@@ -4,6 +4,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.tesseraql.camel.TesseraqlProperties;
+import io.tesseraql.security.Principal;
+import io.tesseraql.security.session.SessionStore;
 import java.io.IOException;
 import java.net.ServerSocket;
 import java.net.URI;
@@ -98,6 +101,31 @@ class QueryJsonIntegrationTest {
         assertThat(response.statusCode()).isEqualTo(403);
         assertThat(MAPPER.readTree(response.body()).path("error").path("code").asText())
                 .isEqualTo("TQL-SEC-4031");
+    }
+
+    @Test
+    void htmxFragmentRendersTableWithSession() throws Exception {
+        SessionStore sessions = runtime.camelContext().getRegistry()
+                .lookupByNameAndType(TesseraqlProperties.SESSION_STORE_BEAN, SessionStore.class);
+        String sid = sessions.create(new Principal("u001", "sato", "Sato", "tenant-a",
+                List.of(), List.of("USER_READ"), List.of(), Map.of()));
+
+        HttpResponse<String> response = HttpClient.newHttpClient().send(
+                HttpRequest.newBuilder(URI.create("http://localhost:" + runtime.port()
+                                + "/users/fragments/table"))
+                        .header("Cookie", sessions.cookieName() + "=" + sid)
+                        .build(),
+                HttpResponse.BodyHandlers.ofString());
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(response.headers().firstValue("Content-Type").orElse("")).contains("text/html");
+        assertThat(response.body()).contains("<table").contains("sato").contains("suzuki");
+    }
+
+    @Test
+    void htmxFragmentRejectsWithoutSession() throws Exception {
+        HttpResponse<String> response = get("/users/fragments/table", null);
+        assertThat(response.statusCode()).isEqualTo(401);
     }
 
     private JsonNode getJson(String path, String bearer) throws Exception {

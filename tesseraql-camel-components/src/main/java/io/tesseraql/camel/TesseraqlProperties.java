@@ -16,6 +16,7 @@ public final class TesseraqlProperties {
     /** Registry bean names bound by the runtime for security components. */
     public static final String POLICY_ENGINE_BEAN = "tesseraqlPolicyEngine";
     public static final String JWT_AUTHENTICATOR_BEAN = "tesseraqlJwtAuthenticator";
+    public static final String SESSION_STORE_BEAN = "tesseraqlSessionStore";
 
     private TesseraqlProperties() {
     }

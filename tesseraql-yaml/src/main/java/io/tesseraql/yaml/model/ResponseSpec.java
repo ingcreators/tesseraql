@@ -7,7 +7,7 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
  * the first milestone; HTML and streaming responses are added in later phases.
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
-public record ResponseSpec(JsonResponse json) {
+public record ResponseSpec(JsonResponse json, HtmlResponse html) {
 
     /**
      * A JSON response. {@code body} is a free-form tree (maps, lists, scalars) whose leaf strings
@@ -19,6 +19,29 @@ public record ResponseSpec(JsonResponse json) {
      */
     @JsonIgnoreProperties(ignoreUnknown = true)
     public record JsonResponse(Integer status, Object body) {
+
+        public int effectiveStatus() {
+            return status == null ? 200 : status;
+        }
+    }
+
+    /**
+     * An HTML fragment / page response (design ch. 6.4, 12).
+     *
+     * @param status   HTTP status code, defaulting to 200
+     * @param template template path relative to the template root
+     * @param model    template model: each value is a source expression (e.g. {@code sql.rows})
+     * @param headers  response headers; nested map values (e.g. {@code HX-Trigger}) are serialized
+     *                 to JSON
+     */
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public record HtmlResponse(Integer status, String template,
+            java.util.Map<String, Object> model, java.util.Map<String, Object> headers) {
+
+        public HtmlResponse {
+            model = model == null ? java.util.Map.of() : java.util.Map.copyOf(model);
+            headers = headers == null ? java.util.Map.of() : java.util.Map.copyOf(headers);
+        }
 
         public int effectiveStatus() {
             return status == null ? 200 : status;

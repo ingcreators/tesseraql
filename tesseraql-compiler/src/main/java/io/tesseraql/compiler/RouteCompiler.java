@@ -1,6 +1,7 @@
 package io.tesseraql.compiler;
 
 import io.tesseraql.compiler.binding.ErrorResponseRenderer;
+import io.tesseraql.compiler.binding.HtmlResponseRenderer;
 import io.tesseraql.compiler.binding.JsonResponseRenderer;
 import io.tesseraql.compiler.binding.RequestBinder;
 import io.tesseraql.core.error.TqlDomain;
@@ -45,19 +46,30 @@ public final class RouteCompiler {
 
     private void buildRoute(RouteBuilder builder, Path appHome, RouteFile routeFile) {
         RouteDefinition definition = routeFile.definition();
-        String recipe = definition.recipe();
-        if (!"query-json".equals(recipe)) {
-            // Only query-json is implemented in the first milestone; other recipes are skipped
-            // with a warning so an app that mixes recipes can still boot.
-            LOG.log(System.Logger.Level.WARNING,
+        switch (definition.recipe()) {
+            case "query-json" -> buildQueryJson(builder, routeFile);
+            case "query-html" -> buildQueryHtml(builder, appHome, routeFile);
+            default -> LOG.log(System.Logger.Level.WARNING,
+                    // Recipes not yet implemented are skipped so a mixed-recipe app can still boot.
                     "Skipping route {0}: recipe ''{1}'' is not supported yet",
-                    definition.id(), recipe);
-            return;
+                    definition.id(), definition.recipe());
         }
-        buildQueryJson(builder, appHome, routeFile);
     }
 
-    private void buildQueryJson(RouteBuilder builder, Path appHome, RouteFile routeFile) {
+    private void buildQueryJson(RouteBuilder builder, RouteFile routeFile) {
+        pipelineThroughSql(builder, routeFile)
+                .process(new JsonResponseRenderer(routeFile.definition().response().json()));
+    }
+
+    private void buildQueryHtml(RouteBuilder builder, Path appHome, RouteFile routeFile) {
+        Path templateRoot = appHome.resolve("templates");
+        pipelineThroughSql(builder, routeFile)
+                .process(new HtmlResponseRenderer(
+                        routeFile.definition().response().html(), templateRoot));
+    }
+
+    /** Builds the common route head: REST endpoint, security, request binding, SQL execution. */
+    private ProcessorDefinition<?> pipelineThroughSql(RouteBuilder builder, RouteFile routeFile) {
         RouteDefinition definition = routeFile.definition();
         String routeId = definition.id();
         String direct = "direct:" + routeId;
@@ -72,9 +84,7 @@ public final class RouteCompiler {
 
         ProcessorDefinition<?> route = builder.from(direct).routeId(routeId);
         applySecurity(route, definition.security());
-        route.process(new RequestBinder(definition))
-                .to(sqlUri)
-                .process(new JsonResponseRenderer(definition.response().json()));
+        return route.process(new RequestBinder(definition)).to(sqlUri);
     }
 
     /** Inserts authenticate/authorize steps before binding when the route declares security. */

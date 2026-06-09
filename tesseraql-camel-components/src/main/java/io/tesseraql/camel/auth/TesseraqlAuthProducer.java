@@ -7,6 +7,8 @@ import io.tesseraql.core.error.TqlException;
 import io.tesseraql.security.Principal;
 import io.tesseraql.security.jwt.JwtAuthenticator;
 import io.tesseraql.security.policy.PolicyEngine;
+import io.tesseraql.security.session.BrowserAuthenticator;
+import io.tesseraql.security.session.SessionStore;
 import org.apache.camel.Exchange;
 import org.apache.camel.support.DefaultProducer;
 
@@ -37,13 +39,14 @@ public class TesseraqlAuthProducer extends DefaultProducer {
     }
 
     private void authenticate(Exchange exchange) {
-        if (!"bearer".equals(endpoint.getAuth())) {
-            throw new TqlException(UNSUPPORTED, "Unsupported auth type: " + endpoint.getAuth());
-        }
-        JwtAuthenticator authenticator = bean(JwtAuthenticator.class,
-                TesseraqlProperties.JWT_AUTHENTICATOR_BEAN);
-        String header = exchange.getMessage().getHeader("Authorization", String.class);
-        Principal principal = authenticator.authenticate(header);
+        Principal principal = switch (endpoint.getAuth()) {
+            case "bearer" -> bean(JwtAuthenticator.class, TesseraqlProperties.JWT_AUTHENTICATOR_BEAN)
+                    .authenticate(exchange.getMessage().getHeader("Authorization", String.class));
+            case "browser" -> new BrowserAuthenticator(
+                    bean(SessionStore.class, TesseraqlProperties.SESSION_STORE_BEAN))
+                    .authenticate(exchange.getMessage().getHeader("Cookie", String.class));
+            default -> throw new TqlException(UNSUPPORTED, "Unsupported auth type: " + endpoint.getAuth());
+        };
         exchange.setProperty(TesseraqlProperties.PRINCIPAL, principal);
     }
 
