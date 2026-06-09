@@ -89,6 +89,34 @@ class BatchJobIntegrationTest {
     }
 
     @Test
+    void querySpoolStepStreamsRowsToTempStore() throws Exception {
+        JobExecution execution = runtime.runJob("user.exportActive", Map.of());
+
+        assertThat(execution.status()).isEqualTo(JobStatus.COMPLETED);
+        StepExecution step = runtime.jobRepository().findSteps(execution.id()).get(0);
+        assertThat(step.stepId()).isEqualTo("extract");
+        assertThat(step.affectedRows()).isEqualTo(2); // sato + pending-user
+
+        // The rows were spooled to a JSONL file on disk rather than materialized in memory.
+        Path spoolDir = appHome.resolve("work/tmp/tesseraql");
+        try (Stream<Path> files = Files.walk(spoolDir)) {
+            long jsonlLines = files.filter(p -> p.toString().endsWith(".jsonl"))
+                    .flatMap(BatchJobIntegrationTest::lines)
+                    .filter(line -> !line.isBlank())
+                    .count();
+            assertThat(jsonlLines).isGreaterThanOrEqualTo(2);
+        }
+    }
+
+    private static Stream<String> lines(Path file) {
+        try {
+            return Files.readAllLines(file).stream();
+        } catch (IOException ex) {
+            throw new UncheckedIOException(ex);
+        }
+    }
+
+    @Test
     void operationsApiRunsJobAndListsExecutions() throws Exception {
         String token = token(List.of("BATCH_OPERATOR"));
 

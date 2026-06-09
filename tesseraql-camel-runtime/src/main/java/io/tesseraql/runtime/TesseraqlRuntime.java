@@ -86,8 +86,9 @@ public final class TesseraqlRuntime implements AutoCloseable {
                     TesseraqlProperties.JWT_AUTHENTICATOR_BEAN, new JwtAuthenticator(security.jwt()));
         }
         context.getRegistry().bind(TesseraqlProperties.SESSION_STORE_BEAN, new SessionStore());
-        context.getRegistry().bind(TesseraqlProperties.TEMP_STORE_BEAN,
-                new io.tesseraql.core.spool.FileTempStore(appHome.resolve("work/tmp/tesseraql")));
+        io.tesseraql.core.spool.FileTempStore tempStore =
+                new io.tesseraql.core.spool.FileTempStore(appHome.resolve("work/tmp/tesseraql"));
+        context.getRegistry().bind(TesseraqlProperties.TEMP_STORE_BEAN, tempStore);
 
         VertxPlatformHttpServerConfiguration httpConfig = new VertxPlatformHttpServerConfiguration();
         httpConfig.setBindHost("0.0.0.0");
@@ -101,7 +102,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
         JdbcOutboxStore outboxStore = new JdbcOutboxStore(dataSource);
         outboxStore.ensureSchema();
         context.getRegistry().bind(TesseraqlProperties.OUTBOX_STORE_BEAN, outboxStore);
-        JobExecutor jobExecutor = new JobExecutor(jobRepository);
+        JobExecutor jobExecutor = new JobExecutor(jobRepository, tempStore);
         Map<String, JobFile> jobs = new LinkedHashMap<>();
         manifest.jobs().forEach(job -> jobs.put(job.definition().id(), job));
         String appName = manifest.config().getString("tesseraql.app.name").orElse("app");

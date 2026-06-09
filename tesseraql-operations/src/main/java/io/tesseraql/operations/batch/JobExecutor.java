@@ -3,7 +3,12 @@ package io.tesseraql.operations.batch;
 import io.tesseraql.core.error.TqlDomain;
 import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import io.tesseraql.core.expr.EvaluationContext;
+import io.tesseraql.core.spool.SpoolKind;
+import io.tesseraql.core.spool.SpoolRef;
+import io.tesseraql.core.spool.SpoolWriter;
+import io.tesseraql.core.spool.TempStore;
 import io.tesseraql.core.sql.BoundParameter;
 import io.tesseraql.core.sql.BoundSql;
 import io.tesseraql.core.sql.SqlRenderer;
@@ -12,11 +17,13 @@ import io.tesseraql.yaml.model.JobDefinition;
 import io.tesseraql.yaml.model.PipelineStep;
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
+import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -37,9 +44,12 @@ public final class JobExecutor {
     private static final TqlErrorCode STEP_ERROR = new TqlErrorCode(TqlDomain.BATCH, 5002);
 
     private final JobRepository repository;
+    private final TempStore tempStore;
+    private final ObjectMapper mapper = new ObjectMapper();
 
-    public JobExecutor(JobRepository repository) {
+    public JobExecutor(JobRepository repository, TempStore tempStore) {
         this.repository = repository;
+        this.tempStore = tempStore;
     }
 
     /** Runs the job and returns the final execution record (COMPLETED or FAILED). */
@@ -69,42 +79,74 @@ public final class JobExecutor {
             Map<String, Object> context, Map<String, Object> stepResults, String executionId) {
         String stepExecutionId = repository.startStep(executionId, step.id());
         try {
-            int affected = runStep(jobFile, step, dataSource, context);
-            stepResults.put(step.id(), Map.of("affectedRows", affected));
-            repository.completeStep(stepExecutionId, affected);
+            Map<String, Object> result = runStep(jobFile, step, dataSource, context);
+            stepResults.put(step.id(), result);
+            repository.completeStep(stepExecutionId,
+                    ((Number) result.getOrDefault("affectedRows", 0)).intValue());
         } catch (RuntimeException ex) {
             repository.failStep(stepExecutionId, ex.getMessage());
             throw ex;
         }
     }
 
-    private int runStep(JobFile jobFile, PipelineStep step, DataSource dataSource,
+    private Map<String, Object> runStep(JobFile jobFile, PipelineStep step, DataSource dataSource,
             Map<String, Object> context) {
         Path sqlPath = jobFile.source().getParent().resolve(step.sql().file()).normalize();
         String source = read(sqlPath);
         Map<String, Object> sqlParams = resolveParams(step, context);
         BoundSql bound = SqlRenderer.render(source, sqlParams);
+        String mode = step.sql().effectiveMode();
 
         try (Connection connection = dataSource.getConnection();
                 PreparedStatement statement = connection.prepareStatement(bound.sql())) {
             bind(statement, bound);
-            if ("query".equals(step.sql().effectiveMode())) {
-                try (ResultSet rs = statement.executeQuery()) {
-                    int count = 0;
-                    while (rs.next()) {
-                        count++;
+            return switch (mode) {
+                case "query-spool" -> spool(statement);
+                case "query" -> {
+                    try (ResultSet rs = statement.executeQuery()) {
+                        int count = 0;
+                        while (rs.next()) {
+                            count++;
+                        }
+                        yield Map.of("affectedRows", count);
                     }
-                    return count;
                 }
-            }
-            return statement.executeUpdate();
-        } catch (SQLException ex) {
+                default -> Map.of("affectedRows", statement.executeUpdate());
+            };
+        } catch (SQLException | IOException ex) {
             throw TqlException.builder(STEP_ERROR)
                     .message("Step '" + step.id() + "' failed: " + ex.getMessage())
                     .source(sqlPath.toString())
                     .cause(ex)
                     .build();
         }
+    }
+
+    /** Streams the result set to a JSONL spool, exposing the SpoolRef to later steps (ch. 28.6). */
+    private Map<String, Object> spool(PreparedStatement statement) throws SQLException, IOException {
+        SpoolRef ref;
+        long rows;
+        try (ResultSet rs = statement.executeQuery();
+                SpoolWriter writer = tempStore.createWriter(SpoolKind.JSONL)) {
+            ResultSetMetaData metaData = rs.getMetaData();
+            int columns = metaData.getColumnCount();
+            while (rs.next()) {
+                Map<String, Object> row = new LinkedHashMap<>();
+                for (int col = 1; col <= columns; col++) {
+                    row.put(metaData.getColumnLabel(col), rs.getObject(col));
+                }
+                writer.write((mapper.writeValueAsString(row) + "\n").getBytes(StandardCharsets.UTF_8));
+                writer.incrementRows(1);
+            }
+            writer.close();
+            ref = writer.toRef();
+            rows = ref.rows();
+        }
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("affectedRows", (int) rows);
+        result.put("rows", rows);
+        result.put("spool", ref);
+        return result;
     }
 
     private static Map<String, Object> resolveParams(PipelineStep step, Map<String, Object> context) {
