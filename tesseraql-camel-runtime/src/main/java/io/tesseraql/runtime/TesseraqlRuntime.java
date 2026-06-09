@@ -69,18 +69,26 @@ public final class TesseraqlRuntime implements AutoCloseable {
     public static TesseraqlRuntime start(Path appHome) {
         AppManifest manifest = new ManifestLoader().load(appHome);
         int port = manifest.config().getString("server.port").map(Integer::parseInt).orElse(8080);
-        return start(appHome, manifest, port);
+        return start(appHome, manifest, port, io.tesseraql.core.telemetry.NoopTracer.INSTANCE);
     }
 
     /** Starts the runtime against {@code appHome} on an explicit port (used by tests). */
     public static TesseraqlRuntime start(Path appHome, int port) {
-        return start(appHome, new ManifestLoader().load(appHome), port);
+        return start(appHome, new ManifestLoader().load(appHome), port,
+                io.tesseraql.core.telemetry.NoopTracer.INSTANCE);
     }
 
-    private static TesseraqlRuntime start(Path appHome, AppManifest manifest, int port) {
+    /** Starts the runtime with an explicit tracer (used to wire observability). */
+    public static TesseraqlRuntime start(Path appHome, int port, io.tesseraql.core.telemetry.Tracer tracer) {
+        return start(appHome, new ManifestLoader().load(appHome), port, tracer);
+    }
+
+    private static TesseraqlRuntime start(Path appHome, AppManifest manifest, int port,
+            io.tesseraql.core.telemetry.Tracer tracer) {
         DefaultCamelContext context = new DefaultCamelContext();
         HikariDataSource dataSource = DataSources.create(manifest.config(), "main");
         context.getRegistry().bind("main", dataSource);
+        context.getRegistry().bind(TesseraqlProperties.TRACER_BEAN, tracer);
 
         SecurityConfig security = SecurityConfigFactory.build(manifest.config());
         context.getRegistry().bind(TesseraqlProperties.POLICY_ENGINE_BEAN, new PolicyEngine(security));

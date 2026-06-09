@@ -22,6 +22,7 @@ public final class TesseraqlProperties {
     public static final String OUTBOX_STORE_BEAN = "tesseraqlOutboxStore";
     public static final String IDENTITY_SERVICE_BEAN = "tesseraqlIdentityService";
     public static final String IDENTITY_REALM_BEAN = "tesseraqlIdentityRealm";
+    public static final String TRACER_BEAN = "tesseraqlTracer";
 
     private TesseraqlProperties() {
     }

@@ -63,26 +63,45 @@ public class TesseraqlSqlProducer extends DefaultProducer {
     @SuppressWarnings("unchecked")
     public void process(Exchange exchange) throws Exception {
         String mode = endpoint.getMode();
-        Map<String, Object> params = exchange.getProperty(
-                TesseraqlProperties.SQL_PARAMS, Map.of(), Map.class);
-        BoundSql bound = SqlRenderer.render(nodes, params);
+        io.tesseraql.core.telemetry.Span span = tracer(exchange).start("tesseraql.sql.execute")
+                .attribute("sqlId", endpoint.getSqlPath())
+                .attribute("mode", mode);
+        try {
+            Map<String, Object> params = exchange.getProperty(
+                    TesseraqlProperties.SQL_PARAMS, Map.of(), Map.class);
+            BoundSql bound = SqlRenderer.render(nodes, params);
 
-        if ("query-export".equals(mode)) {
-            exportCsv(exchange, bound);
-            return;
-        }
-        if (!"query".equals(mode) && !"update".equals(mode)) {
-            throw new TqlException(UNSUPPORTED_MODE,
-                    "Unsupported SQL mode '" + mode + "' (supported: query, update, query-export)");
-        }
-        Map<String, Object> context = exchange.getProperty(
-                TesseraqlProperties.CONTEXT, Map.class);
-        Map<String, Object> result = "update".equals(mode) ? executeUpdate(bound) : executeQuery(bound);
+            if ("query-export".equals(mode)) {
+                exportCsv(exchange, bound);
+                return;
+            }
+            if (!"query".equals(mode) && !"update".equals(mode)) {
+                throw new TqlException(UNSUPPORTED_MODE,
+                        "Unsupported SQL mode '" + mode + "' (supported: query, update, query-export)");
+            }
+            Map<String, Object> context = exchange.getProperty(
+                    TesseraqlProperties.CONTEXT, Map.class);
+            Map<String, Object> result = "update".equals(mode) ? executeUpdate(bound) : executeQuery(bound);
 
-        if (context != null) {
-            context.put(endpoint.getResultKey(), result);
+            span.attribute("update".equals(mode) ? "affectedRows" : "rowCount",
+                    result.get("update".equals(mode) ? "affectedRows" : "rowCount"));
+            if (context != null) {
+                context.put(endpoint.getResultKey(), result);
+            }
+            exchange.getMessage().setBody(result);
+        } catch (RuntimeException ex) {
+            span.recordError(ex);
+            throw ex;
+        } finally {
+            span.end();
         }
-        exchange.getMessage().setBody(result);
+    }
+
+    private io.tesseraql.core.telemetry.Tracer tracer(Exchange exchange) {
+        io.tesseraql.core.telemetry.Tracer tracer = exchange.getContext().getRegistry()
+                .lookupByNameAndType(TesseraqlProperties.TRACER_BEAN,
+                        io.tesseraql.core.telemetry.Tracer.class);
+        return tracer != null ? tracer : io.tesseraql.core.telemetry.NoopTracer.INSTANCE;
     }
 
     /**
