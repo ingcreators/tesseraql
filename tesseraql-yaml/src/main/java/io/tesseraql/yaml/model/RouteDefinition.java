@@ -28,6 +28,7 @@ public record RouteDefinition(
         InputPolicy inputPolicy,
         SecuritySpec security,
         IdempotencySpec idempotency,
+        PolicySpec policy,
         SqlBinding sql,
         ResponseSpec response) {
 

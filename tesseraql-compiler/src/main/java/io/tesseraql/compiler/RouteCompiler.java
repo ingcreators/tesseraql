@@ -1,5 +1,6 @@
 package io.tesseraql.compiler;
 
+import io.tesseraql.compiler.binding.ConcurrencyLimiter;
 import io.tesseraql.compiler.binding.ErrorResponseRenderer;
 import io.tesseraql.compiler.binding.HtmlResponseRenderer;
 import io.tesseraql.compiler.binding.IdempotencyProcessors;
@@ -85,6 +86,7 @@ public final class RouteCompiler {
                 + "&mode=query-export&format=csv&filename=" + exportFilename(definition);
 
         ProcessorDefinition<?> route = builder.from(direct).routeId(routeId);
+        applyConcurrency(route, definition);
         applySecurity(route, definition.security());
         route.process(new RequestBinder(definition)).to(sqlUri);
     }
@@ -121,9 +123,19 @@ public final class RouteCompiler {
                 + "&onOverflow=" + effectiveOnOverflow(definition.sql());
 
         ProcessorDefinition<?> route = builder.from(direct).routeId(routeId);
+        applyConcurrency(route, definition);
         applySecurity(route, definition.security());
         applyIdempotencyBegin(route, definition);
         return route.process(new RequestBinder(definition)).to(sqlUri);
+    }
+
+    /** Inserts a per-route concurrency limiter when declared (design ch. 36.1). */
+    private void applyConcurrency(ProcessorDefinition<?> route, RouteDefinition definition) {
+        if (definition.policy() != null && definition.policy().concurrency() != null
+                && definition.policy().concurrency().maxInFlight() != null) {
+            route.process(new ConcurrencyLimiter(
+                    definition.policy().concurrency().maxInFlight()).acquire());
+        }
     }
 
     /** Inserts the idempotency begin step and a short-circuit for replays (design ch. 39.5). */
