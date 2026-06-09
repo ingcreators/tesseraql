@@ -20,6 +20,13 @@ tesseraql:
       username: ${db.main.username}
       password: ${db.main.password}
 
+  identity:
+    defaultRealm: local
+    realms:
+      local:
+        type: managed
+        datasource: main
+
   camel:
     components:
       allowed:

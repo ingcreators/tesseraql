@@ -34,6 +34,11 @@
       <artifactId>tesseraql-operations</artifactId>
       <version>${project.version}</version>
     </dependency>
+    <dependency>
+      <groupId>io.tesseraql</groupId>
+      <artifactId>tesseraql-identity</artifactId>
+      <version>${project.version}</version>
+    </dependency>
 
     <dependency>
       <groupId>org.apache.camel</groupId>

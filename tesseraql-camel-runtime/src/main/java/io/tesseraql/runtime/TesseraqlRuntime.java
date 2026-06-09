@@ -3,6 +3,9 @@ package io.tesseraql.runtime;
 import com.zaxxer.hikari.HikariDataSource;
 import io.tesseraql.camel.TesseraqlProperties;
 import io.tesseraql.compiler.RouteCompiler;
+import io.tesseraql.identity.IdentityService;
+import io.tesseraql.identity.PasswordAuthenticator;
+import io.tesseraql.identity.RealmConfig;
 import io.tesseraql.security.SecurityConfig;
 import io.tesseraql.security.jwt.JwtAuthenticator;
 import io.tesseraql.security.policy.PolicyEngine;
@@ -85,7 +88,8 @@ public final class TesseraqlRuntime implements AutoCloseable {
             context.getRegistry().bind(
                     TesseraqlProperties.JWT_AUTHENTICATOR_BEAN, new JwtAuthenticator(security.jwt()));
         }
-        context.getRegistry().bind(TesseraqlProperties.SESSION_STORE_BEAN, new SessionStore());
+        SessionStore sessionStore = new SessionStore();
+        context.getRegistry().bind(TesseraqlProperties.SESSION_STORE_BEAN, sessionStore);
         io.tesseraql.core.spool.FileTempStore tempStore =
                 new io.tesseraql.core.spool.FileTempStore(appHome.resolve("work/tmp/tesseraql"));
         context.getRegistry().bind(TesseraqlProperties.TEMP_STORE_BEAN, tempStore);
@@ -121,6 +125,12 @@ public final class TesseraqlRuntime implements AutoCloseable {
             context.addRoutes(new OperationsRouteBuilder(
                     jobRunner, jobRepository, List.copyOf(jobs.keySet())));
             context.addRoutes(new SchedulingRouteBuilder(jobRunner, List.copyOf(jobs.values())));
+
+            IdentityService identity = new IdentityService(name ->
+                    context.getRegistry().lookupByNameAndType(name, javax.sql.DataSource.class));
+            RealmConfig realm = IdentityConfigFactory.defaultRealm(manifest.config(), appHome);
+            context.addRoutes(new LoginRouteBuilder(
+                    new PasswordAuthenticator(identity), realm, sessionStore));
             var outboxDelay = manifest.config().getString("tesseraql.outbox.dispatch.fixedDelay");
             if (outboxDelay.isPresent()) {
                 context.addRoutes(new OutboxDispatchRouteBuilder(outboxStore, LOGGING_SINK,
