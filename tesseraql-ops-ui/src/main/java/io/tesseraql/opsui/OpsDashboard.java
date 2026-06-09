@@ -1,5 +1,7 @@
 package io.tesseraql.opsui;
 
+import io.tesseraql.core.diag.SqlExecution;
+import io.tesseraql.core.diag.SqlExecutionLog;
 import io.tesseraql.core.threading.ExecutionLanes;
 import io.tesseraql.core.threading.Lane;
 import io.tesseraql.operations.batch.JobExecution;
@@ -19,13 +21,15 @@ public final class OpsDashboard {
 
     private final JobRepository jobs;
     private final ExecutionLanes lanes;
+    private final SqlExecutionLog slowSql;
 
-    public OpsDashboard(JobRepository jobs, ExecutionLanes lanes) {
+    public OpsDashboard(JobRepository jobs, ExecutionLanes lanes, SqlExecutionLog slowSql) {
         this.jobs = jobs;
         this.lanes = lanes;
+        this.slowSql = slowSql;
     }
 
-    /** Builds the dashboard overview: a batch summary plus per-lane virtual-thread diagnostics. */
+    /** Builds the dashboard overview: batch summary, lane diagnostics, and the slow-SQL log. */
     public Overview overview(int recentLimit) {
         List<JobExecution> executions = jobs.listExecutions(SCAN_LIMIT);
         Map<String, Integer> byStatus = new LinkedHashMap<>();
@@ -36,7 +40,13 @@ public final class OpsDashboard {
                 .limit(Math.max(0, recentLimit))
                 .map(OpsDashboard::view)
                 .toList();
-        return new Overview(new BatchSummary(executions.size(), byStatus, recent), laneStatuses(lanes));
+        return new Overview(new BatchSummary(executions.size(), byStatus, recent),
+                laneStatuses(lanes), slowSql.recent());
+    }
+
+    /** The recent slow SQL executions collected in-process. */
+    public List<SqlExecution> slowSql() {
+        return slowSql.recent();
     }
 
     /** Maps each execution lane to its current diagnostics (capacity, in-use, admitted, rejected). */
@@ -58,7 +68,7 @@ public final class OpsDashboard {
     }
 
     /** The dashboard overview. */
-    public record Overview(BatchSummary batch, List<LaneStatus> lanes) {
+    public record Overview(BatchSummary batch, List<LaneStatus> lanes, List<SqlExecution> slowSql) {
     }
 
     /** Batch execution summary: total scanned, counts by status, and the most recent executions. */

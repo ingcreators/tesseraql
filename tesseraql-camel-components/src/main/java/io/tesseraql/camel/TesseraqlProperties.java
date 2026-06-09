@@ -28,6 +28,7 @@ public final class TesseraqlProperties {
     public static final String TRACER_BEAN = "tesseraqlTracer";
     public static final String METER_BEAN = "tesseraqlMeter";
     public static final String LANES_BEAN = "tesseraqlExecutionLanes";
+    public static final String SLOW_SQL_LOG_BEAN = "tesseraqlSlowSqlLog";
 
     /** Registry bean name for the {@code ExecutorService} backing a named execution lane. */
     public static String laneExecutorRef(String laneName) {

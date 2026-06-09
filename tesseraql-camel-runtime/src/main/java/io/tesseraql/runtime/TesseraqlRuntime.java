@@ -116,6 +116,14 @@ public final class TesseraqlRuntime implements AutoCloseable {
                     TesseraqlProperties.laneExecutorRef(lane.name()), lane.executor());
         }
 
+        int slowSqlCapacity = manifest.config().getString("tesseraql.diagnostics.slowSqlCapacity")
+                .map(Integer::parseInt).orElse(100);
+        long slowSqlMillis = manifest.config().getString("tesseraql.diagnostics.slowSqlMillis")
+                .map(Long::parseLong).orElse(200L);
+        io.tesseraql.core.diag.RingSqlExecutionLog slowSqlLog =
+                new io.tesseraql.core.diag.RingSqlExecutionLog(slowSqlCapacity, slowSqlMillis);
+        context.getRegistry().bind(TesseraqlProperties.SLOW_SQL_LOG_BEAN, slowSqlLog);
+
         TenantDataSources tenantDataSources = TenantDataSources.load(manifest.config());
         if (!tenantDataSources.isEmpty()) {
             context.getRegistry().bind(
@@ -178,7 +186,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
             context.addRoutes(new RouteCompiler().compile(manifest));
             context.addRoutes(new OperationsRouteBuilder(
                     jobRunner, jobRepository, List.copyOf(jobs.keySet()),
-                    new io.tesseraql.opsui.OpsDashboard(jobRepository, lanes)));
+                    new io.tesseraql.opsui.OpsDashboard(jobRepository, lanes, slowSqlLog)));
             context.addRoutes(new SchedulingRouteBuilder(jobRunner, List.copyOf(jobs.values())));
 
             IdentityService identity = new IdentityService(name ->

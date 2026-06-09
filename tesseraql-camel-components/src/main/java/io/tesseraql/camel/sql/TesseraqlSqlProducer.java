@@ -82,11 +82,18 @@ public class TesseraqlSqlProducer extends DefaultProducer {
             }
             Map<String, Object> context = exchange.getProperty(
                     TesseraqlProperties.CONTEXT, Map.class);
+            long startNanos = System.nanoTime();
+            long startedAt = System.currentTimeMillis();
             Map<String, Object> result = "update".equals(mode)
                     ? executeUpdate(dataSource, bound) : executeQuery(dataSource, bound);
 
-            span.attribute("update".equals(mode) ? "affectedRows" : "rowCount",
-                    result.get("update".equals(mode) ? "affectedRows" : "rowCount"));
+            String countKey = "update".equals(mode) ? "affectedRows" : "rowCount";
+            Object count = result.get(countKey);
+            span.attribute(countKey, count);
+            long durationMs = (System.nanoTime() - startNanos) / 1_000_000L;
+            long rows = count instanceof Number number ? number.longValue() : 0L;
+            slowSqlLog(exchange).record(new io.tesseraql.core.diag.SqlExecution(
+                    endpoint.getSqlPath(), mode, durationMs, rows, startedAt));
             if (context != null) {
                 context.put(endpoint.getResultKey(), result);
             }
@@ -104,6 +111,13 @@ public class TesseraqlSqlProducer extends DefaultProducer {
                 .lookupByNameAndType(TesseraqlProperties.TRACER_BEAN,
                         io.tesseraql.core.telemetry.Tracer.class);
         return tracer != null ? tracer : io.tesseraql.core.telemetry.NoopTracer.INSTANCE;
+    }
+
+    private io.tesseraql.core.diag.SqlExecutionLog slowSqlLog(Exchange exchange) {
+        io.tesseraql.core.diag.SqlExecutionLog log = exchange.getContext().getRegistry()
+                .lookupByNameAndType(TesseraqlProperties.SLOW_SQL_LOG_BEAN,
+                        io.tesseraql.core.diag.SqlExecutionLog.class);
+        return log != null ? log : io.tesseraql.core.diag.NoopSqlExecutionLog.INSTANCE;
     }
 
     /**
