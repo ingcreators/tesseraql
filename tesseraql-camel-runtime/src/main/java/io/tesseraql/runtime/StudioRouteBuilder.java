@@ -34,6 +34,9 @@ final class StudioRouteBuilder extends RouteBuilder {
         rest().get("/_tesseraql/studio/explorer").to("direct:studio.explorer");
         rest().get("/_tesseraql/studio/source").to("direct:studio.source");
         rest().post("/_tesseraql/studio/drafts").to("direct:studio.draft");
+        rest().post("/_tesseraql/studio/preview").to("direct:studio.preview");
+        rest().post("/_tesseraql/studio/apply").to("direct:studio.apply");
+        rest().post("/_tesseraql/studio/reload").to("direct:studio.reload");
 
         from("direct:studio.explorer").routeId("studio.explorer")
                 .to(AUTH).process(json(exchange -> studio.explorer()));
@@ -53,6 +56,24 @@ final class StudioRouteBuilder extends RouteBuilder {
                     result.put("saved", path);
                     return result;
                 }));
+
+        from("direct:studio.preview").routeId("studio.preview")
+                .to(AUTH).process(json(exchange -> {
+                    String path = requirePath(exchange);
+                    return studio.preview(path, exchange.getMessage().getBody(String.class));
+                }));
+
+        from("direct:studio.apply").routeId("studio.apply")
+                .to(AUTH).process(json(exchange -> {
+                    String path = requirePath(exchange);
+                    studio.applyDraft(path);
+                    Map<String, Object> result = new LinkedHashMap<>();
+                    result.put("applied", path);
+                    return result;
+                }));
+
+        from("direct:studio.reload").routeId("studio.reload")
+                .to(AUTH).process(json(exchange -> studio.reload()));
     }
 
     private static String requirePath(Exchange exchange) {

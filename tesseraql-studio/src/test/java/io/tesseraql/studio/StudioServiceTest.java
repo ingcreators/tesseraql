@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import io.tesseraql.core.error.TqlException;
 import io.tesseraql.studio.StudioService.Explorer;
+import io.tesseraql.studio.StudioService.PreviewResult;
 import io.tesseraql.yaml.manifest.AppManifest;
 import io.tesseraql.yaml.manifest.ManifestLoader;
 import java.nio.file.Files;
@@ -78,5 +79,88 @@ class StudioServiceTest {
         assertThat(studio.readDraft("web/api/x/get.yml")).contains("x-edited");
         // The draft does not touch the source of truth.
         assertThat(studio.source("web/api/x/get.yml")).contains("id: x\n");
+    }
+
+    @Test
+    void previewValidatesRoutesAndSql() {
+        StudioService studio = new StudioService(exampleManifest(), true);
+
+        assertThat(studio.preview("web/api/users/get.yml", null).valid()).isTrue();
+        assertThat(studio.preview("web/api/users/search.sql", null))
+                .satisfies(p -> assertThat(p.valid()).isTrue())
+                .satisfies(p -> assertThat(p.result()).doesNotContain("/*"));
+
+        PreviewResult broken = studio.preview("web/api/users/get.yml", "version: tesseraql/v1\nid: y\n");
+        assertThat(broken.valid()).isFalse();
+        assertThat(broken.error()).isNotBlank();
+    }
+
+    @Test
+    void applyPromotesDraftToSourceThenReloadReflectsIt(@TempDir Path dir) throws Exception {
+        Files.createDirectories(dir.resolve("config"));
+        Files.writeString(dir.resolve("config/tesseraql.yml"), "tesseraql:\n  app:\n    name: t\n");
+        Files.createDirectories(dir.resolve("web/api/x"));
+        Files.writeString(dir.resolve("web/api/x/get.yml"), """
+                version: tesseraql/v1
+                id: x
+                kind: route
+                recipe: query-json
+                sql:
+                  file: x.sql
+                response:
+                  json:
+                    body:
+                      data: sql.rows
+                """);
+
+        StudioService studio = new StudioService(new ManifestLoader().load(dir), false);
+        studio.saveDraft("web/api/x/get.yml", """
+                version: tesseraql/v1
+                id: x.renamed
+                kind: route
+                recipe: query-json
+                sql:
+                  file: x.sql
+                response:
+                  json:
+                    body:
+                      data: sql.rows
+                """);
+
+        studio.applyDraft("web/api/x/get.yml");
+        assertThat(studio.source("web/api/x/get.yml")).contains("id: x.renamed");
+        assertThat(studio.readDraft("web/api/x/get.yml")).isNull();
+
+        assertThat(studio.reload().routes()).anyMatch(route -> route.id().equals("x.renamed"));
+    }
+
+    @Test
+    void applyRejectsInvalidDraftAndReadOnly(@TempDir Path dir) throws Exception {
+        Files.createDirectories(dir.resolve("config"));
+        Files.writeString(dir.resolve("config/tesseraql.yml"), "tesseraql:\n  app:\n    name: t\n");
+        Files.createDirectories(dir.resolve("web/api/x"));
+        Files.writeString(dir.resolve("web/api/x/get.yml"), """
+                version: tesseraql/v1
+                id: x
+                kind: route
+                recipe: query-json
+                sql:
+                  file: x.sql
+                response:
+                  json:
+                    body:
+                      data: sql.rows
+                """);
+
+        StudioService writable = new StudioService(new ManifestLoader().load(dir), false);
+        writable.saveDraft("web/api/x/get.yml", "version: tesseraql/v1\nid: y\n");
+        assertThatThrownBy(() -> writable.applyDraft("web/api/x/get.yml"))
+                .isInstanceOf(TqlException.class)
+                .hasMessageContaining("does not compile");
+
+        StudioService readOnly = new StudioService(new ManifestLoader().load(dir), true);
+        assertThatThrownBy(() -> readOnly.applyDraft("web/api/x/get.yml"))
+                .isInstanceOf(TqlException.class)
+                .hasMessageContaining("read-only");
     }
 }

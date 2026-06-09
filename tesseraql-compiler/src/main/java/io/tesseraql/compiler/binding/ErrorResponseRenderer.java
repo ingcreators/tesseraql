@@ -52,6 +52,7 @@ public final class ErrorResponseRenderer implements Processor {
                 case 4002 -> 400;
                 case 4030 -> 403;
                 case 4040 -> 404;
+                case 4221 -> 422;
                 default -> 500;
             };
             case IDEM -> code.number() == 4090 ? 409 : 500;
@@ -71,6 +72,7 @@ public final class ErrorResponseRenderer implements Processor {
             case 401 -> "Unauthorized";
             case 403 -> "Forbidden";
             case 404 -> "Not Found";
+            case 422 -> "Unprocessable Entity";
             case 429 -> "Too Many Requests";
             case 503 -> "Service Unavailable";
             default -> "Internal Server Error";

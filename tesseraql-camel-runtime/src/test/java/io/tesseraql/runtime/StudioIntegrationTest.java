@@ -90,6 +90,40 @@ class StudioIntegrationTest {
     }
 
     @Test
+    void previewApplyAndReloadFlow() throws Exception {
+        String path = "web/api/extra/get.yml";
+        String newRoute = """
+                version: tesseraql/v1
+                id: extra.list
+                kind: route
+                recipe: query-json
+                sql:
+                  file: extra.sql
+                  mode: query
+                response:
+                  json:
+                    body:
+                      data: sql.rows
+                """;
+
+        HttpResponse<String> preview = post(
+                "/_tesseraql/studio/preview?path=" + enc(path), newRoute, true);
+        assertThat(preview.statusCode()).isEqualTo(200);
+        assertThat(MAPPER.readTree(preview.body()).get("valid").asBoolean()).isTrue();
+
+        assertThat(post("/_tesseraql/studio/drafts?path=" + enc(path), newRoute, true)
+                .statusCode()).isEqualTo(200);
+
+        HttpResponse<String> apply = post("/_tesseraql/studio/apply?path=" + enc(path), "", true);
+        assertThat(apply.statusCode()).isEqualTo(200);
+
+        HttpResponse<String> reload = post("/_tesseraql/studio/reload", "", true);
+        assertThat(reload.statusCode()).isEqualTo(200);
+        assertThat(MAPPER.readTree(reload.body()).get("routes")).anySatisfy(route ->
+                assertThat(route.get("id").asText()).isEqualTo("extra.list"));
+    }
+
+    @Test
     void explorerRequiresAuthentication() throws Exception {
         assertThat(get("/_tesseraql/studio/explorer", false).statusCode()).isEqualTo(401);
     }
