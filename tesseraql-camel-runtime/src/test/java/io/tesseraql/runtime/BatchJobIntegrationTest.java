@@ -2,12 +2,19 @@ package io.tesseraql.runtime;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import io.tesseraql.operations.batch.JobExecution;
 import io.tesseraql.operations.batch.JobStatus;
 import io.tesseraql.operations.batch.StepExecution;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.net.ServerSocket;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -15,10 +22,13 @@ import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.ResultSet;
 import java.sql.Statement;
+import java.util.Base64;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Stream;
+import javax.crypto.Mac;
+import javax.crypto.spec.SecretKeySpec;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -35,6 +45,8 @@ class BatchJobIntegrationTest {
 
     @Container
     static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>("postgres:16-alpine");
+
+    private static final ObjectMapper MAPPER = new ObjectMapper();
 
     static TesseraqlRuntime runtime;
     static Path appHome;
@@ -58,6 +70,8 @@ class BatchJobIntegrationTest {
 
     @Test
     void runsBatchJobRecordsExecutionAndMutatesData() {
+        // Reset to PENDING so the assertion is independent of other tests that run the same job.
+        setStatus("pending-user", "PENDING");
         JobExecution execution = runtime.runJob("user.dailyMaintenance",
                 Map.of("businessDate", "2026-06-08"));
 
@@ -72,6 +86,77 @@ class BatchJobIntegrationTest {
 
         assertThat(statusOf("pending-user")).isEqualTo("INACTIVE");
         assertThat(runtime.jobRepository().listExecutions(10)).isNotEmpty();
+    }
+
+    @Test
+    void operationsApiRunsJobAndListsExecutions() throws Exception {
+        String token = token(List.of("BATCH_OPERATOR"));
+
+        HttpResponse<String> run = send("POST",
+                "/_tesseraql/ops/batch/jobs/user.dailyMaintenance/run", token, "{}");
+        assertThat(run.statusCode()).isEqualTo(200);
+        JsonNode runBody = MAPPER.readTree(run.body());
+        assertThat(runBody.path("status").asText()).isEqualTo("COMPLETED");
+        assertThat(runBody.path("executionId").asText()).isNotBlank();
+
+        HttpResponse<String> list = send("GET", "/_tesseraql/ops/batch/executions", token, null);
+        assertThat(list.statusCode()).isEqualTo(200);
+        assertThat(MAPPER.readTree(list.body()).isArray()).isTrue();
+        assertThat(MAPPER.readTree(list.body())).isNotEmpty();
+    }
+
+    @Test
+    void operationsApiRequiresAuthentication() throws Exception {
+        HttpResponse<String> response = send("GET", "/_tesseraql/ops/batch/executions", null, null);
+        assertThat(response.statusCode()).isEqualTo(401);
+    }
+
+    @Test
+    void operationsApiForbidsInsufficientRole() throws Exception {
+        HttpResponse<String> response = send("POST",
+                "/_tesseraql/ops/batch/jobs/user.dailyMaintenance/run",
+                token(List.of("SOME_OTHER_ROLE")), "{}");
+        assertThat(response.statusCode()).isEqualTo(403);
+    }
+
+    private static HttpResponse<String> send(String method, String path, String bearer, String body)
+            throws Exception {
+        HttpRequest.Builder request = HttpRequest.newBuilder(
+                URI.create("http://localhost:" + runtime.port() + path));
+        if (bearer != null) {
+            request.header("Authorization", "Bearer " + bearer);
+        }
+        if ("POST".equals(method)) {
+            request.header("Content-Type", "application/json")
+                    .POST(HttpRequest.BodyPublishers.ofString(body == null ? "{}" : body));
+        } else {
+            request.GET();
+        }
+        return HttpClient.newHttpClient().send(request.build(), HttpResponse.BodyHandlers.ofString());
+    }
+
+    private static String token(List<String> roles) throws Exception {
+        Base64.Encoder enc = Base64.getUrlEncoder().withoutPadding();
+        String header = enc.encodeToString("{\"alg\":\"HS256\"}".getBytes(StandardCharsets.UTF_8));
+        String payload = enc.encodeToString(MAPPER.writeValueAsBytes(
+                Map.of("sub", "ops", "roles", roles)));
+        Mac mac = Mac.getInstance("HmacSHA256");
+        mac.init(new SecretKeySpec(
+                "dev-only-secret-change-me-in-production".getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
+        String signature = enc.encodeToString(
+                mac.doFinal((header + "." + payload).getBytes(StandardCharsets.US_ASCII)));
+        return header + "." + payload + "." + signature;
+    }
+
+    private static void setStatus(String name, String status) {
+        try (Connection connection = DriverManager.getConnection(
+                POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword());
+                Statement statement = connection.createStatement()) {
+            statement.executeUpdate(
+                    "update users set status = '" + status + "' where name = '" + name + "'");
+        } catch (Exception ex) {
+            throw new IllegalStateException(ex);
+        }
     }
 
     private static String statusOf(String name) {

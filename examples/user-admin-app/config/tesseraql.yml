@@ -61,3 +61,14 @@ tesseraql:
         anyOf:
           - role: USER_WRITE
           - permission: users:write
+      ops.batch.view:
+        anyOf:
+          - role: ADMIN
+          - role: BATCH_VIEWER
+          - role: BATCH_OPERATOR
+          - permission: ops:batch:view
+      ops.batch.run:
+        anyOf:
+          - role: ADMIN
+          - role: BATCH_OPERATOR
+          - permission: ops:batch:run

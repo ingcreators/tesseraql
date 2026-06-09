@@ -15,6 +15,7 @@ import io.tesseraql.yaml.manifest.JobFile;
 import io.tesseraql.yaml.manifest.ManifestLoader;
 import java.nio.file.Path;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import org.apache.camel.CamelContext;
 import org.apache.camel.component.platform.http.vertx.VertxPlatformHttpServer;
@@ -90,9 +91,19 @@ public final class TesseraqlRuntime implements AutoCloseable {
         manifest.jobs().forEach(job -> jobs.put(job.definition().id(), job));
         String appName = manifest.config().getString("tesseraql.app.name").orElse("app");
 
+        OperationsRouteBuilder.JobRunner jobRunner = (jobId, params) -> {
+            JobFile jobFile = jobs.get(jobId);
+            if (jobFile == null) {
+                throw new IllegalArgumentException("Unknown job: " + jobId);
+            }
+            return jobExecutor.run(jobFile, dataSource, appName, params, "manual");
+        };
+
         try {
             context.addService(new VertxPlatformHttpServer(httpConfig));
             context.addRoutes(new RouteCompiler().compile(manifest));
+            context.addRoutes(new OperationsRouteBuilder(
+                    jobRunner, jobRepository, List.copyOf(jobs.keySet())));
             context.start();
         } catch (Exception ex) {
             dataSource.close();
