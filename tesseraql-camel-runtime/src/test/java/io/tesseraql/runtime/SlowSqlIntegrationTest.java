@@ -85,6 +85,29 @@ class SlowSqlIntegrationTest {
         });
     }
 
+    @Test
+    void recentSpansAreCollectedInProcess() throws Exception {
+        HttpClient.newHttpClient().send(
+                HttpRequest.newBuilder(URI.create(
+                        "http://localhost:" + runtime.port() + "/api/ping")).build(),
+                HttpResponse.BodyHandlers.ofString());
+
+        HttpResponse<String> traces = HttpClient.newHttpClient().send(
+                HttpRequest.newBuilder(URI.create(
+                                "http://localhost:" + runtime.port() + "/_tesseraql/ops/traces"))
+                        .header("Authorization", "Bearer " + token())
+                        .build(),
+                HttpResponse.BodyHandlers.ofString());
+        assertThat(traces.statusCode()).isEqualTo(200);
+
+        JsonNode spans = MAPPER.readTree(traces.body());
+        assertThat(spans.isArray()).isTrue();
+        assertThat(spans).anySatisfy(span ->
+                assertThat(span.get("name").asText()).isEqualTo("tesseraql.sql.execute"));
+        assertThat(spans).anySatisfy(span ->
+                assertThat(span.get("name").asText()).isEqualTo("tesseraql.route"));
+    }
+
     private static String token() throws Exception {
         Base64.Encoder encoder = Base64.getUrlEncoder().withoutPadding();
         String header = encoder.encodeToString("{\"alg\":\"HS256\"}".getBytes(StandardCharsets.UTF_8));

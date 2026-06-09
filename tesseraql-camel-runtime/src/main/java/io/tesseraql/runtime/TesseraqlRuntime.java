@@ -78,14 +78,14 @@ public final class TesseraqlRuntime implements AutoCloseable {
     public static TesseraqlRuntime start(Path appHome) {
         AppManifest manifest = new ManifestLoader().load(appHome);
         int port = manifest.config().getString("server.port").map(Integer::parseInt).orElse(8080);
-        return start(appHome, manifest, port, io.tesseraql.core.telemetry.NoopTracer.INSTANCE,
+        return start(appHome, manifest, port, new io.tesseraql.core.telemetry.RingTracer(100),
                 io.tesseraql.core.telemetry.NoopMeter.INSTANCE);
     }
 
     /** Starts the runtime against {@code appHome} on an explicit port (used by tests). */
     public static TesseraqlRuntime start(Path appHome, int port) {
         return start(appHome, new ManifestLoader().load(appHome), port,
-                io.tesseraql.core.telemetry.NoopTracer.INSTANCE,
+                new io.tesseraql.core.telemetry.RingTracer(100),
                 io.tesseraql.core.telemetry.NoopMeter.INSTANCE);
     }
 
@@ -154,7 +154,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
         JdbcOutboxStore outboxStore = new JdbcOutboxStore(dataSource);
         outboxStore.ensureSchema();
         context.getRegistry().bind(TesseraqlProperties.OUTBOX_STORE_BEAN, outboxStore);
-        JobExecutor jobExecutor = new JobExecutor(jobRepository, tempStore);
+        JobExecutor jobExecutor = new JobExecutor(jobRepository, tempStore, slowSqlLog);
         Map<String, JobFile> jobs = new LinkedHashMap<>();
         manifest.jobs().forEach(job -> jobs.put(job.definition().id(), job));
         String appName = manifest.config().getString("tesseraql.app.name").orElse("app");
@@ -186,7 +186,9 @@ public final class TesseraqlRuntime implements AutoCloseable {
             context.addRoutes(new RouteCompiler().compile(manifest));
             context.addRoutes(new OperationsRouteBuilder(
                     jobRunner, jobRepository, List.copyOf(jobs.keySet()),
-                    new io.tesseraql.opsui.OpsDashboard(jobRepository, lanes, slowSqlLog)));
+                    new io.tesseraql.opsui.OpsDashboard(jobRepository, lanes, slowSqlLog,
+                            tracer instanceof io.tesseraql.core.telemetry.TraceLog traceLog
+                                    ? traceLog : io.tesseraql.core.telemetry.TraceLog.empty())));
             context.addRoutes(new SchedulingRouteBuilder(jobRunner, List.copyOf(jobs.values())));
 
             IdentityService identity = new IdentityService(name ->

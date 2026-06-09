@@ -45,11 +45,18 @@ public final class JobExecutor {
 
     private final JobRepository repository;
     private final TempStore tempStore;
+    private final io.tesseraql.core.diag.SqlExecutionLog slowSqlLog;
     private final ObjectMapper mapper = new ObjectMapper();
 
     public JobExecutor(JobRepository repository, TempStore tempStore) {
+        this(repository, tempStore, io.tesseraql.core.diag.NoopSqlExecutionLog.INSTANCE);
+    }
+
+    public JobExecutor(JobRepository repository, TempStore tempStore,
+            io.tesseraql.core.diag.SqlExecutionLog slowSqlLog) {
         this.repository = repository;
         this.tempStore = tempStore;
+        this.slowSqlLog = slowSqlLog;
     }
 
     /** Runs the job and returns the final execution record (COMPLETED or FAILED). */
@@ -109,10 +116,12 @@ public final class JobExecutor {
         BoundSql bound = SqlRenderer.render(source, sqlParams);
         String mode = step.sql().effectiveMode();
 
+        long startNanos = System.nanoTime();
+        long startedAt = System.currentTimeMillis();
         try (Connection connection = dataSource.getConnection();
                 PreparedStatement statement = connection.prepareStatement(bound.sql())) {
             bind(statement, bound);
-            return switch (mode) {
+            Map<String, Object> result = switch (mode) {
                 case "query-spool" -> spool(statement);
                 case "query" -> {
                     try (ResultSet rs = statement.executeQuery()) {
@@ -125,6 +134,11 @@ public final class JobExecutor {
                 }
                 default -> Map.of("affectedRows", statement.executeUpdate());
             };
+            long durationMs = (System.nanoTime() - startNanos) / 1_000_000L;
+            long rows = ((Number) result.getOrDefault("affectedRows", 0)).longValue();
+            slowSqlLog.record(new io.tesseraql.core.diag.SqlExecution(
+                    sqlPath.toString(), mode, durationMs, rows, startedAt));
+            return result;
         } catch (SQLException | IOException ex) {
             throw TqlException.builder(STEP_ERROR)
                     .message("Step '" + step.id() + "' failed: " + ex.getMessage())

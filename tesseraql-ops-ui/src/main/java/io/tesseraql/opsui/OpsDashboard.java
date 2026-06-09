@@ -2,6 +2,8 @@ package io.tesseraql.opsui;
 
 import io.tesseraql.core.diag.SqlExecution;
 import io.tesseraql.core.diag.SqlExecutionLog;
+import io.tesseraql.core.telemetry.SpanSample;
+import io.tesseraql.core.telemetry.TraceLog;
 import io.tesseraql.core.threading.ExecutionLanes;
 import io.tesseraql.core.threading.Lane;
 import io.tesseraql.operations.batch.JobExecution;
@@ -22,14 +24,17 @@ public final class OpsDashboard {
     private final JobRepository jobs;
     private final ExecutionLanes lanes;
     private final SqlExecutionLog slowSql;
+    private final TraceLog traces;
 
-    public OpsDashboard(JobRepository jobs, ExecutionLanes lanes, SqlExecutionLog slowSql) {
+    public OpsDashboard(JobRepository jobs, ExecutionLanes lanes, SqlExecutionLog slowSql,
+            TraceLog traces) {
         this.jobs = jobs;
         this.lanes = lanes;
         this.slowSql = slowSql;
+        this.traces = traces;
     }
 
-    /** Builds the dashboard overview: batch summary, lane diagnostics, and the slow-SQL log. */
+    /** Builds the dashboard overview: batch summary, lane diagnostics, slow SQL, and recent traces. */
     public Overview overview(int recentLimit) {
         List<JobExecution> executions = jobs.listExecutions(SCAN_LIMIT);
         Map<String, Integer> byStatus = new LinkedHashMap<>();
@@ -41,12 +46,17 @@ public final class OpsDashboard {
                 .map(OpsDashboard::view)
                 .toList();
         return new Overview(new BatchSummary(executions.size(), byStatus, recent),
-                laneStatuses(lanes), slowSql.recent());
+                laneStatuses(lanes), slowSql.recent(), traces.recentSpans());
     }
 
     /** The recent slow SQL executions collected in-process. */
     public List<SqlExecution> slowSql() {
         return slowSql.recent();
+    }
+
+    /** The recent spans collected in-process. */
+    public List<SpanSample> traces() {
+        return traces.recentSpans();
     }
 
     /** Maps each execution lane to its current diagnostics (capacity, in-use, admitted, rejected). */
@@ -68,7 +78,8 @@ public final class OpsDashboard {
     }
 
     /** The dashboard overview. */
-    public record Overview(BatchSummary batch, List<LaneStatus> lanes, List<SqlExecution> slowSql) {
+    public record Overview(BatchSummary batch, List<LaneStatus> lanes, List<SqlExecution> slowSql,
+            List<SpanSample> traces) {
     }
 
     /** Batch execution summary: total scanned, counts by status, and the most recent executions. */

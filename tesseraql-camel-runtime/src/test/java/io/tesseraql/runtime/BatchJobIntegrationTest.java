@@ -144,6 +144,8 @@ class BatchJobIntegrationTest {
         assertThat(body.path("batch").path("total").asInt()).isGreaterThan(0);
         assertThat(body.path("batch").path("byStatus")).isNotEmpty();
         assertThat(body.path("lanes").isArray()).isTrue();
+        // The batch step's SQL is captured in the slow-SQL log (threshold lowered to 0).
+        assertThat(body.path("slowSql")).isNotEmpty();
     }
 
     @Test
@@ -245,6 +247,10 @@ class BatchJobIntegrationTest {
                     url: %s
                     username: %s
                     password: %s
+
+                tesseraql:
+                  diagnostics:
+                    slowSqlMillis: 0
                 """.formatted(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword()));
         return target;
     }
