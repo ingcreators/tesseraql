@@ -1,0 +1,19 @@
+version: tesseraql/v1
+id: tql.identity.users.list
+kind: route
+recipe: query-html
+
+security:
+  auth: browser
+  policy: users.read
+
+sql:
+  contract: identity.list-users
+
+response:
+  html:
+    status: 200
+    template: admin/users/table.html
+    model:
+      users: sql.rows
+      count: sql.rowCount

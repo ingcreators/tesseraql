@@ -1,0 +1,28 @@
+<div id="identity-users" class="hc-card">
+  <header class="hc-card__header">
+    <h2 class="hc-heading">ユーザー管理</h2>
+  </header>
+  <table class="hc-table">
+    <thead>
+      <tr>
+        <th>ログインID</th>
+        <th>表示名</th>
+        <th>メール</th>
+        <th>状態</th>
+      </tr>
+    </thead>
+    <tbody>
+      {{# users }}
+      <tr>
+        <td>{{ login_id }}</td>
+        <td>{{ display_name }}</td>
+        <td>{{ email }}</td>
+        <td>{{ status }}</td>
+      </tr>
+      {{/ users }}
+      {{^ users }}
+      <tr><td colspan="4">ユーザーがいません</td></tr>
+      {{/ users }}
+    </tbody>
+  </table>
+</div>

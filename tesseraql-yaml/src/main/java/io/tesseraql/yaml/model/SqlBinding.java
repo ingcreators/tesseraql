@@ -12,10 +12,16 @@ import java.util.Map;
  *               {@code principal.claim.tenant_id} (design ch. 6.3)
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
-public record SqlBinding(String file, String mode, Map<String, String> params, Materialize materialize) {
+public record SqlBinding(String file, String contract, String mode, Map<String, String> params,
+        Materialize materialize) {
 
     public SqlBinding {
         params = params == null ? Map.of() : Map.copyOf(params);
+    }
+
+    /** Whether this binding executes a named Identity SQL Contract instead of a SQL file. */
+    public boolean isContract() {
+        return contract != null && !contract.isBlank();
     }
 
     /** Returns the effective mode, defaulting to {@code query}. */

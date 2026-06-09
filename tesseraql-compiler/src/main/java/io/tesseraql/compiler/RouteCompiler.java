@@ -140,19 +140,26 @@ public final class RouteCompiler {
 
         restEndpoint(builder, routeFile.httpMethod(), routeFile.urlPath()).to(direct);
 
+        ProcessorDefinition<?> route = builder.from(direct).routeId(routeId);
+        applyConcurrency(route, definition);
+        applySecurity(route, definition.security());
+        applyIdempotencyBegin(route, definition);
+        return route.process(new RequestBinder(definition)).to(executionUri(routeFile));
+    }
+
+    /** Builds the execution step URI: the tesseraql-iam contract or a tesseraql-sql file. */
+    private String executionUri(RouteFile routeFile) {
+        RouteDefinition definition = routeFile.definition();
+        if (definition.sql().isContract()) {
+            return "tesseraql-iam:contract?name=" + definition.sql().contract() + "&resultKey=sql";
+        }
         Path sqlPath = routeFile.source().getParent().resolve(definition.sql().file()).normalize();
-        String sqlUri = "tesseraql-sql:file:" + sqlPath
+        return "tesseraql-sql:file:" + sqlPath
                 + "?datasource=" + DEFAULT_DATASOURCE
                 + "&mode=" + definition.sql().effectiveMode()
                 + "&resultKey=sql"
                 + "&maxRows=" + effectiveMaxRows(definition.sql())
                 + "&onOverflow=" + effectiveOnOverflow(definition.sql());
-
-        ProcessorDefinition<?> route = builder.from(direct).routeId(routeId);
-        applyConcurrency(route, definition);
-        applySecurity(route, definition.security());
-        applyIdempotencyBegin(route, definition);
-        return route.process(new RequestBinder(definition)).to(sqlUri);
     }
 
     /** Inserts per-route rate limit and concurrency guards when declared (design ch. 36.1). */

@@ -129,6 +129,8 @@ public final class TesseraqlRuntime implements AutoCloseable {
             IdentityService identity = new IdentityService(name ->
                     context.getRegistry().lookupByNameAndType(name, javax.sql.DataSource.class));
             RealmConfig realm = IdentityConfigFactory.defaultRealm(manifest.config(), appHome);
+            context.getRegistry().bind(TesseraqlProperties.IDENTITY_SERVICE_BEAN, identity);
+            context.getRegistry().bind(TesseraqlProperties.IDENTITY_REALM_BEAN, realm);
             context.addRoutes(new LoginRouteBuilder(
                     new PasswordAuthenticator(identity), realm, sessionStore));
             var outboxDelay = manifest.config().getString("tesseraql.outbox.dispatch.fixedDelay");

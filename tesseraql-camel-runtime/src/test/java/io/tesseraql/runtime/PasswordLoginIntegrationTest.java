@@ -75,6 +75,23 @@ class PasswordLoginIntegrationTest {
     }
 
     @Test
+    void adminUsersListServedFromIdentityContract() throws Exception {
+        HttpResponse<String> login = post("/_tesseraql/login",
+                "{\"loginId\":\"admin\",\"password\":\"s3cret\"}");
+        String setCookie = login.headers().firstValue("Set-Cookie").orElse("");
+        String cookie = setCookie.substring(0, setCookie.indexOf(';'));
+
+        HttpResponse<String> page = HttpClient.newHttpClient().send(
+                HttpRequest.newBuilder(URI.create("http://localhost:" + runtime.port() + "/admin/users"))
+                        .header("Cookie", cookie).build(),
+                HttpResponse.BodyHandlers.ofString());
+
+        assertThat(page.statusCode()).isEqualTo(200);
+        assertThat(page.headers().firstValue("Content-Type").orElse("")).contains("text/html");
+        assertThat(page.body()).contains("ユーザー管理").contains("admin"); // login_id from the contract
+    }
+
+    @Test
     void wrongPasswordIsRejected() throws Exception {
         HttpResponse<String> login = post("/_tesseraql/login",
                 "{\"loginId\":\"admin\",\"password\":\"wrong\"}");
