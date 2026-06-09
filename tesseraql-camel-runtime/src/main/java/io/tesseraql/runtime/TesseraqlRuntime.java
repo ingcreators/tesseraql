@@ -58,6 +58,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
     private final AutoCloseable pinningSource;
     private final AutoCloseable otelSdk;
     private final io.tesseraql.opsui.OpsDashboard opsDashboard;
+    private final io.tesseraql.core.outbox.OutboxEventSink outboxSink;
 
     private TesseraqlRuntime(CamelContext camelContext, HikariDataSource mainDataSource, int port,
             JobRepository jobRepository, JobExecutor jobExecutor, JdbcOutboxStore outboxStore,
@@ -65,7 +66,8 @@ public final class TesseraqlRuntime implements AutoCloseable {
             io.tesseraql.core.threading.ExecutionLanes executionLanes,
             TenantDataSources tenantDataSources, io.tesseraql.yaml.config.AppConfig config,
             AutoCloseable pinningSource, AutoCloseable otelSdk,
-            io.tesseraql.opsui.OpsDashboard opsDashboard) {
+            io.tesseraql.opsui.OpsDashboard opsDashboard,
+            io.tesseraql.core.outbox.OutboxEventSink outboxSink) {
         this.camelContext = camelContext;
         this.mainDataSource = mainDataSource;
         this.port = port;
@@ -80,6 +82,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
         this.pinningSource = pinningSource;
         this.otelSdk = otelSdk;
         this.opsDashboard = opsDashboard;
+        this.outboxSink = outboxSink;
     }
 
     /** The operations dashboard for this runtime (health, metrics, traces, alerts). */
@@ -222,6 +225,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
             return jobExecutor.run(jobFile, dataSource, appName, params, "manual");
         };
 
+        io.tesseraql.core.outbox.OutboxEventSink outboxSink = scimOutboundSink(manifest);
         io.tesseraql.opsui.OpsDashboard opsDashboard;
         try {
             opsDashboard = new io.tesseraql.opsui.OpsDashboard(jobRepository, lanes, slowSqlLog,
@@ -265,7 +269,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
             }
             var outboxDelay = manifest.config().getString("tesseraql.outbox.dispatch.fixedDelay");
             if (outboxDelay.isPresent()) {
-                context.addRoutes(new OutboxDispatchRouteBuilder(outboxStore, LOGGING_SINK,
+                context.addRoutes(new OutboxDispatchRouteBuilder(outboxStore, outboxSink,
                         io.tesseraql.core.util.Durations.toMillis(outboxDelay.get())));
             }
             context.start();
@@ -278,7 +282,30 @@ public final class TesseraqlRuntime implements AutoCloseable {
         LOG.info("TesseraQL runtime started on port {} for app {}", port, appHome);
         return new TesseraqlRuntime(context, dataSource, port, jobRepository, jobExecutor,
                 outboxStore, jobs, appName, lanes, tenantDataSources, manifest.config(),
-                pinningSource, otelSdk, opsDashboard);
+                pinningSource, otelSdk, opsDashboard, outboxSink);
+    }
+
+    /**
+     * Builds the outbox sink: the logging sink, optionally composed with a SCIM outbound sink that
+     * provisions {@code USER_PROVISIONED}/{@code USER_DEPROVISIONED} events to a downstream provider
+     * (design ch. 10.15). At-least-once retry is preserved because a sink failure propagates.
+     */
+    private static io.tesseraql.core.outbox.OutboxEventSink scimOutboundSink(AppManifest manifest) {
+        if (!manifest.config().getString("tesseraql.scim.outbound.enabled")
+                .map(Boolean::parseBoolean).orElse(false)) {
+            return LOGGING_SINK;
+        }
+        io.tesseraql.scim.ScimTarget target = new io.tesseraql.scim.ScimTarget(
+                manifest.config().requireString("tesseraql.scim.outbound.target.url"),
+                manifest.config().getString("tesseraql.scim.outbound.target.token").orElse(""));
+        io.tesseraql.scim.ScimProvisioner provisioner = new io.tesseraql.scim.ScimProvisioner(
+                new io.tesseraql.scim.ScimOutboundClient(target),
+                new io.tesseraql.scim.ScimResourceMapping.InMemory());
+        io.tesseraql.scim.ScimOutboundSink scimSink = new io.tesseraql.scim.ScimOutboundSink(provisioner);
+        return event -> {
+            LOGGING_SINK.send(event);
+            scimSink.send(event);
+        };
     }
 
     /** Builds the SCIM user service from the configured contract SQL files (design ch. 10.15). */
@@ -336,7 +363,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
 
     /** Dispatches pending outbox events once, returning the number delivered (design ch. 39.2). */
     public int dispatchOutboxOnce() {
-        return new OutboxDispatcher(outboxStore, LOGGING_SINK).dispatch(100);
+        return new OutboxDispatcher(outboxStore, outboxSink).dispatch(100);
     }
 
     public JdbcOutboxStore outboxStore() {
