@@ -167,6 +167,24 @@ class OpsDashboardTest {
     }
 
     @Test
+    void laneSaturationAndSlowRateRaiseAlerts() {
+        ExecutionLanes lanes = ExecutionLanes.of(List.of(LanePolicy.virtual("io", 1)));
+        lanes.lane("io").tryAdmit();           // take the only permit
+        assertThat(lanes.lane("io").tryAdmit()).isFalse(); // rejected -> saturation
+
+        RingTracer tracer = new RingTracer(10);
+        tracer.start("tesseraql.route").end(); // 1 span, ~0ms
+
+        // slowSpanThresholdMs=0 -> every span is slow -> 100% slow rate; slow threshold 20%.
+        OpsDashboard dashboard = new OpsDashboard(null, lanes, null, tracer, 0L,
+                new OpsDashboard.AlertThresholds(5.0, 20.0, 10.0));
+
+        assertThat(dashboard.alerts()).extracting(OpsDashboard.Alert::code)
+                .contains("TQL-OPS-9002", "TQL-OPS-9003");
+        lanes.close();
+    }
+
+    @Test
     void slowFlagHighlightsSpansOverThreshold() {
         RingTracer tracer = new RingTracer(10);
         tracer.start("tesseraql.route").end();

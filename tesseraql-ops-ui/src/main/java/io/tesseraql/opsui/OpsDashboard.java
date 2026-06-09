@@ -26,21 +26,28 @@ public final class OpsDashboard {
     private final SqlExecutionLog slowSql;
     private final TraceLog traces;
     private final long slowSpanThresholdMs;
-    private final double errorRateWarnPercent;
+    private final AlertThresholds thresholds;
 
     public OpsDashboard(JobRepository jobs, ExecutionLanes lanes, SqlExecutionLog slowSql,
             TraceLog traces, long slowSpanThresholdMs) {
-        this(jobs, lanes, slowSql, traces, slowSpanThresholdMs, 5.0);
+        this(jobs, lanes, slowSql, traces, slowSpanThresholdMs, AlertThresholds.defaults());
     }
 
     public OpsDashboard(JobRepository jobs, ExecutionLanes lanes, SqlExecutionLog slowSql,
             TraceLog traces, long slowSpanThresholdMs, double errorRateWarnPercent) {
+        this(jobs, lanes, slowSql, traces, slowSpanThresholdMs,
+                new AlertThresholds(errorRateWarnPercent, AlertThresholds.defaults().slowRatePercent(),
+                        AlertThresholds.defaults().batchFailureRatePercent()));
+    }
+
+    public OpsDashboard(JobRepository jobs, ExecutionLanes lanes, SqlExecutionLog slowSql,
+            TraceLog traces, long slowSpanThresholdMs, AlertThresholds thresholds) {
         this.jobs = jobs;
         this.lanes = lanes;
         this.slowSql = slowSql;
         this.traces = traces;
         this.slowSpanThresholdMs = slowSpanThresholdMs;
-        this.errorRateWarnPercent = errorRateWarnPercent;
+        this.thresholds = thresholds;
     }
 
     /** Builds the dashboard overview: batch summary, lane diagnostics, slow SQL, and recent traces. */
@@ -67,10 +74,35 @@ public final class OpsDashboard {
     public List<Alert> alerts() {
         TraceMetrics metrics = traceMetrics();
         List<Alert> alerts = new java.util.ArrayList<>();
-        if (metrics.traces() > 0 && metrics.traceErrorRate() >= errorRateWarnPercent) {
+        if (metrics.traces() > 0 && metrics.traceErrorRate() >= thresholds.errorRatePercent()) {
             alerts.add(new Alert("TQL-OPS-9001", "warning",
                     "Trace error rate " + metrics.traceErrorRate() + "% is at or above the "
-                            + errorRateWarnPercent + "% threshold"));
+                            + thresholds.errorRatePercent() + "% threshold"));
+        }
+        if (metrics.spans() > 0 && metrics.slowRate() >= thresholds.slowRatePercent()) {
+            alerts.add(new Alert("TQL-OPS-9003", "warning",
+                    "Slow span rate " + metrics.slowRate() + "% is at or above the "
+                            + thresholds.slowRatePercent() + "% threshold"));
+        }
+        if (lanes != null) {
+            for (LaneStatus lane : laneStatuses(lanes)) {
+                if (lane.rejected() > 0) {
+                    alerts.add(new Alert("TQL-OPS-9002", "warning",
+                            "Lane '" + lane.name() + "' rejected " + lane.rejected()
+                                    + " request(s) (saturation)"));
+                }
+            }
+        }
+        if (jobs != null) {
+            List<JobExecution> executions = jobs.listExecutions(SCAN_LIMIT);
+            int failed = (int) executions.stream()
+                    .filter(e -> e.status() == io.tesseraql.operations.batch.JobStatus.FAILED).count();
+            double failureRate = percent(failed, executions.size());
+            if (!executions.isEmpty() && failureRate >= thresholds.batchFailureRatePercent()) {
+                alerts.add(new Alert("TQL-OPS-9004", "warning",
+                        "Batch failure rate " + failureRate + "% is at or above the "
+                                + thresholds.batchFailureRatePercent() + "% threshold"));
+            }
         }
         return alerts;
     }
@@ -206,6 +238,15 @@ public final class OpsDashboard {
 
     /** An operational alert raised when a metric crosses a threshold. */
     public record Alert(String code, String severity, String message) {
+    }
+
+    /** Warning thresholds (percent) for the operational alerts (design ch. 26.11). */
+    public record AlertThresholds(double errorRatePercent, double slowRatePercent,
+            double batchFailureRatePercent) {
+
+        public static AlertThresholds defaults() {
+            return new AlertThresholds(5.0, 20.0, 10.0);
+        }
     }
 
     /**

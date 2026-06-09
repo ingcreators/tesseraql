@@ -191,8 +191,13 @@ public final class TesseraqlRuntime implements AutoCloseable {
                                     ? traceLog : io.tesseraql.core.telemetry.TraceLog.empty(),
                             manifest.config().getString("tesseraql.diagnostics.slowSpanMillis")
                                     .map(Long::parseLong).orElse(200L),
-                            manifest.config().getString("tesseraql.diagnostics.errorRateWarnPercent")
-                                    .map(Double::parseDouble).orElse(5.0))));
+                            new io.tesseraql.opsui.OpsDashboard.AlertThresholds(
+                                    manifest.config().getString("tesseraql.diagnostics.errorRateWarnPercent")
+                                            .map(Double::parseDouble).orElse(5.0),
+                                    manifest.config().getString("tesseraql.diagnostics.slowRateWarnPercent")
+                                            .map(Double::parseDouble).orElse(20.0),
+                                    manifest.config().getString("tesseraql.diagnostics.batchFailureWarnPercent")
+                                            .map(Double::parseDouble).orElse(10.0)))));
             context.addRoutes(new SchedulingRouteBuilder(jobRunner, List.copyOf(jobs.values())));
 
             IdentityService identity = new IdentityService(name ->
