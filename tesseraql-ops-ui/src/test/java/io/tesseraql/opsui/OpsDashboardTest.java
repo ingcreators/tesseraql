@@ -89,6 +89,33 @@ class OpsDashboardTest {
     }
 
     @Test
+    void traceSummaryCountsErrorsAndSlowSpansAndFilters() {
+        RingTracer tracer = new RingTracer(10);
+        // Trace A: a root with one failing child span.
+        Span rootA = tracer.start("tesseraql.route");
+        Span failing = tracer.start("tesseraql.sql.execute", rootA.context());
+        failing.recordError(new RuntimeException("boom"));
+        failing.end();
+        rootA.end();
+        // Trace B: a clean root with one healthy child.
+        Span rootB = tracer.start("tesseraql.route");
+        tracer.start("tesseraql.sql.execute", rootB.context()).end();
+        rootB.end();
+
+        // Threshold above any real duration so nothing is "slow"; only errors distinguish traces.
+        OpsDashboard dashboard = new OpsDashboard(null, null, null, tracer, 1_000_000L);
+
+        assertThat(dashboard.traceSummaries()).hasSize(2);
+        assertThat(dashboard.traceSummaries("errors"))
+                .singleElement().satisfies(summary -> assertThat(summary.errorCount()).isEqualTo(1));
+        // With the threshold low, every span is slow, so the slow filter keeps both traces.
+        OpsDashboard slowDashboard = new OpsDashboard(null, null, null, tracer, 0L);
+        assertThat(slowDashboard.traceSummaries("slow")).hasSize(2);
+        assertThat(slowDashboard.traceSummaries("slow"))
+                .allSatisfy(summary -> assertThat(summary.slowCount()).isGreaterThan(0));
+    }
+
+    @Test
     void slowFlagHighlightsSpansOverThreshold() {
         RingTracer tracer = new RingTracer(10);
         tracer.start("tesseraql.route").end();

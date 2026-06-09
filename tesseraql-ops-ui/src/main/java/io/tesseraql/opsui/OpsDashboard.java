@@ -98,16 +98,34 @@ public final class OpsDashboard {
                 span.durationMs() >= slowSpanThresholdMs, children);
     }
 
-    /** A per-trace summary (total time and slowest span) for the trace list view (design ch. 26.11). */
+    /** Per-trace summaries (total time, slowest span, error/slow counts) for the trace list view. */
     public List<TraceSummary> traceSummaries() {
+        return traceSummaries(null);
+    }
+
+    /**
+     * Per-trace summaries, optionally filtered (design ch. 26.11): {@code "errors"} keeps traces with
+     * at least one error span, {@code "slow"} keeps traces with at least one span over the slow
+     * threshold; any other value returns all traces.
+     */
+    public List<TraceSummary> traceSummaries(String filter) {
         List<TraceSummary> summaries = new java.util.ArrayList<>();
         for (TraceNode root : traceTree()) {
             List<TraceNode> all = flatten(root, new java.util.ArrayList<>());
             TraceNode slowest = all.stream()
                     .max(java.util.Comparator.comparingLong(TraceNode::durationMs))
                     .orElse(root);
+            int errorCount = (int) all.stream().filter(node -> node.span().error()).count();
+            int slowCount = (int) all.stream().filter(TraceNode::slow).count();
             summaries.add(new TraceSummary(root.span().traceId(), root.span().name(),
-                    root.durationMs(), all.size(), slowest.span().name(), slowest.durationMs()));
+                    root.durationMs(), all.size(), slowest.span().name(), slowest.durationMs(),
+                    errorCount, slowCount));
+        }
+        if ("errors".equalsIgnoreCase(filter)) {
+            return summaries.stream().filter(summary -> summary.errorCount() > 0).toList();
+        }
+        if ("slow".equalsIgnoreCase(filter)) {
+            return summaries.stream().filter(summary -> summary.slowCount() > 0).toList();
         }
         return summaries;
     }
@@ -163,8 +181,8 @@ public final class OpsDashboard {
             boolean slow, List<TraceNode> children) {
     }
 
-    /** A roll-up of one trace: its total time, span count, and slowest span. */
+    /** A roll-up of one trace: total time, span count, slowest span, and error/slow span counts. */
     public record TraceSummary(String traceId, String rootSpan, long totalMs, int spanCount,
-            String slowestSpan, long slowestMs) {
+            String slowestSpan, long slowestMs, int errorCount, int slowCount) {
     }
 }

@@ -176,7 +176,18 @@ class SlowSqlIntegrationTest {
             assertThat(trace.get("rootSpan").asText()).isEqualTo("tesseraql.route");
             assertThat(trace.get("spanCount").asInt()).isGreaterThanOrEqualTo(2);
             assertThat(trace.get("slowestSpan").asText()).isNotBlank();
+            assertThat(trace.get("errorCount").isNumber()).isTrue();
+            assertThat(trace.get("slowCount").asInt()).isGreaterThan(0); // threshold is 0
         });
+
+        // The slow filter keeps traces with at least one slow span (all of them at threshold 0).
+        HttpResponse<String> slowOnly = HttpClient.newHttpClient().send(
+                HttpRequest.newBuilder(URI.create("http://localhost:" + runtime.port()
+                                + "/_tesseraql/ops/traces/summary?filter=slow"))
+                        .header("Authorization", "Bearer " + token()).build(),
+                HttpResponse.BodyHandlers.ofString());
+        assertThat(slowOnly.statusCode()).isEqualTo(200);
+        assertThat(MAPPER.readTree(slowOnly.body())).isNotEmpty();
     }
 
     private static String token() throws Exception {

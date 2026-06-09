@@ -96,7 +96,8 @@ final class OperationsRouteBuilder extends RouteBuilder {
 
         from("direct:ops.traceSummary").routeId("ops.traceSummary")
                 .to(VIEW).to("tesseraql-auth:authorize?policy=ops.batch.view")
-                .process(jsonProcessor(exchange -> dashboard.traceSummaries()));
+                .process(jsonProcessor(exchange ->
+                        dashboard.traceSummaries(exchange.getMessage().getHeader("filter", String.class))));
     }
 
     private Object runJob(Exchange exchange) {
