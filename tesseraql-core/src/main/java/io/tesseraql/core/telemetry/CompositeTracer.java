@@ -24,8 +24,24 @@ public final class CompositeTracer implements Tracer {
 
     @Override
     public Span start(String name, SpanContext parent) {
-        List<Span> spans = delegates.stream().map(tracer -> tracer.start(name, parent)).toList();
-        return new CompositeSpan(spans);
+        if (delegates.isEmpty()) {
+            return NoopTracer.INSTANCE.start(name);
+        }
+        // The first delegate assigns the shared identity; keyed delegates (e.g. OpenTelemetry) reuse
+        // it so they reconstruct the same parent/child hierarchy from the propagated context.
+        Span primary = delegates.get(0).start(name, parent);
+        SpanContext identity = primary.context();
+        List<Span> spans = new java.util.ArrayList<>();
+        spans.add(primary);
+        for (int i = 1; i < delegates.size(); i++) {
+            Tracer delegate = delegates.get(i);
+            if (delegate instanceof KeyedTracer keyed && identity != null) {
+                spans.add(keyed.start(name, parent, identity));
+            } else {
+                spans.add(delegate.start(name, parent));
+            }
+        }
+        return new CompositeSpan(List.copyOf(spans));
     }
 
     private static final class CompositeSpan implements Span {
