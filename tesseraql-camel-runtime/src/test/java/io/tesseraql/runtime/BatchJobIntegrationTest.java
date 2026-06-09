@@ -149,6 +149,21 @@ class BatchJobIntegrationTest {
     }
 
     @Test
+    void batchJobAppearsInTraceTreeWithSqlChildren() throws Exception {
+        String token = token(List.of("BATCH_OPERATOR"));
+        send("POST", "/_tesseraql/ops/batch/jobs/user.dailyMaintenance/run", token, "{}");
+
+        HttpResponse<String> tree = send("GET", "/_tesseraql/ops/traces/tree", token, null);
+        assertThat(tree.statusCode()).isEqualTo(200);
+        JsonNode roots = MAPPER.readTree(tree.body());
+        assertThat(roots).anySatisfy(root -> {
+            assertThat(root.get("span").get("name").asText()).isEqualTo("tesseraql.job");
+            assertThat(root.get("children")).anySatisfy(child ->
+                    assertThat(child.get("span").get("name").asText()).isEqualTo("tesseraql.sql.execute"));
+        });
+    }
+
+    @Test
     void operationsApiRequiresAuthentication() throws Exception {
         HttpResponse<String> response = send("GET", "/_tesseraql/ops/batch/executions", null, null);
         assertThat(response.statusCode()).isEqualTo(401);

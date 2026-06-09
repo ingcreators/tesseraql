@@ -46,6 +46,7 @@ public final class JobExecutor {
     private final JobRepository repository;
     private final TempStore tempStore;
     private final io.tesseraql.core.diag.SqlExecutionLog slowSqlLog;
+    private final io.tesseraql.core.telemetry.Tracer tracer;
     private final ObjectMapper mapper = new ObjectMapper();
 
     public JobExecutor(JobRepository repository, TempStore tempStore) {
@@ -54,9 +55,16 @@ public final class JobExecutor {
 
     public JobExecutor(JobRepository repository, TempStore tempStore,
             io.tesseraql.core.diag.SqlExecutionLog slowSqlLog) {
+        this(repository, tempStore, slowSqlLog, io.tesseraql.core.telemetry.NoopTracer.INSTANCE);
+    }
+
+    public JobExecutor(JobRepository repository, TempStore tempStore,
+            io.tesseraql.core.diag.SqlExecutionLog slowSqlLog,
+            io.tesseraql.core.telemetry.Tracer tracer) {
         this.repository = repository;
         this.tempStore = tempStore;
         this.slowSqlLog = slowSqlLog;
+        this.tracer = tracer;
     }
 
     /** Runs the job and returns the final execution record (COMPLETED or FAILED). */
@@ -81,24 +89,35 @@ public final class JobExecutor {
         context.put("step", stepResults);
         context.put("tenant", tenant);
 
+        io.tesseraql.core.telemetry.Span jobSpan = tracer.start("tesseraql.job")
+                .attribute("jobId", job.id())
+                .attribute("trigger", triggerType);
+        if (tenant != null) {
+            jobSpan.attribute("tenant", tenant.id());
+        }
+        io.tesseraql.core.telemetry.SpanContext jobContext = jobSpan.context();
         try {
             for (PipelineStep step : job.effectiveSteps()) {
-                runStepTracked(jobFile, step, dataSource, context, stepResults, executionId);
+                runStepTracked(jobFile, step, dataSource, context, stepResults, executionId, jobContext);
             }
             repository.completeExecution(executionId);
             LOG.info("Job {} execution {} completed", job.id(), executionId);
         } catch (RuntimeException ex) {
+            jobSpan.recordError(ex);
             repository.failExecution(executionId, ex.getMessage());
             LOG.warn("Job {} execution {} failed: {}", job.id(), executionId, ex.getMessage());
+        } finally {
+            jobSpan.end();
         }
         return repository.findExecution(executionId).orElseThrow();
     }
 
     private void runStepTracked(JobFile jobFile, PipelineStep step, DataSource dataSource,
-            Map<String, Object> context, Map<String, Object> stepResults, String executionId) {
+            Map<String, Object> context, Map<String, Object> stepResults, String executionId,
+            io.tesseraql.core.telemetry.SpanContext jobContext) {
         String stepExecutionId = repository.startStep(executionId, step.id());
         try {
-            Map<String, Object> result = runStep(jobFile, step, dataSource, context);
+            Map<String, Object> result = runStep(jobFile, step, dataSource, context, jobContext);
             stepResults.put(step.id(), result);
             repository.completeStep(stepExecutionId,
                     ((Number) result.getOrDefault("affectedRows", 0)).intValue());
@@ -109,13 +128,17 @@ public final class JobExecutor {
     }
 
     private Map<String, Object> runStep(JobFile jobFile, PipelineStep step, DataSource dataSource,
-            Map<String, Object> context) {
+            Map<String, Object> context, io.tesseraql.core.telemetry.SpanContext jobContext) {
         Path sqlPath = jobFile.source().getParent().resolve(step.sql().file()).normalize();
         String source = read(sqlPath);
         Map<String, Object> sqlParams = resolveParams(step, context);
         BoundSql bound = SqlRenderer.render(source, sqlParams);
         String mode = step.sql().effectiveMode();
 
+        io.tesseraql.core.telemetry.Span span = tracer.start("tesseraql.sql.execute", jobContext)
+                .attribute("sqlId", sqlPath.toString())
+                .attribute("mode", mode)
+                .attribute("stepId", step.id());
         long startNanos = System.nanoTime();
         long startedAt = System.currentTimeMillis();
         try (Connection connection = dataSource.getConnection();
@@ -136,15 +159,20 @@ public final class JobExecutor {
             };
             long durationMs = (System.nanoTime() - startNanos) / 1_000_000L;
             long rows = ((Number) result.getOrDefault("affectedRows", 0)).longValue();
+            span.attribute("affectedRows", rows);
             slowSqlLog.record(new io.tesseraql.core.diag.SqlExecution(
                     sqlPath.toString(), mode, durationMs, rows, startedAt));
             return result;
         } catch (SQLException | IOException ex) {
-            throw TqlException.builder(STEP_ERROR)
+            TqlException failure = TqlException.builder(STEP_ERROR)
                     .message("Step '" + step.id() + "' failed: " + ex.getMessage())
                     .source(sqlPath.toString())
                     .cause(ex)
                     .build();
+            span.recordError(failure);
+            throw failure;
+        } finally {
+            span.end();
         }
     }
 

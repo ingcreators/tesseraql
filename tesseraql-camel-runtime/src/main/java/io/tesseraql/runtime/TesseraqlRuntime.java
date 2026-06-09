@@ -154,7 +154,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
         JdbcOutboxStore outboxStore = new JdbcOutboxStore(dataSource);
         outboxStore.ensureSchema();
         context.getRegistry().bind(TesseraqlProperties.OUTBOX_STORE_BEAN, outboxStore);
-        JobExecutor jobExecutor = new JobExecutor(jobRepository, tempStore, slowSqlLog);
+        JobExecutor jobExecutor = new JobExecutor(jobRepository, tempStore, slowSqlLog, tracer);
         Map<String, JobFile> jobs = new LinkedHashMap<>();
         manifest.jobs().forEach(job -> jobs.put(job.definition().id(), job));
         String appName = manifest.config().getString("tesseraql.app.name").orElse("app");
