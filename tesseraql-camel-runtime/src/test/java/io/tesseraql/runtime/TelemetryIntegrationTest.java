@@ -3,6 +3,7 @@ package io.tesseraql.runtime;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.tesseraql.core.telemetry.RecordingMeter;
 import io.tesseraql.core.telemetry.RecordingTracer;
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -44,6 +45,7 @@ class TelemetryIntegrationTest {
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
     static final RecordingTracer TRACER = new RecordingTracer();
+    static final RecordingMeter METER = new RecordingMeter();
 
     static TesseraqlRuntime runtime;
     static Path appHome;
@@ -52,7 +54,7 @@ class TelemetryIntegrationTest {
     static void start() throws Exception {
         seedDatabase();
         appHome = prepareAppHome();
-        runtime = TesseraqlRuntime.start(appHome, freePort(), TRACER);
+        runtime = TesseraqlRuntime.start(appHome, freePort(), TRACER, METER);
     }
 
     @AfterAll
@@ -78,6 +80,23 @@ class TelemetryIntegrationTest {
             assertThat(span.name()).isEqualTo("tesseraql.sql.execute");
             assertThat(span.attributes()).containsKey("sqlId").containsKey("rowCount");
         });
+    }
+
+    @Test
+    void recordsRouteSpanAndInvocationCounter() throws Exception {
+        long before = METER.total("tesseraql.route.invocations");
+        HttpResponse<String> response = HttpClient.newHttpClient().send(
+                HttpRequest.newBuilder(URI.create("http://localhost:" + runtime.port() + "/api/users?limit=10"))
+                        .header("Authorization", "Bearer " + token())
+                        .build(),
+                HttpResponse.BodyHandlers.ofString());
+        assertThat(response.statusCode()).isEqualTo(200);
+
+        assertThat(TRACER.spans()).anySatisfy(span -> {
+            assertThat(span.name()).isEqualTo("tesseraql.route");
+            assertThat(span.attributes()).containsKey("routeId").containsKey("method").containsKey("path");
+        });
+        assertThat(METER.total("tesseraql.route.invocations")).isGreaterThan(before);
     }
 
     private static String token() throws Exception {

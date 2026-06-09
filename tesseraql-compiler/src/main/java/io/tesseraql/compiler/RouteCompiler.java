@@ -91,6 +91,7 @@ public final class RouteCompiler {
         Path sqlPath = routeFile.source().getParent().resolve(definition.sql().file()).normalize();
 
         ProcessorDefinition<?> route = builder.from(direct).routeId(routeId);
+        applyTelemetry(route, routeFile);
         applyConcurrency(route, definition);
         applySecurity(route, definition.security());
         applyIdempotencyBegin(route, definition);
@@ -112,6 +113,7 @@ public final class RouteCompiler {
                 + "&mode=query-export&format=csv&filename=" + exportFilename(definition);
 
         ProcessorDefinition<?> route = builder.from(direct).routeId(routeId);
+        applyTelemetry(route, routeFile);
         applyConcurrency(route, definition);
         applySecurity(route, definition.security());
         route.process(new RequestBinder(definition, pathParams(routeFile.urlPath()))).to(sqlUri);
@@ -141,6 +143,7 @@ public final class RouteCompiler {
         restEndpoint(builder, routeFile.httpMethod(), routeFile.urlPath()).to(direct);
 
         ProcessorDefinition<?> route = builder.from(direct).routeId(routeId);
+        applyTelemetry(route, routeFile);
         applyConcurrency(route, definition);
         applySecurity(route, definition.security());
         applyIdempotencyBegin(route, definition);
@@ -181,6 +184,12 @@ public final class RouteCompiler {
                 io.tesseraql.core.dialect.Dialect.fromJdbcUrl(config.getString(prefix + "jdbcUrl").orElse(""))
                         .map(io.tesseraql.core.dialect.Dialect::id)
                         .orElse(""));
+    }
+
+    /** Inserts the route telemetry step (span + invocation counter) at the route head (ch. 25). */
+    private void applyTelemetry(ProcessorDefinition<?> route, RouteFile routeFile) {
+        route.process(new io.tesseraql.compiler.binding.RouteTelemetry(
+                routeFile.definition().id(), routeFile.httpMethod(), routeFile.urlPath()));
     }
 
     /** Inserts per-route rate limit and concurrency guards when declared (design ch. 36.1). */
