@@ -134,6 +134,19 @@ class BatchJobIntegrationTest {
     }
 
     @Test
+    void operationsOverviewReportsBatchAndLanes() throws Exception {
+        String token = token(List.of("BATCH_OPERATOR"));
+        send("POST", "/_tesseraql/ops/batch/jobs/user.dailyMaintenance/run", token, "{}");
+
+        HttpResponse<String> overview = send("GET", "/_tesseraql/ops/overview", token, null);
+        assertThat(overview.statusCode()).isEqualTo(200);
+        JsonNode body = MAPPER.readTree(overview.body());
+        assertThat(body.path("batch").path("total").asInt()).isGreaterThan(0);
+        assertThat(body.path("batch").path("byStatus")).isNotEmpty();
+        assertThat(body.path("lanes").isArray()).isTrue();
+    }
+
+    @Test
     void operationsApiRequiresAuthentication() throws Exception {
         HttpResponse<String> response = send("GET", "/_tesseraql/ops/batch/executions", null, null);
         assertThat(response.statusCode()).isEqualTo(401);

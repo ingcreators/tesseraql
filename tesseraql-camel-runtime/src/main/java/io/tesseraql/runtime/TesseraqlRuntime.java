@@ -177,7 +177,8 @@ public final class TesseraqlRuntime implements AutoCloseable {
             context.addService(new VertxPlatformHttpServer(httpConfig));
             context.addRoutes(new RouteCompiler().compile(manifest));
             context.addRoutes(new OperationsRouteBuilder(
-                    jobRunner, jobRepository, List.copyOf(jobs.keySet())));
+                    jobRunner, jobRepository, List.copyOf(jobs.keySet()),
+                    new io.tesseraql.opsui.OpsDashboard(jobRepository, lanes)));
             context.addRoutes(new SchedulingRouteBuilder(jobRunner, List.copyOf(jobs.values())));
 
             IdentityService identity = new IdentityService(name ->

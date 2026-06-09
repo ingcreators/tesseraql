@@ -28,6 +28,7 @@
     <module>tesseraql-observability</module>
     <module>tesseraql-report</module>
     <module>tesseraql-studio</module>
+    <module>tesseraql-ops-ui</module>
     <module>tesseraql-cli</module>
     <module>tesseraql-maven-plugin</module>
   </modules>

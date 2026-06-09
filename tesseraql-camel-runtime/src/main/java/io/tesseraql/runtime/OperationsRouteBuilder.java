@@ -25,6 +25,7 @@ final class OperationsRouteBuilder extends RouteBuilder {
     private final JobRunner runner;
     private final JobRepository repository;
     private final List<String> jobIds;
+    private final io.tesseraql.opsui.OpsDashboard dashboard;
 
     /** Runs a job by id; decouples the route builder from the runtime instance. */
     @FunctionalInterface
@@ -32,10 +33,12 @@ final class OperationsRouteBuilder extends RouteBuilder {
         JobExecution run(String jobId, Map<String, Object> params);
     }
 
-    OperationsRouteBuilder(JobRunner runner, JobRepository repository, List<String> jobIds) {
+    OperationsRouteBuilder(JobRunner runner, JobRepository repository, List<String> jobIds,
+            io.tesseraql.opsui.OpsDashboard dashboard) {
         this.runner = runner;
         this.repository = repository;
         this.jobIds = List.copyOf(jobIds);
+        this.dashboard = dashboard;
     }
 
     @Override
@@ -47,6 +50,8 @@ final class OperationsRouteBuilder extends RouteBuilder {
         rest().get("/_tesseraql/ops/batch/executions").to("direct:ops.batch.executions");
         rest().get("/_tesseraql/ops/batch/executions/{id}").to("direct:ops.batch.executionDetail");
         rest().post("/_tesseraql/ops/batch/jobs/{jobId}/run").to("direct:ops.batch.run");
+        rest().get("/_tesseraql/ops/overview").to("direct:ops.overview");
+        rest().get("/_tesseraql/ops/lanes").to("direct:ops.lanes");
 
         from("direct:ops.batch.jobs").routeId("ops.batch.jobs")
                 .to(VIEW).to("tesseraql-auth:authorize?policy=ops.batch.view")
@@ -64,6 +69,14 @@ final class OperationsRouteBuilder extends RouteBuilder {
         from("direct:ops.batch.run").routeId("ops.batch.run")
                 .to(VIEW).to("tesseraql-auth:authorize?policy=ops.batch.run")
                 .process(jsonProcessor(this::runJob));
+
+        from("direct:ops.overview").routeId("ops.overview")
+                .to(VIEW).to("tesseraql-auth:authorize?policy=ops.batch.view")
+                .process(jsonProcessor(exchange -> dashboard.overview(20)));
+
+        from("direct:ops.lanes").routeId("ops.lanes")
+                .to(VIEW).to("tesseraql-auth:authorize?policy=ops.batch.view")
+                .process(jsonProcessor(exchange -> dashboard.overview(0).lanes()));
     }
 
     private Object runJob(Exchange exchange) {

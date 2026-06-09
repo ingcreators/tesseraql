@@ -44,6 +44,11 @@
       <artifactId>tesseraql-studio</artifactId>
       <version>${project.version}</version>
     </dependency>
+    <dependency>
+      <groupId>io.tesseraql</groupId>
+      <artifactId>tesseraql-ops-ui</artifactId>
+      <version>${project.version}</version>
+    </dependency>
 
     <dependency>
       <groupId>org.apache.camel</groupId>
