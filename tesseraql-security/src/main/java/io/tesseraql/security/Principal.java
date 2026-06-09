@@ -32,7 +32,10 @@ public record Principal(
         groups = groups == null ? List.of() : List.copyOf(groups);
         roles = roles == null ? List.of() : List.copyOf(roles);
         permissions = permissions == null ? List.of() : List.copyOf(permissions);
-        claims = claims == null ? Map.of() : Map.copyOf(claims);
+        // Claims may carry null values (e.g. optional columns), so use a null-tolerant copy.
+        claims = claims == null
+                ? Map.of()
+                : java.util.Collections.unmodifiableMap(new java.util.LinkedHashMap<>(claims));
     }
 
     public boolean hasRole(String role) {

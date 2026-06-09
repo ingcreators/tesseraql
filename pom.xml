@@ -21,6 +21,7 @@
     <module>tesseraql-camel-runtime</module>
     <module>tesseraql-camel-spring-runtime</module>
     <module>tesseraql-security</module>
+    <module>tesseraql-identity</module>
     <module>tesseraql-test-core</module>
     <module>tesseraql-coverage-core</module>
     <module>tesseraql-operations</module>

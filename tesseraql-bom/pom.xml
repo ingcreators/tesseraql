@@ -58,6 +58,11 @@
       </dependency>
       <dependency>
         <groupId>io.tesseraql</groupId>
+        <artifactId>tesseraql-identity</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>io.tesseraql</groupId>
         <artifactId>tesseraql-coverage-core</artifactId>
         <version>${project.version}</version>
       </dependency>
