@@ -242,6 +242,10 @@ public final class TesseraqlRuntime implements AutoCloseable {
             context.addRoutes(new OperationsRouteBuilder(
                     jobRunner, jobRepository, List.copyOf(jobs.keySet()), opsDashboard));
             context.addRoutes(new SchedulingRouteBuilder(jobRunner, List.copyOf(jobs.values())));
+            if (manifest.config().getString("tesseraql.scim.enabled")
+                    .map(Boolean::parseBoolean).orElse(false)) {
+                context.addRoutes(new ScimRouteBuilder(buildScimUserService(manifest, dataSource)));
+            }
 
             IdentityService identity = new IdentityService(name ->
                     context.getRegistry().lookupByNameAndType(name, javax.sql.DataSource.class));
@@ -275,6 +279,25 @@ public final class TesseraqlRuntime implements AutoCloseable {
         return new TesseraqlRuntime(context, dataSource, port, jobRepository, jobExecutor,
                 outboxStore, jobs, appName, lanes, tenantDataSources, manifest.config(),
                 pinningSource, otelSdk, opsDashboard);
+    }
+
+    /** Builds the SCIM user service from the configured contract SQL files (design ch. 10.15). */
+    private static io.tesseraql.scim.ScimUserService buildScimUserService(
+            AppManifest manifest, HikariDataSource dataSource) {
+        io.tesseraql.scim.ScimContract contract = new io.tesseraql.scim.ScimContract(
+                readScimSql(manifest, "tesseraql.scim.users.create"),
+                readScimSql(manifest, "tesseraql.scim.users.findById"),
+                readScimSql(manifest, "tesseraql.scim.users.list"));
+        return new io.tesseraql.scim.ScimUserService(dataSource, contract);
+    }
+
+    private static String readScimSql(AppManifest manifest, String configKey) {
+        String relative = manifest.config().requireString(configKey);
+        try {
+            return java.nio.file.Files.readString(manifest.appHome().resolve(relative).normalize());
+        } catch (java.io.IOException ex) {
+            throw new IllegalStateException("Cannot read SCIM contract SQL: " + relative, ex);
+        }
     }
 
     /** Runs a batch job by id and returns its final execution record (design ch. 26). */
