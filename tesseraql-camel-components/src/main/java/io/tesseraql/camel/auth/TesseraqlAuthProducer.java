@@ -31,12 +31,29 @@ public class TesseraqlAuthProducer extends DefaultProducer {
 
     @Override
     public void process(Exchange exchange) {
-        switch (endpoint.getOperation()) {
-            case "authenticate" -> authenticate(exchange);
-            case "authorize" -> authorize(exchange);
-            case "csrf" -> csrf(exchange);
-            default -> throw new TqlException(UNSUPPORTED,
-                    "Unsupported tesseraql-auth operation: " + endpoint.getOperation());
+        String operation = endpoint.getOperation();
+        io.tesseraql.core.telemetry.Span span = io.tesseraql.camel.TesseraqlTracing.tracer(exchange)
+                .start("tesseraql.security." + operation, io.tesseraql.camel.TesseraqlTracing.parent(exchange))
+                .attribute("operation", operation);
+        if (endpoint.getAuth() != null) {
+            span.attribute("auth", endpoint.getAuth());
+        }
+        if (endpoint.getPolicy() != null) {
+            span.attribute("policy", endpoint.getPolicy());
+        }
+        try {
+            switch (operation) {
+                case "authenticate" -> authenticate(exchange);
+                case "authorize" -> authorize(exchange);
+                case "csrf" -> csrf(exchange);
+                default -> throw new TqlException(UNSUPPORTED,
+                        "Unsupported tesseraql-auth operation: " + operation);
+            }
+        } catch (RuntimeException ex) {
+            span.recordError(ex);
+            throw ex;
+        } finally {
+            span.end();
         }
     }
 

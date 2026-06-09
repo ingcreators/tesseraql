@@ -45,6 +45,20 @@ public final class RequestBinder implements Processor {
 
     @Override
     public void process(Exchange exchange) {
+        io.tesseraql.core.telemetry.Span span = io.tesseraql.camel.TesseraqlTracing.tracer(exchange)
+                .start("tesseraql.request.bind", io.tesseraql.camel.TesseraqlTracing.parent(exchange))
+                .attribute("routeId", route.id());
+        try {
+            bind(exchange);
+        } catch (RuntimeException ex) {
+            span.recordError(ex);
+            throw ex;
+        } finally {
+            span.end();
+        }
+    }
+
+    private void bind(Exchange exchange) {
         Map<String, Object> body = parseBody(exchange);
         guardMassAssignment(body);
 

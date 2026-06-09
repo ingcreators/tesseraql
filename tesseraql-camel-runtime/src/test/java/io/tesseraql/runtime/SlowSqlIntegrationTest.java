@@ -109,6 +109,34 @@ class SlowSqlIntegrationTest {
     }
 
     @Test
+    void securedRouteRecordsSecuritySpans() throws Exception {
+        // Hit the bearer-protected /api/users so authenticate/authorize spans are recorded.
+        HttpResponse<String> secure = HttpClient.newHttpClient().send(
+                HttpRequest.newBuilder(URI.create("http://localhost:" + runtime.port() + "/api/secure"))
+                        .header("Authorization", "Bearer " + token(List.of("USER_READ")))
+                        .build(),
+                HttpResponse.BodyHandlers.ofString());
+        assertThat(secure.statusCode()).isEqualTo(200);
+
+        HttpResponse<String> tree = HttpClient.newHttpClient().send(
+                HttpRequest.newBuilder(URI.create(
+                                "http://localhost:" + runtime.port() + "/_tesseraql/ops/traces/tree"))
+                        .header("Authorization", "Bearer " + token()).build(),
+                HttpResponse.BodyHandlers.ofString());
+        assertThat(tree.statusCode()).isEqualTo(200);
+
+        JsonNode roots = MAPPER.readTree(tree.body());
+        assertThat(roots).anySatisfy(root -> {
+            assertThat(root.get("span").get("attributes").path("routeId").asText())
+                    .isEqualTo("secure.ping");
+            assertThat(root.get("children")).anySatisfy(child ->
+                    assertThat(child.get("span").get("name").asText()).isEqualTo("tesseraql.security.authenticate"));
+            assertThat(root.get("children")).anySatisfy(child ->
+                    assertThat(child.get("span").get("name").asText()).isEqualTo("tesseraql.security.authorize"));
+        });
+    }
+
+    @Test
     void traceTreeNestsSqlSpanUnderRouteSpan() throws Exception {
         HttpClient.newHttpClient().send(
                 HttpRequest.newBuilder(URI.create(
@@ -126,16 +154,23 @@ class SlowSqlIntegrationTest {
         JsonNode roots = MAPPER.readTree(tree.body());
         assertThat(roots).anySatisfy(root -> {
             assertThat(root.get("span").get("name").asText()).isEqualTo("tesseraql.route");
+            // The route span now has intermediate children for binding and SQL execution.
+            assertThat(root.get("children")).anySatisfy(child ->
+                    assertThat(child.get("span").get("name").asText()).isEqualTo("tesseraql.request.bind"));
             assertThat(root.get("children")).anySatisfy(child ->
                     assertThat(child.get("span").get("name").asText()).isEqualTo("tesseraql.sql.execute"));
         });
     }
 
     private static String token() throws Exception {
+        return token(List.of("BATCH_OPERATOR"));
+    }
+
+    private static String token(List<String> roles) throws Exception {
         Base64.Encoder encoder = Base64.getUrlEncoder().withoutPadding();
         String header = encoder.encodeToString("{\"alg\":\"HS256\"}".getBytes(StandardCharsets.UTF_8));
         String payload = encoder.encodeToString(
-                MAPPER.writeValueAsBytes(Map.of("sub", "ops", "roles", List.of("BATCH_OPERATOR"))));
+                MAPPER.writeValueAsBytes(Map.of("sub", "ops", "roles", roles)));
         Mac mac = Mac.getInstance("HmacSHA256");
         mac.init(new SecretKeySpec(
                 "dev-only-secret-change-me-in-production".getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
@@ -184,6 +219,27 @@ class SlowSqlIntegrationTest {
                       data: sql.rows
                 """);
         Files.writeString(pingDir.resolve("ping.sql"), "select 1 as ok\n");
+
+        Path secureDir = target.resolve("web/api/secure");
+        Files.createDirectories(secureDir);
+        Files.writeString(secureDir.resolve("get.yml"), """
+                version: tesseraql/v1
+                id: secure.ping
+                kind: route
+                recipe: query-json
+                security:
+                  auth: bearer
+                  policy: users.read
+                sql:
+                  file: secure.sql
+                  mode: query
+                response:
+                  json:
+                    status: 200
+                    body:
+                      data: sql.rows
+                """);
+        Files.writeString(secureDir.resolve("secure.sql"), "select 1 as ok\n");
         return target;
     }
 
