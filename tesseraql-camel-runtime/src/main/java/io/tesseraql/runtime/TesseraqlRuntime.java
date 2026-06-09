@@ -104,6 +104,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
             context.addRoutes(new RouteCompiler().compile(manifest));
             context.addRoutes(new OperationsRouteBuilder(
                     jobRunner, jobRepository, List.copyOf(jobs.keySet())));
+            context.addRoutes(new SchedulingRouteBuilder(jobRunner, List.copyOf(jobs.values())));
             context.start();
         } catch (Exception ex) {
             dataSource.close();
