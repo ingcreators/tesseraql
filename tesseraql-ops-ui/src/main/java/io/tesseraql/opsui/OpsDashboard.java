@@ -59,6 +59,29 @@ public final class OpsDashboard {
         return traces.recentSpans();
     }
 
+    /**
+     * The recent spans assembled into trace trees by parent/child span ids (design ch. 26.11), with
+     * root spans (no parent, or whose parent is no longer retained) at the top.
+     */
+    public List<TraceNode> traceTree() {
+        List<SpanSample> spans = traces.recentSpans();
+        Map<String, TraceNode> byId = new LinkedHashMap<>();
+        for (SpanSample span : spans) {
+            byId.put(span.spanId(), new TraceNode(span, new java.util.ArrayList<>()));
+        }
+        List<TraceNode> roots = new java.util.ArrayList<>();
+        for (SpanSample span : spans) {
+            TraceNode node = byId.get(span.spanId());
+            TraceNode parent = span.parentSpanId() == null ? null : byId.get(span.parentSpanId());
+            if (parent != null) {
+                parent.children().add(node);
+            } else {
+                roots.add(node);
+            }
+        }
+        return roots;
+    }
+
     /** Maps each execution lane to its current diagnostics (capacity, in-use, admitted, rejected). */
     public static List<LaneStatus> laneStatuses(ExecutionLanes lanes) {
         return lanes.all().stream().map(OpsDashboard::laneStatus).toList();
@@ -94,5 +117,9 @@ public final class OpsDashboard {
     /** Diagnostics for one execution lane (design ch. 24 virtual-thread lanes). */
     public record LaneStatus(String name, String type, int maxConcurrency, int available,
             int inUse, long admitted, long rejected) {
+    }
+
+    /** A span and its child spans, forming a trace tree for display. */
+    public record TraceNode(SpanSample span, List<TraceNode> children) {
     }
 }

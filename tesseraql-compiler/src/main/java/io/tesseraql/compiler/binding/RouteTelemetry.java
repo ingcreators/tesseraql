@@ -38,6 +38,10 @@ public final class RouteTelemetry implements Processor {
                 .attribute("method", method)
                 .attribute("path", path);
         exchange.setProperty(TesseraqlProperties.ROUTE_SPAN, span);
+        io.tesseraql.core.telemetry.SpanContext spanContext = span.context();
+        if (spanContext != null) {
+            exchange.setProperty(TesseraqlProperties.TRACE_CONTEXT, spanContext);
+        }
         exchange.getExchangeExtension().addOnCompletion(new Synchronization() {
             @Override
             public void onComplete(Exchange completed) {

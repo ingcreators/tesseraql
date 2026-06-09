@@ -7,6 +7,14 @@ package io.tesseraql.core.telemetry;
  */
 public interface Tracer {
 
-    /** Starts a span; the caller must {@link Span#end()} it (try-with-resources is supported). */
+    /** Starts a root span; the caller must {@link Span#end()} it (try-with-resources is supported). */
     Span start(String name);
+
+    /**
+     * Starts a span as a child of {@code parent} (a new trace when {@code parent} is null). Tracers
+     * that do not track context fall back to a root span.
+     */
+    default Span start(String name, SpanContext parent) {
+        return start(name);
+    }
 }

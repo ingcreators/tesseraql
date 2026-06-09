@@ -54,6 +54,7 @@ final class OperationsRouteBuilder extends RouteBuilder {
         rest().get("/_tesseraql/ops/lanes").to("direct:ops.lanes");
         rest().get("/_tesseraql/ops/slow-sql").to("direct:ops.slowSql");
         rest().get("/_tesseraql/ops/traces").to("direct:ops.traces");
+        rest().get("/_tesseraql/ops/traces/tree").to("direct:ops.traceTree");
 
         from("direct:ops.batch.jobs").routeId("ops.batch.jobs")
                 .to(VIEW).to("tesseraql-auth:authorize?policy=ops.batch.view")
@@ -87,6 +88,10 @@ final class OperationsRouteBuilder extends RouteBuilder {
         from("direct:ops.traces").routeId("ops.traces")
                 .to(VIEW).to("tesseraql-auth:authorize?policy=ops.batch.view")
                 .process(jsonProcessor(exchange -> dashboard.traces()));
+
+        from("direct:ops.traceTree").routeId("ops.traceTree")
+                .to(VIEW).to("tesseraql-auth:authorize?policy=ops.batch.view")
+                .process(jsonProcessor(exchange -> dashboard.traceTree()));
     }
 
     private Object runJob(Exchange exchange) {

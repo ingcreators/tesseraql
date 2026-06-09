@@ -2,9 +2,12 @@ package io.tesseraql.opsui;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import io.tesseraql.core.telemetry.RingTracer;
+import io.tesseraql.core.telemetry.Span;
 import io.tesseraql.core.threading.ExecutionLanes;
 import io.tesseraql.core.threading.LanePolicy;
 import io.tesseraql.opsui.OpsDashboard.LaneStatus;
+import io.tesseraql.opsui.OpsDashboard.TraceNode;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
@@ -39,6 +42,27 @@ class OpsDashboardTest {
                 assertThat(status.rejected()).isZero();
             });
         }
+    }
+
+    @Test
+    void traceTreeNestsChildSpansUnderTheirParent() {
+        RingTracer tracer = new RingTracer(10);
+        Span route = tracer.start("tesseraql.route");
+        Span sql = tracer.start("tesseraql.sql.execute", route.context());
+        sql.end();
+        route.end();
+
+        OpsDashboard dashboard = new OpsDashboard(null, null, null, tracer);
+        List<TraceNode> roots = dashboard.traceTree();
+
+        assertThat(roots).singleElement().satisfies(root -> {
+            assertThat(root.span().name()).isEqualTo("tesseraql.route");
+            assertThat(root.children()).singleElement().satisfies(child -> {
+                assertThat(child.span().name()).isEqualTo("tesseraql.sql.execute");
+                assertThat(child.span().traceId()).isEqualTo(root.span().traceId());
+                assertThat(child.span().parentSpanId()).isEqualTo(root.span().spanId());
+            });
+        });
     }
 
     @Test

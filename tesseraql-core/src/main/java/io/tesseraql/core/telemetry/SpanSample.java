@@ -6,11 +6,14 @@ import java.util.Map;
  * A finished span captured for in-process trace diagnostics (design ch. 25.4, 26.11).
  *
  * @param name             the span name (e.g. {@code tesseraql.route}, {@code tesseraql.sql.execute})
+ * @param traceId          the trace this span belongs to
+ * @param spanId           this span's id
+ * @param parentSpanId     the parent span's id, or null for a root span
  * @param attributes       span attributes recorded during execution
  * @param durationMs       wall-clock span duration in milliseconds
  * @param error            whether an error was recorded on the span
  * @param startedAtEpochMs when the span started, epoch milliseconds
  */
-public record SpanSample(String name, Map<String, Object> attributes, long durationMs, boolean error,
-        long startedAtEpochMs) {
+public record SpanSample(String name, String traceId, String spanId, String parentSpanId,
+        Map<String, Object> attributes, long durationMs, boolean error, long startedAtEpochMs) {
 }

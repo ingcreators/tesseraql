@@ -63,7 +63,9 @@ public class TesseraqlSqlProducer extends DefaultProducer {
     @SuppressWarnings("unchecked")
     public void process(Exchange exchange) throws Exception {
         String mode = endpoint.getMode();
-        io.tesseraql.core.telemetry.Span span = tracer(exchange).start("tesseraql.sql.execute")
+        io.tesseraql.core.telemetry.SpanContext parent = exchange.getProperty(
+                TesseraqlProperties.TRACE_CONTEXT, io.tesseraql.core.telemetry.SpanContext.class);
+        io.tesseraql.core.telemetry.Span span = tracer(exchange).start("tesseraql.sql.execute", parent)
                 .attribute("sqlId", endpoint.getSqlPath())
                 .attribute("mode", mode);
         try {

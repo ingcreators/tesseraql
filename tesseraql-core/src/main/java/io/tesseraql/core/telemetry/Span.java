@@ -12,6 +12,11 @@ public interface Span extends AutoCloseable {
     /** Records an error/exception on the span. */
     void recordError(Throwable error);
 
+    /** The span's trace/span identity for propagation, or null if the tracer does not track it. */
+    default SpanContext context() {
+        return null;
+    }
+
     /** Ends the span. */
     void end();
 

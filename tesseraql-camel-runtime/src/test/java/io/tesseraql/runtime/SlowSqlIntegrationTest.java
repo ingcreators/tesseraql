@@ -108,6 +108,29 @@ class SlowSqlIntegrationTest {
                 assertThat(span.get("name").asText()).isEqualTo("tesseraql.route"));
     }
 
+    @Test
+    void traceTreeNestsSqlSpanUnderRouteSpan() throws Exception {
+        HttpClient.newHttpClient().send(
+                HttpRequest.newBuilder(URI.create(
+                        "http://localhost:" + runtime.port() + "/api/ping")).build(),
+                HttpResponse.BodyHandlers.ofString());
+
+        HttpResponse<String> tree = HttpClient.newHttpClient().send(
+                HttpRequest.newBuilder(URI.create(
+                                "http://localhost:" + runtime.port() + "/_tesseraql/ops/traces/tree"))
+                        .header("Authorization", "Bearer " + token())
+                        .build(),
+                HttpResponse.BodyHandlers.ofString());
+        assertThat(tree.statusCode()).isEqualTo(200);
+
+        JsonNode roots = MAPPER.readTree(tree.body());
+        assertThat(roots).anySatisfy(root -> {
+            assertThat(root.get("span").get("name").asText()).isEqualTo("tesseraql.route");
+            assertThat(root.get("children")).anySatisfy(child ->
+                    assertThat(child.get("span").get("name").asText()).isEqualTo("tesseraql.sql.execute"));
+        });
+    }
+
     private static String token() throws Exception {
         Base64.Encoder encoder = Base64.getUrlEncoder().withoutPadding();
         String header = encoder.encodeToString("{\"alg\":\"HS256\"}".getBytes(StandardCharsets.UTF_8));

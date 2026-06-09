@@ -6,6 +6,7 @@ import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * A {@link Tracer} that keeps the most recent finished spans in a bounded in-memory ring, exposing
@@ -16,6 +17,7 @@ public final class RingTracer implements Tracer, TraceLog {
 
     private final int capacity;
     private final ArrayDeque<SpanSample> ring;
+    private final AtomicLong ids = new AtomicLong();
 
     public RingTracer(int capacity) {
         if (capacity < 1) {
@@ -27,7 +29,16 @@ public final class RingTracer implements Tracer, TraceLog {
 
     @Override
     public Span start(String name) {
-        return new RingSpan(name, System.nanoTime(), System.currentTimeMillis());
+        return start(name, null);
+    }
+
+    @Override
+    public Span start(String name, SpanContext parent) {
+        String spanId = Long.toHexString(ids.incrementAndGet());
+        String traceId = parent != null ? parent.traceId() : Long.toHexString(ids.incrementAndGet());
+        String parentSpanId = parent != null ? parent.spanId() : null;
+        return new RingSpan(name, traceId, spanId, parentSpanId,
+                System.nanoTime(), System.currentTimeMillis());
     }
 
     @Override
@@ -46,13 +57,20 @@ public final class RingTracer implements Tracer, TraceLog {
 
     private final class RingSpan implements Span {
         private final String name;
+        private final String traceId;
+        private final String spanId;
+        private final String parentSpanId;
         private final long startNanos;
         private final long startedAtEpochMs;
         private final Map<String, Object> attributes = new LinkedHashMap<>();
         private boolean error;
 
-        RingSpan(String name, long startNanos, long startedAtEpochMs) {
+        RingSpan(String name, String traceId, String spanId, String parentSpanId,
+                long startNanos, long startedAtEpochMs) {
             this.name = name;
+            this.traceId = traceId;
+            this.spanId = spanId;
+            this.parentSpanId = parentSpanId;
             this.startNanos = startNanos;
             this.startedAtEpochMs = startedAtEpochMs;
         }
@@ -69,9 +87,15 @@ public final class RingTracer implements Tracer, TraceLog {
         }
 
         @Override
+        public SpanContext context() {
+            return new SpanContext(traceId, spanId);
+        }
+
+        @Override
         public void end() {
             long durationMs = (System.nanoTime() - startNanos) / 1_000_000L;
-            record(new SpanSample(name, Map.copyOf(attributes), durationMs, error, startedAtEpochMs));
+            record(new SpanSample(name, traceId, spanId, parentSpanId,
+                    Map.copyOf(attributes), durationMs, error, startedAtEpochMs));
         }
     }
 }
