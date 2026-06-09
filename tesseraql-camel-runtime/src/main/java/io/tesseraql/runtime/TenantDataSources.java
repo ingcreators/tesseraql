@@ -60,6 +60,12 @@ final class TenantDataSources implements TenantDataSourceResolver, AutoCloseable
         return byTenant.keySet();
     }
 
+    /** The tenant's own pool, or {@code fallback} (the shared pool) when none is configured. */
+    DataSource dataSourceFor(String tenantId, DataSource fallback) {
+        HikariDataSource pool = byTenant.get(tenantId);
+        return pool != null ? pool : fallback;
+    }
+
     @Override
     public DataSource resolve(String tenantId) {
         DataSource dataSource = byTenant.get(tenantId);

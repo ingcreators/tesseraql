@@ -16,6 +16,7 @@ import io.tesseraql.operations.batch.JobRepository;
 import io.tesseraql.operations.idempotency.JdbcIdempotencyStore;
 import io.tesseraql.operations.outbox.JdbcOutboxStore;
 import io.tesseraql.operations.outbox.OutboxDispatcher;
+import io.tesseraql.yaml.config.AppConfig;
 import io.tesseraql.yaml.manifest.AppManifest;
 import io.tesseraql.yaml.manifest.JobFile;
 import io.tesseraql.yaml.manifest.ManifestLoader;
@@ -53,12 +54,13 @@ public final class TesseraqlRuntime implements AutoCloseable {
     private final String appName;
     private final io.tesseraql.core.threading.ExecutionLanes executionLanes;
     private final TenantDataSources tenantDataSources;
+    private final io.tesseraql.yaml.config.AppConfig config;
 
     private TesseraqlRuntime(CamelContext camelContext, HikariDataSource mainDataSource, int port,
             JobRepository jobRepository, JobExecutor jobExecutor, JdbcOutboxStore outboxStore,
             Map<String, JobFile> jobs, String appName,
             io.tesseraql.core.threading.ExecutionLanes executionLanes,
-            TenantDataSources tenantDataSources) {
+            TenantDataSources tenantDataSources, io.tesseraql.yaml.config.AppConfig config) {
         this.camelContext = camelContext;
         this.mainDataSource = mainDataSource;
         this.port = port;
@@ -69,6 +71,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
         this.appName = appName;
         this.executionLanes = executionLanes;
         this.tenantDataSources = tenantDataSources;
+        this.config = config;
     }
 
     /** Starts the runtime against {@code appHome}, using the configured {@code server.port}. */
@@ -149,19 +152,23 @@ public final class TesseraqlRuntime implements AutoCloseable {
         String appName = manifest.config().getString("tesseraql.app.name").orElse("app");
 
         TenantDataSources tenantPools = tenantDataSources;
+        AppConfig runtimeConfig = manifest.config();
         OperationsRouteBuilder.JobRunner jobRunner = (jobId, params) -> {
             JobFile jobFile = jobs.get(jobId);
             if (jobFile == null) {
                 throw new IllegalArgumentException("Unknown job: " + jobId);
             }
-            if (jobFile.definition().perTenant() && !tenantPools.isEmpty()) {
-                JobExecution last = null;
-                for (String tenantId : tenantPools.tenantIds()) {
-                    last = jobExecutor.run(jobFile, tenantPools.resolve(tenantId),
-                            io.tesseraql.core.tenant.TenantContext.of(tenantId),
-                            appName, params, "manual");
+            if (jobFile.definition().perTenant()) {
+                List<String> tenants = TenantRegistry.tenantIds(runtimeConfig, dataSource, tenantPools);
+                if (!tenants.isEmpty()) {
+                    JobExecution last = null;
+                    for (String tenantId : tenants) {
+                        last = jobExecutor.run(jobFile, tenantPools.dataSourceFor(tenantId, dataSource),
+                                io.tesseraql.core.tenant.TenantContext.of(tenantId),
+                                appName, params, "manual");
+                    }
+                    return last;
                 }
-                return last;
             }
             return jobExecutor.run(jobFile, dataSource, appName, params, "manual");
         };
@@ -194,7 +201,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
         }
         LOG.info("TesseraQL runtime started on port {} for app {}", port, appHome);
         return new TesseraqlRuntime(context, dataSource, port, jobRepository, jobExecutor,
-                outboxStore, jobs, appName, lanes, tenantDataSources);
+                outboxStore, jobs, appName, lanes, tenantDataSources, manifest.config());
     }
 
     /** Runs a batch job by id and returns its final execution record (design ch. 26). */
@@ -216,8 +223,9 @@ public final class TesseraqlRuntime implements AutoCloseable {
             throw new IllegalArgumentException("Unknown job: " + jobId);
         }
         List<JobExecution> executions = new java.util.ArrayList<>();
-        for (String tenantId : tenantDataSources.tenantIds()) {
-            executions.add(jobExecutor.run(jobFile, tenantDataSources.resolve(tenantId),
+        for (String tenantId : TenantRegistry.tenantIds(config, mainDataSource, tenantDataSources)) {
+            executions.add(jobExecutor.run(jobFile,
+                    tenantDataSources.dataSourceFor(tenantId, mainDataSource),
                     io.tesseraql.core.tenant.TenantContext.of(tenantId), appName, params, "manual"));
         }
         return executions;
