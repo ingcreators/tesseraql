@@ -29,6 +29,11 @@
       <artifactId>tesseraql-security</artifactId>
       <version>${project.version}</version>
     </dependency>
+    <dependency>
+      <groupId>io.tesseraql</groupId>
+      <artifactId>tesseraql-operations</artifactId>
+      <version>${project.version}</version>
+    </dependency>
 
     <dependency>
       <groupId>org.apache.camel</groupId>
