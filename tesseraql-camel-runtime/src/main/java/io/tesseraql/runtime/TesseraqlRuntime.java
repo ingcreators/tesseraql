@@ -37,6 +37,8 @@ import org.slf4j.LoggerFactory;
 public final class TesseraqlRuntime implements AutoCloseable {
 
     private static final Logger LOG = LoggerFactory.getLogger(TesseraqlRuntime.class);
+    private static final io.tesseraql.core.outbox.OutboxEventSink LOGGING_SINK =
+            event -> LOG.info("Outbox delivered {} {}", event.eventType(), event.id());
 
     private final CamelContext camelContext;
     private final HikariDataSource mainDataSource;
@@ -118,6 +120,11 @@ public final class TesseraqlRuntime implements AutoCloseable {
             context.addRoutes(new OperationsRouteBuilder(
                     jobRunner, jobRepository, List.copyOf(jobs.keySet())));
             context.addRoutes(new SchedulingRouteBuilder(jobRunner, List.copyOf(jobs.values())));
+            var outboxDelay = manifest.config().getString("tesseraql.outbox.dispatch.fixedDelay");
+            if (outboxDelay.isPresent()) {
+                context.addRoutes(new OutboxDispatchRouteBuilder(outboxStore, LOGGING_SINK,
+                        io.tesseraql.core.util.Durations.toMillis(outboxDelay.get())));
+            }
             context.start();
         } catch (Exception ex) {
             dataSource.close();
@@ -143,9 +150,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
 
     /** Dispatches pending outbox events once, returning the number delivered (design ch. 39.2). */
     public int dispatchOutboxOnce() {
-        return new OutboxDispatcher(outboxStore,
-                event -> LOG.info("Outbox delivered {} {}", event.eventType(), event.id()))
-                .dispatch(100);
+        return new OutboxDispatcher(outboxStore, LOGGING_SINK).dispatch(100);
     }
 
     public JdbcOutboxStore outboxStore() {
