@@ -14,9 +14,13 @@ public final class DataSources {
 
     /** Creates a HikariCP pool for the datasource named {@code name} under {@code tesseraql.datasources}. */
     public static HikariDataSource create(AppConfig config, String name) {
-        String prefix = "tesseraql.datasources." + name + ".";
+        return create(config, "tesseraql-" + name, "tesseraql.datasources." + name + ".");
+    }
+
+    /** Creates a HikariCP pool from the {@code jdbcUrl}/{@code username}/{@code password} keys at {@code prefix}. */
+    public static HikariDataSource create(AppConfig config, String poolName, String prefix) {
         HikariConfig hikari = new HikariConfig();
-        hikari.setPoolName("tesseraql-" + name);
+        hikari.setPoolName(poolName);
         hikari.setJdbcUrl(config.requireString(prefix + "jdbcUrl"));
         config.getString(prefix + "username").ifPresent(hikari::setUsername);
         config.getString(prefix + "password").ifPresent(hikari::setPassword);

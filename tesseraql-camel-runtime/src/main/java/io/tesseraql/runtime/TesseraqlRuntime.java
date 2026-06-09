@@ -52,11 +52,13 @@ public final class TesseraqlRuntime implements AutoCloseable {
     private final Map<String, JobFile> jobs;
     private final String appName;
     private final io.tesseraql.core.threading.ExecutionLanes executionLanes;
+    private final TenantDataSources tenantDataSources;
 
     private TesseraqlRuntime(CamelContext camelContext, HikariDataSource mainDataSource, int port,
             JobRepository jobRepository, JobExecutor jobExecutor, JdbcOutboxStore outboxStore,
             Map<String, JobFile> jobs, String appName,
-            io.tesseraql.core.threading.ExecutionLanes executionLanes) {
+            io.tesseraql.core.threading.ExecutionLanes executionLanes,
+            TenantDataSources tenantDataSources) {
         this.camelContext = camelContext;
         this.mainDataSource = mainDataSource;
         this.port = port;
@@ -66,6 +68,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
         this.jobs = jobs;
         this.appName = appName;
         this.executionLanes = executionLanes;
+        this.tenantDataSources = tenantDataSources;
     }
 
     /** Starts the runtime against {@code appHome}, using the configured {@code server.port}. */
@@ -108,6 +111,12 @@ public final class TesseraqlRuntime implements AutoCloseable {
         for (io.tesseraql.core.threading.Lane lane : lanes.all()) {
             context.getRegistry().bind(
                     TesseraqlProperties.laneExecutorRef(lane.name()), lane.executor());
+        }
+
+        TenantDataSources tenantDataSources = TenantDataSources.load(manifest.config());
+        if (!tenantDataSources.isEmpty()) {
+            context.getRegistry().bind(
+                    TesseraqlProperties.TENANT_DATASOURCE_RESOLVER_BEAN, tenantDataSources);
         }
 
         SecurityConfig security = SecurityConfigFactory.build(manifest.config());
@@ -168,13 +177,14 @@ public final class TesseraqlRuntime implements AutoCloseable {
             }
             context.start();
         } catch (Exception ex) {
+            tenantDataSources.close();
             lanes.close();
             dataSource.close();
             throw new IllegalStateException("Failed to start TesseraQL runtime", ex);
         }
         LOG.info("TesseraQL runtime started on port {} for app {}", port, appHome);
-        return new TesseraqlRuntime(
-                context, dataSource, port, jobRepository, jobExecutor, outboxStore, jobs, appName, lanes);
+        return new TesseraqlRuntime(context, dataSource, port, jobRepository, jobExecutor,
+                outboxStore, jobs, appName, lanes, tenantDataSources);
     }
 
     /** Runs a batch job by id and returns its final execution record (design ch. 26). */
@@ -215,7 +225,11 @@ public final class TesseraqlRuntime implements AutoCloseable {
             try {
                 executionLanes.close();
             } finally {
-                mainDataSource.close();
+                try {
+                    tenantDataSources.close();
+                } finally {
+                    mainDataSource.close();
+                }
             }
         }
     }

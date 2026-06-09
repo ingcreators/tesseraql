@@ -54,5 +54,43 @@ public final class AppLinter {
                     "Route references undefined policy '" + definition.security().policy()
                             + "' (deny by default)"));
         }
+        lintTenantPredicate(config, route, definition, source, findings);
+    }
+
+    /**
+     * In shared-schema tenancy, every tenant-owned query must constrain rows by the tenant or it
+     * leaks data across tenants (design ch. 30.4). Warns when an enabled shared-schema app has a
+     * SQL route that neither binds {@code tenant.*} nor mentions a tenant column.
+     */
+    private void lintTenantPredicate(AppConfig config, RouteFile route, RouteDefinition definition,
+            String source, List<LintFinding> findings) {
+        boolean enabled = config.getString("tenancy.enabled").map(Boolean::parseBoolean).orElse(false);
+        String mode = config.getString("tenancy.mode").orElse("shared-schema");
+        if (!enabled || !"shared-schema".equals(mode)) {
+            return;
+        }
+        if (definition.sql() == null || definition.sql().isContract() || definition.sql().file() == null) {
+            return;
+        }
+        boolean boundToTenant = definition.sql().params().values().stream()
+                .anyMatch(expr -> expr != null && expr.startsWith("tenant."));
+        if (boundToTenant) {
+            return;
+        }
+        Path sqlFile = route.source().getParent().resolve(definition.sql().file());
+        if (Files.isRegularFile(sqlFile) && readQuietly(sqlFile).toLowerCase().contains("tenant")) {
+            return;
+        }
+        findings.add(new LintFinding("TQL-TENANT-3001", "warning", source,
+                "Shared-schema route '" + definition.id()
+                        + "' has no tenant predicate; bind tenant.id or filter by a tenant column"));
+    }
+
+    private static String readQuietly(Path file) {
+        try {
+            return Files.readString(file);
+        } catch (java.io.IOException ex) {
+            return "";
+        }
     }
 }

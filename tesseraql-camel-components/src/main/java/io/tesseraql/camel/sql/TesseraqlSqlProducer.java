@@ -70,9 +70,10 @@ public class TesseraqlSqlProducer extends DefaultProducer {
             Map<String, Object> params = exchange.getProperty(
                     TesseraqlProperties.SQL_PARAMS, Map.of(), Map.class);
             BoundSql bound = SqlRenderer.render(nodes, params);
+            DataSource dataSource = dataSource(exchange);
 
             if ("query-export".equals(mode)) {
-                exportCsv(exchange, bound);
+                exportCsv(exchange, dataSource, bound);
                 return;
             }
             if (!"query".equals(mode) && !"update".equals(mode)) {
@@ -81,7 +82,8 @@ public class TesseraqlSqlProducer extends DefaultProducer {
             }
             Map<String, Object> context = exchange.getProperty(
                     TesseraqlProperties.CONTEXT, Map.class);
-            Map<String, Object> result = "update".equals(mode) ? executeUpdate(bound) : executeQuery(bound);
+            Map<String, Object> result = "update".equals(mode)
+                    ? executeUpdate(dataSource, bound) : executeQuery(dataSource, bound);
 
             span.attribute("update".equals(mode) ? "affectedRows" : "rowCount",
                     result.get("update".equals(mode) ? "affectedRows" : "rowCount"));
@@ -109,13 +111,13 @@ public class TesseraqlSqlProducer extends DefaultProducer {
      * (design ch. 28.6, 28.10) without materializing a List&lt;Map&gt;. The spool is deleted when
      * the exchange completes.
      */
-    private void exportCsv(Exchange exchange, BoundSql bound) {
+    private void exportCsv(Exchange exchange, DataSource dataSource, BoundSql bound) {
         if (!"csv".equals(endpoint.getFormat())) {
             throw new TqlException(UNSUPPORTED_MODE, "Unsupported export format: " + endpoint.getFormat());
         }
         TempStore tempStore = tempStore();
         SpoolRef ref;
-        try (Connection connection = connection();
+        try (Connection connection = dataSource.getConnection();
                 PreparedStatement statement = connection.prepareStatement(bound.sql())) {
             bindParameters(statement, bound.parameters());
             try (ResultSet resultSet = statement.executeQuery();
@@ -194,8 +196,8 @@ public class TesseraqlSqlProducer extends DefaultProducer {
                 java.nio.file.Path.of(System.getProperty("java.io.tmpdir"), "tesseraql-spool"));
     }
 
-    private Map<String, Object> executeQuery(BoundSql bound) {
-        try (Connection connection = connection();
+    private Map<String, Object> executeQuery(DataSource dataSource, BoundSql bound) {
+        try (Connection connection = dataSource.getConnection();
                 PreparedStatement statement = connection.prepareStatement(bound.sql())) {
             bindParameters(statement, bound.parameters());
             try (ResultSet resultSet = statement.executeQuery()) {
@@ -210,8 +212,8 @@ public class TesseraqlSqlProducer extends DefaultProducer {
         }
     }
 
-    private Map<String, Object> executeUpdate(BoundSql bound) {
-        try (Connection connection = connection();
+    private Map<String, Object> executeUpdate(DataSource dataSource, BoundSql bound) {
+        try (Connection connection = dataSource.getConnection();
                 PreparedStatement statement = connection.prepareStatement(bound.sql())) {
             bindParameters(statement, bound.parameters());
             int affected = statement.executeUpdate();
@@ -223,14 +225,32 @@ public class TesseraqlSqlProducer extends DefaultProducer {
         }
     }
 
-    private Connection connection() throws java.sql.SQLException {
+    /**
+     * Resolves the datasource for the exchange. When the request carries a resolved tenant and a
+     * {@link io.tesseraql.camel.tenant.TenantDataSourceResolver} is bound, the per-tenant datasource
+     * is used (database/schema-per-tenant, design ch. 30.2); otherwise the named datasource is used.
+     */
+    private DataSource dataSource(Exchange exchange) {
+        Object tenant = exchange.getProperty(TesseraqlProperties.TENANT);
+        if (tenant instanceof io.tesseraql.core.tenant.TenantContext tenantContext) {
+            io.tesseraql.camel.tenant.TenantDataSourceResolver resolver =
+                    endpoint.getCamelContext().getRegistry().lookupByNameAndType(
+                            TesseraqlProperties.TENANT_DATASOURCE_RESOLVER_BEAN,
+                            io.tesseraql.camel.tenant.TenantDataSourceResolver.class);
+            if (resolver != null) {
+                DataSource resolved = resolver.resolve(tenantContext.id());
+                if (resolved != null) {
+                    return resolved;
+                }
+            }
+        }
         DataSource dataSource = endpoint.getCamelContext().getRegistry()
                 .lookupByNameAndType(endpoint.getDatasource(), DataSource.class);
         if (dataSource == null) {
             throw new TqlException(NO_DATASOURCE,
                     "No DataSource named '" + endpoint.getDatasource() + "' in the registry");
         }
-        return dataSource.getConnection();
+        return dataSource;
     }
 
     private TqlException executionError(Exception ex) {
