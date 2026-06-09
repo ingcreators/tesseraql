@@ -225,7 +225,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
             return jobExecutor.run(jobFile, dataSource, appName, params, "manual");
         };
 
-        io.tesseraql.core.outbox.OutboxEventSink outboxSink = scimOutboundSink(manifest);
+        io.tesseraql.core.outbox.OutboxEventSink outboxSink = scimOutboundSink(manifest, dataSource);
         io.tesseraql.opsui.OpsDashboard opsDashboard;
         try {
             opsDashboard = new io.tesseraql.opsui.OpsDashboard(jobRepository, lanes, slowSqlLog,
@@ -290,7 +290,8 @@ public final class TesseraqlRuntime implements AutoCloseable {
      * provisions {@code USER_PROVISIONED}/{@code USER_DEPROVISIONED} events to a downstream provider
      * (design ch. 10.15). At-least-once retry is preserved because a sink failure propagates.
      */
-    private static io.tesseraql.core.outbox.OutboxEventSink scimOutboundSink(AppManifest manifest) {
+    private static io.tesseraql.core.outbox.OutboxEventSink scimOutboundSink(
+            AppManifest manifest, HikariDataSource dataSource) {
         if (!manifest.config().getString("tesseraql.scim.outbound.enabled")
                 .map(Boolean::parseBoolean).orElse(false)) {
             return LOGGING_SINK;
@@ -298,9 +299,11 @@ public final class TesseraqlRuntime implements AutoCloseable {
         io.tesseraql.scim.ScimTarget target = new io.tesseraql.scim.ScimTarget(
                 manifest.config().requireString("tesseraql.scim.outbound.target.url"),
                 manifest.config().getString("tesseraql.scim.outbound.target.token").orElse(""));
+        io.tesseraql.scim.JdbcScimResourceMapping mapping =
+                new io.tesseraql.scim.JdbcScimResourceMapping(dataSource);
+        mapping.ensureSchema();
         io.tesseraql.scim.ScimProvisioner provisioner = new io.tesseraql.scim.ScimProvisioner(
-                new io.tesseraql.scim.ScimOutboundClient(target),
-                new io.tesseraql.scim.ScimResourceMapping.InMemory());
+                new io.tesseraql.scim.ScimOutboundClient(target), mapping);
         io.tesseraql.scim.ScimOutboundSink scimSink = new io.tesseraql.scim.ScimOutboundSink(provisioner);
         return event -> {
             LOGGING_SINK.send(event);
