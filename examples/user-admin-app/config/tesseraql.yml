@@ -1,0 +1,47 @@
+tesseraql:
+  app:
+    name: user-admin
+    home: ${TESSERAQL_APP_HOME:.}
+    work: ${TESSERAQL_WORK_HOME:${TESSERAQL_APP_HOME}/work}
+
+  runtime:
+    engine: camel
+    profile: ${TESSERAQL_PROFILE:local}
+
+  java:
+    baseline: 21
+    compatibility:
+      - 25
+
+  datasources:
+    main:
+      type: hikari
+      jdbcUrl: ${db.main.url}
+      username: ${db.main.username}
+      password: ${db.main.password}
+
+  camel:
+    components:
+      allowed:
+        - direct
+        - platform-http
+        - timer
+        - quartz
+        - file
+        - log
+        - tesseraql-sql
+        - tesseraql-auth
+        - tesseraql-html
+      denied:
+        - exec
+        - script
+        - groovy
+        - class
+
+  security:
+    defaults:
+      api:
+        auth: bearer
+      htmx:
+        auth: browser
+        csrf: auto

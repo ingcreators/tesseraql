@@ -1,0 +1,34 @@
+# Java / Maven
+target/
+*.class
+*.log
+.mvn/wrapper/maven-wrapper.jar
+
+# IDE
+.idea/
+*.iml
+.vscode/*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# TesseraQL local runtime files
+work/
+reports/
+coverage/
+.spool/
+.tesseraql/
+
+# Local env / secrets
+.env
+.env.*
+!.env.example
+.devcontainer/*.local.env
+*.pem
+*.key
+*.p12
+
+# Agent auth/state
+.codex/
+.claude/

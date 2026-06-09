@@ -1,0 +1,10 @@
+{
+  "recommendations": [
+    "vscjava.vscode-java-pack",
+    "redhat.vscode-yaml",
+    "ms-azuretools.vscode-docker",
+    "EditorConfig.EditorConfig",
+    "openai.chatgpt",
+    "anthropic.claude-code"
+  ]
+}

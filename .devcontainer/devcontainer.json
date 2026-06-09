@@ -1,0 +1,52 @@
+{
+  "name": "tesseraql-dev",
+  "dockerComposeFile": "docker-compose.yml",
+  "service": "dev",
+  "workspaceFolder": "/workspace/tesseraql",
+  "remoteUser": "vscode",
+
+  "features": {
+    "ghcr.io/devcontainers/features/docker-outside-of-docker:1": {},
+    "ghcr.io/anthropics/devcontainer-features/claude-code:1.0": {}
+  },
+
+  "mounts": [
+    "source=tesseraql-claude-${devcontainerId},target=/home/vscode/.claude,type=volume",
+    "source=tesseraql-codex-${devcontainerId},target=/home/vscode/.codex,type=volume",
+    "source=tesseraql-m2-${devcontainerId},target=/home/vscode/.m2,type=volume",
+    "source=tesseraql-npm-${devcontainerId},target=/home/vscode/.npm,type=volume"
+  ],
+
+  "remoteEnv": {
+    "CODEX_HOME": "/home/vscode/.codex",
+    "CLAUDE_CONFIG_DIR": "/home/vscode/.claude",
+    "TESSERAQL_PROFILE": "dev"
+  },
+
+  "containerEnv": {
+    "JAVA_TOOL_OPTIONS": "-Dfile.encoding=UTF-8"
+  },
+
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "vscjava.vscode-java-pack",
+        "redhat.vscode-yaml",
+        "ms-azuretools.vscode-docker",
+        "EditorConfig.EditorConfig",
+        "openai.chatgpt",
+        "anthropic.claude-code"
+      ],
+      "settings": {
+        "java.configuration.updateBuildConfiguration": "automatic",
+        "editor.formatOnSave": true,
+        "files.eol": "\n",
+        "yaml.validate": true
+      }
+    }
+  },
+
+  "postCreateCommand": "bash scripts/verify-dev-env.sh",
+
+  "postStartCommand": "git config --global --add safe.directory /workspace/tesseraql || true"
+}

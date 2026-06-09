@@ -1,0 +1,17 @@
+services:
+  dev:
+    build:
+      context: .
+      dockerfile: Dockerfile
+
+    volumes:
+      - ..:/workspace/tesseraql:cached
+
+    command: sleep infinity
+
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+    environment:
+      TESSERAQL_PROFILE: dev
+      TESTCONTAINERS_HOST_OVERRIDE: host.docker.internal

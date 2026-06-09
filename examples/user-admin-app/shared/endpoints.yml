@@ -1,0 +1,6 @@
+endpoints:
+  localExportDir:
+    component: file
+    uri: file:${tesseraql.app.work}/export
+    options:
+      fileExist: Append
