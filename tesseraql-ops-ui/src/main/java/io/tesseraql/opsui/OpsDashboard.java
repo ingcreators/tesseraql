@@ -67,24 +67,55 @@ public final class OpsDashboard {
      */
     public List<TraceNode> traceTree() {
         List<SpanSample> spans = traces.recentSpans();
-        Map<String, TraceNode> byId = new LinkedHashMap<>();
+        Map<String, java.util.List<SpanSample>> childrenByParent = new LinkedHashMap<>();
+        java.util.Set<String> ids = new java.util.HashSet<>();
         for (SpanSample span : spans) {
-            boolean slow = span.durationMs() >= slowSpanThresholdMs;
-            String startedAt = java.time.Instant.ofEpochMilli(span.startedAtEpochMs()).toString();
-            byId.put(span.spanId(), new TraceNode(span, span.durationMs(), startedAt, slow,
-                    new java.util.ArrayList<>()));
+            ids.add(span.spanId());
+        }
+        for (SpanSample span : spans) {
+            if (span.parentSpanId() != null && ids.contains(span.parentSpanId())) {
+                childrenByParent.computeIfAbsent(span.parentSpanId(), k -> new java.util.ArrayList<>())
+                        .add(span);
+            }
         }
         List<TraceNode> roots = new java.util.ArrayList<>();
         for (SpanSample span : spans) {
-            TraceNode node = byId.get(span.spanId());
-            TraceNode parent = span.parentSpanId() == null ? null : byId.get(span.parentSpanId());
-            if (parent != null) {
-                parent.children().add(node);
-            } else {
-                roots.add(node);
+            if (span.parentSpanId() == null || !ids.contains(span.parentSpanId())) {
+                roots.add(buildNode(span, childrenByParent));
             }
         }
         return roots;
+    }
+
+    private TraceNode buildNode(SpanSample span, Map<String, List<SpanSample>> childrenByParent) {
+        List<TraceNode> children = childrenByParent.getOrDefault(span.spanId(), List.of()).stream()
+                .map(child -> buildNode(child, childrenByParent))
+                .toList();
+        long childMs = children.stream().mapToLong(TraceNode::durationMs).sum();
+        long selfMs = Math.max(0, span.durationMs() - childMs);
+        String startedAt = java.time.Instant.ofEpochMilli(span.startedAtEpochMs()).toString();
+        return new TraceNode(span, span.durationMs(), selfMs, startedAt,
+                span.durationMs() >= slowSpanThresholdMs, children);
+    }
+
+    /** A per-trace summary (total time and slowest span) for the trace list view (design ch. 26.11). */
+    public List<TraceSummary> traceSummaries() {
+        List<TraceSummary> summaries = new java.util.ArrayList<>();
+        for (TraceNode root : traceTree()) {
+            List<TraceNode> all = flatten(root, new java.util.ArrayList<>());
+            TraceNode slowest = all.stream()
+                    .max(java.util.Comparator.comparingLong(TraceNode::durationMs))
+                    .orElse(root);
+            summaries.add(new TraceSummary(root.span().traceId(), root.span().name(),
+                    root.durationMs(), all.size(), slowest.span().name(), slowest.durationMs()));
+        }
+        return summaries;
+    }
+
+    private static List<TraceNode> flatten(TraceNode node, List<TraceNode> into) {
+        into.add(node);
+        node.children().forEach(child -> flatten(child, into));
+        return into;
     }
 
     /** Maps each execution lane to its current diagnostics (capacity, in-use, admitted, rejected). */
@@ -125,11 +156,15 @@ public final class OpsDashboard {
     }
 
     /**
-     * A span and its child spans, formatted for display: {@code durationMs} and an ISO-8601
-     * {@code startedAt} are surfaced for convenience, and {@code slow} flags spans over the
-     * configured threshold so the UI can highlight them.
+     * A span and its child spans, formatted for display: {@code durationMs}, {@code selfMs} (time
+     * excluding children), an ISO-8601 {@code startedAt}, and a {@code slow} highlight flag.
      */
-    public record TraceNode(SpanSample span, long durationMs, String startedAt, boolean slow,
-            List<TraceNode> children) {
+    public record TraceNode(SpanSample span, long durationMs, long selfMs, String startedAt,
+            boolean slow, List<TraceNode> children) {
+    }
+
+    /** A roll-up of one trace: its total time, span count, and slowest span. */
+    public record TraceSummary(String traceId, String rootSpan, long totalMs, int spanCount,
+            String slowestSpan, long slowestMs) {
     }
 }

@@ -68,6 +68,27 @@ class OpsDashboardTest {
     }
 
     @Test
+    void traceSummaryReportsTotalCountAndSlowest() {
+        RingTracer tracer = new RingTracer(10);
+        Span route = tracer.start("tesseraql.route");
+        tracer.start("tesseraql.security.authenticate", route.context()).end();
+        tracer.start("tesseraql.sql.execute", route.context()).end();
+        route.end();
+
+        OpsDashboard dashboard = new OpsDashboard(null, null, null, tracer, 200L);
+
+        assertThat(dashboard.traceTree()).singleElement().satisfies(root ->
+                // self time excludes children (here children are ~0ms, so selfMs ~ durationMs).
+                assertThat(root.selfMs()).isLessThanOrEqualTo(root.durationMs()));
+        assertThat(dashboard.traceSummaries()).singleElement().satisfies(summary -> {
+            assertThat(summary.rootSpan()).isEqualTo("tesseraql.route");
+            assertThat(summary.spanCount()).isEqualTo(3);
+            assertThat(summary.slowestSpan()).isNotBlank();
+            assertThat(summary.traceId()).isNotBlank();
+        });
+    }
+
+    @Test
     void slowFlagHighlightsSpansOverThreshold() {
         RingTracer tracer = new RingTracer(10);
         tracer.start("tesseraql.route").end();

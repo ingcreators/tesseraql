@@ -157,12 +157,25 @@ class SlowSqlIntegrationTest {
             // UI fields: formatted start time, duration, and the slow highlight (threshold 0).
             assertThat(root.get("startedAt").asText()).isNotBlank();
             assertThat(root.get("durationMs").isNumber()).isTrue();
+            assertThat(root.get("selfMs").isNumber()).isTrue();
             assertThat(root.get("slow").asBoolean()).isTrue();
             // The route span now has intermediate children for binding and SQL execution.
             assertThat(root.get("children")).anySatisfy(child ->
                     assertThat(child.get("span").get("name").asText()).isEqualTo("tesseraql.request.bind"));
             assertThat(root.get("children")).anySatisfy(child ->
                     assertThat(child.get("span").get("name").asText()).isEqualTo("tesseraql.sql.execute"));
+        });
+
+        HttpResponse<String> summary = HttpClient.newHttpClient().send(
+                HttpRequest.newBuilder(URI.create(
+                                "http://localhost:" + runtime.port() + "/_tesseraql/ops/traces/summary"))
+                        .header("Authorization", "Bearer " + token()).build(),
+                HttpResponse.BodyHandlers.ofString());
+        assertThat(summary.statusCode()).isEqualTo(200);
+        assertThat(MAPPER.readTree(summary.body())).anySatisfy(trace -> {
+            assertThat(trace.get("rootSpan").asText()).isEqualTo("tesseraql.route");
+            assertThat(trace.get("spanCount").asInt()).isGreaterThanOrEqualTo(2);
+            assertThat(trace.get("slowestSpan").asText()).isNotBlank();
         });
     }
 
