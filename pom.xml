@@ -54,6 +54,7 @@
     <testcontainers.version>1.20.4</testcontainers.version>
     <opentelemetry.version>1.45.0</opentelemetry.version>
     <spring.version>6.2.1</spring.version>
+    <spring.boot.version>3.4.1</spring.boot.version>
 
     <!-- Build plugin versions -->
     <maven.compiler.plugin.version>3.13.0</maven.compiler.plugin.version>
@@ -107,6 +108,17 @@
         <version>${spring.version}</version>
         <type>pom</type>
         <scope>import</scope>
+      </dependency>
+
+      <!--
+        Spring Boot actuator (for HealthIndicator contracts) is pinned directly rather than importing
+        the spring-boot-dependencies BOM at the parent: that BOM would override reactor-wide
+        transitive versions (netty, jackson, ...) and break the Camel runtime.
+      -->
+      <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-actuator</artifactId>
+        <version>${spring.boot.version}</version>
       </dependency>
 
       <!-- Standalone third-party dependencies -->

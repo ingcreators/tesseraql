@@ -83,6 +83,16 @@ class SpringRuntimeIntegrationTest {
         assertThat(data.get(0).get("name").asText()).isEqualTo("from-spring");
     }
 
+    @Test
+    void actuatorHealthIndicatorReportsRuntimeHealth() {
+        TesseraqlHealthIndicator indicator = context.getBean(TesseraqlHealthIndicator.class);
+        org.springframework.boot.actuate.health.Health health = indicator.health();
+
+        // No alerts on a freshly started app: status UP with diagnostic details attached.
+        assertThat(health.getStatus().getCode()).isEqualTo("UP");
+        assertThat(health.getDetails()).containsKeys("traceErrorRate", "lanes", "alerts");
+    }
+
     private static void seedDatabase() throws Exception {
         try (Connection connection = DriverManager.getConnection(
                 POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword());

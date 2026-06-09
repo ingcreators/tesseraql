@@ -75,6 +75,22 @@ public final class OpsDashboard {
                 pinning(), !alerts.isEmpty(), alerts);
     }
 
+    /**
+     * A health roll-up suitable for an actuator/health endpoint (design ch. 19.1): {@code UP} when
+     * there are no active alerts, {@code WARN} otherwise, with the key metrics as details.
+     */
+    public HealthReport health() {
+        List<Alert> alerts = alerts();
+        TraceMetrics metrics = traceMetrics();
+        Map<String, Object> details = new LinkedHashMap<>();
+        details.put("traceErrorRate", metrics.traceErrorRate());
+        details.put("spans", metrics.spans());
+        details.put("lanes", lanes == null ? List.of() : laneStatuses(lanes));
+        details.put("pinningEvents", pinning().count());
+        details.put("alerts", alerts);
+        return new HealthReport(alerts.isEmpty() ? "UP" : "WARN", details);
+    }
+
     /** The virtual-thread pinning summary (count and recent events), empty when not monitored. */
     public PinningSummary pinning() {
         if (pinning == null) {
@@ -259,6 +275,10 @@ public final class OpsDashboard {
 
     /** Virtual-thread pinning roll-up: total count and the recent pinning events. */
     public record PinningSummary(long count, List<io.tesseraql.core.diag.PinningEvent> recent) {
+    }
+
+    /** A health roll-up: a status ({@code UP}/{@code WARN}) and supporting detail metrics. */
+    public record HealthReport(String status, Map<String, Object> details) {
     }
 
     /** An operational alert raised when a metric crosses a threshold. */

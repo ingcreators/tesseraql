@@ -57,13 +57,15 @@ public final class TesseraqlRuntime implements AutoCloseable {
     private final io.tesseraql.yaml.config.AppConfig config;
     private final AutoCloseable pinningSource;
     private final AutoCloseable otelSdk;
+    private final io.tesseraql.opsui.OpsDashboard opsDashboard;
 
     private TesseraqlRuntime(CamelContext camelContext, HikariDataSource mainDataSource, int port,
             JobRepository jobRepository, JobExecutor jobExecutor, JdbcOutboxStore outboxStore,
             Map<String, JobFile> jobs, String appName,
             io.tesseraql.core.threading.ExecutionLanes executionLanes,
             TenantDataSources tenantDataSources, io.tesseraql.yaml.config.AppConfig config,
-            AutoCloseable pinningSource, AutoCloseable otelSdk) {
+            AutoCloseable pinningSource, AutoCloseable otelSdk,
+            io.tesseraql.opsui.OpsDashboard opsDashboard) {
         this.camelContext = camelContext;
         this.mainDataSource = mainDataSource;
         this.port = port;
@@ -77,6 +79,12 @@ public final class TesseraqlRuntime implements AutoCloseable {
         this.config = config;
         this.pinningSource = pinningSource;
         this.otelSdk = otelSdk;
+        this.opsDashboard = opsDashboard;
+    }
+
+    /** The operations dashboard for this runtime (health, metrics, traces, alerts). */
+    public io.tesseraql.opsui.OpsDashboard opsDashboard() {
+        return opsDashboard;
     }
 
     /** Starts the runtime against {@code appHome}, using the configured {@code server.port}. */
@@ -214,24 +222,25 @@ public final class TesseraqlRuntime implements AutoCloseable {
             return jobExecutor.run(jobFile, dataSource, appName, params, "manual");
         };
 
+        io.tesseraql.opsui.OpsDashboard opsDashboard;
         try {
+            opsDashboard = new io.tesseraql.opsui.OpsDashboard(jobRepository, lanes, slowSqlLog,
+                    tracer instanceof io.tesseraql.core.telemetry.TraceLog traceLog
+                            ? traceLog : io.tesseraql.core.telemetry.TraceLog.empty(),
+                    manifest.config().getString("tesseraql.diagnostics.slowSpanMillis")
+                            .map(Long::parseLong).orElse(200L),
+                    new io.tesseraql.opsui.OpsDashboard.AlertThresholds(
+                            manifest.config().getString("tesseraql.diagnostics.errorRateWarnPercent")
+                                    .map(Double::parseDouble).orElse(5.0),
+                            manifest.config().getString("tesseraql.diagnostics.slowRateWarnPercent")
+                                    .map(Double::parseDouble).orElse(20.0),
+                            manifest.config().getString("tesseraql.diagnostics.batchFailureWarnPercent")
+                                    .map(Double::parseDouble).orElse(10.0)),
+                    pinningMonitor);
             context.addService(new VertxPlatformHttpServer(httpConfig));
             context.addRoutes(new RouteCompiler().compile(manifest));
             context.addRoutes(new OperationsRouteBuilder(
-                    jobRunner, jobRepository, List.copyOf(jobs.keySet()),
-                    new io.tesseraql.opsui.OpsDashboard(jobRepository, lanes, slowSqlLog,
-                            tracer instanceof io.tesseraql.core.telemetry.TraceLog traceLog
-                                    ? traceLog : io.tesseraql.core.telemetry.TraceLog.empty(),
-                            manifest.config().getString("tesseraql.diagnostics.slowSpanMillis")
-                                    .map(Long::parseLong).orElse(200L),
-                            new io.tesseraql.opsui.OpsDashboard.AlertThresholds(
-                                    manifest.config().getString("tesseraql.diagnostics.errorRateWarnPercent")
-                                            .map(Double::parseDouble).orElse(5.0),
-                                    manifest.config().getString("tesseraql.diagnostics.slowRateWarnPercent")
-                                            .map(Double::parseDouble).orElse(20.0),
-                                    manifest.config().getString("tesseraql.diagnostics.batchFailureWarnPercent")
-                                            .map(Double::parseDouble).orElse(10.0)),
-                            pinningMonitor)));
+                    jobRunner, jobRepository, List.copyOf(jobs.keySet()), opsDashboard));
             context.addRoutes(new SchedulingRouteBuilder(jobRunner, List.copyOf(jobs.values())));
 
             IdentityService identity = new IdentityService(name ->
@@ -265,7 +274,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
         LOG.info("TesseraQL runtime started on port {} for app {}", port, appHome);
         return new TesseraqlRuntime(context, dataSource, port, jobRepository, jobExecutor,
                 outboxStore, jobs, appName, lanes, tenantDataSources, manifest.config(),
-                pinningSource, otelSdk);
+                pinningSource, otelSdk, opsDashboard);
     }
 
     /** Runs a batch job by id and returns its final execution record (design ch. 26). */

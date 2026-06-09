@@ -24,4 +24,10 @@ public class TesseraqlRuntimeConfiguration {
         int port = environment.getProperty("tesseraql.runtime.port", Integer.class, 8080);
         return TesseraqlRuntime.start(appHome, port);
     }
+
+    /** Actuator health contributor backed by the runtime's operations dashboard (design ch. 19.1). */
+    @Bean
+    public TesseraqlHealthIndicator tesseraqlHealthIndicator(TesseraqlRuntime runtime) {
+        return new TesseraqlHealthIndicator(runtime);
+    }
 }
