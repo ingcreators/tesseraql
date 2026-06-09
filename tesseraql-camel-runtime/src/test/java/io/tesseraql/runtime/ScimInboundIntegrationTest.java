@@ -105,6 +105,40 @@ class ScimInboundIntegrationTest {
     }
 
     @Test
+    void replaceUpdatesUserAndDeleteRemovesIt() throws Exception {
+        String id = MAPPER.readTree(send("POST", "/scim/v2/Users",
+                "{\"userName\":\"rdel\",\"name\":{\"givenName\":\"R\",\"familyName\":\"D\"}}").body())
+                .get("id").asText();
+
+        HttpResponse<String> replaced = send("PUT", "/scim/v2/Users/" + id,
+                "{\"userName\":\"rdel\",\"name\":{\"givenName\":\"Renamed\",\"familyName\":\"D\"},"
+                        + "\"active\":false}");
+        assertThat(replaced.statusCode()).isEqualTo(200);
+        assertThat(MAPPER.readTree(replaced.body()).get("name").get("givenName").asText())
+                .isEqualTo("Renamed");
+
+        assertThat(send("DELETE", "/scim/v2/Users/" + id, null).statusCode()).isEqualTo(204);
+        assertThat(send("GET", "/scim/v2/Users/" + id, null).statusCode()).isEqualTo(404);
+        assertThat(send("DELETE", "/scim/v2/Users/" + id, null).statusCode()).isEqualTo(404);
+    }
+
+    @Test
+    void filterByUserNameEqReturnsMatch() throws Exception {
+        send("POST", "/scim/v2/Users", "{\"userName\":\"filterme\"}");
+
+        String encoded = java.net.URLEncoder.encode("userName eq \"filterme\"", StandardCharsets.UTF_8);
+        HttpResponse<String> list = send("GET", "/scim/v2/Users?filter=" + encoded, null);
+        assertThat(list.statusCode()).isEqualTo(200);
+        JsonNode json = MAPPER.readTree(list.body());
+        assertThat(json.get("totalResults").asInt()).isEqualTo(1);
+        assertThat(json.get("Resources").get(0).get("userName").asText()).isEqualTo("filterme");
+
+        String missing = java.net.URLEncoder.encode("userName eq \"nobody\"", StandardCharsets.UTF_8);
+        assertThat(MAPPER.readTree(send("GET", "/scim/v2/Users?filter=" + missing, null).body())
+                .get("totalResults").asInt()).isZero();
+    }
+
+    @Test
     void requiresAuthentication() throws Exception {
         HttpResponse<String> response = HttpClient.newHttpClient().send(
                 HttpRequest.newBuilder(URI.create(
@@ -117,11 +151,13 @@ class ScimInboundIntegrationTest {
         HttpRequest.Builder request = HttpRequest.newBuilder(
                         URI.create("http://localhost:" + runtime.port() + path))
                 .header("Authorization", "Bearer " + token());
-        if ("POST".equals(method)) {
-            request.header("Content-Type", "application/scim+json")
+        switch (method) {
+            case "POST" -> request.header("Content-Type", "application/scim+json")
                     .POST(HttpRequest.BodyPublishers.ofString(body));
-        } else {
-            request.GET();
+            case "PUT" -> request.header("Content-Type", "application/scim+json")
+                    .PUT(HttpRequest.BodyPublishers.ofString(body));
+            case "DELETE" -> request.DELETE();
+            default -> request.GET();
         }
         return HttpClient.newHttpClient().send(request.build(), HttpResponse.BodyHandlers.ofString());
     }
@@ -173,6 +209,9 @@ class ScimInboundIntegrationTest {
                       create: scim/create-user.sql
                       findById: scim/find-user.sql
                       list: scim/list-users.sql
+                      replace: scim/replace-user.sql
+                      delete: scim/delete-user.sql
+                      findByUserName: scim/find-user-by-name.sql
                   security:
                     policies:
                       scim.manage:
@@ -202,6 +241,23 @@ class ScimInboundIntegrationTest {
                        external_id as "externalId"
                 from scim_users order by id
                 limit /* count */ 100 offset (/* startIndex */ 1 - 1)
+                """);
+        Files.writeString(scim.resolve("replace-user.sql"), """
+                update scim_users set user_name = /* userName */ 'u', given_name = /* givenName */ 'g',
+                       family_name = /* familyName */ 'f', email = /* email */ 'e',
+                       active = /* active */ true, external_id = /* externalId */ 'x'
+                where id::text = /* id */ '0'
+                returning id, user_name as "userName", given_name as "givenName",
+                          family_name as "familyName", email as "email", active as "active",
+                          external_id as "externalId"
+                """);
+        Files.writeString(scim.resolve("delete-user.sql"),
+                "delete from scim_users where id::text = /* id */ '0' returning id\n");
+        Files.writeString(scim.resolve("find-user-by-name.sql"), """
+                select id, user_name as "userName", given_name as "givenName",
+                       family_name as "familyName", email as "email", active as "active",
+                       external_id as "externalId"
+                from scim_users where user_name = /* userName */ 'u'
                 """);
         return target;
     }

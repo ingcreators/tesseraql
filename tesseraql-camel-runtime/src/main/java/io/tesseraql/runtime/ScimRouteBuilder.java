@@ -34,6 +34,8 @@ final class ScimRouteBuilder extends RouteBuilder {
         rest().post("/scim/v2/Users").to("direct:scim.createUser");
         rest().get("/scim/v2/Users/{id}").to("direct:scim.getUser");
         rest().get("/scim/v2/Users").to("direct:scim.listUsers");
+        rest().put("/scim/v2/Users/{id}").to("direct:scim.replaceUser");
+        rest().delete("/scim/v2/Users/{id}").to("direct:scim.deleteUser");
 
         from("direct:scim.createUser").routeId("scim.createUser")
                 .to(AUTH).to(AUTHORIZE).process(this::createUser);
@@ -41,6 +43,10 @@ final class ScimRouteBuilder extends RouteBuilder {
                 .to(AUTH).to(AUTHORIZE).process(this::getUser);
         from("direct:scim.listUsers").routeId("scim.listUsers")
                 .to(AUTH).to(AUTHORIZE).process(this::listUsers);
+        from("direct:scim.replaceUser").routeId("scim.replaceUser")
+                .to(AUTH).to(AUTHORIZE).process(this::replaceUser);
+        from("direct:scim.deleteUser").routeId("scim.deleteUser")
+                .to(AUTH).to(AUTHORIZE).process(this::deleteUser);
     }
 
     private void createUser(Exchange exchange) throws Exception {
@@ -58,7 +64,20 @@ final class ScimRouteBuilder extends RouteBuilder {
     private void listUsers(Exchange exchange) throws Exception {
         int startIndex = header(exchange, "startIndex", 1);
         int count = header(exchange, "count", 100);
-        respond(exchange, 200, users.list(startIndex, count));
+        String filter = exchange.getMessage().getHeader("filter", String.class);
+        respond(exchange, 200, users.list(startIndex, count, filter));
+    }
+
+    private void replaceUser(Exchange exchange) throws Exception {
+        String id = exchange.getMessage().getHeader("id", String.class);
+        ScimUser request = mapper.readValue(exchange.getMessage().getBody(String.class), ScimUser.class);
+        respond(exchange, 200, users.replace(id, request));
+    }
+
+    private void deleteUser(Exchange exchange) {
+        users.delete(exchange.getMessage().getHeader("id", String.class));
+        exchange.getMessage().setHeader(Exchange.HTTP_RESPONSE_CODE, 204);
+        exchange.getMessage().setBody(null);
     }
 
     private void respond(Exchange exchange, int status, Object body) throws Exception {

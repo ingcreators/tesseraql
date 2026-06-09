@@ -287,7 +287,10 @@ public final class TesseraqlRuntime implements AutoCloseable {
         io.tesseraql.scim.ScimContract contract = new io.tesseraql.scim.ScimContract(
                 readScimSql(manifest, "tesseraql.scim.users.create"),
                 readScimSql(manifest, "tesseraql.scim.users.findById"),
-                readScimSql(manifest, "tesseraql.scim.users.list"));
+                readScimSql(manifest, "tesseraql.scim.users.list"),
+                readScimSql(manifest, "tesseraql.scim.users.replace"),
+                readScimSql(manifest, "tesseraql.scim.users.delete"),
+                readScimSql(manifest, "tesseraql.scim.users.findByUserName"));
         return new io.tesseraql.scim.ScimUserService(dataSource, contract);
     }
 

@@ -53,6 +53,35 @@ public final class ScimUserService {
         }
     }
 
+    /** Replaces a user by id, returning the updated resource; 404 when it does not exist. */
+    public ScimUser replace(String id, ScimUser user) {
+        try {
+            Map<String, Object> params = ScimUserMapper.toParams(user);
+            params.put("id", id);
+            Map<String, Object> row = queryOne(contract.replaceSql(), params);
+            if (row == null) {
+                throw new ScimException(404, null, "User not found: " + id);
+            }
+            return ScimUserMapper.fromRow(row);
+        } catch (SQLException ex) {
+            if (ex.getSQLState() != null && ex.getSQLState().startsWith("23")) {
+                throw new ScimException(409, "uniqueness", "User already exists: " + user.userName());
+            }
+            throw new ScimException(500, null, "SCIM replace failed: " + ex.getMessage());
+        }
+    }
+
+    /** Deletes a user by id; throws 404 when it does not exist. */
+    public void delete(String id) {
+        try {
+            if (queryOne(contract.deleteSql(), Map.of("id", id)) == null) {
+                throw new ScimException(404, null, "User not found: " + id);
+            }
+        } catch (SQLException ex) {
+            throw new ScimException(500, null, "SCIM delete failed: " + ex.getMessage());
+        }
+    }
+
     /** Lists a page of users; {@code startIndex} is 1-based per SCIM. */
     public ScimListResponse<ScimUser> list(int startIndex, int count) {
         try {
@@ -62,6 +91,29 @@ public final class ScimUserService {
             return ScimListResponse.of(users, users.size(), startIndex);
         } catch (SQLException ex) {
             throw new ScimException(500, null, "SCIM list failed: " + ex.getMessage());
+        }
+    }
+
+    /**
+     * Lists users matching a SCIM filter; only {@code userName eq "..."} is supported, returning the
+     * matching user (or an empty list) so provisioning clients can dedupe before create.
+     */
+    public ScimListResponse<ScimUser> list(int startIndex, int count, String filter) {
+        if (filter == null || filter.isBlank()) {
+            return list(startIndex, count);
+        }
+        ScimFilter parsed = ScimFilter.parse(filter);
+        if (!"userName".equals(parsed.attribute())) {
+            throw new ScimException(400, "invalidFilter",
+                    "Unsupported filter attribute: " + parsed.attribute());
+        }
+        try {
+            Map<String, Object> row = queryOne(contract.findByUserNameSql(),
+                    Map.of("userName", parsed.value()));
+            List<ScimUser> users = row == null ? List.of() : List.of(ScimUserMapper.fromRow(row));
+            return ScimListResponse.of(users, users.size(), startIndex);
+        } catch (SQLException ex) {
+            throw new ScimException(500, null, "SCIM filter failed: " + ex.getMessage());
         }
     }
 
