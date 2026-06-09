@@ -74,6 +74,8 @@ class QueryJsonIntegrationTest {
 
         assertThat(body.path("data")).hasSize(1);
         assertThat(body.path("data").get(0).path("name").asText()).isEqualTo("sato");
+        // created_at is masked by the response field policy (design ch. 34).
+        assertThat(body.path("data").get(0).path("created_at").asText()).isEqualTo("[MASKED]");
         assertThat(body.path("meta").path("count").asInt()).isEqualTo(1);
         assertThat(body.path("meta").path("limit").asInt()).isEqualTo(10);
         assertThat(body.path("meta").path("offset").asInt()).isZero();

@@ -18,11 +18,27 @@ public record ResponseSpec(JsonResponse json, HtmlResponse html) {
      * @param body   the response body template
      */
     @JsonIgnoreProperties(ignoreUnknown = true)
-    public record JsonResponse(Integer status, Object body) {
+    public record JsonResponse(Integer status, Object body, java.util.Map<String, FieldPolicy> fields) {
+
+        public JsonResponse {
+            fields = fields == null ? java.util.Map.of() : java.util.Map.copyOf(fields);
+        }
 
         public int effectiveStatus() {
             return status == null ? 200 : status;
         }
+    }
+
+    /**
+     * Output field authorization and masking policy (design ch. 33.3, 34.2).
+     *
+     * @param visible        when false the field is removed from the response
+     * @param policy         authorization policy the principal must satisfy to see the field
+     * @param mask           masking strategy ({@code email}, {@code last4}, {@code fixed})
+     * @param classification data classification driving a default masking action
+     */
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public record FieldPolicy(Boolean visible, String policy, String mask, String classification) {
     }
 
     /**

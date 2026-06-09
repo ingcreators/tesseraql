@@ -6,6 +6,8 @@ import io.tesseraql.core.error.TqlDomain;
 import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
 import io.tesseraql.core.expr.EvaluationContext;
+import io.tesseraql.security.Principal;
+import io.tesseraql.security.policy.PolicyEngine;
 import io.tesseraql.yaml.model.ResponseSpec;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -42,6 +44,12 @@ public final class JsonResponseRenderer implements Processor {
         EvaluationContext evaluation = new EvaluationContext(context);
 
         Object body = resolve(response.body(), evaluation);
+        if (!response.fields().isEmpty()) {
+            PolicyEngine policyEngine = exchange.getContext().getRegistry()
+                    .lookupByNameAndType(TesseraqlProperties.POLICY_ENGINE_BEAN, PolicyEngine.class);
+            Principal principal = exchange.getProperty(TesseraqlProperties.PRINCIPAL, Principal.class);
+            body = new FieldPolicyApplier(response.fields(), policyEngine, principal).apply(body);
+        }
         String json;
         try {
             json = mapper.writeValueAsString(body);
