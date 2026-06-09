@@ -21,6 +21,61 @@
         <artifactId>tesseraql-core</artifactId>
         <version>${project.version}</version>
       </dependency>
+      <dependency>
+        <groupId>io.tesseraql</groupId>
+        <artifactId>tesseraql-yaml</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>io.tesseraql</groupId>
+        <artifactId>tesseraql-compiler</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>io.tesseraql</groupId>
+        <artifactId>tesseraql-camel-components</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>io.tesseraql</groupId>
+        <artifactId>tesseraql-camel-runtime</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>io.tesseraql</groupId>
+        <artifactId>tesseraql-camel-spring-runtime</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>io.tesseraql</groupId>
+        <artifactId>tesseraql-security</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>io.tesseraql</groupId>
+        <artifactId>tesseraql-test-core</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>io.tesseraql</groupId>
+        <artifactId>tesseraql-coverage-core</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>io.tesseraql</groupId>
+        <artifactId>tesseraql-report</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>io.tesseraql</groupId>
+        <artifactId>tesseraql-studio</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>io.tesseraql</groupId>
+        <artifactId>tesseraql-cli</artifactId>
+        <version>${project.version}</version>
+      </dependency>
     </dependencies>
   </dependencyManagement>
 </project>
