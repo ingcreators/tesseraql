@@ -141,6 +141,32 @@ class OpsDashboardTest {
     }
 
     @Test
+    void errorRateThresholdRaisesWarningAlert() {
+        RingTracer tracer = new RingTracer(50);
+        // 2 of 4 traces error -> 50% trace error rate.
+        for (int i = 0; i < 4; i++) {
+            Span root = tracer.start("tesseraql.route");
+            Span sql = tracer.start("tesseraql.sql.execute", root.context());
+            if (i < 2) {
+                sql.recordError(new RuntimeException("boom"));
+            }
+            sql.end();
+            root.end();
+        }
+
+        // Threshold 10% -> 50% breaches it -> warning.
+        OpsDashboard breaching = new OpsDashboard(null, null, null, tracer, 1_000_000L, 10.0);
+        assertThat(breaching.alerts()).singleElement().satisfies(alert -> {
+            assertThat(alert.severity()).isEqualTo("warning");
+            assertThat(alert.code()).isEqualTo("TQL-OPS-9001");
+        });
+
+        // Threshold 90% -> 50% is below it -> no alert.
+        OpsDashboard healthy = new OpsDashboard(null, null, null, tracer, 1_000_000L, 90.0);
+        assertThat(healthy.alerts()).isEmpty();
+    }
+
+    @Test
     void slowFlagHighlightsSpansOverThreshold() {
         RingTracer tracer = new RingTracer(10);
         tracer.start("tesseraql.route").end();

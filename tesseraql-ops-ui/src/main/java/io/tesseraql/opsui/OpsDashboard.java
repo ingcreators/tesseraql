@@ -26,14 +26,21 @@ public final class OpsDashboard {
     private final SqlExecutionLog slowSql;
     private final TraceLog traces;
     private final long slowSpanThresholdMs;
+    private final double errorRateWarnPercent;
 
     public OpsDashboard(JobRepository jobs, ExecutionLanes lanes, SqlExecutionLog slowSql,
             TraceLog traces, long slowSpanThresholdMs) {
+        this(jobs, lanes, slowSql, traces, slowSpanThresholdMs, 5.0);
+    }
+
+    public OpsDashboard(JobRepository jobs, ExecutionLanes lanes, SqlExecutionLog slowSql,
+            TraceLog traces, long slowSpanThresholdMs, double errorRateWarnPercent) {
         this.jobs = jobs;
         this.lanes = lanes;
         this.slowSql = slowSql;
         this.traces = traces;
         this.slowSpanThresholdMs = slowSpanThresholdMs;
+        this.errorRateWarnPercent = errorRateWarnPercent;
     }
 
     /** Builds the dashboard overview: batch summary, lane diagnostics, slow SQL, and recent traces. */
@@ -47,8 +54,25 @@ public final class OpsDashboard {
                 .limit(Math.max(0, recentLimit))
                 .map(OpsDashboard::view)
                 .toList();
+        List<Alert> alerts = alerts();
         return new Overview(new BatchSummary(executions.size(), byStatus, recent),
-                laneStatuses(lanes), slowSql.recent(), traces.recentSpans(), traceMetrics());
+                laneStatuses(lanes), slowSql.recent(), traces.recentSpans(), traceMetrics(),
+                !alerts.isEmpty(), alerts);
+    }
+
+    /**
+     * Operational alerts derived from the current metrics (design ch. 26.11): a warning is raised
+     * when the trace error rate over the retained window reaches the configured threshold.
+     */
+    public List<Alert> alerts() {
+        TraceMetrics metrics = traceMetrics();
+        List<Alert> alerts = new java.util.ArrayList<>();
+        if (metrics.traces() > 0 && metrics.traceErrorRate() >= errorRateWarnPercent) {
+            alerts.add(new Alert("TQL-OPS-9001", "warning",
+                    "Trace error rate " + metrics.traceErrorRate() + "% is at or above the "
+                            + errorRateWarnPercent + "% threshold"));
+        }
+        return alerts;
     }
 
     /**
@@ -177,7 +201,11 @@ public final class OpsDashboard {
 
     /** The dashboard overview. */
     public record Overview(BatchSummary batch, List<LaneStatus> lanes, List<SqlExecution> slowSql,
-            List<SpanSample> traces, TraceMetrics traceMetrics) {
+            List<SpanSample> traces, TraceMetrics traceMetrics, boolean warning, List<Alert> alerts) {
+    }
+
+    /** An operational alert raised when a metric crosses a threshold. */
+    public record Alert(String code, String severity, String message) {
     }
 
     /**

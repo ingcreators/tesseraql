@@ -150,6 +150,9 @@ class BatchJobIntegrationTest {
         assertThat(body.path("traceMetrics").path("spans").asInt()).isGreaterThan(0);
         assertThat(body.path("traceMetrics").path("traces").asInt()).isGreaterThan(0);
         assertThat(body.path("traceMetrics").has("traceErrorRate")).isTrue();
+        // The overview exposes a warning flag and alert list (threshold logic covered by unit tests).
+        assertThat(body.path("warning").isBoolean()).isTrue();
+        assertThat(body.path("alerts").isArray()).isTrue();
     }
 
     @Test
