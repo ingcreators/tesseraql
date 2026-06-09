@@ -50,9 +50,12 @@ public final class ManifestLoader {
     }
 
     private AppConfig loadConfig(Path home) {
+        // Sources are deep-merged in precedence order so an install overlay can override nested
+        // keys (for example a single datasource) without replacing whole config sub-trees (ch. 32.6).
         Map<String, Object> merged = new HashMap<>();
-        merged.putAll(parseTreeIfPresent(home.resolve("config/application.yml")));
-        merged.putAll(parseTreeIfPresent(home.resolve("config/tesseraql.yml")));
+        deepMerge(merged, parseTreeIfPresent(home.resolve("config/application.yml")));
+        deepMerge(merged, parseTreeIfPresent(home.resolve("config/tesseraql.yml")));
+        deepMerge(merged, parseTreeIfPresent(home.resolve("config/overlay.yml")));
 
         // Provide the app home for ${TESSERAQL_APP_HOME} placeholders, deferring to real env vars.
         String homePath = home.toString();
@@ -68,6 +71,22 @@ public final class ManifestLoader {
 
     private Map<String, Object> parseTreeIfPresent(Path file) {
         return Files.isRegularFile(file) ? parser.parseTree(file) : Map.of();
+    }
+
+    /** Recursively merges {@code incoming} into {@code base}; nested maps merge, leaves override. */
+    @SuppressWarnings("unchecked")
+    private static void deepMerge(Map<String, Object> base, Map<String, Object> incoming) {
+        for (Map.Entry<String, Object> entry : incoming.entrySet()) {
+            Object newValue = entry.getValue();
+            Object oldValue = base.get(entry.getKey());
+            if (oldValue instanceof Map && newValue instanceof Map) {
+                Map<String, Object> child = new HashMap<>((Map<String, Object>) oldValue);
+                deepMerge(child, (Map<String, Object>) newValue);
+                base.put(entry.getKey(), child);
+            } else {
+                base.put(entry.getKey(), newValue);
+            }
+        }
     }
 
     private List<RouteFile> loadRoutes(Path home) {

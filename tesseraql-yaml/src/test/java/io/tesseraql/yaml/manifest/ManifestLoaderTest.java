@@ -65,4 +65,27 @@ class ManifestLoaderTest {
         assertThat(search.sql().params()).containsEntry("q", "query.q");
         assertThat(search.security().auth()).isEqualTo("bearer");
     }
+
+    @Test
+    void overlayDeepMergesOverConfig(@org.junit.jupiter.api.io.TempDir Path dir) throws Exception {
+        java.nio.file.Files.createDirectories(dir.resolve("config"));
+        java.nio.file.Files.writeString(dir.resolve("config/tesseraql.yml"), """
+                tesseraql:
+                  app:
+                    name: t
+                tenancy:
+                  enabled: false
+                  mode: shared-schema
+                """);
+        java.nio.file.Files.writeString(dir.resolve("config/overlay.yml"), """
+                tenancy:
+                  enabled: true
+                """);
+
+        AppManifest manifest = new ManifestLoader().load(dir);
+
+        // Overlay overrides the leaf, deep-merge preserves the sibling key.
+        assertThat(manifest.config().requireString("tenancy.enabled")).isEqualTo("true");
+        assertThat(manifest.config().requireString("tenancy.mode")).isEqualTo("shared-schema");
+    }
 }
