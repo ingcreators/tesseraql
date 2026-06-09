@@ -188,7 +188,9 @@ public final class TesseraqlRuntime implements AutoCloseable {
                     jobRunner, jobRepository, List.copyOf(jobs.keySet()),
                     new io.tesseraql.opsui.OpsDashboard(jobRepository, lanes, slowSqlLog,
                             tracer instanceof io.tesseraql.core.telemetry.TraceLog traceLog
-                                    ? traceLog : io.tesseraql.core.telemetry.TraceLog.empty())));
+                                    ? traceLog : io.tesseraql.core.telemetry.TraceLog.empty(),
+                            manifest.config().getString("tesseraql.diagnostics.slowSpanMillis")
+                                    .map(Long::parseLong).orElse(200L))));
             context.addRoutes(new SchedulingRouteBuilder(jobRunner, List.copyOf(jobs.values())));
 
             IdentityService identity = new IdentityService(name ->

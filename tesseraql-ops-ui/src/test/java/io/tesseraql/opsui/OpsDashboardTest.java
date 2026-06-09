@@ -52,17 +52,32 @@ class OpsDashboardTest {
         sql.end();
         route.end();
 
-        OpsDashboard dashboard = new OpsDashboard(null, null, null, tracer);
+        OpsDashboard dashboard = new OpsDashboard(null, null, null, tracer, 200L);
         List<TraceNode> roots = dashboard.traceTree();
 
         assertThat(roots).singleElement().satisfies(root -> {
             assertThat(root.span().name()).isEqualTo("tesseraql.route");
+            assertThat(root.startedAt()).isNotBlank();
+            assertThat(root.durationMs()).isEqualTo(root.span().durationMs());
             assertThat(root.children()).singleElement().satisfies(child -> {
                 assertThat(child.span().name()).isEqualTo("tesseraql.sql.execute");
                 assertThat(child.span().traceId()).isEqualTo(root.span().traceId());
                 assertThat(child.span().parentSpanId()).isEqualTo(root.span().spanId());
             });
         });
+    }
+
+    @Test
+    void slowFlagHighlightsSpansOverThreshold() {
+        RingTracer tracer = new RingTracer(10);
+        tracer.start("tesseraql.route").end();
+
+        // Threshold 0: every span (>= 0 ms) is flagged slow.
+        assertThat(new OpsDashboard(null, null, null, tracer, 0L).traceTree())
+                .singleElement().satisfies(root -> assertThat(root.slow()).isTrue());
+        // A very high threshold: nothing is flagged.
+        assertThat(new OpsDashboard(null, null, null, tracer, 1_000_000L).traceTree())
+                .singleElement().satisfies(root -> assertThat(root.slow()).isFalse());
     }
 
     @Test

@@ -154,6 +154,10 @@ class SlowSqlIntegrationTest {
         JsonNode roots = MAPPER.readTree(tree.body());
         assertThat(roots).anySatisfy(root -> {
             assertThat(root.get("span").get("name").asText()).isEqualTo("tesseraql.route");
+            // UI fields: formatted start time, duration, and the slow highlight (threshold 0).
+            assertThat(root.get("startedAt").asText()).isNotBlank();
+            assertThat(root.get("durationMs").isNumber()).isTrue();
+            assertThat(root.get("slow").asBoolean()).isTrue();
             // The route span now has intermediate children for binding and SQL execution.
             assertThat(root.get("children")).anySatisfy(child ->
                     assertThat(child.get("span").get("name").asText()).isEqualTo("tesseraql.request.bind"));
@@ -198,6 +202,7 @@ class SlowSqlIntegrationTest {
                 tesseraql:
                   diagnostics:
                     slowSqlMillis: 0
+                    slowSpanMillis: 0
                 """.formatted(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword()));
 
         Path pingDir = target.resolve("web/api/ping");

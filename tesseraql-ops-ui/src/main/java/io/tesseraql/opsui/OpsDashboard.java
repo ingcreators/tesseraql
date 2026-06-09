@@ -25,13 +25,15 @@ public final class OpsDashboard {
     private final ExecutionLanes lanes;
     private final SqlExecutionLog slowSql;
     private final TraceLog traces;
+    private final long slowSpanThresholdMs;
 
     public OpsDashboard(JobRepository jobs, ExecutionLanes lanes, SqlExecutionLog slowSql,
-            TraceLog traces) {
+            TraceLog traces, long slowSpanThresholdMs) {
         this.jobs = jobs;
         this.lanes = lanes;
         this.slowSql = slowSql;
         this.traces = traces;
+        this.slowSpanThresholdMs = slowSpanThresholdMs;
     }
 
     /** Builds the dashboard overview: batch summary, lane diagnostics, slow SQL, and recent traces. */
@@ -67,7 +69,10 @@ public final class OpsDashboard {
         List<SpanSample> spans = traces.recentSpans();
         Map<String, TraceNode> byId = new LinkedHashMap<>();
         for (SpanSample span : spans) {
-            byId.put(span.spanId(), new TraceNode(span, new java.util.ArrayList<>()));
+            boolean slow = span.durationMs() >= slowSpanThresholdMs;
+            String startedAt = java.time.Instant.ofEpochMilli(span.startedAtEpochMs()).toString();
+            byId.put(span.spanId(), new TraceNode(span, span.durationMs(), startedAt, slow,
+                    new java.util.ArrayList<>()));
         }
         List<TraceNode> roots = new java.util.ArrayList<>();
         for (SpanSample span : spans) {
@@ -119,7 +124,12 @@ public final class OpsDashboard {
             int inUse, long admitted, long rejected) {
     }
 
-    /** A span and its child spans, forming a trace tree for display. */
-    public record TraceNode(SpanSample span, List<TraceNode> children) {
+    /**
+     * A span and its child spans, formatted for display: {@code durationMs} and an ISO-8601
+     * {@code startedAt} are surfaced for convenience, and {@code slow} flags spans over the
+     * configured threshold so the UI can highlight them.
+     */
+    public record TraceNode(SpanSample span, long durationMs, String startedAt, boolean slow,
+            List<TraceNode> children) {
     }
 }
