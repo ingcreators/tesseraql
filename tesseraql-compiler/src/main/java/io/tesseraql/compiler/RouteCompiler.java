@@ -6,6 +6,7 @@ import io.tesseraql.compiler.binding.HtmlResponseRenderer;
 import io.tesseraql.compiler.binding.IdempotencyProcessors;
 import io.tesseraql.compiler.binding.JsonResponseRenderer;
 import io.tesseraql.compiler.binding.OutboxCommandProcessor;
+import io.tesseraql.compiler.binding.RateLimiter;
 import io.tesseraql.compiler.binding.RequestBinder;
 import io.tesseraql.core.error.TqlDomain;
 import io.tesseraql.core.error.TqlErrorCode;
@@ -15,6 +16,7 @@ import io.tesseraql.yaml.config.AppConfig;
 import io.tesseraql.yaml.manifest.AppManifest;
 import io.tesseraql.yaml.manifest.RouteFile;
 import io.tesseraql.yaml.model.IdempotencySpec;
+import io.tesseraql.yaml.model.PolicySpec;
 import io.tesseraql.yaml.model.RouteDefinition;
 import io.tesseraql.yaml.model.SecuritySpec;
 import io.tesseraql.yaml.model.SqlBinding;
@@ -153,12 +155,20 @@ public final class RouteCompiler {
         return route.process(new RequestBinder(definition)).to(sqlUri);
     }
 
-    /** Inserts a per-route concurrency limiter when declared (design ch. 36.1). */
+    /** Inserts per-route rate limit and concurrency guards when declared (design ch. 36.1). */
     private void applyConcurrency(ProcessorDefinition<?> route, RouteDefinition definition) {
-        if (definition.policy() != null && definition.policy().concurrency() != null
-                && definition.policy().concurrency().maxInFlight() != null) {
-            route.process(new ConcurrencyLimiter(
-                    definition.policy().concurrency().maxInFlight()).acquire());
+        if (definition.policy() == null) {
+            return;
+        }
+        PolicySpec.RateLimit rateLimit = definition.policy().rateLimit();
+        if (rateLimit != null && rateLimit.requestsPerSecond() != null) {
+            int rps = rateLimit.requestsPerSecond();
+            int burst = rateLimit.burst() != null ? rateLimit.burst() : rps;
+            route.process(new RateLimiter(rps, burst).acquire());
+        }
+        PolicySpec.Concurrency concurrency = definition.policy().concurrency();
+        if (concurrency != null && concurrency.maxInFlight() != null) {
+            route.process(new ConcurrencyLimiter(concurrency.maxInFlight()).acquire());
         }
     }
 

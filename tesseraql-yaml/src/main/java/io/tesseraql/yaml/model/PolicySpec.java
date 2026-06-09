@@ -9,7 +9,7 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
  * @param concurrency in-flight concurrency limit
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
-public record PolicySpec(Concurrency concurrency) {
+public record PolicySpec(Concurrency concurrency, RateLimit rateLimit) {
 
     /**
      * In-flight concurrency limit (design ch. 36.1).
@@ -19,5 +19,15 @@ public record PolicySpec(Concurrency concurrency) {
      */
     @JsonIgnoreProperties(ignoreUnknown = true)
     public record Concurrency(Integer maxInFlight, Integer rejectStatus) {
+    }
+
+    /**
+     * Token-bucket rate limit (design ch. 36.1).
+     *
+     * @param requestsPerSecond sustained request rate
+     * @param burst             bucket capacity; defaults to requestsPerSecond
+     */
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public record RateLimit(Integer requestsPerSecond, Integer burst) {
     }
 }

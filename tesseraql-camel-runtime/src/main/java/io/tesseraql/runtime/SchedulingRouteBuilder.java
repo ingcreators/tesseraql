@@ -44,8 +44,10 @@ final class SchedulingRouteBuilder extends RouteBuilder {
                     .process(exchange -> runner.run(jobId, Map.of()));
             LOG.log(System.Logger.Level.INFO, "Scheduled job {0} every {1}ms", jobId, period);
         } else if (schedule.cron() != null && !schedule.cron().isBlank()) {
-            LOG.log(System.Logger.Level.WARNING,
-                    "Cron scheduling is not yet supported for job {0}; run it on demand", jobId);
+            from("quartz:tesseraql/" + jobId + "?cron=RAW(" + schedule.cron() + ")")
+                    .routeId("schedule." + jobId)
+                    .process(exchange -> runner.run(jobId, Map.of()));
+            LOG.log(System.Logger.Level.INFO, "Scheduled job {0} with cron {1}", jobId, schedule.cron());
         }
     }
 }

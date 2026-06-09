@@ -66,6 +66,21 @@ class SchedulingIntegrationTest {
         assertThat(ran).as("scheduled job 'ping' should have run").isTrue();
     }
 
+    @Test
+    void cronJobRunsAutomatically() throws InterruptedException {
+        long deadline = System.currentTimeMillis() + java.time.Duration.ofSeconds(12).toMillis();
+        boolean ran = false;
+        while (System.currentTimeMillis() < deadline) {
+            ran = runtime.jobRepository().listExecutions(200).stream()
+                    .anyMatch(execution -> "cronping".equals(execution.jobId()));
+            if (ran) {
+                break;
+            }
+            Thread.sleep(250);
+        }
+        assertThat(ran).as("cron-scheduled job 'cronping' should have run").isTrue();
+    }
+
     private static void seedDatabase() throws Exception {
         try (Connection connection = DriverManager.getConnection(
                 POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword());
@@ -109,6 +124,25 @@ class SchedulingIntegrationTest {
                       mode: query
                 """);
         Files.writeString(pingDir.resolve("ping.sql"), "select 1\n");
+
+        // A cron-scheduled job that fires every second (quartz 6-field cron).
+        Path cronDir = target.resolve("batch/cronping");
+        Files.createDirectories(cronDir);
+        Files.writeString(cronDir.resolve("job.yml"), """
+                version: tesseraql/v1
+                id: cronping
+                kind: job
+                recipe: batch-pipeline
+                trigger:
+                  schedule:
+                    cron: "0/1 * * * * ?"
+                pipeline:
+                  - id: ping
+                    sql:
+                      file: ping.sql
+                      mode: query
+                """);
+        Files.writeString(cronDir.resolve("ping.sql"), "select 1\n");
         return target;
     }
 

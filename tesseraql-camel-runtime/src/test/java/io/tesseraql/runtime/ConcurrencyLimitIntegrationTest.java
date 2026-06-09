@@ -75,6 +75,24 @@ class ConcurrencyLimitIntegrationTest {
         }
     }
 
+    @Test
+    void requestsBeyondRateLimitAreRejected() throws Exception {
+        ExecutorService pool = Executors.newFixedThreadPool(8);
+        try {
+            List<Callable<Integer>> calls = new ArrayList<>();
+            for (int i = 0; i < 8; i++) {
+                calls.add(() -> get("/api/rated").statusCode());
+            }
+            List<Integer> statuses = new ArrayList<>();
+            for (Future<Integer> future : pool.invokeAll(calls)) {
+                statuses.add(future.get());
+            }
+            assertThat(statuses).contains(200).contains(429);
+        } finally {
+            pool.shutdownNow();
+        }
+    }
+
     private static HttpResponse<String> get(String path) throws Exception {
         return HttpClient.newHttpClient().send(
                 HttpRequest.newBuilder(URI.create("http://localhost:" + runtime.port() + path)).build(),
@@ -119,6 +137,29 @@ class ConcurrencyLimitIntegrationTest {
                       ok: sql.rowCount
                 """);
         Files.writeString(slowDir.resolve("slow.sql"), "select pg_sleep(0.5) as slept\n");
+
+        // A public route rate-limited to one request per second (bucket capacity 1).
+        Path ratedDir = target.resolve("web/api/rated");
+        Files.createDirectories(ratedDir);
+        Files.writeString(ratedDir.resolve("get.yml"), """
+                version: tesseraql/v1
+                id: rated.query
+                kind: route
+                recipe: query-json
+                policy:
+                  rateLimit:
+                    requestsPerSecond: 1
+                    burst: 1
+                sql:
+                  file: rated.sql
+                  mode: query
+                response:
+                  json:
+                    status: 200
+                    body:
+                      ok: sql.rowCount
+                """);
+        Files.writeString(ratedDir.resolve("rated.sql"), "select 1 as ok\n");
         return target;
     }
 
