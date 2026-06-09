@@ -116,26 +116,32 @@ public final class JobExecutor {
             Map<String, Object> context, Map<String, Object> stepResults, String executionId,
             io.tesseraql.core.telemetry.SpanContext jobContext) {
         String stepExecutionId = repository.startStep(executionId, step.id());
+        io.tesseraql.core.telemetry.Span stepSpan = tracer.start("tesseraql.job.step", jobContext)
+                .attribute("stepId", step.id());
+        io.tesseraql.core.telemetry.SpanContext stepContext = stepSpan.context();
         try {
-            Map<String, Object> result = runStep(jobFile, step, dataSource, context, jobContext);
+            Map<String, Object> result = runStep(jobFile, step, dataSource, context, stepContext);
             stepResults.put(step.id(), result);
             repository.completeStep(stepExecutionId,
                     ((Number) result.getOrDefault("affectedRows", 0)).intValue());
         } catch (RuntimeException ex) {
+            stepSpan.recordError(ex);
             repository.failStep(stepExecutionId, ex.getMessage());
             throw ex;
+        } finally {
+            stepSpan.end();
         }
     }
 
     private Map<String, Object> runStep(JobFile jobFile, PipelineStep step, DataSource dataSource,
-            Map<String, Object> context, io.tesseraql.core.telemetry.SpanContext jobContext) {
+            Map<String, Object> context, io.tesseraql.core.telemetry.SpanContext parentContext) {
         Path sqlPath = jobFile.source().getParent().resolve(step.sql().file()).normalize();
         String source = read(sqlPath);
         Map<String, Object> sqlParams = resolveParams(step, context);
         BoundSql bound = SqlRenderer.render(source, sqlParams);
         String mode = step.sql().effectiveMode();
 
-        io.tesseraql.core.telemetry.Span span = tracer.start("tesseraql.sql.execute", jobContext)
+        io.tesseraql.core.telemetry.Span span = tracer.start("tesseraql.sql.execute", parentContext)
                 .attribute("sqlId", sqlPath.toString())
                 .attribute("mode", mode)
                 .attribute("stepId", step.id());

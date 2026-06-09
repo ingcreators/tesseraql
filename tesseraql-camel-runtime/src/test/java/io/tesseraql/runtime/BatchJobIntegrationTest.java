@@ -158,8 +158,12 @@ class BatchJobIntegrationTest {
         JsonNode roots = MAPPER.readTree(tree.body());
         assertThat(roots).anySatisfy(root -> {
             assertThat(root.get("span").get("name").asText()).isEqualTo("tesseraql.job");
-            assertThat(root.get("children")).anySatisfy(child ->
-                    assertThat(child.get("span").get("name").asText()).isEqualTo("tesseraql.sql.execute"));
+            // job -> step -> sql (three levels).
+            assertThat(root.get("children")).anySatisfy(step -> {
+                assertThat(step.get("span").get("name").asText()).isEqualTo("tesseraql.job.step");
+                assertThat(step.get("children")).anySatisfy(sql ->
+                        assertThat(sql.get("span").get("name").asText()).isEqualTo("tesseraql.sql.execute"));
+            });
         });
     }
 
