@@ -1,4 +1,4 @@
-FROM mcr.microsoft.com/devcontainers/java:1-21-bookworm
+FROM mcr.microsoft.com/devcontainers/java:3-25-bookworm
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
