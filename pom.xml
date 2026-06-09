@@ -23,6 +23,7 @@
     <module>tesseraql-security</module>
     <module>tesseraql-test-core</module>
     <module>tesseraql-coverage-core</module>
+    <module>tesseraql-operations</module>
     <module>tesseraql-report</module>
     <module>tesseraql-studio</module>
     <module>tesseraql-cli</module>
