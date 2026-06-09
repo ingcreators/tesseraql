@@ -71,6 +71,13 @@ public final class ScimUserService {
         }
     }
 
+    /** Applies a SCIM PATCH by normalizing it against the current user and replacing (RFC 7644 §3.5.2). */
+    public ScimUser patch(String id, ScimPatchRequest patch) {
+        ScimUser current = findById(id)
+                .orElseThrow(() -> new ScimException(404, null, "User not found: " + id));
+        return replace(id, ScimPatch.apply(current, patch));
+    }
+
     /** Deletes a user by id; throws 404 when it does not exist. */
     public void delete(String id) {
         try {

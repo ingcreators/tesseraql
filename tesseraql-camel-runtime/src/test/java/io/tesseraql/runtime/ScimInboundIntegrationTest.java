@@ -123,6 +123,29 @@ class ScimInboundIntegrationTest {
     }
 
     @Test
+    void patchDeactivatesAndRenamesUser() throws Exception {
+        String id = MAPPER.readTree(send("POST", "/scim/v2/Users",
+                "{\"userName\":\"patchme\",\"name\":{\"givenName\":\"Pat\",\"familyName\":\"Ch\"},"
+                        + "\"active\":true}").body()).get("id").asText();
+
+        HttpResponse<String> patched = send("PATCH", "/scim/v2/Users/" + id, """
+                {"schemas":["urn:ietf:params:scim:api:messages:2.0:PatchOp"],
+                 "Operations":[
+                   {"op":"replace","path":"name.givenName","value":"Patricia"},
+                   {"op":"replace","value":{"active":false}}
+                 ]}
+                """);
+        assertThat(patched.statusCode()).isEqualTo(200);
+        JsonNode user = MAPPER.readTree(patched.body());
+        assertThat(user.get("name").get("givenName").asText()).isEqualTo("Patricia");
+        assertThat(user.get("active").asBoolean()).isFalse();
+
+        // The change is persisted (re-fetch reflects it).
+        JsonNode refetched = MAPPER.readTree(send("GET", "/scim/v2/Users/" + id, null).body());
+        assertThat(refetched.get("name").get("givenName").asText()).isEqualTo("Patricia");
+    }
+
+    @Test
     void filterByUserNameEqReturnsMatch() throws Exception {
         send("POST", "/scim/v2/Users", "{\"userName\":\"filterme\"}");
 
@@ -156,6 +179,8 @@ class ScimInboundIntegrationTest {
                     .POST(HttpRequest.BodyPublishers.ofString(body));
             case "PUT" -> request.header("Content-Type", "application/scim+json")
                     .PUT(HttpRequest.BodyPublishers.ofString(body));
+            case "PATCH" -> request.header("Content-Type", "application/scim+json")
+                    .method("PATCH", HttpRequest.BodyPublishers.ofString(body));
             case "DELETE" -> request.DELETE();
             default -> request.GET();
         }
