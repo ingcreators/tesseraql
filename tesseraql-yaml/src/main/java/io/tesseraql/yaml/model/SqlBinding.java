@@ -12,7 +12,7 @@ import java.util.Map;
  *               {@code principal.claim.tenant_id} (design ch. 6.3)
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
-public record SqlBinding(String file, String mode, Map<String, String> params) {
+public record SqlBinding(String file, String mode, Map<String, String> params, Materialize materialize) {
 
     public SqlBinding {
         params = params == null ? Map.of() : Map.copyOf(params);
@@ -21,5 +21,15 @@ public record SqlBinding(String file, String mode, Map<String, String> params) {
     /** Returns the effective mode, defaulting to {@code query}. */
     public String effectiveMode() {
         return mode == null || mode.isBlank() ? "query" : mode;
+    }
+
+    /**
+     * Per-route result materialization guard (design ch. 28.7).
+     *
+     * @param maxRows    maximum rows that may be materialized in memory
+     * @param onOverflow behavior when exceeded: {@code fail} (default) or {@code warn}
+     */
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public record Materialize(Integer maxRows, String onOverflow) {
     }
 }

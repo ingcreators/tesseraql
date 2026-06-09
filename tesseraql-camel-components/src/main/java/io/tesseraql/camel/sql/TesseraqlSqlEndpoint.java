@@ -14,6 +14,8 @@ public class TesseraqlSqlEndpoint extends DefaultEndpoint {
     private String datasource = "main";
     private String mode = "query";
     private String resultKey = "sql";
+    private int maxRows = -1;
+    private String onOverflow = "fail";
 
     public TesseraqlSqlEndpoint(String uri, TesseraqlSqlComponent component, String sqlPath) {
         super(uri, component);
@@ -59,5 +61,23 @@ public class TesseraqlSqlEndpoint extends DefaultEndpoint {
     /** Context key under which the result ({@code rows}, {@code rowCount}) is published. */
     public void setResultKey(String resultKey) {
         this.resultKey = resultKey;
+    }
+
+    public int getMaxRows() {
+        return maxRows;
+    }
+
+    /** Maximum rows to materialize for {@code query} mode; {@code -1} means unbounded. */
+    public void setMaxRows(int maxRows) {
+        this.maxRows = maxRows;
+    }
+
+    public String getOnOverflow() {
+        return onOverflow;
+    }
+
+    /** Behavior when {@code maxRows} is exceeded: {@code fail} (default) or {@code warn}. */
+    public void setOnOverflow(String onOverflow) {
+        this.onOverflow = onOverflow;
     }
 }

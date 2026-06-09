@@ -7,10 +7,12 @@ import io.tesseraql.compiler.binding.RequestBinder;
 import io.tesseraql.core.error.TqlDomain;
 import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
+import io.tesseraql.yaml.config.AppConfig;
 import io.tesseraql.yaml.manifest.AppManifest;
 import io.tesseraql.yaml.manifest.RouteFile;
 import io.tesseraql.yaml.model.RouteDefinition;
 import io.tesseraql.yaml.model.SecuritySpec;
+import io.tesseraql.yaml.model.SqlBinding;
 import java.nio.file.Path;
 import org.apache.camel.builder.RouteBuilder;
 import org.apache.camel.model.ProcessorDefinition;
@@ -28,9 +30,13 @@ public final class RouteCompiler {
     private static final System.Logger LOG = System.getLogger(RouteCompiler.class.getName());
     private static final TqlErrorCode UNSUPPORTED_RECIPE = new TqlErrorCode(TqlDomain.CAMEL, 3100);
     private static final String DEFAULT_DATASOURCE = "main";
+    private static final int DEFAULT_MAX_ROWS = 10_000;
+
+    private AppConfig config;
 
     /** Builds a Camel {@link RouteBuilder} for all routes in the manifest. */
     public RouteBuilder compile(AppManifest manifest) {
+        this.config = manifest.config();
         return new RouteBuilder() {
             @Override
             public void configure() {
@@ -80,11 +86,30 @@ public final class RouteCompiler {
         String sqlUri = "tesseraql-sql:file:" + sqlPath
                 + "?datasource=" + DEFAULT_DATASOURCE
                 + "&mode=" + definition.sql().effectiveMode()
-                + "&resultKey=sql";
+                + "&resultKey=sql"
+                + "&maxRows=" + effectiveMaxRows(definition.sql())
+                + "&onOverflow=" + effectiveOnOverflow(definition.sql());
 
         ProcessorDefinition<?> route = builder.from(direct).routeId(routeId);
         applySecurity(route, definition.security());
         return route.process(new RequestBinder(definition)).to(sqlUri);
+    }
+
+    /** Resolves the effective row cap: route override, then global config, then default (ch. 28.7). */
+    private int effectiveMaxRows(SqlBinding sql) {
+        if (sql.materialize() != null && sql.materialize().maxRows() != null) {
+            return sql.materialize().maxRows();
+        }
+        return config.getString("tesseraql.resultMaterialization.maxRows")
+                .map(Integer::parseInt)
+                .orElse(DEFAULT_MAX_ROWS);
+    }
+
+    private String effectiveOnOverflow(SqlBinding sql) {
+        if (sql.materialize() != null && sql.materialize().onOverflow() != null) {
+            return sql.materialize().onOverflow();
+        }
+        return config.getString("tesseraql.resultMaterialization.onOverflow").orElse("fail");
     }
 
     /** Inserts authenticate/authorize steps before binding when the route declares security. */

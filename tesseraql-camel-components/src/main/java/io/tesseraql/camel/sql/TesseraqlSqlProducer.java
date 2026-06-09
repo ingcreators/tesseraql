@@ -33,6 +33,9 @@ public class TesseraqlSqlProducer extends DefaultProducer {
     private static final TqlErrorCode EXECUTION_ERROR = new TqlErrorCode(TqlDomain.SQL, 2500);
     private static final TqlErrorCode UNSUPPORTED_MODE = new TqlErrorCode(TqlDomain.SQL, 2501);
     private static final TqlErrorCode NO_DATASOURCE = new TqlErrorCode(TqlDomain.SQL, 2502);
+    /** TQL-LD-0001: result materialization exceeded the configured maxRows. */
+    private static final TqlErrorCode MATERIALIZATION_OVERFLOW = new TqlErrorCode(TqlDomain.LD, 1);
+    private static final System.Logger LOG = System.getLogger(TesseraqlSqlProducer.class.getName());
 
     private final TesseraqlSqlEndpoint endpoint;
     private List<SqlNode> nodes;
@@ -128,8 +131,22 @@ public class TesseraqlSqlProducer extends DefaultProducer {
     private List<Map<String, Object>> readRows(ResultSet resultSet) throws java.sql.SQLException {
         ResultSetMetaData metaData = resultSet.getMetaData();
         int columnCount = metaData.getColumnCount();
+        int maxRows = endpoint.getMaxRows();
+        boolean warn = "warn".equals(endpoint.getOnOverflow());
         List<Map<String, Object>> rows = new ArrayList<>();
         while (resultSet.next()) {
+            if (maxRows >= 0 && rows.size() >= maxRows) {
+                if (warn) {
+                    LOG.log(System.Logger.Level.WARNING,
+                            "Result truncated at maxRows={0} for {1}", maxRows, endpoint.getSqlPath());
+                    break;
+                }
+                throw TqlException.builder(MATERIALIZATION_OVERFLOW)
+                        .message("Result exceeds maxRows=" + maxRows
+                                + " (use pagination, query-stream, or query-export)")
+                        .source(endpoint.getSqlPath())
+                        .build();
+            }
             Map<String, Object> row = new LinkedHashMap<>();
             for (int col = 1; col <= columnCount; col++) {
                 row.put(metaData.getColumnLabel(col), normalize(resultSet.getObject(col)));
