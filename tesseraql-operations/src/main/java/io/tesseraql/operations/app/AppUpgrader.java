@@ -29,6 +29,7 @@ public final class AppUpgrader {
     private static final TqlErrorCode INCOMPATIBLE = new TqlErrorCode(TqlDomain.UPGRADE, 4090);
     private static final TqlErrorCode NO_TARGET = new TqlErrorCode(TqlDomain.UPGRADE, 4091);
     private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final int DEFAULT_CANARY_WEIGHT = 10;
 
     private final AppInstaller installer = new AppInstaller();
 
@@ -85,12 +86,32 @@ public final class AppUpgrader {
 
         InstalledApp placed = installer.place(tqlapp, installRoot, null, entitled);
         if (canary) {
-            writeState(installRoot, report.appId(), new UpgradeState(previous, placed));
+            writeState(installRoot, report.appId(),
+                    new UpgradeState(previous, placed, DEFAULT_CANARY_WEIGHT));
         } else {
             catalog.register(placed);
-            writeState(installRoot, report.appId(), new UpgradeState(previous, null));
+            writeState(installRoot, report.appId(), new UpgradeState(previous, null, 0));
         }
         return new UpgradeResult(report.appId(), report.fromVersion(), report.toVersion(), canary);
+    }
+
+    /** Adjusts the percentage of traffic the staged canary candidate should receive (0-100). */
+    public void setCanaryWeight(String appId, Path installRoot, int weightPercent) {
+        UpgradeState state = readState(installRoot, appId);
+        if (state == null || state.candidate() == null) {
+            throw new TqlException(NO_TARGET, "No staged candidate for app: " + appId);
+        }
+        int weight = Math.max(0, Math.min(100, weightPercent));
+        writeState(installRoot, appId, new UpgradeState(state.previous(), state.candidate(), weight));
+    }
+
+    /** The staged canary candidate and its traffic weight, if a canary is in progress. */
+    public Optional<CanaryStatus> canary(String appId, Path installRoot) {
+        UpgradeState state = readState(installRoot, appId);
+        if (state == null || state.candidate() == null) {
+            return Optional.empty();
+        }
+        return Optional.of(new CanaryStatus(state.candidate(), state.canaryWeight()));
     }
 
     /** Activates a previously staged canary version. */
@@ -100,7 +121,7 @@ public final class AppUpgrader {
             throw new TqlException(NO_TARGET, "No staged candidate to promote for app: " + appId);
         }
         new AppCatalog(installRoot).register(state.candidate());
-        writeState(installRoot, appId, new UpgradeState(state.previous(), null));
+        writeState(installRoot, appId, new UpgradeState(state.previous(), null, 0));
         return state.candidate();
     }
 
@@ -115,7 +136,7 @@ public final class AppUpgrader {
         }
         if (state.candidate() != null) {
             // Canary not promoted: the catalog still points to the previous version; just discard.
-            writeState(installRoot, appId, new UpgradeState(state.previous(), null));
+            writeState(installRoot, appId, new UpgradeState(state.previous(), null, 0));
             return state.previous();
         }
         InstalledApp previous = state.previous();
@@ -127,7 +148,7 @@ public final class AppUpgrader {
                     "Previous version files are missing for app: " + appId);
         }
         new AppCatalog(installRoot).register(previous);
-        writeState(installRoot, appId, new UpgradeState(null, null));
+        writeState(installRoot, appId, new UpgradeState(null, null, 0));
         return previous;
     }
 
@@ -162,8 +183,12 @@ public final class AppUpgrader {
     public record UpgradeResult(String appId, String fromVersion, String toVersion, boolean canary) {
     }
 
-    /** Persisted snapshot for rollback/promotion (previous active and staged candidate). */
+    /** A staged canary candidate and the percentage of traffic it should receive. */
+    public record CanaryStatus(InstalledApp candidate, int weightPercent) {
+    }
+
+    /** Persisted snapshot for rollback/promotion (previous active, staged candidate, canary weight). */
     @JsonIgnoreProperties(ignoreUnknown = true)
-    record UpgradeState(InstalledApp previous, InstalledApp candidate) {
+    record UpgradeState(InstalledApp previous, InstalledApp candidate, int canaryWeight) {
     }
 }

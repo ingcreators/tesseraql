@@ -112,7 +112,7 @@ public final class MultiAppGateway implements AutoCloseable {
 
             int appPort;
             try {
-                appPort = host.port(appId);
+                appPort = targetPort(appId);
             } catch (RuntimeException unknown) {
                 respond(exchange, 404, "{\"error\":{\"code\":\"TQL-APP-4040\"}}");
                 return;
@@ -164,6 +164,16 @@ public final class MultiAppGateway implements AutoCloseable {
         try (OutputStream out = exchange.getResponseBody()) {
             out.write(responseBody);
         }
+    }
+
+    /** Resolves the port for {@code appId}, splitting traffic to a canary candidate by its weight. */
+    private int targetPort(String appId) {
+        int stablePort = host.port(appId);
+        if (host.hasCanary(appId)
+                && java.util.concurrent.ThreadLocalRandom.current().nextInt(100) < host.canaryWeight(appId)) {
+            return host.canaryPort(appId);
+        }
+        return stablePort;
     }
 
     /** The request's host without port, lowercased, or empty if absent. */
