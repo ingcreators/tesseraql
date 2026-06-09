@@ -56,13 +56,14 @@ public final class TesseraqlRuntime implements AutoCloseable {
     private final TenantDataSources tenantDataSources;
     private final io.tesseraql.yaml.config.AppConfig config;
     private final AutoCloseable pinningSource;
+    private final AutoCloseable otelSdk;
 
     private TesseraqlRuntime(CamelContext camelContext, HikariDataSource mainDataSource, int port,
             JobRepository jobRepository, JobExecutor jobExecutor, JdbcOutboxStore outboxStore,
             Map<String, JobFile> jobs, String appName,
             io.tesseraql.core.threading.ExecutionLanes executionLanes,
             TenantDataSources tenantDataSources, io.tesseraql.yaml.config.AppConfig config,
-            AutoCloseable pinningSource) {
+            AutoCloseable pinningSource, AutoCloseable otelSdk) {
         this.camelContext = camelContext;
         this.mainDataSource = mainDataSource;
         this.port = port;
@@ -75,6 +76,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
         this.tenantDataSources = tenantDataSources;
         this.config = config;
         this.pinningSource = pinningSource;
+        this.otelSdk = otelSdk;
     }
 
     /** Starts the runtime against {@code appHome}, using the configured {@code server.port}. */
@@ -109,8 +111,25 @@ public final class TesseraqlRuntime implements AutoCloseable {
         DefaultCamelContext context = new DefaultCamelContext();
         HikariDataSource dataSource = DataSources.create(manifest.config(), "main");
         context.getRegistry().bind("main", dataSource);
-        context.getRegistry().bind(TesseraqlProperties.TRACER_BEAN, tracer);
-        context.getRegistry().bind(TesseraqlProperties.METER_BEAN, meter);
+
+        // OTLP export (design ch. 25.7): when an endpoint is configured, fan spans out to OTLP
+        // alongside the in-process ring and export metrics via OpenTelemetry.
+        io.tesseraql.core.telemetry.Tracer effectiveTracer = tracer;
+        io.tesseraql.core.telemetry.Meter effectiveMeter = meter;
+        AutoCloseable otelSdk = null;
+        String otlpEndpoint = manifest.config().getString("tesseraql.otel.otlp.endpoint").orElse(null);
+        if (otlpEndpoint != null && !otlpEndpoint.isBlank()) {
+            String serviceName = manifest.config().getString("tesseraql.otel.serviceName")
+                    .or(() -> manifest.config().getString("tesseraql.app.name")).orElse("tesseraql");
+            io.opentelemetry.sdk.OpenTelemetrySdk sdk =
+                    io.tesseraql.observability.OpenTelemetrySupport.otlp(otlpEndpoint, serviceName);
+            otelSdk = sdk;
+            effectiveTracer = new io.tesseraql.core.telemetry.CompositeTracer(
+                    tracer, new io.tesseraql.observability.OpenTelemetryTracer(sdk));
+            effectiveMeter = new io.tesseraql.observability.OpenTelemetryMeter(sdk);
+        }
+        context.getRegistry().bind(TesseraqlProperties.TRACER_BEAN, effectiveTracer);
+        context.getRegistry().bind(TesseraqlProperties.METER_BEAN, effectiveMeter);
 
         io.tesseraql.core.threading.ExecutionLanes lanes = LaneConfigs.load(manifest.config());
         context.getRegistry().bind(TesseraqlProperties.LANES_BEAN, lanes);
@@ -245,7 +264,8 @@ public final class TesseraqlRuntime implements AutoCloseable {
         }
         LOG.info("TesseraQL runtime started on port {} for app {}", port, appHome);
         return new TesseraqlRuntime(context, dataSource, port, jobRepository, jobExecutor,
-                outboxStore, jobs, appName, lanes, tenantDataSources, manifest.config(), pinningSource);
+                outboxStore, jobs, appName, lanes, tenantDataSources, manifest.config(),
+                pinningSource, otelSdk);
     }
 
     /** Runs a batch job by id and returns its final execution record (design ch. 26). */
@@ -299,6 +319,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
     @Override
     public void close() {
         closeQuietly(pinningSource);
+        closeQuietly(otelSdk);
         try {
             camelContext.stop();
         } finally {
