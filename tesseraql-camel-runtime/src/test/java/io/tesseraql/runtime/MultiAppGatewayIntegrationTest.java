@@ -78,6 +78,35 @@ class MultiAppGatewayIntegrationTest {
         assertThat(response.body()).contains("TQL-APP-4040");
     }
 
+    @Test
+    void routesByHostHeader() throws Exception {
+        // The same path on different hosts reaches different apps (no /apps prefix).
+        assertThat(itemNameForHost("shop-a.localhost")).isEqualTo("from-a");
+        assertThat(itemNameForHost("shop-b.localhost")).isEqualTo("from-b");
+    }
+
+    private static String itemNameForHost(String hostName) throws Exception {
+        String body = rawGet("/api/items", hostName);
+        JsonNode data = MAPPER.readTree(body).get("data");
+        assertThat(data).hasSize(1);
+        return data.get(0).get("name").asText();
+    }
+
+    /** Sends a raw HTTP/1.1 GET so a custom Host header can be set (the HTTP client forbids it). */
+    private static String rawGet(String path, String hostName) throws IOException {
+        try (java.net.Socket socket = new java.net.Socket("localhost", gateway.port())) {
+            String request = "GET " + path + " HTTP/1.1\r\nHost: " + hostName
+                    + "\r\nConnection: close\r\n\r\n";
+            socket.getOutputStream().write(request.getBytes(java.nio.charset.StandardCharsets.US_ASCII));
+            socket.getOutputStream().flush();
+            String response = new String(socket.getInputStream().readAllBytes(),
+                    java.nio.charset.StandardCharsets.UTF_8);
+            assertThat(response).startsWith("HTTP/1.1 200");
+            int split = response.indexOf("\r\n\r\n");
+            return response.substring(split + 4);
+        }
+    }
+
     private static String itemName(String appId) throws Exception {
         HttpResponse<String> response = get("/apps/" + appId + "/api/items");
         assertThat(response.statusCode()).isEqualTo(200);
@@ -142,8 +171,8 @@ class MultiAppGatewayIntegrationTest {
                 """);
         Files.writeString(itemsDir.resolve("list.sql"), "select id, name from items order by id\n");
 
-        new AppCatalog(installRoot).register(
-                new InstalledApp(appId, "1.0.0", appId + "/1.0.0", List.of()));
+        new AppCatalog(installRoot).register(new InstalledApp(
+                appId, "1.0.0", appId + "/1.0.0", List.of(), List.of(appId + ".localhost")));
     }
 
     private static void copy(Path source, Path target, Path path) {

@@ -2,6 +2,8 @@ package io.tesseraql.runtime;
 
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
+import io.tesseraql.operations.app.AppCatalog;
+import io.tesseraql.operations.app.InstalledApp;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.io.UncheckedIOException;
@@ -13,6 +15,7 @@ import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.Executors;
 import org.slf4j.Logger;
@@ -21,9 +24,11 @@ import org.slf4j.LoggerFactory;
 /**
  * A single-port front that aggregates every app hosted by a {@link MultiAppHost} (design ch. 32.7).
  *
- * <p>Each app still runs in its own isolated runtime on an internal port; the gateway routes
- * {@code /apps/<appId>/<path>} to the matching app, stripping the prefix, so all apps are reachable
- * through one address without sharing route paths or data. Unknown apps get 404.
+ * <p>Each app still runs in its own isolated runtime on an internal port. The gateway routes a
+ * request to an app by, in order: the {@code Host} header (when the app declares hostnames in its
+ * catalog entry), then the {@code /apps/<appId>/<path>} path prefix. Host routing forwards the full
+ * path; prefix routing strips the prefix. All apps are reachable through one address without sharing
+ * route paths or data; unmatched requests get 404.
  */
 public final class MultiAppGateway implements AutoCloseable {
 
@@ -39,13 +44,15 @@ public final class MultiAppGateway implements AutoCloseable {
     private final HttpServer server;
     private final HttpClient client;
     private final int port;
+    private final Map<String, String> hostToApp;
 
-    private MultiAppGateway(MultiAppHost host, HttpServer server) {
+    private MultiAppGateway(MultiAppHost host, HttpServer server, Map<String, String> hostToApp) {
         this.host = host;
         this.server = server;
+        this.hostToApp = hostToApp;
         this.client = HttpClient.newHttpClient();
         this.port = server.getAddress().getPort();
-        server.createContext(PREFIX, this::handle);
+        server.createContext("/", this::handle);
         server.setExecutor(Executors.newVirtualThreadPerTaskExecutor());
         server.start();
     }
@@ -55,11 +62,23 @@ public final class MultiAppGateway implements AutoCloseable {
         MultiAppHost host = MultiAppHost.start(installRoot);
         try {
             HttpServer server = HttpServer.create(new InetSocketAddress(frontPort), 0);
-            return new MultiAppGateway(host, server);
+            return new MultiAppGateway(host, server, hostMappings(installRoot, host.appIds()));
         } catch (IOException ex) {
             host.close();
             throw new UncheckedIOException(ex);
         }
+    }
+
+    private static Map<String, String> hostMappings(java.nio.file.Path installRoot, Set<String> hosted) {
+        Map<String, String> map = new java.util.HashMap<>();
+        for (InstalledApp app : new AppCatalog(installRoot).list()) {
+            if (hosted.contains(app.id())) {
+                for (String host : app.hosts()) {
+                    map.put(host.toLowerCase(Locale.ROOT), app.id());
+                }
+            }
+        }
+        return Map.copyOf(map);
     }
 
     public int port() {
@@ -72,10 +91,24 @@ public final class MultiAppGateway implements AutoCloseable {
 
     private void handle(HttpExchange exchange) throws IOException {
         try {
-            String remainder = exchange.getRequestURI().getRawPath().substring(PREFIX.length());
-            int slash = remainder.indexOf('/');
-            String appId = slash < 0 ? remainder : remainder.substring(0, slash);
-            String downstreamPath = slash < 0 ? "/" : remainder.substring(slash);
+            String rawPath = exchange.getRequestURI().getRawPath();
+            String hostApp = hostToApp.get(requestHost(exchange));
+
+            String appId;
+            String downstreamPath;
+            if (hostApp != null) {
+                // Host-based: the matched app owns the whole address, forward the path unchanged.
+                appId = hostApp;
+                downstreamPath = rawPath.isEmpty() ? "/" : rawPath;
+            } else if (rawPath.startsWith(PREFIX)) {
+                String remainder = rawPath.substring(PREFIX.length());
+                int slash = remainder.indexOf('/');
+                appId = slash < 0 ? remainder : remainder.substring(0, slash);
+                downstreamPath = slash < 0 ? "/" : remainder.substring(slash);
+            } else {
+                respond(exchange, 404, "{\"error\":{\"code\":\"TQL-APP-4040\"}}");
+                return;
+            }
 
             int appPort;
             try {
@@ -131,6 +164,17 @@ public final class MultiAppGateway implements AutoCloseable {
         try (OutputStream out = exchange.getResponseBody()) {
             out.write(responseBody);
         }
+    }
+
+    /** The request's host without port, lowercased, or empty if absent. */
+    private static String requestHost(HttpExchange exchange) {
+        String header = exchange.getRequestHeaders().getFirst("Host");
+        if (header == null) {
+            return "";
+        }
+        int colon = header.indexOf(':');
+        String name = colon < 0 ? header : header.substring(0, colon);
+        return name.toLowerCase(Locale.ROOT);
     }
 
     private static void respond(HttpExchange exchange, int status, String body) throws IOException {
