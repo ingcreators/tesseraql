@@ -11,6 +11,8 @@ import io.tesseraql.operations.batch.JobExecution;
 import io.tesseraql.operations.batch.JobExecutor;
 import io.tesseraql.operations.batch.JobRepository;
 import io.tesseraql.operations.idempotency.JdbcIdempotencyStore;
+import io.tesseraql.operations.outbox.JdbcOutboxStore;
+import io.tesseraql.operations.outbox.OutboxDispatcher;
 import io.tesseraql.yaml.manifest.AppManifest;
 import io.tesseraql.yaml.manifest.JobFile;
 import io.tesseraql.yaml.manifest.ManifestLoader;
@@ -41,17 +43,19 @@ public final class TesseraqlRuntime implements AutoCloseable {
     private final int port;
     private final JobRepository jobRepository;
     private final JobExecutor jobExecutor;
+    private final JdbcOutboxStore outboxStore;
     private final Map<String, JobFile> jobs;
     private final String appName;
 
     private TesseraqlRuntime(CamelContext camelContext, HikariDataSource mainDataSource, int port,
-            JobRepository jobRepository, JobExecutor jobExecutor, Map<String, JobFile> jobs,
-            String appName) {
+            JobRepository jobRepository, JobExecutor jobExecutor, JdbcOutboxStore outboxStore,
+            Map<String, JobFile> jobs, String appName) {
         this.camelContext = camelContext;
         this.mainDataSource = mainDataSource;
         this.port = port;
         this.jobRepository = jobRepository;
         this.jobExecutor = jobExecutor;
+        this.outboxStore = outboxStore;
         this.jobs = jobs;
         this.appName = appName;
     }
@@ -92,6 +96,9 @@ public final class TesseraqlRuntime implements AutoCloseable {
         JdbcIdempotencyStore idempotencyStore = new JdbcIdempotencyStore(dataSource);
         idempotencyStore.ensureSchema();
         context.getRegistry().bind(TesseraqlProperties.IDEMPOTENCY_STORE_BEAN, idempotencyStore);
+        JdbcOutboxStore outboxStore = new JdbcOutboxStore(dataSource);
+        outboxStore.ensureSchema();
+        context.getRegistry().bind(TesseraqlProperties.OUTBOX_STORE_BEAN, outboxStore);
         JobExecutor jobExecutor = new JobExecutor(jobRepository);
         Map<String, JobFile> jobs = new LinkedHashMap<>();
         manifest.jobs().forEach(job -> jobs.put(job.definition().id(), job));
@@ -117,7 +124,8 @@ public final class TesseraqlRuntime implements AutoCloseable {
             throw new IllegalStateException("Failed to start TesseraQL runtime", ex);
         }
         LOG.info("TesseraQL runtime started on port {} for app {}", port, appHome);
-        return new TesseraqlRuntime(context, dataSource, port, jobRepository, jobExecutor, jobs, appName);
+        return new TesseraqlRuntime(
+                context, dataSource, port, jobRepository, jobExecutor, outboxStore, jobs, appName);
     }
 
     /** Runs a batch job by id and returns its final execution record (design ch. 26). */
@@ -131,6 +139,17 @@ public final class TesseraqlRuntime implements AutoCloseable {
 
     public JobRepository jobRepository() {
         return jobRepository;
+    }
+
+    /** Dispatches pending outbox events once, returning the number delivered (design ch. 39.2). */
+    public int dispatchOutboxOnce() {
+        return new OutboxDispatcher(outboxStore,
+                event -> LOG.info("Outbox delivered {} {}", event.eventType(), event.id()))
+                .dispatch(100);
+    }
+
+    public JdbcOutboxStore outboxStore() {
+        return outboxStore;
     }
 
     public int port() {

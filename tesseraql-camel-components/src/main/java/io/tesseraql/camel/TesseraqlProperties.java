@@ -19,6 +19,7 @@ public final class TesseraqlProperties {
     public static final String SESSION_STORE_BEAN = "tesseraqlSessionStore";
     public static final String TEMP_STORE_BEAN = "tesseraqlTempStore";
     public static final String IDEMPOTENCY_STORE_BEAN = "tesseraqlIdempotencyStore";
+    public static final String OUTBOX_STORE_BEAN = "tesseraqlOutboxStore";
 
     private TesseraqlProperties() {
     }

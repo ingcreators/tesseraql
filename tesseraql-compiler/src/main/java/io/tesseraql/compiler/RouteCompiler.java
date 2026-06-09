@@ -5,6 +5,7 @@ import io.tesseraql.compiler.binding.ErrorResponseRenderer;
 import io.tesseraql.compiler.binding.HtmlResponseRenderer;
 import io.tesseraql.compiler.binding.IdempotencyProcessors;
 import io.tesseraql.compiler.binding.JsonResponseRenderer;
+import io.tesseraql.compiler.binding.OutboxCommandProcessor;
 import io.tesseraql.compiler.binding.RequestBinder;
 import io.tesseraql.core.error.TqlDomain;
 import io.tesseraql.core.error.TqlErrorCode;
@@ -69,9 +70,32 @@ public final class RouteCompiler {
     }
 
     private void buildJson(RouteBuilder builder, RouteFile routeFile) {
+        if (routeFile.definition().outbox() != null) {
+            buildCommandWithOutbox(builder, routeFile);
+            return;
+        }
         ProcessorDefinition<?> route = pipelineThroughSql(builder, routeFile)
                 .process(new JsonResponseRenderer(routeFile.definition().response().json()));
         applyIdempotencyComplete(route, routeFile.definition());
+    }
+
+    /** Builds a command route whose SQL and outbox event commit atomically (design ch. 39.2). */
+    private void buildCommandWithOutbox(RouteBuilder builder, RouteFile routeFile) {
+        RouteDefinition definition = routeFile.definition();
+        String routeId = definition.id();
+        String direct = "direct:" + routeId;
+        restEndpoint(builder, routeFile.httpMethod(), routeFile.urlPath()).to(direct);
+
+        Path sqlPath = routeFile.source().getParent().resolve(definition.sql().file()).normalize();
+
+        ProcessorDefinition<?> route = builder.from(direct).routeId(routeId);
+        applyConcurrency(route, definition);
+        applySecurity(route, definition.security());
+        applyIdempotencyBegin(route, definition);
+        route.process(new RequestBinder(definition))
+                .process(new OutboxCommandProcessor(sqlPath, DEFAULT_DATASOURCE, definition.outbox()))
+                .process(new JsonResponseRenderer(definition.response().json()));
+        applyIdempotencyComplete(route, definition);
     }
 
     private void buildQueryExport(RouteBuilder builder, RouteFile routeFile) {
