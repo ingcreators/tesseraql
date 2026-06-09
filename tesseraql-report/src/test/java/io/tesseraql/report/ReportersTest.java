@@ -36,4 +36,12 @@ class ReportersTest {
         assertThat(json).contains("\"total\" : 2").contains("\"passed\" : 1").contains("\"failed\" : 1");
         assertThat(json).contains("search finds sato").contains("rowCount check");
     }
+
+    @Test
+    void htmlContainsSummaryAndRows() {
+        String html = HtmlReporter.toHtml(report(), "Users Suite");
+        assertThat(html).contains("<!doctype html>").contains("Users Suite");
+        assertThat(html).contains("Passed: 1").contains("Failed: 1");
+        assertThat(html).contains("search finds sato").contains("PASS").contains("FAIL");
+    }
 }
