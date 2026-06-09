@@ -88,10 +88,11 @@ public final class EvaluationContext {
 
     private static Object getterValue(Object target, String name) {
         String capitalized = Character.toUpperCase(name.charAt(0)) + name.substring(1);
-        for (String prefix : new String[] {"get", "is"}) {
+        // Record-style accessor (name), then JavaBean getX/isX.
+        for (String accessor : new String[] {name, "get" + capitalized, "is" + capitalized}) {
             try {
-                Method method = target.getClass().getMethod(prefix + capitalized);
-                if (method.canAccess(target)) {
+                Method method = target.getClass().getMethod(accessor);
+                if (method.getParameterCount() == 0 && method.canAccess(target)) {
                     return method.invoke(target);
                 }
             } catch (ReflectiveOperationException ignored) {
