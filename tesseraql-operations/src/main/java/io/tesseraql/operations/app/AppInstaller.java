@@ -41,6 +41,16 @@ public final class AppInstaller {
      */
     public InstalledApp install(Path tqlapp, Path installRoot, Path overlay,
             List<String> entitledTenants) {
+        InstalledApp app = place(tqlapp, installRoot, overlay, entitledTenants);
+        new AppCatalog(installRoot).register(app);
+        return app;
+    }
+
+    /**
+     * Extracts and places {@code tqlapp} into the install root without touching the catalog, returning
+     * the resulting entry. Used by upgrades to stage a candidate version (canary) before promotion.
+     */
+    public InstalledApp place(Path tqlapp, Path installRoot, Path overlay, List<String> entitledTenants) {
         try {
             Files.createDirectories(installRoot);
             Path staging = Files.createTempDirectory(installRoot, "staging-");
@@ -58,16 +68,38 @@ public final class AppInstaller {
                 Files.createDirectories(target.getParent());
                 Files.move(staging, target, StandardCopyOption.REPLACE_EXISTING);
 
-                InstalledApp app = new InstalledApp(id, version,
+                return new InstalledApp(id, version,
                         installRoot.relativize(target).toString().replace('\\', '/'), entitledTenants);
-                new AppCatalog(installRoot).register(app);
-                return app;
             } finally {
                 deleteRecursively(staging);
             }
         } catch (IOException ex) {
             throw new TqlException(INSTALL_ERROR, "Failed to install package: " + ex.getMessage());
         }
+    }
+
+    /** Reads a package's id, version, and required framework range without installing it. */
+    public PackageInfo peek(Path tqlapp) {
+        try {
+            Path staging = Files.createTempDirectory("peek-");
+            try {
+                extract(tqlapp, staging);
+                AppConfig config = loadConfig(staging);
+                String id = config.getString("tesseraql.app.name").orElseThrow(() -> new TqlException(
+                        INVALID_PACKAGE, "Package has no tesseraql.app.name: " + tqlapp));
+                String version = config.getString("tesseraql.app.version").orElse("0.0.0");
+                String requiresFramework = config.getString("tesseraql.app.requires.framework").orElse("*");
+                return new PackageInfo(id, version, requiresFramework);
+            } finally {
+                deleteRecursively(staging);
+            }
+        } catch (IOException ex) {
+            throw new TqlException(INVALID_PACKAGE, "Failed to read package: " + ex.getMessage());
+        }
+    }
+
+    /** Package metadata read from a {@code .tqlapp} without installing it. */
+    public record PackageInfo(String id, String version, String requiresFramework) {
     }
 
     private void extract(Path tqlapp, Path target) throws IOException {
