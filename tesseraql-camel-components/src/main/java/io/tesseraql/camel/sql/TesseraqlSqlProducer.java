@@ -54,8 +54,9 @@ public class TesseraqlSqlProducer extends DefaultProducer {
     @Override
     protected void doStart() throws Exception {
         super.doStart();
-        String source = Files.readString(Path.of(endpoint.getSqlPath()));
-        this.nodes = Sql2WayParser.parse(source);
+        Path file = io.tesseraql.core.dialect.DialectSqlResolver.resolve(
+                Path.of(endpoint.getSqlPath()), endpoint.getDialect());
+        this.nodes = Sql2WayParser.parse(Files.readString(file));
     }
 
     @Override

@@ -169,8 +169,18 @@ public final class RouteCompiler {
                 + "?datasource=" + DEFAULT_DATASOURCE
                 + "&mode=" + definition.sql().effectiveMode()
                 + "&resultKey=sql"
+                + "&dialect=" + datasourceDialect()
                 + "&maxRows=" + effectiveMaxRows(definition.sql())
                 + "&onOverflow=" + effectiveOnOverflow(definition.sql());
+    }
+
+    /** Resolves the configured datasource dialect, inferring it from the JDBC URL when unset. */
+    private String datasourceDialect() {
+        String prefix = "tesseraql.datasources." + DEFAULT_DATASOURCE + ".";
+        return config.getString(prefix + "dialect").orElseGet(() ->
+                io.tesseraql.core.dialect.Dialect.fromJdbcUrl(config.getString(prefix + "jdbcUrl").orElse(""))
+                        .map(io.tesseraql.core.dialect.Dialect::id)
+                        .orElse(""));
     }
 
     /** Inserts per-route rate limit and concurrency guards when declared (design ch. 36.1). */

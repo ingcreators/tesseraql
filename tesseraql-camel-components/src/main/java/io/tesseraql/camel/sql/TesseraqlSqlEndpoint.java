@@ -18,6 +18,7 @@ public class TesseraqlSqlEndpoint extends DefaultEndpoint {
     private String onOverflow = "fail";
     private String format = "csv";
     private String filename = "export.csv";
+    private String dialect;
 
     public TesseraqlSqlEndpoint(String uri, TesseraqlSqlComponent component, String sqlPath) {
         super(uri, component);
@@ -99,5 +100,14 @@ public class TesseraqlSqlEndpoint extends DefaultEndpoint {
     /** Suggested download filename for {@code query-export} mode. */
     public void setFilename(String filename) {
         this.filename = filename;
+    }
+
+    public String getDialect() {
+        return dialect;
+    }
+
+    /** Dialect id used to resolve a dialect-specific SQL file variant (design ch. 42.3). */
+    public void setDialect(String dialect) {
+        this.dialect = dialect;
     }
 }
