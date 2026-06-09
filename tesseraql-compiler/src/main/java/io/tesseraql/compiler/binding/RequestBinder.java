@@ -34,7 +34,7 @@ public final class RequestBinder implements Processor {
         Map<String, Object> context = new HashMap<>();
         context.put("query", effective);
         context.put("params", effective);
-        context.put("principal", null);
+        context.put("principal", exchange.getProperty(TesseraqlProperties.PRINCIPAL));
 
         Map<String, Object> sqlParams = resolveSqlParams(context);
 

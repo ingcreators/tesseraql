@@ -10,14 +10,20 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.Statement;
+import java.util.Base64;
 import java.util.Comparator;
+import java.util.List;
+import java.util.Map;
 import java.util.stream.Stream;
+import javax.crypto.Mac;
+import javax.crypto.spec.SecretKeySpec;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -26,8 +32,9 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
 /**
- * End-to-end acceptance test for milestone M1: {@code GET /api/users} served from PostgreSQL via
- * Simple YAML -&gt; Camel route -&gt; 2-way SQL -&gt; JSON (design ch. 22 completion conditions 1, 4, 5).
+ * End-to-end acceptance test for milestone M1 plus Phase 4a security: {@code GET /api/users}
+ * served from PostgreSQL via Simple YAML -&gt; authenticate -&gt; authorize -&gt; 2-way SQL -&gt; JSON
+ * (design ch. 22 completion conditions 1, 4, 5, 11).
  */
 @Testcontainers
 class QueryJsonIntegrationTest {
@@ -36,6 +43,7 @@ class QueryJsonIntegrationTest {
     static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>("postgres:16-alpine");
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final String JWT_SECRET = "dev-only-secret-change-me-in-production";
 
     static TesseraqlRuntime runtime;
     static Path appHome;
@@ -59,7 +67,7 @@ class QueryJsonIntegrationTest {
 
     @Test
     void searchFiltersByQueryParameter() throws Exception {
-        JsonNode body = getJson("/api/users?q=sato&limit=10");
+        JsonNode body = getJson("/api/users?q=sato&limit=10", token(List.of("USER_READ")));
 
         assertThat(body.path("data")).hasSize(1);
         assertThat(body.path("data").get(0).path("name").asText()).isEqualTo("sato");
@@ -70,20 +78,55 @@ class QueryJsonIntegrationTest {
 
     @Test
     void searchReturnsAllWhenNoQuery() throws Exception {
-        JsonNode body = getJson("/api/users");
+        JsonNode body = getJson("/api/users", token(List.of("USER_READ")));
 
         assertThat(body.path("data").size()).isEqualTo(3);
         assertThat(body.path("meta").path("limit").asInt()).isEqualTo(50); // default applied
     }
 
-    private JsonNode getJson(String path) throws Exception {
-        HttpResponse<String> response = HttpClient.newHttpClient().send(
-                HttpRequest.newBuilder(URI.create("http://localhost:" + runtime.port() + path)).build(),
-                HttpResponse.BodyHandlers.ofString());
+    @Test
+    void rejectsMissingToken() throws Exception {
+        HttpResponse<String> response = get("/api/users", null);
+        assertThat(response.statusCode()).isEqualTo(401);
+        assertThat(MAPPER.readTree(response.body()).path("error").path("code").asText())
+                .isEqualTo("TQL-SEC-4011");
+    }
+
+    @Test
+    void rejectsInsufficientRole() throws Exception {
+        HttpResponse<String> response = get("/api/users", token(List.of("SOMETHING_ELSE")));
+        assertThat(response.statusCode()).isEqualTo(403);
+        assertThat(MAPPER.readTree(response.body()).path("error").path("code").asText())
+                .isEqualTo("TQL-SEC-4031");
+    }
+
+    private JsonNode getJson(String path, String bearer) throws Exception {
+        HttpResponse<String> response = get(path, bearer);
         assertThat(response.statusCode()).isEqualTo(200);
         assertThat(response.headers().firstValue("Content-Type").orElse(""))
                 .contains("application/json");
         return MAPPER.readTree(response.body());
+    }
+
+    private HttpResponse<String> get(String path, String bearer) throws Exception {
+        HttpRequest.Builder request =
+                HttpRequest.newBuilder(URI.create("http://localhost:" + runtime.port() + path));
+        if (bearer != null) {
+            request.header("Authorization", "Bearer " + bearer);
+        }
+        return HttpClient.newHttpClient().send(request.build(), HttpResponse.BodyHandlers.ofString());
+    }
+
+    private static String token(List<String> roles) throws Exception {
+        Base64.Encoder enc = Base64.getUrlEncoder().withoutPadding();
+        String header = enc.encodeToString("{\"alg\":\"HS256\"}".getBytes(StandardCharsets.UTF_8));
+        String payload = enc.encodeToString(MAPPER.writeValueAsBytes(
+                Map.of("sub", "u001", "preferred_username", "sato", "roles", roles)));
+        Mac mac = Mac.getInstance("HmacSHA256");
+        mac.init(new SecretKeySpec(JWT_SECRET.getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
+        String signature = enc.encodeToString(
+                mac.doFinal((header + "." + payload).getBytes(StandardCharsets.US_ASCII)));
+        return header + "." + payload + "." + signature;
     }
 
     private static void seedDatabase() throws Exception {
@@ -111,7 +154,6 @@ class QueryJsonIntegrationTest {
         try (Stream<Path> files = Files.walk(source)) {
             files.forEach(path -> copy(source, target, path));
         }
-        // Point the datasource at the Testcontainers instance.
         Files.writeString(target.resolve("config/application.yml"), """
                 server:
                   port: 0

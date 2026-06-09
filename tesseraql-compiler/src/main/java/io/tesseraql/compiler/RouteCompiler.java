@@ -1,5 +1,6 @@
 package io.tesseraql.compiler;
 
+import io.tesseraql.compiler.binding.ErrorResponseRenderer;
 import io.tesseraql.compiler.binding.JsonResponseRenderer;
 import io.tesseraql.compiler.binding.RequestBinder;
 import io.tesseraql.core.error.TqlDomain;
@@ -8,8 +9,10 @@ import io.tesseraql.core.error.TqlException;
 import io.tesseraql.yaml.manifest.AppManifest;
 import io.tesseraql.yaml.manifest.RouteFile;
 import io.tesseraql.yaml.model.RouteDefinition;
+import io.tesseraql.yaml.model.SecuritySpec;
 import java.nio.file.Path;
 import org.apache.camel.builder.RouteBuilder;
+import org.apache.camel.model.ProcessorDefinition;
 import org.apache.camel.model.rest.RestDefinition;
 
 /**
@@ -31,6 +34,8 @@ public final class RouteCompiler {
             @Override
             public void configure() {
                 restConfiguration().component("platform-http");
+                onException(TqlException.class).handled(true).process(new ErrorResponseRenderer());
+                onException(Exception.class).handled(true).process(new ErrorResponseRenderer());
                 for (RouteFile routeFile : manifest.routes()) {
                     buildRoute(this, manifest.appHome(), routeFile);
                 }
@@ -65,11 +70,24 @@ public final class RouteCompiler {
                 + "&mode=" + definition.sql().effectiveMode()
                 + "&resultKey=sql";
 
-        builder.from(direct)
-                .routeId(routeId)
-                .process(new RequestBinder(definition))
+        ProcessorDefinition<?> route = builder.from(direct).routeId(routeId);
+        applySecurity(route, definition.security());
+        route.process(new RequestBinder(definition))
                 .to(sqlUri)
                 .process(new JsonResponseRenderer(definition.response().json()));
+    }
+
+    /** Inserts authenticate/authorize steps before binding when the route declares security. */
+    private void applySecurity(ProcessorDefinition<?> route, SecuritySpec security) {
+        if (security == null) {
+            return;
+        }
+        if (security.auth() != null && !"public".equals(security.auth())) {
+            route.to("tesseraql-auth:authenticate?auth=" + security.auth());
+        }
+        if (security.policy() != null && !security.policy().isBlank()) {
+            route.to("tesseraql-auth:authorize?policy=" + security.policy());
+        }
     }
 
     private RestDefinition restEndpoint(RouteBuilder builder, String method, String path) {

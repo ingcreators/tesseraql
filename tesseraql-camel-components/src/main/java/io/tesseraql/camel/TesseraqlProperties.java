@@ -11,6 +11,11 @@ public final class TesseraqlProperties {
 
     public static final String CONTEXT = "TesseraqlContext";
     public static final String SQL_PARAMS = "TesseraqlSqlParams";
+    public static final String PRINCIPAL = "TesseraqlPrincipal";
+
+    /** Registry bean names bound by the runtime for security components. */
+    public static final String POLICY_ENGINE_BEAN = "tesseraqlPolicyEngine";
+    public static final String JWT_AUTHENTICATOR_BEAN = "tesseraqlJwtAuthenticator";
 
     private TesseraqlProperties() {
     }

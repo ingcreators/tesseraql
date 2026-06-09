@@ -1,7 +1,11 @@
 package io.tesseraql.runtime;
 
 import com.zaxxer.hikari.HikariDataSource;
+import io.tesseraql.camel.TesseraqlProperties;
 import io.tesseraql.compiler.RouteCompiler;
+import io.tesseraql.security.SecurityConfig;
+import io.tesseraql.security.jwt.JwtAuthenticator;
+import io.tesseraql.security.policy.PolicyEngine;
 import io.tesseraql.yaml.manifest.AppManifest;
 import io.tesseraql.yaml.manifest.ManifestLoader;
 import java.nio.file.Path;
@@ -49,6 +53,13 @@ public final class TesseraqlRuntime implements AutoCloseable {
         DefaultCamelContext context = new DefaultCamelContext();
         HikariDataSource dataSource = DataSources.create(manifest.config(), "main");
         context.getRegistry().bind("main", dataSource);
+
+        SecurityConfig security = SecurityConfigFactory.build(manifest.config());
+        context.getRegistry().bind(TesseraqlProperties.POLICY_ENGINE_BEAN, new PolicyEngine(security));
+        if (security.jwt() != null) {
+            context.getRegistry().bind(
+                    TesseraqlProperties.JWT_AUTHENTICATOR_BEAN, new JwtAuthenticator(security.jwt()));
+        }
 
         VertxPlatformHttpServerConfiguration httpConfig = new VertxPlatformHttpServerConfiguration();
         httpConfig.setBindHost("0.0.0.0");
