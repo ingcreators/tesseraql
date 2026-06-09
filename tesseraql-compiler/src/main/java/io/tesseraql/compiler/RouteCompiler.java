@@ -42,10 +42,12 @@ public final class RouteCompiler {
     private static final long DEFAULT_IDEMPOTENCY_TTL = java.time.Duration.ofHours(24).toMillis();
 
     private AppConfig config;
+    private io.tesseraql.compiler.binding.TenancySettings tenancy;
 
     /** Builds a Camel {@link RouteBuilder} for all routes in the manifest. */
     public RouteBuilder compile(AppManifest manifest) {
         this.config = manifest.config();
+        this.tenancy = io.tesseraql.compiler.binding.TenancySettings.from(config);
         return new RouteBuilder() {
             @Override
             public void configure() {
@@ -96,6 +98,7 @@ public final class RouteCompiler {
         applyConcurrency(route, definition);
         applyLane(route, definition);
         applySecurity(route, definition.security());
+        applyTenancy(route);
         applyIdempotencyBegin(route, definition);
         route.process(new RequestBinder(definition, pathParams(routeFile.urlPath())))
                 .process(new OutboxCommandProcessor(sqlPath, DEFAULT_DATASOURCE, definition.outbox()))
@@ -119,6 +122,7 @@ public final class RouteCompiler {
         applyConcurrency(route, definition);
         applyLane(route, definition);
         applySecurity(route, definition.security());
+        applyTenancy(route);
         route.process(new RequestBinder(definition, pathParams(routeFile.urlPath()))).to(sqlUri);
     }
 
@@ -150,6 +154,7 @@ public final class RouteCompiler {
         applyConcurrency(route, definition);
         applyLane(route, definition);
         applySecurity(route, definition.security());
+        applyTenancy(route);
         applyIdempotencyBegin(route, definition);
         return route.process(new RequestBinder(definition, pathParams(routeFile.urlPath()))).to(executionUri(routeFile));
     }
@@ -209,6 +214,13 @@ public final class RouteCompiler {
         route.process(new io.tesseraql.compiler.binding.LaneGate(lane));
         route.threads().executorService(TesseraqlProperties.laneExecutorRef(lane))
                 .callerRunsWhenRejected(false);
+    }
+
+    /** Resolves and propagates the request tenant when tenancy is enabled (design ch. 30). */
+    private void applyTenancy(ProcessorDefinition<?> route) {
+        if (tenancy.enabled()) {
+            route.process(new io.tesseraql.compiler.binding.TenantResolution(tenancy));
+        }
     }
 
     /** Inserts per-route rate limit and concurrency guards when declared (design ch. 36.1). */

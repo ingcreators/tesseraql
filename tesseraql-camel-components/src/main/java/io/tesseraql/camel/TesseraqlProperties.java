@@ -12,6 +12,8 @@ public final class TesseraqlProperties {
     public static final String CONTEXT = "TesseraqlContext";
     public static final String SQL_PARAMS = "TesseraqlSqlParams";
     public static final String PRINCIPAL = "TesseraqlPrincipal";
+    public static final String TENANT = "TesseraqlTenant";
+    public static final String ROUTE_SPAN = "TesseraqlRouteSpan";
 
     /** Registry bean names bound by the runtime for security components. */
     public static final String POLICY_ENGINE_BEAN = "tesseraqlPolicyEngine";

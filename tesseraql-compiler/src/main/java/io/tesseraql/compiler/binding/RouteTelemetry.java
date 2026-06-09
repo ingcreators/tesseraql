@@ -18,8 +18,6 @@ import org.apache.camel.spi.Synchronization;
  */
 public final class RouteTelemetry implements Processor {
 
-    private static final String SPAN_PROPERTY = "TesseraqlRouteSpan";
-
     private final String routeId;
     private final String method;
     private final String path;
@@ -39,7 +37,7 @@ public final class RouteTelemetry implements Processor {
                 .attribute("routeId", routeId)
                 .attribute("method", method)
                 .attribute("path", path);
-        exchange.setProperty(SPAN_PROPERTY, span);
+        exchange.setProperty(TesseraqlProperties.ROUTE_SPAN, span);
         exchange.getExchangeExtension().addOnCompletion(new Synchronization() {
             @Override
             public void onComplete(Exchange completed) {
