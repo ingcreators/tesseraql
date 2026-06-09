@@ -5,6 +5,7 @@ import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
 import io.tesseraql.core.error.TqlDomain;
 import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
+import io.tesseraql.yaml.model.JobDefinition;
 import io.tesseraql.yaml.model.RouteDefinition;
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -55,6 +56,38 @@ public final class SimpleYamlParser {
                     .cause(ex)
                     .build();
         }
+    }
+
+    /** Parses a job YAML file. */
+    public JobDefinition parseJob(Path file) {
+        try {
+            JobDefinition job = mapper.readValue(Files.readString(file), JobDefinition.class);
+            return validateJob(job, file.toString());
+        } catch (IOException ex) {
+            throw new UncheckedIOException(ex);
+        } catch (TqlException ex) {
+            throw ex;
+        } catch (RuntimeException ex) {
+            throw TqlException.builder(SCHEMA_ERROR)
+                    .message("Failed to parse job YAML: " + ex.getMessage())
+                    .source(file.toString())
+                    .cause(ex)
+                    .build();
+        }
+    }
+
+    private JobDefinition validateJob(JobDefinition job, String source) {
+        if (job == null) {
+            throw error("Empty job document", source);
+        }
+        requireField(job.version(), "version", source);
+        if (!EXPECTED_VERSION.equals(job.version())) {
+            throw error("Unsupported version '" + job.version() + "', expected " + EXPECTED_VERSION, source);
+        }
+        requireField(job.id(), "id", source);
+        requireField(job.kind(), "kind", source);
+        requireField(job.recipe(), "recipe", source);
+        return job;
     }
 
     /** Parses an arbitrary YAML document into a nested map (for config files). */

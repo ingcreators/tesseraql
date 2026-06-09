@@ -11,11 +11,14 @@ import java.util.List;
  * @param appHome the external app home directory (design ch. 2.5, 4)
  * @param config  merged, placeholder-resolving configuration
  * @param routes  route files discovered under {@code web/}
+ * @param jobs    job files discovered under {@code batch/}
  * @param index   checksum index of the manifest source files
  */
-public record AppManifest(Path appHome, AppConfig config, List<RouteFile> routes, ManifestIndex index) {
+public record AppManifest(Path appHome, AppConfig config, List<RouteFile> routes,
+        List<JobFile> jobs, ManifestIndex index) {
 
     public AppManifest {
         routes = List.copyOf(routes);
+        jobs = List.copyOf(jobs);
     }
 }
