@@ -15,6 +15,8 @@ public final class PolicyEngine {
     public static final TqlErrorCode UNAUTHORIZED = new TqlErrorCode(TqlDomain.SEC, 4011);
     /** TQL-SEC-4031: forbidden by policy. */
     public static final TqlErrorCode FORBIDDEN = new TqlErrorCode(TqlDomain.SEC, 4031);
+    /** TQL-SEC-4032: CSRF token missing or invalid. */
+    public static final TqlErrorCode CSRF_FAILED = new TqlErrorCode(TqlDomain.SEC, 4032);
 
     private final SecurityConfig config;
 

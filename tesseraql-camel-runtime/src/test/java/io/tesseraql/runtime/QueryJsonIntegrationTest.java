@@ -130,6 +130,68 @@ class QueryJsonIntegrationTest {
         assertThat(response.statusCode()).isEqualTo(401);
     }
 
+    @Test
+    void commandSucceedsWithValidCsrf() throws Exception {
+        SessionStore sessions = sessionStore();
+        String sid = sessions.create(writer());
+
+        HttpResponse<String> response = postJson("/users/deactivate",
+                sessions.cookieName() + "=" + sid, sessions.csrfToken(sid), "{\"name\":\"suzuki\"}");
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(MAPPER.readTree(response.body()).path("affected").asInt()).isEqualTo(1);
+    }
+
+    @Test
+    void commandRejectedWithoutCsrfToken() throws Exception {
+        SessionStore sessions = sessionStore();
+        String sid = sessions.create(writer());
+
+        HttpResponse<String> response = postJson("/users/deactivate",
+                sessions.cookieName() + "=" + sid, null, "{\"name\":\"suzuki\"}");
+
+        assertThat(response.statusCode()).isEqualTo(403);
+        assertThat(MAPPER.readTree(response.body()).path("error").path("code").asText())
+                .isEqualTo("TQL-SEC-4032");
+    }
+
+    @Test
+    void commandRejectsUnknownInputField() throws Exception {
+        SessionStore sessions = sessionStore();
+        String sid = sessions.create(writer());
+
+        HttpResponse<String> response = postJson("/users/deactivate",
+                sessions.cookieName() + "=" + sid, sessions.csrfToken(sid),
+                "{\"name\":\"tanaka\",\"role\":\"ADMIN\"}");
+
+        assertThat(response.statusCode()).isEqualTo(400);
+    }
+
+    private SessionStore sessionStore() {
+        return runtime.camelContext().getRegistry()
+                .lookupByNameAndType(TesseraqlProperties.SESSION_STORE_BEAN, SessionStore.class);
+    }
+
+    private static Principal writer() {
+        return new Principal("u001", "sato", "Sato", "tenant-a",
+                List.of(), List.of("USER_READ", "USER_WRITE"), List.of(), Map.of());
+    }
+
+    private HttpResponse<String> postJson(String path, String cookie, String csrf, String body)
+            throws Exception {
+        HttpRequest.Builder request = HttpRequest.newBuilder(
+                        URI.create("http://localhost:" + runtime.port() + path))
+                .header("Content-Type", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString(body));
+        if (cookie != null) {
+            request.header("Cookie", cookie);
+        }
+        if (csrf != null) {
+            request.header("X-CSRF-Token", csrf);
+        }
+        return HttpClient.newHttpClient().send(request.build(), HttpResponse.BodyHandlers.ofString());
+    }
+
     private JsonNode getJson(String path, String bearer) throws Exception {
         HttpResponse<String> response = get(path, bearer);
         assertThat(response.statusCode()).isEqualTo(200);

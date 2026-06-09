@@ -1,0 +1,31 @@
+version: tesseraql/v1
+id: users.deactivate
+kind: route
+recipe: command-json
+
+input:
+  name:
+    type: string
+    required: true
+    writable: true
+
+inputPolicy:
+  unknownFields: reject
+  readOnlyFieldBehavior: reject
+
+security:
+  auth: browser
+  policy: users.write
+  csrf: true
+
+sql:
+  file: deactivate.sql
+  mode: update
+  params:
+    name: body.name
+
+response:
+  json:
+    status: 200
+    body:
+      affected: sql.affectedRows

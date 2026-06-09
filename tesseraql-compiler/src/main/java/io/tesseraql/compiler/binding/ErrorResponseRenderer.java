@@ -40,7 +40,11 @@ public final class ErrorResponseRenderer implements Processor {
     /** Maps an error code to an HTTP status (design ch. 37.4). */
     public static int httpStatus(TqlErrorCode code) {
         return switch (code.domain()) {
-            case SEC -> code.number() == 4011 ? 401 : code.number() == 4031 ? 403 : 401;
+            case SEC -> switch (code.number()) {
+                case 4011 -> 401;
+                case 4031, 4032 -> 403;
+                default -> 401;
+            };
             case FIELD -> 400;
             case RATE -> 429;
             case TENANT, APP -> code.number() == 4031 ? 403 : 404;

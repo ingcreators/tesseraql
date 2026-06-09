@@ -8,6 +8,7 @@ import io.tesseraql.security.Principal;
 import io.tesseraql.security.jwt.JwtAuthenticator;
 import io.tesseraql.security.policy.PolicyEngine;
 import io.tesseraql.security.session.BrowserAuthenticator;
+import io.tesseraql.security.session.CsrfValidator;
 import io.tesseraql.security.session.SessionStore;
 import org.apache.camel.Exchange;
 import org.apache.camel.support.DefaultProducer;
@@ -33,6 +34,7 @@ public class TesseraqlAuthProducer extends DefaultProducer {
         switch (endpoint.getOperation()) {
             case "authenticate" -> authenticate(exchange);
             case "authorize" -> authorize(exchange);
+            case "csrf" -> csrf(exchange);
             default -> throw new TqlException(UNSUPPORTED,
                     "Unsupported tesseraql-auth operation: " + endpoint.getOperation());
         }
@@ -54,6 +56,14 @@ public class TesseraqlAuthProducer extends DefaultProducer {
         PolicyEngine engine = bean(PolicyEngine.class, TesseraqlProperties.POLICY_ENGINE_BEAN);
         Principal principal = exchange.getProperty(TesseraqlProperties.PRINCIPAL, Principal.class);
         engine.authorize(endpoint.getPolicy(), principal);
+    }
+
+    private void csrf(Exchange exchange) {
+        CsrfValidator validator = new CsrfValidator(
+                bean(SessionStore.class, TesseraqlProperties.SESSION_STORE_BEAN));
+        validator.validate(
+                exchange.getMessage().getHeader("Cookie", String.class),
+                exchange.getMessage().getHeader("X-CSRF-Token", String.class));
     }
 
     private <T> T bean(Class<T> type, String name) {

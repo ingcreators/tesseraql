@@ -19,7 +19,15 @@ public record InputField(
         Integer max,
         Integer maxLength,
         @JsonProperty("enum") List<String> enumValues,
+        Boolean writable,
+        String classification,
+        String mask,
         InputItems items) {
+
+    /** Whether this field may be supplied by the request (design ch. 33.2). Defaults to true. */
+    public boolean isWritable() {
+        return writable == null || writable;
+    }
 
     /** Element type for array inputs. */
     @JsonIgnoreProperties(ignoreUnknown = true)

@@ -57,3 +57,7 @@ tesseraql:
         anyOf:
           - role: USER_READ
           - permission: users:read
+      users.write:
+        anyOf:
+          - role: USER_WRITE
+          - permission: users:write

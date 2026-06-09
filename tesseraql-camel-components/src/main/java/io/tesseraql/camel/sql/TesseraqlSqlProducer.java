@@ -52,9 +52,10 @@ public class TesseraqlSqlProducer extends DefaultProducer {
     @Override
     @SuppressWarnings("unchecked")
     public void process(Exchange exchange) throws Exception {
-        if (!"query".equals(endpoint.getMode())) {
+        String mode = endpoint.getMode();
+        if (!"query".equals(mode) && !"update".equals(mode)) {
             throw new TqlException(UNSUPPORTED_MODE,
-                    "Unsupported SQL mode '" + endpoint.getMode() + "' (only 'query' is supported)");
+                    "Unsupported SQL mode '" + mode + "' (supported: query, update)");
         }
         Map<String, Object> params = exchange.getProperty(
                 TesseraqlProperties.SQL_PARAMS, Map.of(), Map.class);
@@ -62,7 +63,7 @@ public class TesseraqlSqlProducer extends DefaultProducer {
                 TesseraqlProperties.CONTEXT, Map.class);
 
         BoundSql bound = SqlRenderer.render(nodes, params);
-        Map<String, Object> result = executeQuery(bound);
+        Map<String, Object> result = "update".equals(mode) ? executeUpdate(bound) : executeQuery(bound);
 
         if (context != null) {
             context.put(endpoint.getResultKey(), result);
@@ -71,13 +72,7 @@ public class TesseraqlSqlProducer extends DefaultProducer {
     }
 
     private Map<String, Object> executeQuery(BoundSql bound) {
-        DataSource dataSource = endpoint.getCamelContext().getRegistry()
-                .lookupByNameAndType(endpoint.getDatasource(), DataSource.class);
-        if (dataSource == null) {
-            throw new TqlException(NO_DATASOURCE,
-                    "No DataSource named '" + endpoint.getDatasource() + "' in the registry");
-        }
-        try (Connection connection = dataSource.getConnection();
+        try (Connection connection = connection();
                 PreparedStatement statement = connection.prepareStatement(bound.sql())) {
             bindParameters(statement, bound.parameters());
             try (ResultSet resultSet = statement.executeQuery()) {
@@ -88,12 +83,39 @@ public class TesseraqlSqlProducer extends DefaultProducer {
                 return result;
             }
         } catch (java.sql.SQLException ex) {
-            throw TqlException.builder(EXECUTION_ERROR)
-                    .message("SQL execution failed: " + ex.getMessage())
-                    .source(endpoint.getSqlPath())
-                    .cause(ex)
-                    .build();
+            throw executionError(ex);
         }
+    }
+
+    private Map<String, Object> executeUpdate(BoundSql bound) {
+        try (Connection connection = connection();
+                PreparedStatement statement = connection.prepareStatement(bound.sql())) {
+            bindParameters(statement, bound.parameters());
+            int affected = statement.executeUpdate();
+            Map<String, Object> result = new LinkedHashMap<>();
+            result.put("affectedRows", affected);
+            return result;
+        } catch (java.sql.SQLException ex) {
+            throw executionError(ex);
+        }
+    }
+
+    private Connection connection() throws java.sql.SQLException {
+        DataSource dataSource = endpoint.getCamelContext().getRegistry()
+                .lookupByNameAndType(endpoint.getDatasource(), DataSource.class);
+        if (dataSource == null) {
+            throw new TqlException(NO_DATASOURCE,
+                    "No DataSource named '" + endpoint.getDatasource() + "' in the registry");
+        }
+        return dataSource.getConnection();
+    }
+
+    private TqlException executionError(java.sql.SQLException ex) {
+        return TqlException.builder(EXECUTION_ERROR)
+                .message("SQL execution failed: " + ex.getMessage())
+                .source(endpoint.getSqlPath())
+                .cause(ex)
+                .build();
     }
 
     private void bindParameters(PreparedStatement statement, List<BoundParameter> parameters)

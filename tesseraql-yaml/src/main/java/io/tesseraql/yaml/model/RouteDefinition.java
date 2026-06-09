@@ -25,11 +25,17 @@ public record RouteDefinition(
         String kind,
         String recipe,
         Map<String, InputField> input,
+        InputPolicy inputPolicy,
         SecuritySpec security,
         SqlBinding sql,
         ResponseSpec response) {
 
     public RouteDefinition {
         input = input == null ? Map.of() : Map.copyOf(input);
+    }
+
+    /** The input policy, or framework defaults (reject unknown / reject read-only). */
+    public InputPolicy effectiveInputPolicy() {
+        return inputPolicy == null ? InputPolicy.defaults() : inputPolicy;
     }
 }

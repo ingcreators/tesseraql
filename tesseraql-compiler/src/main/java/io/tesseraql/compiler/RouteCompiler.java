@@ -47,7 +47,7 @@ public final class RouteCompiler {
     private void buildRoute(RouteBuilder builder, Path appHome, RouteFile routeFile) {
         RouteDefinition definition = routeFile.definition();
         switch (definition.recipe()) {
-            case "query-json" -> buildQueryJson(builder, routeFile);
+            case "query-json", "command-json" -> buildJson(builder, routeFile);
             case "query-html" -> buildQueryHtml(builder, appHome, routeFile);
             default -> LOG.log(System.Logger.Level.WARNING,
                     // Recipes not yet implemented are skipped so a mixed-recipe app can still boot.
@@ -56,7 +56,7 @@ public final class RouteCompiler {
         }
     }
 
-    private void buildQueryJson(RouteBuilder builder, RouteFile routeFile) {
+    private void buildJson(RouteBuilder builder, RouteFile routeFile) {
         pipelineThroughSql(builder, routeFile)
                 .process(new JsonResponseRenderer(routeFile.definition().response().json()));
     }
@@ -94,6 +94,9 @@ public final class RouteCompiler {
         }
         if (security.auth() != null && !"public".equals(security.auth())) {
             route.to("tesseraql-auth:authenticate?auth=" + security.auth());
+        }
+        if (Boolean.TRUE.equals(security.csrf())) {
+            route.to("tesseraql-auth:csrf");
         }
         if (security.policy() != null && !security.policy().isBlank()) {
             route.to("tesseraql-auth:authorize?policy=" + security.policy());
