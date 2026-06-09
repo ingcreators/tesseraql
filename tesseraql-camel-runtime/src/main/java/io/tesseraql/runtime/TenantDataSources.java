@@ -55,6 +55,11 @@ final class TenantDataSources implements TenantDataSourceResolver, AutoCloseable
         return byTenant.isEmpty();
     }
 
+    /** The configured tenant ids, in declaration order. */
+    java.util.Set<String> tenantIds() {
+        return byTenant.keySet();
+    }
+
     @Override
     public DataSource resolve(String tenantId) {
         DataSource dataSource = byTenant.get(tenantId);

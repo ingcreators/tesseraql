@@ -148,10 +148,20 @@ public final class TesseraqlRuntime implements AutoCloseable {
         manifest.jobs().forEach(job -> jobs.put(job.definition().id(), job));
         String appName = manifest.config().getString("tesseraql.app.name").orElse("app");
 
+        TenantDataSources tenantPools = tenantDataSources;
         OperationsRouteBuilder.JobRunner jobRunner = (jobId, params) -> {
             JobFile jobFile = jobs.get(jobId);
             if (jobFile == null) {
                 throw new IllegalArgumentException("Unknown job: " + jobId);
+            }
+            if (jobFile.definition().perTenant() && !tenantPools.isEmpty()) {
+                JobExecution last = null;
+                for (String tenantId : tenantPools.tenantIds()) {
+                    last = jobExecutor.run(jobFile, tenantPools.resolve(tenantId),
+                            io.tesseraql.core.tenant.TenantContext.of(tenantId),
+                            appName, params, "manual");
+                }
+                return last;
             }
             return jobExecutor.run(jobFile, dataSource, appName, params, "manual");
         };
@@ -194,6 +204,23 @@ public final class TesseraqlRuntime implements AutoCloseable {
             throw new IllegalArgumentException("Unknown job: " + jobId);
         }
         return jobExecutor.run(jobFile, mainDataSource, appName, params, "manual");
+    }
+
+    /**
+     * Runs a batch job once per configured tenant, each on its own datasource and tenant context
+     * (design ch. 30.3), returning every execution record.
+     */
+    public List<JobExecution> runJobForAllTenants(String jobId, Map<String, Object> params) {
+        JobFile jobFile = jobs.get(jobId);
+        if (jobFile == null) {
+            throw new IllegalArgumentException("Unknown job: " + jobId);
+        }
+        List<JobExecution> executions = new java.util.ArrayList<>();
+        for (String tenantId : tenantDataSources.tenantIds()) {
+            executions.add(jobExecutor.run(jobFile, tenantDataSources.resolve(tenantId),
+                    io.tesseraql.core.tenant.TenantContext.of(tenantId), appName, params, "manual"));
+        }
+        return executions;
     }
 
     public JobRepository jobRepository() {

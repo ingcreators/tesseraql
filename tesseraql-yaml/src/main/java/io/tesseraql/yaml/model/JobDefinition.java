@@ -17,7 +17,8 @@ import java.util.Map;
  * @param trigger  schedule trigger, when present
  * @param params   declared job parameters
  * @param sql      the single statement for a tasklet job
- * @param pipeline the steps for a pipeline job
+ * @param pipeline  the steps for a pipeline job
+ * @param perTenant when true, the job runs once per configured tenant (design ch. 30.3)
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public record JobDefinition(
@@ -28,7 +29,8 @@ public record JobDefinition(
         TriggerSpec trigger,
         Map<String, InputField> params,
         SqlBinding sql,
-        List<PipelineStep> pipeline) {
+        List<PipelineStep> pipeline,
+        boolean perTenant) {
 
     public JobDefinition {
         params = params == null ? Map.of() : Map.copyOf(params);

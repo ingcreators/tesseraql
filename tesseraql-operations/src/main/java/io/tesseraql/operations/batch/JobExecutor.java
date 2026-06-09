@@ -55,12 +55,24 @@ public final class JobExecutor {
     /** Runs the job and returns the final execution record (COMPLETED or FAILED). */
     public JobExecution run(JobFile jobFile, DataSource dataSource, String appName,
             Map<String, Object> jobParams, String triggerType) {
+        return run(jobFile, dataSource, null, appName, jobParams, triggerType);
+    }
+
+    /**
+     * Runs the job for a specific tenant (design ch. 30.3). The tenant is published into the step
+     * context as {@code tenant} so 2-way SQL can bind {@code tenant.id}, and the caller supplies the
+     * tenant's datasource for per-tenant isolation.
+     */
+    public JobExecution run(JobFile jobFile, DataSource dataSource,
+            io.tesseraql.core.tenant.TenantContext tenant, String appName,
+            Map<String, Object> jobParams, String triggerType) {
         JobDefinition job = jobFile.definition();
         String executionId = repository.startExecution(job.id(), appName, triggerType);
         Map<String, Object> stepResults = new LinkedHashMap<>();
         Map<String, Object> context = new HashMap<>();
         context.put("job", jobParams == null ? Map.of() : jobParams);
         context.put("step", stepResults);
+        context.put("tenant", tenant);
 
         try {
             for (PipelineStep step : job.effectiveSteps()) {
