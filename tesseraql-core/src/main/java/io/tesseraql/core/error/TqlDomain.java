@@ -31,6 +31,7 @@ public enum TqlDomain {
     PLAN,
     GOV,
     LD,
+    LANE,
     TPL,
     COMP,
     IDEM

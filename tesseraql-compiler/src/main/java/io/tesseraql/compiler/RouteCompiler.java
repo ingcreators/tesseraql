@@ -1,5 +1,6 @@
 package io.tesseraql.compiler;
 
+import io.tesseraql.camel.TesseraqlProperties;
 import io.tesseraql.compiler.binding.ConcurrencyLimiter;
 import io.tesseraql.compiler.binding.ErrorResponseRenderer;
 import io.tesseraql.compiler.binding.HtmlResponseRenderer;
@@ -93,6 +94,7 @@ public final class RouteCompiler {
         ProcessorDefinition<?> route = builder.from(direct).routeId(routeId);
         applyTelemetry(route, routeFile);
         applyConcurrency(route, definition);
+        applyLane(route, definition);
         applySecurity(route, definition.security());
         applyIdempotencyBegin(route, definition);
         route.process(new RequestBinder(definition, pathParams(routeFile.urlPath())))
@@ -115,6 +117,7 @@ public final class RouteCompiler {
         ProcessorDefinition<?> route = builder.from(direct).routeId(routeId);
         applyTelemetry(route, routeFile);
         applyConcurrency(route, definition);
+        applyLane(route, definition);
         applySecurity(route, definition.security());
         route.process(new RequestBinder(definition, pathParams(routeFile.urlPath()))).to(sqlUri);
     }
@@ -145,6 +148,7 @@ public final class RouteCompiler {
         ProcessorDefinition<?> route = builder.from(direct).routeId(routeId);
         applyTelemetry(route, routeFile);
         applyConcurrency(route, definition);
+        applyLane(route, definition);
         applySecurity(route, definition.security());
         applyIdempotencyBegin(route, definition);
         return route.process(new RequestBinder(definition, pathParams(routeFile.urlPath()))).to(executionUri(routeFile));
@@ -190,6 +194,21 @@ public final class RouteCompiler {
     private void applyTelemetry(ProcessorDefinition<?> route, RouteFile routeFile) {
         route.process(new io.tesseraql.compiler.binding.RouteTelemetry(
                 routeFile.definition().id(), routeFile.httpMethod(), routeFile.urlPath()));
+    }
+
+    /**
+     * Dispatches the route onto its declared execution lane (design ch. 24): a backpressure gate
+     * followed by a {@code threads()} handoff to the lane's executor, so the remaining steps run on
+     * a virtual (or platform) thread.
+     */
+    private void applyLane(ProcessorDefinition<?> route, RouteDefinition definition) {
+        if (definition.policy() == null || definition.policy().lane() == null) {
+            return;
+        }
+        String lane = definition.policy().lane();
+        route.process(new io.tesseraql.compiler.binding.LaneGate(lane));
+        route.threads().executorService(TesseraqlProperties.laneExecutorRef(lane))
+                .callerRunsWhenRejected(false);
     }
 
     /** Inserts per-route rate limit and concurrency guards when declared (design ch. 36.1). */

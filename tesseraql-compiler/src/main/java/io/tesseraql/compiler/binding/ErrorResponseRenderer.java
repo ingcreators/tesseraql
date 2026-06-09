@@ -47,6 +47,7 @@ public final class ErrorResponseRenderer implements Processor {
             };
             case FIELD -> 400;
             case RATE -> 429;
+            case LANE -> code.number() == 5031 ? 503 : 500;
             case IDEM -> code.number() == 4090 ? 409 : 500;
             case IAM -> code.number() == 4030 ? 403 : 500;
             case TENANT, APP -> code.number() == 4031 ? 403 : 404;
@@ -61,6 +62,7 @@ public final class ErrorResponseRenderer implements Processor {
             case 403 -> "Forbidden";
             case 404 -> "Not Found";
             case 429 -> "Too Many Requests";
+            case 503 -> "Service Unavailable";
             default -> "Internal Server Error";
         };
     }
