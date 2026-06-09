@@ -94,7 +94,7 @@ public final class RouteCompiler {
         applyConcurrency(route, definition);
         applySecurity(route, definition.security());
         applyIdempotencyBegin(route, definition);
-        route.process(new RequestBinder(definition))
+        route.process(new RequestBinder(definition, pathParams(routeFile.urlPath())))
                 .process(new OutboxCommandProcessor(sqlPath, DEFAULT_DATASOURCE, definition.outbox()))
                 .process(new JsonResponseRenderer(definition.response().json()));
         applyIdempotencyComplete(route, definition);
@@ -114,7 +114,7 @@ public final class RouteCompiler {
         ProcessorDefinition<?> route = builder.from(direct).routeId(routeId);
         applyConcurrency(route, definition);
         applySecurity(route, definition.security());
-        route.process(new RequestBinder(definition)).to(sqlUri);
+        route.process(new RequestBinder(definition, pathParams(routeFile.urlPath()))).to(sqlUri);
     }
 
     private static String exportFilename(RouteDefinition definition) {
@@ -144,14 +144,25 @@ public final class RouteCompiler {
         applyConcurrency(route, definition);
         applySecurity(route, definition.security());
         applyIdempotencyBegin(route, definition);
-        return route.process(new RequestBinder(definition)).to(executionUri(routeFile));
+        return route.process(new RequestBinder(definition, pathParams(routeFile.urlPath()))).to(executionUri(routeFile));
+    }
+
+    /** Extracts {@code {name}} path-parameter names from a URL template. */
+    private static java.util.List<String> pathParams(String urlPath) {
+        java.util.List<String> names = new java.util.ArrayList<>();
+        java.util.regex.Matcher matcher = java.util.regex.Pattern.compile("\\{(\\w+)\\}").matcher(urlPath);
+        while (matcher.find()) {
+            names.add(matcher.group(1));
+        }
+        return names;
     }
 
     /** Builds the execution step URI: the tesseraql-iam contract or a tesseraql-sql file. */
     private String executionUri(RouteFile routeFile) {
         RouteDefinition definition = routeFile.definition();
         if (definition.sql().isContract()) {
-            return "tesseraql-iam:contract?name=" + definition.sql().contract() + "&resultKey=sql";
+            return "tesseraql-iam:contract?name=" + definition.sql().contract()
+                    + "&mode=" + definition.sql().effectiveMode() + "&resultKey=sql";
         }
         Path sqlPath = routeFile.source().getParent().resolve(definition.sql().file()).normalize();
         return "tesseraql-sql:file:" + sqlPath

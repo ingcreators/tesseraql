@@ -92,6 +92,46 @@ class PasswordLoginIntegrationTest {
     }
 
     @Test
+    void adminDisableUserViaWriteContract() throws Exception {
+        HttpResponse<String> response = HttpClient.newHttpClient().send(
+                HttpRequest.newBuilder(URI.create(
+                                "http://localhost:" + runtime.port() + "/api/admin/users/u2/disable"))
+                        .header("Authorization", "Bearer " + writerToken())
+                        .header("Content-Type", "application/json")
+                        .POST(HttpRequest.BodyPublishers.ofString("{}"))
+                        .build(),
+                HttpResponse.BodyHandlers.ofString());
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(status("u2")).isEqualTo("DISABLED");
+    }
+
+    private static String status(String userId) throws Exception {
+        try (Connection connection = DriverManager.getConnection(
+                POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword());
+                Statement statement = connection.createStatement();
+                java.sql.ResultSet rs = statement.executeQuery(
+                        "select status from tql_users where user_id = '" + userId + "'")) {
+            return rs.next() ? rs.getString(1) : null;
+        }
+    }
+
+    private static String writerToken() throws Exception {
+        java.util.Base64.Encoder enc = java.util.Base64.getUrlEncoder().withoutPadding();
+        com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+        String header = enc.encodeToString("{\"alg\":\"HS256\"}".getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        String payload = enc.encodeToString(mapper.writeValueAsBytes(
+                java.util.Map.of("sub", "ops", "roles", java.util.List.of("USER_WRITE"))));
+        javax.crypto.Mac mac = javax.crypto.Mac.getInstance("HmacSHA256");
+        mac.init(new javax.crypto.spec.SecretKeySpec(
+                "dev-only-secret-change-me-in-production".getBytes(java.nio.charset.StandardCharsets.UTF_8),
+                "HmacSHA256"));
+        String signature = enc.encodeToString(
+                mac.doFinal((header + "." + payload).getBytes(java.nio.charset.StandardCharsets.US_ASCII)));
+        return header + "." + payload + "." + signature;
+    }
+
+    @Test
     void wrongPasswordIsRejected() throws Exception {
         HttpResponse<String> login = post("/_tesseraql/login",
                 "{\"loginId\":\"admin\",\"password\":\"wrong\"}");
@@ -130,6 +170,9 @@ class PasswordLoginIntegrationTest {
             statement.execute("insert into tql_roles (role_id, role_code, role_name) "
                     + "values ('r1','USER_READ','User Read')");
             statement.execute("insert into tql_user_roles (user_id, role_id) values ('u1','r1')");
+            // A second user to disable via the admin write contract.
+            statement.execute("insert into tql_users (user_id, login_id, display_name, status) "
+                    + "values ('u2','bob','Bob','ACTIVE')");
         }
     }
 

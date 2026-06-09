@@ -11,6 +11,7 @@ import java.sql.Connection;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.Comparator;
+import java.util.Map;
 import java.util.Optional;
 import java.util.function.Function;
 import java.util.stream.Stream;
@@ -82,6 +83,25 @@ class IdentityServiceIntegrationTest {
     }
 
     @Test
+    void writeContractDisablesUserOnReadWriteRealm() {
+        RealmConfig realm = RealmConfig.managed("local", "main"); // readWrite by default
+        int affected = service.executeUpdate(realm, "disable-user", Map.of("userId", "u2"));
+
+        assertThat(affected).isEqualTo(1);
+        var rows = service.execute(realm, IdentityContracts.FIND_USER_BY_ID, Map.of("userId", "u2"));
+        assertThat(rows.get(0).get("status")).isEqualTo("DISABLED");
+    }
+
+    @Test
+    void writeContractRejectedOnReadOnlyRealm() {
+        RealmConfig realm = RealmConfig.managed("local", "main", Capabilities.readOnly());
+        org.assertj.core.api.Assertions.assertThatThrownBy(() ->
+                        service.executeUpdate(realm, "disable-user", Map.of("userId", "u1")))
+                .isInstanceOf(io.tesseraql.core.error.TqlException.class)
+                .hasMessageContaining("TQL-IAM-4030");
+    }
+
+    @Test
     void unknownLoginResolvesToEmpty() {
         RealmConfig realm = RealmConfig.managed("local", "main");
         assertThat(service.resolvePrincipal(realm, "nobody", "tenant-a")).isEmpty();
@@ -91,7 +111,8 @@ class IdentityServiceIntegrationTest {
         runScript(dataSource, DefaultIdentityPack.schema("postgres"));
         runScript(dataSource, """
                 insert into tql_users (user_id, login_id, display_name, status, tenant_id)
-                  values ('u1','admin','Administrator','ACTIVE','tenant-a');
+                  values ('u1','admin','Administrator','ACTIVE','tenant-a'),
+                         ('u2','bob','Bob','ACTIVE','tenant-a');
                 insert into tql_roles (role_id, role_code, role_name)
                   values ('r1','USER_READ','User Read'), ('r2','SALES_ROLE','Sales');
                 insert into tql_permissions (permission_id, permission_code, permission_name)

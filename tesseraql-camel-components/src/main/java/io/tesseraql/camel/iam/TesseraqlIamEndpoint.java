@@ -13,6 +13,7 @@ public class TesseraqlIamEndpoint extends DefaultEndpoint {
     private final String operation;
     private String name;
     private String realm;
+    private String mode = "query";
     private String resultKey = "sql";
 
     public TesseraqlIamEndpoint(String uri, TesseraqlIamComponent component, String operation) {
@@ -50,6 +51,15 @@ public class TesseraqlIamEndpoint extends DefaultEndpoint {
     /** Optional realm id; defaults to the configured default realm. */
     public void setRealm(String realm) {
         this.realm = realm;
+    }
+
+    public String getMode() {
+        return mode;
+    }
+
+    /** Execution mode: {@code query} (default) or {@code update} for write contracts. */
+    public void setMode(String mode) {
+        this.mode = mode;
     }
 
     public String getResultKey() {

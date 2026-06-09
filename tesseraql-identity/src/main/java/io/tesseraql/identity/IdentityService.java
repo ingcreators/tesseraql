@@ -29,6 +29,8 @@ public final class IdentityService {
 
     private static final TqlErrorCode EXEC_ERROR = new TqlErrorCode(TqlDomain.IAM, 1002);
     private static final TqlErrorCode NO_DATASOURCE = new TqlErrorCode(TqlDomain.IAM, 1003);
+    /** TQL-IAM-4030: a write was attempted on a realm whose capability is read-only. */
+    public static final TqlErrorCode READ_ONLY = new TqlErrorCode(TqlDomain.IAM, 4030);
 
     private final Function<String, DataSource> datasources;
 
@@ -58,6 +60,37 @@ public final class IdentityService {
         } catch (SQLException ex) {
             throw TqlException.builder(EXEC_ERROR)
                     .message("Contract '" + contract + "' failed: " + ex.getMessage())
+                    .cause(ex)
+                    .build();
+        }
+    }
+
+    /**
+     * Executes a write contract (update/insert/delete), returning the affected row count. Rejected
+     * with {@link #READ_ONLY} when the realm's user management capability is not readWrite
+     * (design ch. 10.7.3).
+     */
+    public int executeUpdate(RealmConfig realm, String contract, Map<String, Object> params) {
+        if (!realm.capabilities().userWriteAllowed()) {
+            throw new TqlException(READ_ONLY,
+                    "Realm '" + realm.id() + "' does not allow write contract '" + contract + "'");
+        }
+        String sql = new ContractResolver(realm).resolve(contract);
+        BoundSql bound = SqlRenderer.render(sql, params);
+        DataSource dataSource = datasources.apply(realm.datasource());
+        if (dataSource == null) {
+            throw new TqlException(NO_DATASOURCE,
+                    "No datasource '" + realm.datasource() + "' for realm " + realm.id());
+        }
+        try (Connection connection = dataSource.getConnection();
+                PreparedStatement statement = connection.prepareStatement(bound.sql())) {
+            for (int i = 0; i < bound.parameters().size(); i++) {
+                statement.setObject(i + 1, bound.parameters().get(i).value());
+            }
+            return statement.executeUpdate();
+        } catch (SQLException ex) {
+            throw TqlException.builder(EXEC_ERROR)
+                    .message("Write contract '" + contract + "' failed: " + ex.getMessage())
                     .cause(ex)
                     .build();
         }

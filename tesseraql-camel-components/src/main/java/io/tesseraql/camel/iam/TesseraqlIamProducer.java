@@ -40,11 +40,15 @@ public class TesseraqlIamProducer extends DefaultProducer {
 
         Map<String, Object> params = exchange.getProperty(
                 TesseraqlProperties.SQL_PARAMS, Map.of(), Map.class);
-        List<Map<String, Object>> rows = identity.execute(realm, contractName(), params);
 
         Map<String, Object> result = new LinkedHashMap<>();
-        result.put("rows", rows);
-        result.put("rowCount", rows.size());
+        if ("update".equals(endpoint.getMode())) {
+            result.put("affectedRows", identity.executeUpdate(realm, contractName(), params));
+        } else {
+            List<Map<String, Object>> rows = identity.execute(realm, contractName(), params);
+            result.put("rows", rows);
+            result.put("rowCount", rows.size());
+        }
 
         Map<String, Object> context = exchange.getProperty(TesseraqlProperties.CONTEXT, Map.class);
         if (context != null) {

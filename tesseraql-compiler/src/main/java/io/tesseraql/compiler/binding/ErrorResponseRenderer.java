@@ -48,6 +48,7 @@ public final class ErrorResponseRenderer implements Processor {
             case FIELD -> 400;
             case RATE -> 429;
             case IDEM -> code.number() == 4090 ? 409 : 500;
+            case IAM -> code.number() == 4030 ? 403 : 500;
             case TENANT, APP -> code.number() == 4031 ? 403 : 404;
             default -> 500;
         };

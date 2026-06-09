@@ -31,10 +31,16 @@ public final class RequestBinder implements Processor {
     private static final System.Logger LOG = System.getLogger(RequestBinder.class.getName());
 
     private final RouteDefinition route;
+    private final java.util.List<String> pathParams;
     private final ObjectMapper mapper = new ObjectMapper();
 
     public RequestBinder(RouteDefinition route) {
+        this(route, java.util.List.of());
+    }
+
+    public RequestBinder(RouteDefinition route, java.util.List<String> pathParams) {
         this.route = route;
+        this.pathParams = java.util.List.copyOf(pathParams);
     }
 
     @Override
@@ -45,10 +51,16 @@ public final class RequestBinder implements Processor {
         Map<String, Object> effective = InputBinder.bind(route.input(),
                 name -> rawValue(name, body, exchange));
 
+        Map<String, Object> path = new LinkedHashMap<>();
+        for (String name : pathParams) {
+            path.put(name, exchange.getMessage().getHeader(name, String.class));
+        }
+
         Map<String, Object> context = new HashMap<>();
         context.put("query", effective);
         context.put("params", effective);
         context.put("body", body);
+        context.put("path", path);
         context.put("principal", exchange.getProperty(TesseraqlProperties.PRINCIPAL));
 
         exchange.setProperty(TesseraqlProperties.CONTEXT, context);

@@ -10,7 +10,12 @@ import java.nio.file.Path;
  * @param datasource the datasource name backing the realm
  * @param sqlRoot    for {@code sql} realms, the directory of contract SQL files; null for managed
  */
-public record RealmConfig(String id, RealmType type, String datasource, Path sqlRoot) {
+public record RealmConfig(String id, RealmType type, String datasource, Path sqlRoot,
+        Capabilities capabilities) {
+
+    public RealmConfig {
+        capabilities = capabilities == null ? Capabilities.readOnly() : capabilities;
+    }
 
     /** Realm backing type (design ch. 10.2). */
     public enum RealmType {
@@ -21,10 +26,18 @@ public record RealmConfig(String id, RealmType type, String datasource, Path sql
     }
 
     public static RealmConfig managed(String id, String datasource) {
-        return new RealmConfig(id, RealmType.MANAGED, datasource, null);
+        return new RealmConfig(id, RealmType.MANAGED, datasource, null, Capabilities.readWrite());
     }
 
     public static RealmConfig sql(String id, String datasource, Path sqlRoot) {
-        return new RealmConfig(id, RealmType.SQL, datasource, sqlRoot);
+        return new RealmConfig(id, RealmType.SQL, datasource, sqlRoot, Capabilities.readOnly());
+    }
+
+    public static RealmConfig managed(String id, String datasource, Capabilities capabilities) {
+        return new RealmConfig(id, RealmType.MANAGED, datasource, null, capabilities);
+    }
+
+    public static RealmConfig sql(String id, String datasource, Path sqlRoot, Capabilities capabilities) {
+        return new RealmConfig(id, RealmType.SQL, datasource, sqlRoot, capabilities);
     }
 }
