@@ -146,6 +146,10 @@ class BatchJobIntegrationTest {
         assertThat(body.path("lanes").isArray()).isTrue();
         // The batch step's SQL is captured in the slow-SQL log (threshold lowered to 0).
         assertThat(body.path("slowSql")).isNotEmpty();
+        // Trace metrics report retained spans/traces and error rates.
+        assertThat(body.path("traceMetrics").path("spans").asInt()).isGreaterThan(0);
+        assertThat(body.path("traceMetrics").path("traces").asInt()).isGreaterThan(0);
+        assertThat(body.path("traceMetrics").has("traceErrorRate")).isTrue();
     }
 
     @Test

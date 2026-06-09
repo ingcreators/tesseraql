@@ -48,7 +48,28 @@ public final class OpsDashboard {
                 .map(OpsDashboard::view)
                 .toList();
         return new Overview(new BatchSummary(executions.size(), byStatus, recent),
-                laneStatuses(lanes), slowSql.recent(), traces.recentSpans());
+                laneStatuses(lanes), slowSql.recent(), traces.recentSpans(), traceMetrics());
+    }
+
+    /**
+     * Retention and error-rate metrics over the spans currently held in the trace ring
+     * (design ch. 26.11): how many spans/traces are retained and what fraction are errored or slow.
+     */
+    public TraceMetrics traceMetrics() {
+        List<SpanSample> spans = traces.recentSpans();
+        int spanCount = spans.size();
+        int errorSpans = (int) spans.stream().filter(SpanSample::error).count();
+        int slowSpans = (int) spans.stream().filter(s -> s.durationMs() >= slowSpanThresholdMs).count();
+        List<TraceSummary> summaries = traceSummaries();
+        int traceCount = summaries.size();
+        int errorTraces = (int) summaries.stream().filter(s -> s.errorCount() > 0).count();
+        return new TraceMetrics(spanCount, errorSpans, percent(errorSpans, spanCount),
+                slowSpans, percent(slowSpans, spanCount),
+                traceCount, errorTraces, percent(errorTraces, traceCount));
+    }
+
+    private static double percent(int part, int total) {
+        return total == 0 ? 0.0 : Math.round(part * 1000.0 / total) / 10.0;
     }
 
     /** The recent slow SQL executions collected in-process. */
@@ -156,7 +177,15 @@ public final class OpsDashboard {
 
     /** The dashboard overview. */
     public record Overview(BatchSummary batch, List<LaneStatus> lanes, List<SqlExecution> slowSql,
-            List<SpanSample> traces) {
+            List<SpanSample> traces, TraceMetrics traceMetrics) {
+    }
+
+    /**
+     * Retention and error/slow rates over the retained trace ring: counts plus the corresponding
+     * percentages (0-100, one decimal place) for spans and traces.
+     */
+    public record TraceMetrics(int spans, int errorSpans, double spanErrorRate,
+            int slowSpans, double slowRate, int traces, int errorTraces, double traceErrorRate) {
     }
 
     /** Batch execution summary: total scanned, counts by status, and the most recent executions. */

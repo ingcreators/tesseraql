@@ -116,6 +116,31 @@ class OpsDashboardTest {
     }
 
     @Test
+    void traceMetricsReportRetentionAndErrorRate() {
+        RingTracer tracer = new RingTracer(50);
+        // Four traces, one of which has an error span: 1/4 traces = 25% error rate.
+        for (int i = 0; i < 4; i++) {
+            Span root = tracer.start("tesseraql.route");
+            Span sql = tracer.start("tesseraql.sql.execute", root.context());
+            if (i == 0) {
+                sql.recordError(new RuntimeException("boom"));
+            }
+            sql.end();
+            root.end();
+        }
+
+        OpsDashboard.TraceMetrics metrics =
+                new OpsDashboard(null, null, null, tracer, 1_000_000L).traceMetrics();
+
+        assertThat(metrics.spans()).isEqualTo(8);          // 4 traces x 2 spans, all retained
+        assertThat(metrics.errorSpans()).isEqualTo(1);
+        assertThat(metrics.traces()).isEqualTo(4);
+        assertThat(metrics.errorTraces()).isEqualTo(1);
+        assertThat(metrics.traceErrorRate()).isEqualTo(25.0);
+        assertThat(metrics.spanErrorRate()).isEqualTo(12.5);
+    }
+
+    @Test
     void slowFlagHighlightsSpansOverThreshold() {
         RingTracer tracer = new RingTracer(10);
         tracer.start("tesseraql.route").end();
