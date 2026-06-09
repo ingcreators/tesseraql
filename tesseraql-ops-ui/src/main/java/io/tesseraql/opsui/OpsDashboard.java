@@ -27,27 +27,35 @@ public final class OpsDashboard {
     private final TraceLog traces;
     private final long slowSpanThresholdMs;
     private final AlertThresholds thresholds;
+    private final io.tesseraql.core.diag.PinningMonitor pinning;
 
     public OpsDashboard(JobRepository jobs, ExecutionLanes lanes, SqlExecutionLog slowSql,
             TraceLog traces, long slowSpanThresholdMs) {
-        this(jobs, lanes, slowSql, traces, slowSpanThresholdMs, AlertThresholds.defaults());
+        this(jobs, lanes, slowSql, traces, slowSpanThresholdMs, AlertThresholds.defaults(), null);
     }
 
     public OpsDashboard(JobRepository jobs, ExecutionLanes lanes, SqlExecutionLog slowSql,
             TraceLog traces, long slowSpanThresholdMs, double errorRateWarnPercent) {
         this(jobs, lanes, slowSql, traces, slowSpanThresholdMs,
                 new AlertThresholds(errorRateWarnPercent, AlertThresholds.defaults().slowRatePercent(),
-                        AlertThresholds.defaults().batchFailureRatePercent()));
+                        AlertThresholds.defaults().batchFailureRatePercent()), null);
     }
 
     public OpsDashboard(JobRepository jobs, ExecutionLanes lanes, SqlExecutionLog slowSql,
             TraceLog traces, long slowSpanThresholdMs, AlertThresholds thresholds) {
+        this(jobs, lanes, slowSql, traces, slowSpanThresholdMs, thresholds, null);
+    }
+
+    public OpsDashboard(JobRepository jobs, ExecutionLanes lanes, SqlExecutionLog slowSql,
+            TraceLog traces, long slowSpanThresholdMs, AlertThresholds thresholds,
+            io.tesseraql.core.diag.PinningMonitor pinning) {
         this.jobs = jobs;
         this.lanes = lanes;
         this.slowSql = slowSql;
         this.traces = traces;
         this.slowSpanThresholdMs = slowSpanThresholdMs;
         this.thresholds = thresholds;
+        this.pinning = pinning;
     }
 
     /** Builds the dashboard overview: batch summary, lane diagnostics, slow SQL, and recent traces. */
@@ -64,7 +72,15 @@ public final class OpsDashboard {
         List<Alert> alerts = alerts();
         return new Overview(new BatchSummary(executions.size(), byStatus, recent),
                 laneStatuses(lanes), slowSql.recent(), traces.recentSpans(), traceMetrics(),
-                !alerts.isEmpty(), alerts);
+                pinning(), !alerts.isEmpty(), alerts);
+    }
+
+    /** The virtual-thread pinning summary (count and recent events), empty when not monitored. */
+    public PinningSummary pinning() {
+        if (pinning == null) {
+            return new PinningSummary(0, List.of());
+        }
+        return new PinningSummary(pinning.count(), pinning.recent());
     }
 
     /**
@@ -92,6 +108,10 @@ public final class OpsDashboard {
                                     + " request(s) (saturation)"));
                 }
             }
+        }
+        if (pinning != null && pinning.count() > 0) {
+            alerts.add(new Alert("TQL-OPS-9005", "warning",
+                    pinning.count() + " virtual-thread pinning event(s) detected"));
         }
         if (jobs != null) {
             List<JobExecution> executions = jobs.listExecutions(SCAN_LIMIT);
@@ -233,7 +253,12 @@ public final class OpsDashboard {
 
     /** The dashboard overview. */
     public record Overview(BatchSummary batch, List<LaneStatus> lanes, List<SqlExecution> slowSql,
-            List<SpanSample> traces, TraceMetrics traceMetrics, boolean warning, List<Alert> alerts) {
+            List<SpanSample> traces, TraceMetrics traceMetrics,
+            PinningSummary pinning, boolean warning, List<Alert> alerts) {
+    }
+
+    /** Virtual-thread pinning roll-up: total count and the recent pinning events. */
+    public record PinningSummary(long count, List<io.tesseraql.core.diag.PinningEvent> recent) {
     }
 
     /** An operational alert raised when a metric crosses a threshold. */

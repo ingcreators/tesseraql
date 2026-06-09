@@ -58,6 +58,7 @@ final class OperationsRouteBuilder extends RouteBuilder {
         rest().get("/_tesseraql/ops/traces/summary").to("direct:ops.traceSummary");
         rest().get("/_tesseraql/ops/traces/metrics").to("direct:ops.traceMetrics");
         rest().get("/_tesseraql/ops/alerts").to("direct:ops.alerts");
+        rest().get("/_tesseraql/ops/pinning").to("direct:ops.pinning");
 
         from("direct:ops.batch.jobs").routeId("ops.batch.jobs")
                 .to(VIEW).to("tesseraql-auth:authorize?policy=ops.batch.view")
@@ -108,6 +109,10 @@ final class OperationsRouteBuilder extends RouteBuilder {
         from("direct:ops.alerts").routeId("ops.alerts")
                 .to(VIEW).to("tesseraql-auth:authorize?policy=ops.batch.view")
                 .process(jsonProcessor(exchange -> dashboard.alerts()));
+
+        from("direct:ops.pinning").routeId("ops.pinning")
+                .to(VIEW).to("tesseraql-auth:authorize?policy=ops.batch.view")
+                .process(jsonProcessor(exchange -> dashboard.pinning()));
     }
 
     private Object runJob(Exchange exchange) {

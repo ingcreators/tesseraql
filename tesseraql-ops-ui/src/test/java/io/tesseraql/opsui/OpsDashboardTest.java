@@ -185,6 +185,20 @@ class OpsDashboardTest {
     }
 
     @Test
+    void pinningEventsRaiseAlertAndSummary() {
+        io.tesseraql.core.diag.PinningMonitor monitor = new io.tesseraql.core.diag.PinningMonitor(8);
+        monitor.record(new io.tesseraql.core.diag.PinningEvent("carrier-1", 42, "A.a", 1));
+
+        OpsDashboard dashboard = new OpsDashboard(null, null, null, new RingTracer(4), 200L,
+                OpsDashboard.AlertThresholds.defaults(), monitor);
+
+        assertThat(dashboard.pinning().count()).isEqualTo(1);
+        assertThat(dashboard.pinning().recent()).singleElement()
+                .satisfies(event -> assertThat(event.carrierThread()).isEqualTo("carrier-1"));
+        assertThat(dashboard.alerts()).extracting(OpsDashboard.Alert::code).contains("TQL-OPS-9005");
+    }
+
+    @Test
     void slowFlagHighlightsSpansOverThreshold() {
         RingTracer tracer = new RingTracer(10);
         tracer.start("tesseraql.route").end();

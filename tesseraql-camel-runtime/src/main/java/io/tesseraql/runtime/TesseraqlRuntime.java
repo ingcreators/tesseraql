@@ -55,12 +55,14 @@ public final class TesseraqlRuntime implements AutoCloseable {
     private final io.tesseraql.core.threading.ExecutionLanes executionLanes;
     private final TenantDataSources tenantDataSources;
     private final io.tesseraql.yaml.config.AppConfig config;
+    private final AutoCloseable pinningSource;
 
     private TesseraqlRuntime(CamelContext camelContext, HikariDataSource mainDataSource, int port,
             JobRepository jobRepository, JobExecutor jobExecutor, JdbcOutboxStore outboxStore,
             Map<String, JobFile> jobs, String appName,
             io.tesseraql.core.threading.ExecutionLanes executionLanes,
-            TenantDataSources tenantDataSources, io.tesseraql.yaml.config.AppConfig config) {
+            TenantDataSources tenantDataSources, io.tesseraql.yaml.config.AppConfig config,
+            AutoCloseable pinningSource) {
         this.camelContext = camelContext;
         this.mainDataSource = mainDataSource;
         this.port = port;
@@ -72,6 +74,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
         this.executionLanes = executionLanes;
         this.tenantDataSources = tenantDataSources;
         this.config = config;
+        this.pinningSource = pinningSource;
     }
 
     /** Starts the runtime against {@code appHome}, using the configured {@code server.port}. */
@@ -123,6 +126,17 @@ public final class TesseraqlRuntime implements AutoCloseable {
         io.tesseraql.core.diag.RingSqlExecutionLog slowSqlLog =
                 new io.tesseraql.core.diag.RingSqlExecutionLog(slowSqlCapacity, slowSqlMillis);
         context.getRegistry().bind(TesseraqlProperties.SLOW_SQL_LOG_BEAN, slowSqlLog);
+
+        io.tesseraql.core.diag.PinningMonitor pinningMonitor =
+                new io.tesseraql.core.diag.PinningMonitor(100);
+        io.tesseraql.core.diag.JfrPinningSource pinningSource = null;
+        if (manifest.config().getString("tesseraql.diagnostics.pinning.enabled")
+                .map(Boolean::parseBoolean).orElse(false)) {
+            long pinMs = manifest.config().getString("tesseraql.diagnostics.pinning.thresholdMillis")
+                    .map(Long::parseLong).orElse(20L);
+            pinningSource = new io.tesseraql.core.diag.JfrPinningSource(
+                    pinningMonitor, java.time.Duration.ofMillis(pinMs));
+        }
 
         TenantDataSources tenantDataSources = TenantDataSources.load(manifest.config());
         if (!tenantDataSources.isEmpty()) {
@@ -197,7 +211,8 @@ public final class TesseraqlRuntime implements AutoCloseable {
                                     manifest.config().getString("tesseraql.diagnostics.slowRateWarnPercent")
                                             .map(Double::parseDouble).orElse(20.0),
                                     manifest.config().getString("tesseraql.diagnostics.batchFailureWarnPercent")
-                                            .map(Double::parseDouble).orElse(10.0)))));
+                                            .map(Double::parseDouble).orElse(10.0)),
+                            pinningMonitor)));
             context.addRoutes(new SchedulingRouteBuilder(jobRunner, List.copyOf(jobs.values())));
 
             IdentityService identity = new IdentityService(name ->
@@ -230,7 +245,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
         }
         LOG.info("TesseraQL runtime started on port {} for app {}", port, appHome);
         return new TesseraqlRuntime(context, dataSource, port, jobRepository, jobExecutor,
-                outboxStore, jobs, appName, lanes, tenantDataSources, manifest.config());
+                outboxStore, jobs, appName, lanes, tenantDataSources, manifest.config(), pinningSource);
     }
 
     /** Runs a batch job by id and returns its final execution record (design ch. 26). */
@@ -283,6 +298,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
 
     @Override
     public void close() {
+        closeQuietly(pinningSource);
         try {
             camelContext.stop();
         } finally {
@@ -295,6 +311,17 @@ public final class TesseraqlRuntime implements AutoCloseable {
                     mainDataSource.close();
                 }
             }
+        }
+    }
+
+    private static void closeQuietly(AutoCloseable closeable) {
+        if (closeable == null) {
+            return;
+        }
+        try {
+            closeable.close();
+        } catch (Exception ignored) {
+            // best-effort shutdown of the diagnostics source
         }
     }
 }
