@@ -43,19 +43,37 @@ public final class RouteCompiler {
 
     private AppConfig config;
     private io.tesseraql.compiler.binding.TenancySettings tenancy;
+    private boolean mountRest = true;
+    private java.util.Set<String> onlyRouteIds;
 
-    /** Builds a Camel {@link RouteBuilder} for all routes in the manifest. */
+    /** Builds a Camel {@link RouteBuilder} mounting the REST transport and all routes. */
     public RouteBuilder compile(AppManifest manifest) {
+        return compile(manifest, true, null);
+    }
+
+    /**
+     * Builds a {@link RouteBuilder} for the manifest. When {@code mountRest} is false only the
+     * {@code direct:} business routes are produced (no REST consumers) — used to hot-reload route
+     * bodies in place. When {@code onlyRouteIds} is non-null only those route ids are built
+     * (design ch. 16.8 live reload).
+     */
+    public RouteBuilder compile(AppManifest manifest, boolean mountRest, java.util.Set<String> onlyRouteIds) {
         this.config = manifest.config();
         this.tenancy = io.tesseraql.compiler.binding.TenancySettings.from(config);
+        this.mountRest = mountRest;
+        this.onlyRouteIds = onlyRouteIds;
         return new RouteBuilder() {
             @Override
             public void configure() {
-                restConfiguration().component("platform-http");
+                if (mountRest) {
+                    restConfiguration().component("platform-http");
+                }
                 onException(TqlException.class).handled(true).process(new ErrorResponseRenderer());
                 onException(Exception.class).handled(true).process(new ErrorResponseRenderer());
                 for (RouteFile routeFile : manifest.routes()) {
-                    buildRoute(this, manifest.appHome(), routeFile);
+                    if (onlyRouteIds == null || onlyRouteIds.contains(routeFile.definition().id())) {
+                        buildRoute(this, manifest.appHome(), routeFile);
+                    }
                 }
             }
         };
@@ -89,7 +107,9 @@ public final class RouteCompiler {
         RouteDefinition definition = routeFile.definition();
         String routeId = definition.id();
         String direct = "direct:" + routeId;
-        restEndpoint(builder, routeFile.httpMethod(), routeFile.urlPath()).to(direct);
+        if (mountRest) {
+            restEndpoint(builder, routeFile.httpMethod(), routeFile.urlPath()).to(direct);
+        }
 
         Path sqlPath = routeFile.source().getParent().resolve(definition.sql().file()).normalize();
 
@@ -110,7 +130,9 @@ public final class RouteCompiler {
         RouteDefinition definition = routeFile.definition();
         String routeId = definition.id();
         String direct = "direct:" + routeId;
-        restEndpoint(builder, routeFile.httpMethod(), routeFile.urlPath()).to(direct);
+        if (mountRest) {
+            restEndpoint(builder, routeFile.httpMethod(), routeFile.urlPath()).to(direct);
+        }
 
         Path sqlPath = routeFile.source().getParent().resolve(definition.sql().file()).normalize();
         String sqlUri = "tesseraql-sql:file:" + sqlPath
@@ -147,7 +169,9 @@ public final class RouteCompiler {
         String routeId = definition.id();
         String direct = "direct:" + routeId;
 
-        restEndpoint(builder, routeFile.httpMethod(), routeFile.urlPath()).to(direct);
+        if (mountRest) {
+            restEndpoint(builder, routeFile.httpMethod(), routeFile.urlPath()).to(direct);
+        }
 
         ProcessorDefinition<?> route = builder.from(direct).routeId(routeId);
         applyTelemetry(route, routeFile);

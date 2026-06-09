@@ -21,9 +21,11 @@ final class StudioRouteBuilder extends RouteBuilder {
 
     private final ObjectMapper mapper = new ObjectMapper();
     private final StudioService studio;
+    private final RouteReloader reloader;
 
-    StudioRouteBuilder(StudioService studio) {
+    StudioRouteBuilder(StudioService studio, RouteReloader reloader) {
         this.studio = studio;
+        this.reloader = reloader;
     }
 
     @Override
@@ -73,7 +75,7 @@ final class StudioRouteBuilder extends RouteBuilder {
                 }));
 
         from("direct:studio.reload").routeId("studio.reload")
-                .to(AUTH).process(json(exchange -> studio.reload()));
+                .to(AUTH).process(json(exchange -> reloader.reload()));
     }
 
     private static String requirePath(Exchange exchange) {

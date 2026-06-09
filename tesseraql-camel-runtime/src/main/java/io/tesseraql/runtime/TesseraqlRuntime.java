@@ -191,8 +191,10 @@ public final class TesseraqlRuntime implements AutoCloseable {
                     .map(Boolean::parseBoolean).orElse(true)) {
                 boolean readOnly = manifest.config().getString("tesseraql.studio.readOnly")
                         .map(Boolean::parseBoolean).orElse(true);
-                context.addRoutes(new StudioRouteBuilder(
-                        new io.tesseraql.studio.StudioService(manifest, readOnly)));
+                io.tesseraql.studio.StudioService studio =
+                        new io.tesseraql.studio.StudioService(manifest, readOnly);
+                context.addRoutes(new StudioRouteBuilder(studio,
+                        new RouteReloader(context, appHome, manifest, studio)));
             }
             var outboxDelay = manifest.config().getString("tesseraql.outbox.dispatch.fixedDelay");
             if (outboxDelay.isPresent()) {
