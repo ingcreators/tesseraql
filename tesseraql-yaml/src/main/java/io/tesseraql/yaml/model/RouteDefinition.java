@@ -27,6 +27,7 @@ public record RouteDefinition(
         Map<String, InputField> input,
         InputPolicy inputPolicy,
         SecuritySpec security,
+        IdempotencySpec idempotency,
         SqlBinding sql,
         ResponseSpec response) {
 

@@ -167,6 +167,44 @@ class QueryJsonIntegrationTest {
         assertThat(response.statusCode()).isEqualTo(400);
     }
 
+    @Test
+    void commandIsIdempotentPerKey() throws Exception {
+        SessionStore sessions = sessionStore();
+        String sid = sessions.create(writer());
+        String cookie = sessions.cookieName() + "=" + sid;
+        String csrf = sessions.csrfToken(sid);
+        String key = "idem-key-001";
+
+        HttpResponse<String> first = postIdem("/users/deactivate", cookie, csrf, key, "{\"name\":\"suzuki\"}");
+        assertThat(first.statusCode()).isEqualTo(200);
+
+        // Same key, different request body -> conflict (409).
+        HttpResponse<String> conflict =
+                postIdem("/users/deactivate", cookie, csrf, key, "{\"name\":\"tanaka\"}");
+        assertThat(conflict.statusCode()).isEqualTo(409);
+        assertThat(MAPPER.readTree(conflict.body()).path("error").path("code").asText())
+                .isEqualTo("TQL-IDEM-4090");
+
+        // Same key, same request body -> replay of the original response.
+        HttpResponse<String> replay =
+                postIdem("/users/deactivate", cookie, csrf, key, "{\"name\":\"suzuki\"}");
+        assertThat(replay.statusCode()).isEqualTo(200);
+        assertThat(replay.body()).isEqualTo(first.body());
+    }
+
+    private HttpResponse<String> postIdem(String path, String cookie, String csrf, String key, String body)
+            throws Exception {
+        return HttpClient.newHttpClient().send(
+                HttpRequest.newBuilder(URI.create("http://localhost:" + runtime.port() + path))
+                        .header("Content-Type", "application/json")
+                        .header("Cookie", cookie)
+                        .header("X-CSRF-Token", csrf)
+                        .header("Idempotency-Key", key)
+                        .POST(HttpRequest.BodyPublishers.ofString(body))
+                        .build(),
+                HttpResponse.BodyHandlers.ofString());
+    }
+
     private SessionStore sessionStore() {
         return runtime.camelContext().getRegistry()
                 .lookupByNameAndType(TesseraqlProperties.SESSION_STORE_BEAN, SessionStore.class);

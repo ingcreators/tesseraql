@@ -2,14 +2,17 @@ package io.tesseraql.compiler;
 
 import io.tesseraql.compiler.binding.ErrorResponseRenderer;
 import io.tesseraql.compiler.binding.HtmlResponseRenderer;
+import io.tesseraql.compiler.binding.IdempotencyProcessors;
 import io.tesseraql.compiler.binding.JsonResponseRenderer;
 import io.tesseraql.compiler.binding.RequestBinder;
 import io.tesseraql.core.error.TqlDomain;
 import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
+import io.tesseraql.core.util.Durations;
 import io.tesseraql.yaml.config.AppConfig;
 import io.tesseraql.yaml.manifest.AppManifest;
 import io.tesseraql.yaml.manifest.RouteFile;
+import io.tesseraql.yaml.model.IdempotencySpec;
 import io.tesseraql.yaml.model.RouteDefinition;
 import io.tesseraql.yaml.model.SecuritySpec;
 import io.tesseraql.yaml.model.SqlBinding;
@@ -31,6 +34,7 @@ public final class RouteCompiler {
     private static final TqlErrorCode UNSUPPORTED_RECIPE = new TqlErrorCode(TqlDomain.CAMEL, 3100);
     private static final String DEFAULT_DATASOURCE = "main";
     private static final int DEFAULT_MAX_ROWS = 10_000;
+    private static final long DEFAULT_IDEMPOTENCY_TTL = java.time.Duration.ofHours(24).toMillis();
 
     private AppConfig config;
 
@@ -64,8 +68,9 @@ public final class RouteCompiler {
     }
 
     private void buildJson(RouteBuilder builder, RouteFile routeFile) {
-        pipelineThroughSql(builder, routeFile)
+        ProcessorDefinition<?> route = pipelineThroughSql(builder, routeFile)
                 .process(new JsonResponseRenderer(routeFile.definition().response().json()));
+        applyIdempotencyComplete(route, routeFile.definition());
     }
 
     private void buildQueryExport(RouteBuilder builder, RouteFile routeFile) {
@@ -117,7 +122,33 @@ public final class RouteCompiler {
 
         ProcessorDefinition<?> route = builder.from(direct).routeId(routeId);
         applySecurity(route, definition.security());
+        applyIdempotencyBegin(route, definition);
         return route.process(new RequestBinder(definition)).to(sqlUri);
+    }
+
+    /** Inserts the idempotency begin step and a short-circuit for replays (design ch. 39.5). */
+    private void applyIdempotencyBegin(ProcessorDefinition<?> route, RouteDefinition definition) {
+        IdempotencySpec idempotency = definition.idempotency();
+        if (idempotency == null) {
+            return;
+        }
+        String scope = idempotency.scope() != null ? idempotency.scope() : definition.id();
+        long ttl = idempotency.ttl() != null ? Durations.toMillis(idempotency.ttl()) : DEFAULT_IDEMPOTENCY_TTL;
+        route.process(IdempotencyProcessors.begin(scope, ttl, idempotency.isRequired()));
+        route.choice()
+                .when((org.apache.camel.Predicate) exchange ->
+                        Boolean.TRUE.equals(exchange.getProperty(IdempotencyProcessors.REPLAY_PROPERTY)))
+                .stop()
+                .end();
+    }
+
+    /** Appends the idempotency complete step after the response is rendered. */
+    private void applyIdempotencyComplete(ProcessorDefinition<?> route, RouteDefinition definition) {
+        IdempotencySpec idempotency = definition.idempotency();
+        if (idempotency != null) {
+            String scope = idempotency.scope() != null ? idempotency.scope() : definition.id();
+            route.process(IdempotencyProcessors.complete(scope));
+        }
     }
 
     /** Resolves the effective row cap: route override, then global config, then default (ch. 28.7). */

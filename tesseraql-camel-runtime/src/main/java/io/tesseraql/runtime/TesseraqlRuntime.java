@@ -10,6 +10,7 @@ import io.tesseraql.security.session.SessionStore;
 import io.tesseraql.operations.batch.JobExecution;
 import io.tesseraql.operations.batch.JobExecutor;
 import io.tesseraql.operations.batch.JobRepository;
+import io.tesseraql.operations.idempotency.JdbcIdempotencyStore;
 import io.tesseraql.yaml.manifest.AppManifest;
 import io.tesseraql.yaml.manifest.JobFile;
 import io.tesseraql.yaml.manifest.ManifestLoader;
@@ -88,6 +89,9 @@ public final class TesseraqlRuntime implements AutoCloseable {
 
         JobRepository jobRepository = new JobRepository(dataSource);
         jobRepository.ensureSchema();
+        JdbcIdempotencyStore idempotencyStore = new JdbcIdempotencyStore(dataSource);
+        idempotencyStore.ensureSchema();
+        context.getRegistry().bind(TesseraqlProperties.IDEMPOTENCY_STORE_BEAN, idempotencyStore);
         JobExecutor jobExecutor = new JobExecutor(jobRepository);
         Map<String, JobFile> jobs = new LinkedHashMap<>();
         manifest.jobs().forEach(job -> jobs.put(job.definition().id(), job));

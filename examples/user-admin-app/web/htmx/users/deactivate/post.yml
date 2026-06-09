@@ -18,6 +18,10 @@ security:
   policy: users.write
   csrf: true
 
+idempotency:
+  required: false
+  ttl: 24h
+
 sql:
   file: deactivate.sql
   mode: update
