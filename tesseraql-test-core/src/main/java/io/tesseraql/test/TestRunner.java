@@ -3,6 +3,7 @@ package io.tesseraql.test;
 import io.tesseraql.core.sql.BoundParameter;
 import io.tesseraql.core.sql.BoundSql;
 import io.tesseraql.core.sql.SqlRenderer;
+import io.tesseraql.coverage.SqlCoverage;
 import io.tesseraql.identity.IdentityService;
 import io.tesseraql.identity.RealmConfig;
 import io.tesseraql.test.TestReport.TestResult;
@@ -30,16 +31,23 @@ public final class TestRunner {
     private final Path appHome;
     private final IdentityService identity;
     private final RealmConfig realm;
+    private final SqlCoverage coverage;
 
     public TestRunner(DataSource dataSource, Path appHome) {
-        this(dataSource, appHome, null, null);
+        this(dataSource, appHome, null, null, null);
     }
 
     public TestRunner(DataSource dataSource, Path appHome, IdentityService identity, RealmConfig realm) {
+        this(dataSource, appHome, identity, realm, null);
+    }
+
+    public TestRunner(DataSource dataSource, Path appHome, IdentityService identity, RealmConfig realm,
+            SqlCoverage coverage) {
         this.dataSource = dataSource;
         this.appHome = appHome;
         this.identity = identity;
         this.realm = realm;
+        this.coverage = coverage;
     }
 
     /** Runs all cases and returns a report. */
@@ -99,6 +107,10 @@ public final class TestRunner {
 
     private List<Map<String, Object>> executeSql(Path sqlFile, Map<String, Object> params) {
         BoundSql bound = SqlRenderer.render(read(sqlFile), params);
+        if (coverage != null) {
+            coverage.record(appHome.relativize(sqlFile).toString().replace('\\', '/'),
+                    bound.coverageTrace());
+        }
         try (Connection connection = dataSource.getConnection();
                 PreparedStatement statement = connection.prepareStatement(bound.sql())) {
             for (int i = 0; i < bound.parameters().size(); i++) {

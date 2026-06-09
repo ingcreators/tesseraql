@@ -54,16 +54,21 @@ class AppTestRunnerIntegrationTest {
     }
 
     @Test
-    void runsExampleSuitesAndWritesReports(@TempDir Path reportDir) {
+    void runsExampleSuitesWritesReportsAndCollectsCoverage(@TempDir Path reportDir) {
         Path appHome = Path.of("..", "examples", "user-admin-app").toAbsolutePath().normalize();
-        TestReport report = new AppTestRunner()
+        AppTestRunner.RunResult result = new AppTestRunner()
                 .run(appHome, dataSource, RealmConfig.managed("local", "main"), reportDir);
 
-        assertThat(report.results()).hasSize(2);
+        TestReport report = result.report();
+        assertThat(report.results()).hasSize(3);
         assertThat(report.allPassed()).isTrue();
         assertThat(Files.exists(reportDir.resolve("junit/TEST-tesseraql.xml"))).isTrue();
         assertThat(Files.exists(reportDir.resolve("tesseraql-result.json"))).isTrue();
         assertThat(Files.exists(reportDir.resolve("index.html"))).isTrue();
+        assertThat(Files.exists(reportDir.resolve("coverage/sql-coverage.json"))).isTrue();
+
+        // Both branches of search.sql are exercised (q present and empty) -> 100% branch coverage.
+        assertThat(result.coverage().report("web/api/users/search.sql").branchRatio()).isEqualTo(1.0);
     }
 
     private static DataSource dataSource() {

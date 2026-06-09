@@ -42,7 +42,7 @@ public class TestMojo extends AbstractMojo {
     public void execute() throws MojoFailureException {
         DriverManagerDataSource dataSource = new DriverManagerDataSource(jdbcUrl, username, password);
         TestReport report = new AppTestRunner().run(
-                appHome.toPath(), dataSource, RealmConfig.managed(realm, "main"), reportDir.toPath());
+                appHome.toPath(), dataSource, RealmConfig.managed(realm, "main"), reportDir.toPath()).report();
 
         getLog().info("TesseraQL tests: " + report.passed() + " passed, " + report.failed() + " failed");
         for (TestReport.TestResult result : report.results()) {

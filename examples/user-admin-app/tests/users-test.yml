@@ -11,6 +11,16 @@ tests:
       rows:
         - name: sato
 
+  - name: search without query returns all users
+    sql:
+      file: web/api/users/search.sql
+    params:
+      q: ""
+      limit: 50
+      offset: 0
+    expect:
+      rowCount: 1
+
   - name: admin user resolves the USER_READ role
     contract: identity.find-roles-by-user-id
     params:

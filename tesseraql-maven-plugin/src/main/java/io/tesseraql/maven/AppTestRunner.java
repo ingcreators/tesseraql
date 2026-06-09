@@ -1,5 +1,7 @@
 package io.tesseraql.maven;
 
+import io.tesseraql.coverage.SqlCoverage;
+import io.tesseraql.coverage.SqlCoverageReport;
 import io.tesseraql.identity.IdentityService;
 import io.tesseraql.identity.RealmConfig;
 import io.tesseraql.report.HtmlReporter;
@@ -15,6 +17,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Stream;
 import javax.sql.DataSource;
 
@@ -24,10 +27,15 @@ import javax.sql.DataSource;
  */
 public final class AppTestRunner {
 
+    /** Result of a test run: the aggregated report and the collected SQL coverage. */
+    public record RunResult(TestReport report, SqlCoverage coverage) {
+    }
+
     /** Runs every {@code tests/**}{@code /*.yml} suite and writes reports under {@code reportDir}. */
-    public TestReport run(Path appHome, DataSource dataSource, RealmConfig realm, Path reportDir) {
+    public RunResult run(Path appHome, DataSource dataSource, RealmConfig realm, Path reportDir) {
         IdentityService identity = new IdentityService(name -> dataSource);
-        TestRunner runner = new TestRunner(dataSource, appHome, identity, realm);
+        SqlCoverage coverage = new SqlCoverage();
+        TestRunner runner = new TestRunner(dataSource, appHome, identity, realm, coverage);
         TestSuiteLoader loader = new TestSuiteLoader();
 
         List<TestReport.TestResult> results = new ArrayList<>();
@@ -37,7 +45,8 @@ public final class AppTestRunner {
         }
         TestReport report = new TestReport(results);
         writeReports(report, reportDir);
-        return report;
+        writeCoverage(coverage, reportDir);
+        return new RunResult(report, coverage);
     }
 
     private static List<Path> suiteFiles(Path appHome) {
@@ -50,6 +59,27 @@ public final class AppTestRunner {
                     .filter(path -> path.getFileName().toString().endsWith(".yml"))
                     .sorted()
                     .toList();
+        } catch (IOException ex) {
+            throw new UncheckedIOException(ex);
+        }
+    }
+
+    private static void writeCoverage(SqlCoverage coverage, Path reportDir) {
+        StringBuilder json = new StringBuilder("{\n  \"sql\": {\n");
+        var reports = coverage.reports();
+        int i = 0;
+        for (Map.Entry<String, SqlCoverageReport> entry : reports.entrySet()) {
+            SqlCoverageReport report = entry.getValue();
+            json.append("    \"").append(entry.getKey()).append("\": {")
+                    .append("\"branchRatio\": ").append(report.branchRatio())
+                    .append(", \"branchCount\": ").append(report.branchCount())
+                    .append(", \"lines\": ").append(report.lineCount()).append("}");
+            json.append(++i < reports.size() ? ",\n" : "\n");
+        }
+        json.append("  }\n}\n");
+        try {
+            Files.createDirectories(reportDir.resolve("coverage"));
+            Files.writeString(reportDir.resolve("coverage/sql-coverage.json"), json.toString());
         } catch (IOException ex) {
             throw new UncheckedIOException(ex);
         }
