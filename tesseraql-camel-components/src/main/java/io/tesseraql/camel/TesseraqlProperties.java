@@ -17,6 +17,7 @@ public final class TesseraqlProperties {
     public static final String POLICY_ENGINE_BEAN = "tesseraqlPolicyEngine";
     public static final String JWT_AUTHENTICATOR_BEAN = "tesseraqlJwtAuthenticator";
     public static final String SESSION_STORE_BEAN = "tesseraqlSessionStore";
+    public static final String TEMP_STORE_BEAN = "tesseraqlTempStore";
 
     private TesseraqlProperties() {
     }

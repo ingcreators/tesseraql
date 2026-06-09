@@ -55,6 +55,7 @@ public final class RouteCompiler {
         switch (definition.recipe()) {
             case "query-json", "command-json" -> buildJson(builder, routeFile);
             case "query-html" -> buildQueryHtml(builder, appHome, routeFile);
+            case "query-export" -> buildQueryExport(builder, routeFile);
             default -> LOG.log(System.Logger.Level.WARNING,
                     // Recipes not yet implemented are skipped so a mixed-recipe app can still boot.
                     "Skipping route {0}: recipe ''{1}'' is not supported yet",
@@ -65,6 +66,30 @@ public final class RouteCompiler {
     private void buildJson(RouteBuilder builder, RouteFile routeFile) {
         pipelineThroughSql(builder, routeFile)
                 .process(new JsonResponseRenderer(routeFile.definition().response().json()));
+    }
+
+    private void buildQueryExport(RouteBuilder builder, RouteFile routeFile) {
+        RouteDefinition definition = routeFile.definition();
+        String routeId = definition.id();
+        String direct = "direct:" + routeId;
+        restEndpoint(builder, routeFile.httpMethod(), routeFile.urlPath()).to(direct);
+
+        Path sqlPath = routeFile.source().getParent().resolve(definition.sql().file()).normalize();
+        String sqlUri = "tesseraql-sql:file:" + sqlPath
+                + "?datasource=" + DEFAULT_DATASOURCE
+                + "&mode=query-export&format=csv&filename=" + exportFilename(definition);
+
+        ProcessorDefinition<?> route = builder.from(direct).routeId(routeId);
+        applySecurity(route, definition.security());
+        route.process(new RequestBinder(definition)).to(sqlUri);
+    }
+
+    private static String exportFilename(RouteDefinition definition) {
+        if (definition.response() != null && definition.response().stream() != null
+                && definition.response().stream().filename() != null) {
+            return definition.response().stream().filename();
+        }
+        return definition.id() + ".csv";
     }
 
     private void buildQueryHtml(RouteBuilder builder, Path appHome, RouteFile routeFile) {

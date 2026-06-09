@@ -192,6 +192,17 @@ class QueryJsonIntegrationTest {
         return HttpClient.newHttpClient().send(request.build(), HttpResponse.BodyHandlers.ofString());
     }
 
+    @Test
+    void exportStreamsCsv() throws Exception {
+        HttpResponse<String> response = get("/api/users/export", token(List.of("USER_READ")));
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(response.headers().firstValue("Content-Type").orElse("")).contains("text/csv");
+        assertThat(response.headers().firstValue("Content-Disposition").orElse(""))
+                .contains("users.csv");
+        assertThat(response.body()).startsWith("id,name,status").contains("sato");
+    }
+
     private JsonNode getJson(String path, String bearer) throws Exception {
         HttpResponse<String> response = get(path, bearer);
         assertThat(response.statusCode()).isEqualTo(200);

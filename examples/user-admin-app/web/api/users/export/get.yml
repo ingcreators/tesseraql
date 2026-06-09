@@ -1,0 +1,17 @@
+version: tesseraql/v1
+id: users.export
+kind: route
+recipe: query-export
+
+security:
+  auth: bearer
+  policy: users.read
+
+sql:
+  file: export.sql
+  mode: query-export
+
+response:
+  stream:
+    contentType: text/csv
+    filename: users.csv

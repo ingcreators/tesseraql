@@ -79,6 +79,8 @@ public final class TesseraqlRuntime implements AutoCloseable {
                     TesseraqlProperties.JWT_AUTHENTICATOR_BEAN, new JwtAuthenticator(security.jwt()));
         }
         context.getRegistry().bind(TesseraqlProperties.SESSION_STORE_BEAN, new SessionStore());
+        context.getRegistry().bind(TesseraqlProperties.TEMP_STORE_BEAN,
+                new io.tesseraql.core.spool.FileTempStore(appHome.resolve("work/tmp/tesseraql")));
 
         VertxPlatformHttpServerConfiguration httpConfig = new VertxPlatformHttpServerConfiguration();
         httpConfig.setBindHost("0.0.0.0");

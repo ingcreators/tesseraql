@@ -7,7 +7,17 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
  * the first milestone; HTML and streaming responses are added in later phases.
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
-public record ResponseSpec(JsonResponse json, HtmlResponse html) {
+public record ResponseSpec(JsonResponse json, HtmlResponse html, StreamResponse stream) {
+
+    /**
+     * A streaming response for large-data export (design ch. 28.10).
+     *
+     * @param contentType the response content type (e.g. {@code text/csv})
+     * @param filename    the suggested download filename
+     */
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public record StreamResponse(String contentType, String filename) {
+    }
 
     /**
      * A JSON response. {@code body} is a free-form tree (maps, lists, scalars) whose leaf strings

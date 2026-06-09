@@ -6,9 +6,15 @@ import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
 import io.tesseraql.core.sql.BoundParameter;
 import io.tesseraql.core.sql.BoundSql;
+import io.tesseraql.core.spool.FileTempStore;
+import io.tesseraql.core.spool.SpoolKind;
+import io.tesseraql.core.spool.SpoolRef;
+import io.tesseraql.core.spool.SpoolWriter;
+import io.tesseraql.core.spool.TempStore;
 import io.tesseraql.core.sql.SqlNode;
 import io.tesseraql.core.sql.Sql2WayParser;
 import io.tesseraql.core.sql.SqlRenderer;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.sql.Connection;
@@ -56,22 +62,116 @@ public class TesseraqlSqlProducer extends DefaultProducer {
     @SuppressWarnings("unchecked")
     public void process(Exchange exchange) throws Exception {
         String mode = endpoint.getMode();
-        if (!"query".equals(mode) && !"update".equals(mode)) {
-            throw new TqlException(UNSUPPORTED_MODE,
-                    "Unsupported SQL mode '" + mode + "' (supported: query, update)");
-        }
         Map<String, Object> params = exchange.getProperty(
                 TesseraqlProperties.SQL_PARAMS, Map.of(), Map.class);
+        BoundSql bound = SqlRenderer.render(nodes, params);
+
+        if ("query-export".equals(mode)) {
+            exportCsv(exchange, bound);
+            return;
+        }
+        if (!"query".equals(mode) && !"update".equals(mode)) {
+            throw new TqlException(UNSUPPORTED_MODE,
+                    "Unsupported SQL mode '" + mode + "' (supported: query, update, query-export)");
+        }
         Map<String, Object> context = exchange.getProperty(
                 TesseraqlProperties.CONTEXT, Map.class);
-
-        BoundSql bound = SqlRenderer.render(nodes, params);
         Map<String, Object> result = "update".equals(mode) ? executeUpdate(bound) : executeQuery(bound);
 
         if (context != null) {
             context.put(endpoint.getResultKey(), result);
         }
         exchange.getMessage().setBody(result);
+    }
+
+    /**
+     * Streams the result set to a CSV spool and sets the response body to its input stream
+     * (design ch. 28.6, 28.10) without materializing a List&lt;Map&gt;. The spool is deleted when
+     * the exchange completes.
+     */
+    private void exportCsv(Exchange exchange, BoundSql bound) {
+        if (!"csv".equals(endpoint.getFormat())) {
+            throw new TqlException(UNSUPPORTED_MODE, "Unsupported export format: " + endpoint.getFormat());
+        }
+        TempStore tempStore = tempStore();
+        SpoolRef ref;
+        try (Connection connection = connection();
+                PreparedStatement statement = connection.prepareStatement(bound.sql())) {
+            bindParameters(statement, bound.parameters());
+            try (ResultSet resultSet = statement.executeQuery();
+                    SpoolWriter writer = tempStore.createWriter(SpoolKind.CSV)) {
+                writeCsv(resultSet, writer);
+                writer.close();
+                ref = writer.toRef();
+            }
+        } catch (java.io.IOException | java.sql.SQLException ex) {
+            throw executionError(ex);
+        }
+
+        try {
+            exchange.getMessage().setBody(tempStore.openInput(ref));
+        } catch (java.io.IOException ex) {
+            throw executionError(ex);
+        }
+        exchange.getMessage().setHeader(Exchange.HTTP_RESPONSE_CODE, 200);
+        exchange.getMessage().setHeader(Exchange.CONTENT_TYPE, "text/csv; charset=utf-8");
+        exchange.getMessage().setHeader("Content-Disposition",
+                "attachment; filename=\"" + endpoint.getFilename() + "\"");
+        exchange.getExchangeExtension().addOnCompletion(new org.apache.camel.spi.Synchronization() {
+            @Override
+            public void onComplete(Exchange completed) {
+                tempStore.delete(ref);
+            }
+
+            @Override
+            public void onFailure(Exchange failed) {
+                tempStore.delete(ref);
+            }
+        });
+    }
+
+    private void writeCsv(ResultSet resultSet, SpoolWriter writer)
+            throws java.sql.SQLException, java.io.IOException {
+        ResultSetMetaData metaData = resultSet.getMetaData();
+        int columnCount = metaData.getColumnCount();
+        StringBuilder header = new StringBuilder();
+        for (int col = 1; col <= columnCount; col++) {
+            if (col > 1) {
+                header.append(',');
+            }
+            header.append(csvEscape(metaData.getColumnLabel(col)));
+        }
+        header.append('\n');
+        writer.write(header.toString().getBytes(StandardCharsets.UTF_8));
+
+        while (resultSet.next()) {
+            StringBuilder line = new StringBuilder();
+            for (int col = 1; col <= columnCount; col++) {
+                if (col > 1) {
+                    line.append(',');
+                }
+                Object value = normalize(resultSet.getObject(col));
+                line.append(value == null ? "" : csvEscape(String.valueOf(value)));
+            }
+            line.append('\n');
+            writer.write(line.toString().getBytes(StandardCharsets.UTF_8));
+            writer.incrementRows(1);
+        }
+    }
+
+    private static String csvEscape(String value) {
+        if (value.indexOf(',') < 0 && value.indexOf('"') < 0
+                && value.indexOf('\n') < 0 && value.indexOf('\r') < 0) {
+            return value;
+        }
+        return '"' + value.replace("\"", "\"\"") + '"';
+    }
+
+    private TempStore tempStore() {
+        TempStore bean = endpoint.getCamelContext().getRegistry()
+                .lookupByNameAndType(TesseraqlProperties.TEMP_STORE_BEAN, TempStore.class);
+        return bean != null ? bean : new FileTempStore(
+                java.nio.file.Path.of(System.getProperty("java.io.tmpdir"), "tesseraql-spool"));
     }
 
     private Map<String, Object> executeQuery(BoundSql bound) {
@@ -113,7 +213,7 @@ public class TesseraqlSqlProducer extends DefaultProducer {
         return dataSource.getConnection();
     }
 
-    private TqlException executionError(java.sql.SQLException ex) {
+    private TqlException executionError(Exception ex) {
         return TqlException.builder(EXECUTION_ERROR)
                 .message("SQL execution failed: " + ex.getMessage())
                 .source(endpoint.getSqlPath())
