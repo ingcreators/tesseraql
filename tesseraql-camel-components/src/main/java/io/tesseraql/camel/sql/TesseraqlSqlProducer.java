@@ -133,14 +133,30 @@ public class TesseraqlSqlProducer extends DefaultProducer {
         }
         TempStore tempStore = tempStore();
         SpoolRef ref;
-        try (Connection connection = dataSource.getConnection();
-                PreparedStatement statement = connection.prepareStatement(bound.sql())) {
-            bindParameters(statement, bound.parameters());
-            try (ResultSet resultSet = statement.executeQuery();
-                    SpoolWriter writer = tempStore.createWriter(SpoolKind.CSV)) {
-                writeCsv(resultSet, writer);
-                writer.close();
-                ref = writer.toRef();
+        // Stream large exports per the dialect's profile so the driver uses a cursor instead of
+        // buffering the whole result set in memory (design ch. 42, 28).
+        io.tesseraql.core.dialect.StreamingProfile profile =
+                io.tesseraql.core.dialect.StreamingProfiles.forDialect(endpoint.getDialect());
+        try (Connection connection = dataSource.getConnection()) {
+            boolean previousAutoCommit = connection.getAutoCommit();
+            if (profile.autoCommitOff()) {
+                connection.setAutoCommit(false);
+            }
+            try (PreparedStatement statement = connection.prepareStatement(bound.sql(),
+                    ResultSet.TYPE_FORWARD_ONLY, ResultSet.CONCUR_READ_ONLY)) {
+                statement.setFetchSize(profile.fetchSize());
+                bindParameters(statement, bound.parameters());
+                try (ResultSet resultSet = statement.executeQuery();
+                        SpoolWriter writer = tempStore.createWriter(SpoolKind.CSV)) {
+                    writeCsv(resultSet, writer);
+                    writer.close();
+                    ref = writer.toRef();
+                }
+            } finally {
+                if (profile.autoCommitOff()) {
+                    connection.commit();
+                    connection.setAutoCommit(previousAutoCommit);
+                }
             }
         } catch (java.io.IOException | java.sql.SQLException ex) {
             throw executionError(ex);
