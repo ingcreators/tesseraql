@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TesseraQL IAM Admin · users</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;font-family:system-ui,sans-serif;background:#0f172a;color:#e2e8f0}
+.topbar{display:flex;align-items:center;justify-content:space-between;padding:16px 24px;background:#1e293b;border-bottom:1px solid #334155}
+.topbar h1{font-size:16px;margin:0}
+main{padding:24px;max-width:1000px;margin:0 auto}
+section{background:#1e293b;border:1px solid #334155;border-radius:8px;padding:16px 20px;margin-bottom:20px}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th,td{text-align:left;padding:6px 10px;border-bottom:1px solid #334155}
+th{color:#94a3b8;font-weight:600}
+a{color:#93c5fd}
+.badge{padding:4px 12px;border-radius:999px;font-size:12px;font-weight:700;background:#334155}
+.empty{color:#94a3b8;font-style:italic;margin:0}
+</style>
+</head>
+<body>
+<header class="topbar">
+  <h1>IAM Admin · Users</h1>
+  {{# total }}<span class="badge">{{ count }} total</span>{{/ total }}
+</header>
+<main>
+<section>
+  {{^ users }}<p class="empty">No users found.</p>{{/ users }}
+  <table>
+    <thead><tr><th>Login</th><th>Display name</th><th>Email</th><th>Status</th><th>Tenant</th></tr></thead>
+    <tbody>
+    {{# users }}
+      <tr>
+        <td><a href="/_tesseraql/admin/users/{{ user_id }}">{{ login_id }}</a></td>
+        <td>{{ display_name }}</td>
+        <td>{{ email }}</td>
+        <td>{{ status }}</td>
+        <td>{{ tenant_id }}</td>
+      </tr>
+    {{/ users }}
+    </tbody>
+  </table>
+</section>
+</main>
+</body>
+</html>

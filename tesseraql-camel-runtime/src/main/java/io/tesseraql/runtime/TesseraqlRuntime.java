@@ -268,7 +268,6 @@ public final class TesseraqlRuntime implements AutoCloseable {
             context.getRegistry().bind(TesseraqlProperties.IDENTITY_REALM_BEAN, realm);
             context.addRoutes(new LoginRouteBuilder(
                     new PasswordAuthenticator(identity), realm, sessionStore));
-            context.addRoutes(new IamAdminRouteBuilder(identity, realm));
             if (manifest.config().getString("tesseraql.saml.enabled")
                     .map(Boolean::parseBoolean).orElse(false)) {
                 context.addRoutes(buildSamlAcs(manifest, sessionStore, identity, realm));

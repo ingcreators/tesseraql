@@ -33,8 +33,9 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
 /**
- * Integration test for the read-only IAM admin console (design ch. 10): an authorized caller sees
- * the user list and a per-user detail page (roles, groups, permissions); callers without a bearer
+ * Integration test for the bundled IAM admin console app (design ch. 10, 32): the yaml/sql/template
+ * app shipped in tesseraql-identity mounts automatically, serving the user list, a per-user detail
+ * page (roles, groups, permissions) and post/redirect/get status actions; callers without a bearer
  * principal are denied.
  */
 @Testcontainers
@@ -92,20 +93,21 @@ class IamAdminIntegrationTest {
 
     @Test
     void disableThenEnableUserViaForm() throws Exception {
-        // The detail page offers a Disable action for the writable (managed) realm.
+        // The detail page offers the status actions as plain form posts.
         HttpResponse<String> before = get("/_tesseraql/admin/users/u2", true);
         assertThat(before.body()).contains("Disable user")
                 .contains("/_tesseraql/admin/users/u2/disable");
 
+        // post/redirect/get: the command answers 303 back to the detail page.
         HttpResponse<String> disabled = post("/_tesseraql/admin/users/u2/disable");
-        assertThat(disabled.statusCode()).isEqualTo(200);
-        assertThat(disabled.body()).contains("User disabled.").contains("DISABLED")
-                .contains("Enable user");
+        assertThat(disabled.statusCode()).isEqualTo(303);
+        assertThat(disabled.headers().firstValue("location"))
+                .hasValue("/_tesseraql/admin/users/u2");
+        assertThat(get("/_tesseraql/admin/users/u2", true).body()).contains("DISABLED");
 
         HttpResponse<String> enabled = post("/_tesseraql/admin/users/u2/enable");
-        assertThat(enabled.statusCode()).isEqualTo(200);
-        assertThat(enabled.body()).contains("User enabled.").contains("ACTIVE")
-                .contains("Disable user");
+        assertThat(enabled.statusCode()).isEqualTo(303);
+        assertThat(get("/_tesseraql/admin/users/u2", true).body()).contains("ACTIVE");
     }
 
     @Test
@@ -121,10 +123,10 @@ class IamAdminIntegrationTest {
     }
 
     @Test
-    void returnsNotFoundForUnknownUser() throws Exception {
+    void rendersNotFoundPageForUnknownUser() throws Exception {
         HttpResponse<String> response = get("/_tesseraql/admin/users/missing", true);
 
-        assertThat(response.statusCode()).isEqualTo(404);
+        assertThat(response.statusCode()).isEqualTo(200);
         assertThat(response.body()).contains("User not found.");
     }
 

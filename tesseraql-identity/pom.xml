@@ -24,6 +24,12 @@
       <artifactId>tesseraql-security</artifactId>
       <version>${project.version}</version>
     </dependency>
+    <!-- AppSource SPI so the bundled IAM admin console app can self-register (design ch. 32). -->
+    <dependency>
+      <groupId>io.tesseraql</groupId>
+      <artifactId>tesseraql-yaml</artifactId>
+      <version>${project.version}</version>
+    </dependency>
 
     <dependency>
       <groupId>org.slf4j</groupId>

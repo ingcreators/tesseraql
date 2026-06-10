@@ -1,0 +1,28 @@
+version: tesseraql/v1
+id: tql.iamAdmin.users.list
+kind: route
+recipe: query-html
+
+security:
+  auth: bearer
+  policy: iam.admin.view
+
+sql:
+  contract: identity.list-users
+
+queries:
+  total:
+    contract: identity.count-users
+
+response:
+  html:
+    status: 200
+    template: admin-users/list.html
+    model:
+      users: sql.rows
+      total: total.rows
+    headers:
+      Content-Security-Policy: "default-src 'self'; style-src 'self' 'unsafe-inline'; frame-ancestors 'none'"
+      X-Content-Type-Options: nosniff
+      X-Frame-Options: DENY
+      Referrer-Policy: no-referrer

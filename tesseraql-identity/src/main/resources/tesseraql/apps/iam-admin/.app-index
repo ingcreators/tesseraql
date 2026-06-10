@@ -1,0 +1,7 @@
+# IAM admin console app (design ch. 10): served by the runtime as a mounted system app.
+web/_tesseraql/admin/users/get.yml
+web/_tesseraql/admin/users/{id}/get.yml
+web/_tesseraql/admin/users/{id}/enable/post.yml
+web/_tesseraql/admin/users/{id}/disable/post.yml
+templates/admin-users/list.html
+templates/admin-users/detail.html

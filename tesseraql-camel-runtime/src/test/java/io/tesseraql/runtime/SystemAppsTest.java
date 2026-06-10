@@ -54,10 +54,13 @@ class SystemAppsTest {
 
         List<AppManifest> mounted = SystemApps.load(mainConfig, dir.resolve("main"));
 
-        assertThat(mounted).hasSize(1);
-        assertThat(mounted.get(0).routes()).hasSize(1);
+        // The classpath also contributes bundled system apps (e.g. iam-admin); find ours.
+        AppManifest extra = mounted.stream()
+                .filter(m -> m.appHome().equals(home))
+                .findFirst().orElseThrow();
+        assertThat(extra.routes()).hasSize(1);
         // The mounted app's manifest carries the MAIN config (shared datasources/policies).
-        assertThat(mounted.get(0).config()).isSameAs(mainConfig);
+        assertThat(extra.config()).isSameAs(mainConfig);
     }
 
     @Test

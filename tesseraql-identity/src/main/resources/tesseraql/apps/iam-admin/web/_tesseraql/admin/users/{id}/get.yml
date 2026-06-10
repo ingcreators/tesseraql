@@ -1,0 +1,42 @@
+version: tesseraql/v1
+id: tql.iamAdmin.users.detail
+kind: route
+recipe: query-html
+
+security:
+  auth: bearer
+  policy: iam.admin.view
+
+sql:
+  contract: identity.find-user-by-id
+  params:
+    userId: path.id
+
+queries:
+  roles:
+    contract: identity.find-roles-by-user-id
+    params:
+      userId: path.id
+  groups:
+    contract: identity.find-groups-by-user-id
+    params:
+      userId: path.id
+  permissions:
+    contract: identity.find-permissions-by-user-id
+    params:
+      userId: path.id
+
+response:
+  html:
+    status: 200
+    template: admin-users/detail.html
+    model:
+      user: sql.rows
+      roles: roles.rows
+      groups: groups.rows
+      permissions: permissions.rows
+    headers:
+      Content-Security-Policy: "default-src 'self'; style-src 'self' 'unsafe-inline'; frame-ancestors 'none'"
+      X-Content-Type-Options: nosniff
+      X-Frame-Options: DENY
+      Referrer-Policy: no-referrer
