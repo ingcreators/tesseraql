@@ -1,4 +1,4 @@
-package io.tesseraql.runtime;
+package io.tesseraql.saml.camel;
 
 /**
  * SAML SP/IdP endpoint coordinates for SP-initiated SSO and single logout (design ch. 10.14). The IdP

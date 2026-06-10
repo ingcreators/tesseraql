@@ -47,10 +47,12 @@
       <version>${project.version}</version>
       <scope>test</scope>
     </dependency>
+    <!-- Opt-in feature: same RuntimeExtension pattern as SCIM above. -->
     <dependency>
       <groupId>io.tesseraql</groupId>
       <artifactId>tesseraql-saml</artifactId>
       <version>${project.version}</version>
+      <scope>test</scope>
     </dependency>
     <dependency>
       <groupId>io.tesseraql</groupId>

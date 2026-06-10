@@ -1,4 +1,4 @@
-package io.tesseraql.runtime;
+package io.tesseraql.saml.camel;
 
 import io.tesseraql.identity.IdentityContracts;
 import io.tesseraql.identity.IdentityService;

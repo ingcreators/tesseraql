@@ -1,4 +1,4 @@
-package io.tesseraql.runtime;
+package io.tesseraql.saml.camel;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.tesseraql.saml.AuthnRequest;

@@ -263,11 +263,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
             context.getRegistry().bind(TesseraqlProperties.IDENTITY_REALM_BEAN, realm);
             context.addRoutes(new LoginRouteBuilder(
                     new PasswordAuthenticator(identity), realm, sessionStore));
-            if (manifest.config().getString("tesseraql.saml.enabled")
-                    .map(Boolean::parseBoolean).orElse(false)) {
-                context.addRoutes(buildSamlAcs(manifest, sessionStore, identity, realm));
-            }
-            // Optional feature modules (SCIM, ...) self-install via ServiceLoader (design ch. 47).
+            // Optional feature modules (SCIM, SAML, ...) self-install via ServiceLoader (ch. 47).
             for (io.tesseraql.compiler.ext.RuntimeExtension extension : java.util.ServiceLoader
                     .load(io.tesseraql.compiler.ext.RuntimeExtension.class)) {
                 if (extension.enabled(manifest.config())) {
@@ -313,48 +309,6 @@ public final class TesseraqlRuntime implements AutoCloseable {
                 pinningSource, otelSdk, opsDashboard, outboxSink);
     }
 
-    /**
-     * Builds the SAML ACS route from configuration (design ch. 10.14): the SP audience and ACS URL,
-     * the pinned IdP signing key loaded from {@code tesseraql.saml.idp.publicKey} (a certificate or
-     * public-key file under the app home), and the assertion-to-principal attribute mapping.
-     */
-    private static SamlAcsRouteBuilder buildSamlAcs(AppManifest manifest,
-            io.tesseraql.security.session.SessionStore sessions, IdentityService identity,
-            RealmConfig realm) {
-        var config = manifest.config();
-        String audience = config.requireString("tesseraql.saml.sp.audience");
-        String recipient = config.getString("tesseraql.saml.sp.acsUrl").orElse(null);
-        // The pinned IdP signing key comes from IdP metadata when configured, else a key/cert file.
-        java.security.PublicKey idpKey = config.getString("tesseraql.saml.idp.metadata")
-                .map(path -> io.tesseraql.saml.IdpMetadata.signingKey(readSamlBytes(manifest, path)))
-                .orElseGet(() -> io.tesseraql.saml.SamlKeys.publicKey(
-                        readSamlBytes(manifest, config.requireString("tesseraql.saml.idp.publicKey"))));
-        io.tesseraql.saml.SamlResponseValidator validator = new io.tesseraql.saml.SamlResponseValidator(
-                new io.tesseraql.saml.SamlValidationConfig(audience, idpKey, recipient, null));
-        io.tesseraql.saml.SamlAttributeMapping mapping = new io.tesseraql.saml.SamlAttributeMapping(
-                config.getString("tesseraql.saml.attributes.loginId").orElse(null),
-                config.getString("tesseraql.saml.attributes.displayName").orElse(null),
-                config.getString("tesseraql.saml.attributes.email").orElse(null),
-                config.getString("tesseraql.saml.attributes.roles").orElse(null),
-                config.getString("tesseraql.saml.attributes.groups").orElse(null),
-                config.getString("tesseraql.saml.attributes.tenant").orElse(null));
-        // When link mode is on, resolve (and optionally provision) a local user so authorization uses
-        // locally-managed roles instead of IdP-asserted ones (design ch. 10.14 userLink).
-        boolean link = config.getString("tesseraql.saml.link.enabled")
-                .map(Boolean::parseBoolean).orElse(false);
-        SamlUserLinker linker = link ? new SamlUserLinker(identity, realm,
-                config.getString("tesseraql.saml.link.provision")
-                        .map(Boolean::parseBoolean).orElse(false)) : null;
-        // Advertise SP metadata only when the ACS URL is known.
-        io.tesseraql.saml.SpMetadata metadata = recipient == null ? null
-                : new io.tesseraql.saml.SpMetadata(audience, recipient,
-                        config.getString("tesseraql.saml.sp.nameIdFormat").orElse(null));
-        SamlEndpoints endpoints = new SamlEndpoints(audience, recipient,
-                config.getString("tesseraql.saml.idp.ssoUrl").orElse(null),
-                config.getString("tesseraql.saml.idp.sloUrl").orElse(null));
-        return new SamlAcsRouteBuilder(validator, mapping, sessions, linker, metadata, endpoints);
-    }
-
     /** The configured dialect for the main datasource, or inferred from its JDBC URL (design ch. 42). */
     private static String datasourceDialect(AppConfig config) {
         String prefix = "tesseraql.datasources.main.";
@@ -363,14 +317,6 @@ public final class TesseraqlRuntime implements AutoCloseable {
                                 .orElse(""))
                         .map(io.tesseraql.core.dialect.Dialect::id)
                         .orElse(null));
-    }
-
-    private static byte[] readSamlBytes(AppManifest manifest, String relative) {
-        try {
-            return java.nio.file.Files.readAllBytes(manifest.appHome().resolve(relative).normalize());
-        } catch (java.io.IOException ex) {
-            throw new IllegalStateException("Cannot read SAML key material: " + relative, ex);
-        }
     }
 
     /** Runs a batch job by id and returns its final execution record (design ch. 26). */

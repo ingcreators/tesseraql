@@ -24,6 +24,18 @@
       <artifactId>tesseraql-core</artifactId>
       <version>${project.version}</version>
     </dependency>
+    <!-- RuntimeExtension SPI + Camel/yaml, so the SAML SP routes self-install (design ch. 47). -->
+    <dependency>
+      <groupId>io.tesseraql</groupId>
+      <artifactId>tesseraql-compiler</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+    <!-- Link-or-provision of local users from SAML assertions (design ch. 10.14 userLink). -->
+    <dependency>
+      <groupId>io.tesseraql</groupId>
+      <artifactId>tesseraql-identity</artifactId>
+      <version>${project.version}</version>
+    </dependency>
 
     <dependency>
       <groupId>org.junit.jupiter</groupId>
