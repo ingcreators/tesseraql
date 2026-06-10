@@ -66,9 +66,13 @@ class AppTestRunnerIntegrationTest {
         assertThat(Files.exists(reportDir.resolve("tesseraql-result.json"))).isTrue();
         assertThat(Files.exists(reportDir.resolve("index.html"))).isTrue();
         assertThat(Files.exists(reportDir.resolve("coverage/sql-coverage.json"))).isTrue();
+        assertThat(Files.exists(reportDir.resolve("coverage/coverage.sarif"))).isTrue();
 
         // Both branches of search.sql are exercised (q present and empty) -> 100% branch coverage.
         assertThat(result.coverage().report("web/api/users/search.sql").branchRatio()).isEqualTo(1.0);
+        // The derived coverage kinds are available on the result.
+        assertThat(result.assertionCoverage().ratio()).isBetween(0.0, 1.0);
+        assertThat(result.contractCoverage().kind()).isEqualTo("iam-contract");
     }
 
     private static DataSource dataSource() {

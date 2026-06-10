@@ -9,6 +9,7 @@ import io.tesseraql.test.SuiteCoverage;
 import io.tesseraql.report.HtmlReporter;
 import io.tesseraql.report.JUnitXmlReporter;
 import io.tesseraql.report.JsonReporter;
+import io.tesseraql.report.SarifReporter;
 import io.tesseraql.test.TestReport;
 import io.tesseraql.test.TestRunner;
 import io.tesseraql.test.TestSuite;
@@ -57,7 +58,39 @@ public final class AppTestRunner {
         TestReport report = new TestReport(results);
         writeReports(report, reportDir);
         writeCoverage(coverage, List.of(assertions, contracts), reportDir);
+        writeSarif(coverage, List.of(assertions, contracts), reportDir);
         return new RunResult(report, coverage, assertions, contracts);
+    }
+
+    /** Writes coverage gaps as SARIF so CI code-scanning can annotate them (design ch. 15). */
+    private static void writeSarif(SqlCoverage coverage, List<ItemCoverage> kinds, Path reportDir) {
+        List<SarifReporter.Finding> findings = new ArrayList<>();
+        coverage.reports().forEach((sqlId, report) -> {
+            if (report.branchRatio() < 1.0) {
+                findings.add(new SarifReporter.Finding("sql-branch-coverage", "warning",
+                        String.format("Branch coverage %.0f%% for %s", report.branchRatio() * 100, sqlId),
+                        sqlId, null));
+            }
+            if (report.lineRatio() < 1.0) {
+                findings.add(new SarifReporter.Finding("sql-line-coverage", "warning",
+                        String.format("Line coverage %.0f%% (%d/%d) for %s", report.lineRatio() * 100,
+                                report.lineCount(), report.coverableLineCount(), sqlId), sqlId, null));
+            }
+        });
+        for (ItemCoverage kind : kinds) {
+            String level = "iam-contract".equals(kind.kind()) ? "note" : "warning";
+            for (String item : kind.uncovered()) {
+                findings.add(new SarifReporter.Finding(kind.kind() + "-coverage", level,
+                        kind.kind() + " not covered: " + item, null, null));
+            }
+        }
+        try {
+            Files.createDirectories(reportDir.resolve("coverage"));
+            Files.writeString(reportDir.resolve("coverage/coverage.sarif"),
+                    SarifReporter.toSarif("tesseraql", findings));
+        } catch (IOException ex) {
+            throw new UncheckedIOException(ex);
+        }
     }
 
     private static List<Path> suiteFiles(Path appHome) {
