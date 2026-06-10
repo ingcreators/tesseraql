@@ -33,12 +33,25 @@ final class StudioRouteBuilder extends RouteBuilder {
         onException(TqlException.class).handled(true).process(new ErrorResponseRenderer());
         onException(Exception.class).handled(true).process(new ErrorResponseRenderer());
 
+        rest().get("/_tesseraql/studio/ui").to("direct:studio.ui");
+        rest().get("/_tesseraql/studio/ui/source").to("direct:studio.ui.source");
         rest().get("/_tesseraql/studio/explorer").to("direct:studio.explorer");
         rest().get("/_tesseraql/studio/source").to("direct:studio.source");
         rest().post("/_tesseraql/studio/drafts").to("direct:studio.draft");
         rest().post("/_tesseraql/studio/preview").to("direct:studio.preview");
         rest().post("/_tesseraql/studio/apply").to("direct:studio.apply");
         rest().post("/_tesseraql/studio/reload").to("direct:studio.reload");
+
+        from("direct:studio.ui").routeId("studio.ui")
+                .to(AUTH).process(html(exchange ->
+                        io.tesseraql.studio.StudioConsole.renderExplorer(studio.explorer())));
+
+        from("direct:studio.ui.source").routeId("studio.ui.source")
+                .to(AUTH).process(html(exchange -> {
+                    String path = requirePath(exchange);
+                    return io.tesseraql.studio.StudioConsole.renderSource(
+                            path, studio.source(path), studio.isReadOnly());
+                }));
 
         from("direct:studio.explorer").routeId("studio.explorer")
                 .to(AUTH).process(json(exchange -> studio.explorer()));
@@ -94,6 +107,20 @@ final class StudioRouteBuilder extends RouteBuilder {
             Object result = handler.apply(exchange);
             exchange.getMessage().setHeader(Exchange.CONTENT_TYPE, "application/json; charset=utf-8");
             exchange.getMessage().setBody(mapper.writeValueAsString(result));
+        };
+    }
+
+    private Processor html(Function<Exchange, String> handler) {
+        return exchange -> {
+            String body = handler.apply(exchange);
+            exchange.getMessage().setHeader(Exchange.HTTP_RESPONSE_CODE, 200);
+            exchange.getMessage().setHeader(Exchange.CONTENT_TYPE, "text/html; charset=utf-8");
+            exchange.getMessage().setHeader("Content-Security-Policy",
+                    "default-src 'self'; style-src 'self' 'unsafe-inline'; frame-ancestors 'none'");
+            exchange.getMessage().setHeader("X-Content-Type-Options", "nosniff");
+            exchange.getMessage().setHeader("X-Frame-Options", "DENY");
+            exchange.getMessage().setHeader("Referrer-Policy", "no-referrer");
+            exchange.getMessage().setBody(body);
         };
     }
 }

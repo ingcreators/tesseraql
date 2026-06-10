@@ -128,6 +128,33 @@ class StudioIntegrationTest {
         assertThat(get("/_tesseraql/studio/explorer", false).statusCode()).isEqualTo(401);
     }
 
+    @Test
+    void uiExplorerRendersHtmlPage() throws Exception {
+        HttpResponse<String> response = get("/_tesseraql/studio/ui", true);
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(response.headers().firstValue("content-type"))
+                .hasValueSatisfying(value -> assertThat(value).contains("text/html"));
+        assertThat(response.headers().firstValue("content-security-policy"))
+                .hasValueSatisfying(value -> assertThat(value).contains("default-src 'self'"));
+        assertThat(response.body()).startsWith("<!DOCTYPE html>");
+        assertThat(response.body()).contains("TesseraQL Studio").contains("users.search");
+    }
+
+    @Test
+    void uiSourceRendersHtmlPage() throws Exception {
+        HttpResponse<String> response = get(
+                "/_tesseraql/studio/ui/source?path=" + enc("web/api/users/search.sql"), true);
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(response.headers().firstValue("content-type"))
+                .hasValueSatisfying(value -> assertThat(value).contains("text/html"));
+        assertThat(response.body()).contains("web/api/users/search.sql").contains("select");
+    }
+
+    @Test
+    void uiExplorerRequiresAuthentication() throws Exception {
+        assertThat(get("/_tesseraql/studio/ui", false).statusCode()).isEqualTo(401);
+    }
+
     private static HttpResponse<String> get(String path, boolean auth) throws Exception {
         HttpRequest.Builder request = HttpRequest.newBuilder(
                 URI.create("http://localhost:" + runtime.port() + path));
