@@ -39,6 +39,12 @@ public class TesseraqlSqlProducer extends DefaultProducer {
     private static final TqlErrorCode EXECUTION_ERROR = new TqlErrorCode(TqlDomain.SQL, 2500);
     private static final TqlErrorCode UNSUPPORTED_MODE = new TqlErrorCode(TqlDomain.SQL, 2501);
     private static final TqlErrorCode NO_DATASOURCE = new TqlErrorCode(TqlDomain.SQL, 2502);
+    // Portable constraint-violation codes, mapped to HTTP statuses by ErrorResponseRenderer.
+    private static final TqlErrorCode UNIQUE_VIOLATION_CODE = new TqlErrorCode(TqlDomain.SQL, 4090);
+    private static final TqlErrorCode FOREIGN_KEY_VIOLATION_CODE = new TqlErrorCode(TqlDomain.SQL, 4091);
+    private static final TqlErrorCode NOT_NULL_VIOLATION_CODE = new TqlErrorCode(TqlDomain.SQL, 4001);
+    private static final TqlErrorCode CHECK_VIOLATION_CODE = new TqlErrorCode(TqlDomain.SQL, 4002);
+    private static final TqlErrorCode SERIALIZATION_CODE = new TqlErrorCode(TqlDomain.SQL, 4093);
     /** TQL-LD-0001: result materialization exceeded the configured maxRows. */
     private static final TqlErrorCode MATERIALIZATION_OVERFLOW = new TqlErrorCode(TqlDomain.LD, 1);
     private static final System.Logger LOG = System.getLogger(TesseraqlSqlProducer.class.getName());
@@ -286,11 +292,28 @@ public class TesseraqlSqlProducer extends DefaultProducer {
     }
 
     private TqlException executionError(Exception ex) {
-        return TqlException.builder(EXECUTION_ERROR)
+        return TqlException.builder(classifyCode(ex))
                 .message("SQL execution failed: " + ex.getMessage())
                 .source(endpoint.getSqlPath())
                 .cause(ex)
                 .build();
+    }
+
+    /** Maps a JDBC failure to a portable error code so constraint violations get meaningful statuses. */
+    private static TqlErrorCode classifyCode(Exception ex) {
+        java.sql.SQLException sql = ex instanceof java.sql.SQLException direct ? direct
+                : (ex.getCause() instanceof java.sql.SQLException cause ? cause : null);
+        if (sql == null) {
+            return EXECUTION_ERROR;
+        }
+        return switch (io.tesseraql.core.dialect.SqlErrors.classify(sql)) {
+            case UNIQUE_VIOLATION -> UNIQUE_VIOLATION_CODE;
+            case FOREIGN_KEY_VIOLATION -> FOREIGN_KEY_VIOLATION_CODE;
+            case NOT_NULL_VIOLATION -> NOT_NULL_VIOLATION_CODE;
+            case CHECK_VIOLATION -> CHECK_VIOLATION_CODE;
+            case SERIALIZATION_FAILURE -> SERIALIZATION_CODE;
+            default -> EXECUTION_ERROR;
+        };
     }
 
     private void bindParameters(PreparedStatement statement, List<BoundParameter> parameters)

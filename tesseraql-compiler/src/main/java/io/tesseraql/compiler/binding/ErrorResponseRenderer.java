@@ -57,6 +57,11 @@ public final class ErrorResponseRenderer implements Processor {
             };
             case IDEM -> code.number() == 4090 ? 409 : 500;
             case IAM -> code.number() == 4030 ? 403 : 500;
+            case SQL -> switch (code.number()) {
+                case 4001, 4002 -> 400; // not-null / check violation
+                case 4090, 4091, 4093 -> 409; // unique / foreign-key / serialization conflict
+                default -> 500;
+            };
             case TENANT, APP -> switch (code.number()) {
                 case 4001 -> 400;
                 case 4031 -> 403;
