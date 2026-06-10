@@ -122,6 +122,52 @@ class MountedAppIntegrationTest {
     }
 
     @Test
+    void servesMainAppAssets() throws Exception {
+        HttpResponse<String> response = get("/assets/site.css");
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(response.headers().firstValue("content-type"))
+                .hasValueSatisfying(value -> assertThat(value).contains("text/css"));
+        assertThat(response.headers().firstValue("etag")).isPresent();
+        assertThat(response.headers().firstValue("cache-control")).isPresent();
+        assertThat(response.body()).contains(".main");
+
+        // Conditional revalidation answers 304.
+        HttpRequest conditional = HttpRequest.newBuilder(
+                        URI.create("http://localhost:" + runtime.port() + "/assets/site.css"))
+                .header("If-None-Match", response.headers().firstValue("etag").orElseThrow())
+                .build();
+        assertThat(HttpClient.newHttpClient()
+                .send(conditional, HttpResponse.BodyHandlers.ofString()).statusCode())
+                .isEqualTo(304);
+    }
+
+    @Test
+    void servesMountedAppAssetsUnderAppName() throws Exception {
+        HttpResponse<String> response = get("/assets/sysapp/app.css");
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(response.body()).contains(".sysapp");
+    }
+
+    @Test
+    void servesFrameworkThemeCss() throws Exception {
+        HttpResponse<String> response = get("/assets/_tesseraql/tesseraql.css");
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(response.headers().firstValue("content-type"))
+                .hasValueSatisfying(value -> assertThat(value).contains("text/css"));
+        assertThat(response.body()).contains(".topbar");
+    }
+
+    @Test
+    void rejectsTraversalAndUnknownExtensions() throws Exception {
+        assertThat(get("/assets/../config/application.yml").statusCode()).isEqualTo(404);
+        assertThat(get("/assets/site.exe").statusCode()).isEqualTo(404);
+        assertThat(get("/assets/.hidden.css").statusCode()).isEqualTo(404);
+    }
+
+    @Test
     void mainAppRoutesStillWork() throws Exception {
         HttpRequest request = HttpRequest.newBuilder(
                         URI.create("http://localhost:" + runtime.port() + "/api/users"))
@@ -285,6 +331,10 @@ class MountedAppIntegrationTest {
                   app:
                     name: "{{{ appName }}}"
                 """);
+
+        // Static assets served under /assets/<app-name>/ for mounted apps.
+        Files.createDirectories(home.resolve("assets"));
+        Files.writeString(home.resolve("assets/app.css"), ".sysapp{color:#fff}\n");
         return home;
     }
 
@@ -310,6 +360,8 @@ class MountedAppIntegrationTest {
                       path: %s
                 """.formatted(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(),
                 POSTGRES.getPassword(), mounted));
+        Files.createDirectories(target.resolve("assets"));
+        Files.writeString(target.resolve("assets/site.css"), ".main{color:#000}\n");
         return target;
     }
 

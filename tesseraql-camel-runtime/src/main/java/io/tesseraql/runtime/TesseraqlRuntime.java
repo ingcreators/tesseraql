@@ -245,11 +245,22 @@ public final class TesseraqlRuntime implements AutoCloseable {
             context.addRoutes(new RouteCompiler().compile(manifest));
             // Mounted apps (jar-bundled system apps and config-listed directories, design ch. 32)
             // are plain yaml/sql/template trees compiled exactly like the main app.
-            List<AppManifest> mountedApps = SystemApps.load(manifest.config(), appHome);
+            List<SystemApps.MountedApp> mountedApps = SystemApps.load(manifest.config(), appHome);
             SystemApps.requireNoRouteConflicts(manifest, mountedApps);
-            for (AppManifest mounted : mountedApps) {
-                context.addRoutes(new RouteCompiler().compile(mounted));
+            for (SystemApps.MountedApp mounted : mountedApps) {
+                context.addRoutes(new RouteCompiler().compile(mounted.manifest()));
             }
+            // Static assets (design ch. 12, 40): the main app's assets/, each mounted app's
+            // assets/ under its name, framework css under /assets/_tesseraql, vendored WebJars
+            // under /assets/vendor.
+            Map<String, java.nio.file.Path> appAssets = new LinkedHashMap<>();
+            for (SystemApps.MountedApp mounted : mountedApps) {
+                java.nio.file.Path assets = mounted.manifest().appHome().resolve("assets");
+                if (java.nio.file.Files.isDirectory(assets)) {
+                    appAssets.put(mounted.name(), assets);
+                }
+            }
+            context.addRoutes(new AssetsRouteBuilder(appHome.resolve("assets"), appAssets));
             context.addRoutes(new OperationsRouteBuilder(
                     jobRunner, jobRepository, List.copyOf(jobs.keySet()), opsDashboard));
             // Service providers expose non-SQL runtime state to mounted yaml/template apps

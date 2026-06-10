@@ -52,15 +52,16 @@ class SystemAppsTest {
         AppConfig mainConfig = new AppConfig(Map.of("tesseraql", Map.of("apps",
                 Map.of("extra", Map.of("path", home.toString())))), name -> null);
 
-        List<AppManifest> mounted = SystemApps.load(mainConfig, dir.resolve("main"));
+        List<SystemApps.MountedApp> mounted = SystemApps.load(mainConfig, dir.resolve("main"));
 
         // The classpath also contributes bundled system apps (e.g. iam-admin); find ours.
-        AppManifest extra = mounted.stream()
-                .filter(m -> m.appHome().equals(home))
+        SystemApps.MountedApp extra = mounted.stream()
+                .filter(m -> m.name().equals("extra"))
                 .findFirst().orElseThrow();
-        assertThat(extra.routes()).hasSize(1);
+        assertThat(extra.manifest().appHome()).isEqualTo(home);
+        assertThat(extra.manifest().routes()).hasSize(1);
         // The mounted app's manifest carries the MAIN config (shared datasources/policies).
-        assertThat(extra.config()).isSameAs(mainConfig);
+        assertThat(extra.manifest().config()).isSameAs(mainConfig);
     }
 
     @Test
@@ -68,7 +69,7 @@ class SystemAppsTest {
         AppManifest main = load(app("main", "ping.get", "a/ping"));
         AppManifest mounted = load(app("sys", "ping.get", "b/ping"));
 
-        assertThatThrownBy(() -> SystemApps.requireNoRouteConflicts(main, List.of(mounted)))
+        assertThatThrownBy(() -> SystemApps.requireNoRouteConflicts(main, List.of(new SystemApps.MountedApp("sys", mounted))))
                 .isInstanceOf(TqlException.class)
                 .hasMessageContaining("Route id 'ping.get'");
     }
@@ -78,7 +79,7 @@ class SystemAppsTest {
         AppManifest main = load(app("main", "a.ping", "shared/ping"));
         AppManifest mounted = load(app("sys", "b.ping", "shared/ping"));
 
-        assertThatThrownBy(() -> SystemApps.requireNoRouteConflicts(main, List.of(mounted)))
+        assertThatThrownBy(() -> SystemApps.requireNoRouteConflicts(main, List.of(new SystemApps.MountedApp("sys", mounted))))
                 .isInstanceOf(TqlException.class)
                 .hasMessageContaining("Endpoint 'GET /shared/ping'");
     }
@@ -88,6 +89,6 @@ class SystemAppsTest {
         AppManifest main = load(app("main", "a.ping", "a/ping"));
         AppManifest mounted = load(app("sys", "b.ping", "b/ping"));
 
-        SystemApps.requireNoRouteConflicts(main, List.of(mounted));
+        SystemApps.requireNoRouteConflicts(main, List.of(new SystemApps.MountedApp("sys", mounted)));
     }
 }
