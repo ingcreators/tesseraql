@@ -37,6 +37,9 @@ final class StudioRouteBuilder extends RouteBuilder {
         rest().get("/_tesseraql/studio/ui/source").to("direct:studio.ui.source");
         rest().post("/_tesseraql/studio/ui/save").to("direct:studio.ui.save");
         rest().post("/_tesseraql/studio/ui/apply").to("direct:studio.ui.apply");
+        rest().get("/_tesseraql/studio/ui/wizard").to("direct:studio.ui.wizards");
+        rest().get("/_tesseraql/studio/ui/wizard/{kind}").to("direct:studio.ui.wizardForm");
+        rest().post("/_tesseraql/studio/ui/wizard/{kind}").to("direct:studio.ui.wizardSubmit");
         rest().get("/_tesseraql/studio/explorer").to("direct:studio.explorer");
         rest().get("/_tesseraql/studio/source").to("direct:studio.source");
         rest().post("/_tesseraql/studio/drafts").to("direct:studio.draft");
@@ -73,6 +76,20 @@ final class StudioRouteBuilder extends RouteBuilder {
                             path, currentContent(path), studio.isReadOnly(),
                             "Draft applied and routes reloaded.");
                 }));
+
+        from("direct:studio.ui.wizards").routeId("studio.ui.wizards")
+                .to(AUTH).process(html(exchange ->
+                        io.tesseraql.studio.StudioConsole.renderWizardIndex(
+                                io.tesseraql.studio.StudioWizards.all())));
+
+        from("direct:studio.ui.wizardForm").routeId("studio.ui.wizardForm")
+                .to(AUTH).process(html(exchange ->
+                        io.tesseraql.studio.StudioConsole.renderWizardForm(
+                                io.tesseraql.studio.StudioWizards.byKind(
+                                        exchange.getMessage().getHeader("kind", String.class)))));
+
+        from("direct:studio.ui.wizardSubmit").routeId("studio.ui.wizardSubmit")
+                .to(AUTH).process(html(this::wizardSubmit));
 
         from("direct:studio.explorer").routeId("studio.explorer")
                 .to(AUTH).process(json(exchange -> studio.explorer()));
@@ -127,6 +144,21 @@ final class StudioRouteBuilder extends RouteBuilder {
             throw missingPath();
         }
         return path;
+    }
+
+    /** Reads a wizard's form fields, generates its config YAML and renders the result page. */
+    private String wizardSubmit(Exchange exchange) {
+        String kind = exchange.getMessage().getHeader("kind", String.class);
+        io.tesseraql.studio.StudioWizards.Wizard wizard =
+                io.tesseraql.studio.StudioWizards.byKind(kind);
+        Map<String, String> inputs = new java.util.LinkedHashMap<>();
+        for (io.tesseraql.studio.StudioWizards.WizardField field : wizard.fields()) {
+            inputs.put(field.name(), formField(exchange, field.name()));
+            // Strip the inbound form field so a multi-line value is not echoed as a response header.
+            exchange.getMessage().removeHeader(field.name());
+        }
+        String yaml = io.tesseraql.studio.StudioWizards.generate(kind, inputs);
+        return io.tesseraql.studio.StudioConsole.renderWizardResult(wizard, yaml);
     }
 
     /** The draft content if one exists for {@code path}, otherwise the source of truth. */

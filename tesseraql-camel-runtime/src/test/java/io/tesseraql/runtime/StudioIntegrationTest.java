@@ -190,6 +190,42 @@ class StudioIntegrationTest {
         assertThat(apply.body()).contains("Draft applied and routes reloaded.");
     }
 
+    @Test
+    void wizardIndexAndFormRender() throws Exception {
+        HttpResponse<String> index = get("/_tesseraql/studio/ui/wizard", true);
+        assertThat(index.statusCode()).isEqualTo(200);
+        assertThat(index.body()).contains("Setup wizards").contains("SAML SP");
+
+        HttpResponse<String> form = get("/_tesseraql/studio/ui/wizard/saml", true);
+        assertThat(form.statusCode()).isEqualTo(200);
+        assertThat(form.body()).contains("SAML SP wizard").contains("name=\"acsUrl\"");
+    }
+
+    @Test
+    void wizardSubmitGeneratesConfig() throws Exception {
+        String form = "spAudience=" + enc("https://app.example.com/saml")
+                + "&acsUrl=" + enc("https://app.example.com/acs")
+                + "&ssoUrl=" + enc("https://idp.example.com/sso")
+                + "&loginIdAttribute=uid&provision=true"
+                + "&publicKey=" + enc("-----BEGIN CERTIFICATE-----\nABC\n-----END CERTIFICATE-----");
+
+        HttpResponse<String> result = postForm("/_tesseraql/studio/ui/wizard/saml", form);
+
+        assertThat(result.statusCode()).isEqualTo(200);
+        assertThat(result.headers().firstValue("content-type"))
+                .hasValueSatisfying(value -> assertThat(value).contains("text/html"));
+        assertThat(result.body()).contains("SAML SP config");
+        assertThat(result.body()).contains("audience: &quot;https://app.example.com/saml&quot;");
+        assertThat(result.body()).contains("provision: true");
+        // The multi-line certificate field round-trips into the generated YAML.
+        assertThat(result.body()).contains("BEGIN CERTIFICATE");
+    }
+
+    @Test
+    void wizardRequiresAuthentication() throws Exception {
+        assertThat(get("/_tesseraql/studio/ui/wizard", false).statusCode()).isEqualTo(401);
+    }
+
     private static HttpResponse<String> postForm(String path, String form) throws Exception {
         HttpRequest request = HttpRequest.newBuilder(
                         URI.create("http://localhost:" + runtime.port() + path))

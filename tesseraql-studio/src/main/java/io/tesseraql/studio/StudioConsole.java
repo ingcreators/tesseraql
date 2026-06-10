@@ -4,8 +4,11 @@ import io.tesseraql.core.template.HtmlTemplateEngine;
 import io.tesseraql.studio.StudioService.Explorer;
 import io.tesseraql.studio.StudioService.JobSummary;
 import io.tesseraql.studio.StudioService.RouteSummary;
+import io.tesseraql.studio.StudioWizards.Wizard;
+import io.tesseraql.studio.StudioWizards.WizardField;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.util.List;
 
 /**
  * Renders the TesseraQL Studio explorer and source viewer as self-contained HTML pages (design
@@ -26,6 +29,8 @@ public final class StudioConsole {
         StringBuilder out = open("TesseraQL Studio");
         out.append("<header class=\"topbar\"><h1>TesseraQL Studio &middot; ")
                 .append(escape(explorer.appName())).append("</h1>")
+                .append("<span class=\"actions\"><a href=\"").append(UI)
+                .append("/wizard\">wizards &rarr;</a></span>")
                 .append(explorer.readOnly()
                         ? "<span class=\"badge ro\">read-only</span>"
                         : "<span class=\"badge rw\">editable</span>")
@@ -111,6 +116,63 @@ public final class StudioConsole {
         return out.toString();
     }
 
+    /** Renders the wizard index listing the available setup wizards. */
+    public static String renderWizardIndex(List<Wizard> wizards) {
+        StringBuilder out = open("TesseraQL Studio &middot; wizards");
+        out.append("<header class=\"topbar\"><h1>Setup wizards</h1>")
+                .append("<a class=\"back\" href=\"").append(UI).append("\">&larr; explorer</a>")
+                .append("</header>\n<main>\n<section><ul class=\"wizard-list\">");
+        for (Wizard wizard : wizards) {
+            out.append("<li><a href=\"").append(UI).append("/wizard/")
+                    .append(escape(URLEncoder.encode(wizard.kind(), StandardCharsets.UTF_8)))
+                    .append("\">").append(escape(wizard.title())).append("</a></li>");
+        }
+        out.append("</ul></section>\n</main>\n</body>\n</html>\n");
+        return out.toString();
+    }
+
+    /** Renders the input form for a single wizard. */
+    public static String renderWizardForm(Wizard wizard) {
+        StringBuilder out = open("TesseraQL Studio &middot; " + wizard.kind());
+        out.append("<header class=\"topbar\"><h1>").append(escape(wizard.title()))
+                .append(" wizard</h1><a class=\"back\" href=\"").append(UI)
+                .append("/wizard\">&larr; wizards</a></header>\n<main>\n<section>");
+        out.append("<form method=\"post\" action=\"").append(UI).append("/wizard/")
+                .append(escape(URLEncoder.encode(wizard.kind(), StandardCharsets.UTF_8)))
+                .append("\">");
+        for (WizardField field : wizard.fields()) {
+            String name = escape(field.name());
+            out.append("<label>").append(escape(field.label()))
+                    .append(field.required() ? " <span class=\"req\">*</span>" : "").append("<br>");
+            if ("publicKey".equals(field.name())) {
+                out.append("<textarea name=\"").append(name).append("\" rows=\"5\" placeholder=\"")
+                        .append(escape(field.placeholder())).append("\"></textarea>");
+            } else {
+                out.append("<input type=\"text\" name=\"").append(name)
+                        .append(field.required() ? "\" required" : "\"")
+                        .append(" placeholder=\"").append(escape(field.placeholder())).append("\">");
+            }
+            out.append("</label>");
+        }
+        out.append("<div class=\"toolbar\"><button type=\"submit\">Generate config</button></div>")
+                .append("</form></section>\n</main>\n</body>\n</html>\n");
+        return out.toString();
+    }
+
+    /** Renders the generated YAML for a wizard submission, ready to copy into a draft. */
+    public static String renderWizardResult(Wizard wizard, String yaml) {
+        StringBuilder out = open("TesseraQL Studio &middot; " + wizard.kind() + " result");
+        out.append("<header class=\"topbar\"><h1>").append(escape(wizard.title()))
+                .append(" config</h1><a class=\"back\" href=\"").append(UI).append("/wizard/")
+                .append(escape(URLEncoder.encode(wizard.kind(), StandardCharsets.UTF_8)))
+                .append("\">&larr; edit</a></header>\n<main>\n<section>");
+        out.append("<p class=\"status\">Generated config &mdash; review and merge into your "
+                + "<code>config/tesseraql.yml</code>.</p>");
+        out.append("<pre class=\"source\">").append(escape(yaml)).append("</pre>");
+        out.append("</section>\n</main>\n</body>\n</html>\n");
+        return out.toString();
+    }
+
     private static String sourceCell(String source) {
         String href = UI + "/source?path=" + URLEncoder.encode(source, StandardCharsets.UTF_8);
         return "<td><a href=\"" + escape(href) + "\">" + escape(source) + "</a></td>";
@@ -161,6 +223,15 @@ public final class StudioConsole {
                 + "padding:8px 16px;font-size:13px;cursor:pointer}"
                 + "button.apply{background:#166534}"
                 + ".status{background:#14532d;color:#dcfce7;border-radius:6px;padding:8px 12px;"
-                + "margin:0 0 12px}";
+                + "margin:0 0 12px}"
+                + ".actions{margin-left:auto;margin-right:16px;font-size:13px}"
+                + ".actions a{text-decoration:none}"
+                + ".wizard-list{list-style:none;padding:0;margin:0;font-size:14px}"
+                + ".wizard-list li{padding:8px 0;border-bottom:1px solid #334155}"
+                + "form label{display:block;margin:0 0 14px;font-size:13px;color:#cbd5e1}"
+                + "form input,form textarea{width:100%;margin-top:4px;background:#0b1220;"
+                + "color:#e2e8f0;border:1px solid #334155;border-radius:6px;padding:8px;"
+                + "font-family:monospace;font-size:13px}"
+                + ".req{color:#fca5a5}code{background:#0b1220;padding:1px 5px;border-radius:4px}";
     }
 }
