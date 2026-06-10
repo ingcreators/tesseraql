@@ -1,9 +1,11 @@
 package io.tesseraql.maven;
 
+import io.tesseraql.coverage.ItemCoverage;
 import io.tesseraql.coverage.SqlCoverage;
 import io.tesseraql.coverage.SqlCoverageReport;
 import io.tesseraql.identity.IdentityService;
 import io.tesseraql.identity.RealmConfig;
+import io.tesseraql.test.SuiteCoverage;
 import io.tesseraql.report.HtmlReporter;
 import io.tesseraql.report.JUnitXmlReporter;
 import io.tesseraql.report.JsonReporter;
@@ -27,8 +29,12 @@ import javax.sql.DataSource;
  */
 public final class AppTestRunner {
 
-    /** Result of a test run: the aggregated report and the collected SQL coverage. */
-    public record RunResult(TestReport report, SqlCoverage coverage) {
+    /**
+     * Result of a test run: the aggregated report, the collected SQL coverage, and the derived
+     * assertion and IAM-contract coverage (design ch. 14).
+     */
+    public record RunResult(TestReport report, SqlCoverage coverage, ItemCoverage assertionCoverage,
+            ItemCoverage contractCoverage) {
     }
 
     /** Runs every {@code tests/**}{@code /*.yml} suite and writes reports under {@code reportDir}. */
@@ -39,14 +45,19 @@ public final class AppTestRunner {
         TestSuiteLoader loader = new TestSuiteLoader();
 
         List<TestReport.TestResult> results = new ArrayList<>();
+        List<TestSuite> suites = new ArrayList<>();
         for (Path suiteFile : suiteFiles(appHome)) {
             TestSuite suite = loader.load(suiteFile);
+            suites.add(suite);
             results.addAll(runner.run(suite).results());
         }
+        ItemCoverage assertions = SuiteCoverage.assertions(suites);
+        ItemCoverage contracts = SuiteCoverage.contracts(suites);
+
         TestReport report = new TestReport(results);
         writeReports(report, reportDir);
-        writeCoverage(coverage, reportDir);
-        return new RunResult(report, coverage);
+        writeCoverage(coverage, List.of(assertions, contracts), reportDir);
+        return new RunResult(report, coverage, assertions, contracts);
     }
 
     private static List<Path> suiteFiles(Path appHome) {
@@ -64,7 +75,7 @@ public final class AppTestRunner {
         }
     }
 
-    private static void writeCoverage(SqlCoverage coverage, Path reportDir) {
+    private static void writeCoverage(SqlCoverage coverage, List<ItemCoverage> kinds, Path reportDir) {
         StringBuilder json = new StringBuilder("{\n  \"sql\": {\n");
         var reports = coverage.reports();
         int i = 0;
@@ -78,6 +89,16 @@ public final class AppTestRunner {
                     .append(", \"lines\": ").append(report.lineCount()).append("}");
             json.append(++i < reports.size() ? ",\n" : "\n");
         }
+        json.append("  },\n  \"kinds\": {\n");
+        for (int k = 0; k < kinds.size(); k++) {
+            ItemCoverage kind = kinds.get(k);
+            json.append("    \"").append(kind.kind()).append("\": {")
+                    .append("\"ratio\": ").append(kind.ratio())
+                    .append(", \"covered\": ").append(kind.covered().size())
+                    .append(", \"declared\": ").append(kind.declared().size())
+                    .append(", \"uncovered\": ").append(jsonArray(kind.uncovered())).append("}");
+            json.append(k + 1 < kinds.size() ? ",\n" : "\n");
+        }
         json.append("  }\n}\n");
         try {
             Files.createDirectories(reportDir.resolve("coverage"));
@@ -85,6 +106,18 @@ public final class AppTestRunner {
         } catch (IOException ex) {
             throw new UncheckedIOException(ex);
         }
+    }
+
+    private static String jsonArray(java.util.Collection<String> values) {
+        StringBuilder out = new StringBuilder("[");
+        int i = 0;
+        for (String value : values) {
+            out.append('"').append(value.replace("\"", "\\\"")).append('"');
+            if (++i < values.size()) {
+                out.append(", ");
+            }
+        }
+        return out.append(']').toString();
     }
 
     private static void writeReports(TestReport report, Path reportDir) {

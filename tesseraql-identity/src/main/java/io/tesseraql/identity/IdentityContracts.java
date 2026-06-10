@@ -19,4 +19,11 @@ public final class IdentityContracts {
 
     private IdentityContracts() {
     }
+
+    /** The standard contract names shipped by the default identity pack (for coverage denominators). */
+    public static java.util.List<String> standardContracts() {
+        return java.util.List.of(FIND_USER_BY_LOGIN, FIND_USER_BY_ID, CREATE_USER,
+                FIND_CREDENTIAL_BY_LOGIN, FIND_ROLES_BY_USER_ID, FIND_PERMISSIONS_BY_USER_ID,
+                FIND_GROUPS_BY_USER_ID, LIST_USERS, COUNT_USERS);
+    }
 }
