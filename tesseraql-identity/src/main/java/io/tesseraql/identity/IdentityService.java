@@ -33,15 +33,22 @@ public final class IdentityService {
     public static final TqlErrorCode READ_ONLY = new TqlErrorCode(TqlDomain.IAM, 4030);
 
     private final Function<String, DataSource> datasources;
+    private final String dialect;
 
     public IdentityService(Function<String, DataSource> datasources) {
+        this(datasources, null);
+    }
+
+    /** Resolves contract SQL for {@code dialect} (selecting {@code <contract>.<dialect>.sql} variants). */
+    public IdentityService(Function<String, DataSource> datasources, String dialect) {
         this.datasources = datasources;
+        this.dialect = dialect;
     }
 
     /** Executes a contract and returns the rows with their contract-defined aliases. */
     public List<Map<String, Object>> execute(RealmConfig realm, String contract,
             Map<String, Object> params) {
-        String sql = new ContractResolver(realm).resolve(contract);
+        String sql = new ContractResolver(realm, dialect).resolve(contract);
         BoundSql bound = SqlRenderer.render(sql, params);
         DataSource dataSource = datasources.apply(realm.datasource());
         if (dataSource == null) {
@@ -75,7 +82,7 @@ public final class IdentityService {
             throw new TqlException(READ_ONLY,
                     "Realm '" + realm.id() + "' does not allow write contract '" + contract + "'");
         }
-        String sql = new ContractResolver(realm).resolve(contract);
+        String sql = new ContractResolver(realm, dialect).resolve(contract);
         BoundSql bound = SqlRenderer.render(sql, params);
         DataSource dataSource = datasources.apply(realm.datasource());
         if (dataSource == null) {

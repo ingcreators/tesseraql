@@ -253,7 +253,8 @@ public final class TesseraqlRuntime implements AutoCloseable {
             }
 
             IdentityService identity = new IdentityService(name ->
-                    context.getRegistry().lookupByNameAndType(name, javax.sql.DataSource.class));
+                    context.getRegistry().lookupByNameAndType(name, javax.sql.DataSource.class),
+                    datasourceDialect(manifest.config()));
             RealmConfig realm = IdentityConfigFactory.defaultRealm(manifest.config(), appHome);
             context.getRegistry().bind(TesseraqlProperties.IDENTITY_SERVICE_BEAN, identity);
             context.getRegistry().bind(TesseraqlProperties.IDENTITY_REALM_BEAN, realm);
@@ -361,6 +362,16 @@ public final class TesseraqlRuntime implements AutoCloseable {
                 config.getString("tesseraql.saml.idp.ssoUrl").orElse(null),
                 config.getString("tesseraql.saml.idp.sloUrl").orElse(null));
         return new SamlAcsRouteBuilder(validator, mapping, sessions, linker, metadata, endpoints);
+    }
+
+    /** The configured dialect for the main datasource, or inferred from its JDBC URL (design ch. 42). */
+    private static String datasourceDialect(AppConfig config) {
+        String prefix = "tesseraql.datasources.main.";
+        return config.getString(prefix + "dialect").orElseGet(() ->
+                io.tesseraql.core.dialect.Dialect.fromJdbcUrl(config.getString(prefix + "jdbcUrl")
+                                .orElse(""))
+                        .map(io.tesseraql.core.dialect.Dialect::id)
+                        .orElse(null));
     }
 
     private static byte[] readSamlBytes(AppManifest manifest, String relative) {

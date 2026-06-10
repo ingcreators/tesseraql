@@ -1,5 +1,6 @@
 package io.tesseraql.identity;
 
+import io.tesseraql.core.dialect.DialectSqlResolver;
 import io.tesseraql.core.error.TqlDomain;
 import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
@@ -23,9 +24,19 @@ public final class ContractResolver {
     private static final String PACK_PATH = "/io/tesseraql/identity/pack/default/sql/";
 
     private final RealmConfig realm;
+    private final String dialect;
 
     public ContractResolver(RealmConfig realm) {
+        this(realm, null);
+    }
+
+    /**
+     * Resolves contracts for a given dialect: a {@code <contract>.<dialect>.sql} variant overrides the
+     * base {@code <contract>.sql} when present (design ch. 42.3). A null/blank dialect uses the base.
+     */
+    public ContractResolver(RealmConfig realm, String dialect) {
         this.realm = realm;
+        this.dialect = dialect == null || dialect.isBlank() ? null : dialect;
     }
 
     /** Returns the 2-way SQL source for a contract, or throws if it is not available. */
@@ -36,20 +47,31 @@ public final class ContractResolver {
     }
 
     private String fromPack(String contract) {
-        String resource = PACK_PATH + contract + ".sql";
-        try (InputStream in = ContractResolver.class.getResourceAsStream(resource)) {
-            if (in == null) {
-                throw new TqlException(MISSING_CONTRACT,
-                        "Default identity pack has no contract '" + contract + "'");
+        if (dialect != null) {
+            String variant = read(PACK_PATH + contract + "." + dialect + ".sql");
+            if (variant != null) {
+                return variant;
             }
-            return new String(in.readAllBytes(), StandardCharsets.UTF_8);
+        }
+        String base = read(PACK_PATH + contract + ".sql");
+        if (base == null) {
+            throw new TqlException(MISSING_CONTRACT,
+                    "Default identity pack has no contract '" + contract + "'");
+        }
+        return base;
+    }
+
+    private static String read(String resource) {
+        try (InputStream in = ContractResolver.class.getResourceAsStream(resource)) {
+            return in == null ? null : new String(in.readAllBytes(), StandardCharsets.UTF_8);
         } catch (IOException ex) {
             throw new UncheckedIOException(ex);
         }
     }
 
     private String fromSqlRoot(String contract) {
-        Path file = realm.sqlRoot().resolve(contract + ".sql");
+        Path base = realm.sqlRoot().resolve(contract + ".sql");
+        Path file = DialectSqlResolver.resolve(base, dialect);
         if (!Files.isRegularFile(file)) {
             throw new TqlException(MISSING_CONTRACT, "Realm '" + realm.id()
                     + "' is missing contract SQL: " + file);
