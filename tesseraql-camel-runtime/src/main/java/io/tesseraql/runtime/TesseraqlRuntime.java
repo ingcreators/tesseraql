@@ -362,6 +362,17 @@ public final class TesseraqlRuntime implements AutoCloseable {
                             return Map.of("applied", path);
                         });
             }
+            // Retention (design ch. 44): enabled by configuring the sweep interval.
+            var retentionSweep = manifest.config().getString("tesseraql.retention.sweep");
+            if (retentionSweep.isPresent()) {
+                context.addRoutes(new RetentionRouteBuilder(
+                        new io.tesseraql.operations.retention.RetentionSweeper(dataSource),
+                        io.tesseraql.core.util.Durations.toMillis(retentionSweep.get()),
+                        io.tesseraql.core.util.Durations.parse(
+                                manifest.config().getString("tesseraql.retention.outbox").orElse("30d")),
+                        io.tesseraql.core.util.Durations.parse(
+                                manifest.config().getString("tesseraql.retention.jobs").orElse("90d"))));
+            }
             var outboxDelay = manifest.config().getString("tesseraql.outbox.dispatch.fixedDelay");
             if (outboxDelay.isPresent()) {
                 context.addRoutes(new OutboxDispatchRouteBuilder(outboxStore, outboxSink,
