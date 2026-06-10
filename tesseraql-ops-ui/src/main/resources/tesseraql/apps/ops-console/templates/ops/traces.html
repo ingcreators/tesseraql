@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TesseraQL Operations Console · traces</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;font-family:system-ui,sans-serif;background:#0f172a;color:#e2e8f0}
+.topbar{display:flex;align-items:center;justify-content:space-between;padding:16px 24px;background:#1e293b;border-bottom:1px solid #334155}
+.topbar h1{font-size:18px;margin:0}
+main{padding:24px;max-width:1100px;margin:0 auto}
+section{background:#1e293b;border:1px solid #334155;border-radius:8px;padding:16px 20px;margin-bottom:20px}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th,td{text-align:left;padding:5px 10px;border-bottom:1px solid #334155}
+th{color:#94a3b8;font-weight:600}
+a{color:#93c5fd}
+.back{font-size:13px;text-decoration:none}
+.empty{color:#94a3b8;font-style:italic;margin:0}
+.span-name{font-weight:600}
+.slow .span-name{color:#fca5a5}
+.span-error{color:#fca5a5;font-size:11px;text-transform:uppercase}
+</style>
+</head>
+<body>
+<header class="topbar">
+  <h1>Traces</h1>
+  <a class="back" href="/_tesseraql/ops/console">&larr; console</a>
+</header>
+<main>
+<section>
+  {{^ traces.hasSpans }}<p class="empty">No traces retained.</p>{{/ traces.hasSpans }}
+  {{# traces.hasSpans }}
+  <table>
+    <thead><tr><th>Span</th><th>Total (ms)</th><th>Self (ms)</th><th></th></tr></thead>
+    <tbody>
+    {{# traces.spans }}
+      <tr{{# slow }} class="slow"{{/ slow }}>
+        <td style="padding-left:{{ indentPx }}px"><span class="span-name">{{ name }}</span></td>
+        <td>{{ totalMs }}</td>
+        <td>{{ selfMs }}</td>
+        <td>{{# error }}<span class="span-error">error</span>{{/ error }}</td>
+      </tr>
+    {{/ traces.spans }}
+    </tbody>
+  </table>
+  {{/ traces.hasSpans }}
+</section>
+</main>
+</body>
+</html>

@@ -1,0 +1,7 @@
+# Operations console app (design ch. 26.11): served by the runtime as a mounted system app.
+web/_tesseraql/ops/console/get.yml
+web/_tesseraql/ops/console/traces/get.yml
+web/_tesseraql/ops/console/executions/{id}/get.yml
+templates/ops/overview.html
+templates/ops/traces.html
+templates/ops/execution.html

@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TesseraQL Operations Console · execution</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;font-family:system-ui,sans-serif;background:#0f172a;color:#e2e8f0}
+.topbar{display:flex;align-items:center;justify-content:space-between;padding:16px 24px;background:#1e293b;border-bottom:1px solid #334155}
+.topbar h1{font-size:18px;margin:0}
+main{padding:24px;max-width:1100px;margin:0 auto}
+section{background:#1e293b;border:1px solid #334155;border-radius:8px;padding:16px 20px;margin-bottom:20px}
+h2{font-size:15px;margin:0 0 12px;color:#93c5fd}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th,td{text-align:left;padding:6px 10px;border-bottom:1px solid #334155}
+th{color:#94a3b8;font-weight:600}
+table.kv th{width:160px}
+a{color:#93c5fd}
+.back{font-size:13px;text-decoration:none}
+.empty{color:#94a3b8;font-style:italic;margin:0}
+tr.warn td{background:#7f1d1d33}
+.status-completed{color:#86efac}.status-failed{color:#fca5a5}.status-running{color:#93c5fd}
+</style>
+</head>
+<body>
+<header class="topbar">
+  <h1>Execution {{ execution.id }}</h1>
+  <a class="back" href="/_tesseraql/ops/console">&larr; console</a>
+</header>
+<main>
+{{^ execution.found }}
+<section><p class="empty">Execution not found.</p></section>
+{{/ execution.found }}
+{{# execution.found }}
+<section>
+  <h2>Summary</h2>
+  <table class="kv"><tbody>
+    <tr><th>Job</th><td>{{ execution.jobId }}</td></tr>
+    <tr><th>Status</th><td class="{{ execution.statusClass }}">{{ execution.status }}</td></tr>
+    <tr><th>Trigger</th><td>{{ execution.trigger }}</td></tr>
+    <tr><th>Started</th><td>{{ execution.startTime }}</td></tr>
+    <tr><th>Ended</th><td>{{ execution.endTime }}</td></tr>
+    <tr><th>Duration (ms)</th><td>{{ execution.durationMs }}</td></tr>
+    <tr><th>Exit message</th><td>{{ execution.exitMessage }}</td></tr>
+  </tbody></table>
+</section>
+<section id="steps">
+  <h2>Steps</h2>
+  {{^ execution.hasSteps }}<p class="empty">No steps recorded.</p>{{/ execution.hasSteps }}
+  {{# execution.hasSteps }}
+  <table>
+    <thead><tr><th>Step</th><th>Status</th><th>Rows</th><th>Duration (ms)</th><th>Error</th></tr></thead>
+    <tbody>
+    {{# execution.steps }}
+      <tr{{# failed }} class="warn"{{/ failed }}>
+        <td>{{ stepId }}</td>
+        <td class="{{ statusClass }}">{{ status }}</td>
+        <td>{{ affectedRows }}</td>
+        <td>{{ durationMs }}</td>
+        <td>{{ errorMessage }}</td>
+      </tr>
+    {{/ execution.steps }}
+    </tbody>
+  </table>
+  {{/ execution.hasSteps }}
+</section>
+{{/ execution.found }}
+</main>
+</body>
+</html>

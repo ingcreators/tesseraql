@@ -24,6 +24,12 @@
       <artifactId>tesseraql-operations</artifactId>
       <version>${project.version}</version>
     </dependency>
+    <!-- AppSource SPI so the bundled ops-console app can self-register (design ch. 32). -->
+    <dependency>
+      <groupId>io.tesseraql</groupId>
+      <artifactId>tesseraql-yaml</artifactId>
+      <version>${project.version}</version>
+    </dependency>
 
     <dependency>
       <groupId>org.junit.jupiter</groupId>

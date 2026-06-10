@@ -1,0 +1,23 @@
+version: tesseraql/v1
+id: tql.opsConsole.traces
+kind: route
+recipe: query-html
+
+security:
+  auth: bearer
+  policy: ops.batch.view
+
+sql:
+  service: ops.traces
+
+response:
+  html:
+    status: 200
+    template: ops/traces.html
+    model:
+      traces: sql
+    headers:
+      Content-Security-Policy: "default-src 'self'; style-src 'self' 'unsafe-inline'; frame-ancestors 'none'"
+      X-Content-Type-Options: nosniff
+      X-Frame-Options: DENY
+      Referrer-Policy: no-referrer

@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="refresh" content="15">
+<title>TesseraQL Operations Console</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;font-family:system-ui,sans-serif;background:#0f172a;color:#e2e8f0}
+.topbar{display:flex;align-items:center;justify-content:space-between;padding:16px 24px;background:#1e293b;border-bottom:1px solid #334155}
+.topbar h1{font-size:18px;margin:0}
+main{padding:24px;max-width:1100px;margin:0 auto}
+section{background:#1e293b;border:1px solid #334155;border-radius:8px;padding:16px 20px;margin-bottom:20px}
+h2{font-size:15px;margin:0 0 12px;color:#93c5fd}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th,td{text-align:left;padding:6px 10px;border-bottom:1px solid #334155}
+th{color:#94a3b8;font-weight:600}
+.chips{list-style:none;padding:0;margin:0;display:flex;flex-wrap:wrap;gap:8px}
+.chip{background:#334155;border-radius:999px;padding:4px 12px;font-size:12px}
+.badge{padding:4px 12px;border-radius:999px;font-size:12px;font-weight:700}
+.badge.ok{background:#166534;color:#dcfce7}
+.badge.warn{background:#9a3412;color:#ffedd5}
+.alerts{list-style:none;padding:0;margin:0}
+.alert{padding:8px 12px;border-radius:6px;margin-bottom:6px;background:#7f1d1d}
+.alert .code{font-family:monospace;opacity:.8;margin-right:6px}
+.empty{color:#94a3b8;font-style:italic;margin:0}
+.summary{margin:0 0 12px}
+tr.warn td{background:#7f1d1d33}
+.status-completed{color:#86efac}.status-failed{color:#fca5a5}.status-running{color:#93c5fd}
+a{color:#93c5fd}
+.actions{margin-left:auto;margin-right:16px;font-size:13px}
+.actions a{margin-left:12px;text-decoration:none}
+</style>
+</head>
+<body>
+<header class="topbar">
+  <h1>TesseraQL Operations Console</h1>
+  <span class="actions"><a href="/_tesseraql/ops/console/traces">traces &rarr;</a> <a href="/_tesseraql/ops/console">refresh</a></span>
+  {{# ops.ok }}<span class="badge ok">UP</span>{{/ ops.ok }}
+  {{# ops.warning }}<span class="badge warn">WARN</span>{{/ ops.warning }}
+</header>
+<main>
+{{# ops.hasAlerts }}
+<section id="alerts">
+  <h2>Alerts</h2>
+  <ul class="alerts">
+  {{# ops.alerts }}
+    <li class="alert {{ severity }}"><span class="code">{{ code }}</span> {{ message }}</li>
+  {{/ ops.alerts }}
+  </ul>
+</section>
+{{/ ops.hasAlerts }}
+<section id="batch">
+  <h2>Batch executions</h2>
+  <p class="summary">Total scanned: <strong>{{ ops.batchTotal }}</strong></p>
+  <ul class="chips">
+  {{# ops.byStatus }}
+    <li class="chip {{ statusClass }}">{{ status }}: {{ count }}</li>
+  {{/ ops.byStatus }}
+  </ul>
+  {{^ ops.hasRecent }}<p class="empty">No batch executions recorded.</p>{{/ ops.hasRecent }}
+  {{# ops.hasRecent }}
+  <table>
+    <thead><tr><th>Execution</th><th>Job</th><th>Status</th><th>Trigger</th><th>Started</th><th>Duration (ms)</th></tr></thead>
+    <tbody>
+    {{# ops.recent }}
+      <tr>
+        <td><a href="/_tesseraql/ops/console/executions/{{ id }}">{{ id }}</a></td>
+        <td>{{ jobId }}</td>
+        <td class="{{ statusClass }}">{{ status }}</td>
+        <td>{{ trigger }}</td>
+        <td>{{ startTime }}</td>
+        <td>{{ durationMs }}</td>
+      </tr>
+    {{/ ops.recent }}
+    </tbody>
+  </table>
+  {{/ ops.hasRecent }}
+</section>
+<section id="lanes">
+  <h2>Execution lanes</h2>
+  {{^ ops.hasLanes }}<p class="empty">No execution lanes registered.</p>{{/ ops.hasLanes }}
+  {{# ops.hasLanes }}
+  <table>
+    <thead><tr><th>Lane</th><th>Type</th><th>In use</th><th>Max</th><th>Admitted</th><th>Rejected</th></tr></thead>
+    <tbody>
+    {{# ops.lanes }}
+      <tr{{# warn }} class="warn"{{/ warn }}>
+        <td>{{ name }}</td><td>{{ type }}</td><td>{{ inUse }}</td><td>{{ max }}</td><td>{{ admitted }}</td><td>{{ rejected }}</td>
+      </tr>
+    {{/ ops.lanes }}
+    </tbody>
+  </table>
+  {{/ ops.hasLanes }}
+</section>
+<section id="traces">
+  <h2>Trace metrics</h2>
+  <ul class="chips">
+    <li class="chip">Spans: <strong>{{ ops.metrics.spans }}</strong></li>
+    <li class="chip">Span error rate: <strong>{{ ops.metrics.spanErrorRate }}%</strong></li>
+    <li class="chip">Slow span rate: <strong>{{ ops.metrics.slowRate }}%</strong></li>
+    <li class="chip">Traces: <strong>{{ ops.metrics.traces }}</strong></li>
+    <li class="chip">Trace error rate: <strong>{{ ops.metrics.traceErrorRate }}%</strong></li>
+  </ul>
+</section>
+<section id="slow-sql">
+  <h2>Slow SQL</h2>
+  {{^ ops.hasSlowSql }}<p class="empty">No slow SQL recorded.</p>{{/ ops.hasSlowSql }}
+  {{# ops.hasSlowSql }}
+  <table>
+    <thead><tr><th>SQL id</th><th>Mode</th><th>Duration (ms)</th><th>Rows</th></tr></thead>
+    <tbody>
+    {{# ops.slowSql }}
+      <tr><td>{{ sqlId }}</td><td>{{ mode }}</td><td>{{ durationMs }}</td><td>{{ rowCount }}</td></tr>
+    {{/ ops.slowSql }}
+    </tbody>
+  </table>
+  {{/ ops.hasSlowSql }}
+</section>
+<section id="pinning">
+  <h2>Virtual-thread pinning</h2>
+  {{^ ops.hasPinning }}<p class="empty">No pinning events detected.</p>{{/ ops.hasPinning }}
+  {{# ops.hasPinning }}<p class="summary">Pinning events: <strong>{{ ops.pinningCount }}</strong></p>{{/ ops.hasPinning }}
+</section>
+</main>
+</body>
+</html>

@@ -252,7 +252,22 @@ public final class TesseraqlRuntime implements AutoCloseable {
             }
             context.addRoutes(new OperationsRouteBuilder(
                     jobRunner, jobRepository, List.copyOf(jobs.keySet()), opsDashboard));
-            context.addRoutes(new OpsConsoleRouteBuilder(opsDashboard, jobRepository));
+            // Service providers expose non-SQL runtime state to mounted yaml/template apps
+            // (the bundled ops-console app renders these, design ch. 26.11, 47).
+            io.tesseraql.opsui.OpsDashboard dashboardRef = opsDashboard;
+            context.getRegistry().bind(TesseraqlProperties.SERVICE_PROVIDERS_BEAN,
+                    new io.tesseraql.core.service.ServiceProviders()
+                            .register("ops.overview", params ->
+                                    io.tesseraql.opsui.OpsViews.overview(dashboardRef.overview(20)))
+                            .register("ops.traces", params ->
+                                    io.tesseraql.opsui.OpsViews.traces(dashboardRef.traceTree()))
+                            .register("ops.execution", params -> {
+                                String id = params.get("id") == null
+                                        ? "" : String.valueOf(params.get("id"));
+                                return io.tesseraql.opsui.OpsViews.execution(id,
+                                        jobRepository.findExecution(id).orElse(null),
+                                        jobRepository.findSteps(id));
+                            }));
             context.addRoutes(new SchedulingRouteBuilder(jobRunner, List.copyOf(jobs.values())));
 
             IdentityService identity = new IdentityService(name ->

@@ -29,9 +29,9 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
 /**
- * Integration test for the Operations Console UI page (design ch. 26.11): it renders an HTML
- * dashboard for an authorized caller under a strict content security policy, and is denied without
- * a bearer principal.
+ * Integration test for the bundled operations console app (design ch. 26.11, 32, 47): the
+ * yaml/template app shipped in tesseraql-ops-ui mounts automatically and renders the ops.* service
+ * providers under a strict content security policy; callers without a bearer principal are denied.
  */
 @Testcontainers
 class OpsConsoleIntegrationTest {
@@ -87,10 +87,10 @@ class OpsConsoleIntegrationTest {
     }
 
     @Test
-    void returnsNotFoundForUnknownExecution() throws Exception {
+    void rendersNotFoundPageForUnknownExecution() throws Exception {
         HttpResponse<String> response = get("/_tesseraql/ops/console/executions/missing", true);
 
-        assertThat(response.statusCode()).isEqualTo(404);
+        assertThat(response.statusCode()).isEqualTo(200);
         assertThat(response.body()).contains("Execution not found.");
     }
 
