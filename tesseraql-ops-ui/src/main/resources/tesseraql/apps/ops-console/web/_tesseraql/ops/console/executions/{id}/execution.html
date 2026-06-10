@@ -11,6 +11,7 @@
   <h2>Summary</h2>
   <table class="hc-table kv"><tbody>
     <tr><th>Job</th><td th:text="${execution.jobId}"></td></tr>
+    <tr><th>App</th><td th:text="${execution.app}"></td></tr>
     <tr><th>Status</th><td th:class="${execution.statusClass}" th:text="${execution.status}"></td></tr>
     <tr><th>Trigger</th><td th:text="${execution.trigger}"></td></tr>
     <tr><th>Started</th><td th:text="${execution.startTime}"></td></tr>

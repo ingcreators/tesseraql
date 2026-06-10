@@ -9,6 +9,9 @@ security:
 
 sql:
   service: ops.overview
+  params:
+    # Narrows batch visibility to the caller's ops.app.<name> grants (none = legacy full view).
+    permissions: principal.permissions
 
 response:
   html:

@@ -32,7 +32,8 @@ class OpsViewsTest {
         byStatus.put("COMPLETED", 3);
         Overview overview = new Overview(
                 new BatchSummary(3, byStatus, List.of(new ExecutionView(
-                        "e-1", "nightly", "COMPLETED", "cron", "2026-06-10T00:00:00Z", 1200L))),
+                        "e-1", "nightly", "demo-app", "COMPLETED", "cron",
+                        "2026-06-10T00:00:00Z", 1200L))),
                 List.of(new LaneStatus("default", "VIRTUAL", 100, 98, 2, 50, 1)),
                 List.of(), List.of(), metrics(), new PinningSummary(0, List.of()),
                 true, List.of(new Alert("TQL-OPS-9001", "warning", "high error rate")));

@@ -11,6 +11,8 @@ sql:
   service: ops.execution
   params:
     id: path.id
+    # Executions outside the caller's ops.app.<name> grants render as not found.
+    permissions: principal.permissions
 
 response:
   html:

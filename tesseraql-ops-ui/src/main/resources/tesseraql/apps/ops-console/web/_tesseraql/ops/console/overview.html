@@ -22,11 +22,12 @@
   </ul>
   <p class="empty" th:unless="${ops.hasRecent}">No batch executions recorded.</p>
   <table class="hc-table" th:if="${ops.hasRecent}">
-    <thead><tr><th>Execution</th><th>Job</th><th>Status</th><th>Trigger</th><th>Started</th><th>Duration (ms)</th></tr></thead>
+    <thead><tr><th>Execution</th><th>Job</th><th>App</th><th>Status</th><th>Trigger</th><th>Started</th><th>Duration (ms)</th></tr></thead>
     <tbody>
       <tr th:each="e : ${ops.recent}">
         <td><a th:href="|/_tesseraql/ops/console/executions/${e.id}|" th:text="${e.id}"></a></td>
         <td th:text="${e.jobId}"></td>
+        <td th:text="${e.app}"></td>
         <td th:class="${e.statusClass}" th:text="${e.status}"></td>
         <td th:text="${e.trigger}"></td>
         <td th:text="${e.startTime}"></td>

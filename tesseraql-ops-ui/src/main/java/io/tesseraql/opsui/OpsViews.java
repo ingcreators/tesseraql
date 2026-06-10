@@ -69,6 +69,7 @@ public final class OpsViews {
         }
         model.put("found", true);
         model.put("jobId", execution.jobId());
+        model.put("app", dash(execution.appName()));
         model.put("status", name(execution.status()));
         model.put("statusClass", cssClass(name(execution.status())));
         model.put("trigger", dash(execution.triggerType()));
@@ -131,6 +132,7 @@ public final class OpsViews {
             Map<String, Object> row = new LinkedHashMap<>();
             row.put("id", view.id());
             row.put("jobId", dash(view.jobId()));
+            row.put("app", dash(view.app()));
             row.put("status", dash(view.status()));
             row.put("statusClass", cssClass(view.status()));
             row.put("trigger", dash(view.trigger()));
