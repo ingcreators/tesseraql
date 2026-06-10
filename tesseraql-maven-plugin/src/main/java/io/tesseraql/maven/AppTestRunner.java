@@ -73,6 +73,8 @@ public final class AppTestRunner {
             json.append("    \"").append(entry.getKey()).append("\": {")
                     .append("\"branchRatio\": ").append(report.branchRatio())
                     .append(", \"branchCount\": ").append(report.branchCount())
+                    .append(", \"lineRatio\": ").append(report.lineRatio())
+                    .append(", \"coverableLines\": ").append(report.coverableLineCount())
                     .append(", \"lines\": ").append(report.lineCount()).append("}");
             json.append(++i < reports.size() ? ",\n" : "\n");
         }

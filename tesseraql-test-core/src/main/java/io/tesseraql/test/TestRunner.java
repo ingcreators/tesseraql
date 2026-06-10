@@ -2,7 +2,10 @@ package io.tesseraql.test;
 
 import io.tesseraql.core.sql.BoundParameter;
 import io.tesseraql.core.sql.BoundSql;
+import io.tesseraql.core.sql.Sql2WayParser;
+import io.tesseraql.core.sql.SqlNode;
 import io.tesseraql.core.sql.SqlRenderer;
+import io.tesseraql.coverage.SqlCoverableLines;
 import io.tesseraql.coverage.SqlCoverage;
 import io.tesseraql.identity.IdentityService;
 import io.tesseraql.identity.RealmConfig;
@@ -106,10 +109,11 @@ public final class TestRunner {
     }
 
     private List<Map<String, Object>> executeSql(Path sqlFile, Map<String, Object> params) {
-        BoundSql bound = SqlRenderer.render(read(sqlFile), params);
+        List<SqlNode> nodes = Sql2WayParser.parse(read(sqlFile));
+        BoundSql bound = SqlRenderer.render(nodes, params);
         if (coverage != null) {
             coverage.record(appHome.relativize(sqlFile).toString().replace('\\', '/'),
-                    bound.coverageTrace());
+                    bound.coverageTrace(), SqlCoverableLines.compute(nodes));
         }
         try (Connection connection = dataSource.getConnection();
                 PreparedStatement statement = connection.prepareStatement(bound.sql())) {
