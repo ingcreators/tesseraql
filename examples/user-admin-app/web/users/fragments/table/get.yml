@@ -29,5 +29,5 @@ response:
     headers:
       HX-Trigger:
         hc:toast:
-          message: 検索しました
+          message: Search completed
           variant: success

@@ -88,7 +88,7 @@ class PasswordLoginIntegrationTest {
 
         assertThat(page.statusCode()).isEqualTo(200);
         assertThat(page.headers().firstValue("Content-Type").orElse("")).contains("text/html");
-        assertThat(page.body()).contains("ユーザー管理").contains("admin"); // login_id from the contract
+        assertThat(page.body()).contains("User Management").contains("admin"); // login_id from the contract
     }
 
     @Test

@@ -3,8 +3,8 @@
     <thead>
       <tr>
         <th>ID</th>
-        <th>名前</th>
-        <th>ステータス</th>
+        <th>Name</th>
+        <th>Status</th>
       </tr>
     </thead>
     <tbody>
@@ -14,7 +14,7 @@
         <td th:text="${u.status}"></td>
       </tr>
       <tr th:if="${#lists.isEmpty(users)}">
-        <td colspan="3">該当するユーザーがいません</td>
+        <td colspan="3">No matching users</td>
       </tr>
     </tbody>
   </table>

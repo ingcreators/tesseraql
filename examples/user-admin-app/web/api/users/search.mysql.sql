@@ -9,7 +9,7 @@ from
 where
   1 = 1
 /*%if q != null && q != "" */
-  and u.name like /* q */ '%佐藤%'
+  and u.name like /* q */ '%sato%'
 /*%end*/
 order by
   u.id
