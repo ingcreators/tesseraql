@@ -311,9 +311,10 @@ public final class TesseraqlRuntime implements AutoCloseable {
             context.getRegistry().bind(TesseraqlProperties.IDENTITY_REALM_BEAN, realm);
             context.addRoutes(new LoginRouteBuilder(
                     new PasswordAuthenticator(identity), realm, sessionStore));
-            // Optional feature modules (SCIM, SAML, ...) self-install via ServiceLoader (ch. 47).
-            for (io.tesseraql.compiler.ext.RuntimeExtension extension : java.util.ServiceLoader
-                    .load(io.tesseraql.compiler.ext.RuntimeExtension.class)) {
+            // Optional feature modules (SCIM, SAML, ...) self-install via ServiceLoader, from the
+            // classpath or from signature-verified plugin jars in isolated loaders (ch. 47).
+            for (io.tesseraql.compiler.ext.RuntimeExtension extension
+                    : RuntimeExtensions.discover(manifest.config(), appHome)) {
                 if (extension.enabled(manifest.config())) {
                     extension.install(new io.tesseraql.compiler.ext.ExtensionContext(
                             context, manifest, dataSource));

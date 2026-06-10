@@ -25,6 +25,9 @@ assets/                 static files, served at /assets/** (mounted apps at /ass
 security/               identity contract SQL (sql realms), key material paths
 governance/             approvals.yml - the route review ledger (route id + approved source
                         SHA-256), gating routes whose mode or risk score requires review
+plugins/                optional runtime-extension jars, each with a detached Ed25519
+                        signature (<jar>.sig) verified against tesseraql.plugins.trustedKeys
+                        and loaded in an isolated class loader
 work/                   runtime scratch (drafts, spools, mounted apps); never committed
 ```
 
