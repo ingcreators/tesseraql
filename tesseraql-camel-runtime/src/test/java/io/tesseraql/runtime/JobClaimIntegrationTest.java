@@ -51,6 +51,18 @@ class JobClaimIntegrationTest {
     }
 
     @Test
+    void appsSharingADatabaseClaimTheSameJobIdIndependently() {
+        JobRepository repository = repository();
+        Instant fireTime = Instant.parse("2026-06-12T02:00:00Z");
+
+        // The scheduler claims with <app>:<jobId>, so two apps with the same job id never
+        // suppress each other's firings; nodes of the same app still dedupe.
+        assertThat(repository.tryClaimFiring("app-a:nightly", fireTime)).isTrue();
+        assertThat(repository.tryClaimFiring("app-b:nightly", fireTime)).isTrue();
+        assertThat(repository.tryClaimFiring("app-a:nightly", fireTime)).isFalse();
+    }
+
+    @Test
     void concurrentClaimsYieldExactlyOneWinner() throws Exception {
         JobRepository repository = repository();
         Instant fireTime = Instant.parse("2026-06-11T02:00:00Z");

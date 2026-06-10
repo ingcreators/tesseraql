@@ -43,6 +43,8 @@ public final class TesseraqlRuntime implements AutoCloseable {
     private static final Logger LOG = LoggerFactory.getLogger(TesseraqlRuntime.class);
     private static final io.tesseraql.core.outbox.OutboxEventSink LOGGING_SINK =
             event -> LOG.info("Outbox delivered {} {}", event.eventType(), event.id());
+    private static final io.tesseraql.core.error.TqlErrorCode DUPLICATE_JOB =
+            new io.tesseraql.core.error.TqlErrorCode(io.tesseraql.core.error.TqlDomain.APP, 4202);
 
     private final CamelContext camelContext;
     private final Map<String, HikariDataSource> dataSources;
@@ -52,6 +54,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
     private final JobExecutor jobExecutor;
     private final JdbcOutboxStore outboxStore;
     private final Map<String, JobFile> jobs;
+    private final Map<String, String> jobOwners;
     private final String appName;
     private final io.tesseraql.core.threading.ExecutionLanes executionLanes;
     private final TenantDataSources tenantDataSources;
@@ -64,7 +67,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
     private TesseraqlRuntime(CamelContext camelContext, Map<String, HikariDataSource> dataSources,
             int port,
             JobRepository jobRepository, JobExecutor jobExecutor, JdbcOutboxStore outboxStore,
-            Map<String, JobFile> jobs, String appName,
+            Map<String, JobFile> jobs, Map<String, String> jobOwners, String appName,
             io.tesseraql.core.threading.ExecutionLanes executionLanes,
             TenantDataSources tenantDataSources, io.tesseraql.yaml.config.AppConfig config,
             AutoCloseable pinningSource, AutoCloseable otelSdk,
@@ -73,6 +76,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
         this.camelContext = camelContext;
         this.dataSources = dataSources;
         this.mainDataSource = dataSources.get("main");
+        this.jobOwners = Map.copyOf(jobOwners);
         this.port = port;
         this.jobRepository = jobRepository;
         this.jobExecutor = jobExecutor;
@@ -222,6 +226,9 @@ public final class TesseraqlRuntime implements AutoCloseable {
         Map<String, JobFile> jobs = new LinkedHashMap<>();
         manifest.jobs().forEach(job -> jobs.put(job.definition().id(), job));
         String appName = manifest.config().getString("tesseraql.app.name").orElse("app");
+        // The owning app per job id (main app jobs default), so execution records are tagged with
+        // the app that declared the job, not just the hosting runtime (design ch. 26, 32).
+        Map<String, String> jobOwners = new LinkedHashMap<>();
 
         TenantDataSources tenantPools = tenantDataSources;
         AppConfig runtimeConfig = manifest.config();
@@ -230,6 +237,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
             if (jobFile == null) {
                 throw new IllegalArgumentException("Unknown job: " + jobId);
             }
+            String owner = jobOwners.getOrDefault(jobId, appName);
             if (jobFile.definition().perTenant()) {
                 List<String> tenants = TenantRegistry.tenantIds(runtimeConfig, dataSource, tenantPools);
                 if (!tenants.isEmpty()) {
@@ -237,12 +245,12 @@ public final class TesseraqlRuntime implements AutoCloseable {
                     for (String tenantId : tenants) {
                         last = jobExecutor.run(jobFile, tenantPools.dataSourceFor(tenantId, dataSource),
                                 io.tesseraql.core.tenant.TenantContext.of(tenantId),
-                                appName, params, "manual");
+                                owner, params, "manual");
                     }
                     return last;
                 }
             }
-            return jobExecutor.run(jobFile, dataSource, appName, params, "manual");
+            return jobExecutor.run(jobFile, dataSource, owner, params, "manual");
         };
 
         io.tesseraql.core.outbox.OutboxEventSink outboxSink;
@@ -279,6 +287,17 @@ public final class TesseraqlRuntime implements AutoCloseable {
                 AppMigrations.migrate(mounted.name(), mounted.manifest().appHome(),
                         manifest.config(), dataSource, tenantDataSources, dataSources::get);
                 context.addRoutes(new RouteCompiler().compile(mounted.manifest()));
+                // Mounted apps' batch jobs join the same scheduler and manual-run surface,
+                // tagged with the owning app; duplicate ids across apps fail the mount.
+                for (JobFile job : mounted.manifest().jobs()) {
+                    String jobId = job.definition().id();
+                    if (jobs.putIfAbsent(jobId, job) != null) {
+                        throw new io.tesseraql.core.error.TqlException(DUPLICATE_JOB,
+                                "Job id '" + jobId + "' of app '" + mounted.name()
+                                        + "' is already declared by another app");
+                    }
+                    jobOwners.put(jobId, mounted.name());
+                }
             }
             // Static assets (design ch. 12, 40): the main app's assets/, each mounted app's
             // assets/ under its name, framework css under /assets/_tesseraql, vendored WebJars
@@ -298,20 +317,33 @@ public final class TesseraqlRuntime implements AutoCloseable {
             io.tesseraql.opsui.OpsDashboard dashboardRef = opsDashboard;
             io.tesseraql.core.service.ServiceProviders serviceProviders =
                     new io.tesseraql.core.service.ServiceProviders()
+                            // Batch visibility narrows to the caller's ops.app.<name> grants,
+                            // bound by the console routes as principal.permissions (ch. 26.11).
                             .register("ops.overview", params ->
-                                    io.tesseraql.opsui.OpsViews.overview(dashboardRef.overview(20)))
+                                    io.tesseraql.opsui.OpsViews.overview(dashboardRef.overview(20,
+                                            io.tesseraql.opsui.OpsScope.allowedApps(
+                                                    params.get("permissions")))))
                             .register("ops.traces", params ->
                                     io.tesseraql.opsui.OpsViews.traces(dashboardRef.traceTree()))
                             .register("ops.execution", params -> {
                                 String id = params.get("id") == null
                                         ? "" : String.valueOf(params.get("id"));
-                                return io.tesseraql.opsui.OpsViews.execution(id,
-                                        jobRepository.findExecution(id).orElse(null),
-                                        jobRepository.findSteps(id));
+                                java.util.function.Predicate<String> scope =
+                                        io.tesseraql.opsui.OpsScope.allowedApps(
+                                                params.get("permissions"));
+                                // An execution outside the caller's scope renders as not found.
+                                JobExecution execution = jobRepository.findExecution(id)
+                                        .filter(found -> scope.test(found.appName()))
+                                        .orElse(null);
+                                return io.tesseraql.opsui.OpsViews.execution(id, execution,
+                                        execution == null ? List.of() : jobRepository.findSteps(id));
                             });
             context.getRegistry().bind(TesseraqlProperties.SERVICE_PROVIDERS_BEAN, serviceProviders);
+            Map<String, String> claimKeys = new LinkedHashMap<>();
+            jobs.keySet().forEach(id ->
+                    claimKeys.put(id, jobOwners.getOrDefault(id, appName) + ":" + id));
             context.addRoutes(new SchedulingRouteBuilder(
-                    jobRunner, jobRepository, List.copyOf(jobs.values())));
+                    jobRunner, jobRepository, List.copyOf(jobs.values()), claimKeys));
 
             IdentityService identity = new IdentityService(name ->
                     context.getRegistry().lookupByNameAndType(name, javax.sql.DataSource.class),
@@ -398,7 +430,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
         }
         LOG.info("TesseraQL runtime started on port {} for app {}", port, appHome);
         return new TesseraqlRuntime(context, dataSources, port, jobRepository, jobExecutor,
-                outboxStore, jobs, appName, lanes, tenantDataSources, manifest.config(),
+                outboxStore, jobs, jobOwners, appName, lanes, tenantDataSources, manifest.config(),
                 pinningSource, otelSdk, opsDashboard, outboxSink);
     }
 
@@ -418,7 +450,8 @@ public final class TesseraqlRuntime implements AutoCloseable {
         if (jobFile == null) {
             throw new IllegalArgumentException("Unknown job: " + jobId);
         }
-        return jobExecutor.run(jobFile, mainDataSource, appName, params, "manual");
+        return jobExecutor.run(jobFile, mainDataSource,
+                jobOwners.getOrDefault(jobId, appName), params, "manual");
     }
 
     /**
@@ -434,7 +467,8 @@ public final class TesseraqlRuntime implements AutoCloseable {
         for (String tenantId : TenantRegistry.tenantIds(config, mainDataSource, tenantDataSources)) {
             executions.add(jobExecutor.run(jobFile,
                     tenantDataSources.dataSourceFor(tenantId, mainDataSource),
-                    io.tesseraql.core.tenant.TenantContext.of(tenantId), appName, params, "manual"));
+                    io.tesseraql.core.tenant.TenantContext.of(tenantId),
+                    jobOwners.getOrDefault(jobId, appName), params, "manual"));
         }
         return executions;
     }

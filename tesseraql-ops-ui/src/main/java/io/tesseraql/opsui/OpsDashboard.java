@@ -60,7 +60,18 @@ public final class OpsDashboard {
 
     /** Builds the dashboard overview: batch summary, lane diagnostics, slow SQL, and recent traces. */
     public Overview overview(int recentLimit) {
-        List<JobExecution> executions = jobs.listExecutions(SCAN_LIMIT);
+        return overview(recentLimit, app -> true);
+    }
+
+    /**
+     * Builds the overview with the batch executions narrowed to the apps the caller may operate
+     * (design ch. 26.11 {@code ops.app.<name>} scope); runtime-wide diagnostics (lanes, slow SQL,
+     * traces, pinning) stay unfiltered behind the entry permission.
+     */
+    public Overview overview(int recentLimit, java.util.function.Predicate<String> appFilter) {
+        List<JobExecution> executions = jobs.listExecutions(SCAN_LIMIT).stream()
+                .filter(execution -> appFilter.test(execution.appName()))
+                .toList();
         Map<String, Integer> byStatus = new LinkedHashMap<>();
         for (JobExecution execution : executions) {
             byStatus.merge(execution.status().name(), 1, Integer::sum);
@@ -263,8 +274,9 @@ public final class OpsDashboard {
 
     private static ExecutionView view(JobExecution execution) {
         String startTime = execution.startTime() == null ? null : execution.startTime().toString();
-        return new ExecutionView(execution.id(), execution.jobId(), execution.status().name(),
-                execution.triggerType(), startTime, execution.durationMs());
+        return new ExecutionView(execution.id(), execution.jobId(), execution.appName(),
+                execution.status().name(), execution.triggerType(), startTime,
+                execution.durationMs());
     }
 
     /** The dashboard overview. */
@@ -307,7 +319,7 @@ public final class OpsDashboard {
     }
 
     /** A compact view of a batch execution for the dashboard ({@code startTime} as ISO-8601). */
-    public record ExecutionView(String id, String jobId, String status, String trigger,
+    public record ExecutionView(String id, String jobId, String app, String status, String trigger,
             String startTime, Long durationMs) {
     }
 

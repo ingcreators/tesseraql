@@ -26,12 +26,23 @@ final class SchedulingRouteBuilder extends RouteBuilder {
     private final OperationsRouteBuilder.JobRunner runner;
     private final JobRepository repository;
     private final List<JobFile> jobs;
+    private final Map<String, String> claimKeys;
 
     SchedulingRouteBuilder(OperationsRouteBuilder.JobRunner runner, JobRepository repository,
             List<JobFile> jobs) {
+        this(runner, repository, jobs, Map.of());
+    }
+
+    /**
+     * @param claimKeys the cluster-wide claim key per job id (usually {@code <app>:<jobId>}), so
+     *                  different apps sharing a database never contend for each other's firings
+     */
+    SchedulingRouteBuilder(OperationsRouteBuilder.JobRunner runner, JobRepository repository,
+            List<JobFile> jobs, Map<String, String> claimKeys) {
         this.runner = runner;
         this.repository = repository;
         this.jobs = List.copyOf(jobs);
+        this.claimKeys = Map.copyOf(claimKeys);
     }
 
     @Override
@@ -61,7 +72,7 @@ final class SchedulingRouteBuilder extends RouteBuilder {
     }
 
     private void runClaimed(String jobId, Instant fireTime) {
-        if (!repository.tryClaimFiring(jobId, fireTime)) {
+        if (!repository.tryClaimFiring(claimKeys.getOrDefault(jobId, jobId), fireTime)) {
             LOG.log(System.Logger.Level.DEBUG,
                     "Skipping job {0} firing at {1}: claimed by another node", jobId, fireTime);
             return;

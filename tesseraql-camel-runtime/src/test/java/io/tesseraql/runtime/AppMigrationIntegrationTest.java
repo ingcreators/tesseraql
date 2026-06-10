@@ -81,6 +81,12 @@ class AppMigrationIntegrationTest {
         }
         assertThat(historyCount("tql_schema_history_demo_app__audit")).isEqualTo(1);
 
+        // The mounted app's batch job joined the runtime's job surface, and its execution record
+        // is tagged with the owning app, not the hosting runtime's app name.
+        var execution = runtime.runJob("sysapp.touchNotes", java.util.Map.of());
+        assertThat(execution.appName()).isEqualTo("sysapp");
+        assertThat(execution.status().name()).isEqualTo("COMPLETED");
+
         // Re-mounting the same version applies nothing new (idempotent boot).
         runtime.close();
         runtime = TesseraqlRuntime.start(appHome, freePort());
@@ -218,6 +224,21 @@ class AppMigrationIntegrationTest {
                       data: sql.rows
                 """);
         Files.writeString(route.resolve("notes.sql"), "select note from sysapp_notes\n;\n");
+        Path job = home.resolve("batch/touch-notes");
+        Files.createDirectories(job);
+        Files.writeString(job.resolve("job.yml"), """
+                version: tesseraql/v1
+                id: sysapp.touchNotes
+                kind: job
+                recipe: batch-pipeline
+                pipeline:
+                  - id: touch
+                    sql:
+                      file: touch.sql
+                      mode: update
+                """);
+        Files.writeString(job.resolve("touch.sql"),
+                "update sysapp_notes set note = note\n;\n");
         return home;
     }
 
