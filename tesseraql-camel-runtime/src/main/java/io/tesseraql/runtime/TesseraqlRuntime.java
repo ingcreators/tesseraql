@@ -243,6 +243,13 @@ public final class TesseraqlRuntime implements AutoCloseable {
                     pinningMonitor);
             context.addService(new VertxPlatformHttpServer(httpConfig));
             context.addRoutes(new RouteCompiler().compile(manifest));
+            // Mounted apps (jar-bundled system apps and config-listed directories, design ch. 32)
+            // are plain yaml/sql/template trees compiled exactly like the main app.
+            List<AppManifest> mountedApps = SystemApps.load(manifest.config(), appHome);
+            SystemApps.requireNoRouteConflicts(manifest, mountedApps);
+            for (AppManifest mounted : mountedApps) {
+                context.addRoutes(new RouteCompiler().compile(mounted));
+            }
             context.addRoutes(new OperationsRouteBuilder(
                     jobRunner, jobRepository, List.copyOf(jobs.keySet()), opsDashboard));
             context.addRoutes(new OpsConsoleRouteBuilder(opsDashboard, jobRepository));
