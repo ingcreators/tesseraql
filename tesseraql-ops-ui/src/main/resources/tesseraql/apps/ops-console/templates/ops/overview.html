@@ -11,91 +11,75 @@
 <header class="topbar">
   <h1>TesseraQL Operations Console</h1>
   <span class="actions"><a href="/_tesseraql/ops/console/traces">traces &rarr;</a> <a href="/_tesseraql/ops/console">refresh</a></span>
-  {{# ops.ok }}<span class="badge ok">UP</span>{{/ ops.ok }}
-  {{# ops.warning }}<span class="badge warn">WARN</span>{{/ ops.warning }}
+  <span class="badge ok" th:if="${ops.ok}">UP</span>
+  <span class="badge warn" th:if="${ops.warning}">WARN</span>
 </header>
 <main hx-get="/_tesseraql/ops/console" hx-trigger="every 15s" hx-select="main" hx-target="this" hx-swap="outerHTML">
-{{# ops.hasAlerts }}
-<section id="alerts">
+<section id="alerts" th:if="${ops.hasAlerts}">
   <h2>Alerts</h2>
   <ul class="alerts">
-  {{# ops.alerts }}
-    <li class="alert {{ severity }}"><span class="code">{{ code }}</span> {{ message }}</li>
-  {{/ ops.alerts }}
+    <li th:each="a : ${ops.alerts}" th:class="'alert ' + ${a.severity}"><span class="code" th:text="${a.code}"></span> [[${a.message}]]</li>
   </ul>
 </section>
-{{/ ops.hasAlerts }}
 <section id="batch">
   <h2>Batch executions</h2>
-  <p class="summary">Total scanned: <strong>{{ ops.batchTotal }}</strong></p>
+  <p class="summary">Total scanned: <strong th:text="${ops.batchTotal}"></strong></p>
   <ul class="chips">
-  {{# ops.byStatus }}
-    <li class="chip {{ statusClass }}">{{ status }}: {{ count }}</li>
-  {{/ ops.byStatus }}
+    <li th:each="s : ${ops.byStatus}" th:class="'chip ' + ${s.statusClass}">[[${s.status}]]: [[${s.count}]]</li>
   </ul>
-  {{^ ops.hasRecent }}<p class="empty">No batch executions recorded.</p>{{/ ops.hasRecent }}
-  {{# ops.hasRecent }}
-  <table>
+  <p class="empty" th:unless="${ops.hasRecent}">No batch executions recorded.</p>
+  <table th:if="${ops.hasRecent}">
     <thead><tr><th>Execution</th><th>Job</th><th>Status</th><th>Trigger</th><th>Started</th><th>Duration (ms)</th></tr></thead>
     <tbody>
-    {{# ops.recent }}
-      <tr>
-        <td><a href="/_tesseraql/ops/console/executions/{{ id }}">{{ id }}</a></td>
-        <td>{{ jobId }}</td>
-        <td class="{{ statusClass }}">{{ status }}</td>
-        <td>{{ trigger }}</td>
-        <td>{{ startTime }}</td>
-        <td>{{ durationMs }}</td>
+      <tr th:each="e : ${ops.recent}">
+        <td><a th:href="|/_tesseraql/ops/console/executions/${e.id}|" th:text="${e.id}"></a></td>
+        <td th:text="${e.jobId}"></td>
+        <td th:class="${e.statusClass}" th:text="${e.status}"></td>
+        <td th:text="${e.trigger}"></td>
+        <td th:text="${e.startTime}"></td>
+        <td th:text="${e.durationMs}"></td>
       </tr>
-    {{/ ops.recent }}
     </tbody>
   </table>
-  {{/ ops.hasRecent }}
 </section>
 <section id="lanes">
   <h2>Execution lanes</h2>
-  {{^ ops.hasLanes }}<p class="empty">No execution lanes registered.</p>{{/ ops.hasLanes }}
-  {{# ops.hasLanes }}
-  <table>
+  <p class="empty" th:unless="${ops.hasLanes}">No execution lanes registered.</p>
+  <table th:if="${ops.hasLanes}">
     <thead><tr><th>Lane</th><th>Type</th><th>In use</th><th>Max</th><th>Admitted</th><th>Rejected</th></tr></thead>
     <tbody>
-    {{# ops.lanes }}
-      <tr{{# warn }} class="warn"{{/ warn }}>
-        <td>{{ name }}</td><td>{{ type }}</td><td>{{ inUse }}</td><td>{{ max }}</td><td>{{ admitted }}</td><td>{{ rejected }}</td>
+      <tr th:each="l : ${ops.lanes}" th:classappend="${l.warn} ? 'warn'">
+        <td th:text="${l.name}"></td><td th:text="${l.type}"></td><td th:text="${l.inUse}"></td><td th:text="${l.max}"></td><td th:text="${l.admitted}"></td><td th:text="${l.rejected}"></td>
       </tr>
-    {{/ ops.lanes }}
     </tbody>
   </table>
-  {{/ ops.hasLanes }}
 </section>
 <section id="traces">
   <h2>Trace metrics</h2>
   <ul class="chips">
-    <li class="chip">Spans: <strong>{{ ops.metrics.spans }}</strong></li>
-    <li class="chip">Span error rate: <strong>{{ ops.metrics.spanErrorRate }}%</strong></li>
-    <li class="chip">Slow span rate: <strong>{{ ops.metrics.slowRate }}%</strong></li>
-    <li class="chip">Traces: <strong>{{ ops.metrics.traces }}</strong></li>
-    <li class="chip">Trace error rate: <strong>{{ ops.metrics.traceErrorRate }}%</strong></li>
+    <li class="chip">Spans: <strong th:text="${ops.metrics.spans}"></strong></li>
+    <li class="chip">Span error rate: <strong>[[${ops.metrics.spanErrorRate}]]%</strong></li>
+    <li class="chip">Slow span rate: <strong>[[${ops.metrics.slowRate}]]%</strong></li>
+    <li class="chip">Traces: <strong th:text="${ops.metrics.traces}"></strong></li>
+    <li class="chip">Trace error rate: <strong>[[${ops.metrics.traceErrorRate}]]%</strong></li>
   </ul>
 </section>
 <section id="slow-sql">
   <h2>Slow SQL</h2>
-  {{^ ops.hasSlowSql }}<p class="empty">No slow SQL recorded.</p>{{/ ops.hasSlowSql }}
-  {{# ops.hasSlowSql }}
-  <table>
+  <p class="empty" th:unless="${ops.hasSlowSql}">No slow SQL recorded.</p>
+  <table th:if="${ops.hasSlowSql}">
     <thead><tr><th>SQL id</th><th>Mode</th><th>Duration (ms)</th><th>Rows</th></tr></thead>
     <tbody>
-    {{# ops.slowSql }}
-      <tr><td>{{ sqlId }}</td><td>{{ mode }}</td><td>{{ durationMs }}</td><td>{{ rowCount }}</td></tr>
-    {{/ ops.slowSql }}
+      <tr th:each="q : ${ops.slowSql}">
+        <td th:text="${q.sqlId}"></td><td th:text="${q.mode}"></td><td th:text="${q.durationMs}"></td><td th:text="${q.rowCount}"></td>
+      </tr>
     </tbody>
   </table>
-  {{/ ops.hasSlowSql }}
 </section>
 <section id="pinning">
   <h2>Virtual-thread pinning</h2>
-  {{^ ops.hasPinning }}<p class="empty">No pinning events detected.</p>{{/ ops.hasPinning }}
-  {{# ops.hasPinning }}<p class="summary">Pinning events: <strong>{{ ops.pinningCount }}</strong></p>{{/ ops.hasPinning }}
+  <p class="empty" th:unless="${ops.hasPinning}">No pinning events detected.</p>
+  <p class="summary" th:if="${ops.hasPinning}">Pinning events: <strong th:text="${ops.pinningCount}"></strong></p>
 </section>
 </main>
 </body>

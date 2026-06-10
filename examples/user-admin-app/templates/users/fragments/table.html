@@ -8,18 +8,14 @@
       </tr>
     </thead>
     <tbody>
-      {{# users }}
-      <tr>
-        <td>{{ id }}</td>
-        <td>{{ name }}</td>
-        <td>{{ status }}</td>
+      <tr th:each="u : ${users}">
+        <td th:text="${u.id}"></td>
+        <td th:text="${u.name}"></td>
+        <td th:text="${u.status}"></td>
       </tr>
-      {{/ users }}
-      {{^ users }}
-      <tr>
+      <tr th:if="${#lists.isEmpty(users)}">
         <td colspan="3">該当するユーザーがいません</td>
       </tr>
-      {{/ users }}
     </tbody>
   </table>
 </div>

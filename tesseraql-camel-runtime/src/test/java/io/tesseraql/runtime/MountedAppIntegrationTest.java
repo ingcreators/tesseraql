@@ -304,7 +304,7 @@ class MountedAppIntegrationTest {
                 """);
         Files.createDirectories(home.resolve("templates"));
         Files.writeString(home.resolve("templates/hello.html"),
-                "<!DOCTYPE html>\n<html><body><h1>Hello {{ who }}</h1></body></html>\n");
+                "<!DOCTYPE html>\n<html><body><h1>Hello [[${who}]]</h1></body></html>\n");
 
         // A file route: a template-generated text download built from the request inputs.
         Path confDir = home.resolve("web/sysapp/conf");
@@ -329,7 +329,7 @@ class MountedAppIntegrationTest {
         Files.writeString(home.resolve("templates/conf.yml.tpl"), """
                 tesseraql:
                   app:
-                    name: "{{{ appName }}}"
+                    name: "[(${appName})]"
                 """);
 
         // Static assets served under /assets/<app-name>/ for mounted apps.

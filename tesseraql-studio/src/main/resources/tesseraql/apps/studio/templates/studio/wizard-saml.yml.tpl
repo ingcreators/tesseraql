@@ -3,27 +3,17 @@ tesseraql:
   saml:
     enabled: true
     sp:
-      audience: "{{{ spAudience }}}"
-      acsUrl: "{{{ acsUrl }}}"
-{{# nameIdFormat }}
-      nameIdFormat: "{{{ nameIdFormat }}}"
-{{/ nameIdFormat }}
-    idp:
-      ssoUrl: "{{{ ssoUrl }}}"
-{{# sloUrl }}
-      sloUrl: "{{{ sloUrl }}}"
-{{/ sloUrl }}
-{{# idpMetadataPath }}
-      metadata: "{{{ idpMetadataPath }}}"
-{{/ idpMetadataPath }}
-{{# publicKeyPath }}
-      publicKey: "{{{ publicKeyPath }}}"
-{{/ publicKeyPath }}
-    attributes:
-      loginId: "{{{ loginIdAttribute }}}"
-{{# emailAttribute }}
-      email: "{{{ emailAttribute }}}"
-{{/ emailAttribute }}
-    link:
+      audience: "[(${spAudience})]"
+      acsUrl: "[(${acsUrl})]"
+[# th:if="${!#strings.isEmpty(nameIdFormat)}"]      nameIdFormat: "[(${nameIdFormat})]"
+[/]    idp:
+      ssoUrl: "[(${ssoUrl})]"
+[# th:if="${!#strings.isEmpty(sloUrl)}"]      sloUrl: "[(${sloUrl})]"
+[/][# th:if="${!#strings.isEmpty(idpMetadataPath)}"]      metadata: "[(${idpMetadataPath})]"
+[/][# th:if="${!#strings.isEmpty(publicKeyPath)}"]      publicKey: "[(${publicKeyPath})]"
+[/]    attributes:
+      loginId: "[(${loginIdAttribute})]"
+[# th:if="${!#strings.isEmpty(emailAttribute)}"]      email: "[(${emailAttribute})]"
+[/]    link:
       enabled: true
-      provision: {{{ provision }}}
+      provision: [(${provision})]

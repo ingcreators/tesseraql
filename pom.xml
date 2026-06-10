@@ -58,6 +58,7 @@
     <spring.version>6.2.1</spring.version>
     <spring.boot.version>3.4.1</spring.boot.version>
     <htmx.version>2.0.4</htmx.version>
+    <thymeleaf.version>3.1.3.RELEASE</thymeleaf.version>
 
     <!-- Build plugin versions -->
     <maven.compiler.plugin.version>3.13.0</maven.compiler.plugin.version>
@@ -171,6 +172,13 @@
         <groupId>org.webjars.npm</groupId>
         <artifactId>htmx.org</artifactId>
         <version>${htmx.version}</version>
+      </dependency>
+      <!-- The standard template engine (design ch. 12): natural HTML templates with first-class
+           fragments/layouts, plus TEXT mode for generated file responses. -->
+      <dependency>
+        <groupId>org.thymeleaf</groupId>
+        <artifactId>thymeleaf</artifactId>
+        <version>${thymeleaf.version}</version>
       </dependency>
 
       <!-- Test dependencies -->

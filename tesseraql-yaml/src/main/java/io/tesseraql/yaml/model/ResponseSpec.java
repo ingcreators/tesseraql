@@ -13,8 +13,8 @@ public record ResponseSpec(JsonResponse json, HtmlResponse html, StreamResponse 
     /**
      * A template-generated file response (design ch. 6.4): the template is rendered against the
      * model (like an HTML response) and served with an arbitrary text content type, optionally as
-     * a download. Inside file templates use raw {@code {{{ value }}}} interpolation; the default
-     * {@code {{ value }}} form HTML-escapes, which is only right for markup output.
+     * a download. Non-HTML templates render in Thymeleaf TEXT mode: interpolate with
+     * {@code [(${value})]} and gate optional blocks with {@code [# th:if="..."]...[/]}.
      *
      * @param status      HTTP status code, defaulting to 200
      * @param template    template path relative to the template root

@@ -8,47 +8,41 @@
 </head>
 <body>
 <header class="topbar">
-  <h1>Execution {{ execution.id }}</h1>
+  <h1>Execution [[${execution.id}]]</h1>
   <a class="back" href="/_tesseraql/ops/console">&larr; console</a>
 </header>
 <main>
-{{^ execution.found }}
-<section><p class="empty">Execution not found.</p></section>
-{{/ execution.found }}
-{{# execution.found }}
+<section th:unless="${execution.found}"><p class="empty">Execution not found.</p></section>
+<th:block th:if="${execution.found}">
 <section>
   <h2>Summary</h2>
   <table class="kv"><tbody>
-    <tr><th>Job</th><td>{{ execution.jobId }}</td></tr>
-    <tr><th>Status</th><td class="{{ execution.statusClass }}">{{ execution.status }}</td></tr>
-    <tr><th>Trigger</th><td>{{ execution.trigger }}</td></tr>
-    <tr><th>Started</th><td>{{ execution.startTime }}</td></tr>
-    <tr><th>Ended</th><td>{{ execution.endTime }}</td></tr>
-    <tr><th>Duration (ms)</th><td>{{ execution.durationMs }}</td></tr>
-    <tr><th>Exit message</th><td>{{ execution.exitMessage }}</td></tr>
+    <tr><th>Job</th><td th:text="${execution.jobId}"></td></tr>
+    <tr><th>Status</th><td th:class="${execution.statusClass}" th:text="${execution.status}"></td></tr>
+    <tr><th>Trigger</th><td th:text="${execution.trigger}"></td></tr>
+    <tr><th>Started</th><td th:text="${execution.startTime}"></td></tr>
+    <tr><th>Ended</th><td th:text="${execution.endTime}"></td></tr>
+    <tr><th>Duration (ms)</th><td th:text="${execution.durationMs}"></td></tr>
+    <tr><th>Exit message</th><td th:text="${execution.exitMessage}"></td></tr>
   </tbody></table>
 </section>
 <section id="steps">
   <h2>Steps</h2>
-  {{^ execution.hasSteps }}<p class="empty">No steps recorded.</p>{{/ execution.hasSteps }}
-  {{# execution.hasSteps }}
-  <table>
+  <p class="empty" th:unless="${execution.hasSteps}">No steps recorded.</p>
+  <table th:if="${execution.hasSteps}">
     <thead><tr><th>Step</th><th>Status</th><th>Rows</th><th>Duration (ms)</th><th>Error</th></tr></thead>
     <tbody>
-    {{# execution.steps }}
-      <tr{{# failed }} class="warn"{{/ failed }}>
-        <td>{{ stepId }}</td>
-        <td class="{{ statusClass }}">{{ status }}</td>
-        <td>{{ affectedRows }}</td>
-        <td>{{ durationMs }}</td>
-        <td>{{ errorMessage }}</td>
+      <tr th:each="s : ${execution.steps}" th:classappend="${s.failed} ? 'warn'">
+        <td th:text="${s.stepId}"></td>
+        <td th:class="${s.statusClass}" th:text="${s.status}"></td>
+        <td th:text="${s.affectedRows}"></td>
+        <td th:text="${s.durationMs}"></td>
+        <td th:text="${s.errorMessage}"></td>
       </tr>
-    {{/ execution.steps }}
     </tbody>
   </table>
-  {{/ execution.hasSteps }}
 </section>
-{{/ execution.found }}
+</th:block>
 </main>
 </body>
 </html>

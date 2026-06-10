@@ -8,49 +8,41 @@
 </head>
 <body>
 <header class="topbar">
-  <h1>TesseraQL Studio · {{ studio.appName }}</h1>
+  <h1>TesseraQL Studio · [[${studio.appName}]]</h1>
   <span class="actions"><a href="/_tesseraql/studio/ui/wizard">wizards &rarr;</a></span>
-  {{# studio.readOnly }}<span class="badge ro">read-only</span>{{/ studio.readOnly }}
-  {{# studio.editable }}<span class="badge rw">editable</span>{{/ studio.editable }}
+  <span class="badge ro" th:if="${studio.readOnly}">read-only</span>
+  <span class="badge rw" th:if="${studio.editable}">editable</span>
 </header>
 <main>
 <section>
   <h2>Routes</h2>
-  {{^ studio.hasRoutes }}<p class="empty">No routes defined.</p>{{/ studio.hasRoutes }}
-  {{# studio.hasRoutes }}
-  <table>
+  <p class="empty" th:unless="${studio.hasRoutes}">No routes defined.</p>
+  <table th:if="${studio.hasRoutes}">
     <thead><tr><th>Id</th><th>Method</th><th>Path</th><th>Recipe</th><th>Source</th></tr></thead>
     <tbody>
-    {{# studio.routes }}
-      <tr>
-        <td>{{ id }}</td>
-        <td>{{ method }}</td>
-        <td>{{ path }}</td>
-        <td>{{ recipe }}</td>
-        <td><a href="{{ sourceUrl }}">{{ source }}</a></td>
+      <tr th:each="r : ${studio.routes}">
+        <td th:text="${r.id}"></td>
+        <td th:text="${r.method}"></td>
+        <td th:text="${r.path}"></td>
+        <td th:text="${r.recipe}"></td>
+        <td><a th:href="${r.sourceUrl}" th:text="${r.source}"></a></td>
       </tr>
-    {{/ studio.routes }}
     </tbody>
   </table>
-  {{/ studio.hasRoutes }}
 </section>
 <section>
   <h2>Jobs</h2>
-  {{^ studio.hasJobs }}<p class="empty">No jobs defined.</p>{{/ studio.hasJobs }}
-  {{# studio.hasJobs }}
-  <table>
+  <p class="empty" th:unless="${studio.hasJobs}">No jobs defined.</p>
+  <table th:if="${studio.hasJobs}">
     <thead><tr><th>Id</th><th>Recipe</th><th>Source</th></tr></thead>
     <tbody>
-    {{# studio.jobs }}
-      <tr>
-        <td>{{ id }}</td>
-        <td>{{ recipe }}</td>
-        <td><a href="{{ sourceUrl }}">{{ source }}</a></td>
+      <tr th:each="j : ${studio.jobs}">
+        <td th:text="${j.id}"></td>
+        <td th:text="${j.recipe}"></td>
+        <td><a th:href="${j.sourceUrl}" th:text="${j.source}"></a></td>
       </tr>
-    {{/ studio.jobs }}
     </tbody>
   </table>
-  {{/ studio.hasJobs }}
 </section>
 </main>
 </body>

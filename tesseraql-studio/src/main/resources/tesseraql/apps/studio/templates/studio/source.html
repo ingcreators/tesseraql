@@ -8,28 +8,28 @@
 </head>
 <body>
 <header class="topbar">
-  <h1>{{ src.path }}</h1>
+  <h1 th:text="${src.path}"></h1>
   <a class="back" href="/_tesseraql/studio/ui">&larr; explorer</a>
 </header>
 <main>
 <section>
-  {{# saved }}<p class="status">Draft saved.</p>{{/ saved }}
-  {{# applied }}<p class="status">Draft applied and routes reloaded.</p>{{/ applied }}
-  {{# src.readOnly }}
-  <p class="empty">Read-only mode &mdash; edit drafts via the Studio API.</p>
-  <pre class="source">{{ src.content }}</pre>
-  {{/ src.readOnly }}
-  {{# src.editable }}
-  <form method="post" action="/_tesseraql/studio/ui/save">
-    <input type="hidden" name="path" value="{{ src.path }}">
-    <textarea name="content" class="source" rows="24" spellcheck="false">{{ src.content }}</textarea>
-    <div class="toolbar"><button type="submit">Save draft</button></div>
-  </form>
-  <form method="post" action="/_tesseraql/studio/ui/apply">
-    <input type="hidden" name="path" value="{{ src.path }}">
-    <div class="toolbar"><button type="submit" class="apply">Apply draft &amp; reload</button></div>
-  </form>
-  {{/ src.editable }}
+  <p class="status" th:if="${saved}">Draft saved.</p>
+  <p class="status" th:if="${applied}">Draft applied and routes reloaded.</p>
+  <th:block th:if="${src.readOnly}">
+    <p class="empty">Read-only mode &mdash; edit drafts via the Studio API.</p>
+    <pre class="source" th:text="${src.content}"></pre>
+  </th:block>
+  <th:block th:if="${src.editable}">
+    <form method="post" action="/_tesseraql/studio/ui/save">
+      <input type="hidden" name="path" th:value="${src.path}">
+      <textarea name="content" class="source" rows="24" spellcheck="false" th:text="${src.content}"></textarea>
+      <div class="toolbar"><button type="submit">Save draft</button></div>
+    </form>
+    <form method="post" action="/_tesseraql/studio/ui/apply">
+      <input type="hidden" name="path" th:value="${src.path}">
+      <div class="toolbar"><button type="submit" class="apply">Apply draft &amp; reload</button></div>
+    </form>
+  </th:block>
 </section>
 </main>
 </body>

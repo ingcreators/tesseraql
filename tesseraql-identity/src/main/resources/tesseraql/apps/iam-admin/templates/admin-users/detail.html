@@ -8,69 +8,67 @@
 </head>
 <body>
 <header class="topbar">
-  <h1>{{# user }}{{ login_id }}{{/ user }}{{^ user }}Unknown user{{/ user }}</h1>
+  <h1><th:block th:each="u : ${user}" th:text="${u.login_id}"/><th:block th:if="${#lists.isEmpty(user)}">Unknown user</th:block></h1>
   <a class="back" href="/_tesseraql/admin/users">&larr; users</a>
 </header>
 <main>
-{{^ user }}
-<section><p class="empty">User not found.</p></section>
-{{/ user }}
-{{# user }}
+<section th:if="${#lists.isEmpty(user)}"><p class="empty">User not found.</p></section>
+<th:block th:each="u : ${user}">
 <section>
   <h2>Summary</h2>
   <table class="kv"><tbody>
-    <tr><th>User id</th><td>{{ user_id }}</td></tr>
-    <tr><th>Display name</th><td>{{ display_name }}</td></tr>
-    <tr><th>Email</th><td>{{ email }}</td></tr>
-    <tr><th>Status</th><td>{{ status }}</td></tr>
-    <tr><th>Tenant</th><td>{{ tenant_id }}</td></tr>
+    <tr><th>User id</th><td th:text="${u.user_id}"></td></tr>
+    <tr><th>Display name</th><td th:text="${u.display_name}"></td></tr>
+    <tr><th>Email</th><td th:text="${u.email}"></td></tr>
+    <tr><th>Status</th><td th:text="${u.status}"></td></tr>
+    <tr><th>Tenant</th><td th:text="${u.tenant_id}"></td></tr>
   </tbody></table>
 </section>
 <section id="actions">
   <h2>Actions</h2>
   <div class="toolbar">
-    <form method="post" action="/_tesseraql/admin/users/{{ user_id }}/enable">
+    <form method="post" th:action="|/_tesseraql/admin/users/${u.user_id}/enable|">
       <button type="submit">Enable user</button>
     </form>
-    <form method="post" action="/_tesseraql/admin/users/{{ user_id }}/disable">
+    <form method="post" th:action="|/_tesseraql/admin/users/${u.user_id}/disable|">
       <button type="submit" class="danger">Disable user</button>
     </form>
   </div>
 </section>
-{{/ user }}
+</th:block>
 <section id="roles">
   <h2>Roles</h2>
-  {{^ roles }}<p class="empty">No roles assigned.</p>{{/ roles }}
+  <p class="empty" th:if="${#lists.isEmpty(roles)}">No roles assigned.</p>
   <table>
     <thead><tr><th>Code</th><th>Name</th><th>Grant</th></tr></thead>
     <tbody>
-    {{# roles }}
-      <tr><td>{{ role_code }}</td><td>{{ role_name }}</td><td>{{ grant_type }}</td></tr>
-    {{/ roles }}
+      <tr th:each="r : ${roles}">
+        <td th:text="${r.role_code}"></td><td th:text="${r.role_name}"></td><td th:text="${r.grant_type}"></td>
+      </tr>
     </tbody>
   </table>
 </section>
 <section id="groups">
   <h2>Groups</h2>
-  {{^ groups }}<p class="empty">No groups assigned.</p>{{/ groups }}
+  <p class="empty" th:if="${#lists.isEmpty(groups)}">No groups assigned.</p>
   <table>
     <thead><tr><th>Code</th><th>Name</th><th>Tenant</th></tr></thead>
     <tbody>
-    {{# groups }}
-      <tr><td>{{ group_code }}</td><td>{{ group_name }}</td><td>{{ tenant_id }}</td></tr>
-    {{/ groups }}
+      <tr th:each="g : ${groups}">
+        <td th:text="${g.group_code}"></td><td th:text="${g.group_name}"></td><td th:text="${g.tenant_id}"></td>
+      </tr>
     </tbody>
   </table>
 </section>
 <section id="permissions">
   <h2>Effective permissions</h2>
-  {{^ permissions }}<p class="empty">No permissions granted.</p>{{/ permissions }}
+  <p class="empty" th:if="${#lists.isEmpty(permissions)}">No permissions granted.</p>
   <table>
     <thead><tr><th>Code</th><th>Name</th></tr></thead>
     <tbody>
-    {{# permissions }}
-      <tr><td>{{ permission_code }}</td><td>{{ permission_name }}</td></tr>
-    {{/ permissions }}
+      <tr th:each="p : ${permissions}">
+        <td th:text="${p.permission_code}"></td><td th:text="${p.permission_name}"></td>
+      </tr>
     </tbody>
   </table>
 </section>

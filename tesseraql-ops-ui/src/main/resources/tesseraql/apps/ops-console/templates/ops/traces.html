@@ -13,22 +13,18 @@
 </header>
 <main>
 <section>
-  {{^ traces.hasSpans }}<p class="empty">No traces retained.</p>{{/ traces.hasSpans }}
-  {{# traces.hasSpans }}
-  <table>
+  <p class="empty" th:unless="${traces.hasSpans}">No traces retained.</p>
+  <table th:if="${traces.hasSpans}">
     <thead><tr><th>Span</th><th>Total (ms)</th><th>Self (ms)</th><th></th></tr></thead>
     <tbody>
-    {{# traces.spans }}
-      <tr{{# slow }} class="slow"{{/ slow }}>
-        <td style="padding-left:{{ indentPx }}px"><span class="span-name">{{ name }}</span></td>
-        <td>{{ totalMs }}</td>
-        <td>{{ selfMs }}</td>
-        <td>{{# error }}<span class="span-error">error</span>{{/ error }}</td>
+      <tr th:each="s : ${traces.spans}" th:classappend="${s.slow} ? 'slow'">
+        <td th:style="'padding-left:' + ${s.indentPx} + 'px'"><span class="span-name" th:text="${s.name}"></span></td>
+        <td th:text="${s.totalMs}"></td>
+        <td th:text="${s.selfMs}"></td>
+        <td><span class="span-error" th:if="${s.error}">error</span></td>
       </tr>
-    {{/ traces.spans }}
     </tbody>
   </table>
-  {{/ traces.hasSpans }}
 </section>
 </main>
 </body>

@@ -9,23 +9,21 @@
 <body>
 <header class="topbar">
   <h1>IAM Admin · Users</h1>
-  {{# total }}<span class="badge">{{ count }} total</span>{{/ total }}
+  <span class="badge" th:each="t : ${total}">[[${t.count}]] total</span>
 </header>
 <main>
 <section>
-  {{^ users }}<p class="empty">No users found.</p>{{/ users }}
+  <p class="empty" th:if="${#lists.isEmpty(users)}">No users found.</p>
   <table>
     <thead><tr><th>Login</th><th>Display name</th><th>Email</th><th>Status</th><th>Tenant</th></tr></thead>
     <tbody>
-    {{# users }}
-      <tr>
-        <td><a href="/_tesseraql/admin/users/{{ user_id }}">{{ login_id }}</a></td>
-        <td>{{ display_name }}</td>
-        <td>{{ email }}</td>
-        <td>{{ status }}</td>
-        <td>{{ tenant_id }}</td>
+      <tr th:each="u : ${users}">
+        <td><a th:href="|/_tesseraql/admin/users/${u.user_id}|" th:text="${u.login_id}"></a></td>
+        <td th:text="${u.display_name}"></td>
+        <td th:text="${u.email}"></td>
+        <td th:class="'status-' + ${#strings.toLowerCase(u.status)}" th:text="${u.status}"></td>
+        <td th:text="${u.tenant_id}"></td>
       </tr>
-    {{/ users }}
     </tbody>
   </table>
 </section>

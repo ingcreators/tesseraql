@@ -4,11 +4,10 @@ tesseraql:
   scim:
     enabled: true
     groups:
-      enabled: {{{ groups }}}
+      enabled: [(${groups})]
     outbound:
-      enabled: {{{ outbound }}}
-{{# outboundUrl }}
-      target:
-        url: "{{{ outboundUrl }}}"
-        token: "{{{ tokenRef }}}"
-{{/ outboundUrl }}
+      enabled: [(${outbound})]
+[# th:if="${!#strings.isEmpty(outboundUrl)}"]      target:
+        url: "[(${outboundUrl})]"
+        token: "[(${tokenRef})]"
+[/]
