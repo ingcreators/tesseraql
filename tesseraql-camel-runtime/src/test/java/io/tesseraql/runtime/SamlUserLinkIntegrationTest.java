@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.tesseraql.identity.DefaultIdentityPack;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.net.ServerSocket;
@@ -17,6 +18,10 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.security.KeyPair;
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.ResultSet;
+import java.sql.Statement;
 import java.time.Instant;
 import java.util.Base64;
 import java.util.Comparator;
@@ -31,12 +36,12 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
 /**
- * Integration test for the SAML ACS route (design ch. 10.14): a signed SAML response posted to
- * {@code /_tesseraql/saml/acs} authenticates the user and issues a session cookie, while a tampered
- * response is rejected with 401.
+ * Integration test for SAML userLink (design ch. 10.14): a federated login resolves the local
+ * identity-store user (so authorization uses local roles), and an unknown federated subject is
+ * just-in-time provisioned into the managed realm.
  */
 @Testcontainers
-class SamlAcsIntegrationTest {
+class SamlUserLinkIntegrationTest {
 
     @Container
     static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>("postgres:16-alpine");
@@ -53,6 +58,7 @@ class SamlAcsIntegrationTest {
     @BeforeAll
     static void start() throws Exception {
         keyPair = SamlTestSupport.generateKeyPair();
+        seedIdentitySchema();
         appHome = prepareAppHome();
         runtime = TesseraqlRuntime.start(appHome, freePort());
     }
@@ -68,32 +74,41 @@ class SamlAcsIntegrationTest {
     }
 
     @Test
-    void signedResponseIssuesSession() throws Exception {
-        HttpResponse<String> response = postAcs(saml());
+    void existingFederatedUserResolvesLocalIdentity() throws Exception {
+        HttpResponse<String> response = postAcs("alice", Map.of());
         assertThat(response.statusCode()).isEqualTo(200);
-        assertThat(response.headers().firstValue("Set-Cookie")).isPresent()
-                .get().asString().contains("tesseraql_sid=");
         JsonNode body = MAPPER.readTree(response.body());
-        assertThat(body.get("ok").asBoolean()).isTrue();
         assertThat(body.get("loginId").asText()).isEqualTo("alice");
-        assertThat(body.get("subject").asText()).isEqualTo("alice@idp.example.com");
+        // subject is the local user_id (not the NameID), proving the local account was resolved.
+        assertThat(body.get("subject").asText()).isEqualTo("user-alice");
     }
 
     @Test
-    void tamperedResponseIsRejected() throws Exception {
-        String saml = saml().replace("alice@idp.example.com", "mallory@idp.example.com");
-        assertThat(postAcs(saml).statusCode()).isEqualTo(401);
+    void unknownFederatedUserIsProvisioned() throws Exception {
+        HttpResponse<String> response = postAcs("bob@new.example.com",
+                Map.of("email", List.of("bob@corp.example.com")));
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(MAPPER.readTree(response.body()).get("subject").asText())
+                .isNotBlank().isNotEqualTo("bob@new.example.com");
+
+        try (Connection connection = DriverManager.getConnection(
+                POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword());
+                Statement statement = connection.createStatement();
+                ResultSet rs = statement.executeQuery("select display_name, email, status from "
+                        + "tql_users where login_id = 'bob@new.example.com'")) {
+            assertThat(rs.next()).isTrue();
+            assertThat(rs.getString("display_name")).isEqualTo("bob@new.example.com");
+            assertThat(rs.getString("email")).isEqualTo("bob@corp.example.com");
+            assertThat(rs.getString("status")).isEqualTo("ACTIVE");
+        }
     }
 
-    private static String saml() throws Exception {
-        return SamlTestSupport.signedResponse(keyPair.getPrivate(), "alice@idp.example.com",
-                AUDIENCE, RECIPIENT, NOW,
-                Map.of("uid", List.of("alice"), "role", List.of("ADMIN", "USER")));
-    }
-
-    private static HttpResponse<String> postAcs(String samlResponseXml) throws Exception {
+    private static HttpResponse<String> postAcs(String nameId, Map<String, List<String>> attributes)
+            throws Exception {
+        String xml = SamlTestSupport.signedResponse(keyPair.getPrivate(), nameId, AUDIENCE, RECIPIENT,
+                NOW, attributes);
         String body = "SAMLResponse=" + URLEncoder.encode(
-                Base64.getEncoder().encodeToString(samlResponseXml.getBytes(StandardCharsets.UTF_8)),
+                Base64.getEncoder().encodeToString(xml.getBytes(StandardCharsets.UTF_8)),
                 StandardCharsets.UTF_8);
         return HttpClient.newHttpClient().send(
                 HttpRequest.newBuilder(URI.create(
@@ -104,9 +119,23 @@ class SamlAcsIntegrationTest {
                 HttpResponse.BodyHandlers.ofString());
     }
 
+    private static void seedIdentitySchema() throws Exception {
+        try (Connection connection = DriverManager.getConnection(
+                POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword());
+                Statement statement = connection.createStatement()) {
+            for (String ddl : DefaultIdentityPack.schema("postgres").split(";")) {
+                if (!ddl.isBlank()) {
+                    statement.execute(ddl);
+                }
+            }
+            statement.execute("insert into tql_users (user_id, login_id, display_name, status) "
+                    + "values ('user-alice', 'alice', 'Alice', 'ACTIVE')");
+        }
+    }
+
     private static Path prepareAppHome() throws IOException {
         Path source = Paths.get("..", "examples", "user-admin-app").toAbsolutePath().normalize();
-        Path target = Files.createTempDirectory("tesseraql-saml-acs-it");
+        Path target = Files.createTempDirectory("tesseraql-saml-link-it");
         try (Stream<Path> files = Files.walk(source)) {
             files.forEach(path -> copy(source, target, path));
         }
@@ -133,8 +162,10 @@ class SamlAcsIntegrationTest {
                     idp:
                       publicKey: saml/idp.pem
                     attributes:
-                      loginId: uid
-                      roles: role
+                      email: email
+                    link:
+                      enabled: true
+                      provision: true
                 """.formatted(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword(),
                 AUDIENCE, RECIPIENT));
         return target;

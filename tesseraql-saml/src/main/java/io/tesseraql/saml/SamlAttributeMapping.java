@@ -7,10 +7,11 @@ package io.tesseraql.saml;
  *
  * @param loginId     attribute holding the login id (falls back to the NameID when null)
  * @param displayName attribute holding the display name
+ * @param email       attribute holding the email address (used when provisioning a local user)
  * @param roles       attribute holding role values (may be multi-valued)
  * @param groups      attribute holding group values (may be multi-valued)
  * @param tenant      attribute holding the tenant id
  */
-public record SamlAttributeMapping(String loginId, String displayName, String roles, String groups,
-        String tenant) {
+public record SamlAttributeMapping(String loginId, String displayName, String email, String roles,
+        String groups, String tenant) {
 }

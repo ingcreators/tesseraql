@@ -9,6 +9,7 @@ public final class IdentityContracts {
 
     public static final String FIND_USER_BY_LOGIN = "find-user-by-login";
     public static final String FIND_USER_BY_ID = "find-user-by-id";
+    public static final String CREATE_USER = "create-user";
     public static final String FIND_CREDENTIAL_BY_LOGIN = "find-credential-by-login";
     public static final String FIND_ROLES_BY_USER_ID = "find-roles-by-user-id";
     public static final String FIND_PERMISSIONS_BY_USER_ID = "find-permissions-by-user-id";

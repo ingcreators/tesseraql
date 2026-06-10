@@ -29,12 +29,19 @@ final class SamlAcsRouteBuilder extends RouteBuilder {
     private final SamlResponseValidator validator;
     private final SamlAttributeMapping mapping;
     private final SessionStore sessions;
+    private final SamlUserLinker linker;
 
     SamlAcsRouteBuilder(SamlResponseValidator validator, SamlAttributeMapping mapping,
             SessionStore sessions) {
+        this(validator, mapping, sessions, null);
+    }
+
+    SamlAcsRouteBuilder(SamlResponseValidator validator, SamlAttributeMapping mapping,
+            SessionStore sessions, SamlUserLinker linker) {
         this.validator = validator;
         this.mapping = mapping;
         this.sessions = sessions;
+        this.linker = linker;
     }
 
     @Override
@@ -57,7 +64,10 @@ final class SamlAcsRouteBuilder extends RouteBuilder {
         }
         String xml = new String(Base64.getMimeDecoder().decode(encoded), StandardCharsets.UTF_8);
         SamlAssertion assertion = validator.validate(xml, Instant.now());
-        Principal principal = toPrincipal(assertion);
+        Principal principal = linker == null
+                ? toPrincipal(assertion)
+                : linker.resolve(loginId(assertion), attribute(assertion, mapping.displayName()),
+                        attribute(assertion, mapping.email()), attribute(assertion, mapping.tenant()));
 
         String sessionId = sessions.create(principal);
         exchange.getMessage().setHeader(Exchange.HTTP_RESPONSE_CODE, 200);
@@ -68,24 +78,27 @@ final class SamlAcsRouteBuilder extends RouteBuilder {
                 Map.of("ok", true, "loginId", principal.loginId(), "subject", principal.subject())));
     }
 
-    /** Maps a validated assertion onto a principal using the configured attribute mapping. */
+    /** Maps a validated assertion onto a principal from its attributes (IdP-asserted roles). */
     private Principal toPrincipal(SamlAssertion assertion) {
-        String loginId = mapping.loginId() == null
-                ? assertion.nameId()
-                : assertion.attribute(mapping.loginId()).orElse(assertion.nameId());
-        String displayName = mapping.displayName() == null
-                ? null : assertion.attribute(mapping.displayName()).orElse(null);
-        String tenantId = mapping.tenant() == null
-                ? null : assertion.attribute(mapping.tenant()).orElse(null);
-        List<String> roles = values(assertion, mapping.roles());
-        List<String> groups = values(assertion, mapping.groups());
-
         Map<String, Object> claims = new LinkedHashMap<>(assertion.attributes());
         if (assertion.sessionIndex() != null) {
             claims.put("sessionIndex", assertion.sessionIndex());
         }
-        return new Principal(assertion.nameId(), loginId, displayName, tenantId,
-                groups, roles, List.of(), claims);
+        return new Principal(assertion.nameId(), loginId(assertion),
+                attribute(assertion, mapping.displayName()), attribute(assertion, mapping.tenant()),
+                values(assertion, mapping.groups()), values(assertion, mapping.roles()),
+                List.of(), claims);
+    }
+
+    /** The login id: the configured attribute when present, otherwise the subject NameID. */
+    private String loginId(SamlAssertion assertion) {
+        return mapping.loginId() == null
+                ? assertion.nameId()
+                : assertion.attribute(mapping.loginId()).orElse(assertion.nameId());
+    }
+
+    private static String attribute(SamlAssertion assertion, String name) {
+        return name == null ? null : assertion.attribute(name).orElse(null);
     }
 
     private static List<String> values(SamlAssertion assertion, String attribute) {

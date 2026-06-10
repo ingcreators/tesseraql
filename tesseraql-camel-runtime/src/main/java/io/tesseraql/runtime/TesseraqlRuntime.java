@@ -261,7 +261,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
                     new PasswordAuthenticator(identity), realm, sessionStore));
             if (manifest.config().getString("tesseraql.saml.enabled")
                     .map(Boolean::parseBoolean).orElse(false)) {
-                context.addRoutes(buildSamlAcs(manifest, sessionStore));
+                context.addRoutes(buildSamlAcs(manifest, sessionStore, identity, realm));
             }
             if (manifest.config().getString("tesseraql.studio.enabled")
                     .map(Boolean::parseBoolean).orElse(true)) {
@@ -327,7 +327,8 @@ public final class TesseraqlRuntime implements AutoCloseable {
      * public-key file under the app home), and the assertion-to-principal attribute mapping.
      */
     private static SamlAcsRouteBuilder buildSamlAcs(AppManifest manifest,
-            io.tesseraql.security.session.SessionStore sessions) {
+            io.tesseraql.security.session.SessionStore sessions, IdentityService identity,
+            RealmConfig realm) {
         var config = manifest.config();
         String audience = config.requireString("tesseraql.saml.sp.audience");
         String recipient = config.getString("tesseraql.saml.sp.acsUrl").orElse(null);
@@ -338,10 +339,18 @@ public final class TesseraqlRuntime implements AutoCloseable {
         io.tesseraql.saml.SamlAttributeMapping mapping = new io.tesseraql.saml.SamlAttributeMapping(
                 config.getString("tesseraql.saml.attributes.loginId").orElse(null),
                 config.getString("tesseraql.saml.attributes.displayName").orElse(null),
+                config.getString("tesseraql.saml.attributes.email").orElse(null),
                 config.getString("tesseraql.saml.attributes.roles").orElse(null),
                 config.getString("tesseraql.saml.attributes.groups").orElse(null),
                 config.getString("tesseraql.saml.attributes.tenant").orElse(null));
-        return new SamlAcsRouteBuilder(validator, mapping, sessions);
+        // When link mode is on, resolve (and optionally provision) a local user so authorization uses
+        // locally-managed roles instead of IdP-asserted ones (design ch. 10.14 userLink).
+        boolean link = config.getString("tesseraql.saml.link.enabled")
+                .map(Boolean::parseBoolean).orElse(false);
+        SamlUserLinker linker = link ? new SamlUserLinker(identity, realm,
+                config.getString("tesseraql.saml.link.provision")
+                        .map(Boolean::parseBoolean).orElse(false)) : null;
+        return new SamlAcsRouteBuilder(validator, mapping, sessions, linker);
     }
 
     private static byte[] readSamlBytes(AppManifest manifest, String relative) {
