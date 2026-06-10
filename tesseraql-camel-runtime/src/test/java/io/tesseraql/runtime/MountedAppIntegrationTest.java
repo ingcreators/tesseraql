@@ -157,7 +157,7 @@ class MountedAppIntegrationTest {
         assertThat(response.statusCode()).isEqualTo(200);
         assertThat(response.headers().firstValue("content-type"))
                 .hasValueSatisfying(value -> assertThat(value).contains("text/css"));
-        assertThat(response.body()).contains(".topbar");
+        assertThat(response.body()).contains(".hc-shell__main");
     }
 
     @Test

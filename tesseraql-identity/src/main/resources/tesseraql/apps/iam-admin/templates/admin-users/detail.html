@@ -1,18 +1,11 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="dark">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>TesseraQL IAM Admin · user</title>
-<link rel="stylesheet" href="/assets/vendor/hypermedia-components__core/dist/hc.min.css">
-<link rel="stylesheet" href="/assets/_tesseraql/tesseraql.css">
-</head>
-<body>
-<header class="topbar">
-  <h1><th:block th:each="u : ${user}" th:text="${u.login_id}"/><th:block th:if="${#lists.isEmpty(user)}">Unknown user</th:block></h1>
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{tql/shell :: page('IAM Admin · User', ~{:: #page-header}, ~{:: #page-content})}">
+<th:block id="page-header">
+  <span class="hc-badge" th:each="u : ${user}" th:text="${u.login_id}"></span>
   <a class="back" href="/_tesseraql/admin/users">&larr; users</a>
-</header>
-<main>
+</th:block>
+<div id="page-content">
 <section class="hc-card" th:if="${#lists.isEmpty(user)}"><p class="empty">User not found.</p></section>
 <th:block th:each="u : ${user}">
 <section class="hc-card">
@@ -73,6 +66,5 @@
     </tbody>
   </table>
 </section>
-</main>
-</body>
+</div>
 </html>

@@ -1,18 +1,10 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="dark">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>TesseraQL Studio · identity realm wizard</title>
-<link rel="stylesheet" href="/assets/vendor/hypermedia-components__core/dist/hc.min.css">
-<link rel="stylesheet" href="/assets/_tesseraql/tesseraql.css">
-</head>
-<body>
-<header class="topbar">
-  <h1>Identity realm wizard</h1>
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{tql/shell :: page('Identity realm wizard', ~{:: #page-header}, ~{:: #page-content})}">
+<th:block id="page-header">
   <a class="back" href="/_tesseraql/studio/ui/wizard">&larr; wizards</a>
-</header>
-<main>
+</th:block>
+<div id="page-content">
 <section class="hc-card">
   <p class="hint">Generates a tesseraql-identity.yml fragment to merge into config/tesseraql.yml.</p>
   <form method="post" action="/_tesseraql/studio/ui/wizard/identity">
@@ -29,6 +21,5 @@
     <div class="toolbar"><button type="submit" class="hc-button" data-variant="primary">Generate &amp; download config</button></div>
   </form>
 </section>
-</main>
-</body>
+</div>
 </html>

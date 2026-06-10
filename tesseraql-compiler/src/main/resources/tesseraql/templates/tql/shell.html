@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<!-- The framework page layout (design ch. 12): the Hypermedia Components app shell, shared by
+     every app as ~{tql/shell :: page(title, header, content)}. `header` receives per-page extras
+     for the top bar (badges, action links); `content` becomes the main region. Pass ~{} for an
+     empty slot. -->
+<html xmlns:th="http://www.thymeleaf.org" th:fragment="page(title, header, content)"
+      lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title th:text="${title}">TesseraQL</title>
+<link rel="stylesheet" href="/assets/vendor/hypermedia-components__core/dist/hc.min.css">
+<link rel="stylesheet" href="/assets/_tesseraql/tesseraql.css">
+<script src="/assets/vendor/htmx.org/dist/htmx.min.js" defer></script>
+<script type="module" src="/assets/_tesseraql/tesseraql.js"></script>
+</head>
+<body>
+<div class="hc-shell">
+  <header class="hc-shell__header">
+    <button class="hc-button" data-variant="ghost" data-hc-shell-toggle
+            aria-label="Open navigation" type="button">&#9776;</button>
+    <strong th:text="${title}">TesseraQL</strong>
+    <th:block th:replace="${header}"/>
+  </header>
+  <nav class="hc-shell__sidebar" aria-label="System">
+    <a href="/_tesseraql/ops/console">Operations</a>
+    <a href="/_tesseraql/studio/ui">Studio</a>
+    <a href="/_tesseraql/admin/users">IAM Admin</a>
+  </nav>
+  <main class="hc-shell__main">
+    <th:block th:replace="${content}"/>
+  </main>
+</div>
+</body>
+</html>

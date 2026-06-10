@@ -29,6 +29,19 @@ public final class Templates {
 
     private static TemplateEngine engineFor(Path root) {
         return ENGINES.computeIfAbsent(root, key -> {
+            // Framework-shared fragments (the tql/* namespace, e.g. the hc-shell page layout)
+            // resolve from the classpath so every app can th:replace them without copying.
+            org.thymeleaf.templateresolver.ClassLoaderTemplateResolver shared =
+                    new org.thymeleaf.templateresolver.ClassLoaderTemplateResolver(
+                            Templates.class.getClassLoader());
+            shared.setPrefix("tesseraql/templates/");
+            shared.setSuffix(".html");
+            shared.setTemplateMode(TemplateMode.HTML);
+            shared.setResolvablePatterns(java.util.Set.of("tql/*"));
+            shared.setCharacterEncoding("UTF-8");
+            shared.setCacheable(true);
+            shared.setOrder(0);
+
             FileTemplateResolver html = new FileTemplateResolver();
             html.setPrefix(key.toString() + java.io.File.separator);
             html.setTemplateMode(TemplateMode.HTML);
@@ -45,6 +58,7 @@ public final class Templates {
             text.setOrder(2);
 
             TemplateEngine engine = new TemplateEngine();
+            engine.addTemplateResolver(shared);
             engine.addTemplateResolver(html);
             engine.addTemplateResolver(text);
             return engine;

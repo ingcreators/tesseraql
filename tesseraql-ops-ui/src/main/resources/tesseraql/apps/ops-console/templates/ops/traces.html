@@ -1,18 +1,10 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="dark">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>TesseraQL Operations Console · traces</title>
-<link rel="stylesheet" href="/assets/vendor/hypermedia-components__core/dist/hc.min.css">
-<link rel="stylesheet" href="/assets/_tesseraql/tesseraql.css">
-</head>
-<body>
-<header class="topbar">
-  <h1>Traces</h1>
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{tql/shell :: page('Traces', ~{:: #page-header}, ~{:: #page-content})}">
+<th:block id="page-header">
   <a class="back" href="/_tesseraql/ops/console">&larr; console</a>
-</header>
-<main>
+</th:block>
+<div id="page-content">
 <section class="hc-card">
   <p class="empty" th:unless="${traces.hasSpans}">No traces retained.</p>
   <table class="hc-table" th:if="${traces.hasSpans}">
@@ -27,6 +19,5 @@
     </tbody>
   </table>
 </section>
-</main>
-</body>
+</div>
 </html>

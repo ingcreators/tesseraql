@@ -1,21 +1,13 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="dark">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>TesseraQL Operations Console</title>
-<link rel="stylesheet" href="/assets/vendor/hypermedia-components__core/dist/hc.min.css">
-<link rel="stylesheet" href="/assets/_tesseraql/tesseraql.css">
-<script src="/assets/vendor/htmx.org/dist/htmx.min.js" defer></script>
-</head>
-<body>
-<header class="topbar">
-  <h1>TesseraQL Operations Console</h1>
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{tql/shell :: page('TesseraQL Operations Console', ~{:: #page-header}, ~{:: #page-content})}">
+<th:block id="page-header">
   <span class="actions"><a href="/_tesseraql/ops/console/traces">traces &rarr;</a> <a href="/_tesseraql/ops/console">refresh</a></span>
   <span class="hc-badge" data-variant="success" th:if="${ops.ok}">UP</span>
   <span class="hc-badge" data-variant="warning" th:if="${ops.warning}">WARN</span>
-</header>
-<main hx-get="/_tesseraql/ops/console" hx-trigger="every 15s" hx-select="main" hx-target="this" hx-swap="outerHTML">
+</th:block>
+<div id="page-content" hx-get="/_tesseraql/ops/console" hx-trigger="every 15s"
+     hx-select="#page-content" hx-target="this" hx-swap="outerHTML">
 <section class="hc-card" id="alerts" th:if="${ops.hasAlerts}">
   <h2>Alerts</h2>
   <ul class="alerts">
@@ -82,6 +74,5 @@
   <p class="empty" th:unless="${ops.hasPinning}">No pinning events detected.</p>
   <p class="summary" th:if="${ops.hasPinning}">Pinning events: <strong th:text="${ops.pinningCount}"></strong></p>
 </section>
-</main>
-</body>
+</div>
 </html>
