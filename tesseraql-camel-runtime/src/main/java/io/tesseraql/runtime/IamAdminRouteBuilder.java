@@ -23,6 +23,7 @@ final class IamAdminRouteBuilder extends RouteBuilder {
 
     private static final String VIEW = "tesseraql-auth:authenticate?auth=bearer";
     private static final String AUTHZ = "tesseraql-auth:authorize?policy=iam.admin.view";
+    private static final String AUTHZ_WRITE = "tesseraql-auth:authorize?policy=iam.admin.write";
     private static final String CSP = "default-src 'self'; style-src 'self' 'unsafe-inline'; "
             + "frame-ancestors 'none'";
 
@@ -41,12 +42,30 @@ final class IamAdminRouteBuilder extends RouteBuilder {
 
         rest().get("/_tesseraql/admin/users").to("direct:admin.users");
         rest().get("/_tesseraql/admin/users/{id}").to("direct:admin.user");
+        rest().post("/_tesseraql/admin/users/{id}/enable").to("direct:admin.user.enable");
+        rest().post("/_tesseraql/admin/users/{id}/disable").to("direct:admin.user.disable");
 
         from("direct:admin.users").routeId("admin.users")
                 .to(VIEW).to(AUTHZ).process(usersPage());
 
         from("direct:admin.user").routeId("admin.user")
-                .to(VIEW).to(AUTHZ).process(userPage());
+                .to(VIEW).to(AUTHZ).process(userPage(null));
+
+        from("direct:admin.user.enable").routeId("admin.user.enable")
+                .to(VIEW).to(AUTHZ_WRITE).process(statusChange(IdentityContracts.ENABLE_USER,
+                        "User enabled."));
+
+        from("direct:admin.user.disable").routeId("admin.user.disable")
+                .to(VIEW).to(AUTHZ_WRITE).process(statusChange(IdentityContracts.DISABLE_USER,
+                        "User disabled."));
+    }
+
+    private Processor statusChange(String contract, String message) {
+        return exchange -> {
+            String id = exchange.getMessage().getHeader("id", String.class);
+            identity.executeUpdate(realm, contract, Map.of("userId", id));
+            userPage(message).process(exchange);
+        };
     }
 
     private Processor usersPage() {
@@ -60,7 +79,7 @@ final class IamAdminRouteBuilder extends RouteBuilder {
         };
     }
 
-    private Processor userPage() {
+    private Processor userPage(String status) {
         return exchange -> {
             String id = exchange.getMessage().getHeader("id", String.class);
             Map<String, Object> params = Map.of("userId", id);
@@ -74,7 +93,8 @@ final class IamAdminRouteBuilder extends RouteBuilder {
             String html = IamAdminConsole.renderUser(found.get(0),
                     identity.execute(realm, IdentityContracts.FIND_ROLES_BY_USER_ID, params),
                     identity.execute(realm, IdentityContracts.FIND_GROUPS_BY_USER_ID, params),
-                    identity.execute(realm, IdentityContracts.FIND_PERMISSIONS_BY_USER_ID, params));
+                    identity.execute(realm, IdentityContracts.FIND_PERMISSIONS_BY_USER_ID, params),
+                    realm.capabilities().userWriteAllowed(), status);
             writeHtml(exchange, 200, html);
         };
     }

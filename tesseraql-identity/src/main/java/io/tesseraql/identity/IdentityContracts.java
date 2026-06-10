@@ -16,6 +16,8 @@ public final class IdentityContracts {
     public static final String FIND_GROUPS_BY_USER_ID = "find-groups-by-user-id";
     public static final String LIST_USERS = "list-users";
     public static final String COUNT_USERS = "count-users";
+    public static final String ENABLE_USER = "enable-user";
+    public static final String DISABLE_USER = "disable-user";
 
     private IdentityContracts() {
     }

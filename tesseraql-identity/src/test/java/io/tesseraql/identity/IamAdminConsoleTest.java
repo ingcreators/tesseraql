@@ -59,6 +59,40 @@ class IamAdminConsoleTest {
     }
 
     @Test
+    void rendersDisableActionWhenWritableAndActive() {
+        Map<String, Object> user = Map.of("user_id", "u1", "login_id", "sato", "status", "ACTIVE");
+
+        String html = IamAdminConsole.renderUser(user, List.of(), List.of(), List.of(), true, null);
+
+        assertThat(html).contains("id=\"actions\"").contains("Disable user");
+        assertThat(html).contains("action=\"/_tesseraql/admin/users/u1/disable\"");
+        assertThat(html).doesNotContain("Enable user");
+    }
+
+    @Test
+    void rendersEnableActionWhenWritableAndDisabled() {
+        Map<String, Object> user = Map.of("user_id", "u1", "login_id", "sato", "status", "DISABLED");
+
+        String html = IamAdminConsole.renderUser(user, List.of(), List.of(), List.of(), true,
+                "User disabled.");
+
+        assertThat(html).contains("Enable user");
+        assertThat(html).contains("action=\"/_tesseraql/admin/users/u1/enable\"");
+        assertThat(html).contains("class=\"status\"").contains("User disabled.");
+        assertThat(html).doesNotContain("Disable user");
+    }
+
+    @Test
+    void omitsActionsWhenReadOnly() {
+        Map<String, Object> user = Map.of("user_id", "u1", "login_id", "sato", "status", "ACTIVE");
+
+        String html = IamAdminConsole.renderUser(user, List.of(), List.of(), List.of(), false, null);
+
+        assertThat(html).doesNotContain("id=\"actions\"")
+                .doesNotContain("Disable user").doesNotContain("Enable user");
+    }
+
+    @Test
     void escapesDynamicValues() {
         List<Map<String, Object>> users = List.of(
                 Map.of("user_id", "u1", "login_id", "<script>", "display_name", "a&b",

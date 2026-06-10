@@ -52,10 +52,25 @@ public final class IamAdminConsole {
     /** Renders the user detail page: summary plus roles, groups and effective permissions. */
     public static String renderUser(Map<String, Object> user, List<Map<String, Object>> roles,
             List<Map<String, Object>> groups, List<Map<String, Object>> permissions) {
+        return renderUser(user, roles, groups, permissions, false, null);
+    }
+
+    /**
+     * Renders the user detail page. When {@code writable} (the realm allows user management), an
+     * Actions section offers to enable or disable the user via form POSTs. {@code status} is an
+     * optional banner showing the outcome of the last action.
+     */
+    public static String renderUser(Map<String, Object> user, List<Map<String, Object>> roles,
+            List<Map<String, Object>> groups, List<Map<String, Object>> permissions,
+            boolean writable, String status) {
         StringBuilder out = open("TesseraQL IAM Admin &middot; user");
         out.append("<header class=\"topbar\"><h1>").append(escape(str(user, "login_id")))
                 .append("</h1><a class=\"back\" href=\"").append(BASE)
                 .append("\">&larr; users</a></header>\n<main>\n");
+
+        if (status != null && !status.isBlank()) {
+            out.append("<p class=\"status\">").append(escape(status)).append("</p>\n");
+        }
 
         out.append("<section><h2>Summary</h2><table class=\"kv\"><tbody>")
                 .append(kv("User id", str(user, "user_id")))
@@ -64,6 +79,10 @@ public final class IamAdminConsole {
                 .append(kv("Status", str(user, "status")))
                 .append(kv("Tenant", str(user, "tenant_id")))
                 .append("</tbody></table></section>\n");
+
+        if (writable) {
+            renderActions(out, str(user, "user_id"), str(user, "status"));
+        }
 
         table(out, "roles", "Roles", roles,
                 List.of("role_code", "role_name", "grant_type"),
@@ -77,6 +96,20 @@ public final class IamAdminConsole {
 
         out.append("</main>\n</body>\n</html>\n");
         return out.toString();
+    }
+
+    private static void renderActions(StringBuilder out, String userId, String currentStatus) {
+        String encId = URLEncoder.encode(userId, StandardCharsets.UTF_8);
+        out.append("<section id=\"actions\"><h2>Actions</h2><div class=\"toolbar\">");
+        if ("ACTIVE".equalsIgnoreCase(currentStatus)) {
+            out.append("<form method=\"post\" action=\"").append(BASE).append('/').append(escape(encId))
+                    .append("/disable\"><button type=\"submit\" class=\"danger\">Disable user</button>")
+                    .append("</form>");
+        } else {
+            out.append("<form method=\"post\" action=\"").append(BASE).append('/').append(escape(encId))
+                    .append("/enable\"><button type=\"submit\">Enable user</button></form>");
+        }
+        out.append("</div></section>\n");
     }
 
     private static void table(StringBuilder out, String id, String title,
@@ -149,6 +182,12 @@ public final class IamAdminConsole {
                 + "background:#334155}"
                 + ".empty{color:#94a3b8;font-style:italic;margin:0}"
                 + ".status-active{color:#86efac}.status-disabled{color:#fca5a5}"
-                + ".status-locked{color:#fca5a5}";
+                + ".status-locked{color:#fca5a5}"
+                + ".toolbar{display:flex;gap:10px}"
+                + "button{background:#2563eb;color:#fff;border:0;border-radius:6px;"
+                + "padding:8px 16px;font-size:13px;cursor:pointer}"
+                + "button.danger{background:#9a3412}"
+                + ".status{background:#14532d;color:#dcfce7;border-radius:6px;padding:8px 12px;"
+                + "margin:0 0 16px}";
     }
 }

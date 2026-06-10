@@ -73,6 +73,11 @@ tesseraql:
           - role: ADMIN
           - role: IAM_ADMIN
           - permission: iam:admin:view
+      iam.admin.write:
+        anyOf:
+          - role: ADMIN
+          - role: IAM_ADMIN
+          - permission: iam:admin:write
       ops.batch.view:
         anyOf:
           - role: ADMIN

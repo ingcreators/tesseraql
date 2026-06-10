@@ -91,6 +91,36 @@ class IamAdminIntegrationTest {
     }
 
     @Test
+    void disableThenEnableUserViaForm() throws Exception {
+        // The detail page offers a Disable action for the writable (managed) realm.
+        HttpResponse<String> before = get("/_tesseraql/admin/users/u2", true);
+        assertThat(before.body()).contains("Disable user")
+                .contains("/_tesseraql/admin/users/u2/disable");
+
+        HttpResponse<String> disabled = post("/_tesseraql/admin/users/u2/disable");
+        assertThat(disabled.statusCode()).isEqualTo(200);
+        assertThat(disabled.body()).contains("User disabled.").contains("DISABLED")
+                .contains("Enable user");
+
+        HttpResponse<String> enabled = post("/_tesseraql/admin/users/u2/enable");
+        assertThat(enabled.statusCode()).isEqualTo(200);
+        assertThat(enabled.body()).contains("User enabled.").contains("ACTIVE")
+                .contains("Disable user");
+    }
+
+    @Test
+    void writeRequiresAuthentication() throws Exception {
+        HttpRequest request = HttpRequest.newBuilder(
+                        URI.create("http://localhost:" + runtime.port()
+                                + "/_tesseraql/admin/users/u2/disable"))
+                .POST(HttpRequest.BodyPublishers.noBody())
+                .build();
+        HttpResponse<String> response =
+                HttpClient.newHttpClient().send(request, HttpResponse.BodyHandlers.ofString());
+        assertThat(response.statusCode()).isEqualTo(401);
+    }
+
+    @Test
     void returnsNotFoundForUnknownUser() throws Exception {
         HttpResponse<String> response = get("/_tesseraql/admin/users/missing", true);
 
@@ -110,6 +140,15 @@ class IamAdminIntegrationTest {
             request.header("Authorization", "Bearer " + token());
         }
         return HttpClient.newHttpClient().send(request.build(), HttpResponse.BodyHandlers.ofString());
+    }
+
+    private static HttpResponse<String> post(String path) throws Exception {
+        HttpRequest request = HttpRequest.newBuilder(
+                        URI.create("http://localhost:" + runtime.port() + path))
+                .header("Authorization", "Bearer " + token())
+                .POST(HttpRequest.BodyPublishers.noBody())
+                .build();
+        return HttpClient.newHttpClient().send(request, HttpResponse.BodyHandlers.ofString());
     }
 
     private static String token() throws Exception {
