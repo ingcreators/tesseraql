@@ -1,5 +1,6 @@
 package io.tesseraql.scim;
 
+import io.tesseraql.core.dialect.SqlErrors;
 import io.tesseraql.core.sql.BoundParameter;
 import io.tesseraql.core.sql.BoundSql;
 import io.tesseraql.core.sql.SqlRenderer;
@@ -36,7 +37,7 @@ public final class ScimUserService {
             Map<String, Object> row = queryOne(contract.createSql(), ScimUserMapper.toParams(user));
             return row == null ? user : ScimUserMapper.fromRow(row);
         } catch (SQLException ex) {
-            if (ex.getSQLState() != null && ex.getSQLState().startsWith("23")) {
+            if (SqlErrors.isUniqueViolation(ex)) {
                 throw new ScimException(409, "uniqueness", "User already exists: " + user.userName());
             }
             throw new ScimException(500, null, "SCIM create failed: " + ex.getMessage());
@@ -64,7 +65,7 @@ public final class ScimUserService {
             }
             return ScimUserMapper.fromRow(row);
         } catch (SQLException ex) {
-            if (ex.getSQLState() != null && ex.getSQLState().startsWith("23")) {
+            if (SqlErrors.isUniqueViolation(ex)) {
                 throw new ScimException(409, "uniqueness", "User already exists: " + user.userName());
             }
             throw new ScimException(500, null, "SCIM replace failed: " + ex.getMessage());

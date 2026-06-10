@@ -1,5 +1,6 @@
 package io.tesseraql.scim;
 
+import io.tesseraql.core.dialect.SqlErrors;
 import java.sql.SQLException;
 import java.util.List;
 import java.util.Map;
@@ -34,7 +35,7 @@ public final class ScimGroupService {
             return findById(id).orElseThrow(
                     () -> new ScimException(500, null, "Group vanished after create: " + id));
         } catch (SQLException ex) {
-            if (ex.getSQLState() != null && ex.getSQLState().startsWith("23")) {
+            if (SqlErrors.isUniqueViolation(ex)) {
                 throw new ScimException(409, "uniqueness",
                         "Group already exists: " + group.displayName());
             }
@@ -93,7 +94,7 @@ public final class ScimGroupService {
             return findById(id)
                     .orElseThrow(() -> new ScimException(404, null, "Group not found: " + id));
         } catch (SQLException ex) {
-            if (ex.getSQLState() != null && ex.getSQLState().startsWith("23")) {
+            if (SqlErrors.isUniqueViolation(ex)) {
                 throw new ScimException(409, "uniqueness",
                         "Group already exists: " + group.displayName());
             }
@@ -147,8 +148,8 @@ public final class ScimGroupService {
         try {
             ScimSql.update(dataSource, sql, Map.of("groupId", groupId, "memberId", memberId));
         } catch (SQLException ex) {
-            if (ex.getSQLState() != null && ex.getSQLState().startsWith("23")) {
-                return; // membership already present / referent absent — keep PATCH idempotent
+            if (SqlErrors.isUniqueViolation(ex)) {
+                return; // membership already present — keep PATCH idempotent
             }
             throw new ScimException(500, null, "SCIM group " + what + " failed: " + ex.getMessage());
         }
