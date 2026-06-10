@@ -210,9 +210,12 @@ public final class RouteCompiler {
         return names;
     }
 
-    /** Builds an execution step URI: a tesseraql-iam contract or a tesseraql-sql file. */
+    /** Builds an execution step URI: a service provider, a tesseraql-iam contract or a SQL file. */
     private String executionUri(RouteFile routeFile, io.tesseraql.yaml.model.SqlBinding binding,
             String resultKey) {
+        if (binding.isService()) {
+            return "tesseraql-service:call?name=" + binding.service() + "&resultKey=" + resultKey;
+        }
         if (binding.isContract()) {
             return "tesseraql-iam:contract?name=" + binding.contract()
                     + "&mode=" + binding.effectiveMode() + "&resultKey=" + resultKey;
