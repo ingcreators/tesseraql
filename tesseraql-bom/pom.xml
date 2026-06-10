@@ -91,6 +91,13 @@
         <artifactId>tesseraql-cli</artifactId>
         <version>${project.version}</version>
       </dependency>
+      <!-- Self-hosted browser libraries, vendored as WebJars so the supply chain stays on Maven
+           Central and pages never reference external CDNs (design ch. 12, 50). -->
+      <dependency>
+        <groupId>org.webjars.npm</groupId>
+        <artifactId>htmx.org</artifactId>
+        <version>${htmx.version}</version>
+      </dependency>
     </dependencies>
   </dependencyManagement>
 </project>

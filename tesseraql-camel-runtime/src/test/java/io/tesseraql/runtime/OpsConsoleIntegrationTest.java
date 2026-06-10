@@ -76,6 +76,21 @@ class OpsConsoleIntegrationTest {
     }
 
     @Test
+    void overviewUsesSelfHostedHtmxForPolling() throws Exception {
+        HttpResponse<String> page = get("/_tesseraql/ops/console", true);
+        assertThat(page.body())
+                .contains("/assets/vendor/htmx.org/2.0.4/dist/htmx.min.js")
+                .contains("hx-trigger=\"every 15s\"");
+
+        // The vendored library serves from the classpath WebJar - no external CDN.
+        HttpResponse<String> htmx = get("/assets/vendor/htmx.org/2.0.4/dist/htmx.min.js", false);
+        assertThat(htmx.statusCode()).isEqualTo(200);
+        assertThat(htmx.headers().firstValue("content-type"))
+                .hasValueSatisfying(value -> assertThat(value).contains("text/javascript"));
+        assertThat(htmx.body()).contains("htmx");
+    }
+
+    @Test
     void rendersTraceTreePage() throws Exception {
         HttpResponse<String> response = get("/_tesseraql/ops/console/traces", true);
 

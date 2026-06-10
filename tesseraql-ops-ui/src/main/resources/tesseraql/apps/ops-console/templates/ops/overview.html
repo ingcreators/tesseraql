@@ -3,9 +3,9 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta http-equiv="refresh" content="15">
 <title>TesseraQL Operations Console</title>
 <link rel="stylesheet" href="/assets/_tesseraql/tesseraql.css">
+<script src="/assets/vendor/htmx.org/2.0.4/dist/htmx.min.js" defer></script>
 </head>
 <body>
 <header class="topbar">
@@ -14,7 +14,7 @@
   {{# ops.ok }}<span class="badge ok">UP</span>{{/ ops.ok }}
   {{# ops.warning }}<span class="badge warn">WARN</span>{{/ ops.warning }}
 </header>
-<main>
+<main hx-get="/_tesseraql/ops/console" hx-trigger="every 15s" hx-select="main" hx-target="this" hx-swap="outerHTML">
 {{# ops.hasAlerts }}
 <section id="alerts">
   <h2>Alerts</h2>

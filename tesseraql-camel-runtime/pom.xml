@@ -39,6 +39,11 @@
       <artifactId>tesseraql-identity</artifactId>
       <version>${project.version}</version>
     </dependency>
+    <!-- htmx, self-hosted at /assets/vendor/htmx.org/... so pages never load from a CDN. -->
+    <dependency>
+      <groupId>org.webjars.npm</groupId>
+      <artifactId>htmx.org</artifactId>
+    </dependency>
     <!-- Opt-in feature: the runtime has no compile dependency on SCIM; it self-installs via the
          RuntimeExtension SPI when the jar is on the classpath. Test scope keeps the ITs here. -->
     <dependency>
