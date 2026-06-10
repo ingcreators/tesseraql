@@ -248,7 +248,8 @@ public final class TesseraqlRuntime implements AutoCloseable {
             context.addRoutes(new SchedulingRouteBuilder(jobRunner, List.copyOf(jobs.values())));
             if (manifest.config().getString("tesseraql.scim.enabled")
                     .map(Boolean::parseBoolean).orElse(false)) {
-                context.addRoutes(new ScimRouteBuilder(buildScimUserService(manifest, dataSource)));
+                context.addRoutes(new ScimRouteBuilder(buildScimUserService(manifest, dataSource),
+                        buildScimGroupService(manifest, dataSource)));
             }
 
             IdentityService identity = new IdentityService(name ->
@@ -322,6 +323,28 @@ public final class TesseraqlRuntime implements AutoCloseable {
                 readScimSql(manifest, "tesseraql.scim.users.delete"),
                 readScimSql(manifest, "tesseraql.scim.users.findByUserName"));
         return new io.tesseraql.scim.ScimUserService(dataSource, contract);
+    }
+
+    /**
+     * Builds the SCIM group service from the configured contract SQL files, or {@code null} when
+     * group provisioning is disabled (design ch. 10.15). Returning null leaves the {@code /Groups}
+     * endpoints unmounted.
+     */
+    private static io.tesseraql.scim.ScimGroupService buildScimGroupService(
+            AppManifest manifest, HikariDataSource dataSource) {
+        if (!manifest.config().getString("tesseraql.scim.groups.enabled")
+                .map(Boolean::parseBoolean).orElse(false)) {
+            return null;
+        }
+        io.tesseraql.scim.ScimGroupContract contract = new io.tesseraql.scim.ScimGroupContract(
+                readScimSql(manifest, "tesseraql.scim.groups.create"),
+                readScimSql(manifest, "tesseraql.scim.groups.findById"),
+                readScimSql(manifest, "tesseraql.scim.groups.list"),
+                readScimSql(manifest, "tesseraql.scim.groups.delete"),
+                readScimSql(manifest, "tesseraql.scim.groups.listMembers"),
+                readScimSql(manifest, "tesseraql.scim.groups.addMember"),
+                readScimSql(manifest, "tesseraql.scim.groups.removeMember"));
+        return new io.tesseraql.scim.ScimGroupService(dataSource, contract);
     }
 
     private static String readScimSql(AppManifest manifest, String configKey) {

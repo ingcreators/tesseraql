@@ -3,15 +3,18 @@ package io.tesseraql.runtime;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.tesseraql.scim.ScimError;
 import io.tesseraql.scim.ScimException;
+import io.tesseraql.scim.ScimGroup;
+import io.tesseraql.scim.ScimGroupService;
 import io.tesseraql.scim.ScimUser;
 import io.tesseraql.scim.ScimUserService;
 import org.apache.camel.Exchange;
 import org.apache.camel.builder.RouteBuilder;
 
 /**
- * Serves SCIM 2.0 inbound provisioning for users under {@code /scim/v2/Users} (design ch. 10.15).
- * Endpoints require a bearer principal with the {@code scim.manage} policy; responses use the SCIM
- * media type and SCIM error envelope.
+ * Serves SCIM 2.0 inbound provisioning under {@code /scim/v2} (design ch. 10.15): users at
+ * {@code /Users} and, when a group service is configured, groups at {@code /Groups}. Endpoints
+ * require a bearer principal with the {@code scim.manage} policy; responses use the SCIM media type
+ * and SCIM error envelope.
  */
 final class ScimRouteBuilder extends RouteBuilder {
 
@@ -21,9 +24,15 @@ final class ScimRouteBuilder extends RouteBuilder {
 
     private final ObjectMapper mapper = new ObjectMapper();
     private final ScimUserService users;
+    private final ScimGroupService groups;
 
     ScimRouteBuilder(ScimUserService users) {
+        this(users, null);
+    }
+
+    ScimRouteBuilder(ScimUserService users, ScimGroupService groups) {
         this.users = users;
+        this.groups = groups;
     }
 
     @Override
@@ -50,6 +59,29 @@ final class ScimRouteBuilder extends RouteBuilder {
                 .to(AUTH).to(AUTHORIZE).process(this::patchUser);
         from("direct:scim.deleteUser").routeId("scim.deleteUser")
                 .to(AUTH).to(AUTHORIZE).process(this::deleteUser);
+
+        if (groups != null) {
+            configureGroups();
+        }
+    }
+
+    private void configureGroups() {
+        rest().post("/scim/v2/Groups").to("direct:scim.createGroup");
+        rest().get("/scim/v2/Groups/{id}").to("direct:scim.getGroup");
+        rest().get("/scim/v2/Groups").to("direct:scim.listGroups");
+        rest().patch("/scim/v2/Groups/{id}").to("direct:scim.patchGroup");
+        rest().delete("/scim/v2/Groups/{id}").to("direct:scim.deleteGroup");
+
+        from("direct:scim.createGroup").routeId("scim.createGroup")
+                .to(AUTH).to(AUTHORIZE).process(this::createGroup);
+        from("direct:scim.getGroup").routeId("scim.getGroup")
+                .to(AUTH).to(AUTHORIZE).process(this::getGroup);
+        from("direct:scim.listGroups").routeId("scim.listGroups")
+                .to(AUTH).to(AUTHORIZE).process(this::listGroups);
+        from("direct:scim.patchGroup").routeId("scim.patchGroup")
+                .to(AUTH).to(AUTHORIZE).process(this::patchGroup);
+        from("direct:scim.deleteGroup").routeId("scim.deleteGroup")
+                .to(AUTH).to(AUTHORIZE).process(this::deleteGroup);
     }
 
     private void createUser(Exchange exchange) throws Exception {
@@ -86,6 +118,38 @@ final class ScimRouteBuilder extends RouteBuilder {
 
     private void deleteUser(Exchange exchange) {
         users.delete(exchange.getMessage().getHeader("id", String.class));
+        exchange.getMessage().setHeader(Exchange.HTTP_RESPONSE_CODE, 204);
+        exchange.getMessage().setBody(null);
+    }
+
+    private void createGroup(Exchange exchange) throws Exception {
+        ScimGroup request =
+                mapper.readValue(exchange.getMessage().getBody(String.class), ScimGroup.class);
+        respond(exchange, 201, groups.create(request));
+    }
+
+    private void getGroup(Exchange exchange) throws Exception {
+        String id = exchange.getMessage().getHeader("id", String.class);
+        ScimGroup group = groups.findById(id)
+                .orElseThrow(() -> new ScimException(404, null, "Group not found: " + id));
+        respond(exchange, 200, group);
+    }
+
+    private void listGroups(Exchange exchange) throws Exception {
+        int startIndex = header(exchange, "startIndex", 1);
+        int count = header(exchange, "count", 100);
+        respond(exchange, 200, groups.list(startIndex, count));
+    }
+
+    private void patchGroup(Exchange exchange) throws Exception {
+        String id = exchange.getMessage().getHeader("id", String.class);
+        io.tesseraql.scim.ScimPatchRequest patch = mapper.readValue(
+                exchange.getMessage().getBody(String.class), io.tesseraql.scim.ScimPatchRequest.class);
+        respond(exchange, 200, groups.patch(id, patch));
+    }
+
+    private void deleteGroup(Exchange exchange) {
+        groups.delete(exchange.getMessage().getHeader("id", String.class));
         exchange.getMessage().setHeader(Exchange.HTTP_RESPONSE_CODE, 204);
         exchange.getMessage().setBody(null);
     }

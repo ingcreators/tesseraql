@@ -162,6 +162,51 @@ class ScimInboundIntegrationTest {
     }
 
     @Test
+    void createsGetsPatchesAndDeletesGroupViaScim() throws Exception {
+        String body = """
+                {"schemas":["urn:ietf:params:scim:schemas:core:2.0:Group"],
+                 "displayName":"engineers","externalId":"grp-1",
+                 "members":[{"value":"100"}]}
+                """;
+        HttpResponse<String> created = send("POST", "/scim/v2/Groups", body);
+        assertThat(created.statusCode()).isEqualTo(201);
+        JsonNode group = MAPPER.readTree(created.body());
+        String id = group.get("id").asText();
+        assertThat(id).isNotBlank();
+        assertThat(group.get("displayName").asText()).isEqualTo("engineers");
+        assertThat(group.get("members").get(0).get("value").asText()).isEqualTo("100");
+
+        // PATCH adds a member and removes the original via a value-filter path.
+        HttpResponse<String> patched = send("PATCH", "/scim/v2/Groups/" + id, """
+                {"schemas":["urn:ietf:params:scim:api:messages:2.0:PatchOp"],
+                 "Operations":[
+                   {"op":"add","path":"members","value":[{"value":"200"}]},
+                   {"op":"remove","path":"members[value eq \\"100\\"]"}
+                 ]}
+                """);
+        assertThat(patched.statusCode()).isEqualTo(200);
+        JsonNode members = MAPPER.readTree(patched.body()).get("members");
+        assertThat(members).hasSize(1);
+        assertThat(members.get(0).get("value").asText()).isEqualTo("200");
+
+        HttpResponse<String> list = send("GET", "/scim/v2/Groups", null);
+        assertThat(list.statusCode()).isEqualTo(200);
+        assertThat(MAPPER.readTree(list.body()).get("Resources")).isNotEmpty();
+
+        assertThat(send("DELETE", "/scim/v2/Groups/" + id, null).statusCode()).isEqualTo(204);
+        assertThat(send("GET", "/scim/v2/Groups/" + id, null).statusCode()).isEqualTo(404);
+    }
+
+    @Test
+    void duplicateGroupNameYieldsScim409() throws Exception {
+        String body = "{\"displayName\":\"dupe-group\"}";
+        assertThat(send("POST", "/scim/v2/Groups", body).statusCode()).isEqualTo(201);
+        HttpResponse<String> conflict = send("POST", "/scim/v2/Groups", body);
+        assertThat(conflict.statusCode()).isEqualTo(409);
+        assertThat(MAPPER.readTree(conflict.body()).get("scimType").asText()).isEqualTo("uniqueness");
+    }
+
+    @Test
     void requiresAuthentication() throws Exception {
         HttpResponse<String> response = HttpClient.newHttpClient().send(
                 HttpRequest.newBuilder(URI.create(
@@ -208,6 +253,10 @@ class ScimInboundIntegrationTest {
                     + "user_name varchar(200) not null unique, given_name varchar(200), "
                     + "family_name varchar(200), email varchar(320), active boolean default true, "
                     + "external_id varchar(200))");
+            statement.execute("create table scim_groups (id serial primary key, "
+                    + "display_name varchar(200) not null unique, external_id varchar(200))");
+            statement.execute("create table scim_group_members (group_id int not null, "
+                    + "member_id varchar(200) not null, primary key (group_id, member_id))");
         }
     }
 
@@ -237,6 +286,15 @@ class ScimInboundIntegrationTest {
                       replace: scim/replace-user.sql
                       delete: scim/delete-user.sql
                       findByUserName: scim/find-user-by-name.sql
+                    groups:
+                      enabled: true
+                      create: scim/create-group.sql
+                      findById: scim/find-group.sql
+                      list: scim/list-groups.sql
+                      delete: scim/delete-group.sql
+                      listMembers: scim/list-members.sql
+                      addMember: scim/add-member.sql
+                      removeMember: scim/remove-member.sql
                   security:
                     policies:
                       scim.manage:
@@ -283,6 +341,35 @@ class ScimInboundIntegrationTest {
                        family_name as "familyName", email as "email", active as "active",
                        external_id as "externalId"
                 from scim_users where user_name = /* userName */ 'u'
+                """);
+        Files.writeString(scim.resolve("create-group.sql"), """
+                insert into scim_groups (display_name, external_id)
+                values (/* displayName */ 'g', /* externalId */ 'x')
+                returning id, display_name as "displayName", external_id as "externalId"
+                """);
+        Files.writeString(scim.resolve("find-group.sql"), """
+                select id, display_name as "displayName", external_id as "externalId"
+                from scim_groups where id::text = /* id */ '0'
+                """);
+        Files.writeString(scim.resolve("list-groups.sql"), """
+                select id, display_name as "displayName", external_id as "externalId"
+                from scim_groups order by id
+                limit /* count */ 100 offset (/* startIndex */ 1 - 1)
+                """);
+        Files.writeString(scim.resolve("delete-group.sql"),
+                "delete from scim_groups where id::text = /* id */ '0' returning id\n");
+        Files.writeString(scim.resolve("list-members.sql"), """
+                select member_id as "value" from scim_group_members
+                where group_id = cast(/* groupId */ '0' as int) order by member_id
+                """);
+        Files.writeString(scim.resolve("add-member.sql"), """
+                insert into scim_group_members (group_id, member_id)
+                values (cast(/* groupId */ '0' as int), /* memberId */ 'm')
+                on conflict do nothing
+                """);
+        Files.writeString(scim.resolve("remove-member.sql"), """
+                delete from scim_group_members
+                where group_id = cast(/* groupId */ '0' as int) and member_id = /* memberId */ 'm'
                 """);
         return target;
     }
