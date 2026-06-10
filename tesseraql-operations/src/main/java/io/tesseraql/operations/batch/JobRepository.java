@@ -59,8 +59,44 @@ public final class JobRepository {
                       affected_rows integer,
                       error_message varchar(2000)
                     )""");
+            statement.execute("""
+                    create table if not exists tql_job_claim (
+                      job_id varchar(256) not null,
+                      fire_time timestamp not null,
+                      claimed_at timestamp not null,
+                      primary key (job_id, fire_time)
+                    )""");
         } catch (SQLException ex) {
             throw error("Failed to create batch repository schema", ex);
+        }
+    }
+
+    /**
+     * Claims one scheduled firing of {@code jobId} across all runtime nodes (design ch. 26): the
+     * first node to insert the {@code (job_id, fire_time)} claim row runs the job, every other
+     * node's insert hits the primary key and skips. Claims older than seven days are pruned
+     * opportunistically.
+     */
+    public boolean tryClaimFiring(String jobId, Instant fireTime) {
+        try (Connection connection = dataSource.getConnection()) {
+            try (PreparedStatement prune = connection.prepareStatement(
+                    "delete from tql_job_claim where claimed_at < ?")) {
+                prune.setTimestamp(1, Timestamp.from(Instant.now().minus(java.time.Duration.ofDays(7))));
+                prune.executeUpdate();
+            }
+            try (PreparedStatement insert = connection.prepareStatement(
+                    "insert into tql_job_claim (job_id, fire_time, claimed_at) values (?, ?, ?)")) {
+                insert.setString(1, jobId);
+                insert.setTimestamp(2, Timestamp.from(fireTime));
+                insert.setTimestamp(3, Timestamp.from(Instant.now()));
+                insert.executeUpdate();
+                return true;
+            }
+        } catch (SQLException ex) {
+            if (io.tesseraql.core.dialect.SqlErrors.isUniqueViolation(ex)) {
+                return false;
+            }
+            throw error("Failed to claim job firing for " + jobId, ex);
         }
     }
 
