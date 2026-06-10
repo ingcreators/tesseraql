@@ -180,7 +180,21 @@ public final class TesseraqlRuntime implements AutoCloseable {
             context.getRegistry().bind(
                     TesseraqlProperties.JWT_AUTHENTICATOR_BEAN, new JwtAuthenticator(security.jwt()));
         }
-        SessionStore sessionStore = new SessionStore();
+        // Browser sessions: in-memory per node by default; "jdbc" shares tql_session across all
+        // runtime nodes so a login made on one node resolves on every other (design ch. 11.2).
+        SessionStore sessionStore;
+        if ("jdbc".equalsIgnoreCase(
+                manifest.config().getString("tesseraql.sessions.store").orElse("memory"))) {
+            io.tesseraql.security.session.JdbcSessionStore jdbcSessions =
+                    new io.tesseraql.security.session.JdbcSessionStore(dataSource,
+                            java.time.Duration.ofMillis(io.tesseraql.core.util.Durations.toMillis(
+                                    manifest.config().getString("tesseraql.sessions.ttl")
+                                            .orElse("12h"))));
+            jdbcSessions.ensureSchema();
+            sessionStore = jdbcSessions;
+        } else {
+            sessionStore = new io.tesseraql.security.session.InMemorySessionStore();
+        }
         context.getRegistry().bind(TesseraqlProperties.SESSION_STORE_BEAN, sessionStore);
         io.tesseraql.core.spool.FileTempStore tempStore =
                 new io.tesseraql.core.spool.FileTempStore(appHome.resolve("work/tmp/tesseraql"));
@@ -286,7 +300,8 @@ public final class TesseraqlRuntime implements AutoCloseable {
                                         jobRepository.findSteps(id));
                             });
             context.getRegistry().bind(TesseraqlProperties.SERVICE_PROVIDERS_BEAN, serviceProviders);
-            context.addRoutes(new SchedulingRouteBuilder(jobRunner, List.copyOf(jobs.values())));
+            context.addRoutes(new SchedulingRouteBuilder(
+                    jobRunner, jobRepository, List.copyOf(jobs.values())));
 
             IdentityService identity = new IdentityService(name ->
                     context.getRegistry().lookupByNameAndType(name, javax.sql.DataSource.class),
