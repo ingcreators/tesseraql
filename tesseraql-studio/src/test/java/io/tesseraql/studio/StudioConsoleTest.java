@@ -51,10 +51,29 @@ class StudioConsoleTest {
     }
 
     @Test
-    void sourceViewerOmitsReadOnlyNoticeWhenWritable() {
+    void sourceViewerRendersEditorFormWhenWritable() {
         String html = StudioConsole.renderSource("a.sql", "select 1", false);
 
         assertThat(html).doesNotContain("Read-only mode");
-        assertThat(html).contains("select 1");
+        assertThat(html).contains("<textarea name=\"content\"").contains("select 1");
+        assertThat(html).contains("action=\"/_tesseraql/studio/ui/save\"");
+        assertThat(html).contains("action=\"/_tesseraql/studio/ui/apply\"");
+        assertThat(html).contains("Save draft").contains("Apply draft");
+        assertThat(html).contains("name=\"path\" value=\"a.sql\"");
+    }
+
+    @Test
+    void sourceViewerShowsStatusBanner() {
+        String html = StudioConsole.renderSource("a.sql", "select 1", false, "Draft saved.");
+
+        assertThat(html).contains("class=\"status\"").contains("Draft saved.");
+    }
+
+    @Test
+    void readOnlySourceHasNoEditorForm() {
+        String html = StudioConsole.renderSource("a.sql", "select 1", true);
+
+        assertThat(html).doesNotContain("<textarea").doesNotContain("/ui/save");
+        assertThat(html).contains("Read-only mode");
     }
 }

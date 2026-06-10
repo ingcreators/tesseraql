@@ -155,6 +155,51 @@ class StudioIntegrationTest {
         assertThat(get("/_tesseraql/studio/ui", false).statusCode()).isEqualTo(401);
     }
 
+    @Test
+    void uiSaveAndApplyDraftViaForm() throws Exception {
+        String path = "web/api/formtest/get.yml";
+        String content = """
+                version: tesseraql/v1
+                id: formtest.list
+                kind: route
+                recipe: query-json
+                sql:
+                  file: formtest.sql
+                  mode: query
+                response:
+                  json:
+                    body:
+                      data: sql.rows
+                """;
+
+        HttpResponse<String> save = postForm("/_tesseraql/studio/ui/save",
+                "path=" + enc(path) + "&content=" + enc(content));
+        assertThat(save.statusCode()).isEqualTo(200);
+        assertThat(save.headers().firstValue("content-type"))
+                .hasValueSatisfying(value -> assertThat(value).contains("text/html"));
+        assertThat(save.body()).contains("Draft saved.");
+        // The multi-line content round-trips into the editor textarea.
+        assertThat(save.body()).contains("formtest.list").contains("query-json");
+
+        // The applied route is reloaded, so its referenced SQL file must exist and compile.
+        Files.createDirectories(appHome.resolve("web/api/formtest"));
+        Files.writeString(appHome.resolve("web/api/formtest/formtest.sql"), "select 1");
+
+        HttpResponse<String> apply = postForm("/_tesseraql/studio/ui/apply", "path=" + enc(path));
+        assertThat(apply.statusCode()).isEqualTo(200);
+        assertThat(apply.body()).contains("Draft applied and routes reloaded.");
+    }
+
+    private static HttpResponse<String> postForm(String path, String form) throws Exception {
+        HttpRequest request = HttpRequest.newBuilder(
+                        URI.create("http://localhost:" + runtime.port() + path))
+                .header("Authorization", "Bearer " + token())
+                .header("Content-Type", "application/x-www-form-urlencoded")
+                .POST(HttpRequest.BodyPublishers.ofString(form))
+                .build();
+        return HttpClient.newHttpClient().send(request, HttpResponse.BodyHandlers.ofString());
+    }
+
     private static HttpResponse<String> get(String path, boolean auth) throws Exception {
         HttpRequest.Builder request = HttpRequest.newBuilder(
                 URI.create("http://localhost:" + runtime.port() + path));

@@ -68,17 +68,45 @@ public final class StudioConsole {
         return out.toString();
     }
 
-    /** Renders the source viewer page for a single file. */
+    /** Renders the read-only source viewer page for a single file. */
     public static String renderSource(String path, String content, boolean readOnly) {
+        return renderSource(path, content, readOnly, null);
+    }
+
+    /**
+     * Renders the source page for a single file. In read-only mode the content is shown as static
+     * text; otherwise it is rendered in an editor form that saves a draft and applies it (which
+     * reloads the affected routes). {@code status} is an optional banner message (e.g. the outcome
+     * of a save/apply).
+     */
+    public static String renderSource(String path, String content, boolean readOnly, String status) {
         StringBuilder out = open("TesseraQL Studio &middot; source");
         out.append("<header class=\"topbar\"><h1>")
                 .append(escape(path)).append("</h1>")
                 .append("<a class=\"back\" href=\"").append(UI).append("\">&larr; explorer</a>")
                 .append("</header>\n<main>\n<section>");
+        if (status != null && !status.isBlank()) {
+            out.append("<p class=\"status\">").append(escape(status)).append("</p>");
+        }
         if (readOnly) {
             out.append("<p class=\"empty\">Read-only mode &mdash; edit drafts via the Studio API.</p>");
+            out.append("<pre class=\"source\">").append(escape(content)).append("</pre>");
+        } else {
+            String safePath = escape(path);
+            out.append("<form method=\"post\" action=\"").append(UI).append("/save\">")
+                    .append("<input type=\"hidden\" name=\"path\" value=\"").append(safePath)
+                    .append("\">")
+                    .append("<textarea name=\"content\" class=\"source\" rows=\"24\" spellcheck=\"false\">")
+                    .append(escape(content)).append("</textarea>")
+                    .append("<div class=\"toolbar\"><button type=\"submit\">Save draft</button></div>")
+                    .append("</form>");
+            out.append("<form method=\"post\" action=\"").append(UI).append("/apply\">")
+                    .append("<input type=\"hidden\" name=\"path\" value=\"").append(safePath)
+                    .append("\">")
+                    .append("<div class=\"toolbar\"><button type=\"submit\" class=\"apply\">")
+                    .append("Apply draft &amp; reload</button></div>")
+                    .append("</form>");
         }
-        out.append("<pre class=\"source\">").append(escape(content)).append("</pre>");
         out.append("</section>\n</main>\n</body>\n</html>\n");
         return out.toString();
     }
@@ -126,6 +154,13 @@ public final class StudioConsole {
                 + ".back{font-size:13px;text-decoration:none}"
                 + ".empty{color:#94a3b8;font-style:italic;margin:0 0 12px}"
                 + ".source{background:#0b1220;border:1px solid #334155;border-radius:6px;"
-                + "padding:14px;overflow:auto;font-size:13px;white-space:pre-wrap;word-break:break-word}";
+                + "padding:14px;overflow:auto;font-size:13px;white-space:pre-wrap;word-break:break-word}"
+                + "textarea.source{width:100%;color:#e2e8f0;font-family:monospace;resize:vertical}"
+                + ".toolbar{margin:10px 0 4px}"
+                + "button{background:#2563eb;color:#fff;border:0;border-radius:6px;"
+                + "padding:8px 16px;font-size:13px;cursor:pointer}"
+                + "button.apply{background:#166534}"
+                + ".status{background:#14532d;color:#dcfce7;border-radius:6px;padding:8px 12px;"
+                + "margin:0 0 12px}";
     }
 }

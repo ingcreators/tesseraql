@@ -35,6 +35,8 @@ final class StudioRouteBuilder extends RouteBuilder {
 
         rest().get("/_tesseraql/studio/ui").to("direct:studio.ui");
         rest().get("/_tesseraql/studio/ui/source").to("direct:studio.ui.source");
+        rest().post("/_tesseraql/studio/ui/save").to("direct:studio.ui.save");
+        rest().post("/_tesseraql/studio/ui/apply").to("direct:studio.ui.apply");
         rest().get("/_tesseraql/studio/explorer").to("direct:studio.explorer");
         rest().get("/_tesseraql/studio/source").to("direct:studio.source");
         rest().post("/_tesseraql/studio/drafts").to("direct:studio.draft");
@@ -50,7 +52,26 @@ final class StudioRouteBuilder extends RouteBuilder {
                 .to(AUTH).process(html(exchange -> {
                     String path = requirePath(exchange);
                     return io.tesseraql.studio.StudioConsole.renderSource(
-                            path, studio.source(path), studio.isReadOnly());
+                            path, currentContent(path), studio.isReadOnly());
+                }));
+
+        from("direct:studio.ui.save").routeId("studio.ui.save")
+                .to(AUTH).process(html(exchange -> {
+                    String path = requireFormPath(exchange);
+                    String content = formField(exchange, "content");
+                    studio.saveDraft(path, content == null ? "" : content);
+                    return io.tesseraql.studio.StudioConsole.renderSource(
+                            path, currentContent(path), studio.isReadOnly(), "Draft saved.");
+                }));
+
+        from("direct:studio.ui.apply").routeId("studio.ui.apply")
+                .to(AUTH).process(html(exchange -> {
+                    String path = requireFormPath(exchange);
+                    studio.applyDraft(path);
+                    reloader.reload();
+                    return io.tesseraql.studio.StudioConsole.renderSource(
+                            path, currentContent(path), studio.isReadOnly(),
+                            "Draft applied and routes reloaded.");
                 }));
 
         from("direct:studio.explorer").routeId("studio.explorer")
@@ -94,12 +115,60 @@ final class StudioRouteBuilder extends RouteBuilder {
     private static String requirePath(Exchange exchange) {
         String path = exchange.getMessage().getHeader("path", String.class);
         if (path == null || path.isBlank()) {
-            throw new io.tesseraql.core.error.TqlException(
-                    new io.tesseraql.core.error.TqlErrorCode(
-                            io.tesseraql.core.error.TqlDomain.STUDIO, 4002),
-                    "Missing 'path' query parameter");
+            throw missingPath();
         }
         return path;
+    }
+
+    /** Reads the {@code path} form field of an editor POST (header first, then urlencoded body). */
+    private static String requireFormPath(Exchange exchange) {
+        String path = formField(exchange, "path");
+        if (path == null || path.isBlank()) {
+            throw missingPath();
+        }
+        return path;
+    }
+
+    /** The draft content if one exists for {@code path}, otherwise the source of truth. */
+    private String currentContent(String path) {
+        String draft = studio.readDraft(path);
+        return draft != null ? draft : studio.source(path);
+    }
+
+    private static io.tesseraql.core.error.TqlException missingPath() {
+        return new io.tesseraql.core.error.TqlException(
+                new io.tesseraql.core.error.TqlErrorCode(
+                        io.tesseraql.core.error.TqlDomain.STUDIO, 4002),
+                "Missing 'path' parameter");
+    }
+
+    /**
+     * Reads a form field from a urlencoded POST. platform-http exposes form fields as exchange
+     * headers (which, unlike HTTP wire headers, may contain newlines); otherwise the urlencoded
+     * body is parsed.
+     */
+    private static String formField(Exchange exchange, String name) {
+        String header = exchange.getMessage().getHeader(name, String.class);
+        if (header != null) {
+            return header;
+        }
+        String body = exchange.getMessage().getBody(String.class);
+        if (body == null || body.isBlank()) {
+            return null;
+        }
+        for (String pair : body.split("&")) {
+            int eq = pair.indexOf('=');
+            if (eq < 0) {
+                continue;
+            }
+            String key = java.net.URLDecoder.decode(
+                    pair.substring(0, eq), java.nio.charset.StandardCharsets.UTF_8);
+            if (name.equals(key)) {
+                return java.net.URLDecoder.decode(
+                        pair.substring(eq + 1), java.nio.charset.StandardCharsets.UTF_8);
+            }
+        }
+        return null;
     }
 
     private Processor json(Function<Exchange, Object> handler) {
@@ -113,6 +182,9 @@ final class StudioRouteBuilder extends RouteBuilder {
     private Processor html(Function<Exchange, String> handler) {
         return exchange -> {
             String body = handler.apply(exchange);
+            // platform-http exposes form fields as message headers; the multi-line 'content' field
+            // would otherwise be echoed back as an (illegal) HTTP response header.
+            exchange.getMessage().removeHeader("content");
             exchange.getMessage().setHeader(Exchange.HTTP_RESPONSE_CODE, 200);
             exchange.getMessage().setHeader(Exchange.CONTENT_TYPE, "text/html; charset=utf-8");
             exchange.getMessage().setHeader("Content-Security-Policy",
