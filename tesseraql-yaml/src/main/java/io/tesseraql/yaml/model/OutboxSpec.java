@@ -10,7 +10,9 @@ import java.util.Map;
  * @param eventType     the event type, e.g. {@code USER_DISABLED}
  * @param aggregateType the aggregate type, e.g. {@code User}
  * @param aggregateId   a source expression for the aggregate id, e.g. {@code body.name}
- * @param payload       map of payload key to source expression
+ * @param payload       map of payload key to source expression; a dotted key builds a nested object
+ *                      (e.g. {@code name.givenName}), so a command route can emit a structured
+ *                      payload such as a SCIM resource for a provisioning event
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public record OutboxSpec(String eventType, String aggregateType, String aggregateId,

@@ -105,13 +105,34 @@ public final class OutboxCommandProcessor implements Processor {
         String aggregateId = stringValue(evaluation, outbox.aggregateId());
         Map<String, Object> payload = new LinkedHashMap<>();
         outbox.payload().forEach((key, expr) ->
-                payload.put(key, evaluation.resolve(Arrays.asList(expr.split("\\.")))));
+                putNested(payload, key, evaluation.resolve(Arrays.asList(expr.split("\\.")))));
         try {
             return OutboxEvent.toInsert(outbox.aggregateType(), aggregateId, outbox.eventType(),
                     mapper.writeValueAsString(payload));
         } catch (com.fasterxml.jackson.core.JsonProcessingException ex) {
             throw new TqlException(TX_ERROR, "Failed to serialize outbox payload");
         }
+    }
+
+    /**
+     * Places {@code value} into {@code root} at a dotted payload key, creating nested objects as
+     * needed (e.g. {@code name.givenName} yields {@code {"name":{"givenName":...}}}). This lets a
+     * command route emit a structured event payload — such as a SCIM resource for a provisioning
+     * event — directly from its {@code outbox.payload} declaration. Flat keys (no dot) are unchanged.
+     */
+    @SuppressWarnings("unchecked")
+    private static void putNested(Map<String, Object> root, String dottedKey, Object value) {
+        String[] parts = dottedKey.split("\\.");
+        Map<String, Object> node = root;
+        for (int i = 0; i < parts.length - 1; i++) {
+            Object child = node.get(parts[i]);
+            if (!(child instanceof Map)) {
+                child = new LinkedHashMap<String, Object>();
+                node.put(parts[i], child);
+            }
+            node = (Map<String, Object>) child;
+        }
+        node.put(parts[parts.length - 1], value);
     }
 
     private static String stringValue(EvaluationContext evaluation, String expression) {
