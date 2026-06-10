@@ -1,28 +1,34 @@
 package io.tesseraql.runtime;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.tesseraql.saml.AuthnRequest;
+import io.tesseraql.saml.LogoutRequest;
 import io.tesseraql.saml.SamlAssertion;
 import io.tesseraql.saml.SamlAttributeMapping;
 import io.tesseraql.saml.SamlException;
+import io.tesseraql.saml.SamlRedirect;
 import io.tesseraql.saml.SamlResponseValidator;
 import io.tesseraql.saml.SpMetadata;
 import io.tesseraql.security.Principal;
 import io.tesseraql.security.session.SessionStore;
 import java.net.URLDecoder;
+import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.Base64;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import org.apache.camel.Exchange;
 import org.apache.camel.builder.RouteBuilder;
 
 /**
- * SAML 2.0 Assertion Consumer Service at {@code POST /_tesseraql/saml/acs} (design ch. 10.14,
- * HTTP-POST binding). It validates the posted {@code SAMLResponse}, maps the trusted assertion onto a
- * {@link Principal}, and issues a browser session exactly as the password login does. A validation
- * failure returns 401 without leaking assertion contents.
+ * SAML 2.0 SP web endpoints under {@code /_tesseraql/saml} (design ch. 10.14): the Assertion Consumer
+ * Service ({@code POST /acs}, HTTP-POST binding) that validates the response and issues a session,
+ * SP-initiated SSO ({@code GET /login}, HTTP-Redirect AuthnRequest), single logout ({@code GET
+ * /logout}), and SP metadata ({@code GET /metadata}). A validation failure returns 401 without
+ * leaking assertion contents.
  */
 final class SamlAcsRouteBuilder extends RouteBuilder {
 
@@ -32,19 +38,22 @@ final class SamlAcsRouteBuilder extends RouteBuilder {
     private final SessionStore sessions;
     private final SamlUserLinker linker;
     private final SpMetadata metadata;
+    private final SamlEndpoints endpoints;
 
     SamlAcsRouteBuilder(SamlResponseValidator validator, SamlAttributeMapping mapping,
             SessionStore sessions) {
-        this(validator, mapping, sessions, null, null);
+        this(validator, mapping, sessions, null, null, null);
     }
 
     SamlAcsRouteBuilder(SamlResponseValidator validator, SamlAttributeMapping mapping,
-            SessionStore sessions, SamlUserLinker linker, SpMetadata metadata) {
+            SessionStore sessions, SamlUserLinker linker, SpMetadata metadata,
+            SamlEndpoints endpoints) {
         this.validator = validator;
         this.mapping = mapping;
         this.sessions = sessions;
         this.linker = linker;
         this.metadata = metadata;
+        this.endpoints = endpoints;
     }
 
     @Override
@@ -55,10 +64,77 @@ final class SamlAcsRouteBuilder extends RouteBuilder {
         rest().post("/_tesseraql/saml/acs").to("direct:tql.saml.acs");
         from("direct:tql.saml.acs").routeId("system.saml.acs").process(this::consume);
 
+        rest().get("/_tesseraql/saml/logout").to("direct:tql.saml.logout");
+        from("direct:tql.saml.logout").routeId("system.saml.logout").process(this::logout);
+
         if (metadata != null) {
             rest().get("/_tesseraql/saml/metadata").to("direct:tql.saml.metadata");
             from("direct:tql.saml.metadata").routeId("system.saml.metadata").process(this::serveMetadata);
         }
+        if (endpoints != null && endpoints.idpSsoUrl() != null && endpoints.acsUrl() != null) {
+            rest().get("/_tesseraql/saml/login").to("direct:tql.saml.login");
+            from("direct:tql.saml.login").routeId("system.saml.login").process(this::login);
+        }
+    }
+
+    /** SP-initiated SSO: redirect to the IdP with a DEFLATE-encoded AuthnRequest (HTTP-Redirect). */
+    private void login(Exchange exchange) {
+        String xml = new AuthnRequest(endpoints.spEntityId(), endpoints.acsUrl(), endpoints.idpSsoUrl())
+                .toXml("_" + UUID.randomUUID(), Instant.now());
+        String relayState = exchange.getMessage().getHeader("RelayState", String.class);
+        redirect(exchange, endpoints.idpSsoUrl(), SamlRedirect.deflateAndEncode(xml), relayState);
+    }
+
+    /** Single logout: invalidate the local session, clear the cookie, and redirect to the IdP SLO. */
+    private void logout(Exchange exchange) {
+        String sessionId = cookieValue(exchange.getMessage().getHeader("Cookie", String.class),
+                sessions.cookieName());
+        SessionStore.Session session = sessions.session(sessionId);
+        sessions.invalidate(sessionId);
+        exchange.getMessage().setHeader("Set-Cookie",
+                sessions.cookieName() + "=; Path=/; HttpOnly; Max-Age=0");
+
+        String nameId = session == null ? null
+                : (String) session.principal().claims().get("samlNameId");
+        if (endpoints != null && endpoints.idpSloUrl() != null && nameId != null) {
+            String sessionIndex = (String) session.principal().claims().get("sessionIndex");
+            String xml = new LogoutRequest(endpoints.spEntityId(), endpoints.idpSloUrl(), nameId,
+                    sessionIndex).toXml("_" + UUID.randomUUID(), Instant.now());
+            redirect(exchange, endpoints.idpSloUrl(), SamlRedirect.deflateAndEncode(xml), null);
+            return;
+        }
+        exchange.getMessage().setHeader(Exchange.HTTP_RESPONSE_CODE, 200);
+        exchange.getMessage().setHeader(Exchange.CONTENT_TYPE, "application/json; charset=utf-8");
+        try {
+            exchange.getMessage().setBody(mapper.writeValueAsString(Map.of("ok", true)));
+        } catch (Exception ex) {
+            exchange.getMessage().setBody("{\"ok\":true}");
+        }
+    }
+
+    private static void redirect(Exchange exchange, String idpUrl, String samlRequest, String relayState) {
+        String separator = idpUrl.contains("?") ? "&" : "?";
+        StringBuilder location = new StringBuilder(idpUrl).append(separator)
+                .append("SAMLRequest=").append(URLEncoder.encode(samlRequest, StandardCharsets.UTF_8));
+        if (relayState != null) {
+            location.append("&RelayState=").append(URLEncoder.encode(relayState, StandardCharsets.UTF_8));
+        }
+        exchange.getMessage().setHeader(Exchange.HTTP_RESPONSE_CODE, 302);
+        exchange.getMessage().setHeader("Location", location.toString());
+        exchange.getMessage().setBody(null);
+    }
+
+    private static String cookieValue(String cookieHeader, String name) {
+        if (cookieHeader == null) {
+            return null;
+        }
+        for (String cookie : cookieHeader.split(";")) {
+            String trimmed = cookie.trim();
+            if (trimmed.startsWith(name + "=")) {
+                return trimmed.substring(name.length() + 1);
+            }
+        }
+        return null;
     }
 
     private void serveMetadata(Exchange exchange) {
@@ -79,10 +155,11 @@ final class SamlAcsRouteBuilder extends RouteBuilder {
         }
         String xml = new String(Base64.getMimeDecoder().decode(encoded), StandardCharsets.UTF_8);
         SamlAssertion assertion = validator.validate(xml, Instant.now());
-        Principal principal = linker == null
+        Principal resolved = linker == null
                 ? toPrincipal(assertion)
                 : linker.resolve(loginId(assertion), attribute(assertion, mapping.displayName()),
                         attribute(assertion, mapping.email()), attribute(assertion, mapping.tenant()));
+        Principal principal = withFederationClaims(resolved, assertion);
 
         String sessionId = sessions.create(principal);
         exchange.getMessage().setHeader(Exchange.HTTP_RESPONSE_CODE, 200);
@@ -103,6 +180,18 @@ final class SamlAcsRouteBuilder extends RouteBuilder {
                 attribute(assertion, mapping.displayName()), attribute(assertion, mapping.tenant()),
                 values(assertion, mapping.groups()), values(assertion, mapping.roles()),
                 List.of(), claims);
+    }
+
+    /** Stashes the federated NameID and SessionIndex in the principal's claims for later single logout. */
+    private static Principal withFederationClaims(Principal principal, SamlAssertion assertion) {
+        Map<String, Object> claims = new LinkedHashMap<>(principal.claims());
+        claims.put("samlNameId", assertion.nameId());
+        if (assertion.sessionIndex() != null) {
+            claims.put("sessionIndex", assertion.sessionIndex());
+        }
+        return new Principal(principal.subject(), principal.loginId(), principal.displayName(),
+                principal.tenantId(), principal.groups(), principal.roles(), principal.permissions(),
+                claims);
     }
 
     /** The login id: the configured attribute when present, otherwise the subject NameID. */

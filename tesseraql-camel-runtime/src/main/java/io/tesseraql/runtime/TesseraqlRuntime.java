@@ -357,7 +357,10 @@ public final class TesseraqlRuntime implements AutoCloseable {
         io.tesseraql.saml.SpMetadata metadata = recipient == null ? null
                 : new io.tesseraql.saml.SpMetadata(audience, recipient,
                         config.getString("tesseraql.saml.sp.nameIdFormat").orElse(null));
-        return new SamlAcsRouteBuilder(validator, mapping, sessions, linker, metadata);
+        SamlEndpoints endpoints = new SamlEndpoints(audience, recipient,
+                config.getString("tesseraql.saml.idp.ssoUrl").orElse(null),
+                config.getString("tesseraql.saml.idp.sloUrl").orElse(null));
+        return new SamlAcsRouteBuilder(validator, mapping, sessions, linker, metadata, endpoints);
     }
 
     private static byte[] readSamlBytes(AppManifest manifest, String relative) {
