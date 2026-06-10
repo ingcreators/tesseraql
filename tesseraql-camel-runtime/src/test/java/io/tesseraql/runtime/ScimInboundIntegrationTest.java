@@ -229,6 +229,27 @@ class ScimInboundIntegrationTest {
     }
 
     @Test
+    void listReportsTotalResultsBeyondThePage() throws Exception {
+        for (String name : List.of("tally-a", "tally-b", "tally-c")) {
+            send("POST", "/scim/v2/Users", "{\"userName\":\"" + name + "\"}");
+        }
+        JsonNode page = MAPPER.readTree(send("GET", "/scim/v2/Users?startIndex=1&count=2", null).body());
+        assertThat(page.get("Resources")).hasSize(2);
+        assertThat(page.get("itemsPerPage").asInt()).isEqualTo(2);
+        // totalResults counts all users, not just the returned page.
+        assertThat(page.get("totalResults").asInt()).isGreaterThanOrEqualTo(3)
+                .isGreaterThan(page.get("Resources").size());
+
+        for (String name : List.of("count-x", "count-y", "count-z")) {
+            send("POST", "/scim/v2/Groups", "{\"displayName\":\"" + name + "\"}");
+        }
+        JsonNode groups = MAPPER.readTree(send("GET", "/scim/v2/Groups?startIndex=1&count=1", null).body());
+        assertThat(groups.get("Resources")).hasSize(1);
+        assertThat(groups.get("totalResults").asInt()).isGreaterThanOrEqualTo(3)
+                .isGreaterThan(groups.get("Resources").size());
+    }
+
+    @Test
     void requiresAuthentication() throws Exception {
         HttpResponse<String> response = HttpClient.newHttpClient().send(
                 HttpRequest.newBuilder(URI.create(
@@ -308,6 +329,7 @@ class ScimInboundIntegrationTest {
                       replace: scim/replace-user.sql
                       delete: scim/delete-user.sql
                       findByUserName: scim/find-user-by-name.sql
+                      count: scim/count-users.sql
                     groups:
                       enabled: true
                       create: scim/create-group.sql
@@ -318,6 +340,7 @@ class ScimInboundIntegrationTest {
                       listMembers: scim/list-members.sql
                       addMember: scim/add-member.sql
                       removeMember: scim/remove-member.sql
+                      count: scim/count-groups.sql
                   security:
                     policies:
                       scim.manage:
@@ -365,6 +388,8 @@ class ScimInboundIntegrationTest {
                        external_id as "externalId"
                 from scim_users where user_name = /* userName */ 'u'
                 """);
+        Files.writeString(scim.resolve("count-users.sql"),
+                "select count(*) as \"totalResults\" from scim_users\n");
         Files.writeString(scim.resolve("create-group.sql"), """
                 insert into scim_groups (display_name, external_id)
                 values (/* displayName */ 'g', /* externalId */ 'x')
@@ -400,6 +425,8 @@ class ScimInboundIntegrationTest {
                 delete from scim_group_members
                 where group_id = cast(/* groupId */ '0' as int) and member_id = /* memberId */ 'm'
                 """);
+        Files.writeString(scim.resolve("count-groups.sql"),
+                "select count(*) as \"totalResults\" from scim_groups\n");
         return target;
     }
 

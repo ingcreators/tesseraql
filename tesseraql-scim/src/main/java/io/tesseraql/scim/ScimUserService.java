@@ -95,10 +95,19 @@ public final class ScimUserService {
             List<Map<String, Object>> rows = queryAll(contract.listSql(),
                     Map.of("startIndex", startIndex, "count", count));
             List<ScimUser> users = rows.stream().map(ScimUserMapper::fromRow).toList();
-            return ScimListResponse.of(users, users.size(), startIndex);
+            return ScimListResponse.of(users, total(users.size()), startIndex);
         } catch (SQLException ex) {
             throw new ScimException(500, null, "SCIM list failed: " + ex.getMessage());
         }
+    }
+
+    /** Total matching users from the count contract SQL, or {@code fallback} when none is configured. */
+    private int total(int fallback) throws SQLException {
+        if (contract.countSql() == null || contract.countSql().isBlank()) {
+            return fallback;
+        }
+        Map<String, Object> row = queryOne(contract.countSql(), Map.of());
+        return ScimCount.toInt(row, fallback);
     }
 
     /**

@@ -12,7 +12,9 @@ package io.tesseraql.scim;
  * @param replaceSql        replaces a user by {@code id} and returns its row
  * @param deleteSql         deletes a user by {@code id} and returns the deleted id
  * @param findByUserNameSql selects a single user by {@code userName} (for {@code eq} filters)
+ * @param countSql          counts all users for accurate {@code totalResults}; null/blank falls back
+ *                          to the page size
  */
 public record ScimContract(String createSql, String findByIdSql, String listSql,
-        String replaceSql, String deleteSql, String findByUserNameSql) {
+        String replaceSql, String deleteSql, String findByUserNameSql, String countSql) {
 }

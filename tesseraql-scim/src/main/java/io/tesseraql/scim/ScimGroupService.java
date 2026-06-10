@@ -69,10 +69,18 @@ public final class ScimGroupService {
             List<ScimGroup> groups = rows.stream()
                     .map(row -> ScimGroupMapper.fromRow(row, members(string(row.get("id")))))
                     .toList();
-            return ScimListResponse.of(groups, groups.size(), startIndex);
+            return ScimListResponse.of(groups, total(groups.size()), startIndex);
         } catch (SQLException ex) {
             throw new ScimException(500, null, "SCIM group list failed: " + ex.getMessage());
         }
+    }
+
+    /** Total groups from the count contract SQL, or {@code fallback} when none is configured. */
+    private int total(int fallback) throws SQLException {
+        if (contract.countSql() == null || contract.countSql().isBlank()) {
+            return fallback;
+        }
+        return ScimCount.toInt(ScimSql.queryOne(dataSource, contract.countSql(), Map.of()), fallback);
     }
 
     /**

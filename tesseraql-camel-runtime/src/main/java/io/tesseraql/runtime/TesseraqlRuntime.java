@@ -321,7 +321,8 @@ public final class TesseraqlRuntime implements AutoCloseable {
                 readScimSql(manifest, "tesseraql.scim.users.list"),
                 readScimSql(manifest, "tesseraql.scim.users.replace"),
                 readScimSql(manifest, "tesseraql.scim.users.delete"),
-                readScimSql(manifest, "tesseraql.scim.users.findByUserName"));
+                readScimSql(manifest, "tesseraql.scim.users.findByUserName"),
+                readScimSqlOptional(manifest, "tesseraql.scim.users.count"));
         return new io.tesseraql.scim.ScimUserService(dataSource, contract);
     }
 
@@ -344,7 +345,8 @@ public final class TesseraqlRuntime implements AutoCloseable {
                 readScimSql(manifest, "tesseraql.scim.groups.delete"),
                 readScimSql(manifest, "tesseraql.scim.groups.listMembers"),
                 readScimSql(manifest, "tesseraql.scim.groups.addMember"),
-                readScimSql(manifest, "tesseraql.scim.groups.removeMember"));
+                readScimSql(manifest, "tesseraql.scim.groups.removeMember"),
+                readScimSqlOptional(manifest, "tesseraql.scim.groups.count"));
         return new io.tesseraql.scim.ScimGroupService(dataSource, contract);
     }
 
@@ -355,6 +357,12 @@ public final class TesseraqlRuntime implements AutoCloseable {
         } catch (java.io.IOException ex) {
             throw new IllegalStateException("Cannot read SCIM contract SQL: " + relative, ex);
         }
+    }
+
+    /** Reads an optional SCIM contract SQL file, returning {@code null} when the key is unset. */
+    private static String readScimSqlOptional(AppManifest manifest, String configKey) {
+        return manifest.config().getString(configKey).isPresent()
+                ? readScimSql(manifest, configKey) : null;
     }
 
     /** Runs a batch job by id and returns its final execution record (design ch. 26). */

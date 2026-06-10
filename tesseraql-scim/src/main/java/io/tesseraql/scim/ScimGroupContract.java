@@ -13,8 +13,10 @@ package io.tesseraql.scim;
  * @param listMembersSql  selects the members of a group ({@code groupId})
  * @param addMemberSql    adds a member to a group ({@code groupId}, {@code memberId}); idempotent
  * @param removeMemberSql removes a member from a group ({@code groupId}, {@code memberId})
+ * @param countSql        counts all groups for accurate {@code totalResults}; null/blank falls back
+ *                        to the page size
  */
 public record ScimGroupContract(String createSql, String findByIdSql, String listSql,
         String replaceSql, String deleteSql, String listMembersSql, String addMemberSql,
-        String removeMemberSql) {
+        String removeMemberSql, String countSql) {
 }
