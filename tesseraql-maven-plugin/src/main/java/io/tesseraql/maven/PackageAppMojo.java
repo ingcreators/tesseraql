@@ -28,7 +28,11 @@ public class PackageAppMojo extends AbstractMojo {
     public void execute() throws MojoExecutionException {
         try {
             new AppPackager().pack(appHome.toPath(), output.toPath());
-            getLog().info("Packaged TesseraQL app to " + output);
+            // The sibling checksum lets installs verify package integrity (design ch. 49, 50).
+            String sha256 = io.tesseraql.core.util.Hashing.sha256(output.toPath());
+            java.nio.file.Files.writeString(
+                    output.toPath().resolveSibling(output.getName() + ".sha256"), sha256 + "\n");
+            getLog().info("Packaged TesseraQL app to " + output + " (sha256 " + sha256 + ")");
         } catch (IOException ex) {
             throw new MojoExecutionException("Failed to package app", ex);
         }

@@ -24,12 +24,21 @@ public final class ZipAppSource implements AppSource {
     private static final TqlErrorCode NOT_FOUND = new TqlErrorCode(TqlDomain.YAML, 1203);
     private static final TqlErrorCode TRAVERSAL = new TqlErrorCode(TqlDomain.YAML, 1201);
 
+    private static final TqlErrorCode INTEGRITY = new TqlErrorCode(TqlDomain.YAML, 1210);
+
     private final String name;
     private final Path packageFile;
+    private final String expectedSha256;
 
     public ZipAppSource(String name, Path packageFile) {
+        this(name, packageFile, null);
+    }
+
+    /** With a non-null {@code expectedSha256} the package hash is verified before extraction. */
+    public ZipAppSource(String name, Path packageFile, String expectedSha256) {
         this.name = name;
         this.packageFile = packageFile.toAbsolutePath().normalize();
+        this.expectedSha256 = expectedSha256;
     }
 
     @Override
@@ -42,6 +51,14 @@ public final class ZipAppSource implements AppSource {
         if (!Files.isRegularFile(packageFile)) {
             throw new TqlException(NOT_FOUND,
                     "App '" + name + "' package does not exist: " + packageFile);
+        }
+        if (expectedSha256 != null && !expectedSha256.isBlank()) {
+            String actual = io.tesseraql.core.util.Hashing.sha256(packageFile);
+            if (!actual.equalsIgnoreCase(expectedSha256.trim())) {
+                throw new TqlException(INTEGRITY, "App '" + name
+                        + "' package integrity check failed: expected sha256 " + expectedSha256
+                        + " but was " + actual);
+            }
         }
         Path target = workRoot.resolve(name).normalize();
         try {

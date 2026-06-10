@@ -61,7 +61,8 @@ public final class AppSources {
             // A .tqlapp package mounts directly (extracted at boot); a path mounts an unpacked dir.
             var packaged = config.getString("tesseraql.apps." + name + ".package");
             if (packaged.isPresent()) {
-                sources.add(new ZipAppSource(name, Path.of(packaged.get())));
+                sources.add(new ZipAppSource(name, Path.of(packaged.get()),
+                        config.getString("tesseraql.apps." + name + ".sha256").orElse(null)));
                 continue;
             }
             config.getString("tesseraql.apps." + name + ".path")

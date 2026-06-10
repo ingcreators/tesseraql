@@ -69,6 +69,22 @@ class ZipAppSourceTest {
     }
 
     @Test
+    void verifiesPackageIntegrityWhenHashGiven() throws Exception {
+        Path tqlapp = zip("demo.tqlapp", Map.of("web/ping/get.yml", "id: ping\n"));
+        String good = io.tesseraql.core.util.Hashing.sha256(tqlapp);
+
+        // The matching hash extracts normally.
+        assertThat(new ZipAppSource("demo", tqlapp, good).materialize(dir.resolve("work")))
+                .exists();
+
+        // A tampered or wrong package is rejected before extraction.
+        assertThatThrownBy(() -> new ZipAppSource("demo", tqlapp, "deadbeef")
+                .materialize(dir.resolve("work2")))
+                .isInstanceOf(TqlException.class)
+                .hasMessageContaining("integrity check failed");
+    }
+
+    @Test
     void missingPackageFails() {
         assertThatThrownBy(() -> new ZipAppSource("ghost", dir.resolve("nope.tqlapp"))
                 .materialize(dir.resolve("work")))

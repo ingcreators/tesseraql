@@ -36,6 +36,25 @@ public final class AppInstaller {
     }
 
     /**
+     * Installs {@code tqlapp} after verifying its SHA-256 against {@code expectedSha256}
+     * (design ch. 49, 50): a tampered or corrupted package is rejected before extraction.
+     */
+    public InstalledApp install(Path tqlapp, Path installRoot, String expectedSha256) {
+        verifyIntegrity(tqlapp, expectedSha256);
+        return install(tqlapp, installRoot, null, List.of());
+    }
+
+    /** Rejects the package when its SHA-256 does not match the expected value. */
+    public static void verifyIntegrity(Path tqlapp, String expectedSha256) {
+        String actual = io.tesseraql.core.util.Hashing.sha256(tqlapp);
+        if (!actual.equalsIgnoreCase(expectedSha256 == null ? "" : expectedSha256.trim())) {
+            throw new TqlException(INVALID_PACKAGE, "Package integrity check failed for "
+                    + tqlapp.getFileName() + ": expected sha256 " + expectedSha256
+                    + " but was " + actual);
+        }
+    }
+
+    /**
      * Installs {@code tqlapp} into {@code installRoot}, applying {@code overlay} (may be null) and
      * recording {@code entitledTenants} (empty = all tenants).
      */

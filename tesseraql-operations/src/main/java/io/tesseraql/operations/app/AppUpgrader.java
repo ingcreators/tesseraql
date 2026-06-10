@@ -70,6 +70,16 @@ public final class AppUpgrader {
     }
 
     /**
+     * Upgrades after verifying the package SHA-256 (design ch. 49, 50): a tampered or corrupted
+     * package is rejected before the preflight even runs.
+     */
+    public UpgradeResult upgrade(Path tqlapp, Path installRoot, SemanticVersion frameworkVersion,
+            boolean canary, String expectedSha256) {
+        AppInstaller.verifyIntegrity(tqlapp, expectedSha256);
+        return upgrade(tqlapp, installRoot, frameworkVersion, canary);
+    }
+
+    /**
      * Upgrades the app. When {@code canary} is true the new version is staged but not activated;
      * call {@link #promote} to activate it or {@link #rollback} to discard it.
      */

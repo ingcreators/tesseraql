@@ -37,6 +37,26 @@ class AppInstallerTest {
     }
 
     @Test
+    void verifiesPackageIntegrityBeforeInstall(@TempDir Path dir) throws Exception {
+        Path pkg = pack(dir.resolve("user-admin.tqlapp"), Map.of(
+                "config/tesseraql.yml", "tesseraql:\n  app:\n    name: user-admin\n    version: 1.2.0\n",
+                "web/api/users/get.yml", "version: tesseraql/v1\nid: users.search\n"));
+        Path installRoot = dir.resolve("apps");
+        String good = io.tesseraql.core.util.Hashing.sha256(pkg);
+
+        // The matching hash installs normally.
+        assertThat(new AppInstaller().install(pkg, installRoot, good).id()).isEqualTo("user-admin");
+
+        // A mismatched hash is rejected before extraction and nothing is catalogued.
+        Path otherRoot = dir.resolve("apps2");
+        org.assertj.core.api.Assertions.assertThatThrownBy(
+                        () -> new AppInstaller().install(pkg, otherRoot, "deadbeef"))
+                .isInstanceOf(io.tesseraql.core.error.TqlException.class)
+                .hasMessageContaining("integrity check failed");
+        assertThat(new AppCatalog(otherRoot).list()).isEmpty();
+    }
+
+    @Test
     void appliesConfigOverlayAndEntitlements(@TempDir Path dir) throws Exception {
         Path pkg = pack(dir.resolve("a.tqlapp"), Map.of(
                 "config/tesseraql.yml", "tesseraql:\n  app:\n    name: shop\n    version: 2.0.0\n"));
