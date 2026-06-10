@@ -23,6 +23,7 @@
     <module>tesseraql-security</module>
     <module>tesseraql-identity</module>
     <module>tesseraql-scim</module>
+    <module>tesseraql-saml</module>
     <module>tesseraql-test-core</module>
     <module>tesseraql-coverage-core</module>
     <module>tesseraql-operations</module>
