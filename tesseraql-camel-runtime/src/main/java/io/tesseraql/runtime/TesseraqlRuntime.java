@@ -245,6 +245,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
             context.addRoutes(new RouteCompiler().compile(manifest));
             context.addRoutes(new OperationsRouteBuilder(
                     jobRunner, jobRepository, List.copyOf(jobs.keySet()), opsDashboard));
+            context.addRoutes(new OpsConsoleRouteBuilder(opsDashboard));
             context.addRoutes(new SchedulingRouteBuilder(jobRunner, List.copyOf(jobs.values())));
             if (manifest.config().getString("tesseraql.scim.enabled")
                     .map(Boolean::parseBoolean).orElse(false)) {
