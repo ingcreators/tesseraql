@@ -25,7 +25,10 @@
       <button type="submit" class="hc-button" data-variant="primary">Enable user</button>
     </form>
     <form method="post" th:action="|/_tesseraql/admin/users/${u.user_id}/disable|">
-      <button type="submit" class="hc-button" data-variant="error">Disable user</button>
+      <button type="submit" class="hc-button" data-variant="error"
+              th:attr="data-hc-confirm=|Disable user ${u.login_id}?|"
+              data-hc-confirm-title="Confirm disable"
+              data-hc-confirm-ok="Disable" data-hc-confirm-variant="error">Disable user</button>
     </form>
   </div>
 </section>

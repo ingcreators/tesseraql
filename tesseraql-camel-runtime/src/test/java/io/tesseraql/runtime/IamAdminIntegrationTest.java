@@ -93,10 +93,12 @@ class IamAdminIntegrationTest {
 
     @Test
     void disableThenEnableUserViaForm() throws Exception {
-        // The detail page offers the status actions as plain form posts.
+        // The detail page offers the status actions as plain form posts; the destructive one is
+        // guarded by the hc confirm behavior (data-hc-confirm dialog before submit).
         HttpResponse<String> before = get("/_tesseraql/admin/users/u2", true);
         assertThat(before.body()).contains("Disable user")
-                .contains("/_tesseraql/admin/users/u2/disable");
+                .contains("/_tesseraql/admin/users/u2/disable")
+                .contains("data-hc-confirm=\"Disable user bob?\"");
 
         // post/redirect/get: the command answers 303 back to the detail page.
         HttpResponse<String> disabled = post("/_tesseraql/admin/users/u2/disable");
