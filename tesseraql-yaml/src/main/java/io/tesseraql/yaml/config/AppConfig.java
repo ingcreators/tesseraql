@@ -22,8 +22,12 @@ public final class AppConfig {
     private static final TqlErrorCode UNRESOLVED = new TqlErrorCode(TqlDomain.YAML, 1101);
     private static final int MAX_DEPTH = 32;
 
+    private static final io.tesseraql.yaml.secret.SecretResolvers DEFAULT_SECRETS =
+            io.tesseraql.yaml.secret.SecretResolvers.discover();
+
     private final Map<String, Object> root;
     private final EnvironmentSource environment;
+    private final io.tesseraql.yaml.secret.SecretResolvers secrets;
 
     /** Source of environment values; abstracted so tests can supply deterministic values. */
     @FunctionalInterface
@@ -36,8 +40,14 @@ public final class AppConfig {
     }
 
     public AppConfig(Map<String, Object> root, EnvironmentSource environment) {
+        this(root, environment, DEFAULT_SECRETS);
+    }
+
+    public AppConfig(Map<String, Object> root, EnvironmentSource environment,
+            io.tesseraql.yaml.secret.SecretResolvers secrets) {
         this.root = Map.copyOf(root);
         this.environment = environment;
+        this.secrets = secrets;
     }
 
     /** Returns the resolved string value at a dotted path, or empty if the path is absent. */
@@ -93,24 +103,45 @@ public final class AppConfig {
         if (depth > MAX_DEPTH) {
             throw new TqlException(UNRESOLVED, "Placeholder resolution too deep (cycle?): " + value);
         }
-        int start = value.indexOf("${");
-        if (start < 0) {
-            return value;
+        StringBuilder out = new StringBuilder();
+        int from = 0;
+        while (true) {
+            int start = value.indexOf("${", from);
+            if (start < 0) {
+                out.append(value, from, value.length());
+                return out.toString();
+            }
+            int end = matchingBrace(value, start + 2);
+            if (end < 0) {
+                out.append(value, from, value.length());
+                return out.toString();
+            }
+            out.append(value, from, start);
+            // Substituted values are not re-scanned: config values and fallbacks expand inside
+            // resolvePlaceholder, while environment and secret values stay literal so a value
+            // containing ${...} can never inject further resolution.
+            out.append(resolvePlaceholder(value.substring(start + 2, end), depth));
+            from = end + 1;
         }
-        int end = matchingBrace(value, start + 2);
-        if (end < 0) {
-            return value;
-        }
-        String body = value.substring(start + 2, end);
-        String resolved = resolvePlaceholder(body, depth);
-        String replaced = value.substring(0, start) + resolved + value.substring(end + 1);
-        return resolve(replaced, depth + 1);
     }
 
     private String resolvePlaceholder(String body, int depth) {
         int colon = topLevelColon(body);
         String key = (colon < 0 ? body : body.substring(0, colon)).trim();
         String fallback = colon < 0 ? null : body.substring(colon + 1);
+
+        // ${secret.<provider>.<name>} resolves through the secret providers (design ch. 41).
+        // Secret values are literal: they never go through another round of expansion.
+        if (key.startsWith("secret.")) {
+            String secret = secrets.resolve(key.substring("secret.".length()));
+            if (secret != null) {
+                return secret;
+            }
+            if (fallback != null) {
+                return resolve(fallback, depth + 1);
+            }
+            throw new TqlException(UNRESOLVED, "Cannot resolve secret '${" + body + "}'");
+        }
 
         String env = environment.get(key);
         if (env != null) {
