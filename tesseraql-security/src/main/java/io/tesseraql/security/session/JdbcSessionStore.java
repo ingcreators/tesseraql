@@ -6,7 +6,6 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.sql.Statement;
 import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
@@ -37,17 +36,14 @@ public final class JdbcSessionStore implements SessionStore {
                 ? DEFAULT_COOKIE_NAME : cookieName;
     }
 
+    /**
+     * Creates the session table if absent, from the bundled
+     * {@code V1__framework_sessions.sql} migration script.
+     */
     public void ensureSchema() {
-        try (Connection connection = dataSource.getConnection();
-                Statement statement = connection.createStatement()) {
-            statement.execute("""
-                    create table if not exists tql_session (
-                      session_id varchar(64) primary key,
-                      principal_json text not null,
-                      csrf_token varchar(64) not null,
-                      created_at timestamp not null,
-                      expires_at timestamp not null
-                    )""");
+        try {
+            io.tesseraql.core.util.SqlScripts.apply(dataSource, JdbcSessionStore.class,
+                    "/tesseraql/db/migration/security/V1__framework_sessions.sql");
         } catch (SQLException ex) {
             throw new IllegalStateException("Failed to create session schema", ex);
         }

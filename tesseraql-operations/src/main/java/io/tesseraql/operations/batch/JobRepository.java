@@ -30,42 +30,14 @@ public final class JobRepository {
         this.dataSource = dataSource;
     }
 
-    /** Creates the repository tables if they do not already exist. */
+    /**
+     * Creates the repository tables if they do not already exist, from the bundled
+     * {@code V1__framework_operations.sql} migration script.
+     */
     public void ensureSchema() {
-        try (Connection connection = dataSource.getConnection();
-                Statement statement = connection.createStatement()) {
-            statement.execute("""
-                    create table if not exists tql_job_execution (
-                      job_execution_id varchar(64) primary key,
-                      job_id varchar(256) not null,
-                      app_name varchar(256),
-                      status varchar(32) not null,
-                      trigger_type varchar(32),
-                      start_time timestamp not null,
-                      end_time timestamp,
-                      duration_ms bigint,
-                      exit_message varchar(2000),
-                      created_at timestamp not null
-                    )""");
-            statement.execute("""
-                    create table if not exists tql_step_execution (
-                      step_execution_id varchar(64) primary key,
-                      job_execution_id varchar(64) not null,
-                      step_id varchar(256) not null,
-                      status varchar(32) not null,
-                      start_time timestamp not null,
-                      end_time timestamp,
-                      duration_ms bigint,
-                      affected_rows integer,
-                      error_message varchar(2000)
-                    )""");
-            statement.execute("""
-                    create table if not exists tql_job_claim (
-                      job_id varchar(256) not null,
-                      fire_time timestamp not null,
-                      claimed_at timestamp not null,
-                      primary key (job_id, fire_time)
-                    )""");
+        try {
+            io.tesseraql.core.util.SqlScripts.apply(dataSource, JobRepository.class,
+                    "/tesseraql/db/migration/operations/V1__framework_operations.sql");
         } catch (SQLException ex) {
             throw error("Failed to create batch repository schema", ex);
         }

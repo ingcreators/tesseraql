@@ -255,8 +255,11 @@ public final class TesseraqlRuntime implements AutoCloseable {
                             manifest.config().getString("tesseraql.diagnostics.batchFailureWarnPercent")
                                     .map(Double::parseDouble).orElse(10.0)),
                     pinningMonitor);
-            // The app's Flyway migrations (db/migration) run before anything queries its schema:
-            // fresh installs, upgrades and canary activations all converge here (design ch. 31, 32).
+            // The framework's own tables migrate first (versioned history per component, and
+            // Flyway's lock serializes concurrent node startups), then the app's db/migration
+            // runs before anything queries its schema: fresh installs, upgrades and canary
+            // activations all converge here (design ch. 31, 32).
+            FrameworkMigrations.migrate(dataSource);
             AppMigrations.migrate(appName, appHome, manifest.config(), dataSource, tenantDataSources);
             context.addService(new VertxPlatformHttpServer(httpConfig));
             context.addRoutes(new RouteCompiler().compile(manifest));

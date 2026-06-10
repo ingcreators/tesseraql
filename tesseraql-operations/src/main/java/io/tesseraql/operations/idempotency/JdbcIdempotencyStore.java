@@ -27,22 +27,14 @@ public final class JdbcIdempotencyStore implements IdempotencyStore {
         this.dataSource = dataSource;
     }
 
+    /**
+     * Creates the idempotency table if absent, from the bundled
+     * {@code V1__framework_operations.sql} migration script.
+     */
     public void ensureSchema() {
-        try (Connection connection = dataSource.getConnection();
-                Statement statement = connection.createStatement()) {
-            statement.execute("""
-                    create table if not exists tql_idempotency_record (
-                      scope varchar(256) not null,
-                      idempotency_key varchar(512) not null,
-                      request_hash varchar(128) not null,
-                      status varchar(32) not null,
-                      response_status integer,
-                      response_body text,
-                      response_content_type varchar(128),
-                      expires_at timestamp not null,
-                      created_at timestamp not null,
-                      primary key (scope, idempotency_key)
-                    )""");
+        try {
+            io.tesseraql.core.util.SqlScripts.apply(dataSource, JdbcIdempotencyStore.class,
+                    "/tesseraql/db/migration/operations/V1__framework_operations.sql");
         } catch (SQLException ex) {
             throw error("Failed to create idempotency schema", ex);
         }

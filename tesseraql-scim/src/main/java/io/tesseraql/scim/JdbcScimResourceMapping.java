@@ -20,13 +20,14 @@ public final class JdbcScimResourceMapping implements ScimResourceMapping {
         this.dataSource = dataSource;
     }
 
-    /** Creates the mapping table if absent (idempotent). */
+    /**
+     * Creates the mapping table if absent, from the bundled
+     * {@code V1__scim_resource_map.sql} migration script.
+     */
     public void ensureSchema() {
-        try (Connection connection = dataSource.getConnection();
-                PreparedStatement statement = connection.prepareStatement(
-                        "create table if not exists tql_scim_resource_map ("
-                                + "local_id varchar(255) primary key, remote_id varchar(255) not null)")) {
-            statement.execute();
+        try {
+            io.tesseraql.core.util.SqlScripts.apply(dataSource, JdbcScimResourceMapping.class,
+                    "/tesseraql/db/migration/scim/V1__scim_resource_map.sql");
         } catch (SQLException ex) {
             throw new ScimException(500, null, "Cannot create SCIM mapping table: " + ex.getMessage());
         }

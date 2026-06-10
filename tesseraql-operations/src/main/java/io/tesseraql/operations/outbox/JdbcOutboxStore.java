@@ -9,7 +9,6 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.sql.Statement;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -30,35 +29,16 @@ public final class JdbcOutboxStore implements OutboxStore {
         this.dataSource = dataSource;
     }
 
+    /**
+     * Creates the outbox table (including the multi-node claim column) if absent, from the
+     * bundled {@code V1__framework_operations.sql} migration script.
+     */
     public void ensureSchema() {
-        try (Connection connection = dataSource.getConnection();
-                Statement statement = connection.createStatement()) {
-            statement.execute("""
-                    create table if not exists tql_outbox_event (
-                      event_id varchar(64) primary key,
-                      aggregate_type varchar(128),
-                      aggregate_id varchar(256),
-                      event_type varchar(256) not null,
-                      payload_json text,
-                      status varchar(32) not null,
-                      attempts integer not null default 0,
-                      last_error varchar(2000),
-                      created_at timestamp not null,
-                      sent_at timestamp,
-                      claimed_at timestamp
-                    )""");
-            addClaimedAtIfMissing(statement);
+        try {
+            io.tesseraql.core.util.SqlScripts.apply(dataSource, JdbcOutboxStore.class,
+                    "/tesseraql/db/migration/operations/V1__framework_operations.sql");
         } catch (SQLException ex) {
             throw error("Failed to create outbox schema", ex);
-        }
-    }
-
-    /** Adds the claim column to outbox tables created before multi-node dispatch existed. */
-    private static void addClaimedAtIfMissing(Statement statement) {
-        try {
-            statement.execute("alter table tql_outbox_event add column claimed_at timestamp");
-        } catch (SQLException alreadyExists) {
-            // The column is already there (the normal case).
         }
     }
 
