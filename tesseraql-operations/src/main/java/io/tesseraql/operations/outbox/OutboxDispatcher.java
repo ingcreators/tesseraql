@@ -8,7 +8,9 @@ import org.slf4j.LoggerFactory;
 
 /**
  * Delivers pending outbox events to a sink, marking each sent or failed (design ch. 39.2).
- * Intended to be run periodically by a scheduled route.
+ * Intended to be run periodically by a scheduled route. Events are claimed atomically per node
+ * ({@link OutboxStore#claimPending}), so concurrent dispatchers on several nodes never deliver
+ * the same event at the same time.
  */
 public final class OutboxDispatcher {
 
@@ -25,7 +27,7 @@ public final class OutboxDispatcher {
     /** Dispatches up to {@code limit} pending events; returns the number successfully sent. */
     public int dispatch(int limit) {
         int sent = 0;
-        for (OutboxEvent event : store.listPending(limit)) {
+        for (OutboxEvent event : store.claimPending(limit)) {
             try {
                 sink.send(event);
                 store.markSent(event.id());

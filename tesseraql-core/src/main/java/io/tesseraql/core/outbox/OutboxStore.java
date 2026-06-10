@@ -17,6 +17,16 @@ public interface OutboxStore {
 
     List<OutboxEvent> listPending(int limit);
 
+    /**
+     * Atomically claims up to {@code limit} pending events for this dispatcher node, so several
+     * nodes polling the same outbox never deliver the same event concurrently (design ch. 39.3).
+     * The default falls back to {@link #listPending(int)} (single-node semantics); JDBC stores
+     * override it with row-level claiming.
+     */
+    default List<OutboxEvent> claimPending(int limit) {
+        return listPending(limit);
+    }
+
     void markSent(String eventId);
 
     void markFailed(String eventId, String error);

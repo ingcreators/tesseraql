@@ -44,10 +44,21 @@ public final class JdbcOutboxStore implements OutboxStore {
                       attempts integer not null default 0,
                       last_error varchar(2000),
                       created_at timestamp not null,
-                      sent_at timestamp
+                      sent_at timestamp,
+                      claimed_at timestamp
                     )""");
+            addClaimedAtIfMissing(statement);
         } catch (SQLException ex) {
             throw error("Failed to create outbox schema", ex);
+        }
+    }
+
+    /** Adds the claim column to outbox tables created before multi-node dispatch existed. */
+    private static void addClaimedAtIfMissing(Statement statement) {
+        try {
+            statement.execute("alter table tql_outbox_event add column claimed_at timestamp");
+        } catch (SQLException alreadyExists) {
+            // The column is already there (the normal case).
         }
     }
 
@@ -87,6 +98,59 @@ public final class JdbcOutboxStore implements OutboxStore {
             }
         } catch (SQLException ex) {
             throw error("Failed to list pending outbox events", ex);
+        }
+        return events;
+    }
+
+    /**
+     * Claims up to {@code limit} deliverable events for this node (design ch. 39.3): rows are
+     * selected with {@code FOR UPDATE SKIP LOCKED} and flipped to {@code SENDING} in one short
+     * transaction, so concurrent dispatcher nodes never pick the same event. A {@code SENDING}
+     * row whose claim is older than five minutes is treated as abandoned (the claiming node
+     * crashed mid-delivery) and becomes claimable again, preserving at-least-once delivery.
+     */
+    @Override
+    public List<OutboxEvent> claimPending(int limit) {
+        List<OutboxEvent> events = new ArrayList<>();
+        try (Connection connection = dataSource.getConnection()) {
+            boolean autoCommit = connection.getAutoCommit();
+            connection.setAutoCommit(false);
+            try {
+                try (PreparedStatement ps = connection.prepareStatement(
+                        "select * from tql_outbox_event where status = 'PENDING' "
+                                + "or (status = 'SENDING' and claimed_at < ?) "
+                                + "order by created_at limit ? for update skip locked")) {
+                    ps.setTimestamp(1, Timestamp.from(
+                            Instant.now().minus(java.time.Duration.ofMinutes(5))));
+                    ps.setInt(2, limit);
+                    try (ResultSet rs = ps.executeQuery()) {
+                        while (rs.next()) {
+                            events.add(read(rs));
+                        }
+                    }
+                }
+                if (!events.isEmpty()) {
+                    try (PreparedStatement claim = connection.prepareStatement(
+                            "update tql_outbox_event set status = 'SENDING', claimed_at = ? "
+                                    + "where event_id = ?")) {
+                        Timestamp now = Timestamp.from(Instant.now());
+                        for (OutboxEvent event : events) {
+                            claim.setTimestamp(1, now);
+                            claim.setString(2, event.id());
+                            claim.addBatch();
+                        }
+                        claim.executeBatch();
+                    }
+                }
+                connection.commit();
+            } catch (SQLException ex) {
+                connection.rollback();
+                throw ex;
+            } finally {
+                connection.setAutoCommit(autoCommit);
+            }
+        } catch (SQLException ex) {
+            throw error("Failed to claim pending outbox events", ex);
         }
         return events;
     }
