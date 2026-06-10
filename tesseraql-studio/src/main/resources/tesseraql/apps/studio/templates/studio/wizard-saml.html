@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TesseraQL Studio · SAML SP wizard</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;font-family:system-ui,sans-serif;background:#0f172a;color:#e2e8f0}
+.topbar{display:flex;align-items:center;justify-content:space-between;padding:16px 24px;background:#1e293b;border-bottom:1px solid #334155}
+.topbar h1{font-size:16px;margin:0}
+main{padding:24px;max-width:1000px;margin:0 auto}
+section{background:#1e293b;border:1px solid #334155;border-radius:8px;padding:16px 20px;margin-bottom:20px}
+a{color:#93c5fd}
+.back{font-size:13px;text-decoration:none}
+form label{display:block;margin:0 0 14px;font-size:13px;color:#cbd5e1}
+form input,form select{width:100%;margin-top:4px;background:#0b1220;color:#e2e8f0;border:1px solid #334155;border-radius:6px;padding:8px;font-family:monospace;font-size:13px}
+.req{color:#fca5a5}
+.toolbar{margin:10px 0 4px}
+button{background:#2563eb;color:#fff;border:0;border-radius:6px;padding:8px 16px;font-size:13px;cursor:pointer}
+.hint{color:#94a3b8;font-size:12px;margin:0 0 16px}
+</style>
+</head>
+<body>
+<header class="topbar">
+  <h1>SAML SP wizard</h1>
+  <a class="back" href="/_tesseraql/studio/ui/wizard">&larr; wizards</a>
+</header>
+<main>
+<section>
+  <p class="hint">Generates a tesseraql-saml.yml fragment to merge into config/tesseraql.yml.
+  Key material is referenced by file path under the app home; never paste certificate contents here.</p>
+  <form method="post" action="/_tesseraql/studio/ui/wizard/saml">
+    <label>SP entity ID / audience <span class="req">*</span><br>
+      <input type="text" name="spAudience" required placeholder="https://app.example.com/saml"></label>
+    <label>Assertion Consumer Service URL <span class="req">*</span><br>
+      <input type="text" name="acsUrl" required placeholder="https://app.example.com/_tesseraql/saml/acs"></label>
+    <label>IdP SSO URL <span class="req">*</span><br>
+      <input type="text" name="ssoUrl" required placeholder="https://idp.example.com/sso"></label>
+    <label>IdP SLO URL (optional)<br>
+      <input type="text" name="sloUrl" placeholder="https://idp.example.com/slo"></label>
+    <label>IdP metadata file path (optional)<br>
+      <input type="text" name="idpMetadataPath" placeholder="security/saml/idp-metadata.xml"></label>
+    <label>IdP signing certificate file path (optional)<br>
+      <input type="text" name="publicKeyPath" placeholder="security/saml/idp-signing.pem"></label>
+    <label>Login ID attribute <span class="req">*</span><br>
+      <input type="text" name="loginIdAttribute" required placeholder="urn:oid:0.9.2342.19200300.100.1.1"></label>
+    <label>Email attribute (optional)<br>
+      <input type="text" name="emailAttribute" placeholder="urn:oid:0.9.2342.19200300.100.1.3"></label>
+    <label>NameID format (optional)<br>
+      <input type="text" name="nameIdFormat" placeholder="urn:oasis:names:tc:SAML:2.0:nameid-format:persistent"></label>
+    <label>Auto-provision new users<br>
+      <select name="provision"><option value="false">false</option><option value="true">true</option></select></label>
+    <div class="toolbar"><button type="submit">Generate &amp; download config</button></div>
+  </form>
+</section>
+</main>
+</body>
+</html>

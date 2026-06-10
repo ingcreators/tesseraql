@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TesseraQL Studio · identity realm wizard</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;font-family:system-ui,sans-serif;background:#0f172a;color:#e2e8f0}
+.topbar{display:flex;align-items:center;justify-content:space-between;padding:16px 24px;background:#1e293b;border-bottom:1px solid #334155}
+.topbar h1{font-size:16px;margin:0}
+main{padding:24px;max-width:1000px;margin:0 auto}
+section{background:#1e293b;border:1px solid #334155;border-radius:8px;padding:16px 20px;margin-bottom:20px}
+a{color:#93c5fd}
+.back{font-size:13px;text-decoration:none}
+form label{display:block;margin:0 0 14px;font-size:13px;color:#cbd5e1}
+form input,form select{width:100%;margin-top:4px;background:#0b1220;color:#e2e8f0;border:1px solid #334155;border-radius:6px;padding:8px;font-family:monospace;font-size:13px}
+.req{color:#fca5a5}
+.toolbar{margin:10px 0 4px}
+button{background:#2563eb;color:#fff;border:0;border-radius:6px;padding:8px 16px;font-size:13px;cursor:pointer}
+.hint{color:#94a3b8;font-size:12px;margin:0 0 16px}
+</style>
+</head>
+<body>
+<header class="topbar">
+  <h1>Identity realm wizard</h1>
+  <a class="back" href="/_tesseraql/studio/ui/wizard">&larr; wizards</a>
+</header>
+<main>
+<section>
+  <p class="hint">Generates a tesseraql-identity.yml fragment to merge into config/tesseraql.yml.</p>
+  <form method="post" action="/_tesseraql/studio/ui/wizard/identity">
+    <label>Realm id <span class="req">*</span><br>
+      <input type="text" name="realmId" required placeholder="local"></label>
+    <label>Realm type <span class="req">*</span><br>
+      <select name="type"><option value="managed">managed</option><option value="sql">sql</option></select></label>
+    <label>Datasource name <span class="req">*</span><br>
+      <input type="text" name="datasource" required value="main"></label>
+    <label>SQL contract root (sql realms, optional)<br>
+      <input type="text" name="sqlRoot" placeholder="security/identity/local"></label>
+    <label>User management capability (optional)<br>
+      <select name="userManagement"><option value="">-</option><option value="readOnly">readOnly</option><option value="readWrite">readWrite</option></select></label>
+    <div class="toolbar"><button type="submit">Generate &amp; download config</button></div>
+  </form>
+</section>
+</main>
+</body>
+</html>

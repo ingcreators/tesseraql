@@ -208,23 +208,34 @@ class StudioIntegrationTest {
     }
 
     @Test
-    void wizardSubmitGeneratesConfig() throws Exception {
+    void wizardSubmitDownloadsGeneratedConfig() throws Exception {
         String form = "spAudience=" + enc("https://app.example.com/saml")
                 + "&acsUrl=" + enc("https://app.example.com/acs")
                 + "&ssoUrl=" + enc("https://idp.example.com/sso")
                 + "&loginIdAttribute=uid&provision=true"
-                + "&publicKey=" + enc("-----BEGIN CERTIFICATE-----\nABC\n-----END CERTIFICATE-----");
+                + "&publicKeyPath=" + enc("security/saml/idp-signing.pem");
 
         HttpResponse<String> result = postForm("/_tesseraql/studio/ui/wizard/saml", form);
 
         assertThat(result.statusCode()).isEqualTo(200);
         assertThat(result.headers().firstValue("content-type"))
-                .hasValueSatisfying(value -> assertThat(value).contains("text/html"));
-        assertThat(result.body()).contains("SAML SP config");
-        assertThat(result.body()).contains("audience: &quot;https://app.example.com/saml&quot;");
+                .hasValueSatisfying(value -> assertThat(value).contains("text/yaml"));
+        assertThat(result.headers().firstValue("content-disposition"))
+                .hasValue("attachment; filename=\"tesseraql-saml.yml\"");
+        assertThat(result.body()).contains("audience: \"https://app.example.com/saml\"");
+        assertThat(result.body()).contains("ssoUrl: \"https://idp.example.com/sso\"");
+        assertThat(result.body()).contains("publicKey: \"security/saml/idp-signing.pem\"");
         assertThat(result.body()).contains("provision: true");
-        // The multi-line certificate field round-trips into the generated YAML.
-        assertThat(result.body()).contains("BEGIN CERTIFICATE");
+        // Optional fields left blank are omitted.
+        assertThat(result.body()).doesNotContain("sloUrl");
+    }
+
+    @Test
+    void wizardSubmitRejectsMissingRequiredField() throws Exception {
+        HttpResponse<String> result = postForm("/_tesseraql/studio/ui/wizard/saml",
+                "acsUrl=" + enc("https://app.example.com/acs"));
+
+        assertThat(result.statusCode()).isEqualTo(400);
     }
 
     @Test

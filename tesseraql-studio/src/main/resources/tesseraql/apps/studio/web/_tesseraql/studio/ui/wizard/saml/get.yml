@@ -1,0 +1,16 @@
+version: tesseraql/v1
+id: tql.studio.wizard.saml.form
+kind: route
+recipe: page
+
+security:
+  auth: bearer
+
+response:
+  html:
+    template: studio/wizard-saml.html
+    headers:
+      Content-Security-Policy: "default-src 'self'; style-src 'self' 'unsafe-inline'; frame-ancestors 'none'"
+      X-Content-Type-Options: nosniff
+      X-Frame-Options: DENY
+      Referrer-Policy: no-referrer
