@@ -7,7 +7,25 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
  * the first milestone; HTML and streaming responses are added in later phases.
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
-public record ResponseSpec(JsonResponse json, HtmlResponse html, StreamResponse stream) {
+public record ResponseSpec(JsonResponse json, HtmlResponse html, StreamResponse stream,
+        RedirectResponse redirect) {
+
+    /**
+     * A redirect response for browser form posts (design ch. 6.4, the post/redirect/get pattern):
+     * after the route's SQL has run, the client is redirected to {@code location}. Placeholders in
+     * curly braces (for example {@code /admin/users/{path.id}}) are source expressions resolved
+     * against the execution context.
+     *
+     * @param status   HTTP status code, defaulting to 303 (See Other)
+     * @param location the redirect target, with optional {expression} placeholders
+     */
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public record RedirectResponse(Integer status, String location) {
+
+        public int effectiveStatus() {
+            return status == null ? 303 : status;
+        }
+    }
 
     /**
      * A streaming response for large-data export (design ch. 28.10).

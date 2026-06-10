@@ -98,8 +98,17 @@ public final class RouteCompiler {
             return;
         }
         ProcessorDefinition<?> route = pipelineThroughSql(builder, routeFile)
-                .process(new JsonResponseRenderer(routeFile.definition().response().json()));
+                .process(responseRenderer(routeFile.definition()));
         applyIdempotencyComplete(route, routeFile.definition());
+    }
+
+    /** The terminal renderer: a redirect when declared, otherwise the JSON response. */
+    private org.apache.camel.Processor responseRenderer(RouteDefinition definition) {
+        if (definition.response() != null && definition.response().redirect() != null) {
+            return new io.tesseraql.compiler.binding.RedirectRenderer(
+                    definition.response().redirect());
+        }
+        return new JsonResponseRenderer(definition.response().json());
     }
 
     /** Builds a command route whose SQL and outbox event commit atomically (design ch. 39.2). */
@@ -122,7 +131,7 @@ public final class RouteCompiler {
         applyIdempotencyBegin(route, definition);
         route.process(new RequestBinder(definition, pathParams(routeFile.urlPath())))
                 .process(new OutboxCommandProcessor(sqlPath, DEFAULT_DATASOURCE, definition.outbox()))
-                .process(new JsonResponseRenderer(definition.response().json()));
+                .process(responseRenderer(definition));
         applyIdempotencyComplete(route, definition);
     }
 

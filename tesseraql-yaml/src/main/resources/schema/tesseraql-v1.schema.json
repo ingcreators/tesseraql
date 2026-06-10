@@ -82,6 +82,15 @@
             "body": {}
           },
           "additionalProperties": true
+        },
+        "redirect": {
+          "type": "object",
+          "required": ["location"],
+          "properties": {
+            "status": { "type": "integer" },
+            "location": { "type": "string" }
+          },
+          "additionalProperties": true
         }
       },
       "additionalProperties": true

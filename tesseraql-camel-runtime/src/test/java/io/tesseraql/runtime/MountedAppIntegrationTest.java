@@ -80,6 +80,20 @@ class MountedAppIntegrationTest {
     }
 
     @Test
+    void commandRouteRedirectsAfterPost() throws Exception {
+        HttpRequest request = HttpRequest.newBuilder(
+                        URI.create("http://localhost:" + runtime.port() + "/sysapp/touch"))
+                .POST(HttpRequest.BodyPublishers.ofString("{\"n\": 9}"))
+                .header("Content-Type", "application/json")
+                .build();
+        HttpResponse<String> response =
+                HttpClient.newHttpClient().send(request, HttpResponse.BodyHandlers.ofString());
+
+        assertThat(response.statusCode()).isEqualTo(303);
+        assertThat(response.headers().firstValue("location")).hasValue("/sysapp/multi?n=9");
+    }
+
+    @Test
     void mainAppRoutesStillWork() throws Exception {
         HttpRequest request = HttpRequest.newBuilder(
                         URI.create("http://localhost:" + runtime.port() + "/api/users"))
@@ -170,6 +184,31 @@ class MountedAppIntegrationTest {
                 """);
         Files.writeString(multiDir.resolve("one.sql"), "select 1 as a\n;\n");
         Files.writeString(multiDir.resolve("two.sql"), "select /* n */ 0 as b\n;\n");
+
+        // A command route answering with a post/redirect/get redirect whose location resolves a
+        // placeholder from the request.
+        Path touchDir = home.resolve("web/sysapp/touch");
+        Files.createDirectories(touchDir);
+        Files.writeString(touchDir.resolve("post.yml"), """
+                version: tesseraql/v1
+                id: sysapp.touch
+                kind: route
+                recipe: command-json
+                input:
+                  n:
+                    type: integer
+                    default: 5
+                sql:
+                  file: touch.sql
+                  mode: update
+                  params:
+                    n: query.n
+                response:
+                  redirect:
+                    location: /sysapp/multi?n={params.n}
+                """);
+        Files.writeString(touchDir.resolve("touch.sql"),
+                "update users set status = status where id = /* n */ -1\n;\n");
         return home;
     }
 
