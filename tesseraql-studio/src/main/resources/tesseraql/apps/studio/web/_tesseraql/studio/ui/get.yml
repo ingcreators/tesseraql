@@ -12,7 +12,7 @@ sql:
 response:
   html:
     status: 200
-    template: studio/explorer.html
+    template: explorer.html
     model:
       studio: sql
     headers:

@@ -1,21 +1,22 @@
 # Studio UI app (design ch. 16): served by the runtime as a mounted system app.
+# Each route folder is the complete unit: yml + colocated template(s).
 web/_tesseraql/studio/ui/get.yml
+web/_tesseraql/studio/ui/explorer.html
 web/_tesseraql/studio/ui/source/get.yml
+web/_tesseraql/studio/ui/source/source.html
 web/_tesseraql/studio/ui/save/post.yml
 web/_tesseraql/studio/ui/apply/post.yml
 web/_tesseraql/studio/ui/wizard/get.yml
+web/_tesseraql/studio/ui/wizard/wizard-index.html
 web/_tesseraql/studio/ui/wizard/saml/get.yml
+web/_tesseraql/studio/ui/wizard/saml/wizard-saml.html
 web/_tesseraql/studio/ui/wizard/saml/post.yml
+web/_tesseraql/studio/ui/wizard/saml/wizard-saml.yml.tpl
 web/_tesseraql/studio/ui/wizard/scim/get.yml
+web/_tesseraql/studio/ui/wizard/scim/wizard-scim.html
 web/_tesseraql/studio/ui/wizard/scim/post.yml
+web/_tesseraql/studio/ui/wizard/scim/wizard-scim.yml.tpl
 web/_tesseraql/studio/ui/wizard/identity/get.yml
+web/_tesseraql/studio/ui/wizard/identity/wizard-identity.html
 web/_tesseraql/studio/ui/wizard/identity/post.yml
-templates/studio/explorer.html
-templates/studio/source.html
-templates/studio/wizard-index.html
-templates/studio/wizard-saml.html
-templates/studio/wizard-scim.html
-templates/studio/wizard-identity.html
-templates/studio/wizard-saml.yml.tpl
-templates/studio/wizard-scim.yml.tpl
-templates/studio/wizard-identity.yml.tpl
+web/_tesseraql/studio/ui/wizard/identity/wizard-identity.yml.tpl

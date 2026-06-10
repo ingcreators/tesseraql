@@ -25,7 +25,7 @@ security:
 
 response:
   file:
-    template: studio/wizard-identity.yml.tpl
+    template: wizard-identity.yml.tpl
     contentType: text/yaml
     filename: tesseraql-identity.yml
     model:

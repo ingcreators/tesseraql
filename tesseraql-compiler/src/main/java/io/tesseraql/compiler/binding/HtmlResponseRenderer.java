@@ -17,32 +17,45 @@ import org.apache.camel.Processor;
 
 /**
  * Renders an HTML page or fragment response from a Thymeleaf template and model (design ch. 6.4,
- * 12). The template's existence is verified at build time (fail-fast); at request time the model
- * expressions are resolved against the execution context, the template is rendered, and configured
- * response headers (such as {@code HX-Trigger}) are emitted, serializing nested values to JSON.
+ * 12). The template path resolves like {@code sql.file}: first relative to the route's own
+ * directory (the colocated yml + sql + html unit), falling back to the app's shared
+ * {@code templates/} directory for cross-route fragments and layouts. Existence is verified at
+ * build time (fail-fast); at request time the model expressions are resolved against the execution
+ * context, the template is rendered, and configured response headers (such as {@code HX-Trigger})
+ * are emitted, serializing nested values to JSON.
  */
 public final class HtmlResponseRenderer implements Processor {
 
     private static final TqlErrorCode RENDER_ERROR = new TqlErrorCode(TqlDomain.TPL, 2001);
 
     private final HtmlResponse response;
-    private final Path templateRoot;
+    private final Path appHome;
+    private final String templateName;
     private final ObjectMapper mapper = new ObjectMapper();
 
-    public HtmlResponseRenderer(HtmlResponse response, Path templateRoot) {
+    public HtmlResponseRenderer(HtmlResponse response, Path appHome, Path routeDir) {
         this.response = response;
-        this.templateRoot = templateRoot.toAbsolutePath().normalize();
-        requireInsideRoot(this.templateRoot, response.template());
+        this.appHome = appHome.toAbsolutePath().normalize();
+        this.templateName = resolveTemplate(this.appHome, routeDir, response.template());
     }
 
-    static void requireInsideRoot(Path templateRoot, String template) {
-        Path templateFile = templateRoot.resolve(template).normalize();
-        if (!templateFile.startsWith(templateRoot)) {
-            throw new TqlException(RENDER_ERROR, "Template escapes template root: " + template);
+    /**
+     * Resolves a route's template: colocated next to the route first, then the shared
+     * {@code templates/} root; confined to the app home. Returns the app-home-relative name used
+     * with the app's template engine.
+     */
+    static String resolveTemplate(Path appHome, Path routeDir, String template) {
+        Path colocated = routeDir.toAbsolutePath().normalize().resolve(template).normalize();
+        Path file = Files.isRegularFile(colocated)
+                ? colocated
+                : appHome.resolve("templates").resolve(template).normalize();
+        if (!file.startsWith(appHome)) {
+            throw new TqlException(RENDER_ERROR, "Template escapes app home: " + template);
         }
-        if (!Files.isRegularFile(templateFile)) {
+        if (!Files.isRegularFile(file)) {
             throw new TqlException(RENDER_ERROR, "Template not found: " + template);
         }
+        return appHome.relativize(file).toString().replace('\\', '/');
     }
 
     @Override
@@ -56,7 +69,7 @@ public final class HtmlResponseRenderer implements Processor {
         response.model().forEach((key, expr) ->
                 model.put(key, evaluation.resolve(Arrays.asList(String.valueOf(expr).split("\\.")))));
 
-        String html = Templates.render(templateRoot, response.template(), model);
+        String html = Templates.render(appHome, templateName, model);
 
         exchange.getMessage().setHeader(Exchange.HTTP_RESPONSE_CODE, response.effectiveStatus());
         exchange.getMessage().setHeader(Exchange.CONTENT_TYPE, "text/html; charset=utf-8");

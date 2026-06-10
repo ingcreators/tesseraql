@@ -40,7 +40,7 @@ security:
 
 response:
   file:
-    template: studio/wizard-saml.yml.tpl
+    template: wizard-saml.yml.tpl
     contentType: text/yaml
     filename: tesseraql-saml.yml
     model:

@@ -15,7 +15,7 @@ sql:
 response:
   html:
     status: 200
-    template: ops/execution.html
+    template: execution.html
     model:
       execution: sql
     headers:

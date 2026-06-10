@@ -17,7 +17,7 @@ queries:
 response:
   html:
     status: 200
-    template: admin-users/list.html
+    template: list.html
     model:
       users: sql.rows
       total: total.rows

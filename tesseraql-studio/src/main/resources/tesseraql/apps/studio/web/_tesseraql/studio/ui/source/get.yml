@@ -25,7 +25,7 @@ sql:
 response:
   html:
     status: 200
-    template: studio/source.html
+    template: source.html
     model:
       src: sql
       saved: params.saved

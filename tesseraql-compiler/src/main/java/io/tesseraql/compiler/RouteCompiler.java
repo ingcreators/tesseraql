@@ -172,14 +172,14 @@ public final class RouteCompiler {
      * renders as a text file response (e.g. a generated config download) instead of HTML.
      */
     private void buildTemplatePage(RouteBuilder builder, Path appHome, RouteFile routeFile) {
-        Path templateRoot = appHome.resolve("templates");
+        Path routeDir = routeFile.source().getParent();
         ProcessorDefinition<?> route = pipelineThroughSql(builder, routeFile);
         if (routeFile.definition().response().file() != null) {
             route.process(new io.tesseraql.compiler.binding.FileResponseRenderer(
-                    routeFile.definition().response().file(), templateRoot));
+                    routeFile.definition().response().file(), appHome, routeDir));
         } else {
             route.process(new HtmlResponseRenderer(
-                    routeFile.definition().response().html(), templateRoot));
+                    routeFile.definition().response().html(), appHome, routeDir));
         }
     }
 

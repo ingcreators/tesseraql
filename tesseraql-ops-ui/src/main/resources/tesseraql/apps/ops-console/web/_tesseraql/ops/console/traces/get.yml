@@ -13,7 +13,7 @@ sql:
 response:
   html:
     status: 200
-    template: ops/traces.html
+    template: traces.html
     model:
       traces: sql
     headers:

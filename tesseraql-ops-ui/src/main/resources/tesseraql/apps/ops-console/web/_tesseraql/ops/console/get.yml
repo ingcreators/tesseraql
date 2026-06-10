@@ -13,7 +13,7 @@ sql:
 response:
   html:
     status: 200
-    template: ops/overview.html
+    template: overview.html
     model:
       ops: sql
     headers:

@@ -29,7 +29,7 @@ queries:
 response:
   html:
     status: 200
-    template: admin-users/detail.html
+    template: detail.html
     model:
       user: sql.rows
       roles: roles.rows

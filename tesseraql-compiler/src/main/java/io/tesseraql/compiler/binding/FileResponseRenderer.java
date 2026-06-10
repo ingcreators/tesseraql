@@ -20,12 +20,14 @@ import org.apache.camel.Processor;
 public final class FileResponseRenderer implements Processor {
 
     private final FileResponse response;
-    private final Path templateRoot;
+    private final Path appHome;
+    private final String templateName;
 
-    public FileResponseRenderer(FileResponse response, Path templateRoot) {
+    public FileResponseRenderer(FileResponse response, Path appHome, Path routeDir) {
         this.response = response;
-        this.templateRoot = templateRoot.toAbsolutePath().normalize();
-        HtmlResponseRenderer.requireInsideRoot(this.templateRoot, response.template());
+        this.appHome = appHome.toAbsolutePath().normalize();
+        this.templateName = HtmlResponseRenderer.resolveTemplate(
+                this.appHome, routeDir, response.template());
     }
 
     @Override
@@ -45,7 +47,7 @@ public final class FileResponseRenderer implements Processor {
             exchange.getMessage().setHeader("Content-Disposition",
                     "attachment; filename=\"" + sanitizeFilename(response.filename()) + "\"");
         }
-        exchange.getMessage().setBody(Templates.render(templateRoot, response.template(), model));
+        exchange.getMessage().setBody(Templates.render(appHome, templateName, model));
     }
 
     /** Keeps the download filename header-safe (no quotes or control characters). */

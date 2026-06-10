@@ -21,7 +21,7 @@ sql:
 response:
   html:
     status: 200
-    template: users/fragments/table.html
+    template: table.html
     model:
       users: sql.rows
       criteria: params

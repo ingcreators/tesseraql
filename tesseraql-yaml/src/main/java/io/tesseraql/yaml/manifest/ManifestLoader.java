@@ -140,9 +140,9 @@ public final class ManifestLoader {
                 segments.add(segment.toString());
             }
         }
-        if (!segments.isEmpty() && "htmx".equals(segments.get(0))) {
-            segments.remove(0); // htmx routes are served without the htmx prefix (design ch. 4.2)
-        }
+        // web/ mirrors the URL space one-to-one (design ch. 4.2): no directory is special-cased,
+        // so the URL is always predictable from the file path. API vs page vs fragment is a URL
+        // convention (/api/..., /users/..., .../fragments/<name>), not a folder rule.
         String urlPath = "/" + String.join("/", segments);
         return new RouteFile(method, urlPath, file, definition);
     }

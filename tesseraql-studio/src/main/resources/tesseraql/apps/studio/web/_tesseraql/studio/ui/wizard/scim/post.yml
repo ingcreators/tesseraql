@@ -22,7 +22,7 @@ security:
 
 response:
   file:
-    template: studio/wizard-scim.yml.tpl
+    template: wizard-scim.yml.tpl
     contentType: text/yaml
     filename: tesseraql-scim.yml
     model:
