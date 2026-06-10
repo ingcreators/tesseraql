@@ -13,7 +13,7 @@ sql:
 response:
   html:
     status: 200
-    template: table.html
+    template: index.html
     model:
       users: sql.rows
       count: sql.rowCount

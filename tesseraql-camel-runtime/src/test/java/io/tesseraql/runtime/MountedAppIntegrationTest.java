@@ -177,7 +177,10 @@ class MountedAppIntegrationTest {
         assertThat(response.body()).contains("hc-shell");
         assertThat(response.body()).contains("ユーザー一覧");
         assertThat(response.body()).contains("hx-get=\"/users/fragments/table\"");
-        // The app-specific nav replaces the system-console nav.
+        // Live search (the htmx active-search recipe) re-fetches the fragment as you type.
+        assertThat(response.body()).contains("hx-trigger=\"input changed delay:300ms, search\"");
+        // The shared app nav (templates/nav.html fragment) replaces the system-console nav.
+        assertThat(response.body()).contains("ユーザー管理（IAM）");
         assertThat(response.body()).doesNotContain("/_tesseraql/ops/console");
     }
 

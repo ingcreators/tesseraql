@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<!-- IAM user administration page: the framework shell with the app navigation and the user list
+     rendered inline from the identity.list-users contract. -->
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{tql/shell :: shell('ユーザー管理（IAM）', ~{templates/nav.html :: app-nav}, ~{}, ~{:: #page-content})}">
+<div id="page-content">
+<section class="hc-card">
+  <h2>ユーザー管理</h2>
+  <p class="summary">登録ユーザー: <strong th:text="${count}"></strong></p>
+  <table class="hc-table">
+    <thead>
+      <tr>
+        <th>ログインID</th>
+        <th>表示名</th>
+        <th>メール</th>
+        <th>状態</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr th:each="u : ${users}">
+        <td th:text="${u.login_id}"></td>
+        <td th:text="${u.display_name}"></td>
+        <td th:text="${u.email}"></td>
+        <td th:class="'status-' + ${#strings.toLowerCase(u.status)}" th:text="${u.status}"></td>
+      </tr>
+      <tr th:if="${#lists.isEmpty(users)}"><td colspan="4">ユーザーがいません</td></tr>
+    </tbody>
+  </table>
+</section>
+</div>
+</html>
