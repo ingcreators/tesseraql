@@ -225,7 +225,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
             return jobExecutor.run(jobFile, dataSource, appName, params, "manual");
         };
 
-        io.tesseraql.core.outbox.OutboxEventSink outboxSink = scimOutboundSink(manifest, dataSource);
+        io.tesseraql.core.outbox.OutboxEventSink outboxSink;
         io.tesseraql.opsui.OpsDashboard opsDashboard;
         try {
             opsDashboard = new io.tesseraql.opsui.OpsDashboard(jobRepository, lanes, slowSqlLog,
@@ -254,11 +254,6 @@ public final class TesseraqlRuntime implements AutoCloseable {
                     jobRunner, jobRepository, List.copyOf(jobs.keySet()), opsDashboard));
             context.addRoutes(new OpsConsoleRouteBuilder(opsDashboard, jobRepository));
             context.addRoutes(new SchedulingRouteBuilder(jobRunner, List.copyOf(jobs.values())));
-            if (manifest.config().getString("tesseraql.scim.enabled")
-                    .map(Boolean::parseBoolean).orElse(false)) {
-                context.addRoutes(new ScimRouteBuilder(buildScimUserService(manifest, dataSource),
-                        buildScimGroupService(manifest, dataSource)));
-            }
 
             IdentityService identity = new IdentityService(name ->
                     context.getRegistry().lookupByNameAndType(name, javax.sql.DataSource.class),
@@ -272,6 +267,25 @@ public final class TesseraqlRuntime implements AutoCloseable {
                     .map(Boolean::parseBoolean).orElse(false)) {
                 context.addRoutes(buildSamlAcs(manifest, sessionStore, identity, realm));
             }
+            // Optional feature modules (SCIM, ...) self-install via ServiceLoader (design ch. 47).
+            for (io.tesseraql.compiler.ext.RuntimeExtension extension : java.util.ServiceLoader
+                    .load(io.tesseraql.compiler.ext.RuntimeExtension.class)) {
+                if (extension.enabled(manifest.config())) {
+                    extension.install(new io.tesseraql.compiler.ext.ExtensionContext(
+                            context, manifest, dataSource));
+                    LOG.info("Installed runtime extension '{}'", extension.name());
+                }
+            }
+            // The outbox always logs deliveries; an extension-contributed sink (e.g. SCIM outbound
+            // provisioning) is composed on top when bound.
+            io.tesseraql.core.outbox.OutboxEventSink extensionSink =
+                    context.getRegistry().lookupByNameAndType(
+                            TesseraqlProperties.OUTBOX_EVENT_SINK_BEAN,
+                            io.tesseraql.core.outbox.OutboxEventSink.class);
+            outboxSink = extensionSink == null ? LOGGING_SINK : event -> {
+                LOGGING_SINK.send(event);
+                extensionSink.send(event);
+            };
             if (manifest.config().getString("tesseraql.studio.enabled")
                     .map(Boolean::parseBoolean).orElse(true)) {
                 boolean readOnly = manifest.config().getString("tesseraql.studio.readOnly")
@@ -297,37 +311,6 @@ public final class TesseraqlRuntime implements AutoCloseable {
         return new TesseraqlRuntime(context, dataSource, port, jobRepository, jobExecutor,
                 outboxStore, jobs, appName, lanes, tenantDataSources, manifest.config(),
                 pinningSource, otelSdk, opsDashboard, outboxSink);
-    }
-
-    /**
-     * Builds the outbox sink: the logging sink, optionally composed with SCIM outbound sinks that
-     * provision {@code USER_*}/{@code GROUP_*} events to a downstream provider (design ch. 10.15). The
-     * user and group provisioners share one HTTP client and one resource-mapping table (group keys are
-     * namespaced), so both resource types are provisioned from the same outbox. At-least-once retry is
-     * preserved because a sink failure propagates.
-     */
-    private static io.tesseraql.core.outbox.OutboxEventSink scimOutboundSink(
-            AppManifest manifest, HikariDataSource dataSource) {
-        if (!manifest.config().getString("tesseraql.scim.outbound.enabled")
-                .map(Boolean::parseBoolean).orElse(false)) {
-            return LOGGING_SINK;
-        }
-        io.tesseraql.scim.ScimTarget target = new io.tesseraql.scim.ScimTarget(
-                manifest.config().requireString("tesseraql.scim.outbound.target.url"),
-                manifest.config().getString("tesseraql.scim.outbound.target.token").orElse(""));
-        io.tesseraql.scim.JdbcScimResourceMapping mapping =
-                new io.tesseraql.scim.JdbcScimResourceMapping(dataSource);
-        mapping.ensureSchema();
-        io.tesseraql.scim.ScimOutboundClient client = new io.tesseraql.scim.ScimOutboundClient(target);
-        io.tesseraql.scim.ScimOutboundSink userSink = new io.tesseraql.scim.ScimOutboundSink(
-                new io.tesseraql.scim.ScimProvisioner(client, mapping));
-        io.tesseraql.scim.ScimGroupOutboundSink groupSink = new io.tesseraql.scim.ScimGroupOutboundSink(
-                new io.tesseraql.scim.ScimGroupProvisioner(client, mapping));
-        return event -> {
-            LOGGING_SINK.send(event);
-            userSink.send(event);
-            groupSink.send(event);
-        };
     }
 
     /**
@@ -388,59 +371,6 @@ public final class TesseraqlRuntime implements AutoCloseable {
         } catch (java.io.IOException ex) {
             throw new IllegalStateException("Cannot read SAML key material: " + relative, ex);
         }
-    }
-
-    /** Builds the SCIM user service from the configured contract SQL files (design ch. 10.15). */
-    private static io.tesseraql.scim.ScimUserService buildScimUserService(
-            AppManifest manifest, HikariDataSource dataSource) {
-        io.tesseraql.scim.ScimContract contract = new io.tesseraql.scim.ScimContract(
-                readScimSql(manifest, "tesseraql.scim.users.create"),
-                readScimSql(manifest, "tesseraql.scim.users.findById"),
-                readScimSql(manifest, "tesseraql.scim.users.list"),
-                readScimSql(manifest, "tesseraql.scim.users.replace"),
-                readScimSql(manifest, "tesseraql.scim.users.delete"),
-                readScimSql(manifest, "tesseraql.scim.users.findByUserName"),
-                readScimSqlOptional(manifest, "tesseraql.scim.users.count"));
-        return new io.tesseraql.scim.ScimUserService(dataSource, contract);
-    }
-
-    /**
-     * Builds the SCIM group service from the configured contract SQL files, or {@code null} when
-     * group provisioning is disabled (design ch. 10.15). Returning null leaves the {@code /Groups}
-     * endpoints unmounted.
-     */
-    private static io.tesseraql.scim.ScimGroupService buildScimGroupService(
-            AppManifest manifest, HikariDataSource dataSource) {
-        if (!manifest.config().getString("tesseraql.scim.groups.enabled")
-                .map(Boolean::parseBoolean).orElse(false)) {
-            return null;
-        }
-        io.tesseraql.scim.ScimGroupContract contract = new io.tesseraql.scim.ScimGroupContract(
-                readScimSql(manifest, "tesseraql.scim.groups.create"),
-                readScimSql(manifest, "tesseraql.scim.groups.findById"),
-                readScimSql(manifest, "tesseraql.scim.groups.list"),
-                readScimSql(manifest, "tesseraql.scim.groups.replace"),
-                readScimSql(manifest, "tesseraql.scim.groups.delete"),
-                readScimSql(manifest, "tesseraql.scim.groups.listMembers"),
-                readScimSql(manifest, "tesseraql.scim.groups.addMember"),
-                readScimSql(manifest, "tesseraql.scim.groups.removeMember"),
-                readScimSqlOptional(manifest, "tesseraql.scim.groups.count"));
-        return new io.tesseraql.scim.ScimGroupService(dataSource, contract);
-    }
-
-    private static String readScimSql(AppManifest manifest, String configKey) {
-        String relative = manifest.config().requireString(configKey);
-        try {
-            return java.nio.file.Files.readString(manifest.appHome().resolve(relative).normalize());
-        } catch (java.io.IOException ex) {
-            throw new IllegalStateException("Cannot read SCIM contract SQL: " + relative, ex);
-        }
-    }
-
-    /** Reads an optional SCIM contract SQL file, returning {@code null} when the key is unset. */
-    private static String readScimSqlOptional(AppManifest manifest, String configKey) {
-        return manifest.config().getString(configKey).isPresent()
-                ? readScimSql(manifest, configKey) : null;
     }
 
     /** Runs a batch job by id and returns its final execution record (design ch. 26). */

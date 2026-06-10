@@ -19,6 +19,12 @@
       <artifactId>tesseraql-core</artifactId>
       <version>${project.version}</version>
     </dependency>
+    <!-- RuntimeExtension SPI + Camel/yaml, so the SCIM routes self-install (design ch. 47). -->
+    <dependency>
+      <groupId>io.tesseraql</groupId>
+      <artifactId>tesseraql-compiler</artifactId>
+      <version>${project.version}</version>
+    </dependency>
     <dependency>
       <groupId>com.fasterxml.jackson.core</groupId>
       <artifactId>jackson-databind</artifactId>

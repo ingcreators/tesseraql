@@ -24,6 +24,8 @@ public final class TesseraqlProperties {
     public static final String TEMP_STORE_BEAN = "tesseraqlTempStore";
     public static final String IDEMPOTENCY_STORE_BEAN = "tesseraqlIdempotencyStore";
     public static final String OUTBOX_STORE_BEAN = "tesseraqlOutboxStore";
+    /** An OutboxEventSink contributed by a runtime extension (e.g. SCIM outbound provisioning). */
+    public static final String OUTBOX_EVENT_SINK_BEAN = "tesseraqlOutboxEventSink";
     public static final String IDENTITY_SERVICE_BEAN = "tesseraqlIdentityService";
     public static final String IDENTITY_REALM_BEAN = "tesseraqlIdentityRealm";
     public static final String TRACER_BEAN = "tesseraqlTracer";

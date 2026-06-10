@@ -39,10 +39,13 @@
       <artifactId>tesseraql-identity</artifactId>
       <version>${project.version}</version>
     </dependency>
+    <!-- Opt-in feature: the runtime has no compile dependency on SCIM; it self-installs via the
+         RuntimeExtension SPI when the jar is on the classpath. Test scope keeps the ITs here. -->
     <dependency>
       <groupId>io.tesseraql</groupId>
       <artifactId>tesseraql-scim</artifactId>
       <version>${project.version}</version>
+      <scope>test</scope>
     </dependency>
     <dependency>
       <groupId>io.tesseraql</groupId>

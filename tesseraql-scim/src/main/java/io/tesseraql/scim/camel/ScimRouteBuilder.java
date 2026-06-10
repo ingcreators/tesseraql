@@ -1,4 +1,4 @@
-package io.tesseraql.runtime;
+package io.tesseraql.scim.camel;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.tesseraql.scim.ScimError;
@@ -16,7 +16,7 @@ import org.apache.camel.builder.RouteBuilder;
  * require a bearer principal with the {@code scim.manage} policy; responses use the SCIM media type
  * and SCIM error envelope.
  */
-final class ScimRouteBuilder extends RouteBuilder {
+public final class ScimRouteBuilder extends RouteBuilder {
 
     private static final String AUTH = "tesseraql-auth:authenticate?auth=bearer";
     private static final String AUTHORIZE = "tesseraql-auth:authorize?policy=scim.manage";
@@ -26,11 +26,11 @@ final class ScimRouteBuilder extends RouteBuilder {
     private final ScimUserService users;
     private final ScimGroupService groups;
 
-    ScimRouteBuilder(ScimUserService users) {
+    public ScimRouteBuilder(ScimUserService users) {
         this(users, null);
     }
 
-    ScimRouteBuilder(ScimUserService users, ScimGroupService groups) {
+    public ScimRouteBuilder(ScimUserService users, ScimGroupService groups) {
         this.users = users;
         this.groups = groups;
     }
