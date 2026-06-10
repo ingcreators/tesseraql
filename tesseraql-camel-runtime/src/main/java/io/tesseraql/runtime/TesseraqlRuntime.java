@@ -259,6 +259,10 @@ public final class TesseraqlRuntime implements AutoCloseable {
             context.getRegistry().bind(TesseraqlProperties.IDENTITY_REALM_BEAN, realm);
             context.addRoutes(new LoginRouteBuilder(
                     new PasswordAuthenticator(identity), realm, sessionStore));
+            if (manifest.config().getString("tesseraql.saml.enabled")
+                    .map(Boolean::parseBoolean).orElse(false)) {
+                context.addRoutes(buildSamlAcs(manifest, sessionStore));
+            }
             if (manifest.config().getString("tesseraql.studio.enabled")
                     .map(Boolean::parseBoolean).orElse(true)) {
                 boolean readOnly = manifest.config().getString("tesseraql.studio.readOnly")
@@ -315,6 +319,37 @@ public final class TesseraqlRuntime implements AutoCloseable {
             userSink.send(event);
             groupSink.send(event);
         };
+    }
+
+    /**
+     * Builds the SAML ACS route from configuration (design ch. 10.14): the SP audience and ACS URL,
+     * the pinned IdP signing key loaded from {@code tesseraql.saml.idp.publicKey} (a certificate or
+     * public-key file under the app home), and the assertion-to-principal attribute mapping.
+     */
+    private static SamlAcsRouteBuilder buildSamlAcs(AppManifest manifest,
+            io.tesseraql.security.session.SessionStore sessions) {
+        var config = manifest.config();
+        String audience = config.requireString("tesseraql.saml.sp.audience");
+        String recipient = config.getString("tesseraql.saml.sp.acsUrl").orElse(null);
+        java.security.PublicKey idpKey = io.tesseraql.saml.SamlKeys.publicKey(
+                readSamlBytes(manifest, config.requireString("tesseraql.saml.idp.publicKey")));
+        io.tesseraql.saml.SamlResponseValidator validator = new io.tesseraql.saml.SamlResponseValidator(
+                new io.tesseraql.saml.SamlValidationConfig(audience, idpKey, recipient, null));
+        io.tesseraql.saml.SamlAttributeMapping mapping = new io.tesseraql.saml.SamlAttributeMapping(
+                config.getString("tesseraql.saml.attributes.loginId").orElse(null),
+                config.getString("tesseraql.saml.attributes.displayName").orElse(null),
+                config.getString("tesseraql.saml.attributes.roles").orElse(null),
+                config.getString("tesseraql.saml.attributes.groups").orElse(null),
+                config.getString("tesseraql.saml.attributes.tenant").orElse(null));
+        return new SamlAcsRouteBuilder(validator, mapping, sessions);
+    }
+
+    private static byte[] readSamlBytes(AppManifest manifest, String relative) {
+        try {
+            return java.nio.file.Files.readAllBytes(manifest.appHome().resolve(relative).normalize());
+        } catch (java.io.IOException ex) {
+            throw new IllegalStateException("Cannot read SAML key material: " + relative, ex);
+        }
     }
 
     /** Builds the SCIM user service from the configured contract SQL files (design ch. 10.15). */
