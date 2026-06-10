@@ -96,6 +96,44 @@ class StudioServiceTest {
     }
 
     @Test
+    void previewValidatesTemplates() {
+        StudioService studio = new StudioService(exampleManifest(), true);
+
+        // A well-formed fragment template parses and renders against an empty model.
+        PreviewResult ok = studio.preview("web/users/fragments/table/table.html",
+                "<div th:each=\"u : ${users}\" xmlns:th=\"http://www.thymeleaf.org\">"
+                        + "<span th:text=\"${u.name}\"></span></div>");
+        assertThat(ok.valid()).isTrue();
+        assertThat(ok.kind()).isEqualTo("template");
+
+        // Malformed markup (an unclosed attribute quote) is rejected with the parser message.
+        PreviewResult malformed = studio.preview("web/users/index.html",
+                "<div th:text=\"${x}>oops</div>");
+        assertThat(malformed.valid()).isFalse();
+        assertThat(malformed.error()).isNotBlank();
+
+        // An unparseable expression is a static authoring error, not a data-dependent one.
+        PreviewResult badExpr = studio.preview("web/users/index.html",
+                "<p th:text=\"${\" xmlns:th=\"http://www.thymeleaf.org\"></p>");
+        assertThat(badExpr.valid()).isFalse();
+
+        // A reference to a template that does not exist is a hard error too.
+        PreviewResult badRef = studio.preview("web/users/index.html",
+                "<div th:replace=\"~{templates/missing.html :: nav}\"></div>");
+        assertThat(badRef.valid()).isFalse();
+
+        // Expression failures that need real route data still count as parsed.
+        PreviewResult needsData = studio.preview("web/users/index.html",
+                "<p th:text=\"${user.profile.name}\"></p>");
+        assertThat(needsData.valid()).isTrue();
+        assertThat(needsData.result()).contains("parses");
+
+        // TEXT-mode file templates validate as well.
+        PreviewResult text = studio.preview("web/x/conf.yml.tpl", "name: \"[(${appName})]\"\n");
+        assertThat(text.valid()).isTrue();
+    }
+
+    @Test
     void applyPromotesDraftToSourceThenReloadReflectsIt(@TempDir Path dir) throws Exception {
         Files.createDirectories(dir.resolve("config"));
         Files.writeString(dir.resolve("config/tesseraql.yml"), "tesseraql:\n  app:\n    name: t\n");

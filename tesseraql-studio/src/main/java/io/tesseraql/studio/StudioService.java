@@ -118,7 +118,80 @@ public final class StudioService {
                 return PreviewResult.invalid("route", ex.getMessage());
             }
         }
+        if (relativePath.endsWith(".html") || relativePath.endsWith(".tpl")) {
+            return previewTemplate(relativePath, text);
+        }
         return PreviewResult.valid("text", text);
+    }
+
+    /**
+     * Validates a draft template by processing it with the standard engine and an empty model
+     * (design ch. 16.6): framework {@code tql/*} fragments resolve from the classpath and other
+     * app templates from the app home, so cross-references are checked too. Markup/parse errors
+     * are invalid; expression errors that need real route data still count as parsed.
+     */
+    private PreviewResult previewTemplate(String relativePath, String content) {
+        org.thymeleaf.TemplateEngine engine = new org.thymeleaf.TemplateEngine();
+
+        org.thymeleaf.templateresolver.ClassLoaderTemplateResolver shared =
+                new org.thymeleaf.templateresolver.ClassLoaderTemplateResolver(
+                        StudioService.class.getClassLoader());
+        shared.setPrefix("tesseraql/templates/");
+        shared.setSuffix(".html");
+        shared.setTemplateMode(org.thymeleaf.templatemode.TemplateMode.HTML);
+        shared.setResolvablePatterns(java.util.Set.of("tql/*"));
+        shared.setOrder(1);
+        engine.addTemplateResolver(shared);
+
+        org.thymeleaf.templateresolver.FileTemplateResolver files =
+                new org.thymeleaf.templateresolver.FileTemplateResolver();
+        files.setPrefix(appHome.toString() + java.io.File.separator);
+        files.setTemplateMode(org.thymeleaf.templatemode.TemplateMode.HTML);
+        files.setResolvablePatterns(java.util.Set.of("*.html"));
+        files.setCheckExistence(true);
+        files.setOrder(2);
+        engine.addTemplateResolver(files);
+
+        org.thymeleaf.templateresolver.StringTemplateResolver draft =
+                new org.thymeleaf.templateresolver.StringTemplateResolver();
+        draft.setTemplateMode(relativePath.endsWith(".html")
+                ? org.thymeleaf.templatemode.TemplateMode.HTML
+                : org.thymeleaf.templatemode.TemplateMode.TEXT);
+        draft.setOrder(3);
+        engine.addTemplateResolver(draft);
+
+        try {
+            engine.process(content, new org.thymeleaf.context.Context());
+            return PreviewResult.valid("template", "template parses and renders with an empty model");
+        } catch (RuntimeException ex) {
+            if (isDataDependent(ex)) {
+                return PreviewResult.valid("template",
+                        "template parses; full render needs route data (" + rootMessage(ex) + ")");
+            }
+            return PreviewResult.invalid("template", rootMessage(ex));
+        }
+    }
+
+    /**
+     * Whether the failure only happens because the empty preview model lacks route data (an
+     * expression evaluated over null), as opposed to a static authoring error (malformed markup,
+     * unparseable expression, unresolvable template reference).
+     */
+    private static boolean isDataDependent(Throwable ex) {
+        for (Throwable t = ex; t != null; t = t.getCause()) {
+            if (t.getClass().getName().startsWith("ognl.") || t instanceof NullPointerException) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static String rootMessage(Throwable ex) {
+        Throwable root = ex;
+        while (root.getCause() != null) {
+            root = root.getCause();
+        }
+        return root.getMessage() == null ? root.toString() : root.getMessage();
     }
 
     /**

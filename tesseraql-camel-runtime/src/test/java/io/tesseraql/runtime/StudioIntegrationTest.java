@@ -129,6 +129,26 @@ class StudioIntegrationTest {
     }
 
     @Test
+    void previewValidatesPageTemplateWithSharedFragments() throws Exception {
+        // The real page composes the framework tql/shell fragment and the shared app nav; the
+        // preview engine resolves both, so the file validates as authored.
+        String content = Files.readString(appHome.resolve("web/users/index.html"));
+        HttpResponse<String> preview = post(
+                "/_tesseraql/studio/preview?path=" + enc("web/users/index.html"), content, true);
+
+        assertThat(preview.statusCode()).isEqualTo(200);
+        var body = MAPPER.readTree(preview.body());
+        assertThat(body.get("kind").asText()).isEqualTo("template");
+        assertThat(body.get("valid").asBoolean()).isTrue();
+
+        // Malformed markup is rejected through the same endpoint.
+        HttpResponse<String> broken = post(
+                "/_tesseraql/studio/preview?path=" + enc("web/users/index.html"),
+                "<div th:text=\"${x}>oops</div>", true);
+        assertThat(MAPPER.readTree(broken.body()).get("valid").asBoolean()).isFalse();
+    }
+
+    @Test
     void uiExplorerRendersHtmlPage() throws Exception {
         HttpResponse<String> response = get("/_tesseraql/studio/ui", true);
         assertThat(response.statusCode()).isEqualTo(200);
