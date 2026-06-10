@@ -10,6 +10,7 @@ import java.util.List;
 import javax.sql.DataSource;
 import org.junit.jupiter.api.Test;
 import org.postgresql.ds.PGSimpleDataSource;
+import org.testcontainers.containers.MySQLContainer;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
@@ -19,6 +20,9 @@ class FrameworkMigrationsTest {
 
     @Container
     static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>("postgres:16-alpine");
+
+    @Container
+    static final MySQLContainer<?> MYSQL = new MySQLContainer<>("mysql:8.0");
 
     private static DataSource dataSource() {
         PGSimpleDataSource dataSource = new PGSimpleDataSource();
@@ -38,6 +42,28 @@ class FrameworkMigrationsTest {
                 .contains("tql_session", "tql_job_execution", "tql_step_execution",
                         "tql_job_claim", "tql_idempotency_record", "tql_outbox_event",
                         "tql_schema_history__security", "tql_schema_history__operations");
+        try (Connection connection = dataSource.getConnection();
+                Statement statement = connection.createStatement();
+                ResultSet history = statement.executeQuery(
+                        // V1 is the common script; V2 comes from the operations-postgresql
+                        // vendor location layered on top.
+                        "select count(*) from tql_schema_history__operations"
+                                + " where version in ('1', '2') and success")) {
+            history.next();
+            assertThat(history.getInt(1)).isEqualTo(2);
+        }
+    }
+
+    @Test
+    void migratesOnMySqlWithTheCommonScriptsOnly() throws Exception {
+        com.mysql.cj.jdbc.MysqlDataSource dataSource = new com.mysql.cj.jdbc.MysqlDataSource();
+        dataSource.setUrl(MYSQL.getJdbcUrl());
+        dataSource.setUser(MYSQL.getUsername());
+        dataSource.setPassword(MYSQL.getPassword());
+
+        FrameworkMigrations.migrate(dataSource);
+        FrameworkMigrations.migrate(dataSource);
+
         try (Connection connection = dataSource.getConnection();
                 Statement statement = connection.createStatement();
                 ResultSet history = statement.executeQuery(

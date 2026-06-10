@@ -46,15 +46,20 @@ class BootstrapGoalsIntegrationTest {
                 "create table orders (id serial primary key, item varchar(200));");
         Files.writeString(migrations.resolve("V2__orders_status.sql"),
                 "alter table orders add column status varchar(32) default 'NEW';");
+        // Vendor-specific scripts in the migration-<vendor> sibling layer over the common set.
+        Path vendor = appHome.resolve("db/migration-postgresql");
+        Files.createDirectories(vendor);
+        Files.writeString(vendor.resolve("V3__orders_note.sql"),
+                "alter table orders add column if not exists note text;");
         DataSource dataSource = dataSource();
 
-        AppMigrator.Result first = AppMigrator.migrate(appHome, "Order-App", dataSource)
+        AppMigrator.Result first = AppMigrator.migrate(appHome, "Order-App", "main", dataSource)
                 .orElseThrow();
-        assertThat(first.applied()).isEqualTo(2);
+        assertThat(first.applied()).isEqualTo(3);
         assertThat(first.historyTable()).isEqualTo("tql_schema_history_order_app");
 
-        // Re-running applies nothing: the history table remembers both versions.
-        AppMigrator.Result second = AppMigrator.migrate(appHome, "Order-App", dataSource)
+        // Re-running applies nothing: the history table remembers all versions.
+        AppMigrator.Result second = AppMigrator.migrate(appHome, "Order-App", "main", dataSource)
                 .orElseThrow();
         assertThat(second.applied()).isZero();
 
@@ -64,13 +69,31 @@ class BootstrapGoalsIntegrationTest {
                         "select count(*) from tql_schema_history_order_app"
                                 + " where version is not null and version <> '0'")) {
             versions.next();
-            assertThat(versions.getInt(1)).isEqualTo(2);
+            assertThat(versions.getInt(1)).isEqualTo(3);
         }
     }
 
     @Test
+    void namedDatasourceMigratesItsOwnSetIntoItsOwnHistoryTable() throws Exception {
+        Path migrations = appHome.resolve("db/analytics/migration");
+        Files.createDirectories(migrations);
+        Files.writeString(migrations.resolve("V1__facts.sql"),
+                "create table facts (id serial primary key, metric varchar(200));");
+        DataSource dataSource = dataSource();
+
+        AppMigrator.Result result =
+                AppMigrator.migrate(appHome, "Order-App", "analytics", dataSource).orElseThrow();
+
+        assertThat(result.applied()).isEqualTo(1);
+        assertThat(result.historyTable()).isEqualTo("tql_schema_history_order_app__analytics");
+        // The main set is untouched: a missing db/migration directory stays a no-op.
+        assertThat(AppMigrator.migrate(appHome, "Order-App", "main", dataSource)).isEmpty();
+    }
+
+    @Test
     void migrateWithoutMigrationDirectoryIsANoOp() {
-        assertThat(AppMigrator.migrate(appHome.resolve("nowhere"), "x", dataSource())).isEmpty();
+        assertThat(AppMigrator.migrate(appHome.resolve("nowhere"), "x", "main", dataSource()))
+                .isEmpty();
     }
 
     @Test

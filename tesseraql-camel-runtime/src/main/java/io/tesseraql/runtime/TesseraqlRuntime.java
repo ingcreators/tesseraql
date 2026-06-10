@@ -45,6 +45,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
             event -> LOG.info("Outbox delivered {} {}", event.eventType(), event.id());
 
     private final CamelContext camelContext;
+    private final Map<String, HikariDataSource> dataSources;
     private final HikariDataSource mainDataSource;
     private final int port;
     private final JobRepository jobRepository;
@@ -60,7 +61,8 @@ public final class TesseraqlRuntime implements AutoCloseable {
     private final io.tesseraql.opsui.OpsDashboard opsDashboard;
     private final io.tesseraql.core.outbox.OutboxEventSink outboxSink;
 
-    private TesseraqlRuntime(CamelContext camelContext, HikariDataSource mainDataSource, int port,
+    private TesseraqlRuntime(CamelContext camelContext, Map<String, HikariDataSource> dataSources,
+            int port,
             JobRepository jobRepository, JobExecutor jobExecutor, JdbcOutboxStore outboxStore,
             Map<String, JobFile> jobs, String appName,
             io.tesseraql.core.threading.ExecutionLanes executionLanes,
@@ -69,7 +71,8 @@ public final class TesseraqlRuntime implements AutoCloseable {
             io.tesseraql.opsui.OpsDashboard opsDashboard,
             io.tesseraql.core.outbox.OutboxEventSink outboxSink) {
         this.camelContext = camelContext;
-        this.mainDataSource = mainDataSource;
+        this.dataSources = dataSources;
+        this.mainDataSource = dataSources.get("main");
         this.port = port;
         this.jobRepository = jobRepository;
         this.jobExecutor = jobExecutor;
@@ -120,8 +123,11 @@ public final class TesseraqlRuntime implements AutoCloseable {
     private static TesseraqlRuntime start(Path appHome, AppManifest manifest, int port,
             io.tesseraql.core.telemetry.Tracer tracer, io.tesseraql.core.telemetry.Meter meter) {
         DefaultCamelContext context = new DefaultCamelContext();
-        HikariDataSource dataSource = DataSources.create(manifest.config(), "main");
-        context.getRegistry().bind("main", dataSource);
+        // Every datasource declared under tesseraql.datasources gets a pool, registered by name
+        // so routes, contracts and per-datasource migrations can address it (design ch. 5.2).
+        Map<String, HikariDataSource> dataSources = DataSources.createAll(manifest.config());
+        HikariDataSource dataSource = dataSources.get("main");
+        dataSources.forEach((name, pool) -> context.getRegistry().bind(name, pool));
 
         // OTLP export (design ch. 25.7): when an endpoint is configured, fan spans out to OTLP
         // alongside the in-process ring and export metrics via OpenTelemetry.
@@ -260,7 +266,8 @@ public final class TesseraqlRuntime implements AutoCloseable {
             // runs before anything queries its schema: fresh installs, upgrades and canary
             // activations all converge here (design ch. 31, 32).
             FrameworkMigrations.migrate(dataSource);
-            AppMigrations.migrate(appName, appHome, manifest.config(), dataSource, tenantDataSources);
+            AppMigrations.migrate(appName, appHome, manifest.config(), dataSource,
+                    tenantDataSources, dataSources::get);
             context.addService(new VertxPlatformHttpServer(httpConfig));
             context.addRoutes(new RouteCompiler().compile(manifest));
             // Mounted apps (jar-bundled system apps and config-listed directories, design ch. 32)
@@ -270,7 +277,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
             for (SystemApps.MountedApp mounted : mountedApps) {
                 // Mounted apps migrate their own schema (per-app history table) before serving.
                 AppMigrations.migrate(mounted.name(), mounted.manifest().appHome(),
-                        manifest.config(), dataSource, tenantDataSources);
+                        manifest.config(), dataSource, tenantDataSources, dataSources::get);
                 context.addRoutes(new RouteCompiler().compile(mounted.manifest()));
             }
             // Static assets (design ch. 12, 40): the main app's assets/, each mounted app's
@@ -386,11 +393,11 @@ public final class TesseraqlRuntime implements AutoCloseable {
         } catch (Exception ex) {
             tenantDataSources.close();
             lanes.close();
-            dataSource.close();
+            dataSources.values().forEach(HikariDataSource::close);
             throw new IllegalStateException("Failed to start TesseraQL runtime", ex);
         }
         LOG.info("TesseraQL runtime started on port {} for app {}", port, appHome);
-        return new TesseraqlRuntime(context, dataSource, port, jobRepository, jobExecutor,
+        return new TesseraqlRuntime(context, dataSources, port, jobRepository, jobExecutor,
                 outboxStore, jobs, appName, lanes, tenantDataSources, manifest.config(),
                 pinningSource, otelSdk, opsDashboard, outboxSink);
     }
@@ -466,7 +473,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
                 try {
                     tenantDataSources.close();
                 } finally {
-                    mainDataSource.close();
+                    dataSources.values().forEach(HikariDataSource::close);
                 }
             }
         }

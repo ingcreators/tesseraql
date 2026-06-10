@@ -17,9 +17,16 @@ web/                    routes; the directory tree mirrors the URL space one-to-
     search-table.sql
     table.html
 batch/                  job definitions (yml + colocated sql)
-db/migration/           Flyway-managed schema migrations (V1__name.sql, ...), applied when the
-                        app is mounted; per-app history table, run per tenant pool in
-                        schema/database-per-tenant modes
+db/migration/           Flyway-managed schema migrations (V1__name.sql, ...) for the main
+                        datasource, applied when the app is mounted; per-app history table,
+                        run per tenant pool in schema/database-per-tenant modes
+db/migration-<vendor>/  vendor-specific migrations (postgresql, mysql, ...) layered over the
+                        common set for the connected database; version numbers must not
+                        collide with the common scripts
+db/<datasource>/migration[-<vendor>]/
+                        one migration set per named connection: runs against
+                        tesseraql.datasources.<datasource> with its own history table
+                        (tql_schema_history_<app>__<datasource>)
 templates/              shared templates only: app-wide fragments and layouts
 assets/                 static files, served at /assets/** (mounted apps at /assets/<app>/**)
 security/               identity contract SQL (sql realms), key material paths

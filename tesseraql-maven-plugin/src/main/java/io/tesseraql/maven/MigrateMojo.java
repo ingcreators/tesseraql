@@ -21,6 +21,13 @@ public class MigrateMojo extends AbstractMojo {
     @Parameter(property = "tesseraql.appName", defaultValue = "${project.artifactId}")
     private String appName;
 
+    /**
+     * Which migration set to apply: {@code main} runs {@code db/migration}, any other name runs
+     * {@code db/<datasource>/migration} (the jdbcUrl must point at that datasource's database).
+     */
+    @Parameter(property = "tesseraql.datasource", defaultValue = "main")
+    private String datasource;
+
     @Parameter(property = "tesseraql.jdbcUrl", required = true)
     private String jdbcUrl;
 
@@ -33,9 +40,11 @@ public class MigrateMojo extends AbstractMojo {
     @Override
     public void execute() {
         DriverManagerDataSource dataSource = new DriverManagerDataSource(jdbcUrl, username, password);
-        AppMigrator.migrate(appHome.toPath(), appName, dataSource).ifPresentOrElse(
+        AppMigrator.migrate(appHome.toPath(), appName, datasource, dataSource).ifPresentOrElse(
                 result -> getLog().info("Applied " + result.applied() + " migration(s) for app "
-                        + appName + " (history table " + result.historyTable() + ")"),
-                () -> getLog().info("No db/migration directory in " + appHome + "; nothing to do"));
+                        + appName + ", datasource " + datasource
+                        + " (history table " + result.historyTable() + ")"),
+                () -> getLog().info("No migration directory for datasource '" + datasource
+                        + "' in " + appHome + "; nothing to do"));
     }
 }

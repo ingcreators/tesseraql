@@ -73,6 +73,14 @@ class AppMigrationIntegrationTest {
         assertThat(historyCount("tql_schema_history_demo_app")).isEqualTo(2);
         assertThat(historyCount("tql_schema_history_sysapp")).isEqualTo(1);
 
+        // The named 'audit' datasource migrated db/audit/migration into its own history table.
+        try (Connection connection = connect(); Statement statement = connection.createStatement();
+                ResultSet rs = statement.executeQuery("select count(*) from audit_log")) {
+            rs.next();
+            assertThat(rs.getInt(1)).isEqualTo(1);
+        }
+        assertThat(historyCount("tql_schema_history_demo_app__audit")).isEqualTo(1);
+
         // Re-mounting the same version applies nothing new (idempotent boot).
         runtime.close();
         runtime = TesseraqlRuntime.start(appHome, freePort());
@@ -147,6 +155,10 @@ class AppMigrationIntegrationTest {
                       jdbcUrl: ${db.main.url}
                       username: ${db.main.username}
                       password: ${db.main.password}
+                    audit:
+                      jdbcUrl: ${db.main.url}
+                      username: ${db.main.username}
+                      password: ${db.main.password}
                   apps:
                     sysapp:
                       path: %s
@@ -158,6 +170,12 @@ class AppMigrationIntegrationTest {
                 "create table items (id serial primary key, name varchar(100) not null);\n");
         Files.writeString(migrations.resolve("V2__seed_items.sql"),
                 "insert into items (name) values ('seeded');\n");
+        // A second connection keeps its own migration set under db/<datasource>/migration.
+        Path auditMigrations = home.resolve("db/audit/migration");
+        Files.createDirectories(auditMigrations);
+        Files.writeString(auditMigrations.resolve("V1__create_audit_log.sql"),
+                "create table audit_log (id serial primary key, entry varchar(100) not null);\n"
+                        + "insert into audit_log (entry) values ('migrated');\n");
         Path route = home.resolve("web/api/items");
         Files.createDirectories(route);
         Files.writeString(route.resolve("get.yml"), """
