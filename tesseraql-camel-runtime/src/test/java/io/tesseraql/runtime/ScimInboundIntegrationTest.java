@@ -220,6 +220,27 @@ class ScimInboundIntegrationTest {
     }
 
     @Test
+    void patchReplacesGroupDisplayName() throws Exception {
+        String id = MAPPER.readTree(send("POST", "/scim/v2/Groups",
+                "{\"displayName\":\"before\",\"members\":[{\"value\":\"5\"}]}").body())
+                .get("id").asText();
+
+        HttpResponse<String> patched = send("PATCH", "/scim/v2/Groups/" + id, """
+                {"schemas":["urn:ietf:params:scim:api:messages:2.0:PatchOp"],
+                 "Operations":[{"op":"replace","path":"displayName","value":"after"}]}
+                """);
+        assertThat(patched.statusCode()).isEqualTo(200);
+        JsonNode group = MAPPER.readTree(patched.body());
+        assertThat(group.get("displayName").asText()).isEqualTo("after");
+        // The displayName change leaves existing members intact.
+        assertThat(group.get("members").get(0).get("value").asText()).isEqualTo("5");
+
+        // The change is persisted (re-fetch reflects it).
+        assertThat(MAPPER.readTree(send("GET", "/scim/v2/Groups/" + id, null).body())
+                .get("displayName").asText()).isEqualTo("after");
+    }
+
+    @Test
     void duplicateGroupNameYieldsScim409() throws Exception {
         String body = "{\"displayName\":\"dupe-group\"}";
         assertThat(send("POST", "/scim/v2/Groups", body).statusCode()).isEqualTo(201);
