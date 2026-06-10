@@ -1,20 +1,21 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>TesseraQL IAM Admin · users</title>
+<link rel="stylesheet" href="/assets/vendor/hypermedia-components__core/dist/hc.min.css">
 <link rel="stylesheet" href="/assets/_tesseraql/tesseraql.css">
 </head>
 <body>
 <header class="topbar">
   <h1>IAM Admin · Users</h1>
-  <span class="badge" th:each="t : ${total}">[[${t.count}]] total</span>
+  <span class="hc-badge" th:each="t : ${total}">[[${t.count}]] total</span>
 </header>
 <main>
-<section>
+<section class="hc-card">
   <p class="empty" th:if="${#lists.isEmpty(users)}">No users found.</p>
-  <table>
+  <table class="hc-table">
     <thead><tr><th>Login</th><th>Display name</th><th>Email</th><th>Status</th><th>Tenant</th></tr></thead>
     <tbody>
       <tr th:each="u : ${users}">

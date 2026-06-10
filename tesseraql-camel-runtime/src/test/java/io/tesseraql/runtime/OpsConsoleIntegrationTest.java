@@ -79,15 +79,25 @@ class OpsConsoleIntegrationTest {
     void overviewUsesSelfHostedHtmxForPolling() throws Exception {
         HttpResponse<String> page = get("/_tesseraql/ops/console", true);
         assertThat(page.body())
-                .contains("/assets/vendor/htmx.org/2.0.4/dist/htmx.min.js")
+                .contains("/assets/vendor/htmx.org/dist/htmx.min.js")
                 .contains("hx-trigger=\"every 15s\"");
 
-        // The vendored library serves from the classpath WebJar - no external CDN.
-        HttpResponse<String> htmx = get("/assets/vendor/htmx.org/2.0.4/dist/htmx.min.js", false);
+        // The vendored libraries serve from classpath WebJars at version-less URLs - no external
+        // CDN, and upgrades are a pom version bump with templates unchanged.
+        HttpResponse<String> htmx = get("/assets/vendor/htmx.org/dist/htmx.min.js", false);
         assertThat(htmx.statusCode()).isEqualTo(200);
         assertThat(htmx.headers().firstValue("content-type"))
                 .hasValueSatisfying(value -> assertThat(value).contains("text/javascript"));
         assertThat(htmx.body()).contains("htmx");
+
+        assertThat(page.body())
+                .contains("/assets/vendor/hypermedia-components__core/dist/hc.min.css");
+        HttpResponse<String> hc = get(
+                "/assets/vendor/hypermedia-components__core/dist/hc.min.css", false);
+        assertThat(hc.statusCode()).isEqualTo(200);
+        assertThat(hc.headers().firstValue("content-type"))
+                .hasValueSatisfying(value -> assertThat(value).contains("text/css"));
+        assertThat(hc.body()).contains("hc-card");
     }
 
     @Test

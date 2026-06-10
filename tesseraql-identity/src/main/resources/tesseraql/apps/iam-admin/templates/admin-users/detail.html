@@ -1,9 +1,10 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>TesseraQL IAM Admin · user</title>
+<link rel="stylesheet" href="/assets/vendor/hypermedia-components__core/dist/hc.min.css">
 <link rel="stylesheet" href="/assets/_tesseraql/tesseraql.css">
 </head>
 <body>
@@ -12,11 +13,11 @@
   <a class="back" href="/_tesseraql/admin/users">&larr; users</a>
 </header>
 <main>
-<section th:if="${#lists.isEmpty(user)}"><p class="empty">User not found.</p></section>
+<section class="hc-card" th:if="${#lists.isEmpty(user)}"><p class="empty">User not found.</p></section>
 <th:block th:each="u : ${user}">
-<section>
+<section class="hc-card">
   <h2>Summary</h2>
-  <table class="kv"><tbody>
+  <table class="hc-table kv"><tbody>
     <tr><th>User id</th><td th:text="${u.user_id}"></td></tr>
     <tr><th>Display name</th><td th:text="${u.display_name}"></td></tr>
     <tr><th>Email</th><td th:text="${u.email}"></td></tr>
@@ -24,22 +25,22 @@
     <tr><th>Tenant</th><td th:text="${u.tenant_id}"></td></tr>
   </tbody></table>
 </section>
-<section id="actions">
+<section class="hc-card" id="actions">
   <h2>Actions</h2>
   <div class="toolbar">
     <form method="post" th:action="|/_tesseraql/admin/users/${u.user_id}/enable|">
-      <button type="submit">Enable user</button>
+      <button type="submit" class="hc-button" data-variant="primary">Enable user</button>
     </form>
     <form method="post" th:action="|/_tesseraql/admin/users/${u.user_id}/disable|">
-      <button type="submit" class="danger">Disable user</button>
+      <button type="submit" class="hc-button" data-variant="error">Disable user</button>
     </form>
   </div>
 </section>
 </th:block>
-<section id="roles">
+<section class="hc-card" id="roles">
   <h2>Roles</h2>
   <p class="empty" th:if="${#lists.isEmpty(roles)}">No roles assigned.</p>
-  <table>
+  <table class="hc-table">
     <thead><tr><th>Code</th><th>Name</th><th>Grant</th></tr></thead>
     <tbody>
       <tr th:each="r : ${roles}">
@@ -48,10 +49,10 @@
     </tbody>
   </table>
 </section>
-<section id="groups">
+<section class="hc-card" id="groups">
   <h2>Groups</h2>
   <p class="empty" th:if="${#lists.isEmpty(groups)}">No groups assigned.</p>
-  <table>
+  <table class="hc-table">
     <thead><tr><th>Code</th><th>Name</th><th>Tenant</th></tr></thead>
     <tbody>
       <tr th:each="g : ${groups}">
@@ -60,10 +61,10 @@
     </tbody>
   </table>
 </section>
-<section id="permissions">
+<section class="hc-card" id="permissions">
   <h2>Effective permissions</h2>
   <p class="empty" th:if="${#lists.isEmpty(permissions)}">No permissions granted.</p>
-  <table>
+  <table class="hc-table">
     <thead><tr><th>Code</th><th>Name</th></tr></thead>
     <tbody>
       <tr th:each="p : ${permissions}">

@@ -1,52 +1,43 @@
-/* TesseraQL system app theme (design ch. 12): shared by the bundled ops/studio/iam apps,
-   served self-hosted at /assets/_tesseraql/tesseraql.css. */
-*{box-sizing:border-box}
-body{margin:0;font-family:system-ui,sans-serif;background:#0f172a;color:#e2e8f0}
-.topbar{display:flex;align-items:center;justify-content:space-between;padding:16px 24px;background:#1e293b;border-bottom:1px solid #334155}
+/* TesseraQL system app shell (design ch. 12): layout and diagnostics styling on top of
+   Hypermedia Components (/assets/vendor/hypermedia-components__core/dist/hc.min.css, served from
+   the WebJar), which provides the component look (hc-card, hc-table, hc-badge, hc-button,
+   hc-alert, hc-input, ...). */
+body{margin:0;font-family:system-ui,sans-serif;background:var(--hc-color-bg);color:var(--hc-color-text)}
+.topbar{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:16px 24px;background:var(--hc-color-surface);border-bottom:1px solid var(--hc-color-border)}
 .topbar h1{font-size:16px;margin:0}
 main{padding:24px;max-width:1100px;margin:0 auto}
-section{background:#1e293b;border:1px solid #334155;border-radius:8px;padding:16px 20px;margin-bottom:20px}
-h2{font-size:15px;margin:0 0 12px;color:#93c5fd}
-table{width:100%;border-collapse:collapse;font-size:13px}
-th,td{text-align:left;padding:6px 10px;border-bottom:1px solid #334155}
-th{color:#94a3b8;font-weight:600}
-table.kv th{width:160px}
-a{color:#93c5fd}
+main section{margin-bottom:20px}
+h2{font-size:15px;margin:0 0 12px}
+a{color:var(--hc-color-focus-ring)}
 .back{font-size:13px;text-decoration:none}
-.actions{margin-left:auto;margin-right:16px;font-size:13px}
+.actions{margin-left:auto;font-size:13px}
 .actions a{margin-left:12px;text-decoration:none}
-.badge{padding:4px 12px;border-radius:999px;font-size:12px;font-weight:700;background:#334155}
-.badge.ok{background:#166534;color:#dcfce7}
-.badge.warn{background:#9a3412;color:#ffedd5}
-.badge.ro{background:#9a3412;color:#ffedd5}
-.badge.rw{background:#166534;color:#dcfce7}
 .chips{list-style:none;padding:0;margin:0;display:flex;flex-wrap:wrap;gap:8px}
-.chip{background:#334155;border-radius:999px;padding:4px 12px;font-size:12px}
-.alerts{list-style:none;padding:0;margin:0}
-.alert{padding:8px 12px;border-radius:6px;margin-bottom:6px;background:#7f1d1d}
-.alert .code{font-family:monospace;opacity:.8;margin-right:6px}
-.empty{color:#94a3b8;font-style:italic;margin:0 0 12px}
+.chip{background:var(--hc-color-surface);border:1px solid var(--hc-color-border);border-radius:999px;padding:4px 12px;font-size:12px}
+.alerts{list-style:none;padding:0;margin:0;display:grid;gap:6px}
+.empty{color:var(--hc-color-text-muted);font-style:italic;margin:0 0 12px}
 .summary{margin:0 0 12px}
-.hint{color:#94a3b8;font-size:12px;margin:0 0 16px}
+.hint{color:var(--hc-color-text-muted);font-size:12px;margin:0 0 16px}
 .status{background:#14532d;color:#dcfce7;border-radius:6px;padding:8px 12px;margin:0 0 12px}
 tr.warn td{background:#7f1d1d33}
-.status-completed{color:#86efac}
-.status-failed{color:#fca5a5}
-.status-running{color:#93c5fd}
-.status-active{color:#86efac}
-.status-disabled{color:#fca5a5}
-.status-locked{color:#fca5a5}
+.status-completed{color:#15803d}.status-active{color:#15803d}
+.status-failed{color:#dc2626}.status-disabled{color:#dc2626}.status-locked{color:#dc2626}
+.status-running{color:#2563eb}
+[data-theme="dark"] .status-completed,[data-theme="dark"] .status-active{color:#86efac}
+[data-theme="dark"] .status-failed,[data-theme="dark"] .status-disabled,[data-theme="dark"] .status-locked{color:#fca5a5}
+[data-theme="dark"] .status-running{color:#93c5fd}
+table.kv th{width:160px}
 .wizard-list{list-style:none;padding:0;margin:0;font-size:14px}
-.wizard-list li{padding:8px 0;border-bottom:1px solid #334155}
-.source{background:#0b1220;border:1px solid #334155;border-radius:6px;padding:14px;overflow:auto;font-size:13px;white-space:pre-wrap;word-break:break-word}
-textarea.source{width:100%;color:#e2e8f0;font-family:monospace;resize:vertical}
-form label{display:block;margin:0 0 14px;font-size:13px;color:#cbd5e1}
-form input,form select,form textarea{width:100%;margin-top:4px;background:#0b1220;color:#e2e8f0;border:1px solid #334155;border-radius:6px;padding:8px;font-family:monospace;font-size:13px}
-.req{color:#fca5a5}
+.wizard-list li{padding:8px 0;border-bottom:1px solid var(--hc-color-border)}
+.source{font-family:monospace;font-size:13px;white-space:pre-wrap;word-break:break-word}
+pre.source{background:var(--hc-color-surface);border:1px solid var(--hc-color-border);border-radius:6px;padding:14px;overflow:auto}
+textarea.source{width:100%;resize:vertical}
+form label{display:block;margin:0 0 14px;font-size:13px}
+form .hc-input,form .hc-select{width:100%;margin-top:4px}
+.req{color:#dc2626}
 .toolbar{display:flex;gap:10px;margin:10px 0 4px}
-button{background:#2563eb;color:#fff;border:0;border-radius:6px;padding:8px 16px;font-size:13px;cursor:pointer}
-button.apply{background:#166534}
-button.danger{background:#9a3412}
 .span-name{font-weight:600}
-.slow .span-name{color:#fca5a5}
-.span-error{color:#fca5a5;font-size:11px;text-transform:uppercase}
+.slow .span-name{color:#dc2626}
+[data-theme="dark"] .slow .span-name{color:#fca5a5}
+.span-error{color:#dc2626;font-size:11px;text-transform:uppercase}
+[data-theme="dark"] .span-error{color:#fca5a5}

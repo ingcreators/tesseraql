@@ -103,6 +103,16 @@
         <artifactId>thymeleaf</artifactId>
         <version>${thymeleaf.version}</version>
       </dependency>
+      <dependency>
+        <groupId>org.webjars.npm</groupId>
+        <artifactId>hypermedia-components__core</artifactId>
+        <version>${hypermedia-components.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.webjars</groupId>
+        <artifactId>webjars-locator-lite</artifactId>
+        <version>${webjars-locator.version}</version>
+      </dependency>
     </dependencies>
   </dependencyManagement>
 </project>

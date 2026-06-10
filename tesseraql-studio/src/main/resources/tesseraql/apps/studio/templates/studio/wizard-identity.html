@@ -1,9 +1,10 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>TesseraQL Studio · identity realm wizard</title>
+<link rel="stylesheet" href="/assets/vendor/hypermedia-components__core/dist/hc.min.css">
 <link rel="stylesheet" href="/assets/_tesseraql/tesseraql.css">
 </head>
 <body>
@@ -12,20 +13,20 @@
   <a class="back" href="/_tesseraql/studio/ui/wizard">&larr; wizards</a>
 </header>
 <main>
-<section>
+<section class="hc-card">
   <p class="hint">Generates a tesseraql-identity.yml fragment to merge into config/tesseraql.yml.</p>
   <form method="post" action="/_tesseraql/studio/ui/wizard/identity">
     <label>Realm id <span class="req">*</span><br>
-      <input type="text" name="realmId" required placeholder="local"></label>
+      <input class="hc-input" type="text" name="realmId" required placeholder="local"></label>
     <label>Realm type <span class="req">*</span><br>
-      <select name="type"><option value="managed">managed</option><option value="sql">sql</option></select></label>
+      <select class="hc-select" name="type"><option value="managed">managed</option><option value="sql">sql</option></select></label>
     <label>Datasource name <span class="req">*</span><br>
-      <input type="text" name="datasource" required value="main"></label>
+      <input class="hc-input" type="text" name="datasource" required value="main"></label>
     <label>SQL contract root (sql realms, optional)<br>
-      <input type="text" name="sqlRoot" placeholder="security/identity/local"></label>
+      <input class="hc-input" type="text" name="sqlRoot" placeholder="security/identity/local"></label>
     <label>User management capability (optional)<br>
-      <select name="userManagement"><option value="">-</option><option value="readOnly">readOnly</option><option value="readWrite">readWrite</option></select></label>
-    <div class="toolbar"><button type="submit">Generate &amp; download config</button></div>
+      <select class="hc-select" name="userManagement"><option value="">-</option><option value="readOnly">readOnly</option><option value="readWrite">readWrite</option></select></label>
+    <div class="toolbar"><button type="submit" class="hc-button" data-variant="primary">Generate &amp; download config</button></div>
   </form>
 </section>
 </main>

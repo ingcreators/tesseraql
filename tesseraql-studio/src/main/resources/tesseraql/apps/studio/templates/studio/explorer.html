@@ -1,23 +1,24 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>TesseraQL Studio</title>
+<link rel="stylesheet" href="/assets/vendor/hypermedia-components__core/dist/hc.min.css">
 <link rel="stylesheet" href="/assets/_tesseraql/tesseraql.css">
 </head>
 <body>
 <header class="topbar">
   <h1>TesseraQL Studio · [[${studio.appName}]]</h1>
   <span class="actions"><a href="/_tesseraql/studio/ui/wizard">wizards &rarr;</a></span>
-  <span class="badge ro" th:if="${studio.readOnly}">read-only</span>
-  <span class="badge rw" th:if="${studio.editable}">editable</span>
+  <span class="hc-badge" data-variant="warning" th:if="${studio.readOnly}">read-only</span>
+  <span class="hc-badge" data-variant="success" th:if="${studio.editable}">editable</span>
 </header>
 <main>
-<section>
+<section class="hc-card">
   <h2>Routes</h2>
   <p class="empty" th:unless="${studio.hasRoutes}">No routes defined.</p>
-  <table th:if="${studio.hasRoutes}">
+  <table class="hc-table" th:if="${studio.hasRoutes}">
     <thead><tr><th>Id</th><th>Method</th><th>Path</th><th>Recipe</th><th>Source</th></tr></thead>
     <tbody>
       <tr th:each="r : ${studio.routes}">
@@ -30,10 +31,10 @@
     </tbody>
   </table>
 </section>
-<section>
+<section class="hc-card">
   <h2>Jobs</h2>
   <p class="empty" th:unless="${studio.hasJobs}">No jobs defined.</p>
-  <table th:if="${studio.hasJobs}">
+  <table class="hc-table" th:if="${studio.hasJobs}">
     <thead><tr><th>Id</th><th>Recipe</th><th>Source</th></tr></thead>
     <tbody>
       <tr th:each="j : ${studio.jobs}">

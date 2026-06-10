@@ -1,9 +1,10 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>TesseraQL Studio · SCIM wizard</title>
+<link rel="stylesheet" href="/assets/vendor/hypermedia-components__core/dist/hc.min.css">
 <link rel="stylesheet" href="/assets/_tesseraql/tesseraql.css">
 </head>
 <body>
@@ -12,19 +13,19 @@
   <a class="back" href="/_tesseraql/studio/ui/wizard">&larr; wizards</a>
 </header>
 <main>
-<section>
+<section class="hc-card">
   <p class="hint">Generates a tesseraql-scim.yml fragment to merge into config/tesseraql.yml.
   The outbound token stays an environment-variable reference; never paste the literal secret.</p>
   <form method="post" action="/_tesseraql/studio/ui/wizard/scim">
     <label>Enable group provisioning<br>
-      <select name="groups"><option value="false">false</option><option value="true">true</option></select></label>
+      <select class="hc-select" name="groups"><option value="false">false</option><option value="true">true</option></select></label>
     <label>Enable outbound provisioning<br>
-      <select name="outbound"><option value="false">false</option><option value="true">true</option></select></label>
+      <select class="hc-select" name="outbound"><option value="false">false</option><option value="true">true</option></select></label>
     <label>Outbound target URL (when outbound)<br>
-      <input type="text" name="outboundUrl" placeholder="https://idp.example.com/scim/v2"></label>
+      <input class="hc-input" type="text" name="outboundUrl" placeholder="https://idp.example.com/scim/v2"></label>
     <label>Outbound token reference (when outbound)<br>
-      <input type="text" name="tokenRef" value="${SCIM_OUTBOUND_TOKEN}"></label>
-    <div class="toolbar"><button type="submit">Generate &amp; download config</button></div>
+      <input class="hc-input" type="text" name="tokenRef" value="${SCIM_OUTBOUND_TOKEN}"></label>
+    <div class="toolbar"><button type="submit" class="hc-button" data-variant="primary">Generate &amp; download config</button></div>
   </form>
 </section>
 </main>

@@ -39,10 +39,20 @@
       <artifactId>tesseraql-identity</artifactId>
       <version>${project.version}</version>
     </dependency>
-    <!-- htmx, self-hosted at /assets/vendor/htmx.org/... so pages never load from a CDN. -->
+    <!-- Self-hosted browser libraries (design ch. 12, 50): served at version-less
+         /assets/vendor/<webjar>/... paths so pages never load from a CDN and upgrades are a
+         one-line version bump here. -->
     <dependency>
       <groupId>org.webjars.npm</groupId>
       <artifactId>htmx.org</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.webjars.npm</groupId>
+      <artifactId>hypermedia-components__core</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.webjars</groupId>
+      <artifactId>webjars-locator-lite</artifactId>
     </dependency>
     <!-- Opt-in feature: the runtime has no compile dependency on SCIM; it self-installs via the
          RuntimeExtension SPI when the jar is on the classpath. Test scope keeps the ITs here. -->

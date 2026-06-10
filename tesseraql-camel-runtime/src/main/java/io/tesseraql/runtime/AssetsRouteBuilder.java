@@ -49,6 +49,7 @@ final class AssetsRouteBuilder extends RouteBuilder {
     private final Path mainAssets;
     private final Map<String, Path> appAssets;
     private final Map<String, String> etags = new ConcurrentHashMap<>();
+    private final org.webjars.WebJarVersionLocator webJars = new org.webjars.WebJarVersionLocator();
 
     /**
      * @param mainAssets the main app's assets directory (may not exist)
@@ -112,7 +113,19 @@ final class AssetsRouteBuilder extends RouteBuilder {
             return classpathBytes(FRAMEWORK_RESOURCES + rest);
         }
         if (VENDOR_PREFIX.equals(first)) {
-            return classpathBytes(WEBJAR_RESOURCES + rest);
+            // Version-less vendor URLs (/assets/vendor/<webjar>/<file>): the WebJar version is
+            // resolved from the classpath, so an upgrade is a pom bump with templates unchanged.
+            int nameEnd = rest.indexOf('/');
+            if (nameEnd < 0) {
+                return null;
+            }
+            String webjar = rest.substring(0, nameEnd);
+            String version = webJars.version(webjar);
+            if (version == null) {
+                return null;
+            }
+            return classpathBytes(WEBJAR_RESOURCES + webjar + "/" + version + "/"
+                    + rest.substring(nameEnd + 1));
         }
         if (appAssets.containsKey(first)) {
             return fileBytes(appAssets.get(first), rest);

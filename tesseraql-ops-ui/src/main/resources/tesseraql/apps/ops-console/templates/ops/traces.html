@@ -1,9 +1,10 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>TesseraQL Operations Console · traces</title>
+<link rel="stylesheet" href="/assets/vendor/hypermedia-components__core/dist/hc.min.css">
 <link rel="stylesheet" href="/assets/_tesseraql/tesseraql.css">
 </head>
 <body>
@@ -12,9 +13,9 @@
   <a class="back" href="/_tesseraql/ops/console">&larr; console</a>
 </header>
 <main>
-<section>
+<section class="hc-card">
   <p class="empty" th:unless="${traces.hasSpans}">No traces retained.</p>
-  <table th:if="${traces.hasSpans}">
+  <table class="hc-table" th:if="${traces.hasSpans}">
     <thead><tr><th>Span</th><th>Total (ms)</th><th>Self (ms)</th><th></th></tr></thead>
     <tbody>
       <tr th:each="s : ${traces.spans}" th:classappend="${s.slow} ? 'slow'">
