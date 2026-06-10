@@ -332,8 +332,11 @@ public final class TesseraqlRuntime implements AutoCloseable {
         var config = manifest.config();
         String audience = config.requireString("tesseraql.saml.sp.audience");
         String recipient = config.getString("tesseraql.saml.sp.acsUrl").orElse(null);
-        java.security.PublicKey idpKey = io.tesseraql.saml.SamlKeys.publicKey(
-                readSamlBytes(manifest, config.requireString("tesseraql.saml.idp.publicKey")));
+        // The pinned IdP signing key comes from IdP metadata when configured, else a key/cert file.
+        java.security.PublicKey idpKey = config.getString("tesseraql.saml.idp.metadata")
+                .map(path -> io.tesseraql.saml.IdpMetadata.signingKey(readSamlBytes(manifest, path)))
+                .orElseGet(() -> io.tesseraql.saml.SamlKeys.publicKey(
+                        readSamlBytes(manifest, config.requireString("tesseraql.saml.idp.publicKey"))));
         io.tesseraql.saml.SamlResponseValidator validator = new io.tesseraql.saml.SamlResponseValidator(
                 new io.tesseraql.saml.SamlValidationConfig(audience, idpKey, recipient, null));
         io.tesseraql.saml.SamlAttributeMapping mapping = new io.tesseraql.saml.SamlAttributeMapping(
@@ -350,7 +353,11 @@ public final class TesseraqlRuntime implements AutoCloseable {
         SamlUserLinker linker = link ? new SamlUserLinker(identity, realm,
                 config.getString("tesseraql.saml.link.provision")
                         .map(Boolean::parseBoolean).orElse(false)) : null;
-        return new SamlAcsRouteBuilder(validator, mapping, sessions, linker);
+        // Advertise SP metadata only when the ACS URL is known.
+        io.tesseraql.saml.SpMetadata metadata = recipient == null ? null
+                : new io.tesseraql.saml.SpMetadata(audience, recipient,
+                        config.getString("tesseraql.saml.sp.nameIdFormat").orElse(null));
+        return new SamlAcsRouteBuilder(validator, mapping, sessions, linker, metadata);
     }
 
     private static byte[] readSamlBytes(AppManifest manifest, String relative) {

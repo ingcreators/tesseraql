@@ -5,6 +5,7 @@ import io.tesseraql.saml.SamlAssertion;
 import io.tesseraql.saml.SamlAttributeMapping;
 import io.tesseraql.saml.SamlException;
 import io.tesseraql.saml.SamlResponseValidator;
+import io.tesseraql.saml.SpMetadata;
 import io.tesseraql.security.Principal;
 import io.tesseraql.security.session.SessionStore;
 import java.net.URLDecoder;
@@ -30,18 +31,20 @@ final class SamlAcsRouteBuilder extends RouteBuilder {
     private final SamlAttributeMapping mapping;
     private final SessionStore sessions;
     private final SamlUserLinker linker;
+    private final SpMetadata metadata;
 
     SamlAcsRouteBuilder(SamlResponseValidator validator, SamlAttributeMapping mapping,
             SessionStore sessions) {
-        this(validator, mapping, sessions, null);
+        this(validator, mapping, sessions, null, null);
     }
 
     SamlAcsRouteBuilder(SamlResponseValidator validator, SamlAttributeMapping mapping,
-            SessionStore sessions, SamlUserLinker linker) {
+            SessionStore sessions, SamlUserLinker linker, SpMetadata metadata) {
         this.validator = validator;
         this.mapping = mapping;
         this.sessions = sessions;
         this.linker = linker;
+        this.metadata = metadata;
     }
 
     @Override
@@ -51,6 +54,18 @@ final class SamlAcsRouteBuilder extends RouteBuilder {
 
         rest().post("/_tesseraql/saml/acs").to("direct:tql.saml.acs");
         from("direct:tql.saml.acs").routeId("system.saml.acs").process(this::consume);
+
+        if (metadata != null) {
+            rest().get("/_tesseraql/saml/metadata").to("direct:tql.saml.metadata");
+            from("direct:tql.saml.metadata").routeId("system.saml.metadata").process(this::serveMetadata);
+        }
+    }
+
+    private void serveMetadata(Exchange exchange) {
+        exchange.getMessage().setHeader(Exchange.HTTP_RESPONSE_CODE, 200);
+        exchange.getMessage().setHeader(Exchange.CONTENT_TYPE,
+                "application/samlmetadata+xml; charset=utf-8");
+        exchange.getMessage().setBody(metadata.toXml());
     }
 
     private void consume(Exchange exchange) throws Exception {

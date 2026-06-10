@@ -36,7 +36,67 @@ final class SamlTestSupport {
     private static final String PROTOCOL_NS = "urn:oasis:names:tc:SAML:2.0:protocol";
     private static final String ASSERTION_NS = "urn:oasis:names:tc:SAML:2.0:assertion";
 
+    /** A fixed self-signed test certificate (X.509 DER, base64) and its private key (PKCS8 DER). */
+    static final String FIXED_CERT =
+            "MIIDGzCCAgOgAwIBAgIUaqx2kaHliMER8us/H8pOYXTD5HcwDQYJKoZIhvcNAQELBQAwHTEbMBkGA1UEAww"
+            + "SdGVzc2VyYXFsLXRlc3QtaWRwMB4XDTI2MDYxMDAyMjg1M1oXDTQ2MDYwNTAyMjg1M1owHTEbMBkGA1UEAww"
+            + "SdGVzc2VyYXFsLXRlc3QtaWRwMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAq7cPz5X3OIGRxyo"
+            + "haCSkB7c9u6/b5/VFi3RsY4XLCO0ZODUMmjB1CFXmfyZgFWnhJxUYNSLDDQanCFPCWcGybbwRK7bzQ4V2JRE"
+            + "dypCaq5V2ZZ2sLmaPffHgjjeM7La0HyWuzGYqrzejNnu7ETowrD3zobvm7P872gCJPZchJETeuFZ9qWMDtGc"
+            + "orEgI3fVDgZNjYZ8ddQyT62uBtjHeaysucAChdyStaQeDMatIpNGdA5eVSL79WJ1JoNvhhdEnECkK0jqcxvJ"
+            + "Flhe0OZuAdBjVQGMHDzOQPvNr1MlgxAFKWBH2OYhyfChruSfJWcx+6QoFRf7SO/OmgwvRKk1c5QIDAQABo1M"
+            + "wUTAdBgNVHQ4EFgQUQ4T30jhga6kxX+exigPjvHFVIUswHwYDVR0jBBgwFoAUQ4T30jhga6kxX+exigPjvHF"
+            + "VIUswDwYDVR0TAQH/BAUwAwEB/zANBgkqhkiG9w0BAQsFAAOCAQEACtfYnTSijsE0wy/gTPMN0vfRPkQsgLv"
+            + "mBHYMAD64YUhlpbwWFTdUJBNr8XIpk04gcD/wSMvuSpDHeSD6le6N7GMi/hmyvATrWyov56Jp9KztzWfRaU1"
+            + "RLolkoIgRzPmHWoiDMsLvvM1nR7P7OaIpxTNLkTc8wJ4uDa8YE3Jdj0RLzyGZtkK7ewZS/wQnhDu2F6tm/gl"
+            + "BRTNxzz0vuNAxjOP17K+9iq0ne0xaSS7HZXlAbVhFFVob4d5s5G5c1uW53JYnkAMUBSPcWjJLOX06MIKMOSC"
+            + "iobhRn3u7jS5mlxRpL/+81Brek03uXnS/QcuqRUcfOnbtJguYSAw6TEluXg==";
+
+    private static final String FIXED_KEY =
+            "MIIEvAIBADANBgkqhkiG9w0BAQEFAASCBKYwggSiAgEAAoIBAQCrtw/Plfc4gZHHKiFoJKQHtz27r9vn9UWL"
+            + "dGxjhcsI7Rk4NQyaMHUIVeZ/JmAVaeEnFRg1IsMNBqcIU8JZwbJtvBErtvNDhXYlER3KkJqrlXZlnawuZo9"
+            + "98eCON4zstrQfJa7MZiqvN6M2e7sROjCsPfOhu+bs/zvaAIk9lyEkRN64Vn2pYwO0ZyisSAjd9UOBk2Nhnx"
+            + "11DJPra4G2Md5rKy5wAKF3JK1pB4Mxq0ik0Z0Dl5VIvv1YnUmg2+GF0ScQKQrSOpzG8kWWF7Q5m4B0GNVAY"
+            + "wcPM5A+82vUyWDEAUpYEfY5iHJ8KGu5J8lZzH7pCgVF/tI786aDC9EqTVzlAgMBAAECggEAC1HQxsIvzyeJ"
+            + "dNvj4mHh90k+1k/QOxEJ4djNqVzhRsgcfL5Qg5yUpnVFMdYViOvXJhSnqR8OxR3OZofg/Lo+WSoH5r4TeLz"
+            + "ETkq70EXqkEuUx7uWZWOo62hFwZJLZbJgmtoI1RwaDb1o8rdC3G6d1UjrNdr1bOOhbixRX8BF9MZC1D10l0"
+            + "BRBqPHYhThkeOwtzT0vxRk/xEG08dAbNcIeitsvTGrBsuo4a85yooMkSU4J8FdwIimbzHaofuPspFcMnrgG"
+            + "/v2jfYP7UnUKnU3IPFPsmJ0p9Uy2IdBgprmw9QOXMByqR40FiXg6ruuXw5/5fcrojT0IcpIR+t0SSwgkQKB"
+            + "gQDURsdNpmkRpW1nAlTSKDNrTfHC/R+kB2Nce6rMBvqz1VpwiwxHoCCQ+/wigqIjkIgqWCUnxyC6dsVNwce"
+            + "pTLmr3eDdVlLWKBWYO7tTg2sYb7fLLqMt1hjuVMi0LViQNjIRU/AA/za7QOYZfIFULtV7jtxRuF1uw0X3Oj"
+            + "DWSPQgVQKBgQDPFYDbj1CAe4OkucVAeJ6Q96tJupLRHU8JFJU/kTwJQbFXcuR8p6URqlphx3GbSHltZb78Y"
+            + "MgNpmhmiqSKlLo5+uNknXRnB9OpftFSZjNkw3P6Zj07QnIJ/7repxNYpqX0XWXiloO3LlfmvX8IFB1W57Ey"
+            + "8hu7VVZhwE0b/yyaUQKBgFHw6GpO/Gv1YZ/LxJZDMmYPdm2AbEBTIcXHbwzG/OuCRiD/a8QSSb/tpUxlBNW"
+            + "ZqxY9ZEpQkY+o3UzAqqPtnBZ91ZlbAyrr2jojhJIePq72IQprfE3rQUButfLnNjKk2PrbXd/kpGnwCWJ5Ly"
+            + "sh0QKbCOz6sAZblpxyd/ufuazpAoGAN/nVCgRUO1anv/gjNIkmO4Nm/pf7JaFpgsfYjAVDGDF0sXGyB2v9d"
+            + "6f3pGSX9eSCRirxlCDJEr9/ivBBB+Cp8hA6NTFGjK8V7MQF6uMLU1pt2CqYtJMCZmeE6Lh6x0TMqSAx8SzE"
+            + "T9isFAf29YUSZTJduKqvClVH80Za0Y2JTfECgYASsHA/OwJ0EjGFTpaMsavyCoR1+2yvYDjPWQTeqD2hR3S"
+            + "7HGQ3AwjMbMw7oZIHWhbyMyo/AG41sbTGg14vK6zzA9uSinqyNPbVofArcSzw1g74q+pmL01xVWs6f+BsMJ"
+            + "KomSrJqGZun+rpVWzcY0PNQc2G45gwFeiBiuWNc84A0Q==";
+
     private SamlTestSupport() {
+    }
+
+    /** The private key matching {@link #FIXED_CERT}, for signing responses in idp-metadata tests. */
+    static PrivateKey fixedPrivateKey() throws Exception {
+        byte[] der = java.util.Base64.getDecoder().decode(FIXED_KEY);
+        return java.security.KeyFactory.getInstance("RSA")
+                .generatePrivate(new java.security.spec.PKCS8EncodedKeySpec(der));
+    }
+
+    /** IdP metadata advertising {@link #FIXED_CERT} as the signing certificate. */
+    static String idpMetadataXml(String entityId) {
+        return """
+                <md:EntityDescriptor xmlns:md="urn:oasis:names:tc:SAML:2.0:metadata" entityID="%s">
+                  <md:IDPSSODescriptor protocolSupportEnumeration="urn:oasis:names:tc:SAML:2.0:protocol">
+                    <md:KeyDescriptor use="signing">
+                      <ds:KeyInfo xmlns:ds="http://www.w3.org/2000/09/xmldsig#">
+                        <ds:X509Data><ds:X509Certificate>%s</ds:X509Certificate></ds:X509Data>
+                      </ds:KeyInfo>
+                    </md:KeyDescriptor>
+                  </md:IDPSSODescriptor>
+                </md:EntityDescriptor>
+                """.formatted(entityId, FIXED_CERT);
     }
 
     static KeyPair generateKeyPair() throws Exception {
