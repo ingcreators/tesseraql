@@ -52,6 +52,23 @@ public final class AppConfig {
                 UNRESOLVED, "Missing required configuration key: " + dottedPath));
     }
 
+    /** Returns the numeric value at a dotted path, or empty if the path is absent. */
+    public java.util.OptionalDouble getDouble(String dottedPath) {
+        Object raw = navigate(dottedPath);
+        if (raw == null) {
+            return java.util.OptionalDouble.empty();
+        }
+        if (raw instanceof Number number) {
+            return java.util.OptionalDouble.of(number.doubleValue());
+        }
+        try {
+            return java.util.OptionalDouble.of(Double.parseDouble(resolve(String.valueOf(raw), 0).trim()));
+        } catch (NumberFormatException ex) {
+            throw new TqlException(UNRESOLVED,
+                    "Configuration key '" + dottedPath + "' is not a number: " + raw);
+        }
+    }
+
     /** Returns the raw (unresolved) node at a dotted path, or {@code null}. */
     public Object navigate(String dottedPath) {
         Object current = root;

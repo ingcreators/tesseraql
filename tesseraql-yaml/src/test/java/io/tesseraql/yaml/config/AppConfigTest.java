@@ -14,6 +14,24 @@ class AppConfigTest {
     }
 
     @Test
+    void getDoubleReadsNumbersStringsAndPlaceholders() {
+        Map<String, Object> root = Map.of("coverage", Map.of("thresholds",
+                Map.of("sqlLine", 80, "sqlBranch", "75.5", "fromEnv", "${COV:90}")));
+        AppConfig config = config(root, Map.of());
+
+        assertThat(config.getDouble("coverage.thresholds.sqlLine")).hasValue(80.0);
+        assertThat(config.getDouble("coverage.thresholds.sqlBranch")).hasValue(75.5);
+        assertThat(config.getDouble("coverage.thresholds.fromEnv")).hasValue(90.0);
+        assertThat(config.getDouble("coverage.thresholds.missing")).isEmpty();
+    }
+
+    @Test
+    void getDoubleRejectsNonNumeric() {
+        AppConfig config = config(Map.of("x", "abc"), Map.of());
+        assertThatThrownBy(() -> config.getDouble("x")).isInstanceOf(TqlException.class);
+    }
+
+    @Test
     void resolvesCrossFileReference() {
         Map<String, Object> root = Map.of(
                 "db", Map.of("main", Map.of("url", "jdbc:postgresql://h/db")),
