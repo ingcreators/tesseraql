@@ -83,7 +83,7 @@ public final class RouteCompiler {
         RouteDefinition definition = routeFile.definition();
         switch (definition.recipe()) {
             case "query-json", "command-json" -> buildJson(builder, routeFile);
-            case "query-html" -> buildQueryHtml(builder, appHome, routeFile);
+            case "query-html", "page" -> buildTemplatePage(builder, appHome, routeFile);
             case "query-export" -> buildQueryExport(builder, routeFile);
             default -> LOG.log(System.Logger.Level.WARNING,
                     // Recipes not yet implemented are skipped so a mixed-recipe app can still boot.
@@ -165,11 +165,22 @@ public final class RouteCompiler {
         return definition.id() + ".csv";
     }
 
-    private void buildQueryHtml(RouteBuilder builder, Path appHome, RouteFile routeFile) {
+    /**
+     * Builds a template-rendered route: {@code query-html} (SQL/contract/service data into an HTML
+     * page or fragment) and {@code page} (the same pipeline, typically without a data binding, for
+     * forms and static pages, design ch. 6.4). When {@code response.file} is declared the template
+     * renders as a text file response (e.g. a generated config download) instead of HTML.
+     */
+    private void buildTemplatePage(RouteBuilder builder, Path appHome, RouteFile routeFile) {
         Path templateRoot = appHome.resolve("templates");
-        pipelineThroughSql(builder, routeFile)
-                .process(new HtmlResponseRenderer(
-                        routeFile.definition().response().html(), templateRoot));
+        ProcessorDefinition<?> route = pipelineThroughSql(builder, routeFile);
+        if (routeFile.definition().response().file() != null) {
+            route.process(new io.tesseraql.compiler.binding.FileResponseRenderer(
+                    routeFile.definition().response().file(), templateRoot));
+        } else {
+            route.process(new HtmlResponseRenderer(
+                    routeFile.definition().response().html(), templateRoot));
+        }
     }
 
     /** Builds the common route head: REST endpoint, security, request binding, SQL execution. */
@@ -190,8 +201,11 @@ public final class RouteCompiler {
         applyTenancy(route);
         applyIdempotencyBegin(route, definition);
         ProcessorDefinition<?> step = route
-                .process(new RequestBinder(definition, pathParams(routeFile.urlPath())))
-                .to(executionUri(routeFile, definition.sql(), "sql"));
+                .process(new RequestBinder(definition, pathParams(routeFile.urlPath())));
+        // A route may have no data binding at all (the page recipe: forms, static pages).
+        if (definition.sql() != null) {
+            step = step.to(executionUri(routeFile, definition.sql(), "sql"));
+        }
         // Additional named queries run in authored order, each result keyed under its name.
         for (var entry : definition.queries().entrySet()) {
             step = step.process(new io.tesseraql.compiler.binding.NamedQueryBinder(entry.getValue()))

@@ -8,7 +8,37 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public record ResponseSpec(JsonResponse json, HtmlResponse html, StreamResponse stream,
-        RedirectResponse redirect) {
+        RedirectResponse redirect, FileResponse file) {
+
+    /**
+     * A template-generated file response (design ch. 6.4): the template is rendered against the
+     * model (like an HTML response) and served with an arbitrary text content type, optionally as
+     * a download. Inside file templates use raw {@code {{{ value }}}} interpolation; the default
+     * {@code {{ value }}} form HTML-escapes, which is only right for markup output.
+     *
+     * @param status      HTTP status code, defaulting to 200
+     * @param template    template path relative to the template root
+     * @param contentType the response content type, defaulting to {@code text/plain}
+     * @param filename    when set, served as an attachment download with this filename
+     * @param model       template model: each value is a source expression (e.g. {@code params.x})
+     */
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public record FileResponse(Integer status, String template, String contentType, String filename,
+            java.util.Map<String, Object> model) {
+
+        public FileResponse {
+            model = model == null ? java.util.Map.of() : java.util.Map.copyOf(model);
+        }
+
+        public int effectiveStatus() {
+            return status == null ? 200 : status;
+        }
+
+        public String effectiveContentType() {
+            return contentType == null || contentType.isBlank()
+                    ? "text/plain; charset=utf-8" : contentType;
+        }
+    }
 
     /**
      * A redirect response for browser form posts (design ch. 6.4, the post/redirect/get pattern):

@@ -94,6 +94,18 @@
             "location": { "type": "string" }
           },
           "additionalProperties": true
+        },
+        "file": {
+          "type": "object",
+          "required": ["template"],
+          "properties": {
+            "status": { "type": "integer" },
+            "template": { "type": "string" },
+            "contentType": { "type": "string" },
+            "filename": { "type": "string" },
+            "model": { "type": "object" }
+          },
+          "additionalProperties": true
         }
       },
       "additionalProperties": true

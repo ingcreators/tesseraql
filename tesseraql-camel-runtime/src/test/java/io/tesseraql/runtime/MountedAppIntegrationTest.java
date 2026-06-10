@@ -94,6 +94,34 @@ class MountedAppIntegrationTest {
     }
 
     @Test
+    void pageRouteRendersTemplateWithoutSql() throws Exception {
+        HttpResponse<String> response = get("/sysapp/hello?who=tessera");
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(response.headers().firstValue("content-type"))
+                .hasValueSatisfying(value -> assertThat(value).contains("text/html"));
+        assertThat(response.body()).contains("Hello tessera");
+    }
+
+    @Test
+    void fileRouteServesGeneratedDownload() throws Exception {
+        HttpRequest request = HttpRequest.newBuilder(
+                        URI.create("http://localhost:" + runtime.port() + "/sysapp/conf"))
+                .header("Content-Type", "application/x-www-form-urlencoded")
+                .POST(HttpRequest.BodyPublishers.ofString("appName=demo-app"))
+                .build();
+        HttpResponse<String> response =
+                HttpClient.newHttpClient().send(request, HttpResponse.BodyHandlers.ofString());
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(response.headers().firstValue("content-type"))
+                .hasValueSatisfying(value -> assertThat(value).contains("text/yaml"));
+        assertThat(response.headers().firstValue("content-disposition"))
+                .hasValue("attachment; filename=\"app-config.yml\"");
+        assertThat(response.body()).contains("name: \"demo-app\"");
+    }
+
+    @Test
     void mainAppRoutesStillWork() throws Exception {
         HttpRequest request = HttpRequest.newBuilder(
                         URI.create("http://localhost:" + runtime.port() + "/api/users"))
@@ -209,6 +237,54 @@ class MountedAppIntegrationTest {
                 """);
         Files.writeString(touchDir.resolve("touch.sql"),
                 "update users set status = status where id = /* n */ -1\n;\n");
+
+        // A page route: template rendering without any data binding (forms, static pages).
+        Path helloDir = home.resolve("web/sysapp/hello");
+        Files.createDirectories(helloDir);
+        Files.writeString(helloDir.resolve("get.yml"), """
+                version: tesseraql/v1
+                id: sysapp.hello
+                kind: route
+                recipe: page
+                input:
+                  who:
+                    type: string
+                    default: world
+                response:
+                  html:
+                    template: hello.html
+                    model:
+                      who: params.who
+                """);
+        Files.createDirectories(home.resolve("templates"));
+        Files.writeString(home.resolve("templates/hello.html"),
+                "<!DOCTYPE html>\n<html><body><h1>Hello {{ who }}</h1></body></html>\n");
+
+        // A file route: a template-generated text download built from the request inputs.
+        Path confDir = home.resolve("web/sysapp/conf");
+        Files.createDirectories(confDir);
+        Files.writeString(confDir.resolve("post.yml"), """
+                version: tesseraql/v1
+                id: sysapp.conf
+                kind: route
+                recipe: page
+                input:
+                  appName:
+                    type: string
+                    required: true
+                response:
+                  file:
+                    template: conf.yml.tpl
+                    contentType: text/yaml
+                    filename: app-config.yml
+                    model:
+                      appName: params.appName
+                """);
+        Files.writeString(home.resolve("templates/conf.yml.tpl"), """
+                tesseraql:
+                  app:
+                    name: "{{{ appName }}}"
+                """);
         return home;
     }
 
