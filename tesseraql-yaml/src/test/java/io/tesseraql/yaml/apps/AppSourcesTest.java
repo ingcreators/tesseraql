@@ -51,6 +51,26 @@ class AppSourcesTest {
     }
 
     @Test
+    void mountsConfiguredPackages() throws Exception {
+        Path tqlapp = dir.resolve("demo.tqlapp");
+        try (var out = Files.newOutputStream(tqlapp);
+                var zip = new java.util.zip.ZipOutputStream(out)) {
+            zip.putNextEntry(new java.util.zip.ZipEntry("web/ping/get.yml"));
+            zip.write("version: tesseraql/v1\nid: ping\n".getBytes());
+            zip.closeEntry();
+        }
+        AppConfig config = config(Map.of("tesseraql", Map.of("apps",
+                Map.of("demo", Map.of("package", tqlapp.toString())))));
+
+        List<AppSource> sources = AppSources.discover(config);
+
+        AppSource demo = sources.stream().filter(s -> s.name().equals("demo")).findFirst().orElseThrow();
+        assertThat(demo).isInstanceOf(ZipAppSource.class);
+        assertThat(Files.readString(demo.materialize(dir).resolve("web/ping/get.yml")))
+                .contains("id: ping");
+    }
+
+    @Test
     void duplicateNamesAreRejected() {
         AppSourceProvider duplicate = config -> List.of(
                 new DirectoryAppSource("dup", dir), new DirectoryAppSource("dup", dir));

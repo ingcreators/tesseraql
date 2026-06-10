@@ -58,6 +58,12 @@ public final class AppSources {
         List<AppSource> sources = new ArrayList<>();
         for (Map.Entry<?, ?> entry : map.entrySet()) {
             String name = String.valueOf(entry.getKey());
+            // A .tqlapp package mounts directly (extracted at boot); a path mounts an unpacked dir.
+            var packaged = config.getString("tesseraql.apps." + name + ".package");
+            if (packaged.isPresent()) {
+                sources.add(new ZipAppSource(name, Path.of(packaged.get())));
+                continue;
+            }
             config.getString("tesseraql.apps." + name + ".path")
                     .ifPresent(path -> sources.add(new DirectoryAppSource(name, Path.of(path))));
         }
