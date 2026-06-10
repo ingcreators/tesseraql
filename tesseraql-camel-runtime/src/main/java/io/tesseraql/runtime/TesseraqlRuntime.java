@@ -340,6 +340,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
                 readScimSql(manifest, "tesseraql.scim.groups.create"),
                 readScimSql(manifest, "tesseraql.scim.groups.findById"),
                 readScimSql(manifest, "tesseraql.scim.groups.list"),
+                readScimSql(manifest, "tesseraql.scim.groups.replace"),
                 readScimSql(manifest, "tesseraql.scim.groups.delete"),
                 readScimSql(manifest, "tesseraql.scim.groups.listMembers"),
                 readScimSql(manifest, "tesseraql.scim.groups.addMember"),

@@ -198,6 +198,28 @@ class ScimInboundIntegrationTest {
     }
 
     @Test
+    void replaceRenamesGroupAndReconcilesMembersBothWays() throws Exception {
+        String id = MAPPER.readTree(send("POST", "/scim/v2/Groups", """
+                {"displayName":"reconcile","members":[{"value":"1"},{"value":"2"}]}
+                """).body()).get("id").asText();
+
+        // PUT keeps member 2, drops 1, and adds 3 -> membership reconciled in both directions.
+        HttpResponse<String> replaced = send("PUT", "/scim/v2/Groups/" + id, """
+                {"displayName":"reconciled","members":[{"value":"2"},{"value":"3"}]}
+                """);
+        assertThat(replaced.statusCode()).isEqualTo(200);
+        JsonNode group = MAPPER.readTree(replaced.body());
+        assertThat(group.get("displayName").asText()).isEqualTo("reconciled");
+        List<String> members = new java.util.ArrayList<>();
+        group.get("members").forEach(member -> members.add(member.get("value").asText()));
+        assertThat(members).containsExactlyInAnyOrder("2", "3");
+
+        // Replacing a missing group is a 404.
+        assertThat(send("PUT", "/scim/v2/Groups/999999", "{\"displayName\":\"ghost\"}").statusCode())
+                .isEqualTo(404);
+    }
+
+    @Test
     void duplicateGroupNameYieldsScim409() throws Exception {
         String body = "{\"displayName\":\"dupe-group\"}";
         assertThat(send("POST", "/scim/v2/Groups", body).statusCode()).isEqualTo(201);
@@ -291,6 +313,7 @@ class ScimInboundIntegrationTest {
                       create: scim/create-group.sql
                       findById: scim/find-group.sql
                       list: scim/list-groups.sql
+                      replace: scim/replace-group.sql
                       delete: scim/delete-group.sql
                       listMembers: scim/list-members.sql
                       addMember: scim/add-member.sql
@@ -355,6 +378,12 @@ class ScimInboundIntegrationTest {
                 select id, display_name as "displayName", external_id as "externalId"
                 from scim_groups order by id
                 limit /* count */ 100 offset (/* startIndex */ 1 - 1)
+                """);
+        Files.writeString(scim.resolve("replace-group.sql"), """
+                update scim_groups set display_name = /* displayName */ 'g',
+                       external_id = /* externalId */ 'x'
+                where id::text = /* id */ '0'
+                returning id, display_name as "displayName", external_id as "externalId"
                 """);
         Files.writeString(scim.resolve("delete-group.sql"),
                 "delete from scim_groups where id::text = /* id */ '0' returning id\n");

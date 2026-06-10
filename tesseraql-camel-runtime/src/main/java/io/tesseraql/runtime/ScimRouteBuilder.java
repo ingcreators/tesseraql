@@ -69,6 +69,7 @@ final class ScimRouteBuilder extends RouteBuilder {
         rest().post("/scim/v2/Groups").to("direct:scim.createGroup");
         rest().get("/scim/v2/Groups/{id}").to("direct:scim.getGroup");
         rest().get("/scim/v2/Groups").to("direct:scim.listGroups");
+        rest().put("/scim/v2/Groups/{id}").to("direct:scim.replaceGroup");
         rest().patch("/scim/v2/Groups/{id}").to("direct:scim.patchGroup");
         rest().delete("/scim/v2/Groups/{id}").to("direct:scim.deleteGroup");
 
@@ -78,6 +79,8 @@ final class ScimRouteBuilder extends RouteBuilder {
                 .to(AUTH).to(AUTHORIZE).process(this::getGroup);
         from("direct:scim.listGroups").routeId("scim.listGroups")
                 .to(AUTH).to(AUTHORIZE).process(this::listGroups);
+        from("direct:scim.replaceGroup").routeId("scim.replaceGroup")
+                .to(AUTH).to(AUTHORIZE).process(this::replaceGroup);
         from("direct:scim.patchGroup").routeId("scim.patchGroup")
                 .to(AUTH).to(AUTHORIZE).process(this::patchGroup);
         from("direct:scim.deleteGroup").routeId("scim.deleteGroup")
@@ -139,6 +142,13 @@ final class ScimRouteBuilder extends RouteBuilder {
         int startIndex = header(exchange, "startIndex", 1);
         int count = header(exchange, "count", 100);
         respond(exchange, 200, groups.list(startIndex, count));
+    }
+
+    private void replaceGroup(Exchange exchange) throws Exception {
+        String id = exchange.getMessage().getHeader("id", String.class);
+        ScimGroup request =
+                mapper.readValue(exchange.getMessage().getBody(String.class), ScimGroup.class);
+        respond(exchange, 200, groups.replace(id, request));
     }
 
     private void patchGroup(Exchange exchange) throws Exception {

@@ -75,6 +75,42 @@ public final class ScimGroupService {
         }
     }
 
+    /**
+     * Replaces a group by id (RFC 7644 §3.5.1): updates its own attributes and reconciles its
+     * membership to exactly the supplied members — adding those that are missing and removing those
+     * no longer present (bidirectional). Returns the updated group; 404 when it does not exist.
+     */
+    public ScimGroup replace(String id, ScimGroup group) {
+        try {
+            Map<String, Object> params = ScimGroupMapper.toParams(group);
+            params.put("id", id);
+            Map<String, Object> row = ScimSql.queryOne(dataSource, contract.replaceSql(), params);
+            if (row == null) {
+                throw new ScimException(404, null, "Group not found: " + id);
+            }
+            reconcileMembers(id, group.members());
+            return findById(id)
+                    .orElseThrow(() -> new ScimException(404, null, "Group not found: " + id));
+        } catch (SQLException ex) {
+            if (ex.getSQLState() != null && ex.getSQLState().startsWith("23")) {
+                throw new ScimException(409, "uniqueness",
+                        "Group already exists: " + group.displayName());
+            }
+            throw new ScimException(500, null, "SCIM group replace failed: " + ex.getMessage());
+        }
+    }
+
+    /** Drives the membership to exactly {@code desired}: adds the missing, removes the surplus. */
+    private void reconcileMembers(String id, List<ScimGroup.Member> desired) {
+        java.util.Set<String> target = new java.util.LinkedHashSet<>();
+        desired.forEach(member -> target.add(member.value()));
+        java.util.Set<String> current = new java.util.LinkedHashSet<>();
+        members(id).forEach(member -> current.add(member.value()));
+        target.stream().filter(value -> !current.contains(value)).forEach(value -> addMember(id, value));
+        current.stream().filter(value -> !target.contains(value))
+                .forEach(value -> removeMember(id, value));
+    }
+
     /** Deletes a group by id; throws 404 when it does not exist. */
     public void delete(String id) {
         try {

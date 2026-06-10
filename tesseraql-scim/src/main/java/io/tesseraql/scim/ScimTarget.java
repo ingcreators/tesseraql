@@ -11,7 +11,15 @@ public record ScimTarget(String baseUrl, String bearerToken) {
 
     /** The {@code /Users} collection URL, with any trailing slash on the base normalized. */
     public String usersUrl() {
-        String base = baseUrl.endsWith("/") ? baseUrl.substring(0, baseUrl.length() - 1) : baseUrl;
-        return base + "/Users";
+        return base() + "/Users";
+    }
+
+    /** The {@code /Groups} collection URL, with any trailing slash on the base normalized. */
+    public String groupsUrl() {
+        return base() + "/Groups";
+    }
+
+    private String base() {
+        return baseUrl.endsWith("/") ? baseUrl.substring(0, baseUrl.length() - 1) : baseUrl;
     }
 }
