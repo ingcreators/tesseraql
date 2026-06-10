@@ -168,6 +168,20 @@ class MountedAppIntegrationTest {
     }
 
     @Test
+    void exampleAppServesShellReferencePage() throws Exception {
+        // The example app's user page composes the framework hc-shell fragment with its own
+        // sidebar navigation and loads the server-rendered table fragment with htmx.
+        HttpResponse<String> response = get("/users");
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(response.body()).contains("hc-shell");
+        assertThat(response.body()).contains("ユーザー一覧");
+        assertThat(response.body()).contains("hx-get=\"/users/fragments/table\"");
+        // The app-specific nav replaces the system-console nav.
+        assertThat(response.body()).doesNotContain("/_tesseraql/ops/console");
+    }
+
+    @Test
     void mainAppRoutesStillWork() throws Exception {
         HttpRequest request = HttpRequest.newBuilder(
                         URI.create("http://localhost:" + runtime.port() + "/api/users"))

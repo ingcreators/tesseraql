@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<!-- Reference page (design ch. 12): the framework hc-shell layout with an app-specific sidebar,
+     loading the server-rendered user table fragment with htmx. -->
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{tql/shell :: shell('ユーザー管理', ~{:: #app-nav}, ~{}, ~{:: #page-content})}">
+<th:block id="app-nav">
+  <a href="/users">ユーザー一覧</a>
+  <a href="/admin/users">ユーザー管理（IAM）</a>
+</th:block>
+<div id="page-content">
+<section class="hc-card">
+  <h2>ユーザー一覧</h2>
+  <p class="hint">テーブルはログイン済みセッションで htmx により読み込まれます。</p>
+  <div hx-get="/users/fragments/table" hx-trigger="load" hx-swap="innerHTML">
+    <p class="empty">読み込み中…</p>
+  </div>
+</section>
+</div>
+</html>

@@ -1,9 +1,12 @@
 <!DOCTYPE html>
-<!-- The framework page layout (design ch. 12): the Hypermedia Components app shell, shared by
-     every app as ~{tql/shell :: page(title, header, content)}. `header` receives per-page extras
-     for the top bar (badges, action links); `content` becomes the main region. Pass ~{} for an
-     empty slot. -->
-<html xmlns:th="http://www.thymeleaf.org" th:fragment="page(title, header, content)"
+<!-- The framework page layout (design ch. 12): the Hypermedia Components app shell.
+     Generic form, for any app with its own sidebar navigation:
+       ~{tql/shell :: shell(title, nav, header, content)}
+     System-console form, with the built-in system navigation:
+       ~{tql/shell :: page(title, header, content)}
+     `nav` fills the sidebar, `header` receives per-page top-bar extras (badges, action links),
+     `content` becomes the main region. Pass ~{} for an empty slot. -->
+<html xmlns:th="http://www.thymeleaf.org" th:fragment="shell(title, nav, header, content)"
       lang="en" data-theme="dark">
 <head>
 <meta charset="utf-8">
@@ -22,10 +25,8 @@
     <strong th:text="${title}">TesseraQL</strong>
     <th:block th:replace="${header}"/>
   </header>
-  <nav class="hc-shell__sidebar" aria-label="System">
-    <a href="/_tesseraql/ops/console">Operations</a>
-    <a href="/_tesseraql/studio/ui">Studio</a>
-    <a href="/_tesseraql/admin/users">IAM Admin</a>
+  <nav class="hc-shell__sidebar" aria-label="Primary">
+    <th:block th:replace="${nav}"/>
   </nav>
   <main class="hc-shell__main">
     <th:block th:replace="${content}"/>
@@ -33,3 +34,10 @@
 </div>
 </body>
 </html>
+<th:block th:fragment="page(title, header, content)"
+          th:replace="~{tql/shell :: shell(${title}, ~{tql/shell :: system-nav}, ${header}, ${content})}"/>
+<th:block th:fragment="system-nav">
+  <a href="/_tesseraql/ops/console">Operations</a>
+  <a href="/_tesseraql/studio/ui">Studio</a>
+  <a href="/_tesseraql/admin/users">IAM Admin</a>
+</th:block>
