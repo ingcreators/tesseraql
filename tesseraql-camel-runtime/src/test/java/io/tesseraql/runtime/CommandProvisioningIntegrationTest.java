@@ -52,6 +52,7 @@ class CommandProvisioningIntegrationTest {
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
     private static final List<JsonNode> provisioned = new CopyOnWriteArrayList<>();
+    private static final List<JsonNode> provisionedGroups = new CopyOnWriteArrayList<>();
 
     static HttpServer provider;
     static TesseraqlRuntime runtime;
@@ -62,6 +63,7 @@ class CommandProvisioningIntegrationTest {
         seedDatabase();
         provider = HttpServer.create(new InetSocketAddress(0), 0);
         provider.createContext("/scim/v2/Users", CommandProvisioningIntegrationTest::handle);
+        provider.createContext("/scim/v2/Groups", CommandProvisioningIntegrationTest::handleGroup);
         provider.start();
         appHome = prepareAppHome(provider.getAddress().getPort());
         runtime = TesseraqlRuntime.start(appHome, freePort());
@@ -109,6 +111,47 @@ class CommandProvisioningIntegrationTest {
         });
     }
 
+    @Test
+    void commandRouteEmitsScimGroupProvisioningEventWithMembers() throws Exception {
+        HttpResponse<String> response = post("/api/groups/provision",
+                "{\"displayName\":\"engineers\",\"externalId\":\"grp-1\","
+                        + "\"memberIds\":[\"100\",\"200\"]}");
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(MAPPER.readTree(response.body()).path("affected").asInt()).isEqualTo(1);
+
+        // The members array is assembled from the request id list via the members[].value key.
+        OutboxEvent event = runtime.outboxStore().listPending(50).stream()
+                .filter(e -> "GROUP_PROVISIONED".equals(e.eventType()))
+                .findFirst().orElseThrow();
+        JsonNode members = MAPPER.readTree(event.payloadJson()).get("members");
+        assertThat(members).hasSize(2);
+        assertThat(members.get(0).get("value").asText()).isEqualTo("100");
+        assertThat(members.get(1).get("value").asText()).isEqualTo("200");
+
+        int delivered = runtime.dispatchOutboxOnce();
+        assertThat(delivered).isGreaterThanOrEqualTo(1);
+
+        assertThat(provisionedGroups).anySatisfy(group -> {
+            assertThat(group.get("displayName").asText()).isEqualTo("engineers");
+            assertThat(group.get("members").get(0).get("value").asText()).isEqualTo("100");
+        });
+    }
+
+    private static void handleGroup(HttpExchange exchange) {
+        try {
+            JsonNode body = MAPPER.readTree(exchange.getRequestBody().readAllBytes());
+            provisionedGroups.add(body);
+            byte[] out = ((com.fasterxml.jackson.databind.node.ObjectNode) body)
+                    .put("id", "remote-g1").toString().getBytes(StandardCharsets.UTF_8);
+            exchange.sendResponseHeaders(201, out.length);
+            try (OutputStream stream = exchange.getResponseBody()) {
+                stream.write(out);
+            }
+        } catch (IOException ex) {
+            throw new UncheckedIOException(ex);
+        }
+    }
+
     private static void handle(HttpExchange exchange) {
         try {
             JsonNode body = MAPPER.readTree(exchange.getRequestBody().readAllBytes());
@@ -154,6 +197,9 @@ class CommandProvisioningIntegrationTest {
             statement.execute("create table users (id serial primary key, name varchar(200), "
                     + "status varchar(32) not null, created_at timestamp default now())");
             statement.execute("insert into users (name, status) values ('kim','INACTIVE')");
+            statement.execute("create table app_groups (id serial primary key, "
+                    + "display_name varchar(200) not null)");
+            statement.execute("insert into app_groups (display_name) values ('engineers')");
         }
     }
 

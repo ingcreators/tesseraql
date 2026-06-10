@@ -104,14 +104,70 @@ public final class OutboxCommandProcessor implements Processor {
         EvaluationContext evaluation = new EvaluationContext(context == null ? Map.of() : context);
         String aggregateId = stringValue(evaluation, outbox.aggregateId());
         Map<String, Object> payload = new LinkedHashMap<>();
-        outbox.payload().forEach((key, expr) ->
-                putNested(payload, key, evaluation.resolve(Arrays.asList(expr.split("\\.")))));
+        Map<String, Map<String, Object>> arrays = new LinkedHashMap<>();
+        outbox.payload().forEach((key, expr) -> {
+            Object value = evaluation.resolve(Arrays.asList(expr.split("\\.")));
+            int marker = key.indexOf("[]");
+            if (marker < 0) {
+                putNested(payload, key, value);
+            } else {
+                String arrayPath = key.substring(0, marker);
+                String remainder = key.substring(marker + 2);
+                String subfield = remainder.startsWith(".") ? remainder.substring(1) : null;
+                arrays.computeIfAbsent(arrayPath, k -> new LinkedHashMap<>()).put(subfield, value);
+            }
+        });
+        arrays.forEach((arrayPath, fields) -> putNested(payload, arrayPath, buildArray(fields)));
         try {
             return OutboxEvent.toInsert(outbox.aggregateType(), aggregateId, outbox.eventType(),
                     mapper.writeValueAsString(payload));
         } catch (com.fasterxml.jackson.core.JsonProcessingException ex) {
             throw new TqlException(TX_ERROR, "Failed to serialize outbox payload");
         }
+    }
+
+    /**
+     * Builds a payload array from {@code [] } payload keys. A single sub-field-less entry
+     * ({@code members[]}) yields the resolved list as-is; otherwise each sub-field ({@code
+     * members[].value}, {@code members[].display}) contributes a column that is zipped by index into
+     * an array of objects. This lets a command route emit, for example, SCIM group members as
+     * {@code [{"value":"100"},{"value":"200"}]} from a list of member ids.
+     */
+    private static List<Object> buildArray(Map<String, Object> fields) {
+        if (fields.size() == 1 && fields.containsKey(null)) {
+            return toList(fields.get(null));
+        }
+        Map<String, List<Object>> columns = new LinkedHashMap<>();
+        int length = 0;
+        for (Map.Entry<String, Object> field : fields.entrySet()) {
+            List<Object> column = toList(field.getValue());
+            columns.put(field.getKey(), column);
+            length = Math.max(length, column.size());
+        }
+        List<Object> elements = new java.util.ArrayList<>();
+        for (int i = 0; i < length; i++) {
+            Map<String, Object> element = new LinkedHashMap<>();
+            for (Map.Entry<String, List<Object>> column : columns.entrySet()) {
+                if (i < column.getValue().size()) {
+                    element.put(column.getKey(), column.getValue().get(i));
+                }
+            }
+            elements.add(element);
+        }
+        return elements;
+    }
+
+    private static List<Object> toList(Object value) {
+        if (value == null) {
+            return List.of();
+        }
+        if (value instanceof List<?> list) {
+            return new java.util.ArrayList<>(list);
+        }
+        if (value instanceof java.util.Collection<?> collection) {
+            return new java.util.ArrayList<>(collection);
+        }
+        return List.of(value);
     }
 
     /**
