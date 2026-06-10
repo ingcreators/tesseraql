@@ -41,6 +41,7 @@ class OutboxScimProvisioningIntegrationTest {
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
     private static final List<JsonNode> provisioned = new CopyOnWriteArrayList<>();
+    private static final List<JsonNode> provisionedGroups = new CopyOnWriteArrayList<>();
 
     static HttpServer provider;
     static TesseraqlRuntime runtime;
@@ -50,6 +51,7 @@ class OutboxScimProvisioningIntegrationTest {
     static void start() throws Exception {
         provider = HttpServer.create(new InetSocketAddress(0), 0);
         provider.createContext("/scim/v2/Users", OutboxScimProvisioningIntegrationTest::handle);
+        provider.createContext("/scim/v2/Groups", OutboxScimProvisioningIntegrationTest::handleGroup);
         provider.start();
 
         appHome = prepareAppHome(provider.getAddress().getPort());
@@ -84,6 +86,39 @@ class OutboxScimProvisioningIntegrationTest {
 
         assertThat(provisioned).anySatisfy(user ->
                 assertThat(user.get("userName").asText()).isEqualTo("asmith"));
+    }
+
+    @Test
+    void outboxEventProvisionsGroupToProvider() throws Exception {
+        String payload = "{\"displayName\":\"engineers\",\"members\":[{\"value\":\"100\"}]}";
+        try (Connection connection = DriverManager.getConnection(
+                POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword())) {
+            runtime.outboxStore().insert(connection,
+                    OutboxEvent.toInsert("Group", "local-g1", "GROUP_PROVISIONED", payload));
+        }
+
+        int delivered = runtime.dispatchOutboxOnce();
+        assertThat(delivered).isGreaterThanOrEqualTo(1);
+
+        assertThat(provisionedGroups).anySatisfy(group -> {
+            assertThat(group.get("displayName").asText()).isEqualTo("engineers");
+            assertThat(group.get("members").get(0).get("value").asText()).isEqualTo("100");
+        });
+    }
+
+    private static void handleGroup(HttpExchange exchange) {
+        try {
+            JsonNode body = MAPPER.readTree(exchange.getRequestBody().readAllBytes());
+            provisionedGroups.add(body);
+            byte[] response = ((com.fasterxml.jackson.databind.node.ObjectNode) body)
+                    .put("id", "remote-g1").toString().getBytes(StandardCharsets.UTF_8);
+            exchange.sendResponseHeaders(201, response.length);
+            try (OutputStream out = exchange.getResponseBody()) {
+                out.write(response);
+            }
+        } catch (IOException ex) {
+            throw new UncheckedIOException(ex);
+        }
     }
 
     private static void handle(HttpExchange exchange) {

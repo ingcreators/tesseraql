@@ -287,9 +287,11 @@ public final class TesseraqlRuntime implements AutoCloseable {
     }
 
     /**
-     * Builds the outbox sink: the logging sink, optionally composed with a SCIM outbound sink that
-     * provisions {@code USER_PROVISIONED}/{@code USER_DEPROVISIONED} events to a downstream provider
-     * (design ch. 10.15). At-least-once retry is preserved because a sink failure propagates.
+     * Builds the outbox sink: the logging sink, optionally composed with SCIM outbound sinks that
+     * provision {@code USER_*}/{@code GROUP_*} events to a downstream provider (design ch. 10.15). The
+     * user and group provisioners share one HTTP client and one resource-mapping table (group keys are
+     * namespaced), so both resource types are provisioned from the same outbox. At-least-once retry is
+     * preserved because a sink failure propagates.
      */
     private static io.tesseraql.core.outbox.OutboxEventSink scimOutboundSink(
             AppManifest manifest, HikariDataSource dataSource) {
@@ -303,12 +305,15 @@ public final class TesseraqlRuntime implements AutoCloseable {
         io.tesseraql.scim.JdbcScimResourceMapping mapping =
                 new io.tesseraql.scim.JdbcScimResourceMapping(dataSource);
         mapping.ensureSchema();
-        io.tesseraql.scim.ScimProvisioner provisioner = new io.tesseraql.scim.ScimProvisioner(
-                new io.tesseraql.scim.ScimOutboundClient(target), mapping);
-        io.tesseraql.scim.ScimOutboundSink scimSink = new io.tesseraql.scim.ScimOutboundSink(provisioner);
+        io.tesseraql.scim.ScimOutboundClient client = new io.tesseraql.scim.ScimOutboundClient(target);
+        io.tesseraql.scim.ScimOutboundSink userSink = new io.tesseraql.scim.ScimOutboundSink(
+                new io.tesseraql.scim.ScimProvisioner(client, mapping));
+        io.tesseraql.scim.ScimGroupOutboundSink groupSink = new io.tesseraql.scim.ScimGroupOutboundSink(
+                new io.tesseraql.scim.ScimGroupProvisioner(client, mapping));
         return event -> {
             LOGGING_SINK.send(event);
-            scimSink.send(event);
+            userSink.send(event);
+            groupSink.send(event);
         };
     }
 
