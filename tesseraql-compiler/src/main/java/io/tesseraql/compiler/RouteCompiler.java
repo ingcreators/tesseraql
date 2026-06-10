@@ -180,7 +180,15 @@ public final class RouteCompiler {
         applySecurity(route, definition.security());
         applyTenancy(route);
         applyIdempotencyBegin(route, definition);
-        return route.process(new RequestBinder(definition, pathParams(routeFile.urlPath()))).to(executionUri(routeFile));
+        ProcessorDefinition<?> step = route
+                .process(new RequestBinder(definition, pathParams(routeFile.urlPath())))
+                .to(executionUri(routeFile, definition.sql(), "sql"));
+        // Additional named queries run in authored order, each result keyed under its name.
+        for (var entry : definition.queries().entrySet()) {
+            step = step.process(new io.tesseraql.compiler.binding.NamedQueryBinder(entry.getValue()))
+                    .to(executionUri(routeFile, entry.getValue(), entry.getKey()));
+        }
+        return step;
     }
 
     /** Extracts {@code {name}} path-parameter names from a URL template. */
@@ -193,21 +201,21 @@ public final class RouteCompiler {
         return names;
     }
 
-    /** Builds the execution step URI: the tesseraql-iam contract or a tesseraql-sql file. */
-    private String executionUri(RouteFile routeFile) {
-        RouteDefinition definition = routeFile.definition();
-        if (definition.sql().isContract()) {
-            return "tesseraql-iam:contract?name=" + definition.sql().contract()
-                    + "&mode=" + definition.sql().effectiveMode() + "&resultKey=sql";
+    /** Builds an execution step URI: a tesseraql-iam contract or a tesseraql-sql file. */
+    private String executionUri(RouteFile routeFile, io.tesseraql.yaml.model.SqlBinding binding,
+            String resultKey) {
+        if (binding.isContract()) {
+            return "tesseraql-iam:contract?name=" + binding.contract()
+                    + "&mode=" + binding.effectiveMode() + "&resultKey=" + resultKey;
         }
-        Path sqlPath = routeFile.source().getParent().resolve(definition.sql().file()).normalize();
+        Path sqlPath = routeFile.source().getParent().resolve(binding.file()).normalize();
         return "tesseraql-sql:file:" + sqlPath
                 + "?datasource=" + DEFAULT_DATASOURCE
-                + "&mode=" + definition.sql().effectiveMode()
-                + "&resultKey=sql"
+                + "&mode=" + binding.effectiveMode()
+                + "&resultKey=" + resultKey
                 + "&dialect=" + datasourceDialect()
-                + "&maxRows=" + effectiveMaxRows(definition.sql())
-                + "&onOverflow=" + effectiveOnOverflow(definition.sql());
+                + "&maxRows=" + effectiveMaxRows(binding)
+                + "&onOverflow=" + effectiveOnOverflow(binding);
     }
 
     /** Resolves the configured datasource dialect, inferring it from the JDBC URL when unset. */

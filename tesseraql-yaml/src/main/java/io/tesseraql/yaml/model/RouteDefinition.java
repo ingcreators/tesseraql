@@ -16,6 +16,8 @@ import java.util.Map;
  * @param input   declared, whitelisted inputs keyed by name
  * @param security authentication and authorization declaration
  * @param sql     SQL execution binding
+ * @param queries additional named queries executed after {@code sql}, each bound into the
+ *                execution context under its own name so one page can render several result sets
  * @param response response shape
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
@@ -31,10 +33,14 @@ public record RouteDefinition(
         PolicySpec policy,
         OutboxSpec outbox,
         SqlBinding sql,
+        Map<String, SqlBinding> queries,
         ResponseSpec response) {
 
     public RouteDefinition {
         input = input == null ? Map.of() : Map.copyOf(input);
+        // Insertion-ordered so named queries execute in their authored order.
+        queries = queries == null ? Map.of()
+                : java.util.Collections.unmodifiableMap(new java.util.LinkedHashMap<>(queries));
     }
 
     /** The input policy, or framework defaults (reject unknown / reject read-only). */

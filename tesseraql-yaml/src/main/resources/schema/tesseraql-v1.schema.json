@@ -14,6 +14,7 @@
         "query-json",
         "command-json",
         "query-html",
+        "query-export",
         "page",
         "batch-tasklet",
         "batch-pipeline",
@@ -56,6 +57,20 @@
         "params": { "type": "object", "additionalProperties": { "type": "string" } }
       },
       "additionalProperties": true
+    },
+    "queries": {
+      "type": "object",
+      "description": "Additional named queries executed after sql, each bound into the execution context under its name.",
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "file": { "type": "string" },
+          "contract": { "type": "string" },
+          "mode": { "type": "string" },
+          "params": { "type": "object", "additionalProperties": { "type": "string" } }
+        },
+        "additionalProperties": true
+      }
     },
     "response": {
       "type": "object",

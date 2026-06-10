@@ -69,6 +69,17 @@ class MountedAppIntegrationTest {
     }
 
     @Test
+    void namedQueriesBindEachResultSet() throws Exception {
+        HttpResponse<String> response = get("/sysapp/multi?n=42");
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        var json = MAPPER.readTree(response.body());
+        assertThat(json.get("first").get(0).get("a").asInt()).isEqualTo(1);
+        // The named query received its bind from the request input.
+        assertThat(json.get("second").get(0).get("b").asInt()).isEqualTo(42);
+    }
+
+    @Test
     void mainAppRoutesStillWork() throws Exception {
         HttpRequest request = HttpRequest.newBuilder(
                         URI.create("http://localhost:" + runtime.port() + "/api/users"))
@@ -128,6 +139,37 @@ class MountedAppIntegrationTest {
                       data: sql.rows
                 """);
         Files.writeString(routeDir.resolve("ping.sql"), "select 1 as ok\n;\n");
+
+        // A route with an additional named query (the queries: block) whose params come from
+        // the request, rendering two result sets in one response.
+        Path multiDir = home.resolve("web/sysapp/multi");
+        Files.createDirectories(multiDir);
+        Files.writeString(multiDir.resolve("get.yml"), """
+                version: tesseraql/v1
+                id: sysapp.multi
+                kind: route
+                recipe: query-json
+                input:
+                  n:
+                    type: integer
+                    default: 7
+                sql:
+                  file: one.sql
+                  mode: query
+                queries:
+                  second:
+                    file: two.sql
+                    mode: query
+                    params:
+                      n: query.n
+                response:
+                  json:
+                    body:
+                      first: sql.rows
+                      second: second.rows
+                """);
+        Files.writeString(multiDir.resolve("one.sql"), "select 1 as a\n;\n");
+        Files.writeString(multiDir.resolve("two.sql"), "select /* n */ 0 as b\n;\n");
         return home;
     }
 
