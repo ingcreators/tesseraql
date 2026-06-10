@@ -48,8 +48,8 @@ class MultiAppGatewayIntegrationTest {
     static void start() throws Exception {
         seedDatabase();
         installRoot = Files.createTempDirectory("tesseraql-gateway-it");
-        installApp("shop-a", "a");
-        installApp("shop-b", "b");
+        installApp("shop-a", "a", List.of());
+        installApp("shop-b", "b", List.of("tenant-b"));
         gateway = MultiAppGateway.start(installRoot, 0);
     }
 
@@ -76,6 +76,29 @@ class MultiAppGatewayIntegrationTest {
         HttpResponse<String> response = get("/apps/nope/api/items");
         assertThat(response.statusCode()).isEqualTo(404);
         assertThat(response.body()).contains("TQL-APP-4040");
+    }
+
+    @Test
+    void enforcesTenantEntitlementAtTheFrontDoor() throws Exception {
+        // shop-b is entitled to tenant-b only; a request declaring another tenant is refused
+        // before it reaches the app, while the entitled tenant passes through.
+        HttpResponse<String> denied = getWithTenant("/apps/shop-b/api/items", "tenant-x");
+        assertThat(denied.statusCode()).isEqualTo(403);
+        assertThat(denied.body()).contains("TQL-APP-4030");
+
+        HttpResponse<String> allowed = getWithTenant("/apps/shop-b/api/items", "tenant-b");
+        assertThat(allowed.statusCode()).isEqualTo(200);
+
+        // shop-a has no entitlement list, so every tenant is served.
+        assertThat(getWithTenant("/apps/shop-a/api/items", "tenant-x").statusCode()).isEqualTo(200);
+    }
+
+    private static HttpResponse<String> getWithTenant(String path, String tenantId) throws Exception {
+        HttpRequest request = HttpRequest.newBuilder(
+                        URI.create("http://localhost:" + gateway.port() + path))
+                .header("X-Tenant-Id", tenantId)
+                .build();
+        return HttpClient.newHttpClient().send(request, HttpResponse.BodyHandlers.ofString());
     }
 
     @Test
@@ -134,7 +157,8 @@ class MultiAppGatewayIntegrationTest {
         }
     }
 
-    private static void installApp(String appId, String schema) throws IOException {
+    private static void installApp(String appId, String schema, List<String> entitledTenants)
+            throws IOException {
         Path appHome = installRoot.resolve(appId).resolve("1.0.0");
         Path source = Paths.get("..", "examples", "user-admin-app").toAbsolutePath().normalize();
         try (Stream<Path> files = Files.walk(source)) {
@@ -172,7 +196,7 @@ class MultiAppGatewayIntegrationTest {
         Files.writeString(itemsDir.resolve("list.sql"), "select id, name from items order by id\n");
 
         new AppCatalog(installRoot).register(new InstalledApp(
-                appId, "1.0.0", appId + "/1.0.0", List.of(), List.of(appId + ".localhost")));
+                appId, "1.0.0", appId + "/1.0.0", entitledTenants, List.of(appId + ".localhost")));
     }
 
     private static void copy(Path source, Path target, Path path) {
