@@ -1,0 +1,22 @@
+version: tesseraql/v1
+id: tql.studio.explorer
+kind: route
+recipe: query-html
+
+security:
+  auth: bearer
+
+sql:
+  service: studio.explorer
+
+response:
+  html:
+    status: 200
+    template: studio/explorer.html
+    model:
+      studio: sql
+    headers:
+      Content-Security-Policy: "default-src 'self'; style-src 'self' 'unsafe-inline'; frame-ancestors 'none'"
+      X-Content-Type-Options: nosniff
+      X-Frame-Options: DENY
+      Referrer-Policy: no-referrer

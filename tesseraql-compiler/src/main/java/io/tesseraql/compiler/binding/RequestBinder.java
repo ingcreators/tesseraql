@@ -80,12 +80,29 @@ public final class RequestBinder implements Processor {
 
         exchange.setProperty(TesseraqlProperties.CONTEXT, context);
         exchange.setProperty(TesseraqlProperties.SQL_PARAMS, resolveSqlParams(context));
+
+        // Declared inputs are bound into the context now; drop their message headers so inbound
+        // form fields (platform-http exposes them as headers, possibly multi-line) are not echoed
+        // back as response headers.
+        for (String name : route.input().keySet()) {
+            exchange.getMessage().removeHeader(name);
+        }
     }
 
     private Map<String, Object> parseBody(Exchange exchange) {
+        // platform-http parses browser form posts into a Map body; use it directly.
+        if (exchange.getMessage().getBody() instanceof Map<?, ?> formBody) {
+            Map<String, Object> form = new LinkedHashMap<>();
+            formBody.forEach((key, value) -> form.put(String.valueOf(key), value));
+            return form;
+        }
         String raw = exchange.getMessage().getBody(String.class);
         if (raw == null || raw.isBlank()) {
             return Map.of();
+        }
+        String contentType = exchange.getMessage().getHeader(Exchange.CONTENT_TYPE, String.class);
+        if (contentType != null && contentType.contains("application/x-www-form-urlencoded")) {
+            return parseForm(raw);
         }
         try {
             @SuppressWarnings("unchecked")
@@ -94,6 +111,22 @@ public final class RequestBinder implements Processor {
         } catch (com.fasterxml.jackson.core.JsonProcessingException ex) {
             throw new TqlException(FIELD_REJECTED, "Request body is not valid JSON");
         }
+    }
+
+    /** Parses a browser form post body so command routes accept plain HTML forms (design ch. 6.4). */
+    private static Map<String, Object> parseForm(String raw) {
+        Map<String, Object> form = new LinkedHashMap<>();
+        for (String pair : raw.split("&")) {
+            int eq = pair.indexOf('=');
+            if (eq < 0) {
+                continue;
+            }
+            form.put(java.net.URLDecoder.decode(pair.substring(0, eq),
+                            java.nio.charset.StandardCharsets.UTF_8),
+                    java.net.URLDecoder.decode(pair.substring(eq + 1),
+                            java.nio.charset.StandardCharsets.UTF_8));
+        }
+        return form;
     }
 
     private void guardMassAssignment(Map<String, Object> body) {

@@ -33,10 +33,8 @@ final class StudioRouteBuilder extends RouteBuilder {
         onException(TqlException.class).handled(true).process(new ErrorResponseRenderer());
         onException(Exception.class).handled(true).process(new ErrorResponseRenderer());
 
-        rest().get("/_tesseraql/studio/ui").to("direct:studio.ui");
-        rest().get("/_tesseraql/studio/ui/source").to("direct:studio.ui.source");
-        rest().post("/_tesseraql/studio/ui/save").to("direct:studio.ui.save");
-        rest().post("/_tesseraql/studio/ui/apply").to("direct:studio.ui.apply");
+        // The explorer/source/save/apply UI is served by the bundled studio app (design ch. 32);
+        // this builder keeps the JSON API and the setup wizards.
         rest().get("/_tesseraql/studio/ui/wizard").to("direct:studio.ui.wizards");
         rest().get("/_tesseraql/studio/ui/wizard/{kind}").to("direct:studio.ui.wizardForm");
         rest().post("/_tesseraql/studio/ui/wizard/{kind}").to("direct:studio.ui.wizardSubmit");
@@ -46,36 +44,6 @@ final class StudioRouteBuilder extends RouteBuilder {
         rest().post("/_tesseraql/studio/preview").to("direct:studio.preview");
         rest().post("/_tesseraql/studio/apply").to("direct:studio.apply");
         rest().post("/_tesseraql/studio/reload").to("direct:studio.reload");
-
-        from("direct:studio.ui").routeId("studio.ui")
-                .to(AUTH).process(html(exchange ->
-                        io.tesseraql.studio.StudioConsole.renderExplorer(studio.explorer())));
-
-        from("direct:studio.ui.source").routeId("studio.ui.source")
-                .to(AUTH).process(html(exchange -> {
-                    String path = requirePath(exchange);
-                    return io.tesseraql.studio.StudioConsole.renderSource(
-                            path, currentContent(path), studio.isReadOnly());
-                }));
-
-        from("direct:studio.ui.save").routeId("studio.ui.save")
-                .to(AUTH).process(html(exchange -> {
-                    String path = requireFormPath(exchange);
-                    String content = formField(exchange, "content");
-                    studio.saveDraft(path, content == null ? "" : content);
-                    return io.tesseraql.studio.StudioConsole.renderSource(
-                            path, currentContent(path), studio.isReadOnly(), "Draft saved.");
-                }));
-
-        from("direct:studio.ui.apply").routeId("studio.ui.apply")
-                .to(AUTH).process(html(exchange -> {
-                    String path = requireFormPath(exchange);
-                    studio.applyDraft(path);
-                    reloader.reload();
-                    return io.tesseraql.studio.StudioConsole.renderSource(
-                            path, currentContent(path), studio.isReadOnly(),
-                            "Draft applied and routes reloaded.");
-                }));
 
         from("direct:studio.ui.wizards").routeId("studio.ui.wizards")
                 .to(AUTH).process(html(exchange ->
@@ -137,15 +105,6 @@ final class StudioRouteBuilder extends RouteBuilder {
         return path;
     }
 
-    /** Reads the {@code path} form field of an editor POST (header first, then urlencoded body). */
-    private static String requireFormPath(Exchange exchange) {
-        String path = formField(exchange, "path");
-        if (path == null || path.isBlank()) {
-            throw missingPath();
-        }
-        return path;
-    }
-
     /** Reads a wizard's form fields, generates its config YAML and renders the result page. */
     private String wizardSubmit(Exchange exchange) {
         String kind = exchange.getMessage().getHeader("kind", String.class);
@@ -159,12 +118,6 @@ final class StudioRouteBuilder extends RouteBuilder {
         }
         String yaml = io.tesseraql.studio.StudioWizards.generate(kind, inputs);
         return io.tesseraql.studio.StudioConsole.renderWizardResult(wizard, yaml);
-    }
-
-    /** The draft content if one exists for {@code path}, otherwise the source of truth. */
-    private String currentContent(String path) {
-        String draft = studio.readDraft(path);
-        return draft != null ? draft : studio.source(path);
     }
 
     private static io.tesseraql.core.error.TqlException missingPath() {

@@ -1,9 +1,6 @@
 package io.tesseraql.studio;
 
 import io.tesseraql.core.template.HtmlTemplateEngine;
-import io.tesseraql.studio.StudioService.Explorer;
-import io.tesseraql.studio.StudioService.JobSummary;
-import io.tesseraql.studio.StudioService.RouteSummary;
 import io.tesseraql.studio.StudioWizards.Wizard;
 import io.tesseraql.studio.StudioWizards.WizardField;
 import java.net.URLEncoder;
@@ -11,109 +8,16 @@ import java.nio.charset.StandardCharsets;
 import java.util.List;
 
 /**
- * Renders the TesseraQL Studio explorer and source viewer as self-contained HTML pages (design
- * ch. 16). The markup is a valid Light DOM document with inlined styles and no external resources,
- * so it serves under a strict {@code default-src 'self'} content security policy, and all dynamic
- * values are HTML-escaped. The pages are read-only views over the existing Studio backend; draft
- * editing stays on the JSON API.
+ * Renders the TesseraQL Studio setup wizards as self-contained HTML pages (design ch. 16). The
+ * markup is a valid Light DOM document with inlined styles and no external resources, so it serves
+ * under a strict {@code default-src 'self'} content security policy, and all dynamic values are
+ * HTML-escaped. The explorer/source/editor UI is served by the bundled studio app (design ch. 32).
  */
 public final class StudioConsole {
 
     private static final String UI = "/_tesseraql/studio/ui";
 
     private StudioConsole() {
-    }
-
-    /** Renders the explorer page listing the app's routes and jobs, each linking to its source. */
-    public static String renderExplorer(Explorer explorer) {
-        StringBuilder out = open("TesseraQL Studio");
-        out.append("<header class=\"topbar\"><h1>TesseraQL Studio &middot; ")
-                .append(escape(explorer.appName())).append("</h1>")
-                .append("<span class=\"actions\"><a href=\"").append(UI)
-                .append("/wizard\">wizards &rarr;</a></span>")
-                .append(explorer.readOnly()
-                        ? "<span class=\"badge ro\">read-only</span>"
-                        : "<span class=\"badge rw\">editable</span>")
-                .append("</header>\n<main>\n");
-
-        out.append("<section><h2>Routes</h2>");
-        if (explorer.routes().isEmpty()) {
-            out.append("<p class=\"empty\">No routes defined.</p>");
-        } else {
-            out.append("<table><thead><tr><th>Id</th><th>Method</th><th>Path</th>")
-                    .append("<th>Recipe</th><th>Source</th></tr></thead><tbody>");
-            for (RouteSummary route : explorer.routes()) {
-                out.append("<tr>")
-                        .append(td(route.id()))
-                        .append(td(route.method()))
-                        .append(td(route.path()))
-                        .append(td(route.recipe()))
-                        .append(sourceCell(route.source()))
-                        .append("</tr>");
-            }
-            out.append("</tbody></table>");
-        }
-        out.append("</section>\n");
-
-        out.append("<section><h2>Jobs</h2>");
-        if (explorer.jobs().isEmpty()) {
-            out.append("<p class=\"empty\">No jobs defined.</p>");
-        } else {
-            out.append("<table><thead><tr><th>Id</th><th>Recipe</th><th>Source</th></tr></thead><tbody>");
-            for (JobSummary job : explorer.jobs()) {
-                out.append("<tr>")
-                        .append(td(job.id()))
-                        .append(td(job.recipe()))
-                        .append(sourceCell(job.source()))
-                        .append("</tr>");
-            }
-            out.append("</tbody></table>");
-        }
-        out.append("</section>\n</main>\n</body>\n</html>\n");
-        return out.toString();
-    }
-
-    /** Renders the read-only source viewer page for a single file. */
-    public static String renderSource(String path, String content, boolean readOnly) {
-        return renderSource(path, content, readOnly, null);
-    }
-
-    /**
-     * Renders the source page for a single file. In read-only mode the content is shown as static
-     * text; otherwise it is rendered in an editor form that saves a draft and applies it (which
-     * reloads the affected routes). {@code status} is an optional banner message (e.g. the outcome
-     * of a save/apply).
-     */
-    public static String renderSource(String path, String content, boolean readOnly, String status) {
-        StringBuilder out = open("TesseraQL Studio &middot; source");
-        out.append("<header class=\"topbar\"><h1>")
-                .append(escape(path)).append("</h1>")
-                .append("<a class=\"back\" href=\"").append(UI).append("\">&larr; explorer</a>")
-                .append("</header>\n<main>\n<section>");
-        if (status != null && !status.isBlank()) {
-            out.append("<p class=\"status\">").append(escape(status)).append("</p>");
-        }
-        if (readOnly) {
-            out.append("<p class=\"empty\">Read-only mode &mdash; edit drafts via the Studio API.</p>");
-            out.append("<pre class=\"source\">").append(escape(content)).append("</pre>");
-        } else {
-            String safePath = escape(path);
-            out.append("<form method=\"post\" action=\"").append(UI).append("/save\">")
-                    .append("<input type=\"hidden\" name=\"path\" value=\"").append(safePath)
-                    .append("\">")
-                    .append("<textarea name=\"content\" class=\"source\" rows=\"24\" spellcheck=\"false\">")
-                    .append(escape(content)).append("</textarea>")
-                    .append("<div class=\"toolbar\"><button type=\"submit\">Save draft</button></div>")
-                    .append("</form>");
-            out.append("<form method=\"post\" action=\"").append(UI).append("/apply\">")
-                    .append("<input type=\"hidden\" name=\"path\" value=\"").append(safePath)
-                    .append("\">")
-                    .append("<div class=\"toolbar\"><button type=\"submit\" class=\"apply\">")
-                    .append("Apply draft &amp; reload</button></div>")
-                    .append("</form>");
-        }
-        out.append("</section>\n</main>\n</body>\n</html>\n");
-        return out.toString();
     }
 
     /** Renders the wizard index listing the available setup wizards. */
@@ -173,11 +77,6 @@ public final class StudioConsole {
         return out.toString();
     }
 
-    private static String sourceCell(String source) {
-        String href = UI + "/source?path=" + URLEncoder.encode(source, StandardCharsets.UTF_8);
-        return "<td><a href=\"" + escape(href) + "\">" + escape(source) + "</a></td>";
-    }
-
     private static StringBuilder open(String title) {
         return new StringBuilder(2048)
                 .append("<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n")
@@ -186,10 +85,6 @@ public final class StudioConsole {
                 .append("<title>").append(title).append("</title>\n")
                 .append("<style>").append(styles()).append("</style>\n")
                 .append("</head>\n<body>\n");
-    }
-
-    private static String td(String value) {
-        return "<td>" + escape(value == null ? "-" : value) + "</td>";
     }
 
     private static String escape(String value) {

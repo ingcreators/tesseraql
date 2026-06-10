@@ -253,9 +253,9 @@ public final class TesseraqlRuntime implements AutoCloseable {
             context.addRoutes(new OperationsRouteBuilder(
                     jobRunner, jobRepository, List.copyOf(jobs.keySet()), opsDashboard));
             // Service providers expose non-SQL runtime state to mounted yaml/template apps
-            // (the bundled ops-console app renders these, design ch. 26.11, 47).
+            // (the bundled ops-console and studio apps render these, design ch. 26.11, 16, 47).
             io.tesseraql.opsui.OpsDashboard dashboardRef = opsDashboard;
-            context.getRegistry().bind(TesseraqlProperties.SERVICE_PROVIDERS_BEAN,
+            io.tesseraql.core.service.ServiceProviders serviceProviders =
                     new io.tesseraql.core.service.ServiceProviders()
                             .register("ops.overview", params ->
                                     io.tesseraql.opsui.OpsViews.overview(dashboardRef.overview(20)))
@@ -267,7 +267,8 @@ public final class TesseraqlRuntime implements AutoCloseable {
                                 return io.tesseraql.opsui.OpsViews.execution(id,
                                         jobRepository.findExecution(id).orElse(null),
                                         jobRepository.findSteps(id));
-                            }));
+                            });
+            context.getRegistry().bind(TesseraqlProperties.SERVICE_PROVIDERS_BEAN, serviceProviders);
             context.addRoutes(new SchedulingRouteBuilder(jobRunner, List.copyOf(jobs.values())));
 
             IdentityService identity = new IdentityService(name ->
@@ -303,8 +304,31 @@ public final class TesseraqlRuntime implements AutoCloseable {
                         .map(Boolean::parseBoolean).orElse(true);
                 io.tesseraql.studio.StudioService studio =
                         new io.tesseraql.studio.StudioService(manifest, readOnly);
-                context.addRoutes(new StudioRouteBuilder(studio,
-                        new RouteReloader(context, appHome, manifest, studio)));
+                RouteReloader reloader = new RouteReloader(context, appHome, manifest, studio);
+                context.addRoutes(new StudioRouteBuilder(studio, reloader));
+                // Providers backing the bundled studio app (design ch. 16, 47).
+                serviceProviders
+                        .register("studio.explorer", params ->
+                                io.tesseraql.studio.StudioViews.explorer(studio.explorer()))
+                        .register("studio.source", params -> {
+                            String path = String.valueOf(params.get("path"));
+                            String draft = studio.readDraft(path);
+                            return io.tesseraql.studio.StudioViews.source(path,
+                                    draft != null ? draft : studio.source(path),
+                                    studio.isReadOnly());
+                        })
+                        .register("studio.save", params -> {
+                            String path = String.valueOf(params.get("path"));
+                            Object content = params.get("content");
+                            studio.saveDraft(path, content == null ? "" : String.valueOf(content));
+                            return Map.of("saved", path);
+                        })
+                        .register("studio.apply", params -> {
+                            String path = String.valueOf(params.get("path"));
+                            studio.applyDraft(path);
+                            reloader.reload();
+                            return Map.of("applied", path);
+                        });
             }
             var outboxDelay = manifest.config().getString("tesseraql.outbox.dispatch.fixedDelay");
             if (outboxDelay.isPresent()) {

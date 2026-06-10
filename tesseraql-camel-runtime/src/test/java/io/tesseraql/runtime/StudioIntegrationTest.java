@@ -172,22 +172,28 @@ class StudioIntegrationTest {
                       data: sql.rows
                 """;
 
+        // post/redirect/get: saving redirects back to the source page with a status flag.
         HttpResponse<String> save = postForm("/_tesseraql/studio/ui/save",
                 "path=" + enc(path) + "&content=" + enc(content));
-        assertThat(save.statusCode()).isEqualTo(200);
-        assertThat(save.headers().firstValue("content-type"))
-                .hasValueSatisfying(value -> assertThat(value).contains("text/html"));
-        assertThat(save.body()).contains("Draft saved.");
+        assertThat(save.statusCode()).isEqualTo(303);
+        assertThat(save.headers().firstValue("location"))
+                .hasValueSatisfying(value -> assertThat(value)
+                        .startsWith("/_tesseraql/studio/ui/source?path=").contains("saved=1"));
+
+        HttpResponse<String> afterSave = get(save.headers().firstValue("location").orElseThrow(), true);
+        assertThat(afterSave.statusCode()).isEqualTo(200);
+        assertThat(afterSave.body()).contains("Draft saved.");
         // The multi-line content round-trips into the editor textarea.
-        assertThat(save.body()).contains("formtest.list").contains("query-json");
+        assertThat(afterSave.body()).contains("formtest.list").contains("query-json");
 
         // The applied route is reloaded, so its referenced SQL file must exist and compile.
         Files.createDirectories(appHome.resolve("web/api/formtest"));
         Files.writeString(appHome.resolve("web/api/formtest/formtest.sql"), "select 1");
 
         HttpResponse<String> apply = postForm("/_tesseraql/studio/ui/apply", "path=" + enc(path));
-        assertThat(apply.statusCode()).isEqualTo(200);
-        assertThat(apply.body()).contains("Draft applied and routes reloaded.");
+        assertThat(apply.statusCode()).isEqualTo(303);
+        HttpResponse<String> afterApply = get(apply.headers().firstValue("location").orElseThrow(), true);
+        assertThat(afterApply.body()).contains("Draft applied and routes reloaded.");
     }
 
     @Test

@@ -1,0 +1,7 @@
+# Studio UI app (design ch. 16): served by the runtime as a mounted system app.
+web/_tesseraql/studio/ui/get.yml
+web/_tesseraql/studio/ui/source/get.yml
+web/_tesseraql/studio/ui/save/post.yml
+web/_tesseraql/studio/ui/apply/post.yml
+templates/studio/explorer.html
+templates/studio/source.html

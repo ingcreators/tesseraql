@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TesseraQL Studio</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;font-family:system-ui,sans-serif;background:#0f172a;color:#e2e8f0}
+.topbar{display:flex;align-items:center;justify-content:space-between;padding:16px 24px;background:#1e293b;border-bottom:1px solid #334155}
+.topbar h1{font-size:16px;margin:0}
+main{padding:24px;max-width:1100px;margin:0 auto}
+section{background:#1e293b;border:1px solid #334155;border-radius:8px;padding:16px 20px;margin-bottom:20px}
+h2{font-size:15px;margin:0 0 12px;color:#93c5fd}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th,td{text-align:left;padding:6px 10px;border-bottom:1px solid #334155}
+th{color:#94a3b8;font-weight:600}
+a{color:#93c5fd}
+.badge{padding:4px 12px;border-radius:999px;font-size:12px;font-weight:700}
+.badge.ro{background:#9a3412;color:#ffedd5}
+.badge.rw{background:#166534;color:#dcfce7}
+.empty{color:#94a3b8;font-style:italic;margin:0}
+.actions{margin-left:auto;margin-right:16px;font-size:13px}
+.actions a{text-decoration:none}
+</style>
+</head>
+<body>
+<header class="topbar">
+  <h1>TesseraQL Studio · {{ studio.appName }}</h1>
+  <span class="actions"><a href="/_tesseraql/studio/ui/wizard">wizards &rarr;</a></span>
+  {{# studio.readOnly }}<span class="badge ro">read-only</span>{{/ studio.readOnly }}
+  {{# studio.editable }}<span class="badge rw">editable</span>{{/ studio.editable }}
+</header>
+<main>
+<section>
+  <h2>Routes</h2>
+  {{^ studio.hasRoutes }}<p class="empty">No routes defined.</p>{{/ studio.hasRoutes }}
+  {{# studio.hasRoutes }}
+  <table>
+    <thead><tr><th>Id</th><th>Method</th><th>Path</th><th>Recipe</th><th>Source</th></tr></thead>
+    <tbody>
+    {{# studio.routes }}
+      <tr>
+        <td>{{ id }}</td>
+        <td>{{ method }}</td>
+        <td>{{ path }}</td>
+        <td>{{ recipe }}</td>
+        <td><a href="{{ sourceUrl }}">{{ source }}</a></td>
+      </tr>
+    {{/ studio.routes }}
+    </tbody>
+  </table>
+  {{/ studio.hasRoutes }}
+</section>
+<section>
+  <h2>Jobs</h2>
+  {{^ studio.hasJobs }}<p class="empty">No jobs defined.</p>{{/ studio.hasJobs }}
+  {{# studio.hasJobs }}
+  <table>
+    <thead><tr><th>Id</th><th>Recipe</th><th>Source</th></tr></thead>
+    <tbody>
+    {{# studio.jobs }}
+      <tr>
+        <td>{{ id }}</td>
+        <td>{{ recipe }}</td>
+        <td><a href="{{ sourceUrl }}">{{ source }}</a></td>
+      </tr>
+    {{/ studio.jobs }}
+    </tbody>
+  </table>
+  {{/ studio.hasJobs }}
+</section>
+</main>
+</body>
+</html>

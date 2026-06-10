@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TesseraQL Studio · source</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;font-family:system-ui,sans-serif;background:#0f172a;color:#e2e8f0}
+.topbar{display:flex;align-items:center;justify-content:space-between;padding:16px 24px;background:#1e293b;border-bottom:1px solid #334155}
+.topbar h1{font-size:16px;margin:0}
+main{padding:24px;max-width:1100px;margin:0 auto}
+section{background:#1e293b;border:1px solid #334155;border-radius:8px;padding:16px 20px;margin-bottom:20px}
+a{color:#93c5fd}
+.back{font-size:13px;text-decoration:none}
+.empty{color:#94a3b8;font-style:italic;margin:0 0 12px}
+.source{background:#0b1220;border:1px solid #334155;border-radius:6px;padding:14px;overflow:auto;font-size:13px;white-space:pre-wrap;word-break:break-word}
+textarea.source{width:100%;color:#e2e8f0;font-family:monospace;resize:vertical}
+.toolbar{margin:10px 0 4px}
+button{background:#2563eb;color:#fff;border:0;border-radius:6px;padding:8px 16px;font-size:13px;cursor:pointer}
+button.apply{background:#166534}
+.status{background:#14532d;color:#dcfce7;border-radius:6px;padding:8px 12px;margin:0 0 12px}
+</style>
+</head>
+<body>
+<header class="topbar">
+  <h1>{{ src.path }}</h1>
+  <a class="back" href="/_tesseraql/studio/ui">&larr; explorer</a>
+</header>
+<main>
+<section>
+  {{# saved }}<p class="status">Draft saved.</p>{{/ saved }}
+  {{# applied }}<p class="status">Draft applied and routes reloaded.</p>{{/ applied }}
+  {{# src.readOnly }}
+  <p class="empty">Read-only mode &mdash; edit drafts via the Studio API.</p>
+  <pre class="source">{{ src.content }}</pre>
+  {{/ src.readOnly }}
+  {{# src.editable }}
+  <form method="post" action="/_tesseraql/studio/ui/save">
+    <input type="hidden" name="path" value="{{ src.path }}">
+    <textarea name="content" class="source" rows="24" spellcheck="false">{{ src.content }}</textarea>
+    <div class="toolbar"><button type="submit">Save draft</button></div>
+  </form>
+  <form method="post" action="/_tesseraql/studio/ui/apply">
+    <input type="hidden" name="path" value="{{ src.path }}">
+    <div class="toolbar"><button type="submit" class="apply">Apply draft &amp; reload</button></div>
+  </form>
+  {{/ src.editable }}
+</section>
+</main>
+</body>
+</html>

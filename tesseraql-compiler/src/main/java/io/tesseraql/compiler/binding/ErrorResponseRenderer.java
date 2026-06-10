@@ -32,6 +32,12 @@ public final class ErrorResponseRenderer implements Processor {
         error.put("message", reasonPhrase(status));
         Map<String, Object> body = Map.of("error", error);
 
+        // Inbound form fields can surface as multi-line message headers (platform-http); drop them
+        // so the error response is writable as HTTP (header values must not contain newlines).
+        exchange.getMessage().getHeaders().entrySet().removeIf(entry ->
+                entry.getValue() instanceof String value
+                        && (value.indexOf('\n') >= 0 || value.indexOf('\r') >= 0));
+
         exchange.getMessage().setHeader(Exchange.HTTP_RESPONSE_CODE, status);
         exchange.getMessage().setHeader(Exchange.CONTENT_TYPE, "application/json; charset=utf-8");
         exchange.getMessage().setBody(mapper.writeValueAsString(body));
