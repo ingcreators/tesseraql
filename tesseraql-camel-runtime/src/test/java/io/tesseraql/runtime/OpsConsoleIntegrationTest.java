@@ -76,8 +76,28 @@ class OpsConsoleIntegrationTest {
     }
 
     @Test
+    void rendersTraceTreePage() throws Exception {
+        HttpResponse<String> response = get("/_tesseraql/ops/console/traces", true);
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(response.headers().firstValue("content-type"))
+                .hasValueSatisfying(value -> assertThat(value).contains("text/html"));
+        assertThat(response.body()).startsWith("<!DOCTYPE html>");
+        assertThat(response.body()).contains("Traces");
+    }
+
+    @Test
+    void returnsNotFoundForUnknownExecution() throws Exception {
+        HttpResponse<String> response = get("/_tesseraql/ops/console/executions/missing", true);
+
+        assertThat(response.statusCode()).isEqualTo(404);
+        assertThat(response.body()).contains("Execution not found.");
+    }
+
+    @Test
     void requiresAuthentication() throws Exception {
         assertThat(get("/_tesseraql/ops/console", false).statusCode()).isEqualTo(401);
+        assertThat(get("/_tesseraql/ops/console/traces", false).statusCode()).isEqualTo(401);
     }
 
     private static HttpResponse<String> get(String path, boolean auth) throws Exception {

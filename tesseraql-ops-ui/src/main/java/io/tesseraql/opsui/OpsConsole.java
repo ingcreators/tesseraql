@@ -1,7 +1,10 @@
 package io.tesseraql.opsui;
 
 import io.tesseraql.core.diag.SqlExecution;
+import io.tesseraql.core.telemetry.SpanSample;
 import io.tesseraql.core.template.HtmlTemplateEngine;
+import io.tesseraql.operations.batch.JobExecution;
+import io.tesseraql.operations.batch.StepExecution;
 import io.tesseraql.opsui.OpsDashboard.Alert;
 import io.tesseraql.opsui.OpsDashboard.BatchSummary;
 import io.tesseraql.opsui.OpsDashboard.ExecutionView;
@@ -9,6 +12,8 @@ import io.tesseraql.opsui.OpsDashboard.LaneStatus;
 import io.tesseraql.opsui.OpsDashboard.Overview;
 import io.tesseraql.opsui.OpsDashboard.PinningSummary;
 import io.tesseraql.opsui.OpsDashboard.TraceMetrics;
+import io.tesseraql.opsui.OpsDashboard.TraceNode;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -19,21 +24,18 @@ import java.util.Map;
  */
 public final class OpsConsole {
 
+    private static final String CONSOLE = "/_tesseraql/ops/console";
+
     private OpsConsole() {
     }
 
     /** Renders the full Operations Console page for a dashboard overview snapshot. */
     public static String render(Overview overview) {
-        StringBuilder out = new StringBuilder(4096);
-        out.append("<!DOCTYPE html>\n")
-                .append("<html lang=\"en\">\n<head>\n")
-                .append("<meta charset=\"utf-8\">\n")
-                .append("<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n")
-                .append("<title>TesseraQL Operations Console</title>\n")
-                .append("<style>").append(styles()).append("</style>\n")
-                .append("</head>\n<body>\n");
-
+        StringBuilder out = open("TesseraQL Operations Console", true);
         out.append("<header class=\"topbar\"><h1>TesseraQL Operations Console</h1>")
+                .append("<span class=\"actions\"><a href=\"").append(CONSOLE)
+                .append("/traces\">traces &rarr;</a> <a href=\"").append(CONSOLE)
+                .append("\">refresh</a></span>")
                 .append(statusBadge(overview.warning()))
                 .append("</header>\n");
         out.append("<main>\n");
@@ -47,6 +49,94 @@ public final class OpsConsole {
 
         out.append("</main>\n</body>\n</html>\n");
         return out.toString();
+    }
+
+    /** Renders the detail page for a single batch execution and its steps. */
+    public static String renderExecution(JobExecution execution, List<StepExecution> steps) {
+        StringBuilder out = open("TesseraQL Operations Console &middot; execution", false);
+        out.append("<header class=\"topbar\"><h1>Execution ").append(escape(execution.id()))
+                .append("</h1><a class=\"back\" href=\"").append(CONSOLE)
+                .append("\">&larr; console</a></header>\n<main>\n");
+
+        out.append("<section><h2>Summary</h2><table class=\"kv\"><tbody>")
+                .append(kv("Job", execution.jobId()))
+                .append(kv("Status", execution.status() == null ? null : execution.status().name()))
+                .append(kv("Trigger", execution.triggerType()))
+                .append(kv("Started", execution.startTime() == null ? null
+                        : execution.startTime().toString()))
+                .append(kv("Ended", execution.endTime() == null ? null
+                        : execution.endTime().toString()))
+                .append(kv("Duration (ms)", execution.durationMs() == null ? null
+                        : String.valueOf(execution.durationMs())))
+                .append(kv("Exit message", execution.exitMessage()))
+                .append("</tbody></table></section>\n");
+
+        section(out, "steps", "Steps");
+        if (steps.isEmpty()) {
+            empty(out, "No steps recorded.");
+        } else {
+            out.append("<table><thead><tr><th>Step</th><th>Status</th>")
+                    .append("<th>Rows</th><th>Duration (ms)</th><th>Error</th></tr></thead><tbody>");
+            for (StepExecution step : steps) {
+                out.append(step.status() != null && step.status().name().equals("FAILED")
+                        ? "<tr class=\"warn\">" : "<tr>")
+                        .append(td(step.stepId()))
+                        .append("<td class=\"status-").append(escape(step.status() == null ? "-"
+                                : step.status().name().toLowerCase())).append("\">")
+                        .append(escape(step.status() == null ? "-" : step.status().name()))
+                        .append("</td>")
+                        .append(td(step.affectedRows() == null ? null
+                                : String.valueOf(step.affectedRows())))
+                        .append(td(step.durationMs() == null ? null
+                                : String.valueOf(step.durationMs())))
+                        .append(td(step.errorMessage()))
+                        .append("</tr>");
+            }
+            out.append("</tbody></table>");
+        }
+        out.append("</section>\n</main>\n</body>\n</html>\n");
+        return out.toString();
+    }
+
+    /** Renders the trace tree page: recent traces as a nested span tree with self/total timings. */
+    public static String renderTraces(List<TraceNode> roots) {
+        StringBuilder out = open("TesseraQL Operations Console &middot; traces", false);
+        out.append("<header class=\"topbar\"><h1>Traces</h1><a class=\"back\" href=\"")
+                .append(CONSOLE).append("\">&larr; console</a></header>\n<main>\n<section>");
+        if (roots.isEmpty()) {
+            empty(out, "No traces retained.");
+        } else {
+            out.append("<ul class=\"tree\">");
+            for (TraceNode root : roots) {
+                renderTraceNode(out, root);
+            }
+            out.append("</ul>");
+        }
+        out.append("</section>\n</main>\n</body>\n</html>\n");
+        return out.toString();
+    }
+
+    private static void renderTraceNode(StringBuilder out, TraceNode node) {
+        SpanSample span = node.span();
+        out.append(node.slow() ? "<li class=\"slow\">" : "<li>")
+                .append("<span class=\"span-name\">").append(escape(span.name())).append("</span>")
+                .append("<span class=\"span-time\">").append(node.durationMs()).append("ms total, ")
+                .append(node.selfMs()).append("ms self</span>");
+        if (span.error()) {
+            out.append("<span class=\"span-error\">error</span>");
+        }
+        if (!node.children().isEmpty()) {
+            out.append("<ul>");
+            for (TraceNode child : node.children()) {
+                renderTraceNode(out, child);
+            }
+            out.append("</ul>");
+        }
+        out.append("</li>");
+    }
+
+    private static String kv(String key, String value) {
+        return "<tr><th>" + escape(key) + "</th>" + td(value) + "</tr>";
     }
 
     private static void renderAlerts(StringBuilder out, Overview overview) {
@@ -84,7 +174,10 @@ public final class OpsConsole {
                     .append("<th>Trigger</th><th>Started</th><th>Duration (ms)</th></tr></thead><tbody>");
             for (ExecutionView execution : batch.recent()) {
                 out.append("<tr>")
-                        .append(td(execution.id()))
+                        .append("<td><a href=\"").append(CONSOLE).append("/executions/")
+                        .append(escape(java.net.URLEncoder.encode(nullToDash(execution.id()),
+                                java.nio.charset.StandardCharsets.UTF_8)))
+                        .append("\">").append(escape(nullToDash(execution.id()))).append("</a></td>")
                         .append(td(execution.jobId()))
                         .append("<td class=\"status-").append(escape(nullToDash(execution.status())
                                 .toLowerCase())).append("\">").append(escape(execution.status()))
@@ -164,6 +257,19 @@ public final class OpsConsole {
         out.append("</section>\n");
     }
 
+    private static StringBuilder open(String title, boolean autoRefresh) {
+        StringBuilder out = new StringBuilder(4096)
+                .append("<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n")
+                .append("<meta charset=\"utf-8\">\n")
+                .append("<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n");
+        if (autoRefresh) {
+            out.append("<meta http-equiv=\"refresh\" content=\"15\">\n");
+        }
+        return out.append("<title>").append(title).append("</title>\n")
+                .append("<style>").append(styles()).append("</style>\n")
+                .append("</head>\n<body>\n");
+    }
+
     private static void section(StringBuilder out, String id, String title) {
         out.append("<section id=\"").append(escape(id)).append("\"><h2>")
                 .append(escape(title)).append("</h2>");
@@ -221,6 +327,18 @@ public final class OpsConsole {
                 + ".summary{margin:0 0 12px}"
                 + "tr.warn td{background:#7f1d1d33}"
                 + ".status-completed{color:#86efac}.status-failed{color:#fca5a5}"
-                + ".status-running{color:#93c5fd}";
+                + ".status-running{color:#93c5fd}"
+                + "a{color:#93c5fd}"
+                + ".actions{margin-left:auto;margin-right:16px;font-size:13px}"
+                + ".actions a{margin-left:12px;text-decoration:none}"
+                + ".back{font-size:13px;text-decoration:none}"
+                + "table.kv th{width:160px;color:#94a3b8}"
+                + ".tree{list-style:none;padding-left:0;font-size:13px}"
+                + ".tree ul{list-style:none;padding-left:18px;border-left:1px solid #334155}"
+                + ".tree li{padding:3px 0}"
+                + ".tree li.slow>.span-name{color:#fca5a5}"
+                + ".span-name{font-weight:600}"
+                + ".span-time{color:#94a3b8;margin-left:10px}"
+                + ".span-error{color:#fca5a5;margin-left:10px;font-size:11px;text-transform:uppercase}";
     }
 }

@@ -3,6 +3,11 @@ package io.tesseraql.opsui;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import io.tesseraql.core.diag.SqlExecution;
+import io.tesseraql.core.telemetry.SpanSample;
+import io.tesseraql.operations.batch.JobExecution;
+import io.tesseraql.operations.batch.JobStatus;
+import io.tesseraql.operations.batch.StepExecution;
+import io.tesseraql.operations.batch.StepStatus;
 import io.tesseraql.opsui.OpsDashboard.Alert;
 import io.tesseraql.opsui.OpsDashboard.BatchSummary;
 import io.tesseraql.opsui.OpsDashboard.ExecutionView;
@@ -48,6 +53,49 @@ class OpsConsoleTest {
         assertThat(html).contains("nightly").contains("web/api/users/search.sql");
         assertThat(html).contains("COMPLETED: 3").contains("FAILED: 1");
         assertThat(html).contains("badge ok").doesNotContain("badge warn");
+        // The overview links to the execution detail and trace drilldowns.
+        assertThat(html).contains("/_tesseraql/ops/console/executions/e-1");
+        assertThat(html).contains("/_tesseraql/ops/console/traces");
+    }
+
+    @Test
+    void rendersExecutionDetailWithSteps() {
+        JobExecution execution = new JobExecution("e-9", "nightly", "app", JobStatus.COMPLETED,
+                "cron", java.time.Instant.parse("2026-06-10T00:00:00Z"),
+                java.time.Instant.parse("2026-06-10T00:00:02Z"), 2000L, "ok");
+        StepExecution step = new StepExecution("s-1", "e-9", "load", StepStatus.COMPLETED,
+                null, null, 1500L, 42, null);
+
+        String html = OpsConsole.renderExecution(execution, List.of(step));
+
+        assertThat(html).startsWith("<!DOCTYPE html>");
+        assertThat(html).contains("Execution e-9").contains("nightly").contains("COMPLETED");
+        assertThat(html).contains("load").contains("42");
+        assertThat(html).contains("href=\"/_tesseraql/ops/console\"");
+    }
+
+    @Test
+    void rendersTraceTreeWithNestedSpans() {
+        SpanSample root = new SpanSample("tesseraql.route", "t-1", "s-1", null,
+                java.util.Map.of(), 120, false, 0);
+        SpanSample child = new SpanSample("tesseraql.sql.execute", "t-1", "s-2", "s-1",
+                java.util.Map.of(), 90, true, 0);
+        var childNode = new OpsDashboard.TraceNode(child, 90, 90, "1970-01-01T00:00:00Z", true,
+                List.of());
+        var rootNode = new OpsDashboard.TraceNode(root, 120, 30, "1970-01-01T00:00:00Z", false,
+                List.of(childNode));
+
+        String html = OpsConsole.renderTraces(List.of(rootNode));
+
+        assertThat(html).contains("tesseraql.route").contains("tesseraql.sql.execute");
+        assertThat(html).contains("120ms total, 30ms self");
+        assertThat(html).contains("span-error");
+        assertThat(html).contains("class=\"slow\"");
+    }
+
+    @Test
+    void rendersEmptyTraceTree() {
+        assertThat(OpsConsole.renderTraces(List.of())).contains("No traces retained.");
     }
 
     @Test
