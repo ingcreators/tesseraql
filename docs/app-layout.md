@@ -23,6 +23,8 @@ db/migration/           Flyway-managed schema migrations (V1__name.sql, ...), ap
 templates/              shared templates only: app-wide fragments and layouts
 assets/                 static files, served at /assets/** (mounted apps at /assets/<app>/**)
 security/               identity contract SQL (sql realms), key material paths
+governance/             approvals.yml - the route review ledger (route id + approved source
+                        SHA-256), gating routes whose mode or risk score requires review
 work/                   runtime scratch (drafts, spools, mounted apps); never committed
 ```
 
