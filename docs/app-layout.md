@@ -17,6 +17,9 @@ web/                    routes; the directory tree mirrors the URL space one-to-
     search-table.sql
     table.html
 batch/                  job definitions (yml + colocated sql)
+db/migration/           Flyway-managed schema migrations (V1__name.sql, ...), applied when the
+                        app is mounted; per-app history table, run per tenant pool in
+                        schema/database-per-tenant modes
 templates/              shared templates only: app-wide fragments and layouts
 assets/                 static files, served at /assets/** (mounted apps at /assets/<app>/**)
 security/               identity contract SQL (sql realms), key material paths

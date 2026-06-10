@@ -104,6 +104,21 @@
         <version>${thymeleaf.version}</version>
       </dependency>
       <dependency>
+        <groupId>org.flywaydb</groupId>
+        <artifactId>flyway-core</artifactId>
+        <version>${flyway.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.flywaydb</groupId>
+        <artifactId>flyway-database-postgresql</artifactId>
+        <version>${flyway.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.flywaydb</groupId>
+        <artifactId>flyway-mysql</artifactId>
+        <version>${flyway.version}</version>
+      </dependency>
+      <dependency>
         <groupId>org.webjars.npm</groupId>
         <artifactId>hypermedia-components__core</artifactId>
         <version>${hypermedia-components.version}</version>

@@ -54,6 +54,19 @@
       <groupId>org.webjars</groupId>
       <artifactId>webjars-locator-lite</artifactId>
     </dependency>
+    <!-- Flyway-managed app schema migrations, run when an app is mounted (design ch. 31, 32). -->
+    <dependency>
+      <groupId>org.flywaydb</groupId>
+      <artifactId>flyway-core</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.flywaydb</groupId>
+      <artifactId>flyway-database-postgresql</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.flywaydb</groupId>
+      <artifactId>flyway-mysql</artifactId>
+    </dependency>
     <!-- Opt-in feature: the runtime has no compile dependency on SCIM; it self-installs via the
          RuntimeExtension SPI when the jar is on the classpath. Test scope keeps the ITs here. -->
     <dependency>

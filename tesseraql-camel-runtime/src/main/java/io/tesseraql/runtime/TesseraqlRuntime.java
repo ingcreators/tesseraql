@@ -241,6 +241,9 @@ public final class TesseraqlRuntime implements AutoCloseable {
                             manifest.config().getString("tesseraql.diagnostics.batchFailureWarnPercent")
                                     .map(Double::parseDouble).orElse(10.0)),
                     pinningMonitor);
+            // The app's Flyway migrations (db/migration) run before anything queries its schema:
+            // fresh installs, upgrades and canary activations all converge here (design ch. 31, 32).
+            AppMigrations.migrate(appName, appHome, manifest.config(), dataSource, tenantDataSources);
             context.addService(new VertxPlatformHttpServer(httpConfig));
             context.addRoutes(new RouteCompiler().compile(manifest));
             // Mounted apps (jar-bundled system apps and config-listed directories, design ch. 32)
@@ -248,6 +251,9 @@ public final class TesseraqlRuntime implements AutoCloseable {
             List<SystemApps.MountedApp> mountedApps = SystemApps.load(manifest.config(), appHome);
             SystemApps.requireNoRouteConflicts(manifest, mountedApps);
             for (SystemApps.MountedApp mounted : mountedApps) {
+                // Mounted apps migrate their own schema (per-app history table) before serving.
+                AppMigrations.migrate(mounted.name(), mounted.manifest().appHome(),
+                        manifest.config(), dataSource, tenantDataSources);
                 context.addRoutes(new RouteCompiler().compile(mounted.manifest()));
             }
             // Static assets (design ch. 12, 40): the main app's assets/, each mounted app's
