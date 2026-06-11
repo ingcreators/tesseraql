@@ -316,6 +316,17 @@
           <configuration>
             <release>${maven.compiler.release}</release>
             <parameters>true</parameters>
+            <showWarnings>true</showWarnings>
+            <failOnWarning>true</failOnWarning>
+            <compilerArgs>
+              <!--
+                Warnings fail the build so the IDE problems panel stays empty. Excluded
+                categories: -processing (annotation-processor noise), -serial (no Java
+                serialization contract), -this-escape (constructor-pattern false positives),
+                -classfile (third-party jars referencing absent CLASS-retention annotations).
+              -->
+              <arg>-Xlint:all,-processing,-serial,-this-escape,-classfile</arg>
+            </compilerArgs>
           </configuration>
         </plugin>
 

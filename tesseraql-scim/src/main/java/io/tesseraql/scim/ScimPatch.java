@@ -38,7 +38,7 @@ public final class ScimPatch {
             throw new ScimException(400, "noTarget",
                     "PATCH without a path requires an object value");
         }
-        value.fields().forEachRemaining(
+        value.properties().forEach(
                 entry -> setAttribute(flat, entry.getKey(), entry.getValue(), false));
     }
 

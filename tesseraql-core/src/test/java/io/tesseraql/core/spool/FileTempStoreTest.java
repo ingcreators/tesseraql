@@ -15,14 +15,13 @@ class FileTempStoreTest {
     void writesReadsAndDeletes(@TempDir Path dir) throws IOException {
         FileTempStore store = new FileTempStore(dir.resolve("spool"));
 
-        SpoolRef ref;
-        try (SpoolWriter writer = store.createWriter(SpoolKind.CSV)) {
+        SpoolWriter writer = store.createWriter(SpoolKind.CSV);
+        try (writer) {
             writer.write("id,name\n".getBytes(StandardCharsets.UTF_8));
             writer.write("1,sato\n".getBytes(StandardCharsets.UTF_8));
             writer.incrementRows(1);
-            writer.close();
-            ref = writer.toRef();
         }
+        SpoolRef ref = writer.toRef();
 
         assertThat(ref.kind()).isEqualTo(SpoolKind.CSV);
         assertThat(ref.rows()).isEqualTo(1);

@@ -45,7 +45,6 @@ public final class RouteCompiler {
     private AppConfig config;
     private io.tesseraql.compiler.binding.TenancySettings tenancy;
     private boolean mountRest = true;
-    private java.util.Set<String> onlyRouteIds;
     private String appName;
 
     /**
@@ -74,7 +73,6 @@ public final class RouteCompiler {
         this.config = manifest.config();
         this.tenancy = io.tesseraql.compiler.binding.TenancySettings.from(config);
         this.mountRest = mountRest;
-        this.onlyRouteIds = onlyRouteIds;
         if (this.appName == null) {
             this.appName = config.getString("tesseraql.app.name").orElse("app");
         }

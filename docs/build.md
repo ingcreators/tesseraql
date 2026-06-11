@@ -26,6 +26,14 @@ Container). To fix violations:
 ./mvnw spotless:apply
 ```
 
+## Compiler warnings
+
+`javac` warnings fail the build (`-Xlint:all` with `failOnWarning`; the `-processing`,
+`-serial`, `-this-escape`, and `-classfile` categories are excluded as noise). Suppress a
+deliberate violation locally with `@SuppressWarnings` and a comment explaining why - for
+example, a codec that must not close a caller-owned stream, or a Testcontainers field whose
+lifecycle the `@Container` extension manages.
+
 ## Test reports and coverage
 
 The `tesseraql:test` and `tesseraql:coverage` goals run the app's declarative suites and write

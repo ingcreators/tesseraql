@@ -102,12 +102,13 @@ public sealed interface Expr {
             return Objects.equals(l, r);
         }
 
-        @SuppressWarnings("unchecked")
         private static int compare(Object l, Object r) {
             if (l instanceof Number ln && r instanceof Number rn) {
                 return Double.compare(ln.doubleValue(), rn.doubleValue());
             }
-            if (l instanceof Comparable lc && r != null) {
+            if (l instanceof Comparable<?> && r != null) {
+                @SuppressWarnings("unchecked")
+                Comparable<Object> lc = (Comparable<Object>) l;
                 return lc.compareTo(r);
             }
             throw new IllegalArgumentException("Values are not comparable: " + l + ", " + r);
