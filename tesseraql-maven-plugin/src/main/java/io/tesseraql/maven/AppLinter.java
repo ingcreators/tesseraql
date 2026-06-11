@@ -50,6 +50,14 @@ public final class AppLinter {
                         "Referenced SQL file is missing: " + definition.sql().file()));
             }
         }
+        definition.steps().forEach((name, step) -> {
+            if (step.file() != null
+                    && !Files.isRegularFile(route.source().getParent().resolve(step.file()))) {
+                findings.add(new LintFinding("TQL-SQL-2103", "error", source,
+                        "Step '" + name + "' references a missing SQL file: " + step.file()));
+            }
+        });
+        lintOptimisticLocking(route, definition, source, findings);
         if (definition.security() != null && definition.security().policy() != null
                 && config.navigate(
                         "tesseraql.security.policies." + definition.security().policy()) == null) {
@@ -89,6 +97,47 @@ public final class AppLinter {
         findings.add(new LintFinding("TQL-TENANT-3001", "warning", source,
                 "Shared-schema route '" + definition.id()
                         + "' has no tenant predicate; bind tenant.id or filter by a tenant column"));
+    }
+
+    /**
+     * Nudges version-column predicates on command UPDATEs (roadmap Phase 18): a row-count
+     * expectation without a version predicate only detects "row vanished", not concurrent
+     * edits; a version predicate without an expectation silently affects zero rows.
+     */
+    private void lintOptimisticLocking(RouteFile route, RouteDefinition definition, String source,
+            List<LintFinding> findings) {
+        if (!"command-json".equals(definition.recipe())) {
+            return;
+        }
+        java.util.Map<String, io.tesseraql.yaml.model.SqlBinding> bindings = new java.util.LinkedHashMap<>(
+                definition.steps());
+        if (definition.sql() != null) {
+            bindings.put("sql", definition.sql());
+        }
+        bindings.forEach((name, binding) -> {
+            if (binding.file() == null) {
+                return;
+            }
+            Path file = route.source().getParent().resolve(binding.file());
+            if (!Files.isRegularFile(file)) {
+                return;
+            }
+            String sql = readQuietly(file).toLowerCase();
+            boolean isUpdate = sql.stripLeading().startsWith("update");
+            boolean versionPredicate = sql.contains("version");
+            if (isUpdate && binding.expect() != null && !versionPredicate) {
+                findings.add(new LintFinding("TQL-SQL-2104", "warning", source,
+                        "Step '" + name + "': UPDATE declares expect.rows but has no"
+                                + " version-column predicate; a concurrent edit is only detected"
+                                + " when the row vanishes - add `and version = ...`"));
+            }
+            if (isUpdate && binding.expect() == null && versionPredicate) {
+                findings.add(new LintFinding("TQL-SQL-2105", "warning", source,
+                        "Step '" + name + "': UPDATE has a version predicate but no expect.rows;"
+                                + " a stale edit silently affects zero rows - declare"
+                                + " expect: { rows: 1 }"));
+            }
+        });
     }
 
     private static String readQuietly(Path file) {

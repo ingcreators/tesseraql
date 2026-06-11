@@ -46,6 +46,81 @@ class AppLinterTest {
     }
 
     @Test
+    void nudgesVersionPredicateOnExpectedRowCountUpdates(@TempDir Path dir) throws Exception {
+        writeCommandRoute(dir, """
+                steps:
+                  bump:
+                    file: bump.sql
+                    mode: update
+                    expect:
+                      rows: 1
+                """, "update orders set status = /* s */'X' where id = /* id */1\n");
+
+        assertThat(new AppLinter().lint(dir))
+                .anyMatch(f -> f.code().equals("TQL-SQL-2104") && !f.isError());
+    }
+
+    @Test
+    void nudgesExpectOnVersionPredicateUpdates(@TempDir Path dir) throws Exception {
+        writeCommandRoute(dir, """
+                sql:
+                  file: bump.sql
+                  mode: update
+                """, "update orders set v = v + 1 where id = /* id */1 and version = /* v */1\n");
+
+        assertThat(new AppLinter().lint(dir))
+                .anyMatch(f -> f.code().equals("TQL-SQL-2105") && !f.isError());
+    }
+
+    @Test
+    void quietWhenUpdateDeclaresExpectAndVersionPredicate(@TempDir Path dir) throws Exception {
+        writeCommandRoute(dir, """
+                sql:
+                  file: bump.sql
+                  mode: update
+                  expect:
+                    rows: 1
+                """, "update orders set v = v + 1 where id = /* id */1 and version = /* v */1\n");
+
+        assertThat(new AppLinter().lint(dir))
+                .noneMatch(f -> f.code().equals("TQL-SQL-2104") || f.code().equals("TQL-SQL-2105"));
+    }
+
+    @Test
+    void reportsMissingStepSqlFile(@TempDir Path dir) throws Exception {
+        writeCommandRoute(dir, """
+                steps:
+                  header:
+                    file: nope.sql
+                """, null);
+
+        assertThat(new AppLinter().lint(dir))
+                .anyMatch(f -> f.code().equals("TQL-SQL-2103") && f.isError()
+                        && f.message().contains("nope.sql"));
+    }
+
+    private static void writeCommandRoute(Path dir, String bindingYaml, String bumpSql)
+            throws Exception {
+        Files.createDirectories(dir.resolve("config"));
+        Files.writeString(dir.resolve("config/tesseraql.yml"), "tesseraql:\n  app:\n    name: t\n");
+        Files.createDirectories(dir.resolve("web/api/orders"));
+        Files.writeString(dir.resolve("web/api/orders/post.yml"), """
+                version: tesseraql/v1
+                id: orders.cmd
+                kind: route
+                recipe: command-json
+                """ + bindingYaml + """
+                response:
+                  json:
+                    body:
+                      ok: sql.affectedRows
+                """);
+        if (bumpSql != null) {
+            Files.writeString(dir.resolve("web/api/orders/bump.sql"), bumpSql);
+        }
+    }
+
+    @Test
     void reportsUnknownRecipe(@TempDir Path dir) throws Exception {
         Files.createDirectories(dir.resolve("config"));
         Files.writeString(dir.resolve("config/tesseraql.yml"), "tesseraql:\n  app:\n    name: t\n");

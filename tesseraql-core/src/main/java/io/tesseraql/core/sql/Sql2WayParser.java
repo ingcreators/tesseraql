@@ -16,7 +16,9 @@ import java.util.List;
  *   <li>{@code /* expr *}{@code / dummy} — scalar bind; the dummy literal is replaced by {@code ?}</li>
  *   <li>{@code /* expr *}{@code / (...)} — IN-list bind; expands to {@code (?, ?, ...)}</li>
  *   <li>{@code /*%if cond *}{@code / ... /*%elseif cond *}{@code / ... /*%else *}{@code / ... /*%end*}{@code /}</li>
- *   <li>{@code /*%for item : items *}{@code / ... /*%end*}{@code /}</li>
+ *   <li>{@code /*%for item : items *}{@code / ... /*%end*}{@code /} — optionally
+ *       {@code /*%for item : items separator ',' *}{@code /}; the loop exposes
+ *       {@code item_index} (0-based) alongside {@code item}</li>
  * </ul>
  *
  * <p>Every {@code /* ... *}{@code /} block comment is treated as a directive (Doma-style 2-way SQL
@@ -122,6 +124,19 @@ public final class Sql2WayParser {
         }
         String itemVar = argument.substring(0, colon).trim();
         String listExpr = argument.substring(colon + 1).trim();
+        // An optional separator keeps multi-row templates SQL-tool-runnable: the separator
+        // lives inside the directive comment, never in the raw SQL text.
+        String separator = null;
+        int keyword = listExpr.lastIndexOf(" separator ");
+        if (keyword >= 0) {
+            String literal = listExpr.substring(keyword + " separator ".length()).trim();
+            if (literal.length() < 2 || literal.charAt(0) != '\''
+                    || literal.charAt(literal.length() - 1) != '\'') {
+                throw error("for separator must be a quoted literal, e.g. separator ','");
+            }
+            separator = literal.substring(1, literal.length() - 1);
+            listExpr = listExpr.substring(0, keyword).trim();
+        }
         if (itemVar.isEmpty() || listExpr.isEmpty()) {
             throw error("for directive must be 'item : items'");
         }
@@ -131,7 +146,7 @@ public final class Sql2WayParser {
             throw error("Expected end for 'for', found '" + terminator.keyword() + "'");
         }
         pendingTerminator = null;
-        return new SqlNode.For(itemVar, listExpr, ExpressionParser.parse(listExpr),
+        return new SqlNode.For(itemVar, listExpr, ExpressionParser.parse(listExpr), separator,
                 first.sourceLine(), body);
     }
 

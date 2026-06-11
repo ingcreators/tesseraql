@@ -41,14 +41,16 @@ class FrameworkMigrationsTest {
         assertThat(tables(dataSource))
                 .contains("tql_session", "tql_job_execution", "tql_step_execution",
                         "tql_job_claim", "tql_idempotency_record", "tql_outbox_event",
+                        "tql_doc_sequence",
                         "tql_schema_history__security", "tql_schema_history__operations");
         try (Connection connection = dataSource.getConnection();
                 Statement statement = connection.createStatement();
                 ResultSet history = statement.executeQuery(
                         "select count(*) from tql_schema_history__operations"
-                                + " where version = '1' and success")) {
+                                + " where version in ('1', '2') and success")) {
             history.next();
-            assertThat(history.getInt(1)).isEqualTo(1);
+            // V1 framework tables and the V2 document-sequence migration, each applied once.
+            assertThat(history.getInt(1)).isEqualTo(2);
         }
     }
 

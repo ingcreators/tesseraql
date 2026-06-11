@@ -4,6 +4,37 @@ All notable changes to TesseraQL are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [Semantic Versioning](https://semver.org/).
 
+## Unreleased
+
+### Core
+
+- 2-way SQL `%for` directive: an optional `separator ','` (kept inside the directive comment,
+  so multi-row `INSERT ... VALUES` templates stay SQL-tool-runnable) and a 0-based
+  `<item>_index` loop variable.
+- Dialect capability matrix: generated-key retrieval style (`columns` for PostgreSQL/Oracle,
+  `auto` for MySQL/SQL Server).
+- `TqlException` carries an explicit client-safe `details` payload, rendered into error
+  responses (field-level errors, conflict hints) without leaking internals.
+
+### Runtime and recipes
+
+- Transactional write depth for `command-json` (roadmap Phase 18, see
+  [docs/transactional-writes.md](docs/transactional-writes.md)): an ordered `steps:` list
+  executes in a single transaction; later steps bind values produced by earlier ones,
+  including generated keys (`keys:`, published as `steps.<name>.keys.<column>`).
+- Canonical audit binds `/* audit.user */` and `/* audit.now */`, resolved from the
+  principal and one clock reading per command.
+- Declared row-count expectations (`expect: { rows: 1, onMismatch: conflict }`) turn silent
+  lost updates into `409 Conflict` (`TQL-SQL-4092`) with a usable conflict hint; lint nudges
+  the version-predicate/expectation pairing on UPDATEs (`TQL-SQL-2104`/`2105`).
+- Constraint-violation mapping (`errors.constraints`): unique/foreign-key SQLState failures
+  map to field-level error payloads, rendered as JSON or as an inline `hc-alert` fragment
+  for htmx requests. Outbox commands now classify constraint failures like the standard
+  pipeline (a NOT NULL violation answers 400, not 500).
+- Document-number sequences as a managed SQL contract (`sequence:` steps backed by
+  `tql_doc_sequence`, V2 framework migration): gapless allocation under the sequence row's
+  lock, riding the command transaction.
+
 ## 0.1.0 - 2026-06-11
 
 First public release: the complete framework, built and

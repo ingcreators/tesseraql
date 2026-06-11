@@ -235,6 +235,11 @@ public final class TesseraqlRuntime implements AutoCloseable {
         JdbcOutboxStore outboxStore = new JdbcOutboxStore(dataSource);
         outboxStore.ensureSchema();
         context.getRegistry().bind(TesseraqlProperties.OUTBOX_STORE_BEAN, outboxStore);
+        // Managed document-number sequences for command steps (roadmap Phase 18).
+        io.tesseraql.operations.sequence.JdbcDocumentSequences documentSequences = new io.tesseraql.operations.sequence.JdbcDocumentSequences(
+                dataSource);
+        documentSequences.ensureSchema();
+        context.getRegistry().bind(TesseraqlProperties.DOCUMENT_SEQUENCES_BEAN, documentSequences);
         // Asynchronous file imports/exports (design ch. 28); codecs arrive via ServiceLoader, so
         // adding the optional tesseraql-excel module to the classpath is the whole install.
         io.tesseraql.operations.files.JdbcFileTransferService fileTransfers = new io.tesseraql.operations.files.JdbcFileTransferService(

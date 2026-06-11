@@ -86,19 +86,31 @@ public final class SqlRenderer {
     private void renderFor(SqlNode.For forNode) {
         Object value = forNode.listExpression().eval(context);
         List<Object> elements = toList(value, forNode.listExpressionSource(), forNode.sourceLine());
+        String indexVar = forNode.itemVar() + "_index";
         Object previous = scope.get(forNode.itemVar());
         boolean hadPrevious = scope.containsKey(forNode.itemVar());
+        Object previousIndex = scope.get(indexVar);
+        boolean hadPreviousIndex = scope.containsKey(indexVar);
         try {
-            for (Object element : elements) {
-                scope.put(forNode.itemVar(), element);
+            for (int i = 0; i < elements.size(); i++) {
+                if (i > 0 && forNode.separator() != null) {
+                    mapToSource(forNode.separator(), forNode.sourceLine());
+                }
+                scope.put(forNode.itemVar(), elements.get(i));
+                scope.put(indexVar, i);
                 renderNodes(forNode.body());
             }
         } finally {
-            if (hadPrevious) {
-                scope.put(forNode.itemVar(), previous);
-            } else {
-                scope.remove(forNode.itemVar());
-            }
+            restore(forNode.itemVar(), previous, hadPrevious);
+            restore(indexVar, previousIndex, hadPreviousIndex);
+        }
+    }
+
+    private void restore(String name, Object previous, boolean hadPrevious) {
+        if (hadPrevious) {
+            scope.put(name, previous);
+        } else {
+            scope.remove(name);
         }
     }
 

@@ -90,7 +90,9 @@ class OutboxIntegrationTest {
         String before = statusOf("tanaka");
         HttpResponse<String> response = post("/api/users/break", "{\"name\":\"tanaka\"}");
 
-        assertThat(response.statusCode()).isEqualTo(500);
+        // Outbox commands classify constraint failures like the standard pipeline since
+        // Phase 18: the NOT NULL violation maps to TQL-SQL-4001 (400), not an opaque 500.
+        assertThat(response.statusCode()).isEqualTo(400);
         assertThat(statusOf("tanaka")).isEqualTo(before); // unchanged
         assertThat(runtime.outboxStore().listPending(50))
                 .noneMatch(event -> "USER_BROKEN".equals(event.eventType()));
