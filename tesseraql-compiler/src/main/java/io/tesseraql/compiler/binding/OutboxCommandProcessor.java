@@ -42,12 +42,15 @@ public final class OutboxCommandProcessor implements Processor {
     private final List<SqlNode> nodes;
     private final String datasourceName;
     private final OutboxSpec outbox;
+    private final String appName;
     private final ObjectMapper mapper = new ObjectMapper();
 
-    public OutboxCommandProcessor(Path sqlPath, String datasourceName, OutboxSpec outbox) {
+    public OutboxCommandProcessor(Path sqlPath, String datasourceName, OutboxSpec outbox,
+            String appName) {
         this.nodes = Sql2WayParser.parse(read(sqlPath));
         this.datasourceName = datasourceName;
         this.outbox = outbox;
+        this.appName = appName;
     }
 
     @Override
@@ -120,7 +123,7 @@ public final class OutboxCommandProcessor implements Processor {
         arrays.forEach((arrayPath, fields) -> putNested(payload, arrayPath, buildArray(fields)));
         try {
             return OutboxEvent.toInsert(outbox.aggregateType(), aggregateId, outbox.eventType(),
-                    mapper.writeValueAsString(payload));
+                    mapper.writeValueAsString(payload), appName);
         } catch (com.fasterxml.jackson.core.JsonProcessingException ex) {
             throw new TqlException(TX_ERROR, "Failed to serialize outbox payload");
         }

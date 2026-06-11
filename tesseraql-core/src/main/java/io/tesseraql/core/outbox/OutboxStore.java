@@ -27,6 +27,16 @@ public interface OutboxStore {
         return listPending(limit);
     }
 
+    /**
+     * Claims only events emitted by the given apps (plus untagged legacy rows), so runtimes
+     * hosting different apps on one shared database never deliver each other's events to the
+     * wrong sinks. The default ignores the scope (single-runtime semantics); JDBC stores
+     * override it.
+     */
+    default List<OutboxEvent> claimPending(int limit, java.util.Collection<String> apps) {
+        return claimPending(limit);
+    }
+
     void markSent(String eventId);
 
     void markFailed(String eventId, String error);

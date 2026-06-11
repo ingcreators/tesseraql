@@ -48,14 +48,15 @@ public final class JdbcOutboxStore implements OutboxStore {
         try (PreparedStatement ps = connection.prepareStatement("""
                 insert into tql_outbox_event
                   (event_id, aggregate_type, aggregate_id, event_type, payload_json, status,
-                   attempts, created_at)
-                values (?, ?, ?, ?, ?, 'PENDING', 0, ?)""")) {
+                   attempts, created_at, app_name)
+                values (?, ?, ?, ?, ?, 'PENDING', 0, ?, ?)""")) {
             ps.setString(1, id);
             ps.setString(2, event.aggregateType());
             ps.setString(3, event.aggregateId());
             ps.setString(4, event.eventType());
             ps.setString(5, event.payloadJson());
             ps.setTimestamp(6, Timestamp.from(Instant.now()));
+            ps.setString(7, event.appName());
             ps.executeUpdate();
         } catch (SQLException ex) {
             throw error("Failed to insert outbox event", ex);
@@ -91,18 +92,34 @@ public final class JdbcOutboxStore implements OutboxStore {
      */
     @Override
     public List<OutboxEvent> claimPending(int limit) {
+        return claimPending(limit, null);
+    }
+
+    /**
+     * As {@link #claimPending(int)}, additionally narrowed to events emitted by the given apps -
+     * untagged legacy rows stay claimable by anyone. A null or empty scope claims everything.
+     */
+    @Override
+    public List<OutboxEvent> claimPending(int limit, java.util.Collection<String> apps) {
+        List<String> scope = apps == null ? List.of() : List.copyOf(apps);
+        String appsFilter = scope.isEmpty() ? "" : " and (app_name is null or app_name in ("
+                + String.join(", ", java.util.Collections.nCopies(scope.size(), "?")) + "))";
         List<OutboxEvent> events = new ArrayList<>();
         try (Connection connection = dataSource.getConnection()) {
             boolean autoCommit = connection.getAutoCommit();
             connection.setAutoCommit(false);
             try {
                 try (PreparedStatement ps = connection.prepareStatement(
-                        "select * from tql_outbox_event where status = 'PENDING' "
-                                + "or (status = 'SENDING' and claimed_at < ?) "
-                                + "order by created_at limit ? for update skip locked")) {
+                        "select * from tql_outbox_event where (status = 'PENDING' "
+                                + "or (status = 'SENDING' and claimed_at < ?))" + appsFilter
+                                + " order by created_at limit ? for update skip locked")) {
                     ps.setTimestamp(1, Timestamp.from(
                             Instant.now().minus(java.time.Duration.ofMinutes(5))));
-                    ps.setInt(2, limit);
+                    int next = 2;
+                    for (String app : scope) {
+                        ps.setString(next++, app);
+                    }
+                    ps.setInt(next, limit);
                     try (ResultSet rs = ps.executeQuery()) {
                         while (rs.next()) {
                             events.add(read(rs));
@@ -161,7 +178,8 @@ public final class JdbcOutboxStore implements OutboxStore {
                 rs.getString("payload_json"),
                 rs.getString("status"),
                 rs.getInt("attempts"),
-                rs.getTimestamp("created_at").toInstant());
+                rs.getTimestamp("created_at").toInstant(),
+                rs.getString("app_name"));
     }
 
     @FunctionalInterface

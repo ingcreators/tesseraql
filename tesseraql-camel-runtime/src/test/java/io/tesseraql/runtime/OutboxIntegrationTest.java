@@ -75,7 +75,9 @@ class OutboxIntegrationTest {
         assertThat(body.path("eventId").asText()).isNotBlank();
 
         assertThat(runtime.outboxStore().listPending(50))
-                .anyMatch(event -> "USER_DEACTIVATED".equals(event.eventType()));
+                .anyMatch(event -> "USER_DEACTIVATED".equals(event.eventType())
+                        // Command routes tag the event with the emitting app.
+                        && "user-admin".equals(event.appName()));
 
         int delivered = runtime.dispatchOutboxOnce();
         assertThat(delivered).isGreaterThanOrEqualTo(1);

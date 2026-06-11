@@ -45,6 +45,17 @@ public final class RouteCompiler {
     private io.tesseraql.compiler.binding.TenancySettings tenancy;
     private boolean mountRest = true;
     private java.util.Set<String> onlyRouteIds;
+    private String appName;
+
+    /**
+     * Sets the app name routes are attributed to (e.g. outbox events). Mounted apps share the
+     * main app's config, so their name cannot come from {@code tesseraql.app.name} and the host
+     * sets it explicitly; unset, the config value applies.
+     */
+    public RouteCompiler appName(String appName) {
+        this.appName = appName;
+        return this;
+    }
 
     /** Builds a Camel {@link RouteBuilder} mounting the REST transport and all routes. */
     public RouteBuilder compile(AppManifest manifest) {
@@ -62,6 +73,9 @@ public final class RouteCompiler {
         this.tenancy = io.tesseraql.compiler.binding.TenancySettings.from(config);
         this.mountRest = mountRest;
         this.onlyRouteIds = onlyRouteIds;
+        if (this.appName == null) {
+            this.appName = config.getString("tesseraql.app.name").orElse("app");
+        }
         return new RouteBuilder() {
             @Override
             public void configure() {
@@ -130,7 +144,8 @@ public final class RouteCompiler {
         applyTenancy(route);
         applyIdempotencyBegin(route, definition);
         route.process(new RequestBinder(definition, pathParams(routeFile.urlPath())))
-                .process(new OutboxCommandProcessor(sqlPath, DEFAULT_DATASOURCE, definition.outbox()))
+                .process(new OutboxCommandProcessor(
+                        sqlPath, DEFAULT_DATASOURCE, definition.outbox(), appName))
                 .process(responseRenderer(definition));
         applyIdempotencyComplete(route, definition);
     }

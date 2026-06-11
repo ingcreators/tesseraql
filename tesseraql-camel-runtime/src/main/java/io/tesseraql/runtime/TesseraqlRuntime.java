@@ -56,6 +56,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
     private final Map<String, JobFile> jobs;
     private final Map<String, String> jobOwners;
     private final String appName;
+    private final java.util.Set<String> hostedApps;
     private final io.tesseraql.core.threading.ExecutionLanes executionLanes;
     private final TenantDataSources tenantDataSources;
     private final io.tesseraql.yaml.config.AppConfig config;
@@ -68,6 +69,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
             int port,
             JobRepository jobRepository, JobExecutor jobExecutor, JdbcOutboxStore outboxStore,
             Map<String, JobFile> jobs, Map<String, String> jobOwners, String appName,
+            java.util.Set<String> hostedApps,
             io.tesseraql.core.threading.ExecutionLanes executionLanes,
             TenantDataSources tenantDataSources, io.tesseraql.yaml.config.AppConfig config,
             AutoCloseable pinningSource, AutoCloseable otelSdk,
@@ -77,6 +79,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
         this.dataSources = dataSources;
         this.mainDataSource = dataSources.get("main");
         this.jobOwners = Map.copyOf(jobOwners);
+        this.hostedApps = java.util.Set.copyOf(hostedApps);
         this.port = port;
         this.jobRepository = jobRepository;
         this.jobExecutor = jobExecutor;
@@ -229,6 +232,9 @@ public final class TesseraqlRuntime implements AutoCloseable {
         // The owning app per job id (main app jobs default), so execution records are tagged with
         // the app that declared the job, not just the hosting runtime (design ch. 26, 32).
         Map<String, String> jobOwners = new LinkedHashMap<>();
+        // Every app this runtime hosts (main + mounted), scoping outbox claims (design ch. 39).
+        java.util.Set<String> hostedApps = new java.util.LinkedHashSet<>();
+        hostedApps.add(appName);
 
         TenantDataSources tenantPools = tenantDataSources;
         AppConfig runtimeConfig = manifest.config();
@@ -277,7 +283,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
             AppMigrations.migrate(appName, appHome, manifest.config(), dataSource,
                     tenantDataSources, dataSources::get);
             context.addService(new VertxPlatformHttpServer(httpConfig));
-            context.addRoutes(new RouteCompiler().compile(manifest));
+            context.addRoutes(new RouteCompiler().appName(appName).compile(manifest));
             // Mounted apps (jar-bundled system apps and config-listed directories, design ch. 32)
             // are plain yaml/sql/template trees compiled exactly like the main app.
             List<SystemApps.MountedApp> mountedApps = SystemApps.load(manifest.config(), appHome);
@@ -286,7 +292,8 @@ public final class TesseraqlRuntime implements AutoCloseable {
                 // Mounted apps migrate their own schema (per-app history table) before serving.
                 AppMigrations.migrate(mounted.name(), mounted.manifest().appHome(),
                         manifest.config(), dataSource, tenantDataSources, dataSources::get);
-                context.addRoutes(new RouteCompiler().compile(mounted.manifest()));
+                context.addRoutes(new RouteCompiler()
+                        .appName(mounted.name()).compile(mounted.manifest()));
                 // Mounted apps' batch jobs join the same scheduler and manual-run surface,
                 // tagged with the owning app; duplicate ids across apps fail the mount.
                 for (JobFile job : mounted.manifest().jobs()) {
@@ -298,6 +305,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
                     }
                     jobOwners.put(jobId, mounted.name());
                 }
+                hostedApps.add(mounted.name());
             }
             // Static assets (design ch. 12, 40): the main app's assets/, each mounted app's
             // assets/ under its name, framework css under /assets/_tesseraql, vendored WebJars
@@ -419,7 +427,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
             var outboxDelay = manifest.config().getString("tesseraql.outbox.dispatch.fixedDelay");
             if (outboxDelay.isPresent()) {
                 context.addRoutes(new OutboxDispatchRouteBuilder(outboxStore, outboxSink,
-                        io.tesseraql.core.util.Durations.toMillis(outboxDelay.get())));
+                        io.tesseraql.core.util.Durations.toMillis(outboxDelay.get()), hostedApps));
             }
             context.start();
         } catch (Exception ex) {
@@ -430,8 +438,8 @@ public final class TesseraqlRuntime implements AutoCloseable {
         }
         LOG.info("TesseraQL runtime started on port {} for app {}", port, appHome);
         return new TesseraqlRuntime(context, dataSources, port, jobRepository, jobExecutor,
-                outboxStore, jobs, jobOwners, appName, lanes, tenantDataSources, manifest.config(),
-                pinningSource, otelSdk, opsDashboard, outboxSink);
+                outboxStore, jobs, jobOwners, appName, hostedApps, lanes, tenantDataSources,
+                manifest.config(), pinningSource, otelSdk, opsDashboard, outboxSink);
     }
 
     /** The configured dialect for the main datasource, or inferred from its JDBC URL (design ch. 42). */
@@ -479,7 +487,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
 
     /** Dispatches pending outbox events once, returning the number delivered (design ch. 39.2). */
     public int dispatchOutboxOnce() {
-        return new OutboxDispatcher(outboxStore, outboxSink).dispatch(100);
+        return new OutboxDispatcher(outboxStore, outboxSink, hostedApps).dispatch(100);
     }
 
     public JdbcOutboxStore outboxStore() {

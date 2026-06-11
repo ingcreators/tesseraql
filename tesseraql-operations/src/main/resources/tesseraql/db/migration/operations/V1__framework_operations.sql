@@ -59,5 +59,6 @@ create table if not exists tql_outbox_event (
   last_error varchar(2000),
   created_at timestamp not null,
   sent_at timestamp,
-  claimed_at timestamp
+  claimed_at timestamp,
+  app_name varchar(256)
 );
