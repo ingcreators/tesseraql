@@ -35,7 +35,6 @@ import org.apache.camel.model.rest.RestDefinition;
  */
 public final class RouteCompiler {
 
-    private static final System.Logger LOG = System.getLogger(RouteCompiler.class.getName());
     private static final TqlErrorCode UNSUPPORTED_RECIPE = new TqlErrorCode(TqlDomain.CAMEL, 3100);
     /** TQL-CAMEL-3101: a query-export route declares export blocks only file-export supports. */
     private static final TqlErrorCode INVALID_EXPORT = new TqlErrorCode(TqlDomain.CAMEL, 3101);
@@ -103,10 +102,10 @@ public final class RouteCompiler {
             case "query-export" -> buildQueryExport(builder, routeFile);
             case "file-import" -> buildFileImport(builder, routeFile);
             case "file-export" -> buildFileExport(builder, routeFile);
-            default -> LOG.log(System.Logger.Level.WARNING,
-                    // Recipes not yet implemented are skipped so a mixed-recipe app can still boot.
-                    "Skipping route {0}: recipe ''{1}'' is not supported yet",
-                    definition.id(), definition.recipe());
+            // Every designed recipe is implemented, so an unknown one is a typo: fail fast
+            // instead of silently dropping the route from the served surface (design ch. 20.14).
+            default -> throw new TqlException(UNSUPPORTED_RECIPE, "Route '" + definition.id()
+                    + "': unknown recipe '" + definition.recipe() + "'");
         }
     }
 

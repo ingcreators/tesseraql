@@ -3,8 +3,8 @@ package io.tesseraql.yaml.model;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 
 /**
- * Route response declaration (design ch. 6.3, 6.4). Only the JSON response shape is modelled in
- * the first milestone; HTML and streaming responses are added in later phases.
+ * Route response declaration (design ch. 6.3, 6.4): JSON, HTML (template-rendered), streaming
+ * (large-data export), redirect, and generated-file shapes.
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public record ResponseSpec(JsonResponse json, HtmlResponse html, StreamResponse stream,

@@ -60,11 +60,35 @@ final class RouteReloader {
             // full route (REST + body) for the reloaded ids; the old ones were removed above.
             context.addRoutes(new RouteCompiler().compile(reloaded, true, reloadable));
         } catch (Exception ex) {
-            throw new IllegalStateException("Route reload failed: " + ex.getMessage(), ex);
+            // Reload safety (design ch. 22.19): the edited source failed to compile or install
+            // after the old routes were removed - restore them from the last good manifest so a
+            // broken edit never takes a serving endpoint down.
+            rollback(reloadable, ex);
+            throw new IllegalStateException("Route reload failed (previous routes restored): "
+                    + ex.getMessage(), ex);
         }
 
         this.current = reloaded;
         LOG.info("Hot-reloaded {} route(s): {}", reloadable.size(), reloadable);
         return studio.reload();
+    }
+
+    /** Removes any partially installed routes and rebuilds the ids from the last good manifest. */
+    private void rollback(Set<String> reloadable, Exception cause) {
+        try {
+            for (String id : reloadable) {
+                if (context.getRoute(id) != null) {
+                    context.getRouteController().stopRoute(id);
+                    context.removeRoute(id);
+                }
+            }
+            context.addRoutes(new RouteCompiler().compile(current, true, reloadable));
+            LOG.warn("Route reload failed; restored {} route(s) from the previous manifest",
+                    reloadable.size());
+        } catch (Exception rollbackFailure) {
+            cause.addSuppressed(rollbackFailure);
+            LOG.error("Route reload rollback failed; affected routes: {}", reloadable,
+                    rollbackFailure);
+        }
     }
 }

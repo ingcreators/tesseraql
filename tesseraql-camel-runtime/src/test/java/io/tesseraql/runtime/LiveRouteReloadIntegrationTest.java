@@ -75,6 +75,31 @@ class LiveRouteReloadIntegrationTest {
         assertThat(pingVersion()).isEqualTo("v2");
     }
 
+    @Test
+    void brokenEditRollsBackAndTheEndpointKeepsServing() throws Exception {
+        String before = pingVersion();
+        String original = Files.readString(appHome.resolve("web/api/ping/get.yml"));
+        String broken = original.replace("recipe: query-json", "recipe: no-such-recipe");
+
+        // Applying a definition that fails to compile must not take the endpoint down.
+        assertThat(studioPost("/_tesseraql/studio/drafts?path=" + enc("web/api/ping/get.yml"),
+                broken).statusCode()).isEqualTo(200);
+        assertThat(studioPost("/_tesseraql/studio/apply?path=" + enc("web/api/ping/get.yml"),
+                "").statusCode()).isEqualTo(200);
+        HttpResponse<String> reload = studioPost("/_tesseraql/studio/reload", "");
+        assertThat(reload.statusCode()).isGreaterThanOrEqualTo(400);
+        // The previous route was restored (design ch. 22.19 reload safety).
+        assertThat(pingVersion()).isEqualTo(before);
+
+        // Restoring the definition reloads cleanly again.
+        assertThat(studioPost("/_tesseraql/studio/drafts?path=" + enc("web/api/ping/get.yml"),
+                original).statusCode()).isEqualTo(200);
+        assertThat(studioPost("/_tesseraql/studio/apply?path=" + enc("web/api/ping/get.yml"),
+                "").statusCode()).isEqualTo(200);
+        assertThat(studioPost("/_tesseraql/studio/reload", "").statusCode()).isEqualTo(200);
+        assertThat(pingVersion()).isEqualTo(before);
+    }
+
     private static String pingVersion() throws Exception {
         HttpResponse<String> response = HttpClient.newHttpClient().send(
                 HttpRequest.newBuilder(URI.create(

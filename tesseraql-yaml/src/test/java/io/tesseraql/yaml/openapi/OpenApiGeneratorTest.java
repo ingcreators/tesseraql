@@ -33,6 +33,85 @@ class OpenApiGeneratorTest {
     }
 
     @Test
+    void recipesShapeResponses() {
+        String json = new OpenApiGenerator().toJson(exampleApp());
+        // HTML pages respond text/html; query-export streams the export format.
+        assertThat(json).contains("\"text/html\"");
+        assertThat(json).contains("\"text/csv; charset=utf-8\"");
+        assertThat(json).contains("\"format\" : \"binary\"");
+        // The browser-session scheme accompanies bearer in the components.
+        assertThat(json).contains("\"sessionCookie\"").contains("\"tesseraql_sid\"");
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void transferRoutesDocumentUploadAcknowledgementAndSubpaths() {
+        io.tesseraql.yaml.SimpleYamlParser parser = new io.tesseraql.yaml.SimpleYamlParser();
+        Path home = Path.of("/app").toAbsolutePath().normalize();
+        var importRoute = new io.tesseraql.yaml.manifest.RouteFile("post", "/api/items/import",
+                home.resolve("web/api/items/import/post.yml"), parser.parseRoute("""
+                        version: tesseraql/v1
+                        id: items.import
+                        kind: route
+                        recipe: file-import
+                        import:
+                          format: csv
+                          columns: [name]
+                          sql:
+                            file: upsert.sql
+                        """, "import"));
+        var exportRoute = new io.tesseraql.yaml.manifest.RouteFile("post", "/api/items/export",
+                home.resolve("web/api/items/export/post.yml"), parser.parseRoute("""
+                        version: tesseraql/v1
+                        id: items.export
+                        kind: route
+                        recipe: file-export
+                        export:
+                          format: excel
+                          filename: items.xlsx
+                          sql:
+                            file: select.sql
+                        """, "export"));
+        var commandRoute = new io.tesseraql.yaml.manifest.RouteFile("post", "/api/items",
+                home.resolve("web/api/items/post.yml"), parser.parseRoute("""
+                        version: tesseraql/v1
+                        id: items.create
+                        kind: route
+                        recipe: command-json
+                        input:
+                          name:
+                            type: string
+                            required: true
+                        sql:
+                          file: insert.sql
+                          mode: update
+                        """, "command"));
+        AppManifest manifest = new AppManifest(home,
+                new io.tesseraql.yaml.config.AppConfig(java.util.Map.of(), name -> null),
+                java.util.List.of(importRoute, exportRoute, commandRoute), java.util.List.of(),
+                io.tesseraql.yaml.manifest.ManifestIndex.of(java.util.Map.of(), "test"));
+
+        java.util.Map<String, Object> doc = new OpenApiGenerator().generate(manifest);
+        var paths = (java.util.Map<String, Object>) doc.get("paths");
+        // The compiler-mounted status and download subpaths are part of the contract.
+        assertThat(paths).containsKeys("/api/items/import", "/api/items/import/{transferId}",
+                "/api/items/export", "/api/items/export/{transferId}",
+                "/api/items/export/{transferId}/file");
+
+        String json = new OpenApiGenerator().toJson(manifest);
+        // Uploads accept a raw body or a multipart "file" part and acknowledge with 202.
+        assertThat(json).contains("\"multipart/form-data\"").contains("\"202\"")
+                .contains("TransferAccepted").contains("TransferStatus");
+        // The export download declares the Excel content type and the busy/unknown statuses.
+        assertThat(json)
+                .contains("\"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet\"")
+                .contains("\"409\"");
+        // A POST route's declared inputs become a JSON request body schema.
+        assertThat(json).contains("\"requestBody\"")
+                .contains("\"required\" : [ \"name\" ]");
+    }
+
+    @Test
     void outputIsDeterministic() {
         AppManifest manifest = exampleApp();
         OpenApiGenerator generator = new OpenApiGenerator();

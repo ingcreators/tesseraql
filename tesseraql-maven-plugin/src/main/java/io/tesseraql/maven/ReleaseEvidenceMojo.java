@@ -91,6 +91,8 @@ public class ReleaseEvidenceMojo extends AbstractMojo {
                     .toJson(manifest, appId, appVersion, mavenComponents()));
             Files.writeString(dir.resolve("openapi.json"),
                     new OpenApiGenerator().toJson(manifest));
+            Files.writeString(dir.resolve("htmx-contract.json"),
+                    new io.tesseraql.yaml.openapi.HtmxContractGenerator().toJson(manifest));
             if (signingKeyFile != null) {
                 Files.writeString(dir.resolve("release-evidence.json.sig"), sign(evidence));
             }
