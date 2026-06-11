@@ -28,6 +28,8 @@ public final class TesseraqlProperties {
     public static final String TEMP_STORE_BEAN = "tesseraqlTempStore";
     public static final String IDEMPOTENCY_STORE_BEAN = "tesseraqlIdempotencyStore";
     public static final String OUTBOX_STORE_BEAN = "tesseraqlOutboxStore";
+    /** The managed document-number sequence allocator (roadmap Phase 18). */
+    public static final String DOCUMENT_SEQUENCES_BEAN = "tesseraqlDocumentSequences";
     /** The asynchronous file import/export service (design ch. 28). */
     public static final String FILE_TRANSFER_BEAN = "tesseraqlFileTransfers";
     /** An OutboxEventSink contributed by a runtime extension (e.g. SCIM outbound provisioning). */

@@ -8,10 +8,14 @@ import java.util.Optional;
  */
 public enum Dialect {
 
-    POSTGRES("postgres", new DialectCapabilities(true, true, "on-conflict", "\"", "columns")),
-    MYSQL("mysql", new DialectCapabilities(true, false, "on-duplicate-key", "`", "auto")),
-    ORACLE("oracle", new DialectCapabilities(false, true, "merge", "\"", "columns")),
-    SQLSERVER("sqlserver", new DialectCapabilities(false, true, "merge", "\"", "auto"));
+    POSTGRES("postgres",
+            new DialectCapabilities(true, true, "on-conflict", "\"", "columns")), MYSQL("mysql",
+                    new DialectCapabilities(true, false, "on-duplicate-key", "`", "auto")), ORACLE(
+                            "oracle",
+                            new DialectCapabilities(false, true, "merge", "\"",
+                                    "columns")), SQLSERVER("sqlserver",
+                                            new DialectCapabilities(false, true, "merge", "\"",
+                                                    "auto"));
 
     private final String id;
     private final DialectCapabilities capabilities;

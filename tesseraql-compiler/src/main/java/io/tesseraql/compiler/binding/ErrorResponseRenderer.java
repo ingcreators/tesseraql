@@ -13,7 +13,11 @@ import org.apache.camel.Processor;
  * Renders a caught exception into a JSON error response (design ch. 37.2, 37.4).
  *
  * <p>External responses expose only {@code code}, a generic {@code message}, and a trace id;
- * internal diagnostics (source, line) are not leaked (design ch. 37.3).
+ * internal diagnostics (source, line) are not leaked (design ch. 37.3). The one addition is
+ * {@link TqlException#details()}: structured payload the thrower explicitly declared safe —
+ * field-level constraint errors and optimistic-locking conflict hints (roadmap Phase 18).
+ * htmx requests ({@code HX-Request} header) receive those details as an inline HTML fragment
+ * instead of JSON, so a form can surface them next to its fields.
  */
 public final class ErrorResponseRenderer implements Processor {
 
@@ -30,6 +34,9 @@ public final class ErrorResponseRenderer implements Processor {
         Map<String, Object> error = new LinkedHashMap<>();
         error.put("code", code.toString());
         error.put("message", reasonPhrase(status));
+        if (cause instanceof TqlException tql) {
+            tql.details().forEach((key, value) -> error.putIfAbsent(key, value));
+        }
         Map<String, Object> body = Map.of("error", error);
 
         // Inbound form fields can surface as multi-line message headers (platform-http); drop them
@@ -39,8 +46,52 @@ public final class ErrorResponseRenderer implements Processor {
                         && (value.indexOf('\n') >= 0 || value.indexOf('\r') >= 0));
 
         exchange.getMessage().setHeader(Exchange.HTTP_RESPONSE_CODE, status);
+        if ("true".equals(exchange.getMessage().getHeader("HX-Request", String.class))) {
+            exchange.getMessage().setHeader(Exchange.CONTENT_TYPE, "text/html; charset=utf-8");
+            exchange.getMessage().setBody(htmxFragment(error));
+            return;
+        }
         exchange.getMessage().setHeader(Exchange.CONTENT_TYPE, "application/json; charset=utf-8");
         exchange.getMessage().setBody(mapper.writeValueAsString(body));
+    }
+
+    /**
+     * Renders the error as a Hypermedia Components alert fragment for htmx requests: field-level
+     * errors as a list items carry {@code data-field} so a form can retarget them inline, and a
+     * conflict hint renders as the alert's hint line.
+     */
+    @SuppressWarnings("unchecked")
+    private static String htmxFragment(Map<String, Object> error) {
+        StringBuilder html = new StringBuilder();
+        html.append("<div class=\"hc-alert hc-alert-error\" data-error-code=\"")
+                .append(escape(String.valueOf(error.get("code")))).append("\">");
+        html.append("<p class=\"hc-alert-message\">")
+                .append(escape(String.valueOf(error.get("message")))).append("</p>");
+        if (error.get("fields") instanceof java.util.List<?> fields && !fields.isEmpty()) {
+            html.append("<ul class=\"hc-field-errors\">");
+            for (Object entry : fields) {
+                Map<String, Object> field = (Map<String, Object>) entry;
+                html.append("<li class=\"hc-field-error\" data-field=\"")
+                        .append(escape(String.valueOf(field.get("field"))))
+                        .append("\" data-code=\"")
+                        .append(escape(String.valueOf(field.get("code"))))
+                        .append("\">")
+                        .append(escape(field.get("field") + ": " + field.get("code")))
+                        .append("</li>");
+            }
+            html.append("</ul>");
+        }
+        if (error.get("conflict") instanceof Map<?, ?> conflict
+                && conflict.get("hint") != null) {
+            html.append("<p class=\"hc-alert-hint\">")
+                    .append(escape(String.valueOf(conflict.get("hint")))).append("</p>");
+        }
+        return html.append("</div>").toString();
+    }
+
+    private static String escape(String value) {
+        return value.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+                .replace("\"", "&quot;");
     }
 
     /** Maps an error code to an HTTP status (design ch. 37.4). */
@@ -71,7 +122,8 @@ public final class ErrorResponseRenderer implements Processor {
             case IAM -> code.number() == 4030 ? 403 : 500;
             case SQL -> switch (code.number()) {
                 case 4001, 4002 -> 400; // not-null / check violation
-                case 4090, 4091, 4093 -> 409; // unique / foreign-key / serialization conflict
+                // unique / foreign-key / row-count expectation / serialization conflict
+                case 4090, 4091, 4092, 4093 -> 409;
                 default -> 500;
             };
             case TENANT, APP -> switch (code.number()) {
@@ -89,6 +141,7 @@ public final class ErrorResponseRenderer implements Processor {
             case 401 -> "Unauthorized";
             case 403 -> "Forbidden";
             case 404 -> "Not Found";
+            case 409 -> "Conflict";
             case 422 -> "Unprocessable Entity";
             case 429 -> "Too Many Requests";
             case 503 -> "Service Unavailable";

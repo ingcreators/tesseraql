@@ -6,7 +6,6 @@ import io.tesseraql.compiler.binding.ErrorResponseRenderer;
 import io.tesseraql.compiler.binding.HtmlResponseRenderer;
 import io.tesseraql.compiler.binding.IdempotencyProcessors;
 import io.tesseraql.compiler.binding.JsonResponseRenderer;
-import io.tesseraql.compiler.binding.OutboxCommandProcessor;
 import io.tesseraql.compiler.binding.RateLimiter;
 import io.tesseraql.compiler.binding.RequestBinder;
 import io.tesseraql.core.error.TqlDomain;
@@ -110,13 +109,26 @@ public final class RouteCompiler {
     }
 
     private void buildJson(RouteBuilder builder, RouteFile routeFile) {
-        if (routeFile.definition().outbox() != null) {
-            buildCommandWithOutbox(builder, routeFile);
+        if (usesTransactionalCommand(routeFile.definition())) {
+            buildTransactionalCommand(builder, routeFile);
             return;
         }
         ProcessorDefinition<?> route = pipelineThroughSql(builder, routeFile)
                 .process(responseRenderer(routeFile.definition()));
         applyIdempotencyComplete(route, routeFile.definition());
+    }
+
+    /**
+     * Whether the route runs through the transactional command processor (roadmap Phase 18):
+     * any route declaring an outbox event or command steps, and every file-based command-json
+     * route — so audit binds, row-count expectations, and constraint mapping apply uniformly.
+     * Contract/service-bound command routes keep the standard execution pipeline.
+     */
+    private static boolean usesTransactionalCommand(RouteDefinition definition) {
+        return definition.outbox() != null
+                || !definition.steps().isEmpty()
+                || ("command-json".equals(definition.recipe())
+                        && definition.sql() != null && definition.sql().file() != null);
     }
 
     /** The terminal renderer: a redirect when declared, otherwise the JSON response. */
@@ -128,8 +140,13 @@ public final class RouteCompiler {
         return new JsonResponseRenderer(definition.response().json());
     }
 
-    /** Builds a command route whose SQL and outbox event commit atomically (design ch. 39.2). */
-    private void buildCommandWithOutbox(RouteBuilder builder, RouteFile routeFile) {
+    /**
+     * Builds a command route through the transactional command processor (design ch. 39.2,
+     * roadmap Phase 18): its SQL steps, document-sequence allocations, and outbox event commit
+     * atomically in one transaction. Dialect-specific SQL variants resolve per step, like the
+     * standard execution pipeline.
+     */
+    private void buildTransactionalCommand(RouteBuilder builder, RouteFile routeFile) {
         RouteDefinition definition = routeFile.definition();
         String routeId = definition.id();
         String direct = "direct:" + routeId;
@@ -137,7 +154,10 @@ public final class RouteCompiler {
             restEndpoint(builder, routeFile.httpMethod(), routeFile.urlPath()).to(direct);
         }
 
-        Path sqlPath = routeFile.source().getParent().resolve(definition.sql().file()).normalize();
+        Path routeDir = routeFile.source().getParent();
+        String dialect = datasourceDialect();
+        java.util.function.Function<String, Path> stepFile = file -> io.tesseraql.core.dialect.DialectSqlResolver
+                .resolve(routeDir.resolve(file).normalize(), dialect);
 
         ProcessorDefinition<?> route = builder.from(direct).routeId(routeId);
         applyTelemetry(route, routeFile);
@@ -146,11 +166,20 @@ public final class RouteCompiler {
         applySecurity(route, definition.security());
         applyTenancy(route);
         applyIdempotencyBegin(route, definition);
-        route.process(new RequestBinder(definition, pathParams(routeFile.urlPath())))
-                .process(new OutboxCommandProcessor(
-                        sqlPath, DEFAULT_DATASOURCE, definition.outbox(), appName))
-                .process(responseRenderer(definition));
-        applyIdempotencyComplete(route, definition);
+        ProcessorDefinition<?> step = route
+                .process(new RequestBinder(definition, pathParams(routeFile.urlPath())))
+                .process(new io.tesseraql.compiler.binding.TransactionalCommandProcessor(
+                        routeId, definition.sql(), definition.steps(), stepFile,
+                        DEFAULT_DATASOURCE, dialect, definition.outbox(), definition.errors(),
+                        appName));
+        // Named queries still run after the command (outside its transaction), in authored order.
+        for (var entry : definition.queries().entrySet()) {
+            step = step
+                    .process(new io.tesseraql.compiler.binding.NamedQueryBinder(entry.getValue()))
+                    .to(executionUri(routeFile, entry.getValue(), entry.getKey()));
+        }
+        step.process(responseRenderer(definition));
+        applyIdempotencyComplete(step, definition);
     }
 
     /**

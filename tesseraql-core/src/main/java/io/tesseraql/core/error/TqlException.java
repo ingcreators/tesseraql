@@ -37,7 +37,7 @@ public class TqlException extends RuntimeException {
     }
 
     private TqlException(TqlErrorCode code, String message, String source, Integer line,
-            Throwable cause, Map<String, Object> details) {
+            Throwable cause, Map<String, ?> details) {
         super(message, cause);
         this.code = Objects.requireNonNull(code, "code");
         this.source = source;
@@ -91,7 +91,7 @@ public class TqlException extends RuntimeException {
         private String source;
         private Integer line;
         private Throwable cause;
-        private Map<String, Object> details;
+        private Map<String, ?> details;
 
         private Builder(TqlErrorCode code) {
             this.code = Objects.requireNonNull(code, "code");
@@ -118,7 +118,7 @@ public class TqlException extends RuntimeException {
         }
 
         /** Attaches structured detail that is safe to expose in external error responses. */
-        public Builder details(Map<String, Object> details) {
+        public Builder details(Map<String, ?> details) {
             this.details = details;
             return this;
         }
