@@ -23,7 +23,8 @@ class OpenTelemetryHierarchyTest {
         OpenTelemetrySdk sdk = OpenTelemetrySdk.builder().setTracerProvider(provider).build();
 
         // Mirror the runtime: an in-process ring assigns identity, OpenTelemetry mirrors the tree.
-        CompositeTracer composite = new CompositeTracer(new RingTracer(8), new OpenTelemetryTracer(sdk));
+        CompositeTracer composite = new CompositeTracer(new RingTracer(8),
+                new OpenTelemetryTracer(sdk));
 
         Span route = composite.start("tesseraql.route");
         Span sql = composite.start("tesseraql.sql.execute", route.context());

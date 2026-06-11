@@ -21,7 +21,8 @@ public record SqlVariant(String key, String hash) {
     public static SqlVariant of(List<CoverageTrace.Branch> branches) {
         StringBuilder sb = new StringBuilder();
         for (CoverageTrace.Branch branch : branches) {
-            sb.append("b@").append(branch.sourceLine()).append('=').append(branch.taken()).append(';');
+            sb.append("b@").append(branch.sourceLine()).append('=').append(branch.taken())
+                    .append(';');
         }
         String key = sb.toString();
         return new SqlVariant(key, sha256(key));

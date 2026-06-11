@@ -73,7 +73,8 @@ public final class RouteGovernance {
             score += 1;
             factors.add("write route without an authorization policy");
         }
-        if (write && "command-json".equals(definition.recipe()) && definition.idempotency() == null) {
+        if (write && "command-json".equals(definition.recipe())
+                && definition.idempotency() == null) {
             score += 2;
             factors.add("write route without an idempotency declaration");
         }
@@ -136,7 +137,8 @@ public final class RouteGovernance {
             return;
         }
         for (String expr : binding.params().values()) {
-            if (expr.startsWith("query.") || expr.startsWith("body.") || expr.startsWith("params.")) {
+            if (expr.startsWith("query.") || expr.startsWith("body.")
+                    || expr.startsWith("params.")) {
                 String name = expr.substring(expr.indexOf('.') + 1);
                 int dot = name.indexOf('.');
                 String first = dot < 0 ? name : name.substring(0, dot);

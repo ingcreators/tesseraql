@@ -52,12 +52,12 @@ class SharedSessionIntegrationTest {
 
     @AfterAll
     static void stop() throws IOException {
-        for (TesseraqlRuntime runtime : new TesseraqlRuntime[] {nodeA, nodeB}) {
+        for (TesseraqlRuntime runtime : new TesseraqlRuntime[]{nodeA, nodeB}) {
             if (runtime != null) {
                 runtime.close();
             }
         }
-        for (Path home : new Path[] {homeA, homeB}) {
+        for (Path home : new Path[]{homeA, homeB}) {
             if (home != null) {
                 deleteRecursively(home);
             }
@@ -73,7 +73,8 @@ class SharedSessionIntegrationTest {
         String cookie = cookieOf(login);
 
         // ...and the session cookie authorizes a browser-auth route on node B.
-        HttpResponse<String> fragment = getWithCookie(nodeB.port(), "/users/fragments/table", cookie);
+        HttpResponse<String> fragment = getWithCookie(nodeB.port(), "/users/fragments/table",
+                cookie);
         assertThat(fragment.statusCode()).isEqualTo(200);
         assertThat(fragment.body()).contains("<table");
     }
@@ -118,7 +119,8 @@ class SharedSessionIntegrationTest {
             statement.execute("create table users (id serial primary key, name varchar(200), "
                     + "status varchar(32) not null, created_at timestamp default now())");
             statement.execute("insert into users (name, status) values ('sato','ACTIVE')");
-            for (String ddl : io.tesseraql.identity.DefaultIdentityPack.schema("postgres").split(";")) {
+            for (String ddl : io.tesseraql.identity.DefaultIdentityPack.schema("postgres")
+                    .split(";")) {
                 if (!ddl.isBlank()) {
                     statement.execute(ddl);
                 }
@@ -152,7 +154,8 @@ class SharedSessionIntegrationTest {
                 tesseraql:
                   sessions:
                     store: jdbc
-                """.formatted(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword()));
+                """.formatted(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(),
+                POSTGRES.getPassword()));
         return target;
     }
 

@@ -57,8 +57,7 @@ final class AppMigrator {
                 .baselineOnMigrate(true)
                 .baselineVersion("0")
                 .load()
-                .migrate()
-                .migrationsExecuted;
+                .migrate().migrationsExecuted;
         return Optional.of(new Result(applied, historyTable));
     }
 

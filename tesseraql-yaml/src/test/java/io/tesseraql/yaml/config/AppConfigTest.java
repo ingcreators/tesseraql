@@ -35,7 +35,8 @@ class AppConfigTest {
     void resolvesCrossFileReference() {
         Map<String, Object> root = Map.of(
                 "db", Map.of("main", Map.of("url", "jdbc:postgresql://h/db")),
-                "tesseraql", Map.of("datasources", Map.of("main", Map.of("jdbcUrl", "${db.main.url}"))));
+                "tesseraql",
+                Map.of("datasources", Map.of("main", Map.of("jdbcUrl", "${db.main.url}"))));
         AppConfig config = config(root, Map.of());
 
         assertThat(config.requireString("tesseraql.datasources.main.jdbcUrl"))
@@ -44,7 +45,8 @@ class AppConfigTest {
 
     @Test
     void environmentVariableTakesPrecedence() {
-        Map<String, Object> root = Map.of("db", Map.of("main", Map.of("username", "${DB_USER:fallback}")));
+        Map<String, Object> root = Map.of("db",
+                Map.of("main", Map.of("username", "${DB_USER:fallback}")));
         assertThat(config(root, Map.of("DB_USER", "real")).requireString("db.main.username"))
                 .isEqualTo("real");
         assertThat(config(root, Map.of()).requireString("db.main.username"))

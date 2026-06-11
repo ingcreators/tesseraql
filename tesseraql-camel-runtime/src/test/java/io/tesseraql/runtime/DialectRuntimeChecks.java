@@ -32,7 +32,7 @@ final class DialectRuntimeChecks {
     /** Command + outbox + dispatch: exercises the vendor's claim variant end to end. */
     static void outboxRoundTrip(TesseraqlRuntime runtime) throws Exception {
         HttpResponse<String> response = HTTP.send(HttpRequest.newBuilder(
-                        URI.create("http://localhost:" + runtime.port() + "/api/users/touch"))
+                URI.create("http://localhost:" + runtime.port() + "/api/users/touch"))
                 .header("Content-Type", "application/json")
                 .POST(HttpRequest.BodyPublishers.ofString("{\"name\":\"sato\"}"))
                 .build(), HttpResponse.BodyHandlers.ofString());
@@ -57,8 +57,9 @@ final class DialectRuntimeChecks {
         assertThat(awaitTerminal(runtime, "/api/items/export/" + exportId)
                 .get("status").asText()).isEqualTo("COMPLETED");
         HttpResponse<String> file = HTTP.send(HttpRequest.newBuilder(
-                        URI.create("http://localhost:" + runtime.port()
-                                + "/api/items/export/" + exportId + "/file")).build(),
+                URI.create("http://localhost:" + runtime.port()
+                        + "/api/items/export/" + exportId + "/file"))
+                .build(),
                 HttpResponse.BodyHandlers.ofString());
         assertThat(file.statusCode()).isEqualTo(200);
         // Lowercase headers prove the label normalization on uppercase-folding dialects.
@@ -142,7 +143,7 @@ final class DialectRuntimeChecks {
     private static String startTransfer(TesseraqlRuntime runtime, String path, String body)
             throws Exception {
         HttpResponse<String> response = HTTP.send(HttpRequest.newBuilder(
-                        URI.create("http://localhost:" + runtime.port() + path))
+                URI.create("http://localhost:" + runtime.port() + path))
                 .header("Content-Type", "text/csv")
                 .POST(HttpRequest.BodyPublishers.ofString(body, StandardCharsets.UTF_8))
                 .build(), HttpResponse.BodyHandlers.ofString());
@@ -155,7 +156,7 @@ final class DialectRuntimeChecks {
         Instant deadline = Instant.now().plus(Duration.ofSeconds(20));
         while (true) {
             HttpResponse<String> response = HTTP.send(HttpRequest.newBuilder(
-                            URI.create("http://localhost:" + runtime.port() + statusPath)).build(),
+                    URI.create("http://localhost:" + runtime.port() + statusPath)).build(),
                     HttpResponse.BodyHandlers.ofString());
             JsonNode status = MAPPER.readTree(response.body());
             String value = status.get("status").asText();

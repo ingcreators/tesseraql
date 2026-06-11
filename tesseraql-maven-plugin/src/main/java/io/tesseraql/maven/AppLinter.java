@@ -33,7 +33,8 @@ public final class AppLinter {
         return findings;
     }
 
-    private void lintRoute(Path appHome, AppConfig config, RouteFile route, List<LintFinding> findings) {
+    private void lintRoute(Path appHome, AppConfig config, RouteFile route,
+            List<LintFinding> findings) {
         RouteDefinition definition = route.definition();
         String source = appHome.relativize(route.source()).toString().replace('\\', '/');
 
@@ -41,7 +42,8 @@ public final class AppLinter {
             findings.add(new LintFinding("TQL-YAML-1002", "error", source,
                     "Unknown route recipe '" + definition.recipe() + "'"));
         }
-        if (definition.sql() != null && !definition.sql().isContract() && definition.sql().file() != null) {
+        if (definition.sql() != null && !definition.sql().isContract()
+                && definition.sql().file() != null) {
             Path sqlFile = route.source().getParent().resolve(definition.sql().file());
             if (!Files.isRegularFile(sqlFile)) {
                 findings.add(new LintFinding("TQL-SQL-2103", "error", source,
@@ -49,7 +51,8 @@ public final class AppLinter {
             }
         }
         if (definition.security() != null && definition.security().policy() != null
-                && config.navigate("tesseraql.security.policies." + definition.security().policy()) == null) {
+                && config.navigate(
+                        "tesseraql.security.policies." + definition.security().policy()) == null) {
             findings.add(new LintFinding("TQL-SEC-4030", "warning", source,
                     "Route references undefined policy '" + definition.security().policy()
                             + "' (deny by default)"));
@@ -64,12 +67,14 @@ public final class AppLinter {
      */
     private void lintTenantPredicate(AppConfig config, RouteFile route, RouteDefinition definition,
             String source, List<LintFinding> findings) {
-        boolean enabled = config.getString("tenancy.enabled").map(Boolean::parseBoolean).orElse(false);
+        boolean enabled = config.getString("tenancy.enabled").map(Boolean::parseBoolean)
+                .orElse(false);
         String mode = config.getString("tenancy.mode").orElse("shared-schema");
         if (!enabled || !"shared-schema".equals(mode)) {
             return;
         }
-        if (definition.sql() == null || definition.sql().isContract() || definition.sql().file() == null) {
+        if (definition.sql() == null || definition.sql().isContract()
+                || definition.sql().file() == null) {
             return;
         }
         boolean boundToTenant = definition.sql().params().values().stream()

@@ -38,8 +38,8 @@ public final class FileResponseRenderer implements Processor {
         EvaluationContext evaluation = new EvaluationContext(context);
 
         Map<String, Object> model = new LinkedHashMap<>();
-        response.model().forEach((key, expr) ->
-                model.put(key, evaluation.resolve(Arrays.asList(String.valueOf(expr).split("\\.")))));
+        response.model().forEach((key, expr) -> model.put(key,
+                evaluation.resolve(Arrays.asList(String.valueOf(expr).split("\\.")))));
 
         exchange.getMessage().setHeader(Exchange.HTTP_RESPONSE_CODE, response.effectiveStatus());
         exchange.getMessage().setHeader(Exchange.CONTENT_TYPE, response.effectiveContentType());

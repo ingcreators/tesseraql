@@ -21,7 +21,8 @@ import org.apache.camel.builder.RouteBuilder;
  */
 final class SchedulingRouteBuilder extends RouteBuilder {
 
-    private static final System.Logger LOG = System.getLogger(SchedulingRouteBuilder.class.getName());
+    private static final System.Logger LOG = System
+            .getLogger(SchedulingRouteBuilder.class.getName());
 
     private final OperationsRouteBuilder.JobRunner runner;
     private final JobRepository repository;
@@ -62,7 +63,8 @@ final class SchedulingRouteBuilder extends RouteBuilder {
             from("quartz:tesseraql/" + jobId + "?cron=RAW(" + schedule.cron() + ")")
                     .routeId("schedule." + jobId)
                     .process(exchange -> runClaimed(jobId, quartzFireTime(exchange)));
-            LOG.log(System.Logger.Level.INFO, "Scheduled job {0} with cron {1}", jobId, schedule.cron());
+            LOG.log(System.Logger.Level.INFO, "Scheduled job {0} with cron {1}", jobId,
+                    schedule.cron());
         }
     }
 

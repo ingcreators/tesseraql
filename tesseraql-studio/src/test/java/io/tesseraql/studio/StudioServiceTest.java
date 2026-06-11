@@ -90,7 +90,8 @@ class StudioServiceTest {
                 .satisfies(p -> assertThat(p.valid()).isTrue())
                 .satisfies(p -> assertThat(p.result()).doesNotContain("/*"));
 
-        PreviewResult broken = studio.preview("web/api/users/get.yml", "version: tesseraql/v1\nid: y\n");
+        PreviewResult broken = studio.preview("web/api/users/get.yml",
+                "version: tesseraql/v1\nid: y\n");
         assertThat(broken.valid()).isFalse();
         assertThat(broken.error()).isNotBlank();
     }

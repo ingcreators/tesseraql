@@ -62,8 +62,10 @@ public final class JwtAuthenticator {
         }
         try {
             Mac mac = Mac.getInstance("HmacSHA256");
-            mac.init(new SecretKeySpec(config.secret().getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
-            byte[] expected = mac.doFinal((parts[0] + "." + parts[1]).getBytes(StandardCharsets.US_ASCII));
+            mac.init(new SecretKeySpec(config.secret().getBytes(StandardCharsets.UTF_8),
+                    "HmacSHA256"));
+            byte[] expected = mac
+                    .doFinal((parts[0] + "." + parts[1]).getBytes(StandardCharsets.US_ASCII));
             byte[] actual = URL_DECODER.decode(parts[2]);
             if (!java.security.MessageDigest.isEqual(expected, actual)) {
                 throw new TqlException(PolicyEngine.UNAUTHORIZED, "Invalid JWT signature");

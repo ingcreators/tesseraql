@@ -30,7 +30,8 @@ class SqlLineCoverageTest {
 
         SqlCoverage coverage = new SqlCoverage();
         coverage.record("search.sql",
-                SqlRenderer.render(nodes, Collections.singletonMap("q", null)).coverageTrace(), coverable);
+                SqlRenderer.render(nodes, Collections.singletonMap("q", null)).coverageTrace(),
+                coverable);
 
         SqlCoverageReport report = coverage.report("search.sql");
         assertThat(report.coverableLineCount()).isEqualTo(2);
@@ -57,13 +58,15 @@ class SqlLineCoverageTest {
                 SqlRenderer.render(nodes, Collections.singletonMap("q", null)).coverageTrace(),
                 SqlCoverableLines.compute(nodes));
 
-        CoverageGate.Result strict = CoverageGate.check(coverage, CoverageThresholds.ofPercent(80, 80));
+        CoverageGate.Result strict = CoverageGate.check(coverage,
+                CoverageThresholds.ofPercent(80, 80));
         assertThat(strict.passed()).isFalse();
         assertThat(strict.violations()).anyMatch(v -> v.contains("line coverage"))
                 .anyMatch(v -> v.contains("branch coverage"));
 
         // Branch-only thresholds do not gate line coverage.
-        CoverageGate.Result branchOnly = CoverageGate.check(coverage, CoverageThresholds.ofPercent(40));
+        CoverageGate.Result branchOnly = CoverageGate.check(coverage,
+                CoverageThresholds.ofPercent(40));
         assertThat(branchOnly.passed()).isTrue();
     }
 }

@@ -67,9 +67,10 @@ class ScimGroupPatchTest {
 
     @Test
     void pathlessReplaceAppliesObjectFields() {
-        ScimGroup result = patch(group(), """
-                {"Operations":[{"op":"replace","value":{"displayName":"renamed","members":[{"value":"9"}]}}]}
-                """);
+        ScimGroup result = patch(group(),
+                """
+                        {"Operations":[{"op":"replace","value":{"displayName":"renamed","members":[{"value":"9"}]}}]}
+                        """);
         assertThat(result.displayName()).isEqualTo("renamed");
         assertThat(memberValues(result)).containsExactly("9");
     }

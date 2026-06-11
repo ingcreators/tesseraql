@@ -32,7 +32,8 @@ class ManifestCoverageTest {
 
     private static TestSuite sqlSuite(String... sqlFiles) {
         return new TestSuite(java.util.Arrays.stream(sqlFiles)
-                .map(file -> new TestCase("tests " + file, new SqlTarget(file), null, Map.of(), null))
+                .map(file -> new TestCase("tests " + file, new SqlTarget(file), null, Map.of(),
+                        null))
                 .toList());
     }
 
@@ -116,11 +117,14 @@ class ManifestCoverageTest {
         ItemCoverage coverage = ManifestCoverage.saml(linked,
                 List.of(contractSuite("identity.find-user-by-login", "identity.create-user")));
 
-        assertThat(coverage.declared()).containsExactlyInAnyOrder("create-user", "find-groups-by-user-id",
+        assertThat(coverage.declared()).containsExactlyInAnyOrder("create-user",
+                "find-groups-by-user-id",
                 "find-permissions-by-user-id", "find-roles-by-user-id", "find-user-by-login");
-        assertThat(coverage.covered()).containsExactlyInAnyOrder("create-user", "find-user-by-login");
+        assertThat(coverage.covered()).containsExactlyInAnyOrder("create-user",
+                "find-user-by-login");
 
-        AppManifest unlinked = manifest(Map.of("tesseraql", Map.of("saml", Map.of("enabled", "true"))));
+        AppManifest unlinked = manifest(
+                Map.of("tesseraql", Map.of("saml", Map.of("enabled", "true"))));
         assertThat(ManifestCoverage.saml(unlinked, List.of()).declared()).isEmpty();
         assertThat(ManifestCoverage.saml(unlinked, List.of()).ratio()).isEqualTo(1.0);
     }

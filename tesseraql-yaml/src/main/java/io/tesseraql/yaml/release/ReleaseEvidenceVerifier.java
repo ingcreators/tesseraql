@@ -65,8 +65,8 @@ public final class ReleaseEvidenceVerifier {
                 mismatches.add(new Mismatch(path, "content changed since the evidence"));
             }
         }
-        current.keySet().forEach(path ->
-                mismatches.add(new Mismatch(path, "present but not recorded in the evidence")));
+        current.keySet().forEach(path -> mismatches
+                .add(new Mismatch(path, "present but not recorded in the evidence")));
         Object aggregate = evidence.get("manifestSha256");
         if (aggregate != null && mismatches.isEmpty()
                 && !manifest.index().aggregateHash().equalsIgnoreCase(String.valueOf(aggregate))) {

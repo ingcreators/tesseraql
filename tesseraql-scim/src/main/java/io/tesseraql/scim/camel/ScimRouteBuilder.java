@@ -88,7 +88,8 @@ public final class ScimRouteBuilder extends RouteBuilder {
     }
 
     private void createUser(Exchange exchange) throws Exception {
-        ScimUser request = mapper.readValue(exchange.getMessage().getBody(String.class), ScimUser.class);
+        ScimUser request = mapper.readValue(exchange.getMessage().getBody(String.class),
+                ScimUser.class);
         respond(exchange, 201, users.create(request));
     }
 
@@ -108,14 +109,16 @@ public final class ScimRouteBuilder extends RouteBuilder {
 
     private void replaceUser(Exchange exchange) throws Exception {
         String id = exchange.getMessage().getHeader("id", String.class);
-        ScimUser request = mapper.readValue(exchange.getMessage().getBody(String.class), ScimUser.class);
+        ScimUser request = mapper.readValue(exchange.getMessage().getBody(String.class),
+                ScimUser.class);
         respond(exchange, 200, users.replace(id, request));
     }
 
     private void patchUser(Exchange exchange) throws Exception {
         String id = exchange.getMessage().getHeader("id", String.class);
         io.tesseraql.scim.ScimPatchRequest patch = mapper.readValue(
-                exchange.getMessage().getBody(String.class), io.tesseraql.scim.ScimPatchRequest.class);
+                exchange.getMessage().getBody(String.class),
+                io.tesseraql.scim.ScimPatchRequest.class);
         respond(exchange, 200, users.patch(id, patch));
     }
 
@@ -126,8 +129,8 @@ public final class ScimRouteBuilder extends RouteBuilder {
     }
 
     private void createGroup(Exchange exchange) throws Exception {
-        ScimGroup request =
-                mapper.readValue(exchange.getMessage().getBody(String.class), ScimGroup.class);
+        ScimGroup request = mapper.readValue(exchange.getMessage().getBody(String.class),
+                ScimGroup.class);
         respond(exchange, 201, groups.create(request));
     }
 
@@ -146,15 +149,16 @@ public final class ScimRouteBuilder extends RouteBuilder {
 
     private void replaceGroup(Exchange exchange) throws Exception {
         String id = exchange.getMessage().getHeader("id", String.class);
-        ScimGroup request =
-                mapper.readValue(exchange.getMessage().getBody(String.class), ScimGroup.class);
+        ScimGroup request = mapper.readValue(exchange.getMessage().getBody(String.class),
+                ScimGroup.class);
         respond(exchange, 200, groups.replace(id, request));
     }
 
     private void patchGroup(Exchange exchange) throws Exception {
         String id = exchange.getMessage().getHeader("id", String.class);
         io.tesseraql.scim.ScimPatchRequest patch = mapper.readValue(
-                exchange.getMessage().getBody(String.class), io.tesseraql.scim.ScimPatchRequest.class);
+                exchange.getMessage().getBody(String.class),
+                io.tesseraql.scim.ScimPatchRequest.class);
         respond(exchange, 200, groups.patch(id, patch));
     }
 
@@ -178,7 +182,8 @@ public final class ScimRouteBuilder extends RouteBuilder {
     private void genericError(Exchange exchange) throws Exception {
         Throwable cause = exchange.getProperty(Exchange.EXCEPTION_CAUGHT, Throwable.class);
         int status = cause instanceof io.tesseraql.core.error.TqlException tql
-                ? io.tesseraql.compiler.binding.ErrorResponseRenderer.httpStatus(tql.code()) : 500;
+                ? io.tesseraql.compiler.binding.ErrorResponseRenderer.httpStatus(tql.code())
+                : 500;
         respond(exchange, status, ScimError.of(status,
                 cause == null ? "Internal Server Error" : "Request rejected"));
     }

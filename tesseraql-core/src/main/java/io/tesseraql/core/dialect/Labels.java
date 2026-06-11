@@ -19,6 +19,7 @@ public final class Labels {
             return label;
         }
         return label.equals(label.toUpperCase(Locale.ROOT))
-                ? label.toLowerCase(Locale.ROOT) : label;
+                ? label.toLowerCase(Locale.ROOT)
+                : label;
     }
 }

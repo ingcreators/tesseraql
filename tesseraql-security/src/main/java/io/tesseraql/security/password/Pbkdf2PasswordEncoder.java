@@ -29,7 +29,8 @@ public final class Pbkdf2PasswordEncoder {
         byte[] salt = new byte[SALT_BYTES];
         RANDOM.nextBytes(salt);
         byte[] dk = derive(raw, salt, DEFAULT_ITERATIONS, DEFAULT_KEY_LENGTH);
-        return Base64.getEncoder().encodeToString(salt) + ":" + Base64.getEncoder().encodeToString(dk);
+        return Base64.getEncoder().encodeToString(salt) + ":"
+                + Base64.getEncoder().encodeToString(dk);
     }
 
     /** The {@code password_params} string matching {@link #encode}. */
@@ -52,7 +53,8 @@ public final class Pbkdf2PasswordEncoder {
     private static byte[] derive(String raw, byte[] salt, int iterations, int keyLength) {
         try {
             KeySpec spec = new PBEKeySpec(raw.toCharArray(), salt, iterations, keyLength);
-            return SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256").generateSecret(spec).getEncoded();
+            return SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256").generateSecret(spec)
+                    .getEncoded();
         } catch (Exception ex) {
             throw new TqlException(ENCODE_ERROR, "PBKDF2 hashing failed: " + ex.getMessage());
         }

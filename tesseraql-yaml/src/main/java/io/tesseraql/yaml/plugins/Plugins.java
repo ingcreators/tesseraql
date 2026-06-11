@@ -130,7 +130,7 @@ public final class Plugins {
     private static URLClassLoader isolatedLoader(Path jar) {
         try {
             return new URLClassLoader("tesseraql-plugin-" + pluginName(jar),
-                    new URL[] {jar.toUri().toURL()}, Plugins.class.getClassLoader());
+                    new URL[]{jar.toUri().toURL()}, Plugins.class.getClassLoader());
         } catch (MalformedURLException ex) {
             throw new UncheckedIOException(new IOException(ex));
         }

@@ -13,7 +13,8 @@ class OpenTelemetrySupportTest {
     void buildsAnOtlpSdkThatRecordsSpansWithoutError() {
         // No collector is required to build/use the SDK; export happens asynchronously.
         assertThatCode(() -> {
-            try (OpenTelemetrySdk sdk = OpenTelemetrySupport.otlp("http://localhost:4317", "test-app")) {
+            try (OpenTelemetrySdk sdk = OpenTelemetrySupport.otlp("http://localhost:4317",
+                    "test-app")) {
                 Tracer tracer = new OpenTelemetryTracer(sdk);
                 tracer.start("tesseraql.route").attribute("routeId", "users.search").end();
                 assertThat(sdk).isNotNull();

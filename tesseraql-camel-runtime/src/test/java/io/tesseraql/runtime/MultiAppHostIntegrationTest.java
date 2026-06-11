@@ -86,11 +86,12 @@ class MultiAppHostIntegrationTest {
         try (Connection connection = DriverManager.getConnection(
                 POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword());
                 Statement statement = connection.createStatement()) {
-            for (String schema : new String[] {"a", "b"}) {
+            for (String schema : new String[]{"a", "b"}) {
                 statement.execute("create schema " + schema);
                 statement.execute("create table " + schema
                         + ".items (id serial primary key, name varchar(200) not null)");
-                statement.execute("insert into " + schema + ".items (name) values ('from-" + schema + "')");
+                statement.execute(
+                        "insert into " + schema + ".items (name) values ('from-" + schema + "')");
             }
         }
     }

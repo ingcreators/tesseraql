@@ -41,7 +41,8 @@ public final class SqlServerPlanInspector implements PlanInspector {
     }
 
     @Override
-    public QueryPlan explain(Connection connection, String sql, List<Object> params) throws SQLException {
+    public QueryPlan explain(Connection connection, String sql, List<Object> params)
+            throws SQLException {
         // SHOWPLAN_XML only yields a plan result set for direct batches, not for the RPC path
         // parameterized prepared statements take - so the representative parameter values inline
         // as escaped literals (plan inspection runs on fixture values, design ch. 46).
@@ -107,7 +108,8 @@ public final class SqlServerPlanInspector implements PlanInspector {
         } catch (TqlException ex) {
             throw ex;
         } catch (Exception ex) {
-            throw new TqlException(EXPLAIN_ERROR, "Failed to parse Showplan XML: " + ex.getMessage());
+            throw new TqlException(EXPLAIN_ERROR,
+                    "Failed to parse Showplan XML: " + ex.getMessage());
         }
     }
 
@@ -137,9 +139,11 @@ public final class SqlServerPlanInspector implements PlanInspector {
     }
 
     private static Element closestRelOp(Node node) {
-        for (Node current = node.getParentNode(); current != null; current = current.getParentNode()) {
+        for (Node current = node.getParentNode(); current != null; current = current
+                .getParentNode()) {
             if (current instanceof Element element
-                    && "RelOp".equals(element.getLocalName()) && NS.equals(element.getNamespaceURI())) {
+                    && "RelOp".equals(element.getLocalName())
+                    && NS.equals(element.getNamespaceURI())) {
                 return element;
             }
         }
@@ -161,7 +165,8 @@ public final class SqlServerPlanInspector implements PlanInspector {
             return null;
         }
         return value.startsWith("[") && value.endsWith("]")
-                ? value.substring(1, value.length() - 1) : value;
+                ? value.substring(1, value.length() - 1)
+                : value;
     }
 
     private static double parseDouble(String value) {

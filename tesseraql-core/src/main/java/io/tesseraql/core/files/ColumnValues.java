@@ -125,7 +125,8 @@ public final class ColumnValues {
         }
         ZonedDateTime temporal = toZoned(value, zone);
         if (temporal != null && (column.format() != null || isTemporalType(column))) {
-            String pattern = column.format() != null ? column.format()
+            String pattern = column.format() != null
+                    ? column.format()
                     : "date".equals(column.type()) ? DEFAULT_DATE : DEFAULT_DATETIME;
             return DateTimeFormatter.ofPattern(pattern, locale).format(temporal);
         }

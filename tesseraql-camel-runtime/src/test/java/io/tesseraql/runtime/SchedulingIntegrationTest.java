@@ -85,7 +85,8 @@ class SchedulingIntegrationTest {
         try (Connection connection = DriverManager.getConnection(
                 POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword());
                 Statement statement = connection.createStatement()) {
-            statement.execute("create table users (id serial primary key, name varchar(200), status varchar(32))");
+            statement.execute(
+                    "create table users (id serial primary key, name varchar(200), status varchar(32))");
         }
     }
 
@@ -104,7 +105,8 @@ class SchedulingIntegrationTest {
                     url: %s
                     username: %s
                     password: %s
-                """.formatted(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword()));
+                """.formatted(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(),
+                POSTGRES.getPassword()));
 
         // A fast-firing, side-effect-free scheduled job added only for this test.
         Path pingDir = target.resolve("batch/ping");

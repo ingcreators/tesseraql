@@ -34,8 +34,8 @@ public final class ErrorResponseRenderer implements Processor {
 
         // Inbound form fields can surface as multi-line message headers (platform-http); drop them
         // so the error response is writable as HTTP (header values must not contain newlines).
-        exchange.getMessage().getHeaders().entrySet().removeIf(entry ->
-                entry.getValue() instanceof String value
+        exchange.getMessage().getHeaders().entrySet()
+                .removeIf(entry -> entry.getValue() instanceof String value
                         && (value.indexOf('\n') >= 0 || value.indexOf('\r') >= 0));
 
         exchange.getMessage().setHeader(Exchange.HTTP_RESPONSE_CODE, status);

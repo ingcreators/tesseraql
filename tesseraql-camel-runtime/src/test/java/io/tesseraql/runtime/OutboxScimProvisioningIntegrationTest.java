@@ -19,8 +19,8 @@ import java.nio.file.Paths;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.util.Comparator;
-import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
@@ -51,7 +51,8 @@ class OutboxScimProvisioningIntegrationTest {
     static void start() throws Exception {
         provider = HttpServer.create(new InetSocketAddress(0), 0);
         provider.createContext("/scim/v2/Users", OutboxScimProvisioningIntegrationTest::handle);
-        provider.createContext("/scim/v2/Groups", OutboxScimProvisioningIntegrationTest::handleGroup);
+        provider.createContext("/scim/v2/Groups",
+                OutboxScimProvisioningIntegrationTest::handleGroup);
         provider.start();
 
         appHome = prepareAppHome(provider.getAddress().getPort());
@@ -78,14 +79,15 @@ class OutboxScimProvisioningIntegrationTest {
         try (Connection connection = DriverManager.getConnection(
                 POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword())) {
             runtime.outboxStore().insert(connection,
-                    OutboxEvent.toInsert("User", "local-1", "USER_PROVISIONED", payload, "user-admin"));
+                    OutboxEvent.toInsert("User", "local-1", "USER_PROVISIONED", payload,
+                            "user-admin"));
         }
 
         int delivered = runtime.dispatchOutboxOnce();
         assertThat(delivered).isGreaterThanOrEqualTo(1);
 
-        assertThat(provisioned).anySatisfy(user ->
-                assertThat(user.get("userName").asText()).isEqualTo("asmith"));
+        assertThat(provisioned)
+                .anySatisfy(user -> assertThat(user.get("userName").asText()).isEqualTo("asmith"));
     }
 
     @Test
@@ -94,7 +96,8 @@ class OutboxScimProvisioningIntegrationTest {
         try (Connection connection = DriverManager.getConnection(
                 POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword())) {
             runtime.outboxStore().insert(connection,
-                    OutboxEvent.toInsert("Group", "local-g1", "GROUP_PROVISIONED", payload, "user-admin"));
+                    OutboxEvent.toInsert("Group", "local-g1", "GROUP_PROVISIONED", payload,
+                            "user-admin"));
         }
 
         int delivered = runtime.dispatchOutboxOnce();

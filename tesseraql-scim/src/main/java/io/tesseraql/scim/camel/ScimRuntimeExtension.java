@@ -35,7 +35,8 @@ public final class ScimRuntimeExtension implements RuntimeExtension {
 
     @Override
     public boolean enabled(AppConfig config) {
-        return flag(config, "tesseraql.scim.enabled") || flag(config, "tesseraql.scim.outbound.enabled");
+        return flag(config, "tesseraql.scim.enabled")
+                || flag(config, "tesseraql.scim.outbound.enabled");
     }
 
     @Override
@@ -58,7 +59,8 @@ public final class ScimRuntimeExtension implements RuntimeExtension {
      * are namespaced), so both resource types are provisioned from the same outbox. At-least-once
      * retry is preserved because a sink failure propagates.
      */
-    private static OutboxEventSink outboundSink(AppManifest manifest, javax.sql.DataSource dataSource) {
+    private static OutboxEventSink outboundSink(AppManifest manifest,
+            javax.sql.DataSource dataSource) {
         ScimTarget target = new ScimTarget(
                 manifest.config().requireString("tesseraql.scim.outbound.target.url"),
                 manifest.config().getString("tesseraql.scim.outbound.target.token").orElse(""));
@@ -66,8 +68,8 @@ public final class ScimRuntimeExtension implements RuntimeExtension {
         mapping.ensureSchema();
         ScimOutboundClient client = new ScimOutboundClient(target);
         ScimOutboundSink userSink = new ScimOutboundSink(new ScimProvisioner(client, mapping));
-        ScimGroupOutboundSink groupSink =
-                new ScimGroupOutboundSink(new ScimGroupProvisioner(client, mapping));
+        ScimGroupOutboundSink groupSink = new ScimGroupOutboundSink(
+                new ScimGroupProvisioner(client, mapping));
         return event -> {
             userSink.send(event);
             groupSink.send(event);
@@ -122,7 +124,8 @@ public final class ScimRuntimeExtension implements RuntimeExtension {
     /** Reads an optional SCIM contract SQL file, returning {@code null} when the key is unset. */
     private static String readSqlOptional(AppManifest manifest, String configKey) {
         return manifest.config().getString(configKey).isPresent()
-                ? readSql(manifest, configKey) : null;
+                ? readSql(manifest, configKey)
+                : null;
     }
 
     private static boolean flag(AppConfig config, String key) {

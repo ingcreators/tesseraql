@@ -15,7 +15,6 @@ import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.Statement;
 import java.util.Comparator;
-import java.util.Map;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
@@ -36,8 +35,8 @@ import org.testcontainers.oracle.OracleContainer;
 class OraclePortabilityIntegrationTest {
 
     @Container
-    static final OracleContainer ORACLE =
-            new OracleContainer("gvenzl/oracle-free:23-slim-faststart");
+    static final OracleContainer ORACLE = new OracleContainer(
+            "gvenzl/oracle-free:23-slim-faststart");
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
@@ -88,8 +87,7 @@ class OraclePortabilityIntegrationTest {
     }
 
     private static javax.sql.DataSource dataSource() throws Exception {
-        oracle.jdbc.datasource.impl.OracleDataSource dataSource =
-                new oracle.jdbc.datasource.impl.OracleDataSource();
+        oracle.jdbc.datasource.impl.OracleDataSource dataSource = new oracle.jdbc.datasource.impl.OracleDataSource();
         dataSource.setURL(ORACLE.getJdbcUrl());
         dataSource.setUser(ORACLE.getUsername());
         dataSource.setPassword(ORACLE.getPassword());
@@ -98,12 +96,13 @@ class OraclePortabilityIntegrationTest {
 
     private static void seedDatabase() throws Exception {
         try (Connection connection = DriverManager.getConnection(
-                        ORACLE.getJdbcUrl(), ORACLE.getUsername(), ORACLE.getPassword());
+                ORACLE.getJdbcUrl(), ORACLE.getUsername(), ORACLE.getPassword());
                 Statement statement = connection.createStatement()) {
             statement.execute("create table users (name varchar2(200) primary key, "
                     + "status varchar2(32) not null)");
             statement.execute("insert into users (name, status) values ('sato', 'ACTIVE')");
-            statement.execute("create table items (name varchar2(100) primary key, qty number(10) not null)");
+            statement.execute(
+                    "create table items (name varchar2(100) primary key, qty number(10) not null)");
         }
     }
 

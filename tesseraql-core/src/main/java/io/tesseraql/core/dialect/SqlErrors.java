@@ -46,10 +46,10 @@ public final class SqlErrors {
 
     private static SqlErrorKind byVendorCode(int vendorCode) {
         return switch (vendorCode) {
-            case 1, 1062, 1586 -> SqlErrorKind.UNIQUE_VIOLATION;          // Oracle ORA-00001; MySQL dup
+            case 1, 1062, 1586 -> SqlErrorKind.UNIQUE_VIOLATION; // Oracle ORA-00001; MySQL dup
             case 1216, 1217, 1451, 1452, 2291, 2292 -> SqlErrorKind.FOREIGN_KEY_VIOLATION;
-            case 1048, 1364, 1400 -> SqlErrorKind.NOT_NULL_VIOLATION;     // MySQL; Oracle ORA-01400
-            case 3819, 4025, 2290 -> SqlErrorKind.CHECK_VIOLATION;        // MySQL; Oracle ORA-02290
+            case 1048, 1364, 1400 -> SqlErrorKind.NOT_NULL_VIOLATION; // MySQL; Oracle ORA-01400
+            case 3819, 4025, 2290 -> SqlErrorKind.CHECK_VIOLATION; // MySQL; Oracle ORA-02290
             default -> SqlErrorKind.INTEGRITY_CONSTRAINT;
         };
     }

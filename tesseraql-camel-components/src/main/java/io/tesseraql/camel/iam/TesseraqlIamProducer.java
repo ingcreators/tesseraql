@@ -35,7 +35,8 @@ public class TesseraqlIamProducer extends DefaultProducer {
             throw new TqlException(UNSUPPORTED, "Unsupported tesseraql-iam operation: "
                     + endpoint.getOperation());
         }
-        IdentityService identity = bean(IdentityService.class, TesseraqlProperties.IDENTITY_SERVICE_BEAN);
+        IdentityService identity = bean(IdentityService.class,
+                TesseraqlProperties.IDENTITY_SERVICE_BEAN);
         RealmConfig realm = bean(RealmConfig.class, TesseraqlProperties.IDENTITY_REALM_BEAN);
 
         Map<String, Object> params = exchange.getProperty(
@@ -66,7 +67,8 @@ public class TesseraqlIamProducer extends DefaultProducer {
     private <T> T bean(Class<T> type, String name) {
         T bean = endpoint.getCamelContext().getRegistry().lookupByNameAndType(name, type);
         if (bean == null) {
-            throw new TqlException(NOT_CONFIGURED, "Identity bean '" + name + "' is not configured");
+            throw new TqlException(NOT_CONFIGURED,
+                    "Identity bean '" + name + "' is not configured");
         }
         return bean;
     }

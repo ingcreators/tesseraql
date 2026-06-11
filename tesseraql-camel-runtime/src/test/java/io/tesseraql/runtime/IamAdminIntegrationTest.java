@@ -115,12 +115,12 @@ class IamAdminIntegrationTest {
     @Test
     void writeRequiresAuthentication() throws Exception {
         HttpRequest request = HttpRequest.newBuilder(
-                        URI.create("http://localhost:" + runtime.port()
-                                + "/_tesseraql/admin/users/u2/disable"))
+                URI.create("http://localhost:" + runtime.port()
+                        + "/_tesseraql/admin/users/u2/disable"))
                 .POST(HttpRequest.BodyPublishers.noBody())
                 .build();
-        HttpResponse<String> response =
-                HttpClient.newHttpClient().send(request, HttpResponse.BodyHandlers.ofString());
+        HttpResponse<String> response = HttpClient.newHttpClient().send(request,
+                HttpResponse.BodyHandlers.ofString());
         assertThat(response.statusCode()).isEqualTo(401);
     }
 
@@ -143,12 +143,13 @@ class IamAdminIntegrationTest {
         if (auth) {
             request.header("Authorization", "Bearer " + token());
         }
-        return HttpClient.newHttpClient().send(request.build(), HttpResponse.BodyHandlers.ofString());
+        return HttpClient.newHttpClient().send(request.build(),
+                HttpResponse.BodyHandlers.ofString());
     }
 
     private static HttpResponse<String> post(String path) throws Exception {
         HttpRequest request = HttpRequest.newBuilder(
-                        URI.create("http://localhost:" + runtime.port() + path))
+                URI.create("http://localhost:" + runtime.port() + path))
                 .header("Authorization", "Bearer " + token())
                 .POST(HttpRequest.BodyPublishers.noBody())
                 .build();
@@ -157,12 +158,14 @@ class IamAdminIntegrationTest {
 
     private static String token() throws Exception {
         Base64.Encoder encoder = Base64.getUrlEncoder().withoutPadding();
-        String header = encoder.encodeToString("{\"alg\":\"HS256\"}".getBytes(StandardCharsets.UTF_8));
+        String header = encoder
+                .encodeToString("{\"alg\":\"HS256\"}".getBytes(StandardCharsets.UTF_8));
         String payload = encoder.encodeToString(
                 MAPPER.writeValueAsBytes(Map.of("sub", "iam-admin", "roles", List.of("ADMIN"))));
         Mac mac = Mac.getInstance("HmacSHA256");
         mac.init(new SecretKeySpec(
-                "dev-only-secret-change-me-in-production".getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
+                "dev-only-secret-change-me-in-production".getBytes(StandardCharsets.UTF_8),
+                "HmacSHA256"));
         String signature = encoder.encodeToString(
                 mac.doFinal((header + "." + payload).getBytes(StandardCharsets.US_ASCII)));
         return header + "." + payload + "." + signature;
@@ -179,8 +182,9 @@ class IamAdminIntegrationTest {
                     statement.execute(ddl);
                 }
             }
-            statement.execute("insert into tql_users (user_id, login_id, display_name, email, status) "
-                    + "values ('u1','admin','Administrator','admin@example.com','ACTIVE')");
+            statement.execute(
+                    "insert into tql_users (user_id, login_id, display_name, email, status) "
+                            + "values ('u1','admin','Administrator','admin@example.com','ACTIVE')");
             statement.execute("insert into tql_users (user_id, login_id, display_name, status) "
                     + "values ('u2','bob','Bob','ACTIVE')");
             statement.execute("insert into tql_roles (role_id, role_code, role_name) "
@@ -212,7 +216,8 @@ class IamAdminIntegrationTest {
                     url: %s
                     username: %s
                     password: %s
-                """.formatted(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword()));
+                """.formatted(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(),
+                POSTGRES.getPassword()));
         return target;
     }
 

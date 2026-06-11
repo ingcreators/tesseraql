@@ -36,10 +36,12 @@ public class LintMojo extends AbstractMojo {
                 getLog().warn(line);
             }
         }
-        getLog().info("TesseraQL lint: " + findings.size() + " finding(s), " + errors + " error(s)");
+        getLog().info(
+                "TesseraQL lint: " + findings.size() + " finding(s), " + errors + " error(s)");
         boolean failed = errors > 0 || (failOnWarning && !findings.isEmpty());
         if (failed) {
-            throw new MojoFailureException("TesseraQL lint failed with " + findings.size() + " finding(s)");
+            throw new MojoFailureException(
+                    "TesseraQL lint failed with " + findings.size() + " finding(s)");
         }
     }
 }

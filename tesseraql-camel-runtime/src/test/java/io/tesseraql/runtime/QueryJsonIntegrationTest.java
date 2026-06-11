@@ -114,7 +114,7 @@ class QueryJsonIntegrationTest {
 
         HttpResponse<String> response = HttpClient.newHttpClient().send(
                 HttpRequest.newBuilder(URI.create("http://localhost:" + runtime.port()
-                                + "/users/fragments/table"))
+                        + "/users/fragments/table"))
                         .header("Cookie", sessions.cookieName() + "=" + sid)
                         .build(),
                 HttpResponse.BodyHandlers.ofString());
@@ -136,7 +136,8 @@ class QueryJsonIntegrationTest {
         String sid = sessions.create(writer());
 
         HttpResponse<String> response = postJson("/users/deactivate",
-                sessions.cookieName() + "=" + sid, sessions.csrfToken(sid), "{\"name\":\"suzuki\"}");
+                sessions.cookieName() + "=" + sid, sessions.csrfToken(sid),
+                "{\"name\":\"suzuki\"}");
 
         assertThat(response.statusCode()).isEqualTo(200);
         assertThat(MAPPER.readTree(response.body()).path("affected").asInt()).isEqualTo(1);
@@ -175,24 +176,26 @@ class QueryJsonIntegrationTest {
         String csrf = sessions.csrfToken(sid);
         String key = "idem-key-001";
 
-        HttpResponse<String> first = postIdem("/users/deactivate", cookie, csrf, key, "{\"name\":\"suzuki\"}");
+        HttpResponse<String> first = postIdem("/users/deactivate", cookie, csrf, key,
+                "{\"name\":\"suzuki\"}");
         assertThat(first.statusCode()).isEqualTo(200);
 
         // Same key, different request body -> conflict (409).
-        HttpResponse<String> conflict =
-                postIdem("/users/deactivate", cookie, csrf, key, "{\"name\":\"tanaka\"}");
+        HttpResponse<String> conflict = postIdem("/users/deactivate", cookie, csrf, key,
+                "{\"name\":\"tanaka\"}");
         assertThat(conflict.statusCode()).isEqualTo(409);
         assertThat(MAPPER.readTree(conflict.body()).path("error").path("code").asText())
                 .isEqualTo("TQL-IDEM-4090");
 
         // Same key, same request body -> replay of the original response.
-        HttpResponse<String> replay =
-                postIdem("/users/deactivate", cookie, csrf, key, "{\"name\":\"suzuki\"}");
+        HttpResponse<String> replay = postIdem("/users/deactivate", cookie, csrf, key,
+                "{\"name\":\"suzuki\"}");
         assertThat(replay.statusCode()).isEqualTo(200);
         assertThat(replay.body()).isEqualTo(first.body());
     }
 
-    private HttpResponse<String> postIdem(String path, String cookie, String csrf, String key, String body)
+    private HttpResponse<String> postIdem(String path, String cookie, String csrf, String key,
+            String body)
             throws Exception {
         return HttpClient.newHttpClient().send(
                 HttpRequest.newBuilder(URI.create("http://localhost:" + runtime.port() + path))
@@ -218,7 +221,7 @@ class QueryJsonIntegrationTest {
     private HttpResponse<String> postJson(String path, String cookie, String csrf, String body)
             throws Exception {
         HttpRequest.Builder request = HttpRequest.newBuilder(
-                        URI.create("http://localhost:" + runtime.port() + path))
+                URI.create("http://localhost:" + runtime.port() + path))
                 .header("Content-Type", "application/json")
                 .POST(HttpRequest.BodyPublishers.ofString(body));
         if (cookie != null) {
@@ -227,7 +230,8 @@ class QueryJsonIntegrationTest {
         if (csrf != null) {
             request.header("X-CSRF-Token", csrf);
         }
-        return HttpClient.newHttpClient().send(request.build(), HttpResponse.BodyHandlers.ofString());
+        return HttpClient.newHttpClient().send(request.build(),
+                HttpResponse.BodyHandlers.ofString());
     }
 
     @Test
@@ -250,12 +254,13 @@ class QueryJsonIntegrationTest {
     }
 
     private HttpResponse<String> get(String path, String bearer) throws Exception {
-        HttpRequest.Builder request =
-                HttpRequest.newBuilder(URI.create("http://localhost:" + runtime.port() + path));
+        HttpRequest.Builder request = HttpRequest
+                .newBuilder(URI.create("http://localhost:" + runtime.port() + path));
         if (bearer != null) {
             request.header("Authorization", "Bearer " + bearer);
         }
-        return HttpClient.newHttpClient().send(request.build(), HttpResponse.BodyHandlers.ofString());
+        return HttpClient.newHttpClient().send(request.build(),
+                HttpResponse.BodyHandlers.ofString());
     }
 
     private static String token(List<String> roles) throws Exception {
@@ -304,7 +309,8 @@ class QueryJsonIntegrationTest {
                     url: %s
                     username: %s
                     password: %s
-                """.formatted(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword()));
+                """.formatted(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(),
+                POSTGRES.getPassword()));
         return target;
     }
 

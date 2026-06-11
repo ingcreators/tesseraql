@@ -83,7 +83,7 @@ class TenantScopingIntegrationTest {
     private static JsonNode get(String tenant) throws Exception {
         HttpResponse<String> response = HttpClient.newHttpClient().send(
                 HttpRequest.newBuilder(URI.create(
-                                "http://localhost:" + runtime.port() + "/api/items"))
+                        "http://localhost:" + runtime.port() + "/api/items"))
                         .header("X-Tenant-Id", tenant)
                         .build(),
                 HttpResponse.BodyHandlers.ofString());
@@ -125,7 +125,8 @@ class TenantScopingIntegrationTest {
                   resolver:
                     type: header
                     source: X-Tenant-Id
-                """.formatted(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword()));
+                """.formatted(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(),
+                POSTGRES.getPassword()));
 
         Path itemsDir = target.resolve("web/api/items");
         Files.createDirectories(itemsDir);

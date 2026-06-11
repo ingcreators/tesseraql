@@ -19,7 +19,9 @@ import java.util.Map;
  */
 public final class FieldPolicyApplier {
 
-    private enum Action { KEEP, HIDE, MASK }
+    private enum Action {
+        KEEP, HIDE, MASK
+    }
 
     private final Map<String, FieldPolicy> fields;
     private final PolicyEngine policyEngine;
@@ -41,7 +43,8 @@ public final class FieldPolicyApplier {
                 FieldPolicy policy = fields.get(name);
                 Action action = policy == null ? Action.KEEP : decide(policy);
                 switch (action) {
-                    case HIDE -> { /* drop the field */ }
+                    case HIDE -> {
+                        /* drop the field */ }
                     case MASK -> result.put(name, Masking.apply(maskStrategy(policy), value));
                     case KEEP -> result.put(name, apply(value));
                 }
