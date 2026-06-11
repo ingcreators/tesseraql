@@ -13,7 +13,7 @@ RUN ./mvnw -ntp -DskipTests -pl tesseraql-cli -am package \
     && ./mvnw -ntp -DskipTests -pl tesseraql-cli dependency:copy-dependencies \
          -DincludeScope=runtime -DoutputDirectory=target/dependency
 
-FROM eclipse-temurin:21-jre
+FROM eclipse-temurin:25-jre
 RUN useradd --system --home /opt/tesseraql tesseraql
 WORKDIR /opt/tesseraql
 COPY --from=build /build/tesseraql-cli/target/tesseraql-cli-*.jar lib/
