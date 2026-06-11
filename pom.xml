@@ -72,7 +72,7 @@
     <picocli.version>4.7.7</picocli.version>
     <slf4j.version>2.0.16</slf4j.version>
     <maven.api.version>3.9.9</maven.api.version>
-    <maven.plugin.tools.version>3.15.1</maven.plugin.tools.version>
+    <maven.plugin.tools.version>3.15.2</maven.plugin.tools.version>
     <junit.version>6.1.0</junit.version>
     <assertj.version>3.27.7</assertj.version>
     <testcontainers.version>1.20.4</testcontainers.version>
@@ -95,7 +95,7 @@
     <maven.compiler.plugin.version>3.15.0</maven.compiler.plugin.version>
     <maven.enforcer.plugin.version>3.6.3</maven.enforcer.plugin.version>
     <maven.surefire.plugin.version>3.5.6</maven.surefire.plugin.version>
-    <maven.failsafe.plugin.version>3.5.2</maven.failsafe.plugin.version>
+    <maven.failsafe.plugin.version>3.5.6</maven.failsafe.plugin.version>
   </properties>
 
   <dependencyManagement>
