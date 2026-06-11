@@ -1,0 +1,10 @@
+version: tesseraql/v1
+id: user.exportActive
+kind: job
+recipe: batch-pipeline
+
+pipeline:
+  - id: extract
+    sql:
+      file: select-users.sql
+      mode: query-spool

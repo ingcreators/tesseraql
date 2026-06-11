@@ -1,0 +1,25 @@
+version: tesseraql/v1
+id: tql.studio.save
+kind: route
+recipe: command-json
+
+input:
+  path:
+    type: string
+    required: true
+  content:
+    type: string
+    required: false
+
+security:
+  auth: bearer
+
+sql:
+  service: studio.save
+  params:
+    path: params.path
+    content: params.content
+
+response:
+  redirect:
+    location: /_tesseraql/studio/ui/source?path={params.path}&saved=1

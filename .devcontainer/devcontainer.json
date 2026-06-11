@@ -4,29 +4,26 @@
   "service": "dev",
   "workspaceFolder": "/workspace/tesseraql",
   "remoteUser": "vscode",
-
   "features": {
     "ghcr.io/devcontainers/features/docker-outside-of-docker:1": {},
+    "ghcr.io/devcontainers/features/github-cli:1": {},
     "ghcr.io/anthropics/devcontainer-features/claude-code:1.0": {}
   },
-
   "mounts": [
     "source=tesseraql-claude-${devcontainerId},target=/home/vscode/.claude,type=volume",
     "source=tesseraql-codex-${devcontainerId},target=/home/vscode/.codex,type=volume",
+    "source=tesseraql-gh-${devcontainerId},target=/home/vscode/.config/gh,type=volume",
     "source=tesseraql-m2-${devcontainerId},target=/home/vscode/.m2,type=volume",
     "source=tesseraql-npm-${devcontainerId},target=/home/vscode/.npm,type=volume"
   ],
-
   "remoteEnv": {
     "CODEX_HOME": "/home/vscode/.codex",
     "CLAUDE_CONFIG_DIR": "/home/vscode/.claude",
     "TESSERAQL_PROFILE": "dev"
   },
-
   "containerEnv": {
     "JAVA_TOOL_OPTIONS": "-Dfile.encoding=UTF-8"
   },
-
   "customizations": {
     "vscode": {
       "extensions": [
@@ -45,8 +42,6 @@
       }
     }
   },
-
   "postCreateCommand": "bash scripts/verify-dev-env.sh",
-
-  "postStartCommand": "git config --global --add safe.directory /workspace/tesseraql || true"
+  "postStartCommand": "bash scripts/devcontainer-post-start.sh"
 }

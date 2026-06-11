@@ -1,0 +1,59 @@
+package io.tesseraql.security;
+
+import io.tesseraql.security.policy.Policy;
+import java.util.Map;
+import java.util.Optional;
+
+/**
+ * Resolved security configuration: named policies and JWT verification settings (design ch. 10.9,
+ * 11). Built by the runtime from {@code tesseraql.security.*} and bound into the Camel registry.
+ *
+ * @param policies authorization policies keyed by id
+ * @param jwt      bearer JWT verification settings
+ */
+public record SecurityConfig(Map<String, Policy> policies, JwtConfig jwt) {
+
+    public SecurityConfig {
+        policies = policies == null ? Map.of() : Map.copyOf(policies);
+    }
+
+    public Optional<Policy> policy(String id) {
+        return Optional.ofNullable(policies.get(id));
+    }
+
+    /**
+     * HS256 bearer JWT verification settings and claim mappings (design ch. 11.1).
+     *
+     * @param secret           shared HMAC secret for HS256 verification
+     * @param issuer           expected {@code iss}, or null to skip the check
+     * @param rolesClaim       claim holding the roles array
+     * @param permissionsClaim claim holding the permissions array
+     * @param groupsClaim      claim holding the groups array
+     * @param tenantClaim      claim holding the tenant id
+     * @param loginClaim       claim holding the login id
+     * @param nameClaim        claim holding the display name
+     */
+    public record JwtConfig(
+            String secret,
+            String issuer,
+            String rolesClaim,
+            String permissionsClaim,
+            String groupsClaim,
+            String tenantClaim,
+            String loginClaim,
+            String nameClaim) {
+
+        public JwtConfig {
+            rolesClaim = orDefault(rolesClaim, "roles");
+            permissionsClaim = orDefault(permissionsClaim, "permissions");
+            groupsClaim = orDefault(groupsClaim, "groups");
+            tenantClaim = orDefault(tenantClaim, "tenant_id");
+            loginClaim = orDefault(loginClaim, "preferred_username");
+            nameClaim = orDefault(nameClaim, "name");
+        }
+
+        private static String orDefault(String value, String fallback) {
+            return value == null || value.isBlank() ? fallback : value;
+        }
+    }
+}

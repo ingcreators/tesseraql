@@ -13,12 +13,13 @@ target/
 .DS_Store
 Thumbs.db
 
-# TesseraQL local runtime files
-work/
-reports/
-coverage/
-.spool/
-.tesseraql/
+# TesseraQL local runtime files (anchored so they do not match the io/tesseraql/coverage
+# Java package or similarly named source directories)
+/work/
+/reports/
+/coverage/
+/.spool/
+/.tesseraql/
 
 # Local env / secrets
 .env

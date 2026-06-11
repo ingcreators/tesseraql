@@ -1,0 +1,32 @@
+version: tesseraql/v1
+id: tql.studio.wizard.scim.generate
+kind: route
+recipe: page
+
+input:
+  groups:
+    type: string
+    default: "false"
+  outbound:
+    type: string
+    default: "false"
+  outboundUrl:
+    type: string
+    required: false
+  tokenRef:
+    type: string
+    required: false
+
+security:
+  auth: bearer
+
+response:
+  file:
+    template: wizard-scim.yml.tpl
+    contentType: text/yaml
+    filename: tesseraql-scim.yml
+    model:
+      groups: params.groups
+      outbound: params.outbound
+      outboundUrl: params.outboundUrl
+      tokenRef: params.tokenRef

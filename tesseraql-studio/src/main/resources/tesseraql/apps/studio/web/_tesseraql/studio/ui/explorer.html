@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{tql/shell :: page(|TesseraQL Studio · ${studio.appName}|, ~{:: #page-header}, ~{:: #page-content})}">
+<th:block id="page-header">
+  <span class="actions"><a href="/_tesseraql/studio/ui/wizard">wizards &rarr;</a></span>
+  <span class="hc-badge" data-variant="warning" th:if="${studio.readOnly}">read-only</span>
+  <span class="hc-badge" data-variant="success" th:if="${studio.editable}">editable</span>
+</th:block>
+<div id="page-content">
+<section class="hc-card">
+  <h2>Routes</h2>
+  <p class="empty" th:unless="${studio.hasRoutes}">No routes defined.</p>
+  <table class="hc-table" th:if="${studio.hasRoutes}">
+    <thead><tr><th>Id</th><th>Method</th><th>Path</th><th>Recipe</th><th>Source</th></tr></thead>
+    <tbody>
+      <tr th:each="r : ${studio.routes}">
+        <td th:text="${r.id}"></td>
+        <td th:text="${r.method}"></td>
+        <td th:text="${r.path}"></td>
+        <td th:text="${r.recipe}"></td>
+        <td><a th:href="${r.sourceUrl}" th:text="${r.source}"></a></td>
+      </tr>
+    </tbody>
+  </table>
+</section>
+<section class="hc-card">
+  <h2>Jobs</h2>
+  <p class="empty" th:unless="${studio.hasJobs}">No jobs defined.</p>
+  <table class="hc-table" th:if="${studio.hasJobs}">
+    <thead><tr><th>Id</th><th>Recipe</th><th>Source</th></tr></thead>
+    <tbody>
+      <tr th:each="j : ${studio.jobs}">
+        <td th:text="${j.id}"></td>
+        <td th:text="${j.recipe}"></td>
+        <td><a th:href="${j.sourceUrl}" th:text="${j.source}"></a></td>
+      </tr>
+    </tbody>
+  </table>
+</section>
+</div>
+</html>

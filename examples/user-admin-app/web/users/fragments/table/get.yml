@@ -1,0 +1,33 @@
+version: tesseraql/v1
+id: users.table
+kind: route
+recipe: query-html
+
+input:
+  q:
+    type: string
+    required: false
+
+security:
+  auth: browser
+  policy: users.read
+
+sql:
+  file: search-table.sql
+  mode: query
+  params:
+    q: query.q
+
+response:
+  html:
+    status: 200
+    template: table.html
+    model:
+      users: sql.rows
+      criteria: params
+      count: sql.rowCount
+    headers:
+      HX-Trigger:
+        hc:toast:
+          message: Search completed
+          variant: success

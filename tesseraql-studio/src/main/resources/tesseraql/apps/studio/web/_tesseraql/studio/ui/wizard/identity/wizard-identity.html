@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{tql/shell :: page('Identity realm wizard', ~{:: #page-header}, ~{:: #page-content})}">
+<th:block id="page-header">
+  <a class="back" href="/_tesseraql/studio/ui/wizard">&larr; wizards</a>
+</th:block>
+<div id="page-content">
+<section class="hc-card">
+  <p class="hint">Generates a tesseraql-identity.yml fragment to merge into config/tesseraql.yml.</p>
+  <form method="post" action="/_tesseraql/studio/ui/wizard/identity">
+    <label>Realm id <span class="req">*</span><br>
+      <input class="hc-input" type="text" name="realmId" required placeholder="local"></label>
+    <label>Realm type <span class="req">*</span><br>
+      <select class="hc-select" name="type"><option value="managed">managed</option><option value="sql">sql</option></select></label>
+    <label>Datasource name <span class="req">*</span><br>
+      <input class="hc-input" type="text" name="datasource" required value="main"></label>
+    <label>SQL contract root (sql realms, optional)<br>
+      <input class="hc-input" type="text" name="sqlRoot" placeholder="security/identity/local"></label>
+    <label>User management capability (optional)<br>
+      <select class="hc-select" name="userManagement"><option value="">-</option><option value="readOnly">readOnly</option><option value="readWrite">readWrite</option></select></label>
+    <div class="toolbar"><button type="submit" class="hc-button" data-variant="primary">Generate &amp; download config</button></div>
+  </form>
+</section>
+</div>
+</html>

@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<!-- IAM user administration page: the framework shell with the app navigation and the user list
+     rendered inline from the identity.list-users contract. -->
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{tql/shell :: shell('User Management (IAM)', ~{templates/nav.html :: app-nav}, ~{}, ~{:: #page-content})}">
+<div id="page-content">
+<section class="hc-card">
+  <h2>User Management</h2>
+  <p class="summary">Registered users: <strong th:text="${count}"></strong></p>
+  <table class="hc-table">
+    <thead>
+      <tr>
+        <th>Login ID</th>
+        <th>Display Name</th>
+        <th>Email</th>
+        <th>Status</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr th:each="u : ${users}">
+        <td th:text="${u.login_id}"></td>
+        <td th:text="${u.display_name}"></td>
+        <td th:text="${u.email}"></td>
+        <td th:class="'status-' + ${#strings.toLowerCase(u.status)}" th:text="${u.status}"></td>
+      </tr>
+      <tr th:if="${#lists.isEmpty(users)}"><td colspan="4">No users</td></tr>
+    </tbody>
+  </table>
+</section>
+</div>
+</html>

@@ -1,0 +1,49 @@
+# Kamal 2 template for a TesseraQL app on Lightsail behind Cloudflare Tunnel
+# (docs/deployment.md). Copy into your app repository as config/deploy.yml and adjust.
+
+service: myapp
+image: my-org/myapp
+
+servers:
+  web:
+    - 203.0.113.10            # Lightsail instance (only SSH open; HTTP enters via the tunnel)
+
+registry:
+  server: ghcr.io
+  username: my-org
+  password:
+    - KAMAL_REGISTRY_PASSWORD
+
+builder:
+  arch: amd64
+  dockerfile: deploy/Dockerfile
+  args:
+    APP_HOME: .               # the app repo root is the app home
+
+proxy:
+  app_port: 8080
+  healthcheck:
+    path: /_tesseraql/health  # unauthenticated status word; details stay behind the ops API
+  # No public TLS: cloudflared connects outbound to Cloudflare; the proxy only does
+  # zero-downtime container swaps on localhost.
+  ssl: false
+  host: myapp.example.com
+
+env:
+  clear:
+    TESSERAQL_SECRETS_DIR: /run/secrets
+  secret:
+    - DB_PASSWORD             # referenced from config as ${secret.env.DB_PASSWORD}
+
+volumes:
+  - tesseraql-work:/app/work  # spools, drafts, fetched .tqlapp packages
+
+accessories:
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    cmd: tunnel run
+    env:
+      secret:
+        - TUNNEL_TOKEN        # from the Cloudflare Zero Trust dashboard
+    roles:
+      - web

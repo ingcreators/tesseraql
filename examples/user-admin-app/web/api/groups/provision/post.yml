@@ -1,0 +1,47 @@
+version: tesseraql/v1
+id: groups.apiProvision
+kind: route
+recipe: command-json
+
+# Renames a group and, in the same transaction, emits a SCIM provisioning event
+# (GROUP_PROVISIONED). The member ids in the request body are assembled into the SCIM
+# members array via a [] payload key, so the downstream provider receives the full membership
+# and reconciles it in both directions.
+
+input:
+  displayName:
+    type: string
+    required: true
+  externalId:
+    type: string
+  memberIds:
+    type: array
+
+inputPolicy:
+  unknownFields: reject
+
+security:
+  auth: bearer
+  policy: users.write
+
+outbox:
+  eventType: GROUP_PROVISIONED
+  aggregateType: Group
+  aggregateId: body.displayName
+  payload:
+    displayName: body.displayName
+    externalId: body.externalId
+    members[].value: body.memberIds
+
+sql:
+  file: provision.sql
+  mode: update
+  params:
+    displayName: body.displayName
+
+response:
+  json:
+    status: 200
+    body:
+      affected: sql.affectedRows
+      eventId: sql.eventId
