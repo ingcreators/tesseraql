@@ -75,7 +75,15 @@ public final class ErrorResponseRenderer implements Processor {
                         .append(escape(String.valueOf(field.get("field"))))
                         .append("\" data-code=\"")
                         .append(escape(String.valueOf(field.get("code"))))
-                        .append("\">")
+                        .append("\"");
+                // A validation rule's message key (Phase 19), for client-side lookup until
+                // localized rendering arrives (Phase 22).
+                if (field.get("message") != null) {
+                    html.append(" data-message=\"")
+                            .append(escape(String.valueOf(field.get("message"))))
+                            .append("\"");
+                }
+                html.append(">")
                         .append(escape(field.get("field") + ": " + field.get("code")))
                         .append("</li>");
             }
@@ -102,7 +110,9 @@ public final class ErrorResponseRenderer implements Processor {
                 case 4031, 4032 -> 403;
                 default -> 401;
             };
-            case FIELD -> 400;
+            // 4220: declarative validation rejected the input (roadmap Phase 19); other FIELD
+            // failures are malformed requests.
+            case FIELD -> code.number() == 4220 ? 422 : 400;
             case RATE -> 429;
             case LANE -> code.number() == 5031 ? 503 : 500;
             case STUDIO -> switch (code.number()) {

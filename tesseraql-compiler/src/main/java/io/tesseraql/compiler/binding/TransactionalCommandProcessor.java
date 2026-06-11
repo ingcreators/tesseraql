@@ -14,10 +14,12 @@ import io.tesseraql.core.sql.BoundSql;
 import io.tesseraql.core.sql.Sql2WayParser;
 import io.tesseraql.core.sql.SqlNode;
 import io.tesseraql.core.sql.SqlRenderer;
+import io.tesseraql.core.validation.ValidationRules;
 import io.tesseraql.security.Principal;
 import io.tesseraql.yaml.model.ErrorsSpec;
 import io.tesseraql.yaml.model.OutboxSpec;
 import io.tesseraql.yaml.model.SqlBinding;
+import io.tesseraql.yaml.model.ValidationRule;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
@@ -54,6 +56,11 @@ import org.apache.camel.Processor;
  * stay explicit in the SQL. Declared row-count expectations turn silent lost updates into
  * {@code 409 Conflict} with a usable hint, and declared constraint mappings turn unique /
  * foreign-key violations into field-level error payloads.
+ *
+ * <p>The route's {@code validate:} rules (roadmap Phase 19) evaluate first, inside the same
+ * transaction: cross-field expression rules against the execution context and validation SQL
+ * rules on the command's connection. Any violation rejects the request with a field-scoped
+ * {@code 422 Unprocessable Entity} before a single step writes.
  */
 public final class TransactionalCommandProcessor implements Processor {
 
@@ -67,6 +74,8 @@ public final class TransactionalCommandProcessor implements Processor {
     private static final TqlErrorCode INVALID_STEPS = new TqlErrorCode(TqlDomain.CAMEL, 3102);
     /** TQL-SQL-4092: a row-count expectation failed, reported as an optimistic-lock conflict. */
     private static final TqlErrorCode EXPECT_CONFLICT = new TqlErrorCode(TqlDomain.SQL, 4092);
+    /** TQL-FIELD-4220: declarative validation rejected the input (HTTP 422, roadmap Phase 19). */
+    private static final TqlErrorCode VALIDATION_FAILED = new TqlErrorCode(TqlDomain.FIELD, 4220);
     // Portable constraint-violation codes, mapped to HTTP statuses by ErrorResponseRenderer.
     private static final TqlErrorCode UNIQUE_VIOLATION = new TqlErrorCode(TqlDomain.SQL, 4090);
     private static final TqlErrorCode FK_VIOLATION = new TqlErrorCode(TqlDomain.SQL, 4091);
@@ -79,6 +88,7 @@ public final class TransactionalCommandProcessor implements Processor {
 
     private final String routeId;
     private final List<Step> steps;
+    private final ValidationRules validation;
     private final boolean singleSql;
     private final String datasourceName;
     private final OutboxEvents outboxEvents;
@@ -104,10 +114,12 @@ public final class TransactionalCommandProcessor implements Processor {
      * Builds the processor for a command route.
      *
      * @param sql      the single-statement {@code sql:} binding, or null when steps are declared
-     * @param stepFile resolves a step's SQL file reference to its (dialect-resolved) path
+     * @param validate the route's declarative validation rules, keyed by rule id (Phase 19)
+     * @param stepFile resolves a step's or rule's SQL file reference to its (dialect-resolved)
+     *                 path
      */
     public TransactionalCommandProcessor(String routeId, SqlBinding sql,
-            Map<String, SqlBinding> declaredSteps,
+            Map<String, SqlBinding> declaredSteps, Map<String, ValidationRule> validate,
             java.util.function.Function<String, Path> stepFile,
             String datasourceName, String dialect, OutboxSpec outbox, ErrorsSpec errors,
             String appName) {
@@ -126,6 +138,34 @@ public final class TransactionalCommandProcessor implements Processor {
         }
         this.singleSql = sql != null;
         this.steps = compile(sql, declaredSteps, stepFile);
+        this.validation = compileValidation(validate, stepFile);
+    }
+
+    /** Compiles the validate: block, failing fast on misdeclared rules (roadmap Phase 19). */
+    private ValidationRules compileValidation(Map<String, ValidationRule> validate,
+            java.util.function.Function<String, Path> ruleFile) {
+        List<ValidationRules.Rule> compiled = new ArrayList<>();
+        (validate == null ? Map.<String, ValidationRule>of() : validate)
+                .forEach((id, rule) -> {
+                    if (rule.isExpression() == rule.isSql()) {
+                        throw invalid("validation rule '" + id
+                                + "' must declare exactly one of rule: or file:");
+                    }
+                    if (rule.isExpression()) {
+                        if (!rule.params().isEmpty()) {
+                            throw invalid("validation rule '" + id
+                                    + "': params apply to SQL rules only");
+                        }
+                        compiled.add(ValidationRules.expression(id, rule.when(), rule.rule(),
+                                rule.field(), rule.code(), rule.message()));
+                    } else {
+                        Path file = ruleFile.apply(rule.file());
+                        compiled.add(ValidationRules.sql(id, rule.when(), read(file),
+                                file.toString(), rule.params(), rule.field(), rule.code(),
+                                rule.message()));
+                    }
+                });
+        return new ValidationRules(compiled);
     }
 
     private List<Step> compile(SqlBinding sql, Map<String, SqlBinding> declaredSteps,
@@ -236,6 +276,17 @@ public final class TransactionalCommandProcessor implements Processor {
             boolean previousAutoCommit = connection.getAutoCommit();
             connection.setAutoCommit(false);
             try {
+                // Validation runs first, inside the transaction (roadmap Phase 19): expression
+                // rules against the bound context, SQL rules on the command's connection. A
+                // violation rejects the request before a single step writes.
+                List<Map<String, Object>> violations = validation.evaluate(context, connection);
+                if (!violations.isEmpty()) {
+                    throw TqlException.builder(VALIDATION_FAILED)
+                            .message("Route '" + routeId + "': validation rejected the input with "
+                                    + violations.size() + " violation(s)")
+                            .details(Map.of("fields", violations))
+                            .build();
+                }
                 for (Step step : steps) {
                     Map<String, Object> result = step.isSequence()
                             ? allocateSequence(exchange, connection, step)
