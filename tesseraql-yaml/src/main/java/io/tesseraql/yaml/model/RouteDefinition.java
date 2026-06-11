@@ -20,6 +20,8 @@ import java.util.Map;
  *                later steps can bind values produced by earlier ones (roadmap Phase 18)
  * @param queries additional named queries executed after {@code sql}, each bound into the
  *                execution context under its own name so one page can render several result sets
+ * @param validate declarative validation rules of a command, keyed by rule id and evaluated in
+ *                their authored order before the command's steps (roadmap Phase 19)
  * @param errors  declarative error mapping, e.g. constraint names to field-level errors
  * @param fileImport the {@code import:} block of a {@code file-import} route
  * @param fileExport the {@code export:} block of a {@code file-export} route
@@ -40,6 +42,7 @@ public record RouteDefinition(
         SqlBinding sql,
         Map<String, SqlBinding> steps,
         Map<String, SqlBinding> queries,
+        Map<String, ValidationRule> validate,
         ErrorsSpec errors,
         @com.fasterxml.jackson.annotation.JsonProperty("import") ImportSpec fileImport,
         @com.fasterxml.jackson.annotation.JsonProperty("export") ExportSpec fileExport,
@@ -54,6 +57,9 @@ public record RouteDefinition(
         queries = queries == null
                 ? Map.of()
                 : java.util.Collections.unmodifiableMap(new java.util.LinkedHashMap<>(queries));
+        validate = validate == null
+                ? Map.of()
+                : java.util.Collections.unmodifiableMap(new java.util.LinkedHashMap<>(validate));
     }
 
     /** The input policy, or framework defaults (reject unknown / reject read-only). */

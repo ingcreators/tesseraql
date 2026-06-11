@@ -58,6 +58,7 @@ public final class AppLinter {
             }
         });
         lintOptimisticLocking(route, definition, source, findings);
+        lintValidation(route, definition, source, findings);
         if (definition.security() != null && definition.security().policy() != null
                 && config.navigate(
                         "tesseraql.security.policies." + definition.security().policy()) == null) {
@@ -138,6 +139,68 @@ public final class AppLinter {
                                 + " expect: { rows: 1 }"));
             }
         });
+    }
+
+    /**
+     * Statically checks the {@code validate:} block (roadmap Phase 19), reporting at lint time
+     * what would otherwise fail at route build time: validation only applies to command routes,
+     * a rule declares exactly one of {@code rule:}/{@code file:} plus a {@code field:}, its
+     * expressions parse, its SQL file exists, and that SQL is a SELECT (it runs inside the
+     * command's transaction and must not write).
+     */
+    private void lintValidation(RouteFile route, RouteDefinition definition, String source,
+            List<LintFinding> findings) {
+        if (definition.validate().isEmpty()) {
+            return;
+        }
+        if (!"command-json".equals(definition.recipe())) {
+            findings.add(new LintFinding("TQL-YAML-1003", "error", source,
+                    "validate: is only supported on command-json routes, not '"
+                            + definition.recipe() + "'"));
+        }
+        definition.validate().forEach((id, rule) -> {
+            if (rule.isExpression() == rule.isSql()) {
+                findings.add(new LintFinding("TQL-FIELD-2003", "error", source,
+                        "Validation rule '" + id
+                                + "' must declare exactly one of rule: or file:"));
+                return;
+            }
+            if (rule.field() == null || rule.field().isBlank()) {
+                findings.add(new LintFinding("TQL-FIELD-2003", "error", source,
+                        "Validation rule '" + id + "' needs a field: to report violations"
+                                + " against"));
+            }
+            lintRuleExpression(id, rule.when(), source, findings);
+            if (rule.isExpression()) {
+                lintRuleExpression(id, rule.rule(), source, findings);
+                return;
+            }
+            Path file = route.source().getParent().resolve(rule.file());
+            if (!Files.isRegularFile(file)) {
+                findings.add(new LintFinding("TQL-SQL-2103", "error", source,
+                        "Validation rule '" + id + "' references a missing SQL file: "
+                                + rule.file()));
+            } else if (!io.tesseraql.core.validation.ValidationRules
+                    .isSelect(readQuietly(file))) {
+                findings.add(new LintFinding("TQL-FIELD-2003", "error", source,
+                        "Validation rule '" + id + "': validation SQL must be a SELECT"
+                                + " returning violations - it must not write"));
+            }
+        });
+    }
+
+    private void lintRuleExpression(String ruleId, String expression, String source,
+            List<LintFinding> findings) {
+        if (expression == null || expression.isBlank()) {
+            return;
+        }
+        try {
+            io.tesseraql.core.expr.ExpressionParser.parse(expression);
+        } catch (RuntimeException ex) {
+            findings.add(new LintFinding("TQL-SQL-2101", "error", source,
+                    "Validation rule '" + ruleId + "' has a malformed expression: "
+                            + ex.getMessage()));
+        }
     }
 
     private static String readQuietly(Path file) {

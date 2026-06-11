@@ -27,6 +27,18 @@ security:
   auth: bearer
   policy: users.write
 
+# Declarative validation (roadmap Phase 19): the user being provisioned must already exist.
+# The SQL rule runs inside the command's transaction; a violation answers a field-scoped 422
+# before the UPDATE writes.
+validate:
+  userExists:
+    file: validate-user-exists.sql
+    params:
+      userName: body.userName
+    field: userName
+    code: unknown-user
+    message: users.provision.unknown-user
+
 outbox:
   eventType: USER_PROVISIONED
   aggregateType: User

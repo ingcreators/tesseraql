@@ -5,8 +5,9 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * A declarative test suite (design ch. 13). Each case runs a SQL file or an Identity SQL Contract
- * with parameters and asserts on the returned rows.
+ * A declarative test suite (design ch. 13). Each case runs a SQL file, an Identity SQL Contract,
+ * or a route's validation rules (roadmap Phase 19) with parameters and asserts on the returned
+ * rows — for a validation case, the violations are the rows.
  *
  * @param tests the test cases
  */
@@ -18,17 +19,20 @@ public record TestSuite(List<TestCase> tests) {
     }
 
     /**
-     * A single test case (design ch. 13.2). Exactly one of {@code sql} or {@code contract} is set.
+     * A single test case (design ch. 13.2). Exactly one of {@code sql}, {@code contract}, or
+     * {@code validate} is set.
      *
      * @param name     human-readable case name
      * @param sql      a SQL file target
      * @param contract an Identity SQL Contract name
-     * @param params   bind parameters
+     * @param params   bind parameters; for a validation case, the execution context the rules
+     *                 see (typically a {@code body:} map)
      * @param expect   the expectation
+     * @param validate a route's validation rules as the target (roadmap Phase 19)
      */
     @JsonIgnoreProperties(ignoreUnknown = true)
     public record TestCase(String name, SqlTarget sql, String contract,
-            Map<String, Object> params, Expectation expect) {
+            Map<String, Object> params, Expectation expect, ValidateTarget validate) {
 
         public TestCase {
             params = params == null ? Map.of() : Map.copyOf(params);
@@ -38,6 +42,17 @@ public record TestSuite(List<TestCase> tests) {
     /** A SQL file target. */
     @JsonIgnoreProperties(ignoreUnknown = true)
     public record SqlTarget(String file) {
+    }
+
+    /**
+     * A validation-rule target (roadmap Phase 19): the case evaluates the route's
+     * {@code validate:} block against the case's params and asserts on the returned violations.
+     *
+     * @param route the route id whose rules are evaluated
+     * @param rule  optional rule id; unset, every rule of the route's block is evaluated
+     */
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public record ValidateTarget(String route, String rule) {
     }
 
     /**

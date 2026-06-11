@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import io.tesseraql.core.error.TqlException;
 import io.tesseraql.yaml.model.SqlBinding;
+import io.tesseraql.yaml.model.ValidationRule;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.LinkedHashMap;
@@ -116,6 +117,52 @@ class TransactionalCommandProcessorTest {
     }
 
     @Test
+    void rejectsValidationRuleWithBothExpressionAndFile() throws Exception {
+        Map<String, ValidationRule> validate = Map.of("uniqueEmail", new ValidationRule(
+                null, "body.email != null", "check-email.sql", null, "email", null, null));
+
+        assertThatThrownBy(() -> processor(step(sql("single.sql"), Map.of()), Map.of(), validate))
+                .isInstanceOf(TqlException.class)
+                .hasMessageContaining("TQL-CAMEL-3102")
+                .hasMessageContaining("exactly one of rule: or file:");
+    }
+
+    @Test
+    void rejectsParamsOnAnExpressionRule() throws Exception {
+        Map<String, ValidationRule> validate = Map.of("dateOrder", new ValidationRule(
+                null, "body.endDate >= body.startDate", null, Map.of("email", "body.email"),
+                "endDate", null, null));
+
+        assertThatThrownBy(() -> processor(step(sql("single.sql"), Map.of()), Map.of(), validate))
+                .isInstanceOf(TqlException.class)
+                .hasMessageContaining("params apply to SQL rules only");
+    }
+
+    @Test
+    void rejectsValidationSqlThatWrites() throws Exception {
+        Map<String, ValidationRule> validate = Map.of("uniqueEmail", new ValidationRule(
+                null, null, sql("check-email.sql"), Map.of(), "email", null, null));
+
+        assertThatThrownBy(() -> processor(step(sql("single.sql"), Map.of()), Map.of(), validate))
+                .isInstanceOf(TqlException.class)
+                .hasMessageContaining("TQL-FIELD-2003")
+                .hasMessageContaining("must be a SELECT");
+    }
+
+    @Test
+    void acceptsExpressionAndSelectValidationRules() throws Exception {
+        Files.writeString(dir.resolve("check-email.sql"),
+                "select 'email' as field from t where email = /* email */'x'\n");
+        Map<String, ValidationRule> validate = new LinkedHashMap<>();
+        validate.put("dateOrder", new ValidationRule("body.endDate != null",
+                "body.endDate >= body.startDate", null, null, "endDate", null, null));
+        validate.put("uniqueEmail", new ValidationRule(null, null, "check-email.sql",
+                Map.of("email", "body.email"), "email", "duplicate", "members.email.duplicate"));
+
+        assertThat(processor(step(sql("single.sql"), Map.of()), Map.of(), validate)).isNotNull();
+    }
+
+    @Test
     void acceptsOrderedStepsBindingEarlierResults() throws Exception {
         Map<String, SqlBinding> steps = new LinkedHashMap<>();
         steps.put("orderNo", new SqlBinding(null, null, null, null, null, null,
@@ -127,7 +174,12 @@ class TransactionalCommandProcessorTest {
     }
 
     private TransactionalCommandProcessor processor(SqlBinding sql, Map<String, SqlBinding> steps) {
-        return new TransactionalCommandProcessor("orders.create", sql, steps,
+        return processor(sql, steps, Map.of());
+    }
+
+    private TransactionalCommandProcessor processor(SqlBinding sql, Map<String, SqlBinding> steps,
+            Map<String, ValidationRule> validate) {
+        return new TransactionalCommandProcessor("orders.create", sql, steps, validate,
                 file -> dir.resolve(file), "main", "postgres", null, null, "orders");
     }
 

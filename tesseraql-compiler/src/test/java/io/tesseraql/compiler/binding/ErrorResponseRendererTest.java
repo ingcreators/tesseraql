@@ -63,6 +63,58 @@ class ErrorResponseRendererTest {
                 .contains("changed by another user");
     }
 
+    @Test
+    void validationFailureMapsTo422WhileOtherFieldErrorsStay400() {
+        assertThat(ErrorResponseRenderer.httpStatus(new TqlErrorCode(TqlDomain.FIELD, 4220)))
+                .isEqualTo(422);
+        assertThat(ErrorResponseRenderer.httpStatus(new TqlErrorCode(TqlDomain.FIELD, 2001)))
+                .isEqualTo(400);
+        assertThat(ErrorResponseRenderer.httpStatus(new TqlErrorCode(TqlDomain.FIELD, 2002)))
+                .isEqualTo(400);
+    }
+
+    @Test
+    void rendersValidationViolationsWithRuleAndMessageKey() throws Exception {
+        Exchange exchange = exchangeWith(TqlException
+                .builder(new TqlErrorCode(TqlDomain.FIELD, 4220))
+                .message("internal detail that must not leak")
+                .details(Map.of("fields", List.of(
+                        Map.of("rule", "uniqueEmail", "field", "email", "code", "duplicate",
+                                "message", "members.email.duplicate"))))
+                .build());
+
+        new ErrorResponseRenderer().process(exchange);
+
+        String body = exchange.getMessage().getBody(String.class);
+        assertThat(exchange.getMessage().getHeader(Exchange.HTTP_RESPONSE_CODE)).isEqualTo(422);
+        assertThat(body).contains("\"code\":\"TQL-FIELD-4220\"")
+                .contains("\"message\":\"Unprocessable Entity\"")
+                .contains("\"rule\":\"uniqueEmail\"")
+                .contains("\"field\":\"email\"")
+                .contains("\"message\":\"members.email.duplicate\"")
+                .doesNotContain("internal detail");
+    }
+
+    @Test
+    void htmxFragmentCarriesTheFieldCodeAndMessageKey() throws Exception {
+        Exchange exchange = exchangeWith(TqlException
+                .builder(new TqlErrorCode(TqlDomain.FIELD, 4220))
+                .details(Map.of("fields", List.of(
+                        Map.of("rule", "uniqueEmail", "field", "email", "code", "duplicate",
+                                "message", "members.email.duplicate"))))
+                .build());
+        exchange.getMessage().setHeader("HX-Request", "true");
+
+        new ErrorResponseRenderer().process(exchange);
+
+        String body = exchange.getMessage().getBody(String.class);
+        assertThat(exchange.getMessage().getHeader(Exchange.HTTP_RESPONSE_CODE)).isEqualTo(422);
+        assertThat(body).contains("hc-field-error")
+                .contains("data-field=\"email\"")
+                .contains("data-code=\"duplicate\"")
+                .contains("data-message=\"members.email.duplicate\"");
+    }
+
     private static Exchange exchangeWith(Throwable cause) {
         Exchange exchange = new DefaultExchange(new DefaultCamelContext());
         exchange.setProperty(Exchange.EXCEPTION_CAUGHT, cause);

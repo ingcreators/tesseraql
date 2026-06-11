@@ -18,6 +18,14 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Runtime and recipes
 
+- Declarative validation for `command-json` (roadmap Phase 19, see
+  [docs/declarative-validation.md](docs/declarative-validation.md)): a `validate:` block of
+  cross-field rules in the whitelist-only core expression language plus validation SQL
+  (SELECTs whose returned rows are the violations — uniqueness, existence, balance checks)
+  executed inside the command's transaction, before any step writes. Violations answer a
+  field-scoped `422` (`TQL-FIELD-4220`) with a stable error model — rule ids, field paths,
+  rule codes, message keys — as JSON or as an inline `hc-alert` fragment for htmx. Lint
+  checks the block statically (`TQL-YAML-1003`, `TQL-FIELD-2003`, `TQL-SQL-2101`/`2103`).
 - Transactional write depth for `command-json` (roadmap Phase 18, see
   [docs/transactional-writes.md](docs/transactional-writes.md)): an ordered `steps:` list
   executes in a single transaction; later steps bind values produced by earlier ones,
@@ -34,6 +42,14 @@ All notable changes to TesseraQL are documented here. The format follows
 - Document-number sequences as a managed SQL contract (`sequence:` steps backed by
   `tql_doc_sequence`, V2 framework migration): gapless allocation under the sequence row's
   lock, riding the command transaction.
+
+### Quality and supply chain
+
+- Declarative suites gain `validate:` cases (roadmap Phase 19): a case evaluates a route's
+  validation rules — SQL rules against the test database, expression rules against the
+  case's params — and asserts on the violations as rows, recording SQL coverage along the
+  way. A new `validation` coverage kind declares every rule as `<routeId>.<ruleId>`, tracks
+  the rules the suites evaluated, and gates via `coverage.thresholds.kinds.validation`.
 
 ## 0.1.0 - 2026-06-11
 

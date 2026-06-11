@@ -28,3 +28,26 @@ tests:
     expect:
       rows:
         - role_code: USER_READ
+
+  - name: provisioning an unknown user violates the userExists rule
+    validate:
+      route: users.apiProvision
+    params:
+      body:
+        userName: nobody
+    expect:
+      rowCount: 1
+      rows:
+        - rule: userExists
+          field: userName
+          code: unknown-user
+          message: users.provision.unknown-user
+
+  - name: provisioning an existing user passes validation
+    validate:
+      route: users.apiProvision
+    params:
+      body:
+        userName: sato
+    expect:
+      rowCount: 0

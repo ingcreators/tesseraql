@@ -33,13 +33,14 @@ class ManifestCoverageTest {
     private static TestSuite sqlSuite(String... sqlFiles) {
         return new TestSuite(java.util.Arrays.stream(sqlFiles)
                 .map(file -> new TestCase("tests " + file, new SqlTarget(file), null, Map.of(),
-                        null))
+                        null, null))
                 .toList());
     }
 
     private static TestSuite contractSuite(String... contracts) {
         return new TestSuite(java.util.Arrays.stream(contracts)
-                .map(contract -> new TestCase("tests " + contract, null, contract, Map.of(), null))
+                .map(contract -> new TestCase("tests " + contract, null, contract, Map.of(),
+                        null, null))
                 .toList());
     }
 
@@ -107,6 +108,61 @@ class ManifestCoverageTest {
 
         assertThat(covered.covered()).containsExactlyInAnyOrder("admin.create");
         assertThat(uncovered.covered()).isEmpty();
+    }
+
+    private static final String VALIDATED_ROUTE = """
+            version: tesseraql/v1
+            id: members.register
+            kind: route
+            recipe: command-json
+            validate:
+              dateOrder:
+                rule: body.endDate >= body.startDate
+                field: endDate
+              uniqueEmail:
+                file: check-email.sql
+                field: email
+            sql:
+              file: insert-member.sql
+              mode: update
+            """;
+
+    private static TestSuite validateSuite(String route, String rule) {
+        return new TestSuite(List.of(new TestCase("validates " + route, null, null, Map.of(),
+                null, new TestSuite.ValidateTarget(route, rule))));
+    }
+
+    @Test
+    void validationCoverageDeclaresEveryRuleAndTracksEvaluatedOnes() {
+        AppManifest manifest = manifest(Map.of(),
+                route("web/members/post.yml", VALIDATED_ROUTE),
+                route("web/api/users/get.yml", SEARCH_ROUTE));
+
+        ItemCoverage all = ManifestCoverage.validation(manifest,
+                List.of(validateSuite("members.register", null)));
+        ItemCoverage one = ManifestCoverage.validation(manifest,
+                List.of(validateSuite("members.register", "uniqueEmail")));
+        ItemCoverage none = ManifestCoverage.validation(manifest, List.of());
+
+        assertThat(all.kind()).isEqualTo("validation");
+        assertThat(all.declared()).containsExactlyInAnyOrder(
+                "members.register.dateOrder", "members.register.uniqueEmail");
+        // A case without a rule filter evaluates the route's whole block.
+        assertThat(all.covered()).containsExactlyInAnyOrder(
+                "members.register.dateOrder", "members.register.uniqueEmail");
+        assertThat(one.covered()).containsExactlyInAnyOrder("members.register.uniqueEmail");
+        assertThat(none.covered()).isEmpty();
+        assertThat(none.uncovered()).hasSize(2);
+    }
+
+    @Test
+    void validationCoverageIsEmptyWithoutValidateBlocks() {
+        AppManifest manifest = manifest(Map.of(), route("web/api/users/get.yml", SEARCH_ROUTE));
+
+        ItemCoverage coverage = ManifestCoverage.validation(manifest, List.of());
+
+        assertThat(coverage.declared()).isEmpty();
+        assertThat(coverage.ratio()).isEqualTo(1.0);
     }
 
     @Test

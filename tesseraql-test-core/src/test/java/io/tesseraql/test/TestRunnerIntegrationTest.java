@@ -27,10 +27,11 @@ class TestRunnerIntegrationTest {
     static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>("postgres:16-alpine");
 
     static TestRunner runner;
+    static DataSource dataSource;
 
     @BeforeAll
     static void setUp() throws Exception {
-        DataSource dataSource = dataSource();
+        dataSource = dataSource();
         seed(dataSource);
         Path appHome = Paths.get("..", "examples", "user-admin-app").toAbsolutePath().normalize();
         IdentityService identity = new IdentityService(name -> dataSource);
@@ -80,6 +81,120 @@ class TestRunnerIntegrationTest {
         assertThat(report.results().get(1).passed()).isTrue();
         assertThat(report.results().get(2).passed()).isFalse();
         assertThat(report.results().get(2).message()).contains("rowCount");
+    }
+
+    /**
+     * Phase 19: a validation case evaluates a route's {@code validate:} block — SQL rules
+     * against the test database, expression rules against the case's params — and asserts on
+     * the violations as rows, so a rule is testable without serving the route.
+     */
+    @Test
+    void evaluatesRouteValidationRulesAndReturnsViolationsAsRows(
+            @org.junit.jupiter.api.io.TempDir Path appHome) throws Exception {
+        writeValidatedApp(appHome);
+        TestRunner validationRunner = new TestRunner(dataSource, appHome);
+        TestSuite suite = new TestSuiteLoader().parse("""
+                tests:
+                  - name: a taken name is rejected with the declared field error
+                    validate:
+                      route: members.register
+                    params:
+                      body:
+                        name: sato
+                        startDate: "2026-01-01"
+                        endDate: "2026-12-31"
+                    expect:
+                      rowCount: 1
+                      rows:
+                        - rule: uniqueName
+                          field: name
+                          code: duplicate
+                          message: members.name.duplicate
+                  - name: end before start violates the cross-field rule
+                    validate:
+                      route: members.register
+                      rule: dateOrder
+                    params:
+                      body:
+                        name: brand-new
+                        startDate: "2026-12-31"
+                        endDate: "2026-01-01"
+                    expect:
+                      rowCount: 1
+                      rows:
+                        - rule: dateOrder
+                          field: endDate
+                          code: end-before-start
+                  - name: a fresh name with ordered dates passes every rule
+                    validate:
+                      route: members.register
+                    params:
+                      body:
+                        name: brand-new
+                        startDate: "2026-01-01"
+                        endDate: "2026-12-31"
+                    expect:
+                      rowCount: 0
+                """);
+
+        TestReport report = validationRunner.run(suite);
+
+        assertThat(report.results()).hasSize(3);
+        assertThat(report.results()).allMatch(TestReport.TestResult::passed,
+                report.results().toString());
+    }
+
+    /** A minimal app declaring a SQL uniqueness rule and a cross-field expression rule. */
+    private static void writeValidatedApp(Path appHome) throws Exception {
+        java.nio.file.Files.createDirectories(appHome.resolve("config"));
+        java.nio.file.Files.writeString(appHome.resolve("config/tesseraql.yml"),
+                "tesseraql:\n  app:\n    name: members\n");
+        Path routeDir = appHome.resolve("web/members");
+        java.nio.file.Files.createDirectories(routeDir);
+        java.nio.file.Files.writeString(routeDir.resolve("post.yml"), """
+                version: tesseraql/v1
+                id: members.register
+                kind: route
+                recipe: command-json
+                input:
+                  name:
+                    type: string
+                    required: true
+                validate:
+                  uniqueName:
+                    file: check-name.sql
+                    params:
+                      name: body.name
+                    field: name
+                    code: duplicate
+                    message: members.name.duplicate
+                  dateOrder:
+                    when: body.endDate != null
+                    rule: body.endDate >= body.startDate
+                    field: endDate
+                    code: end-before-start
+                sql:
+                  file: insert-member.sql
+                  mode: update
+                  params:
+                    name: body.name
+                response:
+                  json:
+                    status: 201
+                    body:
+                      affected: sql.affectedRows
+                """);
+        java.nio.file.Files.writeString(routeDir.resolve("check-name.sql"), """
+                select
+                  'name' as field
+                from
+                  users
+                where
+                  name = /* name */'sato'
+                """);
+        java.nio.file.Files.writeString(routeDir.resolve("insert-member.sql"), """
+                insert into users (name, status) values (/* name */'sato', 'ACTIVE')
+                """);
     }
 
     private static void seed(DataSource dataSource) throws Exception {

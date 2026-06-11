@@ -17,7 +17,7 @@ import java.util.function.Predicate;
 
 /**
  * Derives manifest-based coverage kinds from the app manifest and the declarative test suites
- * (design ch. 14): route, security, SAML, and SCIM coverage. All four reuse the
+ * (design ch. 14): route, security, SAML, SCIM, and validation coverage. All of them reuse the
  * {@link ItemCoverage} model.
  *
  * <p>A route (and with it the security declaration it carries) counts as covered when a suite case
@@ -47,6 +47,37 @@ public final class ManifestCoverage {
     /** Security coverage: routes declaring a {@code security:} block, covered like routes. */
     public static ItemCoverage security(AppManifest manifest, List<TestSuite> suites) {
         return routeKind("security", manifest, suites, definition -> definition.security() != null);
+    }
+
+    /**
+     * Validation coverage (roadmap Phase 19): every rule of every route's {@code validate:}
+     * block is declared as {@code <routeId>.<ruleId>}, and a suite's validation case covers the
+     * rules it evaluates — the targeted rule, or the route's whole block when no rule is named.
+     */
+    public static ItemCoverage validation(AppManifest manifest, List<TestSuite> suites) {
+        ItemCoverage coverage = new ItemCoverage("validation");
+        for (RouteFile route : manifest.routes()) {
+            RouteDefinition definition = route.definition();
+            if (definition.id() == null) {
+                continue;
+            }
+            definition.validate().keySet()
+                    .forEach(ruleId -> coverage.declare(definition.id() + "." + ruleId));
+        }
+        for (TestSuite suite : suites) {
+            for (TestCase test : suite.tests()) {
+                if (test.validate() == null || test.validate().route() == null) {
+                    continue;
+                }
+                String prefix = test.validate().route() + ".";
+                String targeted = test.validate().rule();
+                coverage.declared().stream()
+                        .filter(item -> item.startsWith(prefix))
+                        .filter(item -> targeted == null || item.equals(prefix + targeted))
+                        .forEach(coverage::cover);
+            }
+        }
+        return coverage;
     }
 
     /**
