@@ -77,6 +77,16 @@ class OraclePortabilityIntegrationTest {
         DialectIdentityChecks.seedAndAuthenticate(dataSource(), "oracle");
     }
 
+    @Test
+    void outboxCommandClaimsAndDispatchesOnThisDialect() throws Exception {
+        DialectRuntimeChecks.outboxRoundTrip(runtime);
+    }
+
+    @Test
+    void fileTransfersRoundTripOnThisDialect() throws Exception {
+        DialectRuntimeChecks.fileTransferRoundTrip(runtime, "oracle-demo");
+    }
+
     private static javax.sql.DataSource dataSource() throws Exception {
         oracle.jdbc.datasource.impl.OracleDataSource dataSource =
                 new oracle.jdbc.datasource.impl.OracleDataSource();
@@ -93,6 +103,7 @@ class OraclePortabilityIntegrationTest {
             statement.execute("create table users (name varchar2(200) primary key, "
                     + "status varchar2(32) not null)");
             statement.execute("insert into users (name, status) values ('sato', 'ACTIVE')");
+            statement.execute("create table items (name varchar2(100) primary key, qty number(10) not null)");
         }
     }
 
@@ -129,6 +140,7 @@ class OraclePortabilityIntegrationTest {
                 """);
         Files.writeString(route.resolve("list.sql"),
                 "select name, status from users order by name\n;\n");
+        DialectRuntimeChecks.writeTransferRoutes(home);
         return home;
     }
 

@@ -78,6 +78,16 @@ class SqlServerPortabilityIntegrationTest {
         DialectIdentityChecks.seedAndAuthenticate(dataSource(), "sqlserver");
     }
 
+    @Test
+    void outboxCommandClaimsAndDispatchesOnThisDialect() throws Exception {
+        DialectRuntimeChecks.outboxRoundTrip(runtime);
+    }
+
+    @Test
+    void fileTransfersRoundTripOnThisDialect() throws Exception {
+        DialectRuntimeChecks.fileTransferRoundTrip(runtime, "sqlserver-demo");
+    }
+
     private static javax.sql.DataSource dataSource() {
         com.microsoft.sqlserver.jdbc.SQLServerDataSource dataSource =
                 new com.microsoft.sqlserver.jdbc.SQLServerDataSource();
@@ -94,6 +104,7 @@ class SqlServerPortabilityIntegrationTest {
             statement.execute("create table users (name varchar(200) primary key, "
                     + "status varchar(32) not null)");
             statement.execute("insert into users (name, status) values ('sato', 'ACTIVE')");
+            statement.execute("create table items (name varchar(100) primary key, qty int not null)");
         }
     }
 
@@ -131,6 +142,7 @@ class SqlServerPortabilityIntegrationTest {
                 """);
         Files.writeString(route.resolve("list.sql"),
                 "select name, status from users order by name\n;\n");
+        DialectRuntimeChecks.writeTransferRoutes(home);
         return home;
     }
 

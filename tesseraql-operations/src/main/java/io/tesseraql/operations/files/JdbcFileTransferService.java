@@ -278,7 +278,7 @@ public final class JdbcFileTransferService implements FileTransferService {
                                         .parseRow(request.readSpec(), values);
                                 applied[0] += executeUpdate(connection,
                                         SqlRenderer.render(rowSql, typed));
-                                connection.releaseSavepoint(savepoint);
+                                releaseQuietly(connection, savepoint);
                             } catch (SQLException | RuntimeException ex) {
                                 connection.rollback(savepoint);
                                 if (errors.size() < MAX_RECORDED_ERRORS) {
@@ -350,6 +350,15 @@ public final class JdbcFileTransferService implements FileTransferService {
         } catch (Exception ex) {
             LOG.warn("File export {} failed: {}", transferId, ex.getMessage());
             jobs.failExecution(transferId, ex.getMessage());
+        }
+    }
+
+    /** Oracle and SQL Server have no RELEASE SAVEPOINT; the commit releases them anyway. */
+    private static void releaseQuietly(Connection connection, Savepoint savepoint) {
+        try {
+            connection.releaseSavepoint(savepoint);
+        } catch (SQLException unsupported) {
+            // Best-effort hygiene only: accumulated savepoints die with the transaction.
         }
     }
 
