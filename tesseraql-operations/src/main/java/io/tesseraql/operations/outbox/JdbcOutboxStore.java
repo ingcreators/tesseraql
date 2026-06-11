@@ -96,10 +96,10 @@ public final class JdbcOutboxStore implements OutboxStore {
     }
 
     /**
-     * As {@link #claimPending(int)}, additionally narrowed to events emitted by the given apps -
-     * untagged legacy rows stay claimable by anyone. A null or empty scope claims everything.
-     * The claim query is the bundled {@code outbox-claim-pending.sql} 2-way template (IN
-     * expansion and the optional scope condition render there, not in Java).
+     * As {@link #claimPending(int)}, additionally narrowed to events emitted by the given apps.
+     * A null or empty scope claims everything. The claim query is the bundled
+     * {@code outbox-claim-pending.sql} 2-way template (IN expansion and the optional scope
+     * condition render there, not in Java).
      */
     @Override
     public List<OutboxEvent> claimPending(int limit, java.util.Collection<String> apps) {

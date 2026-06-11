@@ -78,7 +78,7 @@ class OutboxScimProvisioningIntegrationTest {
         try (Connection connection = DriverManager.getConnection(
                 POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword())) {
             runtime.outboxStore().insert(connection,
-                    OutboxEvent.toInsert("User", "local-1", "USER_PROVISIONED", payload));
+                    OutboxEvent.toInsert("User", "local-1", "USER_PROVISIONED", payload, "user-admin"));
         }
 
         int delivered = runtime.dispatchOutboxOnce();
@@ -94,7 +94,7 @@ class OutboxScimProvisioningIntegrationTest {
         try (Connection connection = DriverManager.getConnection(
                 POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword())) {
             runtime.outboxStore().insert(connection,
-                    OutboxEvent.toInsert("Group", "local-g1", "GROUP_PROVISIONED", payload));
+                    OutboxEvent.toInsert("Group", "local-g1", "GROUP_PROVISIONED", payload, "user-admin"));
         }
 
         int delivered = runtime.dispatchOutboxOnce();

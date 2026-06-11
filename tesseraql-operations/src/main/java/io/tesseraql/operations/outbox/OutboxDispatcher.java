@@ -25,9 +25,9 @@ public final class OutboxDispatcher {
     }
 
     /**
-     * @param hostedApps the apps this runtime hosts; when non-empty, only their events (plus
-     *                   untagged legacy rows) are claimed, so runtimes of different apps sharing
-     *                   one database never deliver each other's events to the wrong sinks
+     * @param hostedApps the apps this runtime hosts; when non-empty, only their events are
+     *                   claimed, so runtimes of different apps sharing one database never
+     *                   deliver each other's events to the wrong sinks
      */
     public OutboxDispatcher(OutboxStore store, OutboxEventSink sink,
             java.util.Set<String> hostedApps) {

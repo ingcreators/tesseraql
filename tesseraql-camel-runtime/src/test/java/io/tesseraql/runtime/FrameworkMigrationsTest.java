@@ -45,12 +45,10 @@ class FrameworkMigrationsTest {
         try (Connection connection = dataSource.getConnection();
                 Statement statement = connection.createStatement();
                 ResultSet history = statement.executeQuery(
-                        // V1 is the common script; V2 comes from the operations-postgresql
-                        // vendor location layered on top.
                         "select count(*) from tql_schema_history__operations"
-                                + " where version in ('1', '2') and success")) {
+                                + " where version = '1' and success")) {
             history.next();
-            assertThat(history.getInt(1)).isEqualTo(2);
+            assertThat(history.getInt(1)).isEqualTo(1);
         }
     }
 

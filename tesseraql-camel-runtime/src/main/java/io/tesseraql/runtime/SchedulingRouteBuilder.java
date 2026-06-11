@@ -28,13 +28,8 @@ final class SchedulingRouteBuilder extends RouteBuilder {
     private final List<JobFile> jobs;
     private final Map<String, String> claimKeys;
 
-    SchedulingRouteBuilder(OperationsRouteBuilder.JobRunner runner, JobRepository repository,
-            List<JobFile> jobs) {
-        this(runner, repository, jobs, Map.of());
-    }
-
     /**
-     * @param claimKeys the cluster-wide claim key per job id (usually {@code <app>:<jobId>}), so
+     * @param claimKeys the cluster-wide claim key per job id ({@code <app>:<jobId>}), so
      *                  different apps sharing a database never contend for each other's firings
      */
     SchedulingRouteBuilder(OperationsRouteBuilder.JobRunner runner, JobRepository repository,

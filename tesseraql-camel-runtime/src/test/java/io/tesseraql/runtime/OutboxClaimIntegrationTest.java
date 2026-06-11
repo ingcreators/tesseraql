@@ -100,13 +100,11 @@ class OutboxClaimIntegrationTest {
         try (Connection connection = connect()) {
             store.insert(connection, event("USER_CREATED", "a1", "app-a"));
             store.insert(connection, event("USER_CREATED", "b1", "app-b"));
-            store.insert(connection, event("USER_CREATED", "legacy", null));
         }
 
-        // A runtime hosting app-a claims its own events plus untagged legacy rows - never app-b's.
-        List<OutboxEvent> claimed = store.claimPending(10, Set.of("app-a"));
-        assertThat(claimed).extracting(OutboxEvent::aggregateId)
-                .containsExactlyInAnyOrder("a1", "legacy");
+        // A runtime hosting app-a claims only its own events - never app-b's.
+        assertThat(store.claimPending(10, Set.of("app-a")))
+                .extracting(OutboxEvent::aggregateId).containsExactly("a1");
 
         // App-b's event stays deliverable for the runtime that hosts app-b.
         assertThat(store.claimPending(10, Set.of("app-b")))
@@ -114,7 +112,7 @@ class OutboxClaimIntegrationTest {
     }
 
     private static OutboxEvent event(String type, String aggregateId) {
-        return event(type, aggregateId, null);
+        return event(type, aggregateId, "user-admin");
     }
 
     private static OutboxEvent event(String type, String aggregateId, String appName) {

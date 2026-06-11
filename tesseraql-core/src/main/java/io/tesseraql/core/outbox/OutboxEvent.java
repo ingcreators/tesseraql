@@ -16,8 +16,8 @@ import java.time.Instant;
  * @param status        PENDING / SENT / FAILED / DEAD
  * @param attempts      delivery attempt count
  * @param createdAt     creation time
- * @param appName       the app that emitted the event (null on rows from earlier versions), so
- *                      dispatchers and operators can scope a shared outbox table per app
+ * @param appName       the app that emitted the event (required), so dispatchers and operators
+ *                      can scope a shared outbox table per app
  */
 public record OutboxEvent(
         String id,
@@ -30,15 +30,14 @@ public record OutboxEvent(
         Instant createdAt,
         String appName) {
 
-    /** Builds an untagged event to insert (id/status/attempts/createdAt assigned by the store). */
-    public static OutboxEvent toInsert(String aggregateType, String aggregateId,
-            String eventType, String payloadJson) {
-        return toInsert(aggregateType, aggregateId, eventType, payloadJson, null);
-    }
-
-    /** Builds an event to insert, tagged with the emitting app. */
+    /**
+     * Builds an event to insert, tagged with the emitting app (id/status/attempts/createdAt are
+     * assigned by the store). Every event carries its app: dispatch scoping and per-app
+     * operations depend on it, and the column is not null.
+     */
     public static OutboxEvent toInsert(String aggregateType, String aggregateId,
             String eventType, String payloadJson, String appName) {
+        java.util.Objects.requireNonNull(appName, "appName");
         return new OutboxEvent(null, aggregateType, aggregateId, eventType, payloadJson,
                 null, 0, null, appName);
     }

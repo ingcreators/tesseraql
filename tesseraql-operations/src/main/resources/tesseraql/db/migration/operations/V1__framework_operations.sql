@@ -6,7 +6,7 @@
 create table if not exists tql_job_execution (
   job_execution_id varchar(64) primary key,
   job_id varchar(256) not null,
-  app_name varchar(256),
+  app_name varchar(256) not null,
   status varchar(32) not null,
   trigger_type varchar(32),
   start_time timestamp not null,
@@ -60,5 +60,5 @@ create table if not exists tql_outbox_event (
   created_at timestamp not null,
   sent_at timestamp,
   claimed_at timestamp,
-  app_name varchar(256)
+  app_name varchar(256) not null
 );

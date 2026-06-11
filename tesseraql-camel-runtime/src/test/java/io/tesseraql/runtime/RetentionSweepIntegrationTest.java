@@ -64,14 +64,16 @@ class RetentionSweepIntegrationTest {
     }
 
     private static String outbox(String id, String status, String sentAt) {
-        return "insert into tql_outbox_event (event_id, event_type, status, created_at, sent_at) "
-                + "values ('" + id + "', 'USER_CREATED', '" + status + "', now(), " + sentAt + ")";
+        return "insert into tql_outbox_event "
+                + "(event_id, event_type, status, created_at, sent_at, app_name) "
+                + "values ('" + id + "', 'USER_CREATED', '" + status + "', now(), " + sentAt
+                + ", 'user-admin')";
     }
 
     private static String execution(String id, String status, String endTime) {
-        return "insert into tql_job_execution (job_execution_id, job_id, status, start_time, "
-                + "end_time, created_at) values ('" + id + "', 'nightly', '" + status
-                + "', now(), " + endTime + ", now())";
+        return "insert into tql_job_execution (job_execution_id, job_id, app_name, status, "
+                + "start_time, end_time, created_at) values ('" + id + "', 'nightly', "
+                + "'user-admin', '" + status + "', now(), " + endTime + ", now())";
     }
 
     private static java.util.List<String> ids(Statement statement, String sql) throws Exception {
