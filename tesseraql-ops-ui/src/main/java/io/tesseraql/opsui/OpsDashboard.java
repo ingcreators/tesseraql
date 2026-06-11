@@ -28,6 +28,7 @@ public final class OpsDashboard {
     private final long slowSpanThresholdMs;
     private final AlertThresholds thresholds;
     private final io.tesseraql.core.diag.PinningMonitor pinning;
+    private java.util.function.Supplier<Map<String, Integer>> outboxCounts;
 
     public OpsDashboard(JobRepository jobs, ExecutionLanes lanes, SqlExecutionLog slowSql,
             TraceLog traces, long slowSpanThresholdMs) {
@@ -58,6 +59,15 @@ public final class OpsDashboard {
         this.slowSpanThresholdMs = slowSpanThresholdMs;
         this.thresholds = thresholds;
         this.pinning = pinning;
+    }
+
+    /**
+     * Wires the outbox status counts (roadmap Phase 20), so dead-lettered deliveries raise an
+     * operational alert like any other threshold breach.
+     */
+    public OpsDashboard outboxCounts(java.util.function.Supplier<Map<String, Integer>> counts) {
+        this.outboxCounts = counts;
+        return this;
     }
 
     /** Builds the dashboard overview: batch summary, lane diagnostics, slow SQL, and recent traces. */
@@ -141,6 +151,14 @@ public final class OpsDashboard {
         if (pinning != null && pinning.count() > 0) {
             alerts.add(new Alert("TQL-OPS-9005", "warning",
                     pinning.count() + " virtual-thread pinning event(s) detected"));
+        }
+        if (outboxCounts != null) {
+            int dead = outboxCounts.get().getOrDefault("DEAD", 0);
+            if (dead > 0) {
+                alerts.add(new Alert("TQL-OPS-9006", "warning",
+                        dead + " outbox event(s) dead-lettered; inspect the outbox delivery"
+                                + " log and redeliver or discard them"));
+            }
         }
         if (jobs != null) {
             List<JobExecution> executions = jobs.listExecutions(SCAN_LIMIT);

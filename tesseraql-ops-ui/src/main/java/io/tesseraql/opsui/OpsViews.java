@@ -73,6 +73,37 @@ public final class OpsViews {
         return model;
     }
 
+    /**
+     * The outbox delivery log model (roadmap Phase 20): recent events with status, attempts and
+     * last error, already scope-filtered, plus per-status counts over those rows. Dead-lettered
+     * rows carry a {@code dead} flag so the screen can offer redelivery.
+     */
+    public static Map<String, Object> outbox(List<io.tesseraql.core.outbox.OutboxEvent> events) {
+        List<Map<String, Object>> rows = new ArrayList<>();
+        Map<String, Integer> counts = new LinkedHashMap<>();
+        for (io.tesseraql.core.outbox.OutboxEvent event : events) {
+            counts.merge(event.status(), 1, Integer::sum);
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("id", event.id());
+            row.put("type", event.eventType());
+            row.put("source", dash(event.aggregateId()));
+            row.put("app", dash(event.appName()));
+            row.put("status", dash(event.status()));
+            row.put("statusClass", cssClass(event.status()));
+            row.put("attempts", event.attempts());
+            row.put("lastError", dash(event.lastError()));
+            row.put("dead", "DEAD".equals(event.status()));
+            row.put("createdAt", event.createdAt() == null ? "-" : event.createdAt().toString());
+            row.put("sentAt", event.sentAt() == null ? "-" : event.sentAt().toString());
+            rows.add(row);
+        }
+        Map<String, Object> model = new LinkedHashMap<>();
+        model.put("rows", rows);
+        model.put("hasRows", !rows.isEmpty());
+        model.put("byStatus", byStatus(counts));
+        return model;
+    }
+
     /** The trace page model: the trace tree flattened with per-node indents. */
     public static Map<String, Object> traces(List<TraceNode> tree) {
         List<Map<String, Object>> rows = new ArrayList<>();

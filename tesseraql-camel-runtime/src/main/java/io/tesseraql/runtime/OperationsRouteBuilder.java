@@ -36,6 +36,7 @@ final class OperationsRouteBuilder extends RouteBuilder {
     private final JobRepository repository;
     private final Map<String, String> jobOwners;
     private final io.tesseraql.opsui.OpsDashboard dashboard;
+    private final io.tesseraql.operations.outbox.JdbcOutboxStore outbox;
 
     /** Runs a job by id; decouples the route builder from the runtime instance. */
     @FunctionalInterface
@@ -44,12 +45,14 @@ final class OperationsRouteBuilder extends RouteBuilder {
     }
 
     OperationsRouteBuilder(JobRunner runner, JobRepository repository,
-            Map<String, String> jobOwners, io.tesseraql.opsui.OpsDashboard dashboard) {
+            Map<String, String> jobOwners, io.tesseraql.opsui.OpsDashboard dashboard,
+            io.tesseraql.operations.outbox.JdbcOutboxStore outbox) {
         this.runner = runner;
         this.repository = repository;
         // Job id -> owning app, insertion-ordered so the job list keeps its declaration order.
         this.jobOwners = java.util.Collections.unmodifiableMap(new LinkedHashMap<>(jobOwners));
         this.dashboard = dashboard;
+        this.outbox = outbox;
     }
 
     @Override
@@ -70,6 +73,9 @@ final class OperationsRouteBuilder extends RouteBuilder {
         rest().get("/_tesseraql/ops/traces/metrics").to("direct:ops.traceMetrics");
         rest().get("/_tesseraql/ops/alerts").to("direct:ops.alerts");
         rest().get("/_tesseraql/ops/pinning").to("direct:ops.pinning");
+        // The outbox delivery log and dead-letter redelivery (roadmap Phase 20).
+        rest().get("/_tesseraql/ops/outbox").to("direct:ops.outbox");
+        rest().post("/_tesseraql/ops/outbox/{id}/redeliver").to("direct:ops.outbox.redeliver");
         // Liveness/readiness for load balancers and deploy tooling: unauthenticated by design,
         // so it exposes only the status word - details stay behind the authorized ops API.
         rest().get("/_tesseraql/health").to("direct:ops.health");
@@ -143,6 +149,49 @@ final class OperationsRouteBuilder extends RouteBuilder {
         from("direct:ops.pinning").routeId("ops.pinning")
                 .to(VIEW).to("tesseraql-auth:authorize?policy=ops.batch.view")
                 .process(jsonProcessor(exchange -> dashboard.pinning()));
+
+        from("direct:ops.outbox").routeId("ops.outbox")
+                .to(VIEW).to("tesseraql-auth:authorize?policy=ops.batch.view")
+                .process(jsonProcessor(exchange -> {
+                    Predicate<String> scope = scope(exchange);
+                    return outbox.recent(200).stream()
+                            .filter(event -> scope.test(event.appName()))
+                            .map(this::outboxEventMap)
+                            .toList();
+                }));
+
+        from("direct:ops.outbox.redeliver").routeId("ops.outbox.redeliver")
+                .to(VIEW).to("tesseraql-auth:authorize?policy=ops.batch.run")
+                .process(jsonProcessor(this::redeliverOutboxEvent));
+    }
+
+    /** Requeues a FAILED/DEAD event; outside the caller's scope it reads as unknown. */
+    private Object redeliverOutboxEvent(Exchange exchange) {
+        String id = exchange.getMessage().getHeader("id", String.class);
+        io.tesseraql.core.outbox.OutboxEvent event = outbox.find(id)
+                .filter(found -> scope(exchange).test(found.appName()))
+                .orElse(null);
+        if (event == null) {
+            return NOT_FOUND;
+        }
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("id", id);
+        result.put("redelivered", outbox.redeliver(id));
+        return result;
+    }
+
+    private Map<String, Object> outboxEventMap(io.tesseraql.core.outbox.OutboxEvent event) {
+        Map<String, Object> map = new LinkedHashMap<>();
+        map.put("id", event.id());
+        map.put("type", event.eventType());
+        map.put("source", event.aggregateId());
+        map.put("app", event.appName());
+        map.put("status", event.status());
+        map.put("attempts", event.attempts());
+        map.put("lastError", event.lastError());
+        map.put("createdAt", event.createdAt() == null ? null : event.createdAt().toString());
+        map.put("sentAt", event.sentAt() == null ? null : event.sentAt().toString());
+        return map;
     }
 
     /** The caller's per-app scope from the authenticated principal (design ch. 26.11). */

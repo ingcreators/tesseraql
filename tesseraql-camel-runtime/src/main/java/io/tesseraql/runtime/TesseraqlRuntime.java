@@ -320,7 +320,9 @@ public final class TesseraqlRuntime implements AutoCloseable {
                             manifest.config()
                                     .getString("tesseraql.diagnostics.batchFailureWarnPercent")
                                     .map(Double::parseDouble).orElse(10.0)),
-                    pinningMonitor);
+                    pinningMonitor)
+                    // Dead-lettered deliveries surface as an operational alert (Phase 20).
+                    .outboxCounts(outboxStore::countByStatus);
             // The app's db/migration runs before anything queries its schema: fresh installs,
             // upgrades and canary activations all converge here (design ch. 31, 32).
             AppMigrations.migrate(appName, appHome, manifest.config(), dataSource,
@@ -365,7 +367,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
             Map<String, String> ownedJobs = new LinkedHashMap<>();
             jobs.keySet().forEach(id -> ownedJobs.put(id, jobOwners.getOrDefault(id, appName)));
             context.addRoutes(new OperationsRouteBuilder(
-                    jobRunner, jobRepository, ownedJobs, opsDashboard));
+                    jobRunner, jobRepository, ownedJobs, opsDashboard, outboxStore));
             // Service providers expose non-SQL runtime state to mounted yaml/template apps
             // (the bundled ops-console and studio apps render these, design ch. 26.11, 16, 47).
             io.tesseraql.opsui.OpsDashboard dashboardRef = opsDashboard;
@@ -387,6 +389,14 @@ public final class TesseraqlRuntime implements AutoCloseable {
                         return io.tesseraql.opsui.OpsViews.transfers(
                                 fileTransfers.recent(50).stream()
                                         .filter(transfer -> scope.test(transfer.appName()))
+                                        .toList());
+                    })
+                    .register("ops.outbox", params -> {
+                        java.util.function.Predicate<String> scope = io.tesseraql.opsui.OpsScope
+                                .allowedApps(params.get("permissions"));
+                        return io.tesseraql.opsui.OpsViews.outbox(
+                                outboxStore.recent(100).stream()
+                                        .filter(event -> scope.test(event.appName()))
                                         .toList());
                     })
                     .register("ops.execution", params -> {

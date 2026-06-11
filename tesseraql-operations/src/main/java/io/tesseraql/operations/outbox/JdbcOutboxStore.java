@@ -229,6 +229,20 @@ public final class JdbcOutboxStore implements OutboxStore {
         }
     }
 
+    /** Looks up one event, for the operations console's scope check before a redelivery. */
+    public java.util.Optional<OutboxEvent> find(String eventId) {
+        try (Connection connection = dataSource.getConnection();
+                PreparedStatement ps = connection.prepareStatement(
+                        "select * from tql_outbox_event where event_id = ?")) {
+            ps.setString(1, eventId);
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next() ? java.util.Optional.of(read(rs)) : java.util.Optional.empty();
+            }
+        } catch (SQLException ex) {
+            throw error("Failed to find outbox event", ex);
+        }
+    }
+
     /** The most recent events (newest first), for the operations console's delivery log. */
     public List<OutboxEvent> recent(int limit) {
         List<OutboxEvent> events = new ArrayList<>();
