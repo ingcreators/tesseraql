@@ -64,7 +64,26 @@ public final class FileImportProcessor implements Processor {
         respondAccepted(exchange, urlPath, transferId, false);
     }
 
+    /**
+     * The uploaded file content: for {@code multipart/form-data} the first file part (a part
+     * named {@code file} preferred), otherwise the raw request body.
+     */
     private static byte[] body(Exchange exchange) throws Exception {
+        String contentType = exchange.getMessage().getHeader(Exchange.CONTENT_TYPE, String.class);
+        if (contentType != null
+                && contentType.toLowerCase(java.util.Locale.ROOT).startsWith("multipart/")) {
+            org.apache.camel.attachment.AttachmentMessage attachments =
+                    exchange.getMessage(org.apache.camel.attachment.AttachmentMessage.class);
+            if (attachments != null && attachments.hasAttachments()) {
+                jakarta.activation.DataHandler part = attachments.getAttachment("file");
+                if (part == null) {
+                    part = attachments.getAttachments().values().iterator().next();
+                }
+                try (InputStream in = part.getInputStream()) {
+                    return in.readAllBytes();
+                }
+            }
+        }
         Object body = exchange.getMessage().getBody();
         if (body instanceof byte[] bytes) {
             return bytes;

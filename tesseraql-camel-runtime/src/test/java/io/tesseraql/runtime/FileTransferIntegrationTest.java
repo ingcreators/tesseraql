@@ -145,6 +145,31 @@ class FileTransferIntegrationTest {
     }
 
     @Test
+    void multipartFormDataUploadImportsTheFilePart() throws Exception {
+        String boundary = "tql-test-boundary";
+        String multipart = "--" + boundary + "\r\n"
+                + "Content-Disposition: form-data; name=\"note\"\r\n\r\n"
+                + "monthly upload\r\n"
+                + "--" + boundary + "\r\n"
+                + "Content-Disposition: form-data; name=\"file\"; filename=\"items.csv\"\r\n"
+                + "Content-Type: text/csv\r\n\r\n"
+                + "name,qty\nmulti,9\n\r\n"
+                + "--" + boundary + "--\r\n";
+        HttpResponse<String> response = HTTP.send(HttpRequest.newBuilder(
+                        URI.create("http://localhost:" + runtime.port() + "/api/items/import"))
+                .header("Content-Type", "multipart/form-data; boundary=" + boundary)
+                .POST(HttpRequest.BodyPublishers.ofString(multipart, StandardCharsets.UTF_8))
+                .build(), HttpResponse.BodyHandlers.ofString());
+        assertThat(response.statusCode()).isEqualTo(202);
+        String transferId = MAPPER.readTree(response.body()).get("transferId").asText();
+
+        JsonNode status = awaitTerminal("/api/items/import/" + transferId);
+        assertThat(status.get("status").asText()).isEqualTo("COMPLETED");
+        assertThat(status.get("rows").asLong()).isEqualTo(1);
+        assertThat(itemCount("multi")).isEqualTo(1);
+    }
+
+    @Test
     void typedColumnsParseOnImportAndFormatPerLocaleOnExport() throws Exception {
         // German-formatted upload: typed parsing turns the text into date/numeric binds.
         String transferId = startTransfer("/api/events/import",

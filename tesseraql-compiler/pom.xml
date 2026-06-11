@@ -24,6 +24,11 @@
       <artifactId>tesseraql-yaml</artifactId>
       <version>${project.version}</version>
     </dependency>
+    <!-- Multipart uploads surface as message attachments on platform-http (design ch. 28). -->
+    <dependency>
+      <groupId>org.apache.camel</groupId>
+      <artifactId>camel-attachments</artifactId>
+    </dependency>
     <dependency>
       <groupId>io.tesseraql</groupId>
       <artifactId>tesseraql-camel-components</artifactId>
