@@ -9,6 +9,8 @@ import org.junit.jupiter.api.Test;
 class JfrPinningSourceTest {
 
     @Test
+    // The try-held source exists for its JFR-streaming side effect and is never referenced.
+    @SuppressWarnings("try")
     void capturesVirtualThreadPinning() throws Exception {
         // synchronized-based pinning was removed in JDK 24 (JEP 491); only assert where it pins.
         assumeTrue(Runtime.version().feature() < 24,

@@ -278,31 +278,32 @@ public final class JxlsFileCodec implements FileCodec {
      */
     private static void writeGrid(OutputStream out, FileWriteSpec spec,
             Iterator<Map<String, Object>> rows) throws IOException {
-        org.dhatim.fastexcel.Workbook workbook = new org.dhatim.fastexcel.Workbook(out, "TesseraQL",
-                "1.0");
-        org.dhatim.fastexcel.Worksheet sheet = workbook.newWorksheet(
-                spec.sheet() == null || spec.sheet().isBlank() ? "data" : spec.sheet());
-        ZoneId zone = io.tesseraql.core.files.ColumnValues.zone(spec.timezone());
-        List<ColumnMapping> columns = new ArrayList<>(spec.columns());
-        int rowIndex = 0;
-        while (rows.hasNext()) {
-            Map<String, Object> row = rows.next();
-            if (columns.isEmpty()) {
-                row.keySet().forEach(key -> columns.add(ColumnMapping.of(key)));
-            }
-            if (rowIndex == 0) {
+        // try-with-resources finishes the workbook even when a row iterator fails mid-write.
+        try (org.dhatim.fastexcel.Workbook workbook = new org.dhatim.fastexcel.Workbook(out,
+                "TesseraQL", "1.0")) {
+            org.dhatim.fastexcel.Worksheet sheet = workbook.newWorksheet(
+                    spec.sheet() == null || spec.sheet().isBlank() ? "data" : spec.sheet());
+            ZoneId zone = io.tesseraql.core.files.ColumnValues.zone(spec.timezone());
+            List<ColumnMapping> columns = new ArrayList<>(spec.columns());
+            int rowIndex = 0;
+            while (rows.hasNext()) {
+                Map<String, Object> row = rows.next();
+                if (columns.isEmpty()) {
+                    row.keySet().forEach(key -> columns.add(ColumnMapping.of(key)));
+                }
+                if (rowIndex == 0) {
+                    for (int i = 0; i < columns.size(); i++) {
+                        sheet.value(rowIndex, i, columns.get(i).effectiveHeader());
+                    }
+                    rowIndex++;
+                }
                 for (int i = 0; i < columns.size(); i++) {
-                    sheet.value(rowIndex, i, columns.get(i).effectiveHeader());
+                    writeValue(sheet, rowIndex, i, columns.get(i),
+                            row.get(columns.get(i).name()), zone);
                 }
                 rowIndex++;
             }
-            for (int i = 0; i < columns.size(); i++) {
-                writeValue(sheet, rowIndex, i, columns.get(i),
-                        row.get(columns.get(i).name()), zone);
-            }
-            rowIndex++;
         }
-        workbook.finish();
     }
 
     /** Writes one typed grid cell, applying the column's (or the temporal default) format. */

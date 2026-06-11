@@ -120,7 +120,8 @@ public final class JdbcFileTransferService implements FileTransferService {
     }
 
     private SpoolRef spool(java.io.InputStream content) {
-        try (SpoolWriter writer = tempStore.createWriter(SpoolKind.BINARY); content) {
+        SpoolWriter writer = tempStore.createWriter(SpoolKind.BINARY);
+        try (writer; content) {
             byte[] buffer = new byte[64 * 1024];
             int read;
             while ((read = content.read(buffer)) >= 0) {
@@ -130,11 +131,11 @@ public final class JdbcFileTransferService implements FileTransferService {
                     writer.write(chunk);
                 }
             }
-            writer.close();
-            return writer.toRef();
         } catch (IOException ex) {
             throw new UncheckedIOException(ex);
         }
+        // toRef() is only valid after close, which the try-with-resources performed.
+        return writer.toRef();
     }
 
     @Override

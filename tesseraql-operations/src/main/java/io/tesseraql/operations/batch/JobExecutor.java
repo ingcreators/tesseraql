@@ -190,10 +190,8 @@ public final class JobExecutor {
     /** Streams the result set to a JSONL spool, exposing the SpoolRef to later steps (ch. 28.6). */
     private Map<String, Object> spool(PreparedStatement statement)
             throws SQLException, IOException {
-        SpoolRef ref;
-        long rows;
-        try (ResultSet rs = statement.executeQuery();
-                SpoolWriter writer = tempStore.createWriter(SpoolKind.JSONL)) {
+        SpoolWriter writer = tempStore.createWriter(SpoolKind.JSONL);
+        try (writer; ResultSet rs = statement.executeQuery()) {
             ResultSetMetaData metaData = rs.getMetaData();
             int columns = metaData.getColumnCount();
             while (rs.next()) {
@@ -205,10 +203,10 @@ public final class JobExecutor {
                         (mapper.writeValueAsString(row) + "\n").getBytes(StandardCharsets.UTF_8));
                 writer.incrementRows(1);
             }
-            writer.close();
-            ref = writer.toRef();
-            rows = ref.rows();
         }
+        // toRef() is only valid after close, which the try-with-resources performed.
+        SpoolRef ref = writer.toRef();
+        long rows = ref.rows();
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("affectedRows", (int) rows);
         result.put("rows", rows);

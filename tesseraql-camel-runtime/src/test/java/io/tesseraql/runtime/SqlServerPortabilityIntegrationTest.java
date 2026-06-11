@@ -36,6 +36,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 class SqlServerPortabilityIntegrationTest {
 
     @Container
+    @SuppressWarnings("resource") // lifecycle is managed by the @Container extension
     static final MSSQLServerContainer<?> SQLSERVER = new MSSQLServerContainer<>(
             "mcr.microsoft.com/mssql/server:2022-latest")
             .acceptLicense();

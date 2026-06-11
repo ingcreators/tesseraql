@@ -13,6 +13,13 @@ updates:
         update-types:
           - minor
           - patch
+    ignore:
+      # Spring 7 / Boot 4 is a deliberate migration (the pinned Boot 3.x actuator requires
+      # Spring 6), not a dependency bump.
+      - dependency-name: "org.springframework:*"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "org.springframework.boot:*"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: github-actions
     directory: /
@@ -32,3 +39,8 @@ updates:
     directory: /deploy
     schedule:
       interval: weekly
+    ignore:
+      # The JDK in these tags is a deliberate choice (build targets --release 21, runtime
+      # stays on the 21 LTS baseline) and the tags are not semver: updated manually.
+      - dependency-name: maven
+      - dependency-name: eclipse-temurin

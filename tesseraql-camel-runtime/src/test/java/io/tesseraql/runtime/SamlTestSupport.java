@@ -81,7 +81,6 @@ final class SamlTestSupport {
                 .generatePrivate(new java.security.spec.PKCS8EncodedKeySpec(der));
     }
 
-    /** IdP metadata advertising {@link #FIXED_CERT} as the signing certificate. */
     /** The fixed test key as a PKCS#8 PEM, for configs that read a key file. */
     static String fixedPrivateKeyPem() throws Exception {
         return "-----BEGIN PRIVATE KEY-----\n"
