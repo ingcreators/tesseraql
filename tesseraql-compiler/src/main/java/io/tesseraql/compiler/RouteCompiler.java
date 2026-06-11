@@ -120,15 +120,17 @@ public final class RouteCompiler {
 
     /**
      * Whether the route runs through the transactional command processor (roadmap Phase 18):
-     * any route declaring an outbox event, command steps, or validation rules (Phase 19), and
-     * every file-based command-json route — so audit binds, row-count expectations, constraint
-     * mapping, and declarative validation apply uniformly. Contract/service-bound command routes
-     * keep the standard execution pipeline (and fail fast when they declare validate:).
+     * any route declaring an outbox event, command steps, validation rules (Phase 19), or
+     * notifications (Phase 20), and every file-based command-json route — so audit binds,
+     * row-count expectations, constraint mapping, and declarative validation apply uniformly.
+     * Contract/service-bound command routes keep the standard execution pipeline (and fail fast
+     * when they declare validate:).
      */
     private static boolean usesTransactionalCommand(RouteDefinition definition) {
         return definition.outbox() != null
                 || !definition.steps().isEmpty()
                 || !definition.validate().isEmpty()
+                || !definition.notifications().isEmpty()
                 || ("command-json".equals(definition.recipe())
                         && definition.sql() != null && definition.sql().file() != null);
     }
@@ -172,8 +174,8 @@ public final class RouteCompiler {
                 .process(new RequestBinder(definition, pathParams(routeFile.urlPath())))
                 .process(new io.tesseraql.compiler.binding.TransactionalCommandProcessor(
                         routeId, definition.sql(), definition.steps(), definition.validate(),
-                        stepFile, DEFAULT_DATASOURCE, dialect, definition.outbox(),
-                        definition.errors(), appName));
+                        definition.notifications(), stepFile, DEFAULT_DATASOURCE, dialect,
+                        definition.outbox(), definition.errors(), appName));
         // Named queries still run after the command (outside its transaction), in authored order.
         for (var entry : definition.queries().entrySet()) {
             step = step

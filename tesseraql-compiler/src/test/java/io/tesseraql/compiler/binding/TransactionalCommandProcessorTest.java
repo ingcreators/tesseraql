@@ -173,13 +173,31 @@ class TransactionalCommandProcessorTest {
         assertThat(processor(null, steps)).isNotNull();
     }
 
+    @Test
+    void acceptsANotifyBlockAndRejectsAChannellessNotification() throws Exception {
+        Map<String, io.tesseraql.yaml.model.NotifySpec> valid = Map.of("confirmation",
+                new io.tesseraql.yaml.model.NotifySpec("member-mail", null,
+                        Map.of("email", "body.email")));
+        assertThat(new TransactionalCommandProcessor("orders.create",
+                step(sql("single.sql"), Map.of()), Map.of(), Map.of(), valid,
+                file -> dir.resolve(file), "main", "postgres", null, null, "orders")).isNotNull();
+
+        Map<String, io.tesseraql.yaml.model.NotifySpec> channelless = Map.of("confirmation",
+                new io.tesseraql.yaml.model.NotifySpec(null, null, Map.of()));
+        assertThatThrownBy(() -> new TransactionalCommandProcessor("orders.create",
+                step(sql("single.sql"), Map.of()), Map.of(), Map.of(), channelless,
+                file -> dir.resolve(file), "main", "postgres", null, null, "orders"))
+                .isInstanceOf(TqlException.class)
+                .hasMessageContaining("TQL-FIELD-2004");
+    }
+
     private TransactionalCommandProcessor processor(SqlBinding sql, Map<String, SqlBinding> steps) {
         return processor(sql, steps, Map.of());
     }
 
     private TransactionalCommandProcessor processor(SqlBinding sql, Map<String, SqlBinding> steps,
             Map<String, ValidationRule> validate) {
-        return new TransactionalCommandProcessor("orders.create", sql, steps, validate,
+        return new TransactionalCommandProcessor("orders.create", sql, steps, validate, Map.of(),
                 file -> dir.resolve(file), "main", "postgres", null, null, "orders");
     }
 
