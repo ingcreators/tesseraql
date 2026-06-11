@@ -11,7 +11,8 @@ class VersionRangeTest {
     void parsesAndOrdersVersions() {
         assertThat(SemanticVersion.parse("1")).isEqualTo(new SemanticVersion(1, 0, 0));
         assertThat(SemanticVersion.parse("1.2")).isEqualTo(new SemanticVersion(1, 2, 0));
-        assertThat(SemanticVersion.parse("1.2.3-rc1+build")).isEqualTo(new SemanticVersion(1, 2, 3));
+        assertThat(SemanticVersion.parse("1.2.3-rc1+build"))
+                .isEqualTo(new SemanticVersion(1, 2, 3));
         assertThat(SemanticVersion.parse("1.2.3")).isGreaterThan(SemanticVersion.parse("1.2.0"));
         assertThat(SemanticVersion.parse("2.0.0")).isGreaterThan(SemanticVersion.parse("1.9.9"));
     }

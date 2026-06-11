@@ -81,8 +81,8 @@ class BootstrapGoalsIntegrationTest {
                 "create table facts (id serial primary key, metric varchar(200));");
         DataSource dataSource = dataSource();
 
-        AppMigrator.Result result =
-                AppMigrator.migrate(appHome, "Order-App", "analytics", dataSource).orElseThrow();
+        AppMigrator.Result result = AppMigrator
+                .migrate(appHome, "Order-App", "analytics", dataSource).orElseThrow();
 
         assertThat(result.applied()).isEqualTo(1);
         assertThat(result.historyTable()).isEqualTo("tql_schema_history_order_app__analytics");
@@ -123,7 +123,8 @@ class BootstrapGoalsIntegrationTest {
             assertThat(new PasswordVerifier().verify("rotated-password", hash,
                     admin.getString("password_algo"), admin.getString("password_params"))).isTrue();
             assertThat(new PasswordVerifier().verify("first-password", hash,
-                    admin.getString("password_algo"), admin.getString("password_params"))).isFalse();
+                    admin.getString("password_algo"), admin.getString("password_params")))
+                    .isFalse();
             assertThat(admin.getString("role_code")).isEqualTo("iam.admin");
             assertThat(admin.next()).isFalse();
         }

@@ -37,8 +37,7 @@ public class CoverageMojo extends AbstractMojo {
     @Parameter(property = "tesseraql.realm", defaultValue = "local")
     private String realm;
 
-    @Parameter(property = "tesseraql.reportDir",
-            defaultValue = "${project.build.directory}/tesseraql-reports")
+    @Parameter(property = "tesseraql.reportDir", defaultValue = "${project.build.directory}/tesseraql-reports")
     private File reportDir;
 
     /** Default minimum SQL branch-coverage percentage (overridden by config). */
@@ -51,17 +50,21 @@ public class CoverageMojo extends AbstractMojo {
 
     @Override
     public void execute() throws MojoFailureException {
-        DriverManagerDataSource dataSource = new DriverManagerDataSource(jdbcUrl, username, password);
+        DriverManagerDataSource dataSource = new DriverManagerDataSource(jdbcUrl, username,
+                password);
         AppTestRunner.RunResult result = new AppTestRunner().run(
-                appHome.toPath(), dataSource, RealmConfig.managed(realm, "main"), reportDir.toPath());
+                appHome.toPath(), dataSource, RealmConfig.managed(realm, "main"),
+                reportDir.toPath());
 
         CoverageThresholds thresholds = CoverageThresholdResolver.resolve(
                 loadConfig(appHome.toPath()), sqlLineThreshold, sqlBranchThreshold);
-        CoverageGate.Result gate = CoverageGate.check(result.coverage(), result.kinds(), thresholds);
+        CoverageGate.Result gate = CoverageGate.check(result.coverage(), result.kinds(),
+                thresholds);
         gate.violations().forEach(getLog()::error);
-        getLog().info(String.format("TesseraQL coverage gate: %s (line >= %.0f%%, branch >= %.0f%%)",
-                gate.passed() ? "passed" : "FAILED",
-                thresholds.sqlLine() * 100, thresholds.sqlBranch() * 100));
+        getLog().info(
+                String.format("TesseraQL coverage gate: %s (line >= %.0f%%, branch >= %.0f%%)",
+                        gate.passed() ? "passed" : "FAILED",
+                        thresholds.sqlLine() * 100, thresholds.sqlBranch() * 100));
         if (!gate.passed()) {
             throw new MojoFailureException("TesseraQL coverage below threshold: "
                     + gate.violations().size() + " file(s)");

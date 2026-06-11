@@ -40,11 +40,13 @@ public final class TestRunner {
         this(dataSource, appHome, null, null, null);
     }
 
-    public TestRunner(DataSource dataSource, Path appHome, IdentityService identity, RealmConfig realm) {
+    public TestRunner(DataSource dataSource, Path appHome, IdentityService identity,
+            RealmConfig realm) {
         this(dataSource, appHome, identity, realm, null);
     }
 
-    public TestRunner(DataSource dataSource, Path appHome, IdentityService identity, RealmConfig realm,
+    public TestRunner(DataSource dataSource, Path appHome, IdentityService identity,
+            RealmConfig realm,
             SqlCoverage coverage) {
         this.dataSource = dataSource;
         this.appHome = appHome;
@@ -74,7 +76,8 @@ public final class TestRunner {
     private List<Map<String, Object>> resultRows(TestCase test) {
         if (test.contract() != null && !test.contract().isBlank()) {
             if (identity == null || realm == null) {
-                throw new IllegalStateException("Contract tests require an identity service and realm");
+                throw new IllegalStateException(
+                        "Contract tests require an identity service and realm");
             }
             return identity.execute(realm, stripIdentityPrefix(test.contract()), test.params());
         }
@@ -101,7 +104,8 @@ public final class TestRunner {
             for (Map.Entry<String, Object> entry : expect.rows().get(i).entrySet()) {
                 if (!looselyEqual(actual.get(entry.getKey()), entry.getValue())) {
                     return TestResult.fail(test.name(), "row " + i + " field '" + entry.getKey()
-                            + "' expected " + entry.getValue() + " but was " + actual.get(entry.getKey()));
+                            + "' expected " + entry.getValue() + " but was "
+                            + actual.get(entry.getKey()));
                 }
             }
         }
@@ -129,7 +133,8 @@ public final class TestRunner {
         }
     }
 
-    private static List<Map<String, Object>> readRows(ResultSet resultSet) throws java.sql.SQLException {
+    private static List<Map<String, Object>> readRows(ResultSet resultSet)
+            throws java.sql.SQLException {
         ResultSetMetaData metaData = resultSet.getMetaData();
         int columns = metaData.getColumnCount();
         List<Map<String, Object>> rows = new ArrayList<>();
@@ -151,7 +156,9 @@ public final class TestRunner {
     }
 
     private static String stripIdentityPrefix(String contract) {
-        return contract.startsWith("identity.") ? contract.substring("identity.".length()) : contract;
+        return contract.startsWith("identity.")
+                ? contract.substring("identity.".length())
+                : contract;
     }
 
     private static String read(Path path) {

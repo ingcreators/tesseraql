@@ -11,7 +11,8 @@ class JfrPinningSourceTest {
     @Test
     void capturesVirtualThreadPinning() throws Exception {
         // synchronized-based pinning was removed in JDK 24 (JEP 491); only assert where it pins.
-        assumeTrue(Runtime.version().feature() < 24, "virtual threads no longer pin on synchronized");
+        assumeTrue(Runtime.version().feature() < 24,
+                "virtual threads no longer pin on synchronized");
 
         PinningMonitor monitor = new PinningMonitor(16);
         try (JfrPinningSource source = new JfrPinningSource(monitor, Duration.ofMillis(1))) {

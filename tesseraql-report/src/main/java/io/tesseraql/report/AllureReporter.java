@@ -56,7 +56,8 @@ public final class AllureReporter {
         try {
             return MAPPER.writerWithDefaultPrettyPrinter().writeValueAsString(entry);
         } catch (JsonProcessingException ex) {
-            throw new TqlException(REPORT_ERROR, "Failed to render Allure result: " + ex.getMessage());
+            throw new TqlException(REPORT_ERROR,
+                    "Failed to render Allure result: " + ex.getMessage());
         }
     }
 }

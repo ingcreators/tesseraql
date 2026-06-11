@@ -33,7 +33,8 @@ public class TesseraqlAuthProducer extends DefaultProducer {
     public void process(Exchange exchange) {
         String operation = endpoint.getOperation();
         io.tesseraql.core.telemetry.Span span = io.tesseraql.camel.TesseraqlTracing.tracer(exchange)
-                .start("tesseraql.security." + operation, io.tesseraql.camel.TesseraqlTracing.parent(exchange))
+                .start("tesseraql.security." + operation,
+                        io.tesseraql.camel.TesseraqlTracing.parent(exchange))
                 .attribute("operation", operation);
         if (endpoint.getAuth() != null) {
             span.attribute("auth", endpoint.getAuth());
@@ -59,12 +60,15 @@ public class TesseraqlAuthProducer extends DefaultProducer {
 
     private void authenticate(Exchange exchange) {
         Principal principal = switch (endpoint.getAuth()) {
-            case "bearer" -> bean(JwtAuthenticator.class, TesseraqlProperties.JWT_AUTHENTICATOR_BEAN)
-                    .authenticate(exchange.getMessage().getHeader("Authorization", String.class));
+            case "bearer" ->
+                bean(JwtAuthenticator.class, TesseraqlProperties.JWT_AUTHENTICATOR_BEAN)
+                        .authenticate(
+                                exchange.getMessage().getHeader("Authorization", String.class));
             case "browser" -> new BrowserAuthenticator(
                     bean(SessionStore.class, TesseraqlProperties.SESSION_STORE_BEAN))
                     .authenticate(exchange.getMessage().getHeader("Cookie", String.class));
-            default -> throw new TqlException(UNSUPPORTED, "Unsupported auth type: " + endpoint.getAuth());
+            default ->
+                throw new TqlException(UNSUPPORTED, "Unsupported auth type: " + endpoint.getAuth());
         };
         exchange.setProperty(TesseraqlProperties.PRINCIPAL, principal);
     }

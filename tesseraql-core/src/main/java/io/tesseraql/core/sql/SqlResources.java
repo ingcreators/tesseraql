@@ -20,7 +20,8 @@ public final class SqlResources {
     }
 
     /** Renders the resource (resolved against the anchor class) with the given parameters. */
-    public static BoundSql render(Class<?> anchor, String resourcePath, Map<String, Object> params) {
+    public static BoundSql render(Class<?> anchor, String resourcePath,
+            Map<String, Object> params) {
         List<SqlNode> nodes = CACHE.computeIfAbsent(anchor.getName() + ":" + resourcePath,
                 key -> Sql2WayParser.parse(SqlScripts.read(anchor, resourcePath)));
         return SqlRenderer.render(nodes, params);

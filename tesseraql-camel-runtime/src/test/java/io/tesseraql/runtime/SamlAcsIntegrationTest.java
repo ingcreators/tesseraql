@@ -89,7 +89,8 @@ class SamlAcsIntegrationTest {
     void metadataEndpointPublishesSpDescriptor() throws Exception {
         HttpResponse<String> response = HttpClient.newHttpClient().send(
                 HttpRequest.newBuilder(URI.create(
-                        "http://localhost:" + runtime.port() + "/_tesseraql/saml/metadata")).build(),
+                        "http://localhost:" + runtime.port() + "/_tesseraql/saml/metadata"))
+                        .build(),
                 HttpResponse.BodyHandlers.ofString());
         assertThat(response.statusCode()).isEqualTo(200);
         assertThat(response.body())
@@ -107,11 +108,12 @@ class SamlAcsIntegrationTest {
 
     private static HttpResponse<String> postAcs(String samlResponseXml) throws Exception {
         String body = "SAMLResponse=" + URLEncoder.encode(
-                Base64.getEncoder().encodeToString(samlResponseXml.getBytes(StandardCharsets.UTF_8)),
+                Base64.getEncoder()
+                        .encodeToString(samlResponseXml.getBytes(StandardCharsets.UTF_8)),
                 StandardCharsets.UTF_8);
         return HttpClient.newHttpClient().send(
                 HttpRequest.newBuilder(URI.create(
-                                "http://localhost:" + runtime.port() + "/_tesseraql/saml/acs"))
+                        "http://localhost:" + runtime.port() + "/_tesseraql/saml/acs"))
                         .header("Content-Type", "application/x-www-form-urlencoded")
                         .POST(HttpRequest.BodyPublishers.ofString(body))
                         .build(),
@@ -126,7 +128,8 @@ class SamlAcsIntegrationTest {
         }
         Path saml = target.resolve("saml");
         Files.createDirectories(saml);
-        Files.writeString(saml.resolve("idp.pem"), SamlTestSupport.publicKeyPem(keyPair.getPublic()));
+        Files.writeString(saml.resolve("idp.pem"),
+                SamlTestSupport.publicKeyPem(keyPair.getPublic()));
 
         Files.writeString(target.resolve("config/application.yml"), """
                 server:

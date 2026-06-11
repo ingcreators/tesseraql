@@ -27,7 +27,8 @@ import javax.sql.DataSource;
  */
 final class TenantDataSources implements TenantDataSourceResolver, AutoCloseable {
 
-    private static final TqlErrorCode NO_TENANT_DATASOURCE = new TqlErrorCode(TqlDomain.TENANT, 4031);
+    private static final TqlErrorCode NO_TENANT_DATASOURCE = new TqlErrorCode(TqlDomain.TENANT,
+            4031);
 
     private final Map<String, HikariDataSource> byTenant;
 

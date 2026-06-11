@@ -42,8 +42,10 @@ public class TesseraqlSqlProducer extends DefaultProducer {
     private static final TqlErrorCode NO_DATASOURCE = new TqlErrorCode(TqlDomain.SQL, 2502);
     // Portable constraint-violation codes, mapped to HTTP statuses by ErrorResponseRenderer.
     private static final TqlErrorCode UNIQUE_VIOLATION_CODE = new TqlErrorCode(TqlDomain.SQL, 4090);
-    private static final TqlErrorCode FOREIGN_KEY_VIOLATION_CODE = new TqlErrorCode(TqlDomain.SQL, 4091);
-    private static final TqlErrorCode NOT_NULL_VIOLATION_CODE = new TqlErrorCode(TqlDomain.SQL, 4001);
+    private static final TqlErrorCode FOREIGN_KEY_VIOLATION_CODE = new TqlErrorCode(TqlDomain.SQL,
+            4091);
+    private static final TqlErrorCode NOT_NULL_VIOLATION_CODE = new TqlErrorCode(TqlDomain.SQL,
+            4001);
     private static final TqlErrorCode CHECK_VIOLATION_CODE = new TqlErrorCode(TqlDomain.SQL, 4002);
     private static final TqlErrorCode SERIALIZATION_CODE = new TqlErrorCode(TqlDomain.SQL, 4093);
     /** TQL-LD-0001: result materialization exceeded the configured maxRows. */
@@ -72,7 +74,8 @@ public class TesseraqlSqlProducer extends DefaultProducer {
         String mode = endpoint.getMode();
         io.tesseraql.core.telemetry.SpanContext parent = exchange.getProperty(
                 TesseraqlProperties.TRACE_CONTEXT, io.tesseraql.core.telemetry.SpanContext.class);
-        io.tesseraql.core.telemetry.Span span = tracer(exchange).start("tesseraql.sql.execute", parent)
+        io.tesseraql.core.telemetry.Span span = tracer(exchange)
+                .start("tesseraql.sql.execute", parent)
                 .attribute("sqlId", endpoint.getSqlPath())
                 .attribute("mode", mode);
         try {
@@ -87,14 +90,16 @@ public class TesseraqlSqlProducer extends DefaultProducer {
             }
             if (!"query".equals(mode) && !"update".equals(mode)) {
                 throw new TqlException(UNSUPPORTED_MODE,
-                        "Unsupported SQL mode '" + mode + "' (supported: query, update, query-export)");
+                        "Unsupported SQL mode '" + mode
+                                + "' (supported: query, update, query-export)");
             }
             Map<String, Object> context = exchange.getProperty(
                     TesseraqlProperties.CONTEXT, Map.class);
             long startNanos = System.nanoTime();
             long startedAt = System.currentTimeMillis();
             Map<String, Object> result = "update".equals(mode)
-                    ? executeUpdate(dataSource, bound) : executeQuery(dataSource, bound);
+                    ? executeUpdate(dataSource, bound)
+                    : executeQuery(dataSource, bound);
 
             String countKey = "update".equals(mode) ? "affectedRows" : "rowCount";
             Object count = result.get(countKey);
@@ -138,7 +143,8 @@ public class TesseraqlSqlProducer extends DefaultProducer {
      */
     private void export(Exchange exchange, DataSource dataSource, BoundSql bound) {
         FileCodec codec = exchange.getProperty(TesseraqlProperties.EXPORT_CODEC, FileCodec.class);
-        FileWriteSpec spec = exchange.getProperty(TesseraqlProperties.EXPORT_SPEC, FileWriteSpec.class);
+        FileWriteSpec spec = exchange.getProperty(TesseraqlProperties.EXPORT_SPEC,
+                FileWriteSpec.class);
         if (codec == null || spec == null) {
             throw new TqlException(UNSUPPORTED_MODE,
                     "query-export requires the compiled export binding (codec and write spec)");
@@ -147,8 +153,8 @@ public class TesseraqlSqlProducer extends DefaultProducer {
         SpoolRef ref;
         // Stream large exports per the dialect's profile so the driver uses a cursor instead of
         // buffering the whole result set in memory (design ch. 42, 28).
-        io.tesseraql.core.dialect.StreamingProfile profile =
-                io.tesseraql.core.dialect.StreamingProfiles.forDialect(endpoint.getDialect());
+        io.tesseraql.core.dialect.StreamingProfile profile = io.tesseraql.core.dialect.StreamingProfiles
+                .forDialect(endpoint.getDialect());
         try (Connection connection = dataSource.getConnection()) {
             boolean previousAutoCommit = connection.getAutoCommit();
             if (profile.autoCommitOff()) {
@@ -161,7 +167,8 @@ public class TesseraqlSqlProducer extends DefaultProducer {
                 SpoolKind kind = "csv".equals(codec.format()) ? SpoolKind.CSV : SpoolKind.BINARY;
                 try (ResultSet resultSet = statement.executeQuery();
                         SpoolWriter writer = tempStore.createWriter(kind)) {
-                    codec.write(new SpoolOutputStream(writer), spec, new ResultRows(resultSet, writer));
+                    codec.write(new SpoolOutputStream(writer), spec,
+                            new ResultRows(resultSet, writer));
                     writer.close();
                     ref = writer.toRef();
                 }
@@ -261,7 +268,7 @@ public class TesseraqlSqlProducer extends DefaultProducer {
 
         @Override
         public void write(int b) throws java.io.IOException {
-            writer.write(new byte[] {(byte) b});
+            writer.write(new byte[]{(byte) b});
         }
 
         @Override
@@ -273,8 +280,11 @@ public class TesseraqlSqlProducer extends DefaultProducer {
     private TempStore tempStore() {
         TempStore bean = endpoint.getCamelContext().getRegistry()
                 .lookupByNameAndType(TesseraqlProperties.TEMP_STORE_BEAN, TempStore.class);
-        return bean != null ? bean : new FileTempStore(
-                java.nio.file.Path.of(System.getProperty("java.io.tmpdir"), "tesseraql-spool"));
+        return bean != null
+                ? bean
+                : new FileTempStore(
+                        java.nio.file.Path.of(System.getProperty("java.io.tmpdir"),
+                                "tesseraql-spool"));
     }
 
     private Map<String, Object> executeQuery(DataSource dataSource, BoundSql bound) {
@@ -314,8 +324,8 @@ public class TesseraqlSqlProducer extends DefaultProducer {
     private DataSource dataSource(Exchange exchange) {
         Object tenant = exchange.getProperty(TesseraqlProperties.TENANT);
         if (tenant instanceof io.tesseraql.core.tenant.TenantContext tenantContext) {
-            io.tesseraql.camel.tenant.TenantDataSourceResolver resolver =
-                    endpoint.getCamelContext().getRegistry().lookupByNameAndType(
+            io.tesseraql.camel.tenant.TenantDataSourceResolver resolver = endpoint.getCamelContext()
+                    .getRegistry().lookupByNameAndType(
                             TesseraqlProperties.TENANT_DATASOURCE_RESOLVER_BEAN,
                             io.tesseraql.camel.tenant.TenantDataSourceResolver.class);
             if (resolver != null) {
@@ -344,7 +354,8 @@ public class TesseraqlSqlProducer extends DefaultProducer {
 
     /** Maps a JDBC failure to a portable error code so constraint violations get meaningful statuses. */
     private static TqlErrorCode classifyCode(Exception ex) {
-        java.sql.SQLException sql = ex instanceof java.sql.SQLException direct ? direct
+        java.sql.SQLException sql = ex instanceof java.sql.SQLException direct
+                ? direct
                 : (ex.getCause() instanceof java.sql.SQLException cause ? cause : null);
         if (sql == null) {
             return EXECUTION_ERROR;
@@ -376,7 +387,8 @@ public class TesseraqlSqlProducer extends DefaultProducer {
             if (maxRows >= 0 && rows.size() >= maxRows) {
                 if (warn) {
                     LOG.log(System.Logger.Level.WARNING,
-                            "Result truncated at maxRows={0} for {1}", maxRows, endpoint.getSqlPath());
+                            "Result truncated at maxRows={0} for {1}", maxRows,
+                            endpoint.getSqlPath());
                     break;
                 }
                 throw TqlException.builder(MATERIALIZATION_OVERFLOW)

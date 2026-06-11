@@ -54,7 +54,8 @@ public final class SecretResolvers {
         SecretResolver resolver = providers.get(provider);
         if (resolver == null) {
             throw new TqlException(UNKNOWN_PROVIDER,
-                    "Unknown secret provider '" + provider + "' in ${secret." + providerAndName + "}");
+                    "Unknown secret provider '" + provider + "' in ${secret." + providerAndName
+                            + "}");
         }
         return name.isBlank() ? null : resolver.resolve(name);
     }

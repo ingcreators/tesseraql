@@ -73,7 +73,8 @@ public final class CsvFileCodec implements FileCodec {
                     int position = positions[i];
                     values.put(columns.get(i).name(),
                             position >= 0 && position < record.size()
-                                    ? record.get(position) : null);
+                                    ? record.get(position)
+                                    : null);
                 }
                 handler.row(rowNumber, values);
             }

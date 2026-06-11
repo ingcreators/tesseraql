@@ -20,7 +20,7 @@ class CompositeTracerTest {
         assertThat(ring.recentSpans()).extracting(SpanSample::name).contains("tesseraql.route");
         assertThat(recording.spans()).extracting(RecordingTracer.RecordedSpan::name)
                 .contains("tesseraql.route");
-        assertThat(recording.spans()).anySatisfy(s ->
-                assertThat(s.attributes()).containsEntry("routeId", "users.search"));
+        assertThat(recording.spans()).anySatisfy(
+                s -> assertThat(s.attributes()).containsEntry("routeId", "users.search"));
     }
 }

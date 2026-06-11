@@ -18,7 +18,8 @@ class AppPackagerTest {
         Path appHome = dir.resolve("app");
         Files.createDirectories(appHome.resolve("config"));
         Files.createDirectories(appHome.resolve("work/tmp"));
-        Files.writeString(appHome.resolve("config/tesseraql.yml"), "tesseraql:\n  app:\n    name: t\n");
+        Files.writeString(appHome.resolve("config/tesseraql.yml"),
+                "tesseraql:\n  app:\n    name: t\n");
         Files.writeString(appHome.resolve("work/tmp/scratch.txt"), "ignore me");
 
         Path out = dir.resolve("app.tqlapp");

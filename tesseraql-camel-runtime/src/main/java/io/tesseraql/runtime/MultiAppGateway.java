@@ -174,7 +174,8 @@ public final class MultiAppGateway implements AutoCloseable {
             }
         });
         byte[] responseBody = response.body();
-        exchange.sendResponseHeaders(response.statusCode(), responseBody.length == 0 ? -1 : responseBody.length);
+        exchange.sendResponseHeaders(response.statusCode(),
+                responseBody.length == 0 ? -1 : responseBody.length);
         try (OutputStream out = exchange.getResponseBody()) {
             out.write(responseBody);
         }
@@ -184,7 +185,8 @@ public final class MultiAppGateway implements AutoCloseable {
     private int targetPort(String appId) {
         int stablePort = host.port(appId);
         if (host.hasCanary(appId)
-                && java.util.concurrent.ThreadLocalRandom.current().nextInt(100) < host.canaryWeight(appId)) {
+                && java.util.concurrent.ThreadLocalRandom.current().nextInt(100) < host
+                        .canaryWeight(appId)) {
             return host.canaryPort(appId);
         }
         return stablePort;

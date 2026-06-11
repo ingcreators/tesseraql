@@ -38,8 +38,7 @@ import org.apache.maven.project.ProjectBuildingRequest;
  * both integrity and origin; the key is read from a file and never appears in the evidence or the
  * logs.
  */
-@Mojo(name = "release-evidence", defaultPhase = LifecyclePhase.VERIFY, threadSafe = true,
-        requiresDependencyResolution = ResolutionScope.RUNTIME)
+@Mojo(name = "release-evidence", defaultPhase = LifecyclePhase.VERIFY, threadSafe = true, requiresDependencyResolution = ResolutionScope.RUNTIME)
 public class ReleaseEvidenceMojo extends AbstractMojo {
 
     @Parameter(property = "tesseraql.appHome", required = true)
@@ -51,8 +50,7 @@ public class ReleaseEvidenceMojo extends AbstractMojo {
     @Parameter(property = "tesseraql.appVersion", defaultValue = "${project.version}")
     private String appVersion;
 
-    @Parameter(property = "tesseraql.evidenceDir",
-            defaultValue = "${project.build.directory}/tesseraql-evidence")
+    @Parameter(property = "tesseraql.evidenceDir", defaultValue = "${project.build.directory}/tesseraql-evidence")
     private File evidenceDir;
 
     /**
@@ -110,7 +108,8 @@ public class ReleaseEvidenceMojo extends AbstractMojo {
         List<SbomGenerator.MavenComponent> components = new ArrayList<>();
         for (Artifact artifact : project.getArtifacts()) {
             String sha256 = artifact.getFile() != null && artifact.getFile().isFile()
-                    ? Hashing.sha256(artifact.getFile().toPath()) : null;
+                    ? Hashing.sha256(artifact.getFile().toPath())
+                    : null;
             components.add(new SbomGenerator.MavenComponent(artifact.getGroupId(),
                     artifact.getArtifactId(), artifact.getVersion(), sha256, licenses(artifact)));
         }
@@ -120,8 +119,8 @@ public class ReleaseEvidenceMojo extends AbstractMojo {
     /** The licenses declared in the dependency's own POM; empty when the model cannot be built. */
     private List<String> licenses(Artifact artifact) {
         try {
-            ProjectBuildingRequest request =
-                    new DefaultProjectBuildingRequest(session.getProjectBuildingRequest());
+            ProjectBuildingRequest request = new DefaultProjectBuildingRequest(
+                    session.getProjectBuildingRequest());
             request.setResolveDependencies(false);
             request.setProcessPlugins(false);
             return projectBuilder.build(artifact, request).getProject().getLicenses().stream()

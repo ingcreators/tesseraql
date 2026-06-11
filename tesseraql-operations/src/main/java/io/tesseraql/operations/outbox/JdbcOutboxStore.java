@@ -64,7 +64,6 @@ public final class JdbcOutboxStore implements OutboxStore {
         return id;
     }
 
-
     /** The connected vendor (for SQL variants and the row-limit clause), detected once. */
     private volatile String vendor;
     private volatile boolean vendorDetected;
@@ -171,19 +170,20 @@ public final class JdbcOutboxStore implements OutboxStore {
 
     @Override
     public void markSent(String eventId) {
-        update("update tql_outbox_event set status = 'SENT', sent_at = ? where event_id = ?", ps -> {
-            ps.setTimestamp(1, Timestamp.from(Instant.now()));
-            ps.setString(2, eventId);
-        });
+        update("update tql_outbox_event set status = 'SENT', sent_at = ? where event_id = ?",
+                ps -> {
+                    ps.setTimestamp(1, Timestamp.from(Instant.now()));
+                    ps.setString(2, eventId);
+                });
     }
 
     @Override
     public void markFailed(String eventId, String error) {
         update("update tql_outbox_event set status = 'FAILED', attempts = attempts + 1, "
                 + "last_error = ? where event_id = ?", ps -> {
-            ps.setString(1, error);
-            ps.setString(2, eventId);
-        });
+                    ps.setString(1, error);
+                    ps.setString(2, eventId);
+                });
     }
 
     private static OutboxEvent read(ResultSet rs) throws SQLException {
@@ -215,6 +215,7 @@ public final class JdbcOutboxStore implements OutboxStore {
     }
 
     private static TqlException error(String message, SQLException ex) {
-        return TqlException.builder(STORE_ERROR).message(message + ": " + ex.getMessage()).cause(ex).build();
+        return TqlException.builder(STORE_ERROR).message(message + ": " + ex.getMessage()).cause(ex)
+                .build();
     }
 }

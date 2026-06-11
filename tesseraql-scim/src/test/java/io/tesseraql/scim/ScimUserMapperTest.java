@@ -87,7 +87,8 @@ class ScimUserMapperTest {
 
     @Test
     void serializesErrorInScimShape() throws Exception {
-        JsonNode json = MAPPER.valueToTree(ScimError.of(409, "userName already exists", "uniqueness"));
+        JsonNode json = MAPPER
+                .valueToTree(ScimError.of(409, "userName already exists", "uniqueness"));
         assertThat(json.get("schemas").get(0).asText()).isEqualTo(ScimError.SCHEMA);
         assertThat(json.get("status").asText()).isEqualTo("409");
         assertThat(json.get("scimType").asText()).isEqualTo("uniqueness");

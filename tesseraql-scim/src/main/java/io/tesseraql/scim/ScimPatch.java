@@ -35,9 +35,11 @@ public final class ScimPatch {
     /** A path-less replace/add carries a partial resource object; apply each member. */
     private static void applyValueObject(Map<String, Object> flat, JsonNode value) {
         if (value == null || !value.isObject()) {
-            throw new ScimException(400, "noTarget", "PATCH without a path requires an object value");
+            throw new ScimException(400, "noTarget",
+                    "PATCH without a path requires an object value");
         }
-        value.fields().forEachRemaining(entry -> setAttribute(flat, entry.getKey(), entry.getValue(), false));
+        value.fields().forEachRemaining(
+                entry -> setAttribute(flat, entry.getKey(), entry.getValue(), false));
     }
 
     private static void setAttribute(Map<String, Object> flat, String path, JsonNode value,
@@ -59,7 +61,8 @@ public final class ScimPatch {
                 }
             }
             case "emails" -> flat.put("email", remove ? null : primaryEmail(value));
-            default -> throw new ScimException(400, "invalidPath", "Unsupported PATCH path: " + path);
+            default ->
+                throw new ScimException(400, "invalidPath", "Unsupported PATCH path: " + path);
         }
     }
 

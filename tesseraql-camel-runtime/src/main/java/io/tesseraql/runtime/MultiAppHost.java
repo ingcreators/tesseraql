@@ -59,7 +59,8 @@ public final class MultiAppHost implements AutoCloseable {
 
                 upgrader.canary(app.id(), installRoot).ifPresent(canary -> {
                     Path candidateHome = installRoot.resolve(canary.candidate().path()).normalize();
-                    started.put(app.id() + CANARY_SLOT, TesseraqlRuntime.start(candidateHome, freePort()));
+                    started.put(app.id() + CANARY_SLOT,
+                            TesseraqlRuntime.start(candidateHome, freePort()));
                     canaryWeights.put(app.id(), canary.weightPercent());
                     LOG.info("Hosting canary {} v{} at {}% traffic",
                             app.id(), canary.candidate().version(), canary.weightPercent());

@@ -26,13 +26,16 @@ class PolicyEngineTest {
 
     @Test
     void permitsWhenAnyRuleMatches() {
-        assertThat(engine().permits("users.read", principal(List.of("USER_READ"), List.of()))).isTrue();
-        assertThat(engine().permits("users.read", principal(List.of(), List.of("users:read")))).isTrue();
+        assertThat(engine().permits("users.read", principal(List.of("USER_READ"), List.of())))
+                .isTrue();
+        assertThat(engine().permits("users.read", principal(List.of(), List.of("users:read"))))
+                .isTrue();
     }
 
     @Test
     void deniesWhenNoRuleMatches() {
-        assertThatThrownBy(() -> engine().authorize("users.read", principal(List.of("OTHER"), List.of())))
+        assertThatThrownBy(
+                () -> engine().authorize("users.read", principal(List.of("OTHER"), List.of())))
                 .isInstanceOf(TqlException.class)
                 .hasMessageContaining("TQL-SEC-4031");
     }
@@ -46,7 +49,8 @@ class PolicyEngineTest {
 
     @Test
     void deniesUndefinedPolicyByDefault() {
-        assertThatThrownBy(() -> engine().authorize("unknown.policy", principal(List.of("ADMIN"), List.of())))
+        assertThatThrownBy(
+                () -> engine().authorize("unknown.policy", principal(List.of("ADMIN"), List.of())))
                 .isInstanceOf(TqlException.class)
                 .hasMessageContaining("TQL-SEC-4031");
     }

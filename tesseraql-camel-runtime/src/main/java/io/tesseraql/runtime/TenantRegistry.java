@@ -26,7 +26,8 @@ final class TenantRegistry {
     private TenantRegistry() {
     }
 
-    static List<String> tenantIds(AppConfig config, DataSource mainDataSource, TenantDataSources pools) {
+    static List<String> tenantIds(AppConfig config, DataSource mainDataSource,
+            TenantDataSources pools) {
         Object staticList = config.navigate("tenancy.tenants");
         if (staticList instanceof List<?> list && !list.isEmpty()) {
             return list.stream().map(String::valueOf).toList();
@@ -50,7 +51,8 @@ final class TenantRegistry {
                 ids.add(rs.getString(1));
             }
         } catch (SQLException ex) {
-            throw new TqlException(REGISTRY_ERROR, "Tenant registry query failed: " + ex.getMessage());
+            throw new TqlException(REGISTRY_ERROR,
+                    "Tenant registry query failed: " + ex.getMessage());
         }
         return ids;
     }

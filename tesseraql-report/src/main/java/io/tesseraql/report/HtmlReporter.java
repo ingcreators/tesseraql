@@ -14,13 +14,15 @@ public final class HtmlReporter {
     public static String toHtml(TestReport report, String title) {
         StringBuilder html = new StringBuilder();
         html.append("<!doctype html>\n<html lang=\"en\">\n<head>\n")
-                .append("<meta charset=\"utf-8\">\n<title>").append(escape(title)).append("</title>\n")
+                .append("<meta charset=\"utf-8\">\n<title>").append(escape(title))
+                .append("</title>\n")
                 .append("</head>\n<body>\n");
         html.append("<h1>").append(escape(title)).append("</h1>\n");
         html.append("<p>Total: ").append(report.results().size())
                 .append(", Passed: ").append(report.passed())
                 .append(", Failed: ").append(report.failed()).append("</p>\n");
-        html.append("<table>\n<thead><tr><th>Test</th><th>Result</th><th>Message</th></tr></thead>\n")
+        html.append(
+                "<table>\n<thead><tr><th>Test</th><th>Result</th><th>Message</th></tr></thead>\n")
                 .append("<tbody>\n");
         for (TestResult result : report.results()) {
             html.append("<tr><td>").append(escape(result.name()))

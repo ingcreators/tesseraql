@@ -75,7 +75,8 @@ class SpringRuntimeIntegrationTest {
         assertThat(runtime.port()).isEqualTo(port);
 
         HttpResponse<String> response = HttpClient.newHttpClient().send(
-                HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/api/items")).build(),
+                HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/api/items"))
+                        .build(),
                 HttpResponse.BodyHandlers.ofString());
         assertThat(response.statusCode()).isEqualTo(200);
         JsonNode data = MAPPER.readTree(response.body()).get("data");
@@ -97,7 +98,8 @@ class SpringRuntimeIntegrationTest {
         try (Connection connection = DriverManager.getConnection(
                 POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword());
                 Statement statement = connection.createStatement()) {
-            statement.execute("create table items (id serial primary key, name varchar(200) not null)");
+            statement.execute(
+                    "create table items (id serial primary key, name varchar(200) not null)");
             statement.execute("insert into items (name) values ('from-spring')");
         }
     }
@@ -117,7 +119,8 @@ class SpringRuntimeIntegrationTest {
                     url: %s
                     username: %s
                     password: %s
-                """.formatted(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword()));
+                """.formatted(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(),
+                POSTGRES.getPassword()));
 
         Path itemsDir = target.resolve("web/api/items");
         Files.createDirectories(itemsDir);

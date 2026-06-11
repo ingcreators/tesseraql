@@ -61,7 +61,9 @@ public sealed interface Expr {
 
     /** Short-circuiting logical {@code &&} / {@code ||}. */
     record Logical(Operator operator, Expr left, Expr right) implements Expr {
-        public enum Operator { AND, OR }
+        public enum Operator {
+            AND, OR
+        }
 
         @Override
         public Object eval(EvaluationContext context) {
@@ -75,7 +77,9 @@ public sealed interface Expr {
 
     /** Equality / relational comparison. */
     record Comparison(Operator operator, Expr left, Expr right) implements Expr {
-        public enum Operator { EQ, NE, LT, GT, LE, GE }
+        public enum Operator {
+            EQ, NE, LT, GT, LE, GE
+        }
 
         @Override
         public Object eval(EvaluationContext context) {

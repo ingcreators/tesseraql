@@ -67,7 +67,7 @@ class PasswordLoginIntegrationTest {
         String cookie = setCookie.substring(0, setCookie.indexOf(';'));
         HttpResponse<String> fragment = HttpClient.newHttpClient().send(
                 HttpRequest.newBuilder(URI.create(
-                                "http://localhost:" + runtime.port() + "/users/fragments/table"))
+                        "http://localhost:" + runtime.port() + "/users/fragments/table"))
                         .header("Cookie", cookie).build(),
                 HttpResponse.BodyHandlers.ofString());
         assertThat(fragment.statusCode()).isEqualTo(200);
@@ -82,7 +82,9 @@ class PasswordLoginIntegrationTest {
         String cookie = setCookie.substring(0, setCookie.indexOf(';'));
 
         HttpResponse<String> page = HttpClient.newHttpClient().send(
-                HttpRequest.newBuilder(URI.create("http://localhost:" + runtime.port() + "/admin/users"))
+                HttpRequest
+                        .newBuilder(
+                                URI.create("http://localhost:" + runtime.port() + "/admin/users"))
                         .header("Cookie", cookie).build(),
                 HttpResponse.BodyHandlers.ofString());
 
@@ -95,7 +97,7 @@ class PasswordLoginIntegrationTest {
     void adminDisableUserViaWriteContract() throws Exception {
         HttpResponse<String> response = HttpClient.newHttpClient().send(
                 HttpRequest.newBuilder(URI.create(
-                                "http://localhost:" + runtime.port() + "/api/admin/users/u2/disable"))
+                        "http://localhost:" + runtime.port() + "/api/admin/users/u2/disable"))
                         .header("Authorization", "Bearer " + writerToken())
                         .header("Content-Type", "application/json")
                         .POST(HttpRequest.BodyPublishers.ofString("{}"))
@@ -119,15 +121,18 @@ class PasswordLoginIntegrationTest {
     private static String writerToken() throws Exception {
         java.util.Base64.Encoder enc = java.util.Base64.getUrlEncoder().withoutPadding();
         com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
-        String header = enc.encodeToString("{\"alg\":\"HS256\"}".getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        String header = enc.encodeToString(
+                "{\"alg\":\"HS256\"}".getBytes(java.nio.charset.StandardCharsets.UTF_8));
         String payload = enc.encodeToString(mapper.writeValueAsBytes(
                 java.util.Map.of("sub", "ops", "roles", java.util.List.of("USER_WRITE"))));
         javax.crypto.Mac mac = javax.crypto.Mac.getInstance("HmacSHA256");
         mac.init(new javax.crypto.spec.SecretKeySpec(
-                "dev-only-secret-change-me-in-production".getBytes(java.nio.charset.StandardCharsets.UTF_8),
+                "dev-only-secret-change-me-in-production"
+                        .getBytes(java.nio.charset.StandardCharsets.UTF_8),
                 "HmacSHA256"));
         String signature = enc.encodeToString(
-                mac.doFinal((header + "." + payload).getBytes(java.nio.charset.StandardCharsets.US_ASCII)));
+                mac.doFinal((header + "." + payload)
+                        .getBytes(java.nio.charset.StandardCharsets.US_ASCII)));
         return header + "." + payload + "." + signature;
     }
 
@@ -191,7 +196,8 @@ class PasswordLoginIntegrationTest {
                     url: %s
                     username: %s
                     password: %s
-                """.formatted(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword()));
+                """.formatted(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(),
+                POSTGRES.getPassword()));
         return target;
     }
 

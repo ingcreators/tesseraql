@@ -36,7 +36,8 @@ class SecretResolutionTest {
 
     @Test
     void resolvesSecretPlaceholdersThroughProviders() {
-        SecretResolvers secrets = SecretResolvers.of(fake("vault", Map.of("db/password", "s3cr3t")));
+        SecretResolvers secrets = SecretResolvers
+                .of(fake("vault", Map.of("db/password", "s3cr3t")));
         AppConfig config = config(Map.of(
                 "db", Map.of("password", "${secret.vault.db/password}")), secrets);
 

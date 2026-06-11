@@ -39,10 +39,12 @@ public final class SamlRuntimeExtension implements RuntimeExtension {
     public void install(ExtensionContext context) throws Exception {
         AppManifest manifest = context.manifest();
         AppConfig config = manifest.config();
-        SessionStore sessions = context.bean(TesseraqlProperties.SESSION_STORE_BEAN, SessionStore.class);
-        IdentityService identity =
-                context.bean(TesseraqlProperties.IDENTITY_SERVICE_BEAN, IdentityService.class);
-        RealmConfig realm = context.bean(TesseraqlProperties.IDENTITY_REALM_BEAN, RealmConfig.class);
+        SessionStore sessions = context.bean(TesseraqlProperties.SESSION_STORE_BEAN,
+                SessionStore.class);
+        IdentityService identity = context.bean(TesseraqlProperties.IDENTITY_SERVICE_BEAN,
+                IdentityService.class);
+        RealmConfig realm = context.bean(TesseraqlProperties.IDENTITY_REALM_BEAN,
+                RealmConfig.class);
 
         String audience = config.requireString("tesseraql.saml.sp.audience");
         String recipient = config.getString("tesseraql.saml.sp.acsUrl").orElse(null);
@@ -64,11 +66,14 @@ public final class SamlRuntimeExtension implements RuntimeExtension {
         // uses locally-managed roles instead of IdP-asserted ones (design ch. 10.14 userLink).
         boolean link = config.getString("tesseraql.saml.link.enabled")
                 .map(Boolean::parseBoolean).orElse(false);
-        SamlUserLinker linker = link ? new SamlUserLinker(identity, realm,
-                config.getString("tesseraql.saml.link.provision")
-                        .map(Boolean::parseBoolean).orElse(false)) : null;
+        SamlUserLinker linker = link
+                ? new SamlUserLinker(identity, realm,
+                        config.getString("tesseraql.saml.link.provision")
+                                .map(Boolean::parseBoolean).orElse(false))
+                : null;
         // Advertise SP metadata only when the ACS URL is known.
-        SpMetadata metadata = recipient == null ? null
+        SpMetadata metadata = recipient == null
+                ? null
                 : new SpMetadata(audience, recipient,
                         config.getString("tesseraql.saml.sp.nameIdFormat").orElse(null));
         SamlEndpoints endpoints = new SamlEndpoints(audience, recipient,

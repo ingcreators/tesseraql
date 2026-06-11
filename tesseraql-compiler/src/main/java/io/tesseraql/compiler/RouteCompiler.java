@@ -69,7 +69,8 @@ public final class RouteCompiler {
      * bodies in place. When {@code onlyRouteIds} is non-null only those route ids are built
      * (design ch. 16.8 live reload).
      */
-    public RouteBuilder compile(AppManifest manifest, boolean mountRest, java.util.Set<String> onlyRouteIds) {
+    public RouteBuilder compile(AppManifest manifest, boolean mountRest,
+            java.util.Set<String> onlyRouteIds) {
         this.config = manifest.config();
         this.tenancy = io.tesseraql.compiler.binding.TenancySettings.from(config);
         this.mountRest = mountRest;
@@ -86,7 +87,8 @@ public final class RouteCompiler {
                 onException(TqlException.class).handled(true).process(new ErrorResponseRenderer());
                 onException(Exception.class).handled(true).process(new ErrorResponseRenderer());
                 for (RouteFile routeFile : manifest.routes()) {
-                    if (onlyRouteIds == null || onlyRouteIds.contains(routeFile.definition().id())) {
+                    if (onlyRouteIds == null
+                            || onlyRouteIds.contains(routeFile.definition().id())) {
                         buildRoute(this, manifest.appHome(), routeFile);
                     }
                 }
@@ -171,10 +173,11 @@ public final class RouteCompiler {
                     + " file-export recipe for asynchronous extraction with follow-up statements");
         }
         String format = spec != null && spec.format() != null ? spec.format() : "csv";
-        io.tesseraql.core.files.FileCodec codec =
-                io.tesseraql.core.files.FileCodecs.discover().require(format);
+        io.tesseraql.core.files.FileCodec codec = io.tesseraql.core.files.FileCodecs.discover()
+                .require(format);
         Path template = spec == null || spec.template() == null
-                ? null : routeDir.resolve(spec.template()).normalize();
+                ? null
+                : routeDir.resolve(spec.template()).normalize();
         io.tesseraql.core.files.FileWriteSpec writeSpec = spec == null
                 ? new io.tesseraql.core.files.FileWriteSpec(java.util.List.of(), null, null, null)
                 : spec.toWriteSpec(template);
@@ -240,9 +243,11 @@ public final class RouteCompiler {
         Path querySql = routeDir.resolve(spec.sql().file()).normalize();
         String afterTiming = spec.after() == null ? null : spec.after().effectiveTiming();
         Path afterSql = spec.after() == null
-                ? null : routeDir.resolve(spec.after().sql().file()).normalize();
+                ? null
+                : routeDir.resolve(spec.after().sql().file()).normalize();
         Path template = spec.template() == null
-                ? null : routeDir.resolve(spec.template()).normalize();
+                ? null
+                : routeDir.resolve(spec.template()).normalize();
 
         String direct = "direct:" + routeId;
         if (mountRest) {
@@ -273,7 +278,8 @@ public final class RouteCompiler {
     /** The route's locale/timezone declaration, falling back to the app-wide configuration. */
     private String formatDeclaration(String declared, String configKey) {
         return declared != null && !declared.isBlank()
-                ? declared : config.getString(configKey).orElse(null);
+                ? declared
+                : config.getString(configKey).orElse(null);
     }
 
     /** GET {path}/{transferId}: the shared status endpoint, secured like its parent route. */
@@ -343,7 +349,8 @@ public final class RouteCompiler {
         }
         // Additional named queries run in authored order, each result keyed under its name.
         for (var entry : definition.queries().entrySet()) {
-            step = step.process(new io.tesseraql.compiler.binding.NamedQueryBinder(entry.getValue()))
+            step = step
+                    .process(new io.tesseraql.compiler.binding.NamedQueryBinder(entry.getValue()))
                     .to(executionUri(routeFile, entry.getValue(), entry.getKey()));
         }
         return step;
@@ -352,7 +359,8 @@ public final class RouteCompiler {
     /** Extracts {@code {name}} path-parameter names from a URL template. */
     private static java.util.List<String> pathParams(String urlPath) {
         java.util.List<String> names = new java.util.ArrayList<>();
-        java.util.regex.Matcher matcher = java.util.regex.Pattern.compile("\\{(\\w+)\\}").matcher(urlPath);
+        java.util.regex.Matcher matcher = java.util.regex.Pattern.compile("\\{(\\w+)\\}")
+                .matcher(urlPath);
         while (matcher.find()) {
             names.add(matcher.group(1));
         }
@@ -382,8 +390,9 @@ public final class RouteCompiler {
     /** Resolves the configured datasource dialect, inferring it from the JDBC URL when unset. */
     private String datasourceDialect() {
         String prefix = "tesseraql.datasources." + DEFAULT_DATASOURCE + ".";
-        return config.getString(prefix + "dialect").orElseGet(() ->
-                io.tesseraql.core.dialect.Dialect.fromJdbcUrl(config.getString(prefix + "jdbcUrl").orElse(""))
+        return config.getString(prefix + "dialect")
+                .orElseGet(() -> io.tesseraql.core.dialect.Dialect
+                        .fromJdbcUrl(config.getString(prefix + "jdbcUrl").orElse(""))
                         .map(io.tesseraql.core.dialect.Dialect::id)
                         .orElse(""));
     }
@@ -440,17 +449,20 @@ public final class RouteCompiler {
             return;
         }
         String scope = idempotency.scope() != null ? idempotency.scope() : definition.id();
-        long ttl = idempotency.ttl() != null ? Durations.toMillis(idempotency.ttl()) : DEFAULT_IDEMPOTENCY_TTL;
+        long ttl = idempotency.ttl() != null
+                ? Durations.toMillis(idempotency.ttl())
+                : DEFAULT_IDEMPOTENCY_TTL;
         route.process(IdempotencyProcessors.begin(scope, ttl, idempotency.isRequired()));
         route.choice()
-                .when((org.apache.camel.Predicate) exchange ->
-                        Boolean.TRUE.equals(exchange.getProperty(IdempotencyProcessors.REPLAY_PROPERTY)))
+                .when((org.apache.camel.Predicate) exchange -> Boolean.TRUE
+                        .equals(exchange.getProperty(IdempotencyProcessors.REPLAY_PROPERTY)))
                 .stop()
                 .end();
     }
 
     /** Appends the idempotency complete step after the response is rendered. */
-    private void applyIdempotencyComplete(ProcessorDefinition<?> route, RouteDefinition definition) {
+    private void applyIdempotencyComplete(ProcessorDefinition<?> route,
+            RouteDefinition definition) {
         IdempotencySpec idempotency = definition.idempotency();
         if (idempotency != null) {
             String scope = idempotency.scope() != null ? idempotency.scope() : definition.id();
@@ -498,7 +510,8 @@ public final class RouteCompiler {
             case "PUT" -> builder.rest().put(path);
             case "PATCH" -> builder.rest().patch(path);
             case "DELETE" -> builder.rest().delete(path);
-            default -> throw new TqlException(UNSUPPORTED_RECIPE, "Unsupported HTTP method: " + method);
+            default ->
+                throw new TqlException(UNSUPPORTED_RECIPE, "Unsupported HTTP method: " + method);
         };
     }
 }

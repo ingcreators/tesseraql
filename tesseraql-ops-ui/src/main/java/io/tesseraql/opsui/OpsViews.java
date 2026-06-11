@@ -63,7 +63,8 @@ public final class OpsViews {
             row.put("filename", dash(transfer.filename()));
             row.put("downloaded", transfer.downloaded() ? "yes" : "-");
             row.put("createdAt", transfer.createdAt() == null
-                    ? "-" : transfer.createdAt().toString());
+                    ? "-"
+                    : transfer.createdAt().toString());
             rows.add(row);
         }
         Map<String, Object> model = new LinkedHashMap<>();
@@ -99,9 +100,11 @@ public final class OpsViews {
         model.put("status", name(execution.status()));
         model.put("statusClass", cssClass(name(execution.status())));
         model.put("trigger", dash(execution.triggerType()));
-        model.put("startTime", execution.startTime() == null ? "-" : execution.startTime().toString());
+        model.put("startTime",
+                execution.startTime() == null ? "-" : execution.startTime().toString());
         model.put("endTime", execution.endTime() == null ? "-" : execution.endTime().toString());
-        model.put("durationMs", execution.durationMs() == null ? "-"
+        model.put("durationMs", execution.durationMs() == null
+                ? "-"
                 : String.valueOf(execution.durationMs()));
         model.put("exitMessage", dash(execution.exitMessage()));
         List<Map<String, Object>> steps = new ArrayList<>();
@@ -111,9 +114,11 @@ public final class OpsViews {
             row.put("status", name(step.status()));
             row.put("statusClass", cssClass(name(step.status())));
             row.put("failed", step.status() != null && "FAILED".equals(step.status().name()));
-            row.put("affectedRows", step.affectedRows() == null ? "-"
+            row.put("affectedRows", step.affectedRows() == null
+                    ? "-"
                     : String.valueOf(step.affectedRows()));
-            row.put("durationMs", step.durationMs() == null ? "-" : String.valueOf(step.durationMs()));
+            row.put("durationMs",
+                    step.durationMs() == null ? "-" : String.valueOf(step.durationMs()));
             row.put("errorMessage", dash(step.errorMessage()));
             steps.add(row);
         }
@@ -166,7 +171,8 @@ public final class OpsViews {
             row.put("statusClass", cssClass(view.status()));
             row.put("trigger", dash(view.trigger()));
             row.put("startTime", dash(view.startTime()));
-            row.put("durationMs", view.durationMs() == null ? "-" : String.valueOf(view.durationMs()));
+            row.put("durationMs",
+                    view.durationMs() == null ? "-" : String.valueOf(view.durationMs()));
             rows.add(row);
         }
         return rows;

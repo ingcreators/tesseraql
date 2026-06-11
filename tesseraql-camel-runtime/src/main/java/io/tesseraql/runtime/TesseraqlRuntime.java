@@ -41,10 +41,10 @@ import org.slf4j.LoggerFactory;
 public final class TesseraqlRuntime implements AutoCloseable {
 
     private static final Logger LOG = LoggerFactory.getLogger(TesseraqlRuntime.class);
-    private static final io.tesseraql.core.outbox.OutboxEventSink LOGGING_SINK =
-            event -> LOG.info("Outbox delivered {} {}", event.eventType(), event.id());
-    private static final io.tesseraql.core.error.TqlErrorCode DUPLICATE_JOB =
-            new io.tesseraql.core.error.TqlErrorCode(io.tesseraql.core.error.TqlDomain.APP, 4202);
+    private static final io.tesseraql.core.outbox.OutboxEventSink LOGGING_SINK = event -> LOG
+            .info("Outbox delivered {} {}", event.eventType(), event.id());
+    private static final io.tesseraql.core.error.TqlErrorCode DUPLICATE_JOB = new io.tesseraql.core.error.TqlErrorCode(
+            io.tesseraql.core.error.TqlDomain.APP, 4202);
 
     private final CamelContext camelContext;
     private final Map<String, HikariDataSource> dataSources;
@@ -116,7 +116,8 @@ public final class TesseraqlRuntime implements AutoCloseable {
     }
 
     /** Starts the runtime with an explicit tracer (used to wire observability). */
-    public static TesseraqlRuntime start(Path appHome, int port, io.tesseraql.core.telemetry.Tracer tracer) {
+    public static TesseraqlRuntime start(Path appHome, int port,
+            io.tesseraql.core.telemetry.Tracer tracer) {
         return start(appHome, new ManifestLoader().load(appHome), port, tracer,
                 io.tesseraql.core.telemetry.NoopMeter.INSTANCE);
     }
@@ -141,12 +142,14 @@ public final class TesseraqlRuntime implements AutoCloseable {
         io.tesseraql.core.telemetry.Tracer effectiveTracer = tracer;
         io.tesseraql.core.telemetry.Meter effectiveMeter = meter;
         AutoCloseable otelSdk = null;
-        String otlpEndpoint = manifest.config().getString("tesseraql.otel.otlp.endpoint").orElse(null);
+        String otlpEndpoint = manifest.config().getString("tesseraql.otel.otlp.endpoint")
+                .orElse(null);
         if (otlpEndpoint != null && !otlpEndpoint.isBlank()) {
             String serviceName = manifest.config().getString("tesseraql.otel.serviceName")
-                    .or(() -> manifest.config().getString("tesseraql.app.name")).orElse("tesseraql");
-            io.opentelemetry.sdk.OpenTelemetrySdk sdk =
-                    io.tesseraql.observability.OpenTelemetrySupport.otlp(otlpEndpoint, serviceName);
+                    .or(() -> manifest.config().getString("tesseraql.app.name"))
+                    .orElse("tesseraql");
+            io.opentelemetry.sdk.OpenTelemetrySdk sdk = io.tesseraql.observability.OpenTelemetrySupport
+                    .otlp(otlpEndpoint, serviceName);
             otelSdk = sdk;
             effectiveTracer = new io.tesseraql.core.telemetry.CompositeTracer(
                     tracer, new io.tesseraql.observability.OpenTelemetryTracer(sdk));
@@ -166,16 +169,17 @@ public final class TesseraqlRuntime implements AutoCloseable {
                 .map(Integer::parseInt).orElse(100);
         long slowSqlMillis = manifest.config().getString("tesseraql.diagnostics.slowSqlMillis")
                 .map(Long::parseLong).orElse(200L);
-        io.tesseraql.core.diag.RingSqlExecutionLog slowSqlLog =
-                new io.tesseraql.core.diag.RingSqlExecutionLog(slowSqlCapacity, slowSqlMillis);
+        io.tesseraql.core.diag.RingSqlExecutionLog slowSqlLog = new io.tesseraql.core.diag.RingSqlExecutionLog(
+                slowSqlCapacity, slowSqlMillis);
         context.getRegistry().bind(TesseraqlProperties.SLOW_SQL_LOG_BEAN, slowSqlLog);
 
-        io.tesseraql.core.diag.PinningMonitor pinningMonitor =
-                new io.tesseraql.core.diag.PinningMonitor(100);
+        io.tesseraql.core.diag.PinningMonitor pinningMonitor = new io.tesseraql.core.diag.PinningMonitor(
+                100);
         io.tesseraql.core.diag.JfrPinningSource pinningSource = null;
         if (manifest.config().getString("tesseraql.diagnostics.pinning.enabled")
                 .map(Boolean::parseBoolean).orElse(false)) {
-            long pinMs = manifest.config().getString("tesseraql.diagnostics.pinning.thresholdMillis")
+            long pinMs = manifest.config()
+                    .getString("tesseraql.diagnostics.pinning.thresholdMillis")
                     .map(Long::parseLong).orElse(20L);
             pinningSource = new io.tesseraql.core.diag.JfrPinningSource(
                     pinningMonitor, java.time.Duration.ofMillis(pinMs));
@@ -188,29 +192,31 @@ public final class TesseraqlRuntime implements AutoCloseable {
         }
 
         SecurityConfig security = SecurityConfigFactory.build(manifest.config());
-        context.getRegistry().bind(TesseraqlProperties.POLICY_ENGINE_BEAN, new PolicyEngine(security));
+        context.getRegistry().bind(TesseraqlProperties.POLICY_ENGINE_BEAN,
+                new PolicyEngine(security));
         if (security.jwt() != null) {
             context.getRegistry().bind(
-                    TesseraqlProperties.JWT_AUTHENTICATOR_BEAN, new JwtAuthenticator(security.jwt()));
+                    TesseraqlProperties.JWT_AUTHENTICATOR_BEAN,
+                    new JwtAuthenticator(security.jwt()));
         }
         // Browser sessions: in-memory per node by default; "jdbc" shares tql_session across all
         // runtime nodes so a login made on one node resolves on every other (design ch. 11.2).
         SessionStore sessionStore;
         if ("jdbc".equalsIgnoreCase(
                 manifest.config().getString("tesseraql.sessions.store").orElse("memory"))) {
-            io.tesseraql.security.session.JdbcSessionStore jdbcSessions =
-                    new io.tesseraql.security.session.JdbcSessionStore(dataSource,
-                            java.time.Duration.ofMillis(io.tesseraql.core.util.Durations.toMillis(
-                                    manifest.config().getString("tesseraql.sessions.ttl")
-                                            .orElse("12h"))));
+            io.tesseraql.security.session.JdbcSessionStore jdbcSessions = new io.tesseraql.security.session.JdbcSessionStore(
+                    dataSource,
+                    java.time.Duration.ofMillis(io.tesseraql.core.util.Durations.toMillis(
+                            manifest.config().getString("tesseraql.sessions.ttl")
+                                    .orElse("12h"))));
             jdbcSessions.ensureSchema();
             sessionStore = jdbcSessions;
         } else {
             sessionStore = new io.tesseraql.security.session.InMemorySessionStore();
         }
         context.getRegistry().bind(TesseraqlProperties.SESSION_STORE_BEAN, sessionStore);
-        io.tesseraql.core.spool.FileTempStore tempStore =
-                new io.tesseraql.core.spool.FileTempStore(appHome.resolve("work/tmp/tesseraql"));
+        io.tesseraql.core.spool.FileTempStore tempStore = new io.tesseraql.core.spool.FileTempStore(
+                appHome.resolve("work/tmp/tesseraql"));
         context.getRegistry().bind(TesseraqlProperties.TEMP_STORE_BEAN, tempStore);
 
         VertxPlatformHttpServerConfiguration httpConfig = new VertxPlatformHttpServerConfiguration();
@@ -231,9 +237,9 @@ public final class TesseraqlRuntime implements AutoCloseable {
         context.getRegistry().bind(TesseraqlProperties.OUTBOX_STORE_BEAN, outboxStore);
         // Asynchronous file imports/exports (design ch. 28); codecs arrive via ServiceLoader, so
         // adding the optional tesseraql-excel module to the classpath is the whole install.
-        io.tesseraql.operations.files.JdbcFileTransferService fileTransfers =
-                new io.tesseraql.operations.files.JdbcFileTransferService(jobRepository,
-                        tempStore, dataSource, io.tesseraql.core.files.FileCodecs.discover());
+        io.tesseraql.operations.files.JdbcFileTransferService fileTransfers = new io.tesseraql.operations.files.JdbcFileTransferService(
+                jobRepository,
+                tempStore, dataSource, io.tesseraql.core.files.FileCodecs.discover());
         fileTransfers.ensureSchema();
         context.getRegistry().bind(TesseraqlProperties.FILE_TRANSFER_BEAN, fileTransfers);
         JobExecutor jobExecutor = new JobExecutor(jobRepository, tempStore, slowSqlLog, tracer);
@@ -256,11 +262,13 @@ public final class TesseraqlRuntime implements AutoCloseable {
             }
             String owner = jobOwners.getOrDefault(jobId, appName);
             if (jobFile.definition().perTenant()) {
-                List<String> tenants = TenantRegistry.tenantIds(runtimeConfig, dataSource, tenantPools);
+                List<String> tenants = TenantRegistry.tenantIds(runtimeConfig, dataSource,
+                        tenantPools);
                 if (!tenants.isEmpty()) {
                     JobExecution last = null;
                     for (String tenantId : tenants) {
-                        last = jobExecutor.run(jobFile, tenantPools.dataSourceFor(tenantId, dataSource),
+                        last = jobExecutor.run(jobFile,
+                                tenantPools.dataSourceFor(tenantId, dataSource),
                                 io.tesseraql.core.tenant.TenantContext.of(tenantId),
                                 owner, params, "manual");
                     }
@@ -275,15 +283,18 @@ public final class TesseraqlRuntime implements AutoCloseable {
         try {
             opsDashboard = new io.tesseraql.opsui.OpsDashboard(jobRepository, lanes, slowSqlLog,
                     tracer instanceof io.tesseraql.core.telemetry.TraceLog traceLog
-                            ? traceLog : io.tesseraql.core.telemetry.TraceLog.empty(),
+                            ? traceLog
+                            : io.tesseraql.core.telemetry.TraceLog.empty(),
                     manifest.config().getString("tesseraql.diagnostics.slowSpanMillis")
                             .map(Long::parseLong).orElse(200L),
                     new io.tesseraql.opsui.OpsDashboard.AlertThresholds(
-                            manifest.config().getString("tesseraql.diagnostics.errorRateWarnPercent")
+                            manifest.config()
+                                    .getString("tesseraql.diagnostics.errorRateWarnPercent")
                                     .map(Double::parseDouble).orElse(5.0),
                             manifest.config().getString("tesseraql.diagnostics.slowRateWarnPercent")
                                     .map(Double::parseDouble).orElse(20.0),
-                            manifest.config().getString("tesseraql.diagnostics.batchFailureWarnPercent")
+                            manifest.config()
+                                    .getString("tesseraql.diagnostics.batchFailureWarnPercent")
                                     .map(Double::parseDouble).orElse(10.0)),
                     pinningMonitor);
             // The app's db/migration runs before anything queries its schema: fresh installs,
@@ -334,49 +345,51 @@ public final class TesseraqlRuntime implements AutoCloseable {
             // Service providers expose non-SQL runtime state to mounted yaml/template apps
             // (the bundled ops-console and studio apps render these, design ch. 26.11, 16, 47).
             io.tesseraql.opsui.OpsDashboard dashboardRef = opsDashboard;
-            io.tesseraql.core.service.ServiceProviders serviceProviders =
-                    new io.tesseraql.core.service.ServiceProviders()
-                            // Batch visibility narrows to the caller's ops.app.<name> grants,
-                            // bound by the console routes as principal.permissions (ch. 26.11).
-                            .register("ops.overview", params ->
-                                    io.tesseraql.opsui.OpsViews.overview(dashboardRef.overview(20,
-                                            io.tesseraql.opsui.OpsScope.allowedApps(
-                                                    params.get("permissions")))))
-                            .register("ops.traces", params ->
-                                    io.tesseraql.opsui.OpsViews.traces(dashboardRef.traceTree(
-                                            io.tesseraql.opsui.OpsScope.allowedApps(
-                                                    params.get("permissions")))))
-                            .register("ops.transfers", params -> {
-                                java.util.function.Predicate<String> scope =
-                                        io.tesseraql.opsui.OpsScope.allowedApps(
-                                                params.get("permissions"));
-                                return io.tesseraql.opsui.OpsViews.transfers(
-                                        fileTransfers.recent(50).stream()
-                                                .filter(transfer -> scope.test(transfer.appName()))
-                                                .toList());
-                            })
-                            .register("ops.execution", params -> {
-                                String id = params.get("id") == null
-                                        ? "" : String.valueOf(params.get("id"));
-                                java.util.function.Predicate<String> scope =
-                                        io.tesseraql.opsui.OpsScope.allowedApps(
-                                                params.get("permissions"));
-                                // An execution outside the caller's scope renders as not found.
-                                JobExecution execution = jobRepository.findExecution(id)
-                                        .filter(found -> scope.test(found.appName()))
-                                        .orElse(null);
-                                return io.tesseraql.opsui.OpsViews.execution(id, execution,
-                                        execution == null ? List.of() : jobRepository.findSteps(id));
-                            });
-            context.getRegistry().bind(TesseraqlProperties.SERVICE_PROVIDERS_BEAN, serviceProviders);
+            io.tesseraql.core.service.ServiceProviders serviceProviders = new io.tesseraql.core.service.ServiceProviders()
+                    // Batch visibility narrows to the caller's ops.app.<name> grants,
+                    // bound by the console routes as principal.permissions (ch. 26.11).
+                    .register("ops.overview",
+                            params -> io.tesseraql.opsui.OpsViews.overview(dashboardRef.overview(20,
+                                    io.tesseraql.opsui.OpsScope.allowedApps(
+                                            params.get("permissions")))))
+                    .register("ops.traces",
+                            params -> io.tesseraql.opsui.OpsViews.traces(dashboardRef.traceTree(
+                                    io.tesseraql.opsui.OpsScope.allowedApps(
+                                            params.get("permissions")))))
+                    .register("ops.transfers", params -> {
+                        java.util.function.Predicate<String> scope = io.tesseraql.opsui.OpsScope
+                                .allowedApps(
+                                        params.get("permissions"));
+                        return io.tesseraql.opsui.OpsViews.transfers(
+                                fileTransfers.recent(50).stream()
+                                        .filter(transfer -> scope.test(transfer.appName()))
+                                        .toList());
+                    })
+                    .register("ops.execution", params -> {
+                        String id = params.get("id") == null
+                                ? ""
+                                : String.valueOf(params.get("id"));
+                        java.util.function.Predicate<String> scope = io.tesseraql.opsui.OpsScope
+                                .allowedApps(
+                                        params.get("permissions"));
+                        // An execution outside the caller's scope renders as not found.
+                        JobExecution execution = jobRepository.findExecution(id)
+                                .filter(found -> scope.test(found.appName()))
+                                .orElse(null);
+                        return io.tesseraql.opsui.OpsViews.execution(id, execution,
+                                execution == null ? List.of() : jobRepository.findSteps(id));
+                    });
+            context.getRegistry().bind(TesseraqlProperties.SERVICE_PROVIDERS_BEAN,
+                    serviceProviders);
             Map<String, String> claimKeys = new LinkedHashMap<>();
-            jobs.keySet().forEach(id ->
-                    claimKeys.put(id, jobOwners.getOrDefault(id, appName) + ":" + id));
+            jobs.keySet().forEach(
+                    id -> claimKeys.put(id, jobOwners.getOrDefault(id, appName) + ":" + id));
             context.addRoutes(new SchedulingRouteBuilder(
                     jobRunner, jobRepository, List.copyOf(jobs.values()), claimKeys));
 
-            IdentityService identity = new IdentityService(name ->
-                    context.getRegistry().lookupByNameAndType(name, javax.sql.DataSource.class),
+            IdentityService identity = new IdentityService(
+                    name -> context.getRegistry().lookupByNameAndType(name,
+                            javax.sql.DataSource.class),
                     datasourceDialect(manifest.config()));
             RealmConfig realm = IdentityConfigFactory.defaultRealm(manifest.config(), appHome);
             context.getRegistry().bind(TesseraqlProperties.IDENTITY_SERVICE_BEAN, identity);
@@ -385,8 +398,8 @@ public final class TesseraqlRuntime implements AutoCloseable {
                     new PasswordAuthenticator(identity), realm, sessionStore));
             // Optional feature modules (SCIM, SAML, ...) self-install via ServiceLoader, from the
             // classpath or from signature-verified plugin jars in isolated loaders (ch. 47).
-            for (io.tesseraql.compiler.ext.RuntimeExtension extension
-                    : RuntimeExtensions.discover(manifest.config(), appHome)) {
+            for (io.tesseraql.compiler.ext.RuntimeExtension extension : RuntimeExtensions
+                    .discover(manifest.config(), appHome)) {
                 if (extension.enabled(manifest.config())) {
                     extension.install(new io.tesseraql.compiler.ext.ExtensionContext(
                             context, manifest, dataSource));
@@ -395,8 +408,8 @@ public final class TesseraqlRuntime implements AutoCloseable {
             }
             // The outbox always logs deliveries; an extension-contributed sink (e.g. SCIM outbound
             // provisioning) is composed on top when bound.
-            io.tesseraql.core.outbox.OutboxEventSink extensionSink =
-                    context.getRegistry().lookupByNameAndType(
+            io.tesseraql.core.outbox.OutboxEventSink extensionSink = context.getRegistry()
+                    .lookupByNameAndType(
                             TesseraqlProperties.OUTBOX_EVENT_SINK_BEAN,
                             io.tesseraql.core.outbox.OutboxEventSink.class);
             outboxSink = extensionSink == null ? LOGGING_SINK : event -> {
@@ -407,14 +420,15 @@ public final class TesseraqlRuntime implements AutoCloseable {
                     .map(Boolean::parseBoolean).orElse(true)) {
                 boolean readOnly = manifest.config().getString("tesseraql.studio.readOnly")
                         .map(Boolean::parseBoolean).orElse(true);
-                io.tesseraql.studio.StudioService studio =
-                        new io.tesseraql.studio.StudioService(manifest, readOnly);
+                io.tesseraql.studio.StudioService studio = new io.tesseraql.studio.StudioService(
+                        manifest, readOnly);
                 RouteReloader reloader = new RouteReloader(context, appHome, manifest, studio);
                 context.addRoutes(new StudioRouteBuilder(studio, reloader));
                 // Providers backing the bundled studio app (design ch. 16, 47).
                 serviceProviders
-                        .register("studio.explorer", params ->
-                                io.tesseraql.studio.StudioViews.explorer(studio.explorer()))
+                        .register("studio.explorer",
+                                params -> io.tesseraql.studio.StudioViews
+                                        .explorer(studio.explorer()))
                         .register("studio.source", params -> {
                             String path = String.valueOf(params.get("path"));
                             String draft = studio.readDraft(path);
@@ -442,9 +456,11 @@ public final class TesseraqlRuntime implements AutoCloseable {
                         new io.tesseraql.operations.retention.RetentionSweeper(dataSource),
                         io.tesseraql.core.util.Durations.toMillis(retentionSweep.get()),
                         io.tesseraql.core.util.Durations.parse(
-                                manifest.config().getString("tesseraql.retention.outbox").orElse("30d")),
+                                manifest.config().getString("tesseraql.retention.outbox")
+                                        .orElse("30d")),
                         io.tesseraql.core.util.Durations.parse(
-                                manifest.config().getString("tesseraql.retention.jobs").orElse("90d"))));
+                                manifest.config().getString("tesseraql.retention.jobs")
+                                        .orElse("90d"))));
             }
             var outboxDelay = manifest.config().getString("tesseraql.outbox.dispatch.fixedDelay");
             if (outboxDelay.isPresent()) {
@@ -467,8 +483,9 @@ public final class TesseraqlRuntime implements AutoCloseable {
     /** The configured dialect for the main datasource, or inferred from its JDBC URL (design ch. 42). */
     private static String datasourceDialect(AppConfig config) {
         String prefix = "tesseraql.datasources.main.";
-        return config.getString(prefix + "dialect").orElseGet(() ->
-                io.tesseraql.core.dialect.Dialect.fromJdbcUrl(config.getString(prefix + "jdbcUrl")
+        return config.getString(prefix + "dialect")
+                .orElseGet(() -> io.tesseraql.core.dialect.Dialect
+                        .fromJdbcUrl(config.getString(prefix + "jdbcUrl")
                                 .orElse(""))
                         .map(io.tesseraql.core.dialect.Dialect::id)
                         .orElse(null));
@@ -494,7 +511,8 @@ public final class TesseraqlRuntime implements AutoCloseable {
             throw new IllegalArgumentException("Unknown job: " + jobId);
         }
         List<JobExecution> executions = new java.util.ArrayList<>();
-        for (String tenantId : TenantRegistry.tenantIds(config, mainDataSource, tenantDataSources)) {
+        for (String tenantId : TenantRegistry.tenantIds(config, mainDataSource,
+                tenantDataSources)) {
             executions.add(jobExecutor.run(jobFile,
                     tenantDataSources.dataSourceFor(tenantId, mainDataSource),
                     io.tesseraql.core.tenant.TenantContext.of(tenantId),
@@ -535,8 +553,8 @@ public final class TesseraqlRuntime implements AutoCloseable {
     public void close() {
         closeQuietly(pinningSource);
         closeQuietly(otelSdk);
-        io.tesseraql.operations.files.JdbcFileTransferService fileTransfers =
-                camelContext.getRegistry().lookupByNameAndType(
+        io.tesseraql.operations.files.JdbcFileTransferService fileTransfers = camelContext
+                .getRegistry().lookupByNameAndType(
                         TesseraqlProperties.FILE_TRANSFER_BEAN,
                         io.tesseraql.operations.files.JdbcFileTransferService.class);
         if (fileTransfers != null) {

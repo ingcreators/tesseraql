@@ -31,8 +31,8 @@ public final class ManifestLoader {
 
     private static final TqlErrorCode TRAVERSAL = new TqlErrorCode(TqlDomain.YAML, 1201);
     private static final TqlErrorCode LOAD_ERROR = new TqlErrorCode(TqlDomain.YAML, 1202);
-    private static final Set<String> HTTP_METHODS =
-            Set.of("get", "post", "put", "patch", "delete", "head", "options");
+    private static final Set<String> HTTP_METHODS = Set.of("get", "post", "put", "patch", "delete",
+            "head", "options");
 
     private final SimpleYamlParser parser = new SimpleYamlParser();
 
@@ -162,8 +162,10 @@ public final class ManifestLoader {
             throw new UncheckedIOException(ex);
         }
         StringBuilder aggregate = new StringBuilder();
-        checksums.forEach((key, value) -> aggregate.append(key).append(':').append(value).append('\n'));
-        return ManifestIndex.of(checksums, sha256(aggregate.toString().getBytes(StandardCharsets.UTF_8)));
+        checksums.forEach(
+                (key, value) -> aggregate.append(key).append(':').append(value).append('\n'));
+        return ManifestIndex.of(checksums,
+                sha256(aggregate.toString().getBytes(StandardCharsets.UTF_8)));
     }
 
     private static String relativeKey(Path home, Path file) {

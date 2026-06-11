@@ -86,7 +86,8 @@ public final class OutboxCommandProcessor implements Processor {
                 exchange.getMessage().setBody(result);
             } catch (RuntimeException | SQLException ex) {
                 connection.rollback();
-                throw new TqlException(TX_ERROR, "Command+outbox transaction failed: " + ex.getMessage());
+                throw new TqlException(TX_ERROR,
+                        "Command+outbox transaction failed: " + ex.getMessage());
             } finally {
                 connection.setAutoCommit(previousAutoCommit);
             }

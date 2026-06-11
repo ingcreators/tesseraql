@@ -27,26 +27,28 @@ public record TenancySettings(
 
     /** How the tenant id is located on an inbound request. */
     public enum ResolverType {
-        HEADER,
-        CLAIM
+        HEADER, CLAIM
     }
 
-    private static final TenancySettings DISABLED =
-            new TenancySettings(false, "single", ResolverType.HEADER, "X-Tenant-Id", false);
+    private static final TenancySettings DISABLED = new TenancySettings(false, "single",
+            ResolverType.HEADER, "X-Tenant-Id", false);
 
     /** Reads tenancy settings from config, returning a disabled instance when not configured. */
     public static TenancySettings from(AppConfig config) {
-        boolean enabled = config.getString("tenancy.enabled").map(Boolean::parseBoolean).orElse(false);
+        boolean enabled = config.getString("tenancy.enabled").map(Boolean::parseBoolean)
+                .orElse(false);
         if (!enabled) {
             return DISABLED;
         }
         String mode = config.getString("tenancy.mode").orElse("shared-schema");
         ResolverType resolver = "claim".equalsIgnoreCase(
                 config.getString("tenancy.resolver.type").orElse("header"))
-                ? ResolverType.CLAIM : ResolverType.HEADER;
+                        ? ResolverType.CLAIM
+                        : ResolverType.HEADER;
         String source = config.getString("tenancy.resolver.source")
                 .orElse(resolver == ResolverType.HEADER ? "X-Tenant-Id" : "tenantId");
-        boolean required = config.getString("tenancy.required").map(Boolean::parseBoolean).orElse(true);
+        boolean required = config.getString("tenancy.required").map(Boolean::parseBoolean)
+                .orElse(true);
         return new TenancySettings(true, mode, resolver, source, required);
     }
 }

@@ -70,7 +70,7 @@ class SlowSqlIntegrationTest {
 
         HttpResponse<String> slow = HttpClient.newHttpClient().send(
                 HttpRequest.newBuilder(URI.create(
-                                "http://localhost:" + runtime.port() + "/_tesseraql/ops/slow-sql"))
+                        "http://localhost:" + runtime.port() + "/_tesseraql/ops/slow-sql"))
                         .header("Authorization", "Bearer " + token())
                         .build(),
                 HttpResponse.BodyHandlers.ofString());
@@ -94,7 +94,7 @@ class SlowSqlIntegrationTest {
 
         HttpResponse<String> traces = HttpClient.newHttpClient().send(
                 HttpRequest.newBuilder(URI.create(
-                                "http://localhost:" + runtime.port() + "/_tesseraql/ops/traces"))
+                        "http://localhost:" + runtime.port() + "/_tesseraql/ops/traces"))
                         .header("Authorization", "Bearer " + token())
                         .build(),
                 HttpResponse.BodyHandlers.ofString());
@@ -102,17 +102,19 @@ class SlowSqlIntegrationTest {
 
         JsonNode spans = MAPPER.readTree(traces.body());
         assertThat(spans.isArray()).isTrue();
-        assertThat(spans).anySatisfy(span ->
-                assertThat(span.get("name").asText()).isEqualTo("tesseraql.sql.execute"));
-        assertThat(spans).anySatisfy(span ->
-                assertThat(span.get("name").asText()).isEqualTo("tesseraql.route"));
+        assertThat(spans).anySatisfy(
+                span -> assertThat(span.get("name").asText()).isEqualTo("tesseraql.sql.execute"));
+        assertThat(spans).anySatisfy(
+                span -> assertThat(span.get("name").asText()).isEqualTo("tesseraql.route"));
     }
 
     @Test
     void securedRouteRecordsSecuritySpans() throws Exception {
         // Hit the bearer-protected /api/users so authenticate/authorize spans are recorded.
         HttpResponse<String> secure = HttpClient.newHttpClient().send(
-                HttpRequest.newBuilder(URI.create("http://localhost:" + runtime.port() + "/api/secure"))
+                HttpRequest
+                        .newBuilder(
+                                URI.create("http://localhost:" + runtime.port() + "/api/secure"))
                         .header("Authorization", "Bearer " + token(List.of("USER_READ")))
                         .build(),
                 HttpResponse.BodyHandlers.ofString());
@@ -120,7 +122,7 @@ class SlowSqlIntegrationTest {
 
         HttpResponse<String> tree = HttpClient.newHttpClient().send(
                 HttpRequest.newBuilder(URI.create(
-                                "http://localhost:" + runtime.port() + "/_tesseraql/ops/traces/tree"))
+                        "http://localhost:" + runtime.port() + "/_tesseraql/ops/traces/tree"))
                         .header("Authorization", "Bearer " + token()).build(),
                 HttpResponse.BodyHandlers.ofString());
         assertThat(tree.statusCode()).isEqualTo(200);
@@ -129,10 +131,12 @@ class SlowSqlIntegrationTest {
         assertThat(roots).anySatisfy(root -> {
             assertThat(root.get("span").get("attributes").path("routeId").asText())
                     .isEqualTo("secure.ping");
-            assertThat(root.get("children")).anySatisfy(child ->
-                    assertThat(child.get("span").get("name").asText()).isEqualTo("tesseraql.security.authenticate"));
-            assertThat(root.get("children")).anySatisfy(child ->
-                    assertThat(child.get("span").get("name").asText()).isEqualTo("tesseraql.security.authorize"));
+            assertThat(root.get("children"))
+                    .anySatisfy(child -> assertThat(child.get("span").get("name").asText())
+                            .isEqualTo("tesseraql.security.authenticate"));
+            assertThat(root.get("children"))
+                    .anySatisfy(child -> assertThat(child.get("span").get("name").asText())
+                            .isEqualTo("tesseraql.security.authorize"));
         });
     }
 
@@ -145,7 +149,7 @@ class SlowSqlIntegrationTest {
 
         HttpResponse<String> tree = HttpClient.newHttpClient().send(
                 HttpRequest.newBuilder(URI.create(
-                                "http://localhost:" + runtime.port() + "/_tesseraql/ops/traces/tree"))
+                        "http://localhost:" + runtime.port() + "/_tesseraql/ops/traces/tree"))
                         .header("Authorization", "Bearer " + token())
                         .build(),
                 HttpResponse.BodyHandlers.ofString());
@@ -160,15 +164,17 @@ class SlowSqlIntegrationTest {
             assertThat(root.get("selfMs").isNumber()).isTrue();
             assertThat(root.get("slow").asBoolean()).isTrue();
             // The route span now has intermediate children for binding and SQL execution.
-            assertThat(root.get("children")).anySatisfy(child ->
-                    assertThat(child.get("span").get("name").asText()).isEqualTo("tesseraql.request.bind"));
-            assertThat(root.get("children")).anySatisfy(child ->
-                    assertThat(child.get("span").get("name").asText()).isEqualTo("tesseraql.sql.execute"));
+            assertThat(root.get("children"))
+                    .anySatisfy(child -> assertThat(child.get("span").get("name").asText())
+                            .isEqualTo("tesseraql.request.bind"));
+            assertThat(root.get("children"))
+                    .anySatisfy(child -> assertThat(child.get("span").get("name").asText())
+                            .isEqualTo("tesseraql.sql.execute"));
         });
 
         HttpResponse<String> summary = HttpClient.newHttpClient().send(
                 HttpRequest.newBuilder(URI.create(
-                                "http://localhost:" + runtime.port() + "/_tesseraql/ops/traces/summary"))
+                        "http://localhost:" + runtime.port() + "/_tesseraql/ops/traces/summary"))
                         .header("Authorization", "Bearer " + token()).build(),
                 HttpResponse.BodyHandlers.ofString());
         assertThat(summary.statusCode()).isEqualTo(200);
@@ -183,7 +189,7 @@ class SlowSqlIntegrationTest {
         // The slow filter keeps traces with at least one slow span (all of them at threshold 0).
         HttpResponse<String> slowOnly = HttpClient.newHttpClient().send(
                 HttpRequest.newBuilder(URI.create("http://localhost:" + runtime.port()
-                                + "/_tesseraql/ops/traces/summary?filter=slow"))
+                        + "/_tesseraql/ops/traces/summary?filter=slow"))
                         .header("Authorization", "Bearer " + token()).build(),
                 HttpResponse.BodyHandlers.ofString());
         assertThat(slowOnly.statusCode()).isEqualTo(200);
@@ -196,13 +202,15 @@ class SlowSqlIntegrationTest {
 
     private static String token(List<String> roles) throws Exception {
         Base64.Encoder encoder = Base64.getUrlEncoder().withoutPadding();
-        String header = encoder.encodeToString("{\"alg\":\"HS256\"}".getBytes(StandardCharsets.UTF_8));
+        String header = encoder
+                .encodeToString("{\"alg\":\"HS256\"}".getBytes(StandardCharsets.UTF_8));
         // ops.app.* keeps full trace visibility under the per-app scope.
         String payload = encoder.encodeToString(MAPPER.writeValueAsBytes(Map.of(
                 "sub", "ops", "roles", roles, "permissions", List.of("ops.app.*"))));
         Mac mac = Mac.getInstance("HmacSHA256");
         mac.init(new SecretKeySpec(
-                "dev-only-secret-change-me-in-production".getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
+                "dev-only-secret-change-me-in-production".getBytes(StandardCharsets.UTF_8),
+                "HmacSHA256"));
         String signature = encoder.encodeToString(
                 mac.doFinal((header + "." + payload).getBytes(StandardCharsets.US_ASCII)));
         return header + "." + payload + "." + signature;
@@ -228,7 +236,8 @@ class SlowSqlIntegrationTest {
                   diagnostics:
                     slowSqlMillis: 0
                     slowSpanMillis: 0
-                """.formatted(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword()));
+                """.formatted(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(),
+                POSTGRES.getPassword()));
 
         Path pingDir = target.resolve("web/api/ping");
         Files.createDirectories(pingDir);

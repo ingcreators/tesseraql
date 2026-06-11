@@ -18,8 +18,8 @@ import java.util.regex.Pattern;
  */
 public final class ScimGroupPatch {
 
-    private static final Pattern MEMBER_FILTER =
-            Pattern.compile("^members\\[\\s*value\\s+eq\\s+\"(.*)\"\\s*]$");
+    private static final Pattern MEMBER_FILTER = Pattern
+            .compile("^members\\[\\s*value\\s+eq\\s+\"(.*)\"\\s*]$");
 
     private ScimGroupPatch() {
     }
@@ -55,9 +55,11 @@ public final class ScimGroupPatch {
     /** A path-less add/replace carries a partial group object; apply each field. */
     private static void applyValueObject(State state, String op, JsonNode value) {
         if (value == null || !value.isObject()) {
-            throw new ScimException(400, "noTarget", "PATCH without a path requires an object value");
+            throw new ScimException(400, "noTarget",
+                    "PATCH without a path requires an object value");
         }
-        value.fields().forEachRemaining(entry -> setAttribute(state, op, entry.getKey(), entry.getValue()));
+        value.fields().forEachRemaining(
+                entry -> setAttribute(state, op, entry.getKey(), entry.getValue()));
     }
 
     private static void setAttribute(State state, String op, String path, JsonNode value) {
@@ -66,13 +68,15 @@ public final class ScimGroupPatch {
             case "displayname" -> state.displayName = remove ? null : text(value);
             case "externalid" -> state.externalId = remove ? null : text(value);
             case "members" -> applyMembers(state, op, value);
-            default -> throw new ScimException(400, "invalidPath", "Unsupported PATCH path: " + path);
+            default ->
+                throw new ScimException(400, "invalidPath", "Unsupported PATCH path: " + path);
         }
     }
 
     private static void applyMembers(State state, String op, JsonNode value) {
         switch (op) {
-            case "add" -> members(value).forEach(member -> state.members.put(member.value(), member));
+            case "add" ->
+                members(value).forEach(member -> state.members.put(member.value(), member));
             case "replace" -> {
                 state.members.clear();
                 members(value).forEach(member -> state.members.put(member.value(), member));
@@ -85,7 +89,8 @@ public final class ScimGroupPatch {
                     targeted.forEach(member -> state.members.remove(member.value()));
                 }
             }
-            default -> throw new ScimException(400, "invalidSyntax", "Unsupported members op: " + op);
+            default ->
+                throw new ScimException(400, "invalidSyntax", "Unsupported members op: " + op);
         }
     }
 
@@ -127,7 +132,8 @@ public final class ScimGroupPatch {
         }
 
         ScimGroup toGroup(String id) {
-            return new ScimGroup(null, id, externalId, displayName, new ArrayList<>(members.values()));
+            return new ScimGroup(null, id, externalId, displayName,
+                    new ArrayList<>(members.values()));
         }
     }
 }

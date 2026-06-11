@@ -20,7 +20,8 @@ public record LanePolicy(String name, LaneType type, int maxConcurrency) {
         Objects.requireNonNull(name, "name");
         Objects.requireNonNull(type, "type");
         if (maxConcurrency < 1) {
-            throw new IllegalArgumentException("maxConcurrency must be at least 1: " + maxConcurrency);
+            throw new IllegalArgumentException(
+                    "maxConcurrency must be at least 1: " + maxConcurrency);
         }
     }
 

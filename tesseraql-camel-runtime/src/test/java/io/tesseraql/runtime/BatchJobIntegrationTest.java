@@ -168,8 +168,9 @@ class BatchJobIntegrationTest {
             // job -> step -> sql (three levels).
             assertThat(root.get("children")).anySatisfy(step -> {
                 assertThat(step.get("span").get("name").asText()).isEqualTo("tesseraql.job.step");
-                assertThat(step.get("children")).anySatisfy(sql ->
-                        assertThat(sql.get("span").get("name").asText()).isEqualTo("tesseraql.sql.execute"));
+                assertThat(step.get("children"))
+                        .anySatisfy(sql -> assertThat(sql.get("span").get("name").asText())
+                                .isEqualTo("tesseraql.sql.execute"));
             });
         });
     }
@@ -232,7 +233,8 @@ class BatchJobIntegrationTest {
         } else {
             request.GET();
         }
-        return HttpClient.newHttpClient().send(request.build(), HttpResponse.BodyHandlers.ofString());
+        return HttpClient.newHttpClient().send(request.build(),
+                HttpResponse.BodyHandlers.ofString());
     }
 
     /** An operator token with full per-app visibility ({@code ops.app.*}). */
@@ -247,7 +249,8 @@ class BatchJobIntegrationTest {
                 Map.of("sub", "ops", "roles", roles, "permissions", permissions)));
         Mac mac = Mac.getInstance("HmacSHA256");
         mac.init(new SecretKeySpec(
-                "dev-only-secret-change-me-in-production".getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
+                "dev-only-secret-change-me-in-production".getBytes(StandardCharsets.UTF_8),
+                "HmacSHA256"));
         String signature = enc.encodeToString(
                 mac.doFinal((header + "." + payload).getBytes(StandardCharsets.US_ASCII)));
         return header + "." + payload + "." + signature;
@@ -313,7 +316,8 @@ class BatchJobIntegrationTest {
                 tesseraql:
                   diagnostics:
                     slowSqlMillis: 0
-                """.formatted(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword()));
+                """.formatted(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(),
+                POSTGRES.getPassword()));
         return target;
     }
 

@@ -21,8 +21,8 @@ public final class SecurityConfigFactory {
         Map<String, Policy> policies = new LinkedHashMap<>();
         Object raw = config.navigate("tesseraql.security.policies");
         if (raw instanceof Map<?, ?> policyMap) {
-            policyMap.forEach((id, spec) ->
-                    policies.put(String.valueOf(id), parsePolicy(String.valueOf(id), spec)));
+            policyMap.forEach((id, spec) -> policies.put(String.valueOf(id),
+                    parsePolicy(String.valueOf(id), spec)));
         }
         return new SecurityConfig(policies, parseJwt(config));
     }
@@ -45,7 +45,8 @@ public final class SecurityConfigFactory {
             return java.util.Optional.of(Policy.Rule.ofRole(String.valueOf(rule.get("role"))));
         }
         if (rule.get("permission") != null) {
-            return java.util.Optional.of(Policy.Rule.ofPermission(String.valueOf(rule.get("permission"))));
+            return java.util.Optional
+                    .of(Policy.Rule.ofPermission(String.valueOf(rule.get("permission"))));
         }
         if (rule.get("claim") instanceof Map<?, ?> claim) {
             return java.util.Optional.of(Policy.Rule.ofClaim(

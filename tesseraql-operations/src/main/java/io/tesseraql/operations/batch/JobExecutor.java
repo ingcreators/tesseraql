@@ -102,7 +102,8 @@ public final class JobExecutor {
         io.tesseraql.core.telemetry.SpanContext jobContext = jobSpan.context();
         try {
             for (PipelineStep step : job.effectiveSteps()) {
-                runStepTracked(jobFile, step, dataSource, context, stepResults, executionId, jobContext);
+                runStepTracked(jobFile, step, dataSource, context, stepResults, executionId,
+                        jobContext);
             }
             repository.completeExecution(executionId);
             LOG.info("Job {} execution {} completed", job.id(), executionId);
@@ -187,7 +188,8 @@ public final class JobExecutor {
     }
 
     /** Streams the result set to a JSONL spool, exposing the SpoolRef to later steps (ch. 28.6). */
-    private Map<String, Object> spool(PreparedStatement statement) throws SQLException, IOException {
+    private Map<String, Object> spool(PreparedStatement statement)
+            throws SQLException, IOException {
         SpoolRef ref;
         long rows;
         try (ResultSet rs = statement.executeQuery();
@@ -199,7 +201,8 @@ public final class JobExecutor {
                 for (int col = 1; col <= columns; col++) {
                     row.put(metaData.getColumnLabel(col), rs.getObject(col));
                 }
-                writer.write((mapper.writeValueAsString(row) + "\n").getBytes(StandardCharsets.UTF_8));
+                writer.write(
+                        (mapper.writeValueAsString(row) + "\n").getBytes(StandardCharsets.UTF_8));
                 writer.incrementRows(1);
             }
             writer.close();
@@ -213,11 +216,12 @@ public final class JobExecutor {
         return result;
     }
 
-    private static Map<String, Object> resolveParams(PipelineStep step, Map<String, Object> context) {
+    private static Map<String, Object> resolveParams(PipelineStep step,
+            Map<String, Object> context) {
         EvaluationContext evaluation = new EvaluationContext(context);
         Map<String, Object> params = new LinkedHashMap<>();
-        step.sql().params().forEach((bindName, sourceExpr) ->
-                params.put(bindName, evaluation.resolve(Arrays.asList(sourceExpr.split("\\.")))));
+        step.sql().params().forEach((bindName, sourceExpr) -> params.put(bindName,
+                evaluation.resolve(Arrays.asList(sourceExpr.split("\\.")))));
         return params;
     }
 

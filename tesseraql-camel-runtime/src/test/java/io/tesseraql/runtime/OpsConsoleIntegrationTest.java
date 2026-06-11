@@ -143,17 +143,20 @@ class OpsConsoleIntegrationTest {
         if (auth) {
             request.header("Authorization", "Bearer " + token());
         }
-        return HttpClient.newHttpClient().send(request.build(), HttpResponse.BodyHandlers.ofString());
+        return HttpClient.newHttpClient().send(request.build(),
+                HttpResponse.BodyHandlers.ofString());
     }
 
     private static String token() throws Exception {
         Base64.Encoder encoder = Base64.getUrlEncoder().withoutPadding();
-        String header = encoder.encodeToString("{\"alg\":\"HS256\"}".getBytes(StandardCharsets.UTF_8));
+        String header = encoder
+                .encodeToString("{\"alg\":\"HS256\"}".getBytes(StandardCharsets.UTF_8));
         String payload = encoder.encodeToString(
                 MAPPER.writeValueAsBytes(Map.of("sub", "ops-user", "roles", List.of("ADMIN"))));
         Mac mac = Mac.getInstance("HmacSHA256");
         mac.init(new SecretKeySpec(
-                "dev-only-secret-change-me-in-production".getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
+                "dev-only-secret-change-me-in-production".getBytes(StandardCharsets.UTF_8),
+                "HmacSHA256"));
         String signature = encoder.encodeToString(
                 mac.doFinal((header + "." + payload).getBytes(StandardCharsets.US_ASCII)));
         return header + "." + payload + "." + signature;
@@ -174,7 +177,8 @@ class OpsConsoleIntegrationTest {
                     url: %s
                     username: %s
                     password: %s
-                """.formatted(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword()));
+                """.formatted(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(),
+                POSTGRES.getPassword()));
         return target;
     }
 

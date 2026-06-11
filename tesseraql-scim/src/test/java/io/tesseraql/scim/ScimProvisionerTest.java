@@ -38,7 +38,8 @@ class ScimProvisionerTest {
         server.start();
         ScimTarget target = new ScimTarget(
                 "http://localhost:" + server.getAddress().getPort() + "/scim/v2", "secret-token");
-        provisioner = new ScimProvisioner(new ScimOutboundClient(target), new ScimResourceMapping.InMemory());
+        provisioner = new ScimProvisioner(new ScimOutboundClient(target),
+                new ScimResourceMapping.InMemory());
     }
 
     @AfterEach

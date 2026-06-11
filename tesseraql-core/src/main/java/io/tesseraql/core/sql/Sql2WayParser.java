@@ -42,7 +42,8 @@ public final class Sql2WayParser {
         Sql2WayParser parser = new Sql2WayParser(source);
         List<SqlNode> nodes = parser.parseBlock();
         if (parser.pendingTerminator != null) {
-            throw parser.error("Unexpected '" + parser.pendingTerminator.keyword() + "' without matching block");
+            throw parser.error("Unexpected '" + parser.pendingTerminator.keyword()
+                    + "' without matching block");
         }
         return nodes;
     }
@@ -107,7 +108,8 @@ public final class Sql2WayParser {
                     pendingTerminator = null;
                     return new SqlNode.If(branches);
                 }
-                default -> throw error("Expected elseif/else/end, found '" + terminator.keyword() + "'");
+                default ->
+                    throw error("Expected elseif/else/end, found '" + terminator.keyword() + "'");
             }
         }
     }
@@ -160,7 +162,8 @@ public final class Sql2WayParser {
             pos++;
         }
         StringBuilder content = new StringBuilder();
-        while (pos < length && !(source.charAt(pos) == '*' && pos + 1 < length && source.charAt(pos + 1) == '/')) {
+        while (pos < length && !(source.charAt(pos) == '*' && pos + 1 < length
+                && source.charAt(pos + 1) == '/')) {
             content.append(consume());
         }
         if (pos >= length) {

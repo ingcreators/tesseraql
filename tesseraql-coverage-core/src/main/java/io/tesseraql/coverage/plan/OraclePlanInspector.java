@@ -29,10 +29,11 @@ public final class OraclePlanInspector implements PlanInspector {
     }
 
     @Override
-    public QueryPlan explain(Connection connection, String sql, List<Object> params) throws SQLException {
+    public QueryPlan explain(Connection connection, String sql, List<Object> params)
+            throws SQLException {
         String statementId = "TQL_" + Long.toHexString(System.nanoTime());
-        try (PreparedStatement delete =
-                connection.prepareStatement("DELETE FROM plan_table WHERE statement_id = ?")) {
+        try (PreparedStatement delete = connection
+                .prepareStatement("DELETE FROM plan_table WHERE statement_id = ?")) {
             delete.setString(1, statementId);
             delete.executeUpdate();
         }
@@ -84,7 +85,8 @@ public final class OraclePlanInspector implements PlanInspector {
         return build(root, byParent);
     }
 
-    private static QueryPlan build(Map<String, Object> row, Map<Long, List<Map<String, Object>>> byParent) {
+    private static QueryPlan build(Map<String, Object> row,
+            Map<Long, List<Map<String, Object>>> byParent) {
         Long id = asLong(row.get("id"));
         List<QueryPlan> children = new ArrayList<>();
         for (Map<String, Object> child : byParent.getOrDefault(id, List.of())) {

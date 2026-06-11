@@ -36,7 +36,8 @@ public record ResponseSpec(JsonResponse json, HtmlResponse html, StreamResponse 
 
         public String effectiveContentType() {
             return contentType == null || contentType.isBlank()
-                    ? "text/plain; charset=utf-8" : contentType;
+                    ? "text/plain; charset=utf-8"
+                    : contentType;
         }
     }
 
@@ -76,7 +77,8 @@ public record ResponseSpec(JsonResponse json, HtmlResponse html, StreamResponse 
      * @param body   the response body template
      */
     @JsonIgnoreProperties(ignoreUnknown = true)
-    public record JsonResponse(Integer status, Object body, java.util.Map<String, FieldPolicy> fields) {
+    public record JsonResponse(Integer status, Object body,
+            java.util.Map<String, FieldPolicy> fields) {
 
         public JsonResponse {
             fields = fields == null ? java.util.Map.of() : java.util.Map.copyOf(fields);

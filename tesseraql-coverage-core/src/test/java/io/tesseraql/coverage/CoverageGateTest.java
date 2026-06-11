@@ -29,8 +29,8 @@ class CoverageGateTest {
     void gatesItemCoverageKindsByConfiguredThreshold() {
         ItemCoverage routes = new ItemCoverage("route")
                 .declare("users.search").declare("users.create").cover("users.search");
-        CoverageThresholds thresholds =
-                new CoverageThresholds(0.0, 0.0, Map.of("route", 0.8, "scim", 0.8));
+        CoverageThresholds thresholds = new CoverageThresholds(0.0, 0.0,
+                Map.of("route", 0.8, "scim", 0.8));
 
         CoverageGate.Result result = CoverageGate.check(new SqlCoverage(),
                 java.util.List.of(routes, new ItemCoverage("scim")), thresholds);

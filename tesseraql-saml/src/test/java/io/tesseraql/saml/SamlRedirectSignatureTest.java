@@ -20,7 +20,8 @@ class SamlRedirectSignatureTest {
     void signedQueryRoundTripsAndCoversRelayState() throws Exception {
         KeyPair keys = keys();
         String encoded = SamlRedirect.deflateAndEncode("<x/>");
-        String query = SamlRedirect.signedQuery("SAMLRequest", encoded, "/return", keys.getPrivate());
+        String query = SamlRedirect.signedQuery("SAMLRequest", encoded, "/return",
+                keys.getPrivate());
         Map<String, String> params = params(query);
         assertThat(params).containsKeys("SAMLRequest", "RelayState", "SigAlg", "Signature");
         assertThat(params.get("SigAlg")).isEqualTo(SamlRedirect.RSA_SHA256);

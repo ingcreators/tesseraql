@@ -32,7 +32,8 @@ final class ScimSql {
         }
     }
 
-    static Map<String, Object> queryOne(DataSource dataSource, String sql, Map<String, Object> params)
+    static Map<String, Object> queryOne(DataSource dataSource, String sql,
+            Map<String, Object> params)
             throws SQLException {
         List<Map<String, Object>> rows = queryAll(dataSource, sql, params);
         return rows.isEmpty() ? null : rows.get(0);

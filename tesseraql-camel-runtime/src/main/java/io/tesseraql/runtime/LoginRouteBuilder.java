@@ -24,7 +24,8 @@ final class LoginRouteBuilder extends RouteBuilder {
     private final RealmConfig realm;
     private final SessionStore sessions;
 
-    LoginRouteBuilder(PasswordAuthenticator authenticator, RealmConfig realm, SessionStore sessions) {
+    LoginRouteBuilder(PasswordAuthenticator authenticator, RealmConfig realm,
+            SessionStore sessions) {
         this.authenticator = authenticator;
         this.realm = realm;
         this.sessions = sessions;
@@ -42,10 +43,15 @@ final class LoginRouteBuilder extends RouteBuilder {
     private void login(Exchange exchange) throws Exception {
         Map<String, Object> body = parseBody(exchange);
         String loginId = String.valueOf(body.get("loginId"));
-        String password = body.get("password") == null ? null : String.valueOf(body.get("password"));
-        String tenantId = body.get("tenantId") == null ? null : String.valueOf(body.get("tenantId"));
+        String password = body.get("password") == null
+                ? null
+                : String.valueOf(body.get("password"));
+        String tenantId = body.get("tenantId") == null
+                ? null
+                : String.valueOf(body.get("tenantId"));
 
-        Optional<Principal> principal = authenticator.authenticate(realm, loginId, password, tenantId);
+        Optional<Principal> principal = authenticator.authenticate(realm, loginId, password,
+                tenantId);
         if (principal.isEmpty()) {
             throw new TqlException(PolicyEngine.UNAUTHORIZED, "Invalid credentials");
         }

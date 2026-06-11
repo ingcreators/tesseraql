@@ -16,7 +16,6 @@ import javax.xml.crypto.dsig.Reference;
 import javax.xml.crypto.dsig.SignatureMethod;
 import javax.xml.crypto.dsig.SignedInfo;
 import javax.xml.crypto.dsig.Transform;
-import javax.xml.crypto.dsig.XMLSignature;
 import javax.xml.crypto.dsig.XMLSignatureFactory;
 import javax.xml.crypto.dsig.dom.DOMSignContext;
 import javax.xml.crypto.dsig.spec.C14NMethodParameterSpec;
@@ -37,8 +36,7 @@ final class SamlTestSupport {
     private static final String ASSERTION_NS = "urn:oasis:names:tc:SAML:2.0:assertion";
 
     /** A fixed self-signed test certificate (X.509 DER, base64) and its private key (PKCS8 DER). */
-    static final String FIXED_CERT =
-            "MIIDGzCCAgOgAwIBAgIUaqx2kaHliMER8us/H8pOYXTD5HcwDQYJKoZIhvcNAQELBQAwHTEbMBkGA1UEAww"
+    static final String FIXED_CERT = "MIIDGzCCAgOgAwIBAgIUaqx2kaHliMER8us/H8pOYXTD5HcwDQYJKoZIhvcNAQELBQAwHTEbMBkGA1UEAww"
             + "SdGVzc2VyYXFsLXRlc3QtaWRwMB4XDTI2MDYxMDAyMjg1M1oXDTQ2MDYwNTAyMjg1M1owHTEbMBkGA1UEAww"
             + "SdGVzc2VyYXFsLXRlc3QtaWRwMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAq7cPz5X3OIGRxyo"
             + "haCSkB7c9u6/b5/VFi3RsY4XLCO0ZODUMmjB1CFXmfyZgFWnhJxUYNSLDDQanCFPCWcGybbwRK7bzQ4V2JRE"
@@ -52,8 +50,7 @@ final class SamlTestSupport {
             + "BRTNxzz0vuNAxjOP17K+9iq0ne0xaSS7HZXlAbVhFFVob4d5s5G5c1uW53JYnkAMUBSPcWjJLOX06MIKMOSC"
             + "iobhRn3u7jS5mlxRpL/+81Brek03uXnS/QcuqRUcfOnbtJguYSAw6TEluXg==";
 
-    private static final String FIXED_KEY =
-            "MIIEvAIBADANBgkqhkiG9w0BAQEFAASCBKYwggSiAgEAAoIBAQCrtw/Plfc4gZHHKiFoJKQHtz27r9vn9UWL"
+    private static final String FIXED_KEY = "MIIEvAIBADANBgkqhkiG9w0BAQEFAASCBKYwggSiAgEAAoIBAQCrtw/Plfc4gZHHKiFoJKQHtz27r9vn9UWL"
             + "dGxjhcsI7Rk4NQyaMHUIVeZ/JmAVaeEnFRg1IsMNBqcIU8JZwbJtvBErtvNDhXYlER3KkJqrlXZlnawuZo9"
             + "98eCON4zstrQfJa7MZiqvN6M2e7sROjCsPfOhu+bs/zvaAIk9lyEkRN64Vn2pYwO0ZyisSAjd9UOBk2Nhnx"
             + "11DJPra4G2Md5rKy5wAKF3JK1pB4Mxq0ik0Z0Dl5VIvv1YnUmg2+GF0ScQKQrSOpzG8kWWF7Q5m4B0GNVAY"
@@ -104,7 +101,8 @@ final class SamlTestSupport {
                     </md:KeyDescriptor>
                   </md:IDPSSODescriptor>
                 </md:EntityDescriptor>
-                """.formatted(entityId, FIXED_CERT);
+                """
+                .formatted(entityId, FIXED_CERT);
     }
 
     static KeyPair generateKeyPair() throws Exception {
@@ -161,16 +159,19 @@ final class SamlTestSupport {
                     <saml:AttributeStatement>%s</saml:AttributeStatement>
                   </saml:Assertion>
                 </samlp:Response>
-                """.formatted(PROTOCOL_NS, ASSERTION_NS, java.util.UUID.randomUUID(), now,
-                inResponseTo == null ? "" : " InResponseTo=\"" + inResponseTo + "\"",
-                assertionId, now, nameId, now.plusSeconds(300),
-                recipient, now.minusSeconds(60), now.plusSeconds(300), audience, now, attrXml);
+                """
+                .formatted(PROTOCOL_NS, ASSERTION_NS, java.util.UUID.randomUUID(), now,
+                        inResponseTo == null ? "" : " InResponseTo=\"" + inResponseTo + "\"",
+                        assertionId, now, nameId, now.plusSeconds(300),
+                        recipient, now.minusSeconds(60), now.plusSeconds(300), audience, now,
+                        attrXml);
 
         DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
         factory.setNamespaceAware(true);
         Document document = factory.newDocumentBuilder()
                 .parse(new ByteArrayInputStream(xml.getBytes(StandardCharsets.UTF_8)));
-        Element assertion = (Element) document.getElementsByTagNameNS(ASSERTION_NS, "Assertion").item(0);
+        Element assertion = (Element) document.getElementsByTagNameNS(ASSERTION_NS, "Assertion")
+                .item(0);
         assertion.setIdAttribute("ID", true);
         signEnveloped(assertion, firstChild(assertion, "Subject"),
                 "#" + assertion.getAttribute("ID"), key);
@@ -201,7 +202,8 @@ final class SamlTestSupport {
     private static Element firstChild(Element parent, String localName) {
         org.w3c.dom.NodeList children = parent.getChildNodes();
         for (int i = 0; i < children.getLength(); i++) {
-            if (children.item(i) instanceof Element child && localName.equals(child.getLocalName())) {
+            if (children.item(i) instanceof Element child
+                    && localName.equals(child.getLocalName())) {
                 return child;
             }
         }

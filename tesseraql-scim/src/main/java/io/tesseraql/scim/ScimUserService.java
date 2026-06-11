@@ -38,7 +38,8 @@ public final class ScimUserService {
             return row == null ? user : ScimUserMapper.fromRow(row);
         } catch (SQLException ex) {
             if (SqlErrors.isUniqueViolation(ex)) {
-                throw new ScimException(409, "uniqueness", "User already exists: " + user.userName());
+                throw new ScimException(409, "uniqueness",
+                        "User already exists: " + user.userName());
             }
             throw new ScimException(500, null, "SCIM create failed: " + ex.getMessage());
         }
@@ -66,7 +67,8 @@ public final class ScimUserService {
             return ScimUserMapper.fromRow(row);
         } catch (SQLException ex) {
             if (SqlErrors.isUniqueViolation(ex)) {
-                throw new ScimException(409, "uniqueness", "User already exists: " + user.userName());
+                throw new ScimException(409, "uniqueness",
+                        "User already exists: " + user.userName());
             }
             throw new ScimException(500, null, "SCIM replace failed: " + ex.getMessage());
         }
@@ -134,7 +136,8 @@ public final class ScimUserService {
         }
     }
 
-    private Map<String, Object> queryOne(String sql, Map<String, Object> params) throws SQLException {
+    private Map<String, Object> queryOne(String sql, Map<String, Object> params)
+            throws SQLException {
         List<Map<String, Object>> rows = queryAll(sql, params);
         return rows.isEmpty() ? null : rows.get(0);
     }

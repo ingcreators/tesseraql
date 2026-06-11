@@ -29,7 +29,8 @@ public final class FileTransferStatusProcessor implements Processor {
                 .lookupByNameAndType(TesseraqlProperties.FILE_TRANSFER_BEAN,
                         FileTransferService.class);
         FileTransferService.TransferStatus status = transfers == null
-                ? null : transfers.status(transferId).orElse(null);
+                ? null
+                : transfers.status(transferId).orElse(null);
         if (status == null) {
             throw new TqlException(UNKNOWN, "Unknown transfer: " + transferId);
         }

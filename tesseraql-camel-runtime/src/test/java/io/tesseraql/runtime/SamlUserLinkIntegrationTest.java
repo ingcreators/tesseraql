@@ -105,14 +105,15 @@ class SamlUserLinkIntegrationTest {
 
     private static HttpResponse<String> postAcs(String nameId, Map<String, List<String>> attributes)
             throws Exception {
-        String xml = SamlTestSupport.signedResponse(keyPair.getPrivate(), nameId, AUDIENCE, RECIPIENT,
+        String xml = SamlTestSupport.signedResponse(keyPair.getPrivate(), nameId, AUDIENCE,
+                RECIPIENT,
                 NOW, attributes);
         String body = "SAMLResponse=" + URLEncoder.encode(
                 Base64.getEncoder().encodeToString(xml.getBytes(StandardCharsets.UTF_8)),
                 StandardCharsets.UTF_8);
         return HttpClient.newHttpClient().send(
                 HttpRequest.newBuilder(URI.create(
-                                "http://localhost:" + runtime.port() + "/_tesseraql/saml/acs"))
+                        "http://localhost:" + runtime.port() + "/_tesseraql/saml/acs"))
                         .header("Content-Type", "application/x-www-form-urlencoded")
                         .POST(HttpRequest.BodyPublishers.ofString(body))
                         .build(),
@@ -141,7 +142,8 @@ class SamlUserLinkIntegrationTest {
         }
         Path saml = target.resolve("saml");
         Files.createDirectories(saml);
-        Files.writeString(saml.resolve("idp.pem"), SamlTestSupport.publicKeyPem(keyPair.getPublic()));
+        Files.writeString(saml.resolve("idp.pem"),
+                SamlTestSupport.publicKeyPem(keyPair.getPublic()));
 
         Files.writeString(target.resolve("config/application.yml"), """
                 server:

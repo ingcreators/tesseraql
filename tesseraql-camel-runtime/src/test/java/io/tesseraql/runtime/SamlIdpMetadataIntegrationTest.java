@@ -73,7 +73,7 @@ class SamlIdpMetadataIntegrationTest {
                 StandardCharsets.UTF_8);
         HttpResponse<String> response = HttpClient.newHttpClient().send(
                 HttpRequest.newBuilder(URI.create(
-                                "http://localhost:" + runtime.port() + "/_tesseraql/saml/acs"))
+                        "http://localhost:" + runtime.port() + "/_tesseraql/saml/acs"))
                         .header("Content-Type", "application/x-www-form-urlencoded")
                         .POST(HttpRequest.BodyPublishers.ofString(form))
                         .build(),

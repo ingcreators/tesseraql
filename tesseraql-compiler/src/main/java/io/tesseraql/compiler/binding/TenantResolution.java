@@ -39,7 +39,8 @@ public final class TenantResolution implements Processor {
 
         if (tenantId == null || tenantId.isBlank()) {
             if (settings.required()) {
-                throw new TqlException(MISSING_TENANT, "No tenant could be resolved for the request");
+                throw new TqlException(MISSING_TENANT,
+                        "No tenant could be resolved for the request");
             }
             return;
         }
@@ -60,7 +61,8 @@ public final class TenantResolution implements Processor {
             return null;
         }
         EvaluationContext context = new EvaluationContext(Map.of("principal", principal));
-        Object value = context.resolve(Arrays.asList(("principal." + settings.source()).split("\\.")));
+        Object value = context
+                .resolve(Arrays.asList(("principal." + settings.source()).split("\\.")));
         return value == null ? null : String.valueOf(value);
     }
 }
