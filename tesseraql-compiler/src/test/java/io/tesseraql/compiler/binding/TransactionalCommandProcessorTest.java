@@ -96,6 +96,16 @@ class TransactionalCommandProcessorTest {
     }
 
     @Test
+    void rejectsExpectOnAQueryModeStep() throws Exception {
+        Map<String, SqlBinding> steps = Map.of("check", new SqlBinding(sql("check.sql"), null,
+                "query", null, null, null, null, null, new SqlBinding.Expect(1, null)));
+
+        assertThatThrownBy(() -> processor(null, steps))
+                .isInstanceOf(TqlException.class)
+                .hasMessageContaining("expect/keys need an update statement");
+    }
+
+    @Test
     void rejectsBothSqlAndSteps() throws Exception {
         SqlBinding sql = step(sql("single.sql"), Map.of());
         Map<String, SqlBinding> steps = Map.of("header", step(sql("header.sql"), Map.of()));

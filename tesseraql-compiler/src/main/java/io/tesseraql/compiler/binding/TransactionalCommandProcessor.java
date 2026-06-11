@@ -153,6 +153,12 @@ public final class TransactionalCommandProcessor implements Processor {
                         : (binding.mode() == null || binding.mode().isBlank()
                                 ? "update"
                                 : binding.mode());
+                // Expectations and key capture count affected rows, which query mode never has.
+                if ("query".equals(mode)
+                        && (binding.expect() != null || !binding.keys().isEmpty())) {
+                    throw invalid("step '" + name + "': expect/keys need an update statement -"
+                            + " declare mode: update");
+                }
                 compiled.add(new Step(name, contextKey, Sql2WayParser.parse(read(file)),
                         file.toString(), mode,
                         binding.params(), binding.keys(), binding.expect(), null));
