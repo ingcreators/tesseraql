@@ -33,14 +33,14 @@ class ManifestCoverageTest {
     private static TestSuite sqlSuite(String... sqlFiles) {
         return new TestSuite(java.util.Arrays.stream(sqlFiles)
                 .map(file -> new TestCase("tests " + file, new SqlTarget(file), null, Map.of(),
-                        null, null))
+                        null, null, null))
                 .toList());
     }
 
     private static TestSuite contractSuite(String... contracts) {
         return new TestSuite(java.util.Arrays.stream(contracts)
                 .map(contract -> new TestCase("tests " + contract, null, contract, Map.of(),
-                        null, null))
+                        null, null, null))
                 .toList());
     }
 
@@ -129,7 +129,7 @@ class ManifestCoverageTest {
 
     private static TestSuite validateSuite(String route, String rule) {
         return new TestSuite(List.of(new TestCase("validates " + route, null, null, Map.of(),
-                null, new TestSuite.ValidateTarget(route, rule))));
+                null, new TestSuite.ValidateTarget(route, rule), null)));
     }
 
     @Test
@@ -163,6 +163,69 @@ class ManifestCoverageTest {
 
         assertThat(coverage.declared()).isEmpty();
         assertThat(coverage.ratio()).isEqualTo(1.0);
+    }
+
+    private static final String NOTIFYING_ROUTE = """
+            version: tesseraql/v1
+            id: members.register
+            kind: route
+            recipe: command-json
+            notify:
+              confirmation:
+                channel: member-mail
+                payload:
+                  email: body.email
+              audit:
+                channel: audit-webhook
+            sql:
+              file: insert-member.sql
+              mode: update
+            """;
+
+    private static io.tesseraql.yaml.manifest.JobFile notifyingJob() {
+        return new io.tesseraql.yaml.manifest.JobFile(APP_HOME.resolve("batch/cleanup/job.yml"),
+                new io.tesseraql.yaml.model.JobDefinition("tesseraql/v1", "members.cleanup",
+                        "job", "batch-pipeline", null, Map.of(), null,
+                        List.of(
+                                new io.tesseraql.yaml.model.PipelineStep("purge",
+                                        new io.tesseraql.yaml.model.SqlBinding("purge.sql", null,
+                                                "update", Map.of(), null, null, null, null, null)),
+                                new io.tesseraql.yaml.model.PipelineStep("report", null,
+                                        new io.tesseraql.yaml.model.NotifySpec("ops-mail", null,
+                                                Map.of()))),
+                        false));
+    }
+
+    private static TestSuite notifySuite(String route, String job, String id) {
+        return new TestSuite(List.of(new TestCase("notifies", null, null, Map.of(),
+                null, null, new TestSuite.NotifyTarget(route, job, id))));
+    }
+
+    @Test
+    void notificationCoverageDeclaresRouteAndJobNotificationsAndTracksEvaluatedOnes() {
+        AppManifest manifest = new AppManifest(APP_HOME, new AppConfig(Map.of(), name -> null),
+                List.of(route("web/members/post.yml", NOTIFYING_ROUTE)),
+                List.of(notifyingJob()), ManifestIndex.of(Map.of(), "test"));
+
+        ItemCoverage all = ManifestCoverage.notification(manifest,
+                List.of(notifySuite("members.register", null, null)));
+        ItemCoverage one = ManifestCoverage.notification(manifest,
+                List.of(notifySuite("members.register", null, "audit")));
+        ItemCoverage jobOnly = ManifestCoverage.notification(manifest,
+                List.of(notifySuite(null, "members.cleanup", null)));
+        ItemCoverage none = ManifestCoverage.notification(manifest, List.of());
+
+        assertThat(all.kind()).isEqualTo("notification");
+        // Routes declare <routeId>.<notifyId>; job notify steps declare <jobId>.<stepId> —
+        // the purge SQL step is not a notification and is not declared.
+        assertThat(all.declared()).containsExactlyInAnyOrder(
+                "members.register.confirmation", "members.register.audit",
+                "members.cleanup.report");
+        assertThat(all.covered()).containsExactlyInAnyOrder(
+                "members.register.confirmation", "members.register.audit");
+        assertThat(one.covered()).containsExactlyInAnyOrder("members.register.audit");
+        assertThat(jobOnly.covered()).containsExactlyInAnyOrder("members.cleanup.report");
+        assertThat(none.covered()).isEmpty();
     }
 
     @Test

@@ -93,6 +93,7 @@ public final class AppTestRunner {
             kinds.add(ManifestCoverage.saml(manifest, suites));
             kinds.add(ManifestCoverage.scim(manifest, suites));
             kinds.add(ManifestCoverage.validation(manifest, suites));
+            kinds.add(ManifestCoverage.notification(manifest, suites));
         }
         return kinds;
     }

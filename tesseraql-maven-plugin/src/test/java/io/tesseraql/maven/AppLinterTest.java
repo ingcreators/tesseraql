@@ -46,6 +46,71 @@ class AppLinterTest {
     }
 
     @Test
+    void lintsNotifyDeclarationsOnRoutesAndJobs(@TempDir Path dir) throws Exception {
+        Files.createDirectories(dir.resolve("config"));
+        Files.writeString(dir.resolve("config/tesseraql.yml"), """
+                tesseraql:
+                  app:
+                    name: t
+                  notifications:
+                    channels:
+                      member-mail:
+                        type: mail
+                        host: localhost
+                """);
+        Files.createDirectories(dir.resolve("web/members"));
+        Files.writeString(dir.resolve("web/members/get.yml"), """
+                version: tesseraql/v1
+                id: members.search
+                kind: route
+                recipe: query-json
+                notify:
+                  declared:
+                    channel: member-mail
+                  channelless:
+                    when: body.email !!
+                    payload:
+                      email: body.email
+                  unknownChannel:
+                    channel: missing-channel
+                sql:
+                  file: search.sql
+                response:
+                  json:
+                    body:
+                      data: sql.rows
+                """);
+        Files.writeString(dir.resolve("web/members/search.sql"), "select 1 as one\n");
+        Files.createDirectories(dir.resolve("batch/cleanup"));
+        Files.writeString(dir.resolve("batch/cleanup/job.yml"), """
+                version: tesseraql/v1
+                id: members.cleanup
+                kind: job
+                recipe: batch-pipeline
+                pipeline:
+                  - id: broken
+                    sql:
+                      file: purge.sql
+                    notify:
+                      channel: member-mail
+                """);
+
+        List<LintFinding> findings = new AppLinter().lint(dir);
+
+        // notify: on a non-command recipe.
+        assertThat(findings).anyMatch(f -> f.code().equals("TQL-YAML-1004") && f.isError());
+        // A notification without a channel, and a job step declaring both sql: and notify:.
+        assertThat(findings)
+                .filteredOn(f -> f.code().equals("TQL-FIELD-2004") && f.isError())
+                .hasSize(2);
+        // A malformed when: guard.
+        assertThat(findings).anyMatch(f -> f.code().equals("TQL-SQL-2101") && f.isError());
+        // An undeclared channel is a warning: another environment's config may declare it.
+        assertThat(findings).anyMatch(f -> f.code().equals("TQL-YAML-1102") && !f.isError()
+                && f.message().contains("missing-channel"));
+    }
+
+    @Test
     void nudgesVersionPredicateOnExpectedRowCountUpdates(@TempDir Path dir) throws Exception {
         writeCommandRoute(dir, """
                 steps:

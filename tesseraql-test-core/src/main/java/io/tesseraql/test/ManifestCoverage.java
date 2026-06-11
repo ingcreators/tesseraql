@@ -81,6 +81,50 @@ public final class ManifestCoverage {
     }
 
     /**
+     * Notification coverage (roadmap Phase 20): every notification of every route's
+     * {@code notify:} block is declared as {@code <routeId>.<notifyId>}, and every job notify
+     * step as {@code <jobId>.<stepId>}; a suite's notify case covers the declarations it
+     * evaluates — the targeted one, or the route's/job's whole set when no id is named.
+     */
+    public static ItemCoverage notification(AppManifest manifest, List<TestSuite> suites) {
+        ItemCoverage coverage = new ItemCoverage("notification");
+        for (RouteFile route : manifest.routes()) {
+            RouteDefinition definition = route.definition();
+            if (definition.id() == null) {
+                continue;
+            }
+            definition.notifications().keySet()
+                    .forEach(notifyId -> coverage.declare(definition.id() + "." + notifyId));
+        }
+        for (io.tesseraql.yaml.manifest.JobFile job : manifest.jobs()) {
+            if (job.definition().id() == null) {
+                continue;
+            }
+            job.definition().effectiveSteps().stream()
+                    .filter(step -> step.notification() != null)
+                    .forEach(step -> coverage.declare(job.definition().id() + "." + step.id()));
+        }
+        for (TestSuite suite : suites) {
+            for (TestCase test : suite.tests()) {
+                TestSuite.NotifyTarget target = test.notifications();
+                if (target == null) {
+                    continue;
+                }
+                String owner = target.route() != null ? target.route() : target.job();
+                if (owner == null) {
+                    continue;
+                }
+                String prefix = owner + ".";
+                coverage.declared().stream()
+                        .filter(item -> item.startsWith(prefix))
+                        .filter(item -> target.id() == null || item.equals(prefix + target.id()))
+                        .forEach(coverage::cover);
+            }
+        }
+        return coverage;
+    }
+
+    /**
      * SAML coverage: when SAML user linking is enabled ({@code tesseraql.saml.link.enabled}), the
      * SAML login path resolves the principal through Identity SQL Contracts — those contracts are
      * declared and contract test cases cover them. Without SAML (or without linking) the login
