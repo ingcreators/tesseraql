@@ -25,4 +25,21 @@ public final class SqlResources {
                 key -> Sql2WayParser.parse(SqlScripts.read(anchor, resourcePath)));
         return SqlRenderer.render(nodes, params);
     }
+
+    /**
+     * As {@link #render(Class, String, Map)}, preferring a vendor variant when one is bundled:
+     * {@code <base>.<vendor>.sql} replaces {@code <base>.sql} (design ch. 42), the convention the
+     * app-side dialect file resolution already uses.
+     */
+    public static BoundSql render(Class<?> anchor, String resourcePath, String vendor,
+            Map<String, Object> params) {
+        if (vendor != null && !vendor.isBlank() && resourcePath.endsWith(".sql")) {
+            String variant = resourcePath.substring(0, resourcePath.length() - 4)
+                    + "." + vendor + ".sql";
+            if (anchor.getResource(variant) != null) {
+                return render(anchor, variant, params);
+            }
+        }
+        return render(anchor, resourcePath, params);
+    }
 }

@@ -139,14 +139,15 @@ public final class IdentityService {
         return values;
     }
 
-    private static List<Map<String, Object>> readRows(ResultSet resultSet) throws SQLException {
+    private List<Map<String, Object>> readRows(ResultSet resultSet) throws SQLException {
         ResultSetMetaData metaData = resultSet.getMetaData();
         int columnCount = metaData.getColumnCount();
         List<Map<String, Object>> rows = new ArrayList<>();
         while (resultSet.next()) {
             Map<String, Object> row = new LinkedHashMap<>();
             for (int col = 1; col <= columnCount; col++) {
-                row.put(metaData.getColumnLabel(col), resultSet.getObject(col));
+                row.put(io.tesseraql.core.dialect.Labels.normalize(
+                        dialect, metaData.getColumnLabel(col)), resultSet.getObject(col));
             }
             rows.add(row);
         }

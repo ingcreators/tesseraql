@@ -29,4 +29,15 @@ public final class Pagination {
     public static Clause clause(Dialect dialect, long limit, long offset) {
         return clause(dialect.capabilities(), limit, offset);
     }
+
+    /**
+     * The trailing single-bind row-limit clause for a vendor id (as detected by
+     * {@code DatabaseVendors}): {@code offset 0 rows fetch next ? rows only} where {@code limit}
+     * is not supported (Oracle, SQL Server - both require an {@code order by}, which the
+     * framework's list queries always have), {@code limit ?} otherwise.
+     */
+    public static String fetchClause(String vendor) {
+        return "oracle".equals(vendor) || "sqlserver".equals(vendor)
+                ? "offset 0 rows fetch next ? rows only" : "limit ?";
+    }
 }

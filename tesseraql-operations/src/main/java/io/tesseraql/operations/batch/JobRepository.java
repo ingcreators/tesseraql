@@ -36,7 +36,7 @@ public final class JobRepository {
      */
     public void ensureSchema() {
         try {
-            io.tesseraql.core.util.SqlScripts.apply(dataSource, JobRepository.class,
+            io.tesseraql.core.util.SqlScripts.applyForVendor(dataSource, JobRepository.class,
                     "/tesseraql/db/migration/operations/V1__framework_operations.sql");
         } catch (SQLException ex) {
             throw error("Failed to create batch repository schema", ex);
@@ -154,11 +154,23 @@ public final class JobRepository {
                 });
     }
 
+
+    /** The vendor-appropriate trailing row-limit clause, detected once per store. */
+    private volatile String fetchClause;
+
+    private String fetchClause() {
+        if (fetchClause == null) {
+            fetchClause = io.tesseraql.core.dialect.Pagination.fetchClause(
+                    io.tesseraql.core.util.DatabaseVendors.vendor(dataSource).orElse(null));
+        }
+        return fetchClause;
+    }
+
     public List<JobExecution> listExecutions(int limit) {
         List<JobExecution> executions = new ArrayList<>();
         try (Connection connection = dataSource.getConnection();
                 PreparedStatement ps = connection.prepareStatement(
-                        "select * from tql_job_execution order by start_time desc limit ?")) {
+                        "select * from tql_job_execution order by start_time desc " + fetchClause())) {
             ps.setInt(1, limit);
             try (ResultSet rs = ps.executeQuery()) {
                 while (rs.next()) {

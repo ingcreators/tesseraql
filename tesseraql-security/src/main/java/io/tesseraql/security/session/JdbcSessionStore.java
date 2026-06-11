@@ -42,7 +42,7 @@ public final class JdbcSessionStore implements SessionStore {
      */
     public void ensureSchema() {
         try {
-            io.tesseraql.core.util.SqlScripts.apply(dataSource, JdbcSessionStore.class,
+            io.tesseraql.core.util.SqlScripts.applyForVendor(dataSource, JdbcSessionStore.class,
                     "/tesseraql/db/migration/security/V1__framework_sessions.sql");
         } catch (SQLException ex) {
             throw new IllegalStateException("Failed to create session schema", ex);

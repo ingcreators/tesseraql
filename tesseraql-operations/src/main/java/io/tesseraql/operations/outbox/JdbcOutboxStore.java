@@ -35,7 +35,7 @@ public final class JdbcOutboxStore implements OutboxStore {
      */
     public void ensureSchema() {
         try {
-            io.tesseraql.core.util.SqlScripts.apply(dataSource, JdbcOutboxStore.class,
+            io.tesseraql.core.util.SqlScripts.applyForVendor(dataSource, JdbcOutboxStore.class,
                     "/tesseraql/db/migration/operations/V1__framework_operations.sql");
         } catch (SQLException ex) {
             throw error("Failed to create outbox schema", ex);
@@ -64,13 +64,30 @@ public final class JdbcOutboxStore implements OutboxStore {
         return id;
     }
 
+
+    /** The connected vendor (for SQL variants and the row-limit clause), detected once. */
+    private volatile String vendor;
+    private volatile boolean vendorDetected;
+
+    private String vendor() {
+        if (!vendorDetected) {
+            vendor = io.tesseraql.core.util.DatabaseVendors.vendor(dataSource).orElse(null);
+            vendorDetected = true;
+        }
+        return vendor;
+    }
+
+    private String fetchClause() {
+        return io.tesseraql.core.dialect.Pagination.fetchClause(vendor());
+    }
+
     @Override
     public List<OutboxEvent> listPending(int limit) {
         List<OutboxEvent> events = new ArrayList<>();
         try (Connection connection = dataSource.getConnection();
                 PreparedStatement ps = connection.prepareStatement(
                         "select * from tql_outbox_event where status = 'PENDING' "
-                                + "order by created_at limit ?")) {
+                                + "order by created_at " + fetchClause())) {
             ps.setInt(1, limit);
             try (ResultSet rs = ps.executeQuery()) {
                 while (rs.next()) {
@@ -110,7 +127,7 @@ public final class JdbcOutboxStore implements OutboxStore {
         params.put("limit", limit);
         io.tesseraql.core.sql.BoundSql bound = io.tesseraql.core.sql.SqlResources.render(
                 JdbcOutboxStore.class, "/tesseraql/sql/operations/outbox-claim-pending.sql",
-                params);
+                vendor(), params);
         List<OutboxEvent> events = new ArrayList<>();
         try (Connection connection = dataSource.getConnection()) {
             boolean autoCommit = connection.getAutoCommit();

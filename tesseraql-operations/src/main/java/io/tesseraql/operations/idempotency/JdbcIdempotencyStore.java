@@ -33,7 +33,7 @@ public final class JdbcIdempotencyStore implements IdempotencyStore {
      */
     public void ensureSchema() {
         try {
-            io.tesseraql.core.util.SqlScripts.apply(dataSource, JdbcIdempotencyStore.class,
+            io.tesseraql.core.util.SqlScripts.applyForVendor(dataSource, JdbcIdempotencyStore.class,
                     "/tesseraql/db/migration/operations/V1__framework_operations.sql");
         } catch (SQLException ex) {
             throw error("Failed to create idempotency schema", ex);

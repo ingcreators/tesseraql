@@ -18,6 +18,11 @@ PostgreSQL and MySQL integration tests run on every `./mvnw verify`. The Oracle 
 plan-guard tests use large container images and are opt-in:
 
 ```bash
+# Query Plan Guard against real Oracle / SQL Server
 ./mvnw -pl tesseraql-coverage-core test -Dtesseraql.dialect.its=true \
   -Dtest='OraclePlanGuardIntegrationTest,SqlServerPlanGuardIntegrationTest'
+
+# Full runtime portability (framework migrations, stores, identity pack, a served route)
+./mvnw -pl tesseraql-camel-runtime test -Dtesseraql.dialect.its=true \
+  -Dtest='OraclePortabilityIntegrationTest,SqlServerPortabilityIntegrationTest'
 ```

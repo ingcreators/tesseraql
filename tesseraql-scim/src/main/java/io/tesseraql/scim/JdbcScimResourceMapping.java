@@ -26,7 +26,7 @@ public final class JdbcScimResourceMapping implements ScimResourceMapping {
      */
     public void ensureSchema() {
         try {
-            io.tesseraql.core.util.SqlScripts.apply(dataSource, JdbcScimResourceMapping.class,
+            io.tesseraql.core.util.SqlScripts.applyForVendor(dataSource, JdbcScimResourceMapping.class,
                     "/tesseraql/db/migration/scim/V1__scim_resource_map.sql");
         } catch (SQLException ex) {
             throw new ScimException(500, null, "Cannot create SCIM mapping table: " + ex.getMessage());

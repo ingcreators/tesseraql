@@ -199,7 +199,8 @@ public class TesseraqlSqlProducer extends DefaultProducer {
             if (col > 1) {
                 header.append(',');
             }
-            header.append(csvEscape(metaData.getColumnLabel(col)));
+            header.append(csvEscape(io.tesseraql.core.dialect.Labels.normalize(
+                    endpoint.getDialect(), metaData.getColumnLabel(col))));
         }
         header.append('\n');
         writer.write(header.toString().getBytes(StandardCharsets.UTF_8));
@@ -344,7 +345,9 @@ public class TesseraqlSqlProducer extends DefaultProducer {
             }
             Map<String, Object> row = new LinkedHashMap<>();
             for (int col = 1; col <= columnCount; col++) {
-                row.put(metaData.getColumnLabel(col), normalize(resultSet.getObject(col)));
+                row.put(io.tesseraql.core.dialect.Labels.normalize(
+                        endpoint.getDialect(), metaData.getColumnLabel(col)),
+                        normalize(resultSet.getObject(col)));
             }
             rows.add(row);
         }

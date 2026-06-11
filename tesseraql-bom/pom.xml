@@ -123,6 +123,16 @@
         <artifactId>flyway-mysql</artifactId>
         <version>${flyway.version}</version>
       </dependency>
+      <dependency>
+        <groupId>org.flywaydb</groupId>
+        <artifactId>flyway-database-oracle</artifactId>
+        <version>${flyway.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.flywaydb</groupId>
+        <artifactId>flyway-sqlserver</artifactId>
+        <version>${flyway.version}</version>
+      </dependency>
       <!-- Tabular file transfers (design ch. 28): CSV built in, Excel as an optional module. -->
       <dependency>
         <groupId>org.apache.commons</groupId>

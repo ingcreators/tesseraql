@@ -21,6 +21,27 @@ public final class SqlScripts {
     }
 
     /**
+     * Executes the bundled migration script matching the datasource's vendor: when a
+     * {@code <dir>-<vendor>/<file>} sibling of {@code <dir>/<file>} exists (e.g.
+     * {@code operations-oracle/V1__framework_operations.sql}), it replaces the common script
+     * entirely - vendors whose DDL diverges keep complete scripts of their own (design ch. 42).
+     */
+    public static void applyForVendor(DataSource dataSource, Class<?> anchor, String resourcePath)
+            throws SQLException {
+        String path = resourcePath;
+        String vendor = DatabaseVendors.vendor(dataSource).orElse(null);
+        if (vendor != null) {
+            int slash = resourcePath.lastIndexOf('/');
+            String variant = resourcePath.substring(0, slash) + "-" + vendor
+                    + resourcePath.substring(slash);
+            if (anchor.getResource(variant) != null) {
+                path = variant;
+            }
+        }
+        apply(dataSource, anchor, path);
+    }
+
+    /**
      * Executes the resource (resolved against the anchor class) on the datasource, one statement
      * at a time - drivers like MySQL's reject multi-statement strings.
      */
@@ -30,7 +51,16 @@ public final class SqlScripts {
         try (Connection connection = dataSource.getConnection();
                 Statement statement = connection.createStatement()) {
             for (String sql : statements(script)) {
-                statement.execute(sql);
+                try {
+                    statement.execute(sql);
+                } catch (SQLException ex) {
+                    // Oracle has no CREATE TABLE IF NOT EXISTS the tooling stack parses, so its
+                    // scripts use plain CREATE and the bootstrap tolerates ORA-00955 (name is
+                    // already used) - the idempotency the other dialects get from IF NOT EXISTS.
+                    if (ex.getErrorCode() != 955) {
+                        throw ex;
+                    }
+                }
             }
         }
     }

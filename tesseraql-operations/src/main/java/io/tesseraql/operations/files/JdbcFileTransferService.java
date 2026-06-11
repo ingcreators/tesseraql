@@ -86,7 +86,7 @@ public final class JdbcFileTransferService implements FileTransferService {
      */
     public void ensureSchema() {
         try {
-            io.tesseraql.core.util.SqlScripts.apply(dataSource, JdbcFileTransferService.class,
+            io.tesseraql.core.util.SqlScripts.applyForVendor(dataSource, JdbcFileTransferService.class,
                     "/tesseraql/db/migration/operations/V1__framework_operations.sql");
         } catch (SQLException ex) {
             throw new TqlException(TRANSFER_ERROR,
@@ -164,6 +164,23 @@ public final class JdbcFileTransferService implements FileTransferService {
                 transfer.downloadedAt() != null));
     }
 
+
+    /** The connected vendor (for label normalization and the row-limit clause), detected once. */
+    private volatile String vendor;
+    private volatile boolean vendorDetected;
+
+    private String vendor() {
+        if (!vendorDetected) {
+            vendor = io.tesseraql.core.util.DatabaseVendors.vendor(dataSource).orElse(null);
+            vendorDetected = true;
+        }
+        return vendor;
+    }
+
+    private String fetchClause() {
+        return io.tesseraql.core.dialect.Pagination.fetchClause(vendor());
+    }
+
     @Override
     public List<TransferSummary> recent(int limit) {
         List<TransferSummary> summaries = new ArrayList<>();
@@ -173,7 +190,7 @@ public final class JdbcFileTransferService implements FileTransferService {
                         from tql_file_transfer t
                           left join tql_job_execution e on e.job_execution_id = t.transfer_id
                         order by t.created_at desc
-                        limit ?""")) {
+                        """ + fetchClause())) {
             statement.setInt(1, limit);
             try (ResultSet rs = statement.executeQuery()) {
                 while (rs.next()) {
@@ -311,7 +328,7 @@ public final class JdbcFileTransferService implements FileTransferService {
                         PreparedStatement statement = prepare(connection, bound);
                         ResultSet results = statement.executeQuery();
                         OutputStream out = new SpoolOutputStream(writer)) {
-                    RowIterator iterator = new RowIterator(results);
+                    RowIterator iterator = new RowIterator(results, vendor());
                     codec.write(out, request.writeSpec(), iterator);
                     rows = iterator.count;
                     writer.incrementRows(rows);
@@ -377,12 +394,13 @@ public final class JdbcFileTransferService implements FileTransferService {
         private Boolean hasNext;
         private long count;
 
-        RowIterator(ResultSet results) throws SQLException {
+        RowIterator(ResultSet results, String vendor) throws SQLException {
             this.results = results;
             ResultSetMetaData metaData = results.getMetaData();
             List<String> columnLabels = new ArrayList<>();
             for (int i = 1; i <= metaData.getColumnCount(); i++) {
-                columnLabels.add(metaData.getColumnLabel(i));
+                columnLabels.add(io.tesseraql.core.dialect.Labels.normalize(
+                        vendor, metaData.getColumnLabel(i)));
             }
             this.labels = List.copyOf(columnLabels);
         }

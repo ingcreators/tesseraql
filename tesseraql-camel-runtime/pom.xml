@@ -65,6 +65,16 @@
     </dependency>
     <dependency>
       <groupId>org.flywaydb</groupId>
+      <artifactId>flyway-database-oracle</artifactId>
+      <scope>runtime</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.flywaydb</groupId>
+      <artifactId>flyway-sqlserver</artifactId>
+      <scope>runtime</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.flywaydb</groupId>
       <artifactId>flyway-mysql</artifactId>
     </dependency>
     <!-- Opt-in feature: the runtime has no compile dependency on SCIM; it self-installs via the
@@ -144,6 +154,27 @@
     <dependency>
       <groupId>io.opentelemetry</groupId>
       <artifactId>opentelemetry-sdk-testing</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <!-- Gated Oracle/SQL Server portability ITs (-Dtesseraql.dialect.its=true). -->
+    <dependency>
+      <groupId>org.testcontainers</groupId>
+      <artifactId>oracle-free</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.testcontainers</groupId>
+      <artifactId>mssqlserver</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>com.oracle.database.jdbc</groupId>
+      <artifactId>ojdbc11</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>com.microsoft.sqlserver</groupId>
+      <artifactId>mssql-jdbc</artifactId>
       <scope>test</scope>
     </dependency>
     <!-- The optional Excel codec, on the test classpath to prove ServiceLoader discovery. -->

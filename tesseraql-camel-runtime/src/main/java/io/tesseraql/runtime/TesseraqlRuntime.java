@@ -217,6 +217,10 @@ public final class TesseraqlRuntime implements AutoCloseable {
         httpConfig.setBindHost("0.0.0.0");
         httpConfig.setBindPort(port);
 
+        // The framework's own migrations run before any store touches the schema (versioned
+        // history per component, Flyway's lock serializing concurrent node startups); the
+        // stores' direct bootstrap below stays as the idempotent fallback for embedders.
+        FrameworkMigrations.migrate(dataSource);
         JobRepository jobRepository = new JobRepository(dataSource);
         jobRepository.ensureSchema();
         JdbcIdempotencyStore idempotencyStore = new JdbcIdempotencyStore(dataSource);
@@ -282,11 +286,8 @@ public final class TesseraqlRuntime implements AutoCloseable {
                             manifest.config().getString("tesseraql.diagnostics.batchFailureWarnPercent")
                                     .map(Double::parseDouble).orElse(10.0)),
                     pinningMonitor);
-            // The framework's own tables migrate first (versioned history per component, and
-            // Flyway's lock serializes concurrent node startups), then the app's db/migration
-            // runs before anything queries its schema: fresh installs, upgrades and canary
-            // activations all converge here (design ch. 31, 32).
-            FrameworkMigrations.migrate(dataSource);
+            // The app's db/migration runs before anything queries its schema: fresh installs,
+            // upgrades and canary activations all converge here (design ch. 31, 32).
             AppMigrations.migrate(appName, appHome, manifest.config(), dataSource,
                     tenantDataSources, dataSources::get);
             context.addService(new VertxPlatformHttpServer(httpConfig));
