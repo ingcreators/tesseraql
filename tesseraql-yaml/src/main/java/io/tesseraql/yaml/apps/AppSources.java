@@ -58,7 +58,14 @@ public final class AppSources {
         List<AppSource> sources = new ArrayList<>();
         for (Map.Entry<?, ?> entry : map.entrySet()) {
             String name = String.valueOf(entry.getKey());
-            // A .tqlapp package mounts directly (extracted at boot); a path mounts an unpacked dir.
+            // A url fetches a hash-pinned .tqlapp (multi-server distribution); a package mounts
+            // a local .tqlapp; a path mounts an unpacked directory.
+            var url = config.getString("tesseraql.apps." + name + ".url");
+            if (url.isPresent()) {
+                sources.add(new HttpAppSource(name, url.get(),
+                        config.getString("tesseraql.apps." + name + ".sha256").orElse(null)));
+                continue;
+            }
             var packaged = config.getString("tesseraql.apps." + name + ".package");
             if (packaged.isPresent()) {
                 sources.add(new ZipAppSource(name, Path.of(packaged.get()),

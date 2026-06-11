@@ -59,6 +59,13 @@ final class OperationsRouteBuilder extends RouteBuilder {
         rest().get("/_tesseraql/ops/traces/metrics").to("direct:ops.traceMetrics");
         rest().get("/_tesseraql/ops/alerts").to("direct:ops.alerts");
         rest().get("/_tesseraql/ops/pinning").to("direct:ops.pinning");
+        // Liveness/readiness for load balancers and deploy tooling: unauthenticated by design,
+        // so it exposes only the status word - details stay behind the authorized ops API.
+        rest().get("/_tesseraql/health").to("direct:ops.health");
+
+        from("direct:ops.health").routeId("ops.health")
+                .process(jsonProcessor(exchange ->
+                        java.util.Map.of("status", dashboard.health().status())));
 
         from("direct:ops.batch.jobs").routeId("ops.batch.jobs")
                 .to(VIEW).to("tesseraql-auth:authorize?policy=ops.batch.view")
