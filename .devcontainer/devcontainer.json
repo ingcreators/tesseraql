@@ -39,6 +39,7 @@
         "java.format.settings.url": "config/eclipse-formatter.xml",
         "java.format.settings.profile": "TesseraQL",
         "java.completion.importOrder": ["#"],
+        "java.compile.nullAnalysis.mode": "disabled",
         "[java]": {
           "editor.codeActionsOnSave": {
             "source.organizeImports": "explicit"

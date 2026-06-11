@@ -407,6 +407,10 @@
         </configuration>
         <executions>
           <execution>
+            <!-- m2e must not run this in IDE builds: Spotless' embedded Eclipse formatter
+                 clashes with the IDE's own JDT classes. VS Code formats via the same
+                 profile through java.format.settings.url; the CLI/CI gate is unaffected. -->
+            <?m2e ignore?>
             <goals>
               <goal>check</goal>
             </goals>

@@ -1,7 +1,17 @@
 {
   "java.configuration.updateBuildConfiguration": "automatic",
+  "java.format.settings.url": "config/eclipse-formatter.xml",
+  "java.format.settings.profile": "TesseraQL",
+  "java.completion.importOrder": ["#"],
+  "[java]": {
+    "editor.codeActionsOnSave": {
+      "source.organizeImports": "explicit"
+    }
+  },
+  // The codebase carries no null annotations of its own; "automatic" flips analysis on
+  // because Jackson ships JSpecify metadata, flagging JDK/Camel interop as false positives.
+  "java.compile.nullAnalysis.mode": "disabled",
   "editor.formatOnSave": true,
   "files.eol": "\n",
-  "yaml.validate": true,
-  "java.compile.nullAnalysis.mode": "automatic"
+  "yaml.validate": true
 }
