@@ -147,6 +147,7 @@ public final class ManifestCoverage {
         if (definition.sql() != null) {
             bindings.add(definition.sql());
         }
+        bindings.addAll(definition.steps().values());
         bindings.addAll(definition.queries().values());
         if (definition.fileImport() != null && definition.fileImport().sql() != null) {
             bindings.add(definition.fileImport().sql());

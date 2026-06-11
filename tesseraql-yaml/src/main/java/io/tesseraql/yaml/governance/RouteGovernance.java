@@ -126,6 +126,8 @@ public final class RouteGovernance {
     private static Set<String> undeclaredInputs(RouteDefinition definition) {
         Set<String> undeclared = new TreeSet<>();
         collectUndeclared(definition, definition.sql(), undeclared);
+        definition.steps().values()
+                .forEach(binding -> collectUndeclared(definition, binding, undeclared));
         definition.queries().values()
                 .forEach(binding -> collectUndeclared(definition, binding, undeclared));
         return undeclared;
