@@ -11,6 +11,27 @@
   <name>TesseraQL Parent</name>
   <description>SQL-first hypermedia and integration framework.</description>
   <url>https://github.com/ingcreators/tesseraql</url>
+  <inceptionYear>2026</inceptionYear>
+
+  <licenses>
+    <license>
+      <name>Apache-2.0</name>
+      <url>https://www.apache.org/licenses/LICENSE-2.0.txt</url>
+      <distribution>repo</distribution>
+    </license>
+  </licenses>
+
+  <organization>
+    <name>ingcreators</name>
+    <url>https://github.com/ingcreators</url>
+  </organization>
+
+  <scm>
+    <url>https://github.com/ingcreators/tesseraql</url>
+    <connection>scm:git:https://github.com/ingcreators/tesseraql.git</connection>
+    <developerConnection>scm:git:git@github.com:ingcreators/tesseraql.git</developerConnection>
+    <tag>HEAD</tag>
+  </scm>
 
   <modules>
     <module>tesseraql-bom</module>
