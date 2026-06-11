@@ -4,9 +4,9 @@ All notable changes to TesseraQL are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [Semantic Versioning](https://semver.org/).
 
-## 0.1.0 (unreleased)
+## 0.1.0 - 2026-06-11
 
-First public release: the complete framework described in the design document, built and
+First public release: the complete framework, built and
 verified per feature against live databases.
 
 ### Core
