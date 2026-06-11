@@ -24,6 +24,16 @@ class DialectTest {
     }
 
     @Test
+    void generatedKeyRetrievalPerDialect() {
+        // PostgreSQL and Oracle honor requested key columns (RETURNING / RETURNING INTO);
+        // MySQL and SQL Server only return the auto-increment / identity value.
+        assertThat(Dialect.POSTGRES.capabilities().generatedKeyColumns()).isTrue();
+        assertThat(Dialect.ORACLE.capabilities().generatedKeyColumns()).isTrue();
+        assertThat(Dialect.MYSQL.capabilities().generatedKeyColumns()).isFalse();
+        assertThat(Dialect.SQLSERVER.capabilities().generatedKeyColumns()).isFalse();
+    }
+
+    @Test
     void prefersDialectSpecificSqlFile(@TempDir Path dir) throws Exception {
         Path base = dir.resolve("search.sql");
         Path mysql = dir.resolve("search.mysql.sql");

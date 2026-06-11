@@ -1,5 +1,6 @@
 package io.tesseraql.core.error;
 
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 
@@ -9,12 +10,18 @@ import java.util.Optional;
  * <p>Internal diagnostics (source file, line) are retained here but, per design ch. 37.3,
  * callers decide what to expose externally. Construct with {@link #builder(TqlErrorCode)} when
  * source location is available.
+ *
+ * <p>{@link #details()} is the explicit exception to that rule: a structured payload the thrower
+ * declares safe for external responses (for example field-level constraint errors or an
+ * optimistic-locking conflict hint, roadmap Phase 18). Never put internal SQL, schema, or stack
+ * information in it.
  */
 public class TqlException extends RuntimeException {
 
     private final TqlErrorCode code;
     private final String source;
     private final Integer line;
+    private final transient Map<String, Object> details;
 
     public TqlException(TqlErrorCode code, String message) {
         this(code, message, null, null, null);
@@ -26,10 +33,18 @@ public class TqlException extends RuntimeException {
 
     protected TqlException(TqlErrorCode code, String message, String source, Integer line,
             Throwable cause) {
+        this(code, message, source, line, cause, null);
+    }
+
+    private TqlException(TqlErrorCode code, String message, String source, Integer line,
+            Throwable cause, Map<String, Object> details) {
         super(message, cause);
         this.code = Objects.requireNonNull(code, "code");
         this.source = source;
         this.line = line;
+        this.details = details == null || details.isEmpty()
+                ? Map.of()
+                : java.util.Collections.unmodifiableMap(new java.util.LinkedHashMap<>(details));
     }
 
     public TqlErrorCode code() {
@@ -42,6 +57,11 @@ public class TqlException extends RuntimeException {
 
     public Optional<Integer> line() {
         return Optional.ofNullable(line);
+    }
+
+    /** Structured detail the thrower declared safe to expose in external error responses. */
+    public Map<String, Object> details() {
+        return details;
     }
 
     @Override
@@ -71,6 +91,7 @@ public class TqlException extends RuntimeException {
         private String source;
         private Integer line;
         private Throwable cause;
+        private Map<String, Object> details;
 
         private Builder(TqlErrorCode code) {
             this.code = Objects.requireNonNull(code, "code");
@@ -96,8 +117,14 @@ public class TqlException extends RuntimeException {
             return this;
         }
 
+        /** Attaches structured detail that is safe to expose in external error responses. */
+        public Builder details(Map<String, Object> details) {
+            this.details = details;
+            return this;
+        }
+
         public TqlException build() {
-            return new TqlException(code, message, source, line, cause);
+            return new TqlException(code, message, source, line, cause, details);
         }
     }
 }
