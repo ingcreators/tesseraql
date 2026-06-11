@@ -74,8 +74,22 @@ public final class SamlRuntimeExtension implements RuntimeExtension {
         SamlEndpoints endpoints = new SamlEndpoints(audience, recipient,
                 config.getString("tesseraql.saml.idp.ssoUrl").orElse(null),
                 config.getString("tesseraql.saml.idp.sloUrl").orElse(null));
-        context.camel().addRoutes(
-                new SamlAcsRouteBuilder(validator, mapping, sessions, linker, metadata, endpoints));
+        // Hardening (design ch. 10.14, 20): the JDBC replay guard enforces single-use
+        // InResponseTo/RelayState and assertion-replay rejection across nodes; an SP signing key
+        // signs HTTP-Redirect messages; inbound logout must be signed unless explicitly relaxed.
+        SamlReplayGuard replayGuard = new SamlReplayGuard(context.dataSource());
+        replayGuard.ensureSchema();
+        java.security.PrivateKey spKey = config.getString("tesseraql.saml.sp.signingKey")
+                .map(path -> SamlKeys.privateKey(readBytes(manifest, path)))
+                .orElse(null);
+        boolean allowIdpInitiated = config.getString("tesseraql.saml.allowIdpInitiated")
+                .map(Boolean::parseBoolean).orElse(false);
+        boolean requireSignedLogout = config.getString("tesseraql.saml.requireSignedLogout")
+                .map(Boolean::parseBoolean).orElse(true);
+        SamlAcsRouteBuilder.SamlSecurity security = new SamlAcsRouteBuilder.SamlSecurity(
+                replayGuard, spKey, idpKey, allowIdpInitiated, requireSignedLogout);
+        context.camel().addRoutes(new SamlAcsRouteBuilder(
+                validator, mapping, sessions, linker, metadata, endpoints, security));
     }
 
     private static byte[] readBytes(AppManifest manifest, String relative) {

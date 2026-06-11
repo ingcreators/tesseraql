@@ -31,6 +31,70 @@ public final class SamlRedirect {
         return Base64.getEncoder().encodeToString(out.toByteArray());
     }
 
+    /** The RSA-SHA256 signature algorithm identifier the redirect binding advertises. */
+    public static final String RSA_SHA256 = "http://www.w3.org/2001/04/xmldsig-more#rsa-sha256";
+
+    /**
+     * Builds the signed redirect query string (OASIS SAML Bindings 3.4.4.1): the signature is
+     * computed over the exact URL-encoded octets of
+     * {@code <param>=...[&RelayState=...]&SigAlg=...} and appended as {@code &Signature=...}.
+     */
+    public static String signedQuery(String paramName, String encodedMessage, String relayState,
+            java.security.PrivateKey key) {
+        String query = query(paramName, encodedMessage, relayState)
+                + "&SigAlg=" + urlEncode(RSA_SHA256);
+        try {
+            java.security.Signature signer = java.security.Signature.getInstance("SHA256withRSA");
+            signer.initSign(key);
+            signer.update(query.getBytes(StandardCharsets.UTF_8));
+            return query + "&Signature=" + urlEncode(
+                    Base64.getEncoder().encodeToString(signer.sign()));
+        } catch (java.security.GeneralSecurityException ex) {
+            throw new SamlException("Cannot sign redirect message: " + ex.getMessage(), ex);
+        }
+    }
+
+    /** The unsigned redirect query string. */
+    public static String query(String paramName, String encodedMessage, String relayState) {
+        StringBuilder query = new StringBuilder(paramName).append('=')
+                .append(urlEncode(encodedMessage));
+        if (relayState != null && !relayState.isBlank()) {
+            query.append("&RelayState=").append(urlEncode(relayState));
+        }
+        return query.toString();
+    }
+
+    /**
+     * Verifies an inbound signed redirect message against the pinned IdP key, rebuilding the
+     * exact signed octets from the received parameter values. Throws on any mismatch.
+     */
+    public static void verifySignedQuery(String paramName, String encodedMessage,
+            String relayState, String sigAlg, String signatureBase64,
+            java.security.PublicKey key) {
+        if (sigAlg == null || signatureBase64 == null) {
+            throw new SamlException("Redirect message is not signed");
+        }
+        if (!RSA_SHA256.equals(sigAlg)) {
+            throw new SamlException("Unsupported redirect signature algorithm: " + sigAlg);
+        }
+        String query = query(paramName, encodedMessage, relayState)
+                + "&SigAlg=" + urlEncode(sigAlg);
+        try {
+            java.security.Signature verifier = java.security.Signature.getInstance("SHA256withRSA");
+            verifier.initVerify(key);
+            verifier.update(query.getBytes(StandardCharsets.UTF_8));
+            if (!verifier.verify(Base64.getMimeDecoder().decode(signatureBase64))) {
+                throw new SamlException("Redirect signature does not verify");
+            }
+        } catch (java.security.GeneralSecurityException ex) {
+            throw new SamlException("Cannot verify redirect signature: " + ex.getMessage(), ex);
+        }
+    }
+
+    private static String urlEncode(String value) {
+        return java.net.URLEncoder.encode(value, StandardCharsets.UTF_8);
+    }
+
     /** Base64-decodes and raw-INFLATEs a redirect-binding SAML message. */
     public static String decodeAndInflate(String encoded) {
         byte[] compressed = Base64.getMimeDecoder().decode(encoded);

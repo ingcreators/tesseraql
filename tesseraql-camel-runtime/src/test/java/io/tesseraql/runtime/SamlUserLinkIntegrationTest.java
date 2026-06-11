@@ -156,6 +156,7 @@ class SamlUserLinkIntegrationTest {
                 tesseraql:
                   saml:
                     enabled: true
+                    allowIdpInitiated: true
                     sp:
                       audience: %s
                       acsUrl: %s

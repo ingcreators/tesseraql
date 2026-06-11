@@ -85,6 +85,14 @@ final class SamlTestSupport {
     }
 
     /** IdP metadata advertising {@link #FIXED_CERT} as the signing certificate. */
+    /** The fixed test key as a PKCS#8 PEM, for configs that read a key file. */
+    static String fixedPrivateKeyPem() throws Exception {
+        return "-----BEGIN PRIVATE KEY-----\n"
+                + java.util.Base64.getMimeEncoder(64, "\n".getBytes())
+                        .encodeToString(fixedPrivateKey().getEncoded())
+                + "\n-----END PRIVATE KEY-----\n";
+    }
+
     static String idpMetadataXml(String entityId) {
         return """
                 <md:EntityDescriptor xmlns:md="urn:oasis:names:tc:SAML:2.0:metadata" entityID="%s">
@@ -116,6 +124,14 @@ final class SamlTestSupport {
     /** Builds a SAML response signed at the assertion level with the supplied attributes. */
     static String signedResponse(PrivateKey key, String nameId, String audience, String recipient,
             Instant now, Map<String, List<String>> attributes) throws Exception {
+        return signedResponse(key, nameId, audience, recipient, now, attributes,
+                "_a" + java.util.UUID.randomUUID(), null);
+    }
+
+    /** As above with an explicit assertion id and optional InResponseTo (replay/SP-initiated tests). */
+    static String signedResponse(PrivateKey key, String nameId, String audience, String recipient,
+            Instant now, Map<String, List<String>> attributes, String assertionId,
+            String inResponseTo) throws Exception {
         StringBuilder attrXml = new StringBuilder();
         attributes.forEach((name, values) -> {
             attrXml.append("<saml:Attribute Name=\"").append(name).append("\">");
@@ -124,13 +140,13 @@ final class SamlTestSupport {
             attrXml.append("</saml:Attribute>");
         });
         String xml = """
-                <samlp:Response xmlns:samlp="%s" xmlns:saml="%s" ID="response-id" Version="2.0"
-                                IssueInstant="%s">
+                <samlp:Response xmlns:samlp="%s" xmlns:saml="%s" ID="_r%s" Version="2.0"
+                                IssueInstant="%s"%s>
                   <saml:Issuer>https://idp.example.com</saml:Issuer>
                   <samlp:Status>
                     <samlp:StatusCode Value="urn:oasis:names:tc:SAML:2.0:status:Success"/>
                   </samlp:Status>
-                  <saml:Assertion ID="assertion-id" Version="2.0" IssueInstant="%s">
+                  <saml:Assertion ID="%s" Version="2.0" IssueInstant="%s">
                     <saml:Issuer>https://idp.example.com</saml:Issuer>
                     <saml:Subject>
                       <saml:NameID>%s</saml:NameID>
@@ -145,7 +161,9 @@ final class SamlTestSupport {
                     <saml:AttributeStatement>%s</saml:AttributeStatement>
                   </saml:Assertion>
                 </samlp:Response>
-                """.formatted(PROTOCOL_NS, ASSERTION_NS, now, now, nameId, now.plusSeconds(300),
+                """.formatted(PROTOCOL_NS, ASSERTION_NS, java.util.UUID.randomUUID(), now,
+                inResponseTo == null ? "" : " InResponseTo=\"" + inResponseTo + "\"",
+                assertionId, now, nameId, now.plusSeconds(300),
                 recipient, now.minusSeconds(60), now.plusSeconds(300), audience, now, attrXml);
 
         DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
@@ -154,7 +172,8 @@ final class SamlTestSupport {
                 .parse(new ByteArrayInputStream(xml.getBytes(StandardCharsets.UTF_8)));
         Element assertion = (Element) document.getElementsByTagNameNS(ASSERTION_NS, "Assertion").item(0);
         assertion.setIdAttribute("ID", true);
-        signEnveloped(assertion, firstChild(assertion, "Subject"), "#assertion-id", key);
+        signEnveloped(assertion, firstChild(assertion, "Subject"),
+                "#" + assertion.getAttribute("ID"), key);
         return serialize(document);
     }
 

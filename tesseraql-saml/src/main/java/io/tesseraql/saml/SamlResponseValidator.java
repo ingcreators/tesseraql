@@ -63,7 +63,15 @@ public final class SamlResponseValidator {
 
         validateConditions(assertion, now);
         validateSubjectConfirmation(assertion, now);
-        return extract(assertion);
+        SamlAssertion extracted = extract(assertion);
+        String inResponseTo = response.getAttribute("InResponseTo");
+        return new SamlAssertion(extracted.nameId(), extracted.nameIdFormat(),
+                extracted.sessionIndex(), extracted.attributes(), extracted.notOnOrAfter(),
+                blankToNull(assertion.getAttribute("ID")), blankToNull(inResponseTo));
+    }
+
+    private static String blankToNull(String value) {
+        return value == null || value.isBlank() ? null : value;
     }
 
     // --- signature -------------------------------------------------------------------------------

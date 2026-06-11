@@ -3,6 +3,7 @@ package io.tesseraql.saml.camel;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.tesseraql.saml.AuthnRequest;
 import io.tesseraql.saml.LogoutRequest;
+import io.tesseraql.saml.LogoutResponse;
 import io.tesseraql.saml.SamlAssertion;
 import io.tesseraql.saml.SamlAttributeMapping;
 import io.tesseraql.saml.SamlException;
@@ -39,21 +40,44 @@ final class SamlAcsRouteBuilder extends RouteBuilder {
     private final SamlUserLinker linker;
     private final SpMetadata metadata;
     private final SamlEndpoints endpoints;
+    private final SamlSecurity security;
+
+    /**
+     * Hardening options (design ch. 10.14, 20): the replay guard (null disables InResponseTo and
+     * assertion-replay checks - tests only), the SP redirect-signing key (null sends unsigned
+     * redirects), the pinned IdP key for inbound redirect signatures, whether unsolicited
+     * (IdP-initiated) responses are accepted, and whether inbound logout must be signed.
+     */
+    record SamlSecurity(SamlReplayGuard replayGuard, java.security.PrivateKey spSigningKey,
+            java.security.PublicKey idpKey, boolean allowIdpInitiated,
+            boolean requireSignedLogout) {
+
+        static SamlSecurity none() {
+            return new SamlSecurity(null, null, null, true, false);
+        }
+    }
 
     SamlAcsRouteBuilder(SamlResponseValidator validator, SamlAttributeMapping mapping,
             SessionStore sessions) {
-        this(validator, mapping, sessions, null, null, null);
+        this(validator, mapping, sessions, null, null, null, SamlSecurity.none());
     }
 
     SamlAcsRouteBuilder(SamlResponseValidator validator, SamlAttributeMapping mapping,
             SessionStore sessions, SamlUserLinker linker, SpMetadata metadata,
             SamlEndpoints endpoints) {
+        this(validator, mapping, sessions, linker, metadata, endpoints, SamlSecurity.none());
+    }
+
+    SamlAcsRouteBuilder(SamlResponseValidator validator, SamlAttributeMapping mapping,
+            SessionStore sessions, SamlUserLinker linker, SpMetadata metadata,
+            SamlEndpoints endpoints, SamlSecurity security) {
         this.validator = validator;
         this.mapping = mapping;
         this.sessions = sessions;
         this.linker = linker;
         this.metadata = metadata;
         this.endpoints = endpoints;
+        this.security = security;
     }
 
     @Override
@@ -75,14 +99,58 @@ final class SamlAcsRouteBuilder extends RouteBuilder {
             rest().get("/_tesseraql/saml/login").to("direct:tql.saml.login");
             from("direct:tql.saml.login").routeId("system.saml.login").process(this::login);
         }
+        if (endpoints != null && endpoints.idpSloUrl() != null) {
+            rest().get("/_tesseraql/saml/slo").to("direct:tql.saml.slo");
+            from("direct:tql.saml.slo").routeId("system.saml.slo").process(this::inboundLogout);
+        }
     }
 
     /** SP-initiated SSO: redirect to the IdP with a DEFLATE-encoded AuthnRequest (HTTP-Redirect). */
     private void login(Exchange exchange) {
+        String requestId = "_" + UUID.randomUUID();
         String xml = new AuthnRequest(endpoints.spEntityId(), endpoints.acsUrl(), endpoints.idpSsoUrl())
-                .toXml("_" + UUID.randomUUID(), Instant.now());
+                .toXml(requestId, Instant.now());
         String relayState = exchange.getMessage().getHeader("RelayState", String.class);
-        redirect(exchange, endpoints.idpSsoUrl(), SamlRedirect.deflateAndEncode(xml), relayState);
+        if (security.replayGuard() != null) {
+            // The pending id is consumed exactly once when InResponseTo comes back.
+            security.replayGuard().storeRequest(requestId, relayState);
+        }
+        redirect(exchange, endpoints.idpSsoUrl(), "SAMLRequest",
+                SamlRedirect.deflateAndEncode(xml), relayState);
+    }
+
+    /**
+     * IdP-initiated single logout: verify the redirect signature, terminate the local session
+     * and answer with a LogoutResponse redirect (design ch. 10.14).
+     */
+    private void inboundLogout(Exchange exchange) {
+        String encoded = exchange.getMessage().getHeader("SAMLRequest", String.class);
+        if (encoded == null) {
+            throw new SamlException("Missing SAMLRequest");
+        }
+        String relayState = exchange.getMessage().getHeader("RelayState", String.class);
+        String sigAlg = exchange.getMessage().getHeader("SigAlg", String.class);
+        String signature = exchange.getMessage().getHeader("Signature", String.class);
+        if (security.requireSignedLogout() || signature != null) {
+            if (security.idpKey() == null) {
+                throw new SamlException("No pinned IdP key to verify the logout signature");
+            }
+            SamlRedirect.verifySignedQuery("SAMLRequest", encoded, relayState, sigAlg,
+                    signature, security.idpKey());
+        }
+        LogoutRequest.Parsed request =
+                LogoutRequest.parse(SamlRedirect.decodeAndInflate(encoded));
+
+        String sessionId = cookieValue(exchange.getMessage().getHeader("Cookie", String.class),
+                sessions.cookieName());
+        sessions.invalidate(sessionId);
+        exchange.getMessage().setHeader("Set-Cookie",
+                sessions.cookieName() + "=; Path=/; HttpOnly; Max-Age=0");
+
+        String responseXml = new LogoutResponse(endpoints.spEntityId(), endpoints.idpSloUrl(),
+                request.id()).toXml("_" + UUID.randomUUID(), Instant.now());
+        redirect(exchange, endpoints.idpSloUrl(), "SAMLResponse",
+                SamlRedirect.deflateAndEncode(responseXml), relayState);
     }
 
     /** Single logout: invalidate the local session, clear the cookie, and redirect to the IdP SLO. */
@@ -100,7 +168,8 @@ final class SamlAcsRouteBuilder extends RouteBuilder {
             String sessionIndex = (String) session.principal().claims().get("sessionIndex");
             String xml = new LogoutRequest(endpoints.spEntityId(), endpoints.idpSloUrl(), nameId,
                     sessionIndex).toXml("_" + UUID.randomUUID(), Instant.now());
-            redirect(exchange, endpoints.idpSloUrl(), SamlRedirect.deflateAndEncode(xml), null);
+            redirect(exchange, endpoints.idpSloUrl(), "SAMLRequest",
+                    SamlRedirect.deflateAndEncode(xml), null);
             return;
         }
         exchange.getMessage().setHeader(Exchange.HTTP_RESPONSE_CODE, 200);
@@ -112,15 +181,15 @@ final class SamlAcsRouteBuilder extends RouteBuilder {
         }
     }
 
-    private static void redirect(Exchange exchange, String idpUrl, String samlRequest, String relayState) {
+    private void redirect(Exchange exchange, String idpUrl, String paramName,
+            String encodedMessage, String relayState) {
         String separator = idpUrl.contains("?") ? "&" : "?";
-        StringBuilder location = new StringBuilder(idpUrl).append(separator)
-                .append("SAMLRequest=").append(URLEncoder.encode(samlRequest, StandardCharsets.UTF_8));
-        if (relayState != null) {
-            location.append("&RelayState=").append(URLEncoder.encode(relayState, StandardCharsets.UTF_8));
-        }
+        String query = security.spSigningKey() != null
+                ? SamlRedirect.signedQuery(paramName, encodedMessage, relayState,
+                        security.spSigningKey())
+                : SamlRedirect.query(paramName, encodedMessage, relayState);
         exchange.getMessage().setHeader(Exchange.HTTP_RESPONSE_CODE, 302);
-        exchange.getMessage().setHeader("Location", location.toString());
+        exchange.getMessage().setHeader("Location", idpUrl + separator + query);
         exchange.getMessage().setBody(null);
     }
 
@@ -155,6 +224,7 @@ final class SamlAcsRouteBuilder extends RouteBuilder {
         }
         String xml = new String(Base64.getMimeDecoder().decode(encoded), StandardCharsets.UTF_8);
         SamlAssertion assertion = validator.validate(xml, Instant.now());
+        guardAgainstReplay(exchange, assertion);
         Principal resolved = linker == null
                 ? toPrincipal(assertion)
                 : linker.resolve(loginId(assertion), attribute(assertion, mapping.displayName()),
@@ -168,6 +238,41 @@ final class SamlAcsRouteBuilder extends RouteBuilder {
                 sessions.cookieName() + "=" + sessionId + "; Path=/; HttpOnly; SameSite=Lax");
         exchange.getMessage().setBody(mapper.writeValueAsString(
                 Map.of("ok", true, "loginId", principal.loginId(), "subject", principal.subject())));
+    }
+
+    /**
+     * InResponseTo, RelayState and assertion-replay checks (design ch. 10.14, 20): a solicited
+     * response must consume its pending AuthnRequest exactly once with an untampered RelayState,
+     * an unsolicited one passes only when IdP-initiated SSO is enabled, and an assertion id is
+     * accepted at most once until its NotOnOrAfter.
+     */
+    private void guardAgainstReplay(Exchange exchange, SamlAssertion assertion) {
+        if (security.replayGuard() == null) {
+            return;
+        }
+        if (assertion.inResponseTo() != null) {
+            String storedRelayState = security.replayGuard()
+                    .consumeRequest(assertion.inResponseTo())
+                    .orElseThrow(() -> new SamlException(
+                            "InResponseTo does not match a pending request (replay or forgery)"));
+            String returned = exchange.getMessage().getHeader("RelayState", String.class);
+            if (returned == null) {
+                returned = formParam(exchange.getMessage().getBody(String.class), "RelayState");
+            }
+            if (!storedRelayState.isEmpty() && !storedRelayState.equals(returned)) {
+                throw new SamlException("RelayState does not match the original request");
+            }
+        } else if (!security.allowIdpInitiated()) {
+            throw new SamlException(
+                    "Unsolicited response rejected (enable tesseraql.saml.allowIdpInitiated)");
+        }
+        if (assertion.assertionId() != null) {
+            Instant expiry = assertion.notOnOrAfter() == null
+                    ? Instant.now().plusSeconds(300) : assertion.notOnOrAfter();
+            if (!security.replayGuard().markAssertionSeen(assertion.assertionId(), expiry)) {
+                throw new SamlException("Assertion replay rejected");
+            }
+        }
     }
 
     /** Maps a validated assertion onto a principal from its attributes (IdP-asserted roles). */

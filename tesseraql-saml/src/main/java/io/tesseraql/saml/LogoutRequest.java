@@ -38,6 +38,39 @@ public record LogoutRequest(String issuer, String destination, String nameId, St
                         escapeAttr(destination), escapeText(issuer), escapeText(nameId), sessionIndexXml);
     }
 
+    /** A parsed inbound logout request: its message id (for InResponseTo) and subject. */
+    public record Parsed(String id, String issuer, String nameId) {
+    }
+
+    /** Parses an inbound (IdP-initiated) LogoutRequest's id, issuer and NameID. */
+    public static Parsed parse(String xml) {
+        try {
+            javax.xml.parsers.DocumentBuilderFactory factory =
+                    javax.xml.parsers.DocumentBuilderFactory.newInstance();
+            factory.setNamespaceAware(true);
+            factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true);
+            org.w3c.dom.Document document = factory.newDocumentBuilder()
+                    .parse(new java.io.ByteArrayInputStream(
+                            xml.getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+            org.w3c.dom.Element root = document.getDocumentElement();
+            if (!PROTOCOL_NS.equals(root.getNamespaceURI())
+                    || !"LogoutRequest".equals(root.getLocalName())) {
+                throw new SamlException("Not a SAML LogoutRequest");
+            }
+            return new Parsed(root.getAttribute("ID"),
+                    text(root, ASSERTION_NS, "Issuer"), text(root, ASSERTION_NS, "NameID"));
+        } catch (SamlException ex) {
+            throw ex;
+        } catch (Exception ex) {
+            throw new SamlException("Malformed LogoutRequest: " + ex.getMessage(), ex);
+        }
+    }
+
+    private static String text(org.w3c.dom.Element root, String ns, String localName) {
+        org.w3c.dom.NodeList nodes = root.getElementsByTagNameNS(ns, localName);
+        return nodes.getLength() == 0 ? null : nodes.item(0).getTextContent().trim();
+    }
+
     private static String escapeAttr(String value) {
         return escapeText(value).replace("\"", "&quot;");
     }

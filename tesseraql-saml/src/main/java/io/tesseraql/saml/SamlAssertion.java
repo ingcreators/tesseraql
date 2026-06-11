@@ -17,7 +17,14 @@ import java.util.Optional;
  * @param notOnOrAfter the assertion's conditions {@code NotOnOrAfter}, if present
  */
 public record SamlAssertion(String nameId, String nameIdFormat, String sessionIndex,
-        Map<String, List<String>> attributes, Instant notOnOrAfter) {
+        Map<String, List<String>> attributes, Instant notOnOrAfter,
+        String assertionId, String inResponseTo) {
+
+    /** Without response correlation (tests and pre-correlation callers). */
+    public SamlAssertion(String nameId, String nameIdFormat, String sessionIndex,
+            Map<String, List<String>> attributes, Instant notOnOrAfter) {
+        this(nameId, nameIdFormat, sessionIndex, attributes, notOnOrAfter, null, null);
+    }
 
     public SamlAssertion {
         attributes = attributes == null ? Map.of() : Map.copyOf(attributes);
