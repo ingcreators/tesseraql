@@ -5,6 +5,14 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    groups:
+      # Plugin patch/minor bumps land together; library and major bumps stay individual.
+      maven-plugins:
+        patterns:
+          - "org.apache.maven.plugins:*"
+        update-types:
+          - minor
+          - patch
 
   - package-ecosystem: github-actions
     directory: /
@@ -13,5 +21,14 @@ updates:
 
   - package-ecosystem: docker
     directory: /.devcontainer
+    schedule:
+      interval: weekly
+    ignore:
+      # The JDK in the tag is a deliberate choice (Java 21 baseline; CI checks 25
+      # compatibility) and the tags are not semver, so this image is updated manually.
+      - dependency-name: mcr.microsoft.com/devcontainers/java
+
+  - package-ecosystem: docker
+    directory: /deploy
     schedule:
       interval: weekly
