@@ -82,6 +82,27 @@ class SqlRendererTest {
     }
 
     @Test
+    void forLoopSeparatorJoinsIterationsAndStaysOutOfRawSql() {
+        // The separator lives inside the directive comment, so the raw template remains a
+        // single SQL-tool-runnable VALUES element (roadmap Phase 18 multi-row inserts).
+        String sql = "insert into t (a) values /*%for v : vs separator ', ' */(/* v */0)/*%end*/";
+        BoundSql bound = SqlRenderer.render(sql, Map.of("vs", List.of(7, 8, 9)));
+
+        assertThat(bound.sql()).isEqualTo("insert into t (a) values (?), (?), (?)");
+        assertThat(bound.parameters()).extracting(BoundParameter::value).containsExactly(7, 8, 9);
+    }
+
+    @Test
+    void forLoopExposesZeroBasedIndexVariable() {
+        String sql = "/*%for v : vs separator ',' */(/* v_index */0, /* v */'')/*%end*/";
+        BoundSql bound = SqlRenderer.render(sql, Map.of("vs", List.of("a", "b")));
+
+        assertThat(bound.sql()).isEqualTo("(?, ?),(?, ?)");
+        assertThat(bound.parameters()).extracting(BoundParameter::value)
+                .containsExactly(0, "a", 1, "b");
+    }
+
+    @Test
     void variantDiffersByBranchDecision() {
         String sql = """
                 select * from t where 1=1

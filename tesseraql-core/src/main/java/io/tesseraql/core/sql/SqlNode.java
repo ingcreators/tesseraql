@@ -45,9 +45,15 @@ public sealed interface SqlNode {
         }
     }
 
-    /** A repeated fragment: {@code /*%for item : items *}{@code / ... /*%end*}{@code /}. */
-    record For(String itemVar, String listExpressionSource, Expr listExpression, int sourceLine,
-            List<SqlNode> body) implements SqlNode {
+    /**
+     * A repeated fragment: {@code /*%for item : items *}{@code / ... /*%end*}{@code /}. An
+     * optional separator ({@code /*%for item : items separator ',' *}{@code /}) is emitted
+     * between iterations - it lives inside the directive comment, so the raw template stays a
+     * single, SQL-tool-runnable element (e.g. a multi-row {@code INSERT ... VALUES} list).
+     * The loop exposes {@code <item>_index} (0-based) alongside {@code <item>}.
+     */
+    record For(String itemVar, String listExpressionSource, Expr listExpression, String separator,
+            int sourceLine, List<SqlNode> body) implements SqlNode {
         public For {
             body = List.copyOf(body);
         }
