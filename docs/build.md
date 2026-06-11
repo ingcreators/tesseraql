@@ -12,6 +12,18 @@ TesseraQL 1.x build policy:
 - Maven plugin first
 - Gradle plugin later
 
+## Formatting
+
+Java formatting is enforced in the build: `spotless:check` runs during `verify` against the
+shared profile [config/eclipse-formatter.xml](../config/eclipse-formatter.xml) (4-space
+indent, 100 columns; hand-wrapped lines and comments are left as authored). VS Code applies
+the same profile on save (`java.format.settings.url`, preconfigured in the Dev Container).
+To fix violations:
+
+```bash
+./mvnw spotless:apply
+```
+
 ## Test reports and coverage
 
 The `tesseraql:test` and `tesseraql:coverage` goals run the app's declarative suites and write

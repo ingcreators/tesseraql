@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!--
+  TesseraQL Java format profile - the single source of truth shared by the build
+  (spotless-maven-plugin, `./mvnw spotless:apply` to fix) and VS Code
+  (java.format.settings.url). Style: 4-space indent, 100-column limit, K&R braces.
+  Already-wrapped lines are never joined and comments are left as authored, so the
+  formatter normalizes new code without churning hand-formatted constructs.
+  Unlisted settings use the Eclipse JDT defaults.
+-->
+<profiles version="13">
+  <profile kind="CodeFormatterProfile" name="TesseraQL" version="13">
+    <setting id="org.eclipse.jdt.core.formatter.tabulation.char" value="space"/>
+    <setting id="org.eclipse.jdt.core.formatter.tabulation.size" value="4"/>
+    <setting id="org.eclipse.jdt.core.formatter.indentation.size" value="4"/>
+    <setting id="org.eclipse.jdt.core.formatter.continuation_indentation" value="2"/>
+    <setting id="org.eclipse.jdt.core.formatter.continuation_indentation_for_array_initializer" value="2"/>
+    <setting id="org.eclipse.jdt.core.formatter.lineSplit" value="100"/>
+    <setting id="org.eclipse.jdt.core.formatter.comment.line_length" value="100"/>
+    <setting id="org.eclipse.jdt.core.formatter.join_wrapped_lines" value="false"/>
+    <setting id="org.eclipse.jdt.core.formatter.join_lines_in_comments" value="false"/>
+    <setting id="org.eclipse.jdt.core.formatter.comment.format_javadoc_comments" value="false"/>
+    <setting id="org.eclipse.jdt.core.formatter.comment.format_block_comments" value="false"/>
+    <setting id="org.eclipse.jdt.core.formatter.comment.format_line_comments" value="false"/>
+    <setting id="org.eclipse.jdt.core.formatter.comment.format_header" value="false"/>
+    <setting id="org.eclipse.jdt.core.formatter.number_of_empty_lines_to_preserve" value="1"/>
+    <setting id="org.eclipse.jdt.core.formatter.blank_lines_after_package" value="1"/>
+    <setting id="org.eclipse.jdt.core.formatter.blank_lines_before_package" value="0"/>
+    <setting id="org.eclipse.jdt.core.formatter.insert_new_line_at_end_of_file_if_missing" value="insert"/>
+  </profile>
+</profiles>
