@@ -57,7 +57,7 @@ public class CoverageMojo extends AbstractMojo {
 
         CoverageThresholds thresholds = CoverageThresholdResolver.resolve(
                 loadConfig(appHome.toPath()), sqlLineThreshold, sqlBranchThreshold);
-        CoverageGate.Result gate = CoverageGate.check(result.coverage(), thresholds);
+        CoverageGate.Result gate = CoverageGate.check(result.coverage(), result.kinds(), thresholds);
         gate.violations().forEach(getLog()::error);
         getLog().info(String.format("TesseraQL coverage gate: %s (line >= %.0f%%, branch >= %.0f%%)",
                 gate.passed() ? "passed" : "FAILED",

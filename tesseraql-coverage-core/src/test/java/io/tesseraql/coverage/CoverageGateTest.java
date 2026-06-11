@@ -26,6 +26,29 @@ class CoverageGateTest {
     }
 
     @Test
+    void gatesItemCoverageKindsByConfiguredThreshold() {
+        ItemCoverage routes = new ItemCoverage("route")
+                .declare("users.search").declare("users.create").cover("users.search");
+        CoverageThresholds thresholds =
+                new CoverageThresholds(0.0, 0.0, Map.of("route", 0.8, "scim", 0.8));
+
+        CoverageGate.Result result = CoverageGate.check(new SqlCoverage(),
+                java.util.List.of(routes, new ItemCoverage("scim")), thresholds);
+        assertThat(result.passed()).isFalse();
+        // The empty scim kind passes (nothing declared -> 1.0); the route kind is below 80%.
+        assertThat(result.violations()).hasSize(1);
+        assertThat(result.violations().get(0)).contains("route").contains("50%").contains("80%");
+    }
+
+    @Test
+    void ungatedKindsDoNotFailTheGate() {
+        ItemCoverage assertions = new ItemCoverage("assertion").declare("a");
+        CoverageGate.Result result = CoverageGate.check(new SqlCoverage(),
+                java.util.List.of(assertions), CoverageThresholds.ofPercent(0, 0));
+        assertThat(result.passed()).isTrue();
+    }
+
+    @Test
     void failsWhenBranchUnderThreshold() {
         SqlCoverage coverage = new SqlCoverage();
         coverage.record("s.sql", SqlRenderer.render(SQL, Map.of("q", "a")).coverageTrace());

@@ -5,15 +5,21 @@ import io.tesseraql.coverage.SqlCoverage;
 import io.tesseraql.coverage.SqlCoverageReport;
 import io.tesseraql.identity.IdentityService;
 import io.tesseraql.identity.RealmConfig;
-import io.tesseraql.test.SuiteCoverage;
+import io.tesseraql.report.AllureReporter;
+import io.tesseraql.report.CoberturaReporter;
 import io.tesseraql.report.HtmlReporter;
 import io.tesseraql.report.JUnitXmlReporter;
 import io.tesseraql.report.JsonReporter;
 import io.tesseraql.report.SarifReporter;
+import io.tesseraql.report.SonarQubeReporter;
+import io.tesseraql.test.ManifestCoverage;
+import io.tesseraql.test.SuiteCoverage;
 import io.tesseraql.test.TestReport;
 import io.tesseraql.test.TestRunner;
 import io.tesseraql.test.TestSuite;
 import io.tesseraql.test.TestSuiteLoader;
+import io.tesseraql.yaml.manifest.AppManifest;
+import io.tesseraql.yaml.manifest.ManifestLoader;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
@@ -21,21 +27,34 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Stream;
 import javax.sql.DataSource;
 
 /**
  * Discovers and runs declarative test suites under an app's {@code tests/} directory and writes the
- * JUnit XML, JSON, and HTML reports (design ch. 13, 15, 18). Independent of Maven for testability.
+ * JUnit XML, JSON, HTML, SARIF, Cobertura, SonarQube, and Allure reports (design ch. 13, 15, 18).
+ * Independent of Maven for testability.
  */
 public final class AppTestRunner {
 
+    /** Coverage kinds whose gaps are framework-inventory hints rather than test gaps. */
+    private static final Set<String> NOTE_KINDS = Set.of("iam-contract", "saml", "scim");
+
     /**
      * Result of a test run: the aggregated report, the collected SQL coverage, and the derived
-     * assertion and IAM-contract coverage (design ch. 14).
+     * item-coverage kinds (assertion, iam-contract, route, security, saml, scim — design ch. 14).
      */
-    public record RunResult(TestReport report, SqlCoverage coverage, ItemCoverage assertionCoverage,
-            ItemCoverage contractCoverage) {
+    public record RunResult(TestReport report, SqlCoverage coverage, List<ItemCoverage> kinds) {
+
+        public RunResult {
+            kinds = List.copyOf(kinds);
+        }
+
+        /** The derived coverage of one kind, or {@code null} when it was not collected. */
+        public ItemCoverage kind(String name) {
+            return kinds.stream().filter(kind -> kind.kind().equals(name)).findFirst().orElse(null);
+        }
     }
 
     /** Runs every {@code tests/**}{@code /*.yml} suite and writes reports under {@code reportDir}. */
@@ -52,14 +71,36 @@ public final class AppTestRunner {
             suites.add(suite);
             results.addAll(runner.run(suite).results());
         }
-        ItemCoverage assertions = SuiteCoverage.assertions(suites);
-        ItemCoverage contracts = SuiteCoverage.contracts(suites);
+        List<ItemCoverage> kinds = coverageKinds(appHome, suites);
 
         TestReport report = new TestReport(results);
         writeReports(report, reportDir);
-        writeCoverage(coverage, List.of(assertions, contracts), reportDir);
-        writeSarif(coverage, List.of(assertions, contracts), reportDir);
-        return new RunResult(report, coverage, assertions, contracts);
+        writeCoverage(coverage, kinds, reportDir);
+        writeSarif(coverage, kinds, reportDir);
+        return new RunResult(report, coverage, kinds);
+    }
+
+    /** Derives the item-coverage kinds; the manifest-based ones need a loadable manifest. */
+    private static List<ItemCoverage> coverageKinds(Path appHome, List<TestSuite> suites) {
+        List<ItemCoverage> kinds = new ArrayList<>();
+        kinds.add(SuiteCoverage.assertions(suites));
+        kinds.add(SuiteCoverage.contracts(suites));
+        AppManifest manifest = loadManifest(appHome);
+        if (manifest != null) {
+            kinds.add(ManifestCoverage.routes(manifest, suites));
+            kinds.add(ManifestCoverage.security(manifest, suites));
+            kinds.add(ManifestCoverage.saml(manifest, suites));
+            kinds.add(ManifestCoverage.scim(manifest, suites));
+        }
+        return kinds;
+    }
+
+    private static AppManifest loadManifest(Path appHome) {
+        try {
+            return new ManifestLoader().load(appHome);
+        } catch (RuntimeException ex) {
+            return null;
+        }
     }
 
     /** Writes coverage gaps as SARIF so CI code-scanning can annotate them (design ch. 15). */
@@ -78,7 +119,7 @@ public final class AppTestRunner {
             }
         });
         for (ItemCoverage kind : kinds) {
-            String level = "iam-contract".equals(kind.kind()) ? "note" : "warning";
+            String level = NOTE_KINDS.contains(kind.kind()) ? "note" : "warning";
             for (String item : kind.uncovered()) {
                 findings.add(new SarifReporter.Finding(kind.kind() + "-coverage", level,
                         kind.kind() + " not covered: " + item, null, null));
@@ -136,6 +177,10 @@ public final class AppTestRunner {
         try {
             Files.createDirectories(reportDir.resolve("coverage"));
             Files.writeString(reportDir.resolve("coverage/sql-coverage.json"), json.toString());
+            Files.writeString(reportDir.resolve("coverage/cobertura.xml"),
+                    CoberturaReporter.toXml(reports));
+            Files.writeString(reportDir.resolve("coverage/sonarqube.xml"),
+                    SonarQubeReporter.toXml(reports));
         } catch (IOException ex) {
             throw new UncheckedIOException(ex);
         }
@@ -160,6 +205,12 @@ public final class AppTestRunner {
                     JUnitXmlReporter.toXml(report, "tesseraql"));
             Files.writeString(reportDir.resolve("tesseraql-result.json"), JsonReporter.toJson(report));
             Files.writeString(reportDir.resolve("index.html"), HtmlReporter.toHtml(report, "TesseraQL Tests"));
+            Path allureDir = reportDir.resolve("allure-results");
+            Files.createDirectories(allureDir);
+            for (Map.Entry<String, String> file
+                    : AllureReporter.toResults(report, "tesseraql").entrySet()) {
+                Files.writeString(allureDir.resolve(file.getKey()), file.getValue());
+            }
         } catch (IOException ex) {
             throw new UncheckedIOException(ex);
         }

@@ -9,8 +9,8 @@ import java.util.List;
 /**
  * Derives non-SQL coverage kinds from the declarative test suites (design ch. 14): assertion
  * coverage (which cases actually assert something) and IAM-contract coverage (which standard identity
- * contracts the tests exercise). Both reuse the {@link ItemCoverage} model so further kinds (route,
- * security, SAML, SCIM) can follow the same shape as their test kinds land.
+ * contracts the tests exercise). Both reuse the {@link ItemCoverage} model; the manifest-based
+ * kinds (route, security, SAML, SCIM) live in {@link ManifestCoverage}.
  */
 public final class SuiteCoverage {
 

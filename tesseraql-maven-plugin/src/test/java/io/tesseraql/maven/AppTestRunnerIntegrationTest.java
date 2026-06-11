@@ -67,12 +67,26 @@ class AppTestRunnerIntegrationTest {
         assertThat(Files.exists(reportDir.resolve("index.html"))).isTrue();
         assertThat(Files.exists(reportDir.resolve("coverage/sql-coverage.json"))).isTrue();
         assertThat(Files.exists(reportDir.resolve("coverage/coverage.sarif"))).isTrue();
+        assertThat(Files.exists(reportDir.resolve("coverage/cobertura.xml"))).isTrue();
+        assertThat(Files.exists(reportDir.resolve("coverage/sonarqube.xml"))).isTrue();
+        try (var allureFiles = Files.list(reportDir.resolve("allure-results"))) {
+            assertThat(allureFiles.filter(f -> f.toString().endsWith("-result.json")).count())
+                    .isEqualTo(3);
+        } catch (Exception ex) {
+            throw new AssertionError(ex);
+        }
 
         // Both branches of search.sql are exercised (q present and empty) -> 100% branch coverage.
         assertThat(result.coverage().report("web/api/users/search.sql").branchRatio()).isEqualTo(1.0);
         // The derived coverage kinds are available on the result.
-        assertThat(result.assertionCoverage().ratio()).isBetween(0.0, 1.0);
-        assertThat(result.contractCoverage().kind()).isEqualTo("iam-contract");
+        assertThat(result.kind("assertion").ratio()).isBetween(0.0, 1.0);
+        assertThat(result.kind("iam-contract").kind()).isEqualTo("iam-contract");
+        // The manifest-based kinds: the users route binds search.sql, which the suite exercises.
+        assertThat(result.kind("route").covered()).contains("users.search");
+        assertThat(result.kind("security").declared()).isNotEmpty();
+        // No SAML linking and no SCIM in the example app: nothing declared, ratio 1.0.
+        assertThat(result.kind("saml").ratio()).isEqualTo(1.0);
+        assertThat(result.kind("scim").ratio()).isEqualTo(1.0);
     }
 
     private static DataSource dataSource() {

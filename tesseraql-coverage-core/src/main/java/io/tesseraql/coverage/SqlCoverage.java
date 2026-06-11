@@ -62,7 +62,7 @@ public final class SqlCoverage {
             long hitCoverable = coverableLines.stream().filter(coveredLines::contains).count();
             double lineRatio = coverableCount == 0 ? 1.0 : (double) hitCoverable / coverableCount;
 
-            return new SqlCoverageReport(sqlId, Set.copyOf(coveredLines), coverableCount,
+            return new SqlCoverageReport(sqlId, Set.copyOf(coveredLines), Set.copyOf(coverableLines),
                     branchCount, outcomes, branchRatio, lineRatio);
         }
     }
