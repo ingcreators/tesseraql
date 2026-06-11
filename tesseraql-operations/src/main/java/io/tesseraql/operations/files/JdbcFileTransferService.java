@@ -153,10 +153,13 @@ public final class JdbcFileTransferService implements FileTransferService {
 
     @Override
     public Optional<TransferStatus> status(String transferId) {
+        // Read the execution status before the transfer detail: the run records its counts and
+        // errors before completing, so a terminal status guarantees the detail row is final
+        // (reading the other way round can observe COMPLETED with stale counts).
+        String executionStatus = jobs.findExecution(transferId)
+                .map(execution -> execution.status().name()).orElse("UNKNOWN");
         return findTransfer(transferId).map(transfer -> new TransferStatus(
-                transferId, transfer.routeId(), transfer.direction(),
-                jobs.findExecution(transferId)
-                        .map(execution -> execution.status().name()).orElse("UNKNOWN"),
+                transferId, transfer.routeId(), transfer.direction(), executionStatus,
                 transfer.rowCount(), transfer.errors(), transfer.filename(),
                 transfer.downloadedAt() != null));
     }
