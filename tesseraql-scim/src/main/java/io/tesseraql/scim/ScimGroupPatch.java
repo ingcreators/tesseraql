@@ -58,7 +58,7 @@ public final class ScimGroupPatch {
             throw new ScimException(400, "noTarget",
                     "PATCH without a path requires an object value");
         }
-        value.fields().forEachRemaining(
+        value.properties().forEach(
                 entry -> setAttribute(state, op, entry.getKey(), entry.getValue()));
     }
 

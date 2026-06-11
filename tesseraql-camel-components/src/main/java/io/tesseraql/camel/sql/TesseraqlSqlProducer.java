@@ -165,13 +165,13 @@ public class TesseraqlSqlProducer extends DefaultProducer {
                 statement.setFetchSize(profile.fetchSize());
                 bindParameters(statement, bound.parameters());
                 SpoolKind kind = "csv".equals(codec.format()) ? SpoolKind.CSV : SpoolKind.BINARY;
-                try (ResultSet resultSet = statement.executeQuery();
-                        SpoolWriter writer = tempStore.createWriter(kind)) {
+                SpoolWriter writer = tempStore.createWriter(kind);
+                // The writer closes first (listed first); toRef() is only valid after close.
+                try (writer; ResultSet resultSet = statement.executeQuery()) {
                     codec.write(new SpoolOutputStream(writer), spec,
                             new ResultRows(resultSet, writer));
-                    writer.close();
-                    ref = writer.toRef();
                 }
+                ref = writer.toRef();
             } finally {
                 if (profile.autoCommitOff()) {
                     connection.commit();
