@@ -68,7 +68,7 @@ class MySqlPortabilityIntegrationTest {
     void runsOnMySqlAndUsesDialectVariant() throws Exception {
         HttpResponse<String> response = HttpClient.newHttpClient().send(
                 HttpRequest.newBuilder(URI.create(
-                                "http://localhost:" + runtime.port() + "/api/users?limit=10"))
+                        "http://localhost:" + runtime.port() + "/api/users?limit=10"))
                         .header("Authorization", "Bearer " + token())
                         .build(),
                 HttpResponse.BodyHandlers.ofString());
@@ -100,7 +100,8 @@ class MySqlPortabilityIntegrationTest {
                 MAPPER.writeValueAsBytes(Map.of("sub", "u1", "roles", List.of("USER_READ"))));
         Mac mac = Mac.getInstance("HmacSHA256");
         mac.init(new SecretKeySpec(
-                "dev-only-secret-change-me-in-production".getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
+                "dev-only-secret-change-me-in-production".getBytes(StandardCharsets.UTF_8),
+                "HmacSHA256"));
         String signature = enc.encodeToString(
                 mac.doFinal((header + "." + payload).getBytes(StandardCharsets.US_ASCII)));
         return header + "." + payload + "." + signature;

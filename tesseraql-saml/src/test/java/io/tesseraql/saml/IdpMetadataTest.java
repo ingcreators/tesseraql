@@ -10,8 +10,7 @@ import org.junit.jupiter.api.Test;
 class IdpMetadataTest {
 
     /** A fixed self-signed test certificate (X.509 DER, base64). */
-    private static final String CERT =
-            "MIIDGzCCAgOgAwIBAgIUaqx2kaHliMER8us/H8pOYXTD5HcwDQYJKoZIhvcNAQELBQAwHTEbMBkGA1UEAww"
+    private static final String CERT = "MIIDGzCCAgOgAwIBAgIUaqx2kaHliMER8us/H8pOYXTD5HcwDQYJKoZIhvcNAQELBQAwHTEbMBkGA1UEAww"
             + "SdGVzc2VyYXFsLXRlc3QtaWRwMB4XDTI2MDYxMDAyMjg1M1oXDTQ2MDYwNTAyMjg1M1owHTEbMBkGA1UEAww"
             + "SdGVzc2VyYXFsLXRlc3QtaWRwMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAq7cPz5X3OIGRxyo"
             + "haCSkB7c9u6/b5/VFi3RsY4XLCO0ZODUMmjB1CFXmfyZgFWnhJxUYNSLDDQanCFPCWcGybbwRK7bzQ4V2JRE"
@@ -38,7 +37,8 @@ class IdpMetadataTest {
                     </md:KeyDescriptor>
                   </md:IDPSSODescriptor>
                 </md:EntityDescriptor>
-                """.formatted(useAttr, CERT)).getBytes(StandardCharsets.UTF_8);
+                """
+                .formatted(useAttr, CERT)).getBytes(StandardCharsets.UTF_8);
     }
 
     @Test

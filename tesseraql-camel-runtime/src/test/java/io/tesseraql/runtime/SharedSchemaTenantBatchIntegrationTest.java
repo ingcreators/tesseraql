@@ -113,7 +113,8 @@ class SharedSchemaTenantBatchIntegrationTest {
                     source: X-Tenant-Id
                   registry:
                     sql: select tenant_id from tenants order by tenant_id
-                """.formatted(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword()));
+                """.formatted(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(),
+                POSTGRES.getPassword()));
 
         Path jobDir = target.resolve("batch/items/seed");
         Files.createDirectories(jobDir);

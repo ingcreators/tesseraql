@@ -31,9 +31,8 @@ public final class Templates {
         return ENGINES.computeIfAbsent(root, key -> {
             // Framework-shared fragments (the tql/* namespace, e.g. the hc-shell page layout)
             // resolve from the classpath so every app can th:replace them without copying.
-            org.thymeleaf.templateresolver.ClassLoaderTemplateResolver shared =
-                    new org.thymeleaf.templateresolver.ClassLoaderTemplateResolver(
-                            Templates.class.getClassLoader());
+            org.thymeleaf.templateresolver.ClassLoaderTemplateResolver shared = new org.thymeleaf.templateresolver.ClassLoaderTemplateResolver(
+                    Templates.class.getClassLoader());
             shared.setPrefix("tesseraql/templates/");
             shared.setSuffix(".html");
             shared.setTemplateMode(TemplateMode.HTML);

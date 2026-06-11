@@ -30,7 +30,8 @@ class SpMetadataTest {
         assertThat(acs.getAttribute("Binding"))
                 .isEqualTo("urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST");
 
-        Element nameIdFormat = (Element) document.getElementsByTagNameNS(MD_NS, "NameIDFormat").item(0);
+        Element nameIdFormat = (Element) document.getElementsByTagNameNS(MD_NS, "NameIDFormat")
+                .item(0);
         assertThat(nameIdFormat.getTextContent())
                 .isEqualTo("urn:oasis:names:tc:SAML:2.0:nameid-format:unspecified");
     }
@@ -39,7 +40,8 @@ class SpMetadataTest {
     void escapesAttributeValues() throws Exception {
         SpMetadata metadata = new SpMetadata("https://sp/a&b", "https://sp/acs?x=1&y=2", null);
         Document document = parse(metadata.toXml()); // would throw if escaping were wrong
-        assertThat(document.getDocumentElement().getAttribute("entityID")).isEqualTo("https://sp/a&b");
+        assertThat(document.getDocumentElement().getAttribute("entityID"))
+                .isEqualTo("https://sp/a&b");
     }
 
     private static Document parse(String xml) throws Exception {

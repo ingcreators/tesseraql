@@ -59,7 +59,8 @@ class SqlRendererTest {
         BoundSql bound = SqlRenderer.render(sql, Map.of("ids", List.of(10, 20, 30)));
 
         assertThat(bound.sql()).isEqualTo("select * from users where id in (?, ?, ?)");
-        assertThat(bound.parameters()).extracting(BoundParameter::value).containsExactly(10, 20, 30);
+        assertThat(bound.parameters()).extracting(BoundParameter::value).containsExactly(10, 20,
+                30);
     }
 
     @Test
@@ -86,7 +87,8 @@ class SqlRendererTest {
                 select * from t where 1=1
                 /*%if q != null */ and q = /* q */ '' /*%end*/""";
         SqlVariant withQ = SqlRenderer.render(sql, Map.of("q", "a")).variant();
-        SqlVariant withoutQ = SqlRenderer.render(sql, Collections.singletonMap("q", null)).variant();
+        SqlVariant withoutQ = SqlRenderer.render(sql, Collections.singletonMap("q", null))
+                .variant();
 
         assertThat(withQ.hash()).isNotEqualTo(withoutQ.hash());
     }

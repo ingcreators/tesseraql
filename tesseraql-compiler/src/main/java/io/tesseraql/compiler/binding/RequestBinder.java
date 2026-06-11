@@ -46,7 +46,8 @@ public final class RequestBinder implements Processor {
     @Override
     public void process(Exchange exchange) {
         io.tesseraql.core.telemetry.Span span = io.tesseraql.camel.TesseraqlTracing.tracer(exchange)
-                .start("tesseraql.request.bind", io.tesseraql.camel.TesseraqlTracing.parent(exchange))
+                .start("tesseraql.request.bind",
+                        io.tesseraql.camel.TesseraqlTracing.parent(exchange))
                 .attribute("routeId", route.id());
         try {
             bind(exchange);
@@ -122,7 +123,7 @@ public final class RequestBinder implements Processor {
                 continue;
             }
             form.put(java.net.URLDecoder.decode(pair.substring(0, eq),
-                            java.nio.charset.StandardCharsets.UTF_8),
+                    java.nio.charset.StandardCharsets.UTF_8),
                     java.net.URLDecoder.decode(pair.substring(eq + 1),
                             java.nio.charset.StandardCharsets.UTF_8));
         }
@@ -144,7 +145,8 @@ public final class RequestBinder implements Processor {
             }
             if (!field.isWritable()) {
                 switch (policy.readOnlyBehaviorOrDefault()) {
-                    case "ignore" -> { /* drop silently */ }
+                    case "ignore" -> {
+                        /* drop silently */ }
                     case "warn" -> LOG.log(System.Logger.Level.WARNING,
                             "Ignoring non-writable input field ''{0}''", key);
                     default -> throw new TqlException(FIELD_REJECTED,
@@ -165,8 +167,8 @@ public final class RequestBinder implements Processor {
         EvaluationContext evaluation = new EvaluationContext(context);
         Map<String, Object> sqlParams = new LinkedHashMap<>();
         if (route.sql() != null) {
-            route.sql().params().forEach((bindName, sourceExpr) ->
-                    sqlParams.put(bindName, evaluation.resolve(Arrays.asList(sourceExpr.split("\\.")))));
+            route.sql().params().forEach((bindName, sourceExpr) -> sqlParams.put(bindName,
+                    evaluation.resolve(Arrays.asList(sourceExpr.split("\\.")))));
         }
         return sqlParams;
     }

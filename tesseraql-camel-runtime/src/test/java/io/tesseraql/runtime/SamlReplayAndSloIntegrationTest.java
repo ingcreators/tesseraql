@@ -121,8 +121,8 @@ class SamlReplayAndSloIntegrationTest {
         String query = signedIdpQuery(SamlRedirect.deflateAndEncode(logoutXml));
 
         HttpResponse<String> slo = HTTP.send(HttpRequest.newBuilder(
-                        URI.create("http://localhost:" + runtime.port()
-                                + "/_tesseraql/saml/slo?" + query))
+                URI.create("http://localhost:" + runtime.port()
+                        + "/_tesseraql/saml/slo?" + query))
                 .header("Cookie", cookie)
                 .build(), HttpResponse.BodyHandlers.ofString());
         assertThat(slo.statusCode()).isEqualTo(302);
@@ -143,8 +143,9 @@ class SamlReplayAndSloIntegrationTest {
         String query = SamlRedirect.query("SAMLRequest",
                 SamlRedirect.deflateAndEncode(logoutXml), null);
         HttpResponse<String> slo = HTTP.send(HttpRequest.newBuilder(
-                        URI.create("http://localhost:" + runtime.port()
-                                + "/_tesseraql/saml/slo?" + query)).build(),
+                URI.create("http://localhost:" + runtime.port()
+                        + "/_tesseraql/saml/slo?" + query))
+                .build(),
                 HttpResponse.BodyHandlers.ofString());
         assertThat(slo.statusCode()).isEqualTo(401);
     }
@@ -200,13 +201,14 @@ class SamlReplayAndSloIntegrationTest {
     private static HttpResponse<String> postAcs(String samlResponseXml, String relayState)
             throws Exception {
         String body = "SAMLResponse=" + URLEncoder.encode(
-                Base64.getEncoder().encodeToString(samlResponseXml.getBytes(StandardCharsets.UTF_8)),
+                Base64.getEncoder()
+                        .encodeToString(samlResponseXml.getBytes(StandardCharsets.UTF_8)),
                 StandardCharsets.UTF_8);
         if (relayState != null) {
             body += "&RelayState=" + URLEncoder.encode(relayState, StandardCharsets.UTF_8);
         }
         return HTTP.send(HttpRequest.newBuilder(URI.create(
-                        "http://localhost:" + runtime.port() + "/_tesseraql/saml/acs"))
+                "http://localhost:" + runtime.port() + "/_tesseraql/saml/acs"))
                 .header("Content-Type", "application/x-www-form-urlencoded")
                 .POST(HttpRequest.BodyPublishers.ofString(body))
                 .build(), HttpResponse.BodyHandlers.ofString());
@@ -220,7 +222,8 @@ class SamlReplayAndSloIntegrationTest {
         }
         Path saml = target.resolve("saml");
         Files.createDirectories(saml);
-        Files.writeString(saml.resolve("idp.pem"), SamlTestSupport.publicKeyPem(idpKeys.getPublic()));
+        Files.writeString(saml.resolve("idp.pem"),
+                SamlTestSupport.publicKeyPem(idpKeys.getPublic()));
         // The SP signs its redirects with the fixed test key (PKCS#8 PEM).
         Files.writeString(saml.resolve("sp.pem"), SamlTestSupport.fixedPrivateKeyPem());
 

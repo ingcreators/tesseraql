@@ -38,6 +38,7 @@ public final class Pagination {
      */
     public static String fetchClause(String vendor) {
         return "oracle".equals(vendor) || "sqlserver".equals(vendor)
-                ? "offset 0 rows fetch next ? rows only" : "limit ?";
+                ? "offset 0 rows fetch next ? rows only"
+                : "limit ?";
     }
 }

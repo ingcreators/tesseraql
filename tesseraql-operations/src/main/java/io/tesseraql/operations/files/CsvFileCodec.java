@@ -73,7 +73,8 @@ public final class CsvFileCodec implements FileCodec {
                     int position = positions[i];
                     values.put(columns.get(i).name(),
                             position >= 0 && position < record.size()
-                                    ? record.get(position) : null);
+                                    ? record.get(position)
+                                    : null);
                 }
                 handler.row(rowNumber, values);
             }
@@ -81,6 +82,9 @@ public final class CsvFileCodec implements FileCodec {
     }
 
     @Override
+    // The printer is deliberately not closed: closing it would close the caller-owned stream;
+    // the codec contract is flush-only.
+    @SuppressWarnings("resource")
     public void write(OutputStream out, FileWriteSpec spec, Iterator<Map<String, Object>> rows)
             throws IOException {
         CSVPrinter printer = new CSVPrinter(

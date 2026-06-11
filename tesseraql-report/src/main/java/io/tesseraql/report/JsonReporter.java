@@ -42,7 +42,8 @@ public final class JsonReporter {
         try {
             return MAPPER.writerWithDefaultPrettyPrinter().writeValueAsString(root);
         } catch (JsonProcessingException ex) {
-            throw new TqlException(REPORT_ERROR, "Failed to render JSON report: " + ex.getMessage());
+            throw new TqlException(REPORT_ERROR,
+                    "Failed to render JSON report: " + ex.getMessage());
         }
     }
 }

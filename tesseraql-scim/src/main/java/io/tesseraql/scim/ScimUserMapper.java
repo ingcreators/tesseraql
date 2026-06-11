@@ -33,10 +33,12 @@ public final class ScimUserMapper {
         String givenName = string(row.get("givenName"));
         String familyName = string(row.get("familyName"));
         ScimUser.Name name = givenName == null && familyName == null
-                ? null : new ScimUser.Name(givenName, familyName, null);
+                ? null
+                : new ScimUser.Name(givenName, familyName, null);
         String email = string(row.get("email"));
         List<ScimUser.Email> emails = email == null
-                ? List.of() : List.of(new ScimUser.Email(email, true));
+                ? List.of()
+                : List.of(new ScimUser.Email(email, true));
         return new ScimUser(null, string(row.get("id")), string(row.get("externalId")),
                 string(row.get("userName")), name, emails, bool(row.get("active")));
     }

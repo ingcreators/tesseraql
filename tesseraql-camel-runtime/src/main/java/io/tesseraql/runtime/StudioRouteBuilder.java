@@ -93,7 +93,8 @@ final class StudioRouteBuilder extends RouteBuilder {
     private Processor json(Function<Exchange, Object> handler) {
         return exchange -> {
             Object result = handler.apply(exchange);
-            exchange.getMessage().setHeader(Exchange.CONTENT_TYPE, "application/json; charset=utf-8");
+            exchange.getMessage().setHeader(Exchange.CONTENT_TYPE,
+                    "application/json; charset=utf-8");
             exchange.getMessage().setBody(mapper.writeValueAsString(result));
         };
     }

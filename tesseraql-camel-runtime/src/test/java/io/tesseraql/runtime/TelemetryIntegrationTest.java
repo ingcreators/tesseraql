@@ -70,7 +70,9 @@ class TelemetryIntegrationTest {
     @Test
     void recordsSqlExecutionSpan() throws Exception {
         HttpResponse<String> response = HttpClient.newHttpClient().send(
-                HttpRequest.newBuilder(URI.create("http://localhost:" + runtime.port() + "/api/users?limit=10"))
+                HttpRequest
+                        .newBuilder(URI.create(
+                                "http://localhost:" + runtime.port() + "/api/users?limit=10"))
                         .header("Authorization", "Bearer " + token())
                         .build(),
                 HttpResponse.BodyHandlers.ofString());
@@ -86,7 +88,9 @@ class TelemetryIntegrationTest {
     void recordsRouteSpanAndInvocationCounter() throws Exception {
         long before = METER.total("tesseraql.route.invocations");
         HttpResponse<String> response = HttpClient.newHttpClient().send(
-                HttpRequest.newBuilder(URI.create("http://localhost:" + runtime.port() + "/api/users?limit=10"))
+                HttpRequest
+                        .newBuilder(URI.create(
+                                "http://localhost:" + runtime.port() + "/api/users?limit=10"))
                         .header("Authorization", "Bearer " + token())
                         .build(),
                 HttpResponse.BodyHandlers.ofString());
@@ -94,7 +98,8 @@ class TelemetryIntegrationTest {
 
         assertThat(TRACER.spans()).anySatisfy(span -> {
             assertThat(span.name()).isEqualTo("tesseraql.route");
-            assertThat(span.attributes()).containsKey("routeId").containsKey("method").containsKey("path");
+            assertThat(span.attributes()).containsKey("routeId").containsKey("method")
+                    .containsKey("path");
         });
         assertThat(METER.total("tesseraql.route.invocations")).isGreaterThan(before);
     }
@@ -106,7 +111,8 @@ class TelemetryIntegrationTest {
                 MAPPER.writeValueAsBytes(Map.of("sub", "u1", "roles", List.of("USER_READ"))));
         Mac mac = Mac.getInstance("HmacSHA256");
         mac.init(new SecretKeySpec(
-                "dev-only-secret-change-me-in-production".getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
+                "dev-only-secret-change-me-in-production".getBytes(StandardCharsets.UTF_8),
+                "HmacSHA256"));
         String signature = enc.encodeToString(
                 mac.doFinal((header + "." + payload).getBytes(StandardCharsets.US_ASCII)));
         return header + "." + payload + "." + signature;
@@ -137,7 +143,8 @@ class TelemetryIntegrationTest {
                     url: %s
                     username: %s
                     password: %s
-                """.formatted(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword()));
+                """.formatted(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(),
+                POSTGRES.getPassword()));
         return target;
     }
 

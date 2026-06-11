@@ -20,8 +20,7 @@ public class PackageAppMojo extends AbstractMojo {
     private File appHome;
 
     /** The output archive path. */
-    @Parameter(property = "tesseraql.output",
-            defaultValue = "${project.build.directory}/${project.artifactId}-${project.version}.tqlapp")
+    @Parameter(property = "tesseraql.output", defaultValue = "${project.build.directory}/${project.artifactId}-${project.version}.tqlapp")
     private File output;
 
     @Override

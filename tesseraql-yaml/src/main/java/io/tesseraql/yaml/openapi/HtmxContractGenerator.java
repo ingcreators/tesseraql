@@ -55,7 +55,8 @@ public final class HtmxContractGenerator {
         try {
             return MAPPER.writerWithDefaultPrettyPrinter().writeValueAsString(generate(manifest));
         } catch (JsonProcessingException ex) {
-            throw new TqlException(GEN_ERROR, "Failed to serialize htmx contract: " + ex.getMessage());
+            throw new TqlException(GEN_ERROR,
+                    "Failed to serialize htmx contract: " + ex.getMessage());
         }
     }
 

@@ -37,7 +37,8 @@ public record RealmConfig(String id, RealmType type, String datasource, Path sql
         return new RealmConfig(id, RealmType.MANAGED, datasource, null, capabilities);
     }
 
-    public static RealmConfig sql(String id, String datasource, Path sqlRoot, Capabilities capabilities) {
+    public static RealmConfig sql(String id, String datasource, Path sqlRoot,
+            Capabilities capabilities) {
         return new RealmConfig(id, RealmType.SQL, datasource, sqlRoot, capabilities);
     }
 }

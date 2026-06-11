@@ -21,8 +21,7 @@ import org.junit.jupiter.api.io.TempDir;
 
 class RuntimeExtensionsTest {
 
-    private static final String EXTENSION_CLASS =
-            "io.tesseraql.runtime.TestPluginExtension";
+    private static final String EXTENSION_CLASS = "io.tesseraql.runtime.TestPluginExtension";
 
     @TempDir
     Path appHome;
@@ -72,8 +71,8 @@ class RuntimeExtensionsTest {
     @Test
     void withoutPluginDirectoryOnlyClasspathExtensionsRemain() {
         AppConfig config = new AppConfig(Map.of(), name -> null);
-        List<RuntimeExtension> extensions =
-                RuntimeExtensions.discover(config, appHome.resolve("nowhere"));
+        List<RuntimeExtension> extensions = RuntimeExtensions.discover(config,
+                appHome.resolve("nowhere"));
         assertThat(extensions).extracting(RuntimeExtension::name).doesNotContain("test-plugin");
     }
 }

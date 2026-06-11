@@ -31,8 +31,8 @@ public final class RedirectRenderer implements Processor {
     @Override
     public void process(Exchange exchange) {
         @SuppressWarnings("unchecked")
-        Map<String, Object> context =
-                exchange.getProperty(TesseraqlProperties.CONTEXT, Map.of(), Map.class);
+        Map<String, Object> context = exchange.getProperty(TesseraqlProperties.CONTEXT, Map.of(),
+                Map.class);
         EvaluationContext evaluation = new EvaluationContext(context);
 
         Matcher matcher = PLACEHOLDER.matcher(redirect.location());

@@ -44,7 +44,8 @@ class FieldPolicyApplierTest {
     @Test
     void masksByClassificationDefault() {
         FieldPolicyApplier applier = new FieldPolicyApplier(
-                Map.of("salary", new FieldPolicy(null, null, null, "business-confidential")), null, null);
+                Map.of("salary", new FieldPolicy(null, null, null, "business-confidential")), null,
+                null);
         assertThat(firstRow(applier.apply(data())).get("salary")).isEqualTo("[MASKED]");
     }
 
@@ -52,7 +53,8 @@ class FieldPolicyApplierTest {
     void hidesPolicyGatedFieldWhenDenied() {
         PolicyEngine engine = new PolicyEngine(new SecurityConfig(
                 Map.of("users.readSensitive", new Policy("users.readSensitive",
-                        List.of(Policy.Rule.ofPermission("users:readSensitive")))), null));
+                        List.of(Policy.Rule.ofPermission("users:readSensitive")))),
+                null));
         Principal principal = new Principal("u1", "sato", "Sato", null,
                 List.of(), List.of("USER_READ"), List.of(), Map.of());
 
@@ -66,7 +68,8 @@ class FieldPolicyApplierTest {
     void keepsPolicyGatedFieldWhenPermitted() {
         PolicyEngine engine = new PolicyEngine(new SecurityConfig(
                 Map.of("users.readSensitive", new Policy("users.readSensitive",
-                        List.of(Policy.Rule.ofPermission("users:readSensitive")))), null));
+                        List.of(Policy.Rule.ofPermission("users:readSensitive")))),
+                null));
         Principal principal = new Principal("u1", "sato", "Sato", null,
                 List.of(), List.of(), List.of("users:readSensitive"), Map.of());
 

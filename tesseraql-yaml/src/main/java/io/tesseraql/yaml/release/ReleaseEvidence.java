@@ -39,7 +39,8 @@ public final class ReleaseEvidence {
             return mapper.writerWithDefaultPrettyPrinter()
                     .writeValueAsString(build(manifest, appId, appVersion));
         } catch (JsonProcessingException ex) {
-            throw new TqlException(ERROR, "Failed to serialize release evidence: " + ex.getMessage());
+            throw new TqlException(ERROR,
+                    "Failed to serialize release evidence: " + ex.getMessage());
         }
     }
 }

@@ -82,7 +82,8 @@ public final class SimpleYamlParser {
         }
         requireField(job.version(), "version", source);
         if (!EXPECTED_VERSION.equals(job.version())) {
-            throw error("Unsupported version '" + job.version() + "', expected " + EXPECTED_VERSION, source);
+            throw error("Unsupported version '" + job.version() + "', expected " + EXPECTED_VERSION,
+                    source);
         }
         requireField(job.id(), "id", source);
         requireField(job.kind(), "kind", source);
@@ -111,7 +112,9 @@ public final class SimpleYamlParser {
         }
         requireField(route.version(), "version", source);
         if (!EXPECTED_VERSION.equals(route.version())) {
-            throw error("Unsupported version '" + route.version() + "', expected " + EXPECTED_VERSION, source);
+            throw error(
+                    "Unsupported version '" + route.version() + "', expected " + EXPECTED_VERSION,
+                    source);
         }
         requireField(route.id(), "id", source);
         requireField(route.kind(), "kind", source);

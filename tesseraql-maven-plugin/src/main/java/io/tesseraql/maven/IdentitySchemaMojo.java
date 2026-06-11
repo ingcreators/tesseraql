@@ -85,8 +85,10 @@ public class IdentitySchemaMojo extends AbstractMojo {
     }
 
     private static List<String> csv(String values) {
-        return values == null ? List.of() : Arrays.stream(values.split(","))
-                .map(String::trim).filter(value -> !value.isEmpty()).toList();
+        return values == null
+                ? List.of()
+                : Arrays.stream(values.split(","))
+                        .map(String::trim).filter(value -> !value.isEmpty()).toList();
     }
 
     private String adminPassword() throws MojoExecutionException {

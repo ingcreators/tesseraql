@@ -35,7 +35,9 @@ public final class RingTracer implements Tracer, TraceLog {
     @Override
     public Span start(String name, SpanContext parent) {
         String spanId = Long.toHexString(ids.incrementAndGet());
-        String traceId = parent != null ? parent.traceId() : Long.toHexString(ids.incrementAndGet());
+        String traceId = parent != null
+                ? parent.traceId()
+                : Long.toHexString(ids.incrementAndGet());
         String parentSpanId = parent != null ? parent.spanId() : null;
         return new RingSpan(name, traceId, spanId, parentSpanId,
                 System.nanoTime(), System.currentTimeMillis());

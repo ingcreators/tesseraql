@@ -2,8 +2,8 @@ package io.tesseraql.scim;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -87,7 +87,8 @@ class ScimUserMapperTest {
 
     @Test
     void serializesErrorInScimShape() throws Exception {
-        JsonNode json = MAPPER.valueToTree(ScimError.of(409, "userName already exists", "uniqueness"));
+        JsonNode json = MAPPER
+                .valueToTree(ScimError.of(409, "userName already exists", "uniqueness"));
         assertThat(json.get("schemas").get(0).asText()).isEqualTo(ScimError.SCHEMA);
         assertThat(json.get("status").asText()).isEqualTo("409");
         assertThat(json.get("scimType").asText()).isEqualTo("uniqueness");

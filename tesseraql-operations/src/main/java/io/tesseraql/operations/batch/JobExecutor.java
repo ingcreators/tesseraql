@@ -1,9 +1,9 @@
 package io.tesseraql.operations.batch;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import io.tesseraql.core.error.TqlDomain;
 import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.tesseraql.core.expr.EvaluationContext;
 import io.tesseraql.core.spool.SpoolKind;
 import io.tesseraql.core.spool.SpoolRef;
@@ -102,7 +102,8 @@ public final class JobExecutor {
         io.tesseraql.core.telemetry.SpanContext jobContext = jobSpan.context();
         try {
             for (PipelineStep step : job.effectiveSteps()) {
-                runStepTracked(jobFile, step, dataSource, context, stepResults, executionId, jobContext);
+                runStepTracked(jobFile, step, dataSource, context, stepResults, executionId,
+                        jobContext);
             }
             repository.completeExecution(executionId);
             LOG.info("Job {} execution {} completed", job.id(), executionId);
@@ -187,11 +188,10 @@ public final class JobExecutor {
     }
 
     /** Streams the result set to a JSONL spool, exposing the SpoolRef to later steps (ch. 28.6). */
-    private Map<String, Object> spool(PreparedStatement statement) throws SQLException, IOException {
-        SpoolRef ref;
-        long rows;
-        try (ResultSet rs = statement.executeQuery();
-                SpoolWriter writer = tempStore.createWriter(SpoolKind.JSONL)) {
+    private Map<String, Object> spool(PreparedStatement statement)
+            throws SQLException, IOException {
+        SpoolWriter writer = tempStore.createWriter(SpoolKind.JSONL);
+        try (writer; ResultSet rs = statement.executeQuery()) {
             ResultSetMetaData metaData = rs.getMetaData();
             int columns = metaData.getColumnCount();
             while (rs.next()) {
@@ -199,13 +199,14 @@ public final class JobExecutor {
                 for (int col = 1; col <= columns; col++) {
                     row.put(metaData.getColumnLabel(col), rs.getObject(col));
                 }
-                writer.write((mapper.writeValueAsString(row) + "\n").getBytes(StandardCharsets.UTF_8));
+                writer.write(
+                        (mapper.writeValueAsString(row) + "\n").getBytes(StandardCharsets.UTF_8));
                 writer.incrementRows(1);
             }
-            writer.close();
-            ref = writer.toRef();
-            rows = ref.rows();
         }
+        // toRef() is only valid after close, which the try-with-resources performed.
+        SpoolRef ref = writer.toRef();
+        long rows = ref.rows();
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("affectedRows", (int) rows);
         result.put("rows", rows);
@@ -213,11 +214,12 @@ public final class JobExecutor {
         return result;
     }
 
-    private static Map<String, Object> resolveParams(PipelineStep step, Map<String, Object> context) {
+    private static Map<String, Object> resolveParams(PipelineStep step,
+            Map<String, Object> context) {
         EvaluationContext evaluation = new EvaluationContext(context);
         Map<String, Object> params = new LinkedHashMap<>();
-        step.sql().params().forEach((bindName, sourceExpr) ->
-                params.put(bindName, evaluation.resolve(Arrays.asList(sourceExpr.split("\\.")))));
+        step.sql().params().forEach((bindName, sourceExpr) -> params.put(bindName,
+                evaluation.resolve(Arrays.asList(sourceExpr.split("\\.")))));
         return params;
     }
 

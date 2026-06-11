@@ -13,7 +13,6 @@ import io.tesseraql.saml.SpMetadata;
 import io.tesseraql.security.Principal;
 import io.tesseraql.security.session.SessionStore;
 import java.net.URLDecoder;
-import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.Base64;
@@ -93,7 +92,8 @@ final class SamlAcsRouteBuilder extends RouteBuilder {
 
         if (metadata != null) {
             rest().get("/_tesseraql/saml/metadata").to("direct:tql.saml.metadata");
-            from("direct:tql.saml.metadata").routeId("system.saml.metadata").process(this::serveMetadata);
+            from("direct:tql.saml.metadata").routeId("system.saml.metadata")
+                    .process(this::serveMetadata);
         }
         if (endpoints != null && endpoints.idpSsoUrl() != null && endpoints.acsUrl() != null) {
             rest().get("/_tesseraql/saml/login").to("direct:tql.saml.login");
@@ -108,7 +108,8 @@ final class SamlAcsRouteBuilder extends RouteBuilder {
     /** SP-initiated SSO: redirect to the IdP with a DEFLATE-encoded AuthnRequest (HTTP-Redirect). */
     private void login(Exchange exchange) {
         String requestId = "_" + UUID.randomUUID();
-        String xml = new AuthnRequest(endpoints.spEntityId(), endpoints.acsUrl(), endpoints.idpSsoUrl())
+        String xml = new AuthnRequest(endpoints.spEntityId(), endpoints.acsUrl(),
+                endpoints.idpSsoUrl())
                 .toXml(requestId, Instant.now());
         String relayState = exchange.getMessage().getHeader("RelayState", String.class);
         if (security.replayGuard() != null) {
@@ -138,8 +139,7 @@ final class SamlAcsRouteBuilder extends RouteBuilder {
             SamlRedirect.verifySignedQuery("SAMLRequest", encoded, relayState, sigAlg,
                     signature, security.idpKey());
         }
-        LogoutRequest.Parsed request =
-                LogoutRequest.parse(SamlRedirect.decodeAndInflate(encoded));
+        LogoutRequest.Parsed request = LogoutRequest.parse(SamlRedirect.decodeAndInflate(encoded));
 
         String sessionId = cookieValue(exchange.getMessage().getHeader("Cookie", String.class),
                 sessions.cookieName());
@@ -162,7 +162,8 @@ final class SamlAcsRouteBuilder extends RouteBuilder {
         exchange.getMessage().setHeader("Set-Cookie",
                 sessions.cookieName() + "=; Path=/; HttpOnly; Max-Age=0");
 
-        String nameId = session == null ? null
+        String nameId = session == null
+                ? null
                 : (String) session.principal().claims().get("samlNameId");
         if (endpoints != null && endpoints.idpSloUrl() != null && nameId != null) {
             String sessionIndex = (String) session.principal().claims().get("sessionIndex");
@@ -228,7 +229,8 @@ final class SamlAcsRouteBuilder extends RouteBuilder {
         Principal resolved = linker == null
                 ? toPrincipal(assertion)
                 : linker.resolve(loginId(assertion), attribute(assertion, mapping.displayName()),
-                        attribute(assertion, mapping.email()), attribute(assertion, mapping.tenant()));
+                        attribute(assertion, mapping.email()),
+                        attribute(assertion, mapping.tenant()));
         Principal principal = withFederationClaims(resolved, assertion);
 
         String sessionId = sessions.create(principal);
@@ -237,7 +239,8 @@ final class SamlAcsRouteBuilder extends RouteBuilder {
         exchange.getMessage().setHeader("Set-Cookie",
                 sessions.cookieName() + "=" + sessionId + "; Path=/; HttpOnly; SameSite=Lax");
         exchange.getMessage().setBody(mapper.writeValueAsString(
-                Map.of("ok", true, "loginId", principal.loginId(), "subject", principal.subject())));
+                Map.of("ok", true, "loginId", principal.loginId(), "subject",
+                        principal.subject())));
     }
 
     /**
@@ -268,7 +271,8 @@ final class SamlAcsRouteBuilder extends RouteBuilder {
         }
         if (assertion.assertionId() != null) {
             Instant expiry = assertion.notOnOrAfter() == null
-                    ? Instant.now().plusSeconds(300) : assertion.notOnOrAfter();
+                    ? Instant.now().plusSeconds(300)
+                    : assertion.notOnOrAfter();
             if (!security.replayGuard().markAssertionSeen(assertion.assertionId(), expiry)) {
                 throw new SamlException("Assertion replay rejected");
             }
@@ -295,7 +299,8 @@ final class SamlAcsRouteBuilder extends RouteBuilder {
             claims.put("sessionIndex", assertion.sessionIndex());
         }
         return new Principal(principal.subject(), principal.loginId(), principal.displayName(),
-                principal.tenantId(), principal.groups(), principal.roles(), principal.permissions(),
+                principal.tenantId(), principal.groups(), principal.roles(),
+                principal.permissions(),
                 claims);
     }
 

@@ -63,8 +63,8 @@ class LaneBackpressureIntegrationTest {
                 URI.create("http://localhost:" + runtime.port() + "/api/slow")).build();
 
         // Fire the first request; it occupies the single lane permit for ~1s (pg_sleep).
-        CompletableFuture<HttpResponse<String>> first =
-                client.sendAsync(request, HttpResponse.BodyHandlers.ofString());
+        CompletableFuture<HttpResponse<String>> first = client.sendAsync(request,
+                HttpResponse.BodyHandlers.ofString());
         Thread.sleep(300);
 
         HttpResponse<String> second = client.send(request, HttpResponse.BodyHandlers.ofString());
@@ -104,7 +104,8 @@ class LaneBackpressureIntegrationTest {
                     io:
                       type: virtual
                       maxConcurrency: 1
-                """.formatted(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword()));
+                """.formatted(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(),
+                POSTGRES.getPassword()));
 
         Path slowDir = target.resolve("web/api/slow");
         Files.createDirectories(slowDir);

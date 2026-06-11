@@ -37,7 +37,8 @@ final class LaneConfigs {
             String name = String.valueOf(entry.getKey());
             Map<?, ?> lane = entry.getValue() instanceof Map<?, ?> map ? map : Map.of();
             LaneType type = "platform".equalsIgnoreCase(string(lane.get("type")))
-                    ? LaneType.PLATFORM : LaneType.VIRTUAL;
+                    ? LaneType.PLATFORM
+                    : LaneType.VIRTUAL;
             policies.add(new LanePolicy(name, type, maxConcurrency(lane.get("maxConcurrency"))));
         }
         return ExecutionLanes.of(policies);

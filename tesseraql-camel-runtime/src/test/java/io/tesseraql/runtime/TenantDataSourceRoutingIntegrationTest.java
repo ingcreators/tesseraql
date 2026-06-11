@@ -74,7 +74,7 @@ class TenantDataSourceRoutingIntegrationTest {
     void unknownTenantIsRejected() throws Exception {
         HttpResponse<String> response = HttpClient.newHttpClient().send(
                 HttpRequest.newBuilder(URI.create(
-                                "http://localhost:" + runtime.port() + "/api/items"))
+                        "http://localhost:" + runtime.port() + "/api/items"))
                         .header("X-Tenant-Id", "nope")
                         .build(),
                 HttpResponse.BodyHandlers.ofString());
@@ -85,7 +85,7 @@ class TenantDataSourceRoutingIntegrationTest {
     private static JsonNode get(String tenant, int expectedStatus) throws Exception {
         HttpResponse<String> response = HttpClient.newHttpClient().send(
                 HttpRequest.newBuilder(URI.create(
-                                "http://localhost:" + runtime.port() + "/api/items"))
+                        "http://localhost:" + runtime.port() + "/api/items"))
                         .header("X-Tenant-Id", tenant)
                         .build(),
                 HttpResponse.BodyHandlers.ofString());
@@ -97,7 +97,7 @@ class TenantDataSourceRoutingIntegrationTest {
         try (Connection connection = DriverManager.getConnection(
                 POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword());
                 Statement statement = connection.createStatement()) {
-            for (String tenant : new String[] {"acme", "globex"}) {
+            for (String tenant : new String[]{"acme", "globex"}) {
                 statement.execute("create schema " + tenant);
                 statement.execute("create table " + tenant
                         + ".items (id serial primary key, name varchar(200) not null)");

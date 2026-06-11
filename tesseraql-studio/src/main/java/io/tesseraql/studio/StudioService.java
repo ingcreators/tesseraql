@@ -133,9 +133,8 @@ public final class StudioService {
     private PreviewResult previewTemplate(String relativePath, String content) {
         org.thymeleaf.TemplateEngine engine = new org.thymeleaf.TemplateEngine();
 
-        org.thymeleaf.templateresolver.ClassLoaderTemplateResolver shared =
-                new org.thymeleaf.templateresolver.ClassLoaderTemplateResolver(
-                        StudioService.class.getClassLoader());
+        org.thymeleaf.templateresolver.ClassLoaderTemplateResolver shared = new org.thymeleaf.templateresolver.ClassLoaderTemplateResolver(
+                StudioService.class.getClassLoader());
         shared.setPrefix("tesseraql/templates/");
         shared.setSuffix(".html");
         shared.setTemplateMode(org.thymeleaf.templatemode.TemplateMode.HTML);
@@ -143,8 +142,7 @@ public final class StudioService {
         shared.setOrder(1);
         engine.addTemplateResolver(shared);
 
-        org.thymeleaf.templateresolver.FileTemplateResolver files =
-                new org.thymeleaf.templateresolver.FileTemplateResolver();
+        org.thymeleaf.templateresolver.FileTemplateResolver files = new org.thymeleaf.templateresolver.FileTemplateResolver();
         files.setPrefix(appHome.toString() + java.io.File.separator);
         files.setTemplateMode(org.thymeleaf.templatemode.TemplateMode.HTML);
         files.setResolvablePatterns(java.util.Set.of("*.html"));
@@ -152,8 +150,7 @@ public final class StudioService {
         files.setOrder(2);
         engine.addTemplateResolver(files);
 
-        org.thymeleaf.templateresolver.StringTemplateResolver draft =
-                new org.thymeleaf.templateresolver.StringTemplateResolver();
+        org.thymeleaf.templateresolver.StringTemplateResolver draft = new org.thymeleaf.templateresolver.StringTemplateResolver();
         draft.setTemplateMode(relativePath.endsWith(".html")
                 ? org.thymeleaf.templatemode.TemplateMode.HTML
                 : org.thymeleaf.templatemode.TemplateMode.TEXT);
@@ -162,7 +159,8 @@ public final class StudioService {
 
         try {
             engine.process(content, new org.thymeleaf.context.Context());
-            return PreviewResult.valid("template", "template parses and renders with an empty model");
+            return PreviewResult.valid("template",
+                    "template parses and renders with an empty model");
         } catch (RuntimeException ex) {
             if (isDataDependent(ex)) {
                 return PreviewResult.valid("template",
@@ -247,7 +245,8 @@ public final class StudioService {
     private Path resolve(String relativePath) {
         Path resolved = appHome.resolve(relativePath).normalize();
         if (!resolved.startsWith(appHome)) {
-            throw new TqlException(TRAVERSAL, "Path escapes app home (design ch. 20.2): " + relativePath);
+            throw new TqlException(TRAVERSAL,
+                    "Path escapes app home (design ch. 20.2): " + relativePath);
         }
         return resolved;
     }
@@ -267,7 +266,8 @@ public final class StudioService {
     }
 
     private JobSummary jobSummary(JobFile job) {
-        return new JobSummary(job.definition().id(), job.definition().recipe(), relative(job.source()));
+        return new JobSummary(job.definition().id(), job.definition().recipe(),
+                relative(job.source()));
     }
 
     private String relative(Path source) {
@@ -280,7 +280,8 @@ public final class StudioService {
     }
 
     /** A route entry in the explorer. */
-    public record RouteSummary(String id, String method, String path, String recipe, String source) {
+    public record RouteSummary(String id, String method, String path, String recipe,
+            String source) {
     }
 
     /** A job entry in the explorer. */

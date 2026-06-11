@@ -95,7 +95,8 @@ class ConcurrencyLimitIntegrationTest {
 
     private static HttpResponse<String> get(String path) throws Exception {
         return HttpClient.newHttpClient().send(
-                HttpRequest.newBuilder(URI.create("http://localhost:" + runtime.port() + path)).build(),
+                HttpRequest.newBuilder(URI.create("http://localhost:" + runtime.port() + path))
+                        .build(),
                 HttpResponse.BodyHandlers.ofString());
     }
 
@@ -114,7 +115,8 @@ class ConcurrencyLimitIntegrationTest {
                     url: %s
                     username: %s
                     password: %s
-                """.formatted(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword()));
+                """.formatted(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(),
+                POSTGRES.getPassword()));
 
         // A public, deliberately slow route limited to one in-flight request.
         Path slowDir = target.resolve("web/api/slow");

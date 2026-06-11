@@ -27,8 +27,10 @@ public final class PostgresPlanInspector implements PlanInspector {
     }
 
     @Override
-    public QueryPlan explain(Connection connection, String sql, List<Object> params) throws SQLException {
-        try (PreparedStatement statement = connection.prepareStatement("EXPLAIN (FORMAT JSON) " + sql)) {
+    public QueryPlan explain(Connection connection, String sql, List<Object> params)
+            throws SQLException {
+        try (PreparedStatement statement = connection
+                .prepareStatement("EXPLAIN (FORMAT JSON) " + sql)) {
             for (int i = 0; i < params.size(); i++) {
                 statement.setObject(i + 1, params.get(i));
             }
@@ -47,7 +49,8 @@ public final class PostgresPlanInspector implements PlanInspector {
             JsonNode planNode = root.get(0).get("Plan");
             return toPlan(planNode);
         } catch (Exception ex) {
-            throw new TqlException(EXPLAIN_ERROR, "Failed to parse EXPLAIN output: " + ex.getMessage());
+            throw new TqlException(EXPLAIN_ERROR,
+                    "Failed to parse EXPLAIN output: " + ex.getMessage());
         }
     }
 

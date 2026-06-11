@@ -46,15 +46,18 @@ public final class JsonResponseRenderer implements Processor {
         Object body = resolve(response.body(), evaluation);
         if (!response.fields().isEmpty()) {
             PolicyEngine policyEngine = exchange.getContext().getRegistry()
-                    .lookupByNameAndType(TesseraqlProperties.POLICY_ENGINE_BEAN, PolicyEngine.class);
-            Principal principal = exchange.getProperty(TesseraqlProperties.PRINCIPAL, Principal.class);
+                    .lookupByNameAndType(TesseraqlProperties.POLICY_ENGINE_BEAN,
+                            PolicyEngine.class);
+            Principal principal = exchange.getProperty(TesseraqlProperties.PRINCIPAL,
+                    Principal.class);
             body = new FieldPolicyApplier(response.fields(), policyEngine, principal).apply(body);
         }
         String json;
         try {
             json = mapper.writeValueAsString(body);
         } catch (RuntimeException | com.fasterxml.jackson.core.JsonProcessingException ex) {
-            throw new TqlException(RENDER_ERROR, "Failed to serialize JSON response: " + ex.getMessage());
+            throw new TqlException(RENDER_ERROR,
+                    "Failed to serialize JSON response: " + ex.getMessage());
         }
 
         exchange.getMessage().setHeader(Exchange.HTTP_RESPONSE_CODE, response.effectiveStatus());
@@ -67,7 +70,8 @@ public final class JsonResponseRenderer implements Processor {
             case null -> null;
             case Map<?, ?> map -> {
                 Map<String, Object> resolved = new LinkedHashMap<>();
-                map.forEach((key, value) -> resolved.put(String.valueOf(key), resolve(value, evaluation)));
+                map.forEach((key, value) -> resolved.put(String.valueOf(key),
+                        resolve(value, evaluation)));
                 yield resolved;
             }
             case List<?> list -> {

@@ -21,8 +21,8 @@ class ReleaseEvidenceVerifierTest {
     void freshEvidenceVerifiesAgainstItsOwnSources() {
         AppManifest manifest = exampleApp();
         String evidence = new ReleaseEvidence().toJson(manifest, "user-admin", "1.0.0");
-        ReleaseEvidenceVerifier.Result result =
-                new ReleaseEvidenceVerifier().verify(manifest, evidence, null, null);
+        ReleaseEvidenceVerifier.Result result = new ReleaseEvidenceVerifier().verify(manifest,
+                evidence, null, null);
         assertThat(result.verified()).isTrue();
     }
 
@@ -35,8 +35,8 @@ class ReleaseEvidenceVerifierTest {
         String tampered = evidence.substring(0, files) + evidence.substring(files)
                 .replaceFirst("\"[0-9a-f]{64}\"", "\"" + "0".repeat(64) + "\"");
 
-        ReleaseEvidenceVerifier.Result result =
-                new ReleaseEvidenceVerifier().verify(manifest, tampered, null, null);
+        ReleaseEvidenceVerifier.Result result = new ReleaseEvidenceVerifier().verify(manifest,
+                tampered, null, null);
 
         assertThat(result.verified()).isFalse();
         assertThat(result.mismatches())

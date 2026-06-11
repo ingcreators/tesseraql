@@ -36,9 +36,10 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 class SqlServerPortabilityIntegrationTest {
 
     @Container
-    static final MSSQLServerContainer<?> SQLSERVER =
-            new MSSQLServerContainer<>("mcr.microsoft.com/mssql/server:2022-latest")
-                    .acceptLicense();
+    @SuppressWarnings("resource") // lifecycle is managed by the @Container extension
+    static final MSSQLServerContainer<?> SQLSERVER = new MSSQLServerContainer<>(
+            "mcr.microsoft.com/mssql/server:2022-latest")
+            .acceptLicense();
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
@@ -89,8 +90,7 @@ class SqlServerPortabilityIntegrationTest {
     }
 
     private static javax.sql.DataSource dataSource() {
-        com.microsoft.sqlserver.jdbc.SQLServerDataSource dataSource =
-                new com.microsoft.sqlserver.jdbc.SQLServerDataSource();
+        com.microsoft.sqlserver.jdbc.SQLServerDataSource dataSource = new com.microsoft.sqlserver.jdbc.SQLServerDataSource();
         dataSource.setURL(SQLSERVER.getJdbcUrl());
         dataSource.setUser(SQLSERVER.getUsername());
         dataSource.setPassword(SQLSERVER.getPassword());
@@ -99,12 +99,13 @@ class SqlServerPortabilityIntegrationTest {
 
     private static void seedDatabase() throws Exception {
         try (Connection connection = DriverManager.getConnection(
-                        SQLSERVER.getJdbcUrl(), SQLSERVER.getUsername(), SQLSERVER.getPassword());
+                SQLSERVER.getJdbcUrl(), SQLSERVER.getUsername(), SQLSERVER.getPassword());
                 Statement statement = connection.createStatement()) {
             statement.execute("create table users (name varchar(200) primary key, "
                     + "status varchar(32) not null)");
             statement.execute("insert into users (name, status) values ('sato', 'ACTIVE')");
-            statement.execute("create table items (name varchar(100) primary key, qty int not null)");
+            statement.execute(
+                    "create table items (name varchar(100) primary key, qty int not null)");
         }
     }
 

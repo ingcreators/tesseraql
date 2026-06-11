@@ -24,9 +24,10 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 class SqlServerPlanGuardIntegrationTest {
 
     @Container
-    static final MSSQLServerContainer<?> SQLSERVER =
-            new MSSQLServerContainer<>("mcr.microsoft.com/mssql/server:2022-latest")
-                    .acceptLicense();
+    @SuppressWarnings("resource") // lifecycle is managed by the @Container extension
+    static final MSSQLServerContainer<?> SQLSERVER = new MSSQLServerContainer<>(
+            "mcr.microsoft.com/mssql/server:2022-latest")
+            .acceptLicense();
 
     private static final SqlServerPlanInspector INSPECTOR = new SqlServerPlanInspector();
 
@@ -62,8 +63,8 @@ class SqlServerPlanGuardIntegrationTest {
             QueryPlan plan = INSPECTOR.explain(connection,
                     "select * from t where name = ?", List.of("n1"));
             assertThat(plan.flatten()).anyMatch(node -> "Seq Scan".equals(node.nodeType()));
-            List<PlanViolation> violations =
-                    PlanGuard.evaluate(plan, PlanGuardPolicy.noSeqScan(10_000));
+            List<PlanViolation> violations = PlanGuard.evaluate(plan,
+                    PlanGuardPolicy.noSeqScan(10_000));
             assertThat(violations).anyMatch(v -> v.code().toString().equals("TQL-PLAN-1001"));
         }
     }

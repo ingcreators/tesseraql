@@ -23,7 +23,8 @@ public final class TesseraqlHealthIndicator implements HealthIndicator {
     public Health health() {
         OpsDashboard.HealthReport report = runtime.opsDashboard().health();
         Health.Builder builder = "UP".equals(report.status())
-                ? Health.up() : Health.status(new Status(report.status()));
+                ? Health.up()
+                : Health.status(new Status(report.status()));
         return builder.withDetails(report.details()).build();
     }
 }

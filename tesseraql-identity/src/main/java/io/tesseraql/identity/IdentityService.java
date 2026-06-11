@@ -104,11 +104,13 @@ public final class IdentityService {
     }
 
     /** Resolves the full principal (user, roles, permissions, groups) for a login id. */
-    public Optional<Principal> resolvePrincipal(RealmConfig realm, String loginId, String tenantId) {
+    public Optional<Principal> resolvePrincipal(RealmConfig realm, String loginId,
+            String tenantId) {
         Map<String, Object> lookup = new LinkedHashMap<>();
         lookup.put("loginId", loginId);
         lookup.put("tenantId", tenantId);
-        List<Map<String, Object>> users = execute(realm, IdentityContracts.FIND_USER_BY_LOGIN, lookup);
+        List<Map<String, Object>> users = execute(realm, IdentityContracts.FIND_USER_BY_LOGIN,
+                lookup);
         if (users.isEmpty()) {
             return Optional.empty();
         }
@@ -121,8 +123,10 @@ public final class IdentityService {
                 asString(user.get("login_id")),
                 asString(user.get("display_name")),
                 asString(user.get("tenant_id")),
-                column(execute(realm, IdentityContracts.FIND_GROUPS_BY_USER_ID, byUser), "group_code"),
-                column(execute(realm, IdentityContracts.FIND_ROLES_BY_USER_ID, byUser), "role_code"),
+                column(execute(realm, IdentityContracts.FIND_GROUPS_BY_USER_ID, byUser),
+                        "group_code"),
+                column(execute(realm, IdentityContracts.FIND_ROLES_BY_USER_ID, byUser),
+                        "role_code"),
                 column(execute(realm, IdentityContracts.FIND_PERMISSIONS_BY_USER_ID, byUser),
                         "permission_code"),
                 user));

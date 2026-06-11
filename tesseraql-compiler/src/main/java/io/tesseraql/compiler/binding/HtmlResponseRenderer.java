@@ -66,8 +66,8 @@ public final class HtmlResponseRenderer implements Processor {
         EvaluationContext evaluation = new EvaluationContext(context);
 
         Map<String, Object> model = new LinkedHashMap<>();
-        response.model().forEach((key, expr) ->
-                model.put(key, evaluation.resolve(Arrays.asList(String.valueOf(expr).split("\\.")))));
+        response.model().forEach((key, expr) -> model.put(key,
+                evaluation.resolve(Arrays.asList(String.valueOf(expr).split("\\.")))));
 
         String html = Templates.render(appHome, templateName, model);
 

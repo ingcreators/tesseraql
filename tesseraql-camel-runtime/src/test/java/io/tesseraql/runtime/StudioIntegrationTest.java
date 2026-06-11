@@ -68,8 +68,8 @@ class StudioIntegrationTest {
 
         JsonNode explorer = MAPPER.readTree(response.body());
         assertThat(explorer.get("readOnly").asBoolean()).isFalse();
-        assertThat(explorer.get("routes")).anySatisfy(route ->
-                assertThat(route.get("id").asText()).isEqualTo("users.search"));
+        assertThat(explorer.get("routes")).anySatisfy(
+                route -> assertThat(route.get("id").asText()).isEqualTo("users.search"));
     }
 
     @Test
@@ -119,8 +119,8 @@ class StudioIntegrationTest {
 
         HttpResponse<String> reload = post("/_tesseraql/studio/reload", "", true);
         assertThat(reload.statusCode()).isEqualTo(200);
-        assertThat(MAPPER.readTree(reload.body()).get("routes")).anySatisfy(route ->
-                assertThat(route.get("id").asText()).isEqualTo("extra.list"));
+        assertThat(MAPPER.readTree(reload.body()).get("routes"))
+                .anySatisfy(route -> assertThat(route.get("id").asText()).isEqualTo("extra.list"));
     }
 
     @Test
@@ -200,7 +200,8 @@ class StudioIntegrationTest {
                 .hasValueSatisfying(value -> assertThat(value)
                         .startsWith("/_tesseraql/studio/ui/source?path=").contains("saved=1"));
 
-        HttpResponse<String> afterSave = get(save.headers().firstValue("location").orElseThrow(), true);
+        HttpResponse<String> afterSave = get(save.headers().firstValue("location").orElseThrow(),
+                true);
         assertThat(afterSave.statusCode()).isEqualTo(200);
         assertThat(afterSave.body()).contains("Draft saved.");
         // The multi-line content round-trips into the editor textarea.
@@ -212,7 +213,8 @@ class StudioIntegrationTest {
 
         HttpResponse<String> apply = postForm("/_tesseraql/studio/ui/apply", "path=" + enc(path));
         assertThat(apply.statusCode()).isEqualTo(303);
-        HttpResponse<String> afterApply = get(apply.headers().firstValue("location").orElseThrow(), true);
+        HttpResponse<String> afterApply = get(apply.headers().firstValue("location").orElseThrow(),
+                true);
         assertThat(afterApply.body()).contains("Draft applied and routes reloaded.");
     }
 
@@ -265,7 +267,7 @@ class StudioIntegrationTest {
 
     private static HttpResponse<String> postForm(String path, String form) throws Exception {
         HttpRequest request = HttpRequest.newBuilder(
-                        URI.create("http://localhost:" + runtime.port() + path))
+                URI.create("http://localhost:" + runtime.port() + path))
                 .header("Authorization", "Bearer " + token())
                 .header("Content-Type", "application/x-www-form-urlencoded")
                 .POST(HttpRequest.BodyPublishers.ofString(form))
@@ -279,17 +281,20 @@ class StudioIntegrationTest {
         if (auth) {
             request.header("Authorization", "Bearer " + token());
         }
-        return HttpClient.newHttpClient().send(request.build(), HttpResponse.BodyHandlers.ofString());
+        return HttpClient.newHttpClient().send(request.build(),
+                HttpResponse.BodyHandlers.ofString());
     }
 
-    private static HttpResponse<String> post(String path, String body, boolean auth) throws Exception {
+    private static HttpResponse<String> post(String path, String body, boolean auth)
+            throws Exception {
         HttpRequest.Builder request = HttpRequest.newBuilder(
-                        URI.create("http://localhost:" + runtime.port() + path))
+                URI.create("http://localhost:" + runtime.port() + path))
                 .POST(HttpRequest.BodyPublishers.ofString(body));
         if (auth) {
             request.header("Authorization", "Bearer " + token());
         }
-        return HttpClient.newHttpClient().send(request.build(), HttpResponse.BodyHandlers.ofString());
+        return HttpClient.newHttpClient().send(request.build(),
+                HttpResponse.BodyHandlers.ofString());
     }
 
     private static String enc(String value) {
@@ -298,12 +303,14 @@ class StudioIntegrationTest {
 
     private static String token() throws Exception {
         Base64.Encoder encoder = Base64.getUrlEncoder().withoutPadding();
-        String header = encoder.encodeToString("{\"alg\":\"HS256\"}".getBytes(StandardCharsets.UTF_8));
+        String header = encoder
+                .encodeToString("{\"alg\":\"HS256\"}".getBytes(StandardCharsets.UTF_8));
         String payload = encoder.encodeToString(
                 MAPPER.writeValueAsBytes(Map.of("sub", "studio-user", "roles", List.of("ADMIN"))));
         Mac mac = Mac.getInstance("HmacSHA256");
         mac.init(new SecretKeySpec(
-                "dev-only-secret-change-me-in-production".getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
+                "dev-only-secret-change-me-in-production".getBytes(StandardCharsets.UTF_8),
+                "HmacSHA256"));
         String signature = encoder.encodeToString(
                 mac.doFinal((header + "." + payload).getBytes(StandardCharsets.US_ASCII)));
         return header + "." + payload + "." + signature;
@@ -329,7 +336,8 @@ class StudioIntegrationTest {
                   studio:
                     enabled: true
                     readOnly: false
-                """.formatted(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword()));
+                """.formatted(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(),
+                POSTGRES.getPassword()));
         return target;
     }
 

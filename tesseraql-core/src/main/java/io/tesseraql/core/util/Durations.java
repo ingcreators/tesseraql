@@ -37,7 +37,8 @@ public final class Durations {
             case "m" -> Duration.ofMinutes(amount);
             case "h" -> Duration.ofHours(amount);
             case "d" -> Duration.ofDays(amount);
-            default -> throw new TqlException(INVALID, "Unknown duration unit '" + unit + "' in " + value);
+            default ->
+                throw new TqlException(INVALID, "Unknown duration unit '" + unit + "' in " + value);
         };
     }
 

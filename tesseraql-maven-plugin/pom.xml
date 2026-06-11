@@ -15,6 +15,13 @@
   <packaging>maven-plugin</packaging>
 
   <dependencies>
+    <!-- JSR-330 injection for Maven components (@Inject replaces the deprecated @Component). -->
+    <dependency>
+      <groupId>javax.inject</groupId>
+      <artifactId>javax.inject</artifactId>
+      <version>1</version>
+      <scope>provided</scope>
+    </dependency>
     <dependency>
       <groupId>io.tesseraql</groupId>
       <artifactId>tesseraql-core</artifactId>

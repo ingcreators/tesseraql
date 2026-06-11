@@ -93,9 +93,10 @@ class MultiAppGatewayIntegrationTest {
         assertThat(getWithTenant("/apps/shop-a/api/items", "tenant-x").statusCode()).isEqualTo(200);
     }
 
-    private static HttpResponse<String> getWithTenant(String path, String tenantId) throws Exception {
+    private static HttpResponse<String> getWithTenant(String path, String tenantId)
+            throws Exception {
         HttpRequest request = HttpRequest.newBuilder(
-                        URI.create("http://localhost:" + gateway.port() + path))
+                URI.create("http://localhost:" + gateway.port() + path))
                 .header("X-Tenant-Id", tenantId)
                 .build();
         return HttpClient.newHttpClient().send(request, HttpResponse.BodyHandlers.ofString());
@@ -120,7 +121,8 @@ class MultiAppGatewayIntegrationTest {
         try (java.net.Socket socket = new java.net.Socket("localhost", gateway.port())) {
             String request = "GET " + path + " HTTP/1.1\r\nHost: " + hostName
                     + "\r\nConnection: close\r\n\r\n";
-            socket.getOutputStream().write(request.getBytes(java.nio.charset.StandardCharsets.US_ASCII));
+            socket.getOutputStream()
+                    .write(request.getBytes(java.nio.charset.StandardCharsets.US_ASCII));
             socket.getOutputStream().flush();
             String response = new String(socket.getInputStream().readAllBytes(),
                     java.nio.charset.StandardCharsets.UTF_8);
@@ -140,7 +142,8 @@ class MultiAppGatewayIntegrationTest {
 
     private static HttpResponse<String> get(String path) throws Exception {
         return HttpClient.newHttpClient().send(
-                HttpRequest.newBuilder(URI.create("http://localhost:" + gateway.port() + path)).build(),
+                HttpRequest.newBuilder(URI.create("http://localhost:" + gateway.port() + path))
+                        .build(),
                 HttpResponse.BodyHandlers.ofString());
     }
 
@@ -148,11 +151,12 @@ class MultiAppGatewayIntegrationTest {
         try (Connection connection = DriverManager.getConnection(
                 POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword());
                 Statement statement = connection.createStatement()) {
-            for (String schema : new String[] {"a", "b"}) {
+            for (String schema : new String[]{"a", "b"}) {
                 statement.execute("create schema " + schema);
                 statement.execute("create table " + schema
                         + ".items (id serial primary key, name varchar(200) not null)");
-                statement.execute("insert into " + schema + ".items (name) values ('from-" + schema + "')");
+                statement.execute(
+                        "insert into " + schema + ".items (name) values ('from-" + schema + "')");
             }
         }
     }

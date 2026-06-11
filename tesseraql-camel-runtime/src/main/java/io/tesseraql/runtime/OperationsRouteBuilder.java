@@ -28,8 +28,8 @@ import org.apache.camel.builder.RouteBuilder;
 final class OperationsRouteBuilder extends RouteBuilder {
 
     private static final String VIEW = "tesseraql-auth:authenticate?auth=bearer";
-    private static final Map<String, Object> NOT_FOUND =
-            Map.of("error", Map.of("code", "TQL-BATCH-4040", "message", "Not Found"));
+    private static final Map<String, Object> NOT_FOUND = Map.of("error",
+            Map.of("code", "TQL-BATCH-4040", "message", "Not Found"));
 
     private final ObjectMapper mapper = new ObjectMapper();
     private final JobRunner runner;
@@ -75,8 +75,8 @@ final class OperationsRouteBuilder extends RouteBuilder {
         rest().get("/_tesseraql/health").to("direct:ops.health");
 
         from("direct:ops.health").routeId("ops.health")
-                .process(jsonProcessor(exchange ->
-                        java.util.Map.of("status", dashboard.health().status())));
+                .process(jsonProcessor(
+                        exchange -> java.util.Map.of("status", dashboard.health().status())));
 
         from("direct:ops.batch.jobs").routeId("ops.batch.jobs")
                 .to(VIEW).to("tesseraql-auth:authorize?policy=ops.batch.view")
@@ -189,7 +189,8 @@ final class OperationsRouteBuilder extends RouteBuilder {
         map.put("app", execution.appName());
         map.put("status", execution.status().name());
         map.put("triggerType", execution.triggerType());
-        map.put("startTime", execution.startTime() == null ? null : execution.startTime().toString());
+        map.put("startTime",
+                execution.startTime() == null ? null : execution.startTime().toString());
         map.put("endTime", execution.endTime() == null ? null : execution.endTime().toString());
         map.put("durationMs", execution.durationMs());
         map.put("exitMessage", execution.exitMessage());
@@ -225,7 +226,8 @@ final class OperationsRouteBuilder extends RouteBuilder {
         return exchange -> {
             Object body = handler.apply(exchange);
             exchange.getMessage().setHeader(Exchange.HTTP_RESPONSE_CODE, 200);
-            exchange.getMessage().setHeader(Exchange.CONTENT_TYPE, "application/json; charset=utf-8");
+            exchange.getMessage().setHeader(Exchange.CONTENT_TYPE,
+                    "application/json; charset=utf-8");
             exchange.getMessage().setBody(mapper.writeValueAsString(body));
         };
     }

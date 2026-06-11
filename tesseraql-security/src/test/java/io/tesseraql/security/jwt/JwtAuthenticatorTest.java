@@ -26,7 +26,8 @@ class JwtAuthenticatorTest {
 
     private static String token(Map<String, Object> claims) throws Exception {
         Base64.Encoder enc = Base64.getUrlEncoder().withoutPadding();
-        String header = enc.encodeToString("{\"alg\":\"HS256\",\"typ\":\"JWT\"}".getBytes(StandardCharsets.UTF_8));
+        String header = enc.encodeToString(
+                "{\"alg\":\"HS256\",\"typ\":\"JWT\"}".getBytes(StandardCharsets.UTF_8));
         String payload = enc.encodeToString(MAPPER.writeValueAsBytes(claims));
         Mac mac = Mac.getInstance("HmacSHA256");
         mac.init(new SecretKeySpec(SECRET.getBytes(StandardCharsets.UTF_8), "HmacSHA256"));

@@ -26,7 +26,8 @@ public record LogoutRequest(String issuer, String destination, String nameId, St
 
     /** The request XML with the caller-supplied message id and issue instant. */
     public String toXml(String id, Instant issueInstant) {
-        String sessionIndexXml = sessionIndex == null ? ""
+        String sessionIndexXml = sessionIndex == null
+                ? ""
                 : "<samlp:SessionIndex>" + escapeText(sessionIndex) + "</samlp:SessionIndex>";
         return ("""
                 <samlp:LogoutRequest xmlns:samlp="%s" xmlns:saml="%s" ID="%s" Version="2.0"\
@@ -35,7 +36,8 @@ public record LogoutRequest(String issuer, String destination, String nameId, St
                 <saml:NameID>%s</saml:NameID>%s\
                 </samlp:LogoutRequest>""")
                 .formatted(PROTOCOL_NS, ASSERTION_NS, escapeAttr(id), issueInstant,
-                        escapeAttr(destination), escapeText(issuer), escapeText(nameId), sessionIndexXml);
+                        escapeAttr(destination), escapeText(issuer), escapeText(nameId),
+                        sessionIndexXml);
     }
 
     /** A parsed inbound logout request: its message id (for InResponseTo) and subject. */
@@ -45,8 +47,8 @@ public record LogoutRequest(String issuer, String destination, String nameId, St
     /** Parses an inbound (IdP-initiated) LogoutRequest's id, issuer and NameID. */
     public static Parsed parse(String xml) {
         try {
-            javax.xml.parsers.DocumentBuilderFactory factory =
-                    javax.xml.parsers.DocumentBuilderFactory.newInstance();
+            javax.xml.parsers.DocumentBuilderFactory factory = javax.xml.parsers.DocumentBuilderFactory
+                    .newInstance();
             factory.setNamespaceAware(true);
             factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true);
             org.w3c.dom.Document document = factory.newDocumentBuilder()

@@ -22,8 +22,8 @@ public final class MysqlPlanInspector implements PlanInspector {
 
     private static final TqlErrorCode EXPLAIN_ERROR = new TqlErrorCode(TqlDomain.PLAN, 1501);
     private static final ObjectMapper MAPPER = new ObjectMapper();
-    private static final String[] WRAPPERS =
-            {"ordering_operation", "grouping_operation", "duplicates_removal"};
+    private static final String[] WRAPPERS = {"ordering_operation", "grouping_operation",
+            "duplicates_removal"};
 
     @Override
     public String dialect() {
@@ -31,8 +31,10 @@ public final class MysqlPlanInspector implements PlanInspector {
     }
 
     @Override
-    public QueryPlan explain(Connection connection, String sql, List<Object> params) throws SQLException {
-        try (PreparedStatement statement = connection.prepareStatement("EXPLAIN FORMAT=JSON " + sql)) {
+    public QueryPlan explain(Connection connection, String sql, List<Object> params)
+            throws SQLException {
+        try (PreparedStatement statement = connection
+                .prepareStatement("EXPLAIN FORMAT=JSON " + sql)) {
             for (int i = 0; i < params.size(); i++) {
                 statement.setObject(i + 1, params.get(i));
             }
@@ -51,7 +53,8 @@ public final class MysqlPlanInspector implements PlanInspector {
         } catch (TqlException ex) {
             throw ex;
         } catch (Exception ex) {
-            throw new TqlException(EXPLAIN_ERROR, "Failed to parse EXPLAIN output: " + ex.getMessage());
+            throw new TqlException(EXPLAIN_ERROR,
+                    "Failed to parse EXPLAIN output: " + ex.getMessage());
         }
     }
 

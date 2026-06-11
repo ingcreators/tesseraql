@@ -60,16 +60,15 @@ public final class JxlsFileCodec implements FileCodec {
      */
     @Override
     public void read(InputStream in, FileReadSpec spec, RowHandler handler) throws Exception {
-        try (org.dhatim.fastexcel.reader.ReadableWorkbook workbook =
-                new org.dhatim.fastexcel.reader.ReadableWorkbook(in)) {
-            org.dhatim.fastexcel.reader.Sheet sheet =
-                    spec.sheet() == null || spec.sheet().isBlank()
-                            ? workbook.getFirstSheet()
-                            : workbook.findSheet(spec.sheet()).orElseThrow(() ->
-                                    new IllegalArgumentException(
-                                            "No sheet named '" + spec.sheet() + "'"));
-            try (java.util.stream.Stream<org.dhatim.fastexcel.reader.Row> rows =
-                    sheet.openStream()) {
+        try (org.dhatim.fastexcel.reader.ReadableWorkbook workbook = new org.dhatim.fastexcel.reader.ReadableWorkbook(
+                in)) {
+            org.dhatim.fastexcel.reader.Sheet sheet = spec.sheet() == null || spec.sheet().isBlank()
+                    ? workbook.getFirstSheet()
+                    : workbook.findSheet(spec.sheet())
+                            .orElseThrow(() -> new IllegalArgumentException(
+                                    "No sheet named '" + spec.sheet() + "'"));
+            try (java.util.stream.Stream<org.dhatim.fastexcel.reader.Row> rows = sheet
+                    .openStream()) {
                 java.util.Iterator<org.dhatim.fastexcel.reader.Row> iterator = rows.iterator();
                 for (int skip = 1; skip < spec.startRow() && iterator.hasNext(); skip++) {
                     iterator.next();
@@ -92,9 +91,10 @@ public final class JxlsFileCodec implements FileCodec {
                     rowNumber++;
                     Map<String, Object> values = new LinkedHashMap<>();
                     for (int i = 0; i < columns.size(); i++) {
-                        org.dhatim.fastexcel.reader.Cell cell =
-                                positions[i] < 0 || positions[i] >= row.getCellCount()
-                                        ? null : row.getCell(positions[i]);
+                        org.dhatim.fastexcel.reader.Cell cell = positions[i] < 0
+                                || positions[i] >= row.getCellCount()
+                                        ? null
+                                        : row.getCell(positions[i]);
                         values.put(columns.get(i).name(), value(columns.get(i), cell));
                     }
                     handler.row(rowNumber, values);
@@ -110,8 +110,7 @@ public final class JxlsFileCodec implements FileCodec {
                 || cell.getType() == org.dhatim.fastexcel.reader.CellType.EMPTY) {
             return null;
         }
-        boolean numericCell =
-                cell.getType() == org.dhatim.fastexcel.reader.CellType.NUMBER;
+        boolean numericCell = cell.getType() == org.dhatim.fastexcel.reader.CellType.NUMBER;
         if (numericCell && ("date".equals(column.type()) || "datetime".equals(column.type()))) {
             return cell.asDate();
         }
@@ -149,7 +148,8 @@ public final class JxlsFileCodec implements FileCodec {
 
     private static Sheet sheet(Workbook workbook, String name) {
         Sheet sheet = name == null || name.isBlank()
-                ? workbook.getSheetAt(0) : workbook.getSheet(name);
+                ? workbook.getSheetAt(0)
+                : workbook.getSheet(name);
         if (sheet == null) {
             throw new IllegalArgumentException("No sheet named '" + name + "'");
         }
@@ -278,50 +278,53 @@ public final class JxlsFileCodec implements FileCodec {
      */
     private static void writeGrid(OutputStream out, FileWriteSpec spec,
             Iterator<Map<String, Object>> rows) throws IOException {
-        org.dhatim.fastexcel.Workbook workbook =
-                new org.dhatim.fastexcel.Workbook(out, "TesseraQL", "1.0");
-        org.dhatim.fastexcel.Worksheet sheet = workbook.newWorksheet(
-                spec.sheet() == null || spec.sheet().isBlank() ? "data" : spec.sheet());
-        ZoneId zone = io.tesseraql.core.files.ColumnValues.zone(spec.timezone());
-        List<ColumnMapping> columns = new ArrayList<>(spec.columns());
-        int rowIndex = 0;
-        while (rows.hasNext()) {
-            Map<String, Object> row = rows.next();
-            if (columns.isEmpty()) {
-                row.keySet().forEach(key -> columns.add(ColumnMapping.of(key)));
-            }
-            if (rowIndex == 0) {
+        // try-with-resources finishes the workbook even when a row iterator fails mid-write.
+        try (org.dhatim.fastexcel.Workbook workbook = new org.dhatim.fastexcel.Workbook(out,
+                "TesseraQL", "1.0")) {
+            org.dhatim.fastexcel.Worksheet sheet = workbook.newWorksheet(
+                    spec.sheet() == null || spec.sheet().isBlank() ? "data" : spec.sheet());
+            ZoneId zone = io.tesseraql.core.files.ColumnValues.zone(spec.timezone());
+            List<ColumnMapping> columns = new ArrayList<>(spec.columns());
+            int rowIndex = 0;
+            while (rows.hasNext()) {
+                Map<String, Object> row = rows.next();
+                if (columns.isEmpty()) {
+                    row.keySet().forEach(key -> columns.add(ColumnMapping.of(key)));
+                }
+                if (rowIndex == 0) {
+                    for (int i = 0; i < columns.size(); i++) {
+                        sheet.value(rowIndex, i, columns.get(i).effectiveHeader());
+                    }
+                    rowIndex++;
+                }
                 for (int i = 0; i < columns.size(); i++) {
-                    sheet.value(rowIndex, i, columns.get(i).effectiveHeader());
+                    writeValue(sheet, rowIndex, i, columns.get(i),
+                            row.get(columns.get(i).name()), zone);
                 }
                 rowIndex++;
             }
-            for (int i = 0; i < columns.size(); i++) {
-                writeValue(sheet, rowIndex, i, columns.get(i),
-                        row.get(columns.get(i).name()), zone);
-            }
-            rowIndex++;
         }
-        workbook.finish();
     }
 
     /** Writes one typed grid cell, applying the column's (or the temporal default) format. */
     private static void writeValue(org.dhatim.fastexcel.Worksheet sheet, int rowIndex,
             int colIndex, ColumnMapping column, Object value, ZoneId zone) {
-        java.time.ZonedDateTime temporal =
-                io.tesseraql.core.files.ColumnValues.toZoned(value, zone);
+        java.time.ZonedDateTime temporal = io.tesseraql.core.files.ColumnValues.toZoned(value,
+                zone);
         String format = column.format();
         if (temporal != null) {
             sheet.value(rowIndex, colIndex, temporal.toLocalDateTime());
             // A date cell without a format renders as a raw serial number; default sensibly.
             sheet.style(rowIndex, colIndex)
                     .format(format == null || format.isBlank()
-                            ? "yyyy-mm-dd hh:mm" : format)
+                            ? "yyyy-mm-dd hh:mm"
+                            : format)
                     .set();
             return;
         }
         switch (value) {
-            case null -> { }
+            case null -> {
+            }
             case Number number -> {
                 sheet.value(rowIndex, colIndex, number);
                 if (format != null && !format.isBlank()) {
@@ -335,8 +338,8 @@ public final class JxlsFileCodec implements FileCodec {
 
     /** Writes a typed cell: temporals become real date cells, numbers numeric cells. */
     private static void setCell(Cell cell, Object value, ZoneId zone) {
-        java.time.ZonedDateTime temporal =
-                io.tesseraql.core.files.ColumnValues.toZoned(value, zone);
+        java.time.ZonedDateTime temporal = io.tesseraql.core.files.ColumnValues.toZoned(value,
+                zone);
         if (temporal != null) {
             cell.setCellValue(temporal.toLocalDateTime());
             return;
