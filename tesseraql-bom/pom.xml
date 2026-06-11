@@ -149,6 +149,17 @@
         <artifactId>fastexcel-reader</artifactId>
         <version>${fastexcel.version}</version>
       </dependency>
+      <!-- Dialect drivers (design ch. 42): Oracle FUTC and MIT licensed respectively. -->
+      <dependency>
+        <groupId>com.oracle.database.jdbc</groupId>
+        <artifactId>ojdbc11</artifactId>
+        <version>${ojdbc.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.microsoft.sqlserver</groupId>
+        <artifactId>mssql-jdbc</artifactId>
+        <version>${mssql-jdbc.version}</version>
+      </dependency>
       <dependency>
         <groupId>org.webjars.npm</groupId>
         <artifactId>hypermedia-components__core</artifactId>

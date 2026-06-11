@@ -14,8 +14,9 @@ import java.util.Map;
  * normalizing them into the dialect-independent {@link QueryPlan}. {@code TABLE ACCESS FULL} maps to the
  * common {@code Seq Scan} the guard recognizes; index operations map to {@code Index Scan}.
  *
- * <p>The {@code PLAN_TABLE} normalization is unit-tested against captured rows; a live integration test
- * is deferred because the Oracle container image is large and license-gated.
+ * <p>The {@code PLAN_TABLE} normalization is unit-tested against captured rows; the live
+ * integration test runs against a real Oracle Free container behind
+ * {@code -Dtesseraql.dialect.its=true} (the image is large, so it is opt-in).
  */
 public final class OraclePlanInspector implements PlanInspector {
 

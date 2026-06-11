@@ -6,7 +6,6 @@ import io.tesseraql.core.error.TqlException;
 import java.io.ByteArrayInputStream;
 import java.nio.charset.StandardCharsets;
 import java.sql.Connection;
-import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
@@ -27,8 +26,9 @@ import org.w3c.dom.NodeList;
  * Scan}, {@code Clustered Index Scan}) map to the common {@code Seq Scan} the guard recognizes, while
  * seeks map to {@code Index Scan}.
  *
- * <p>The XML normalization is unit-tested against captured Showplan output; a live integration test is
- * deferred because the SQL Server container image is large and license-gated.
+ * <p>The XML normalization is unit-tested against captured Showplan output; the live integration
+ * test runs against a real SQL Server container behind {@code -Dtesseraql.dialect.its=true}
+ * (the image is large and license-gated, so it is opt-in).
  */
 public final class SqlServerPlanInspector implements PlanInspector {
 
@@ -42,20 +42,44 @@ public final class SqlServerPlanInspector implements PlanInspector {
 
     @Override
     public QueryPlan explain(Connection connection, String sql, List<Object> params) throws SQLException {
+        // SHOWPLAN_XML only yields a plan result set for direct batches, not for the RPC path
+        // parameterized prepared statements take - so the representative parameter values inline
+        // as escaped literals (plan inspection runs on fixture values, design ch. 46).
         setShowplan(connection, true);
-        try (PreparedStatement statement = connection.prepareStatement(sql)) {
-            for (int i = 0; i < params.size(); i++) {
-                statement.setObject(i + 1, params.get(i));
+        try (Statement statement = connection.createStatement();
+                ResultSet resultSet = statement.executeQuery(inline(sql, params))) {
+            if (!resultSet.next()) {
+                throw new TqlException(EXPLAIN_ERROR, "SHOWPLAN_XML returned no rows");
             }
-            try (ResultSet resultSet = statement.executeQuery()) {
-                if (!resultSet.next()) {
-                    throw new TqlException(EXPLAIN_ERROR, "SHOWPLAN_XML returned no rows");
-                }
-                return parse(resultSet.getString(1));
-            }
+            return parse(resultSet.getString(1));
         } finally {
             setShowplan(connection, false);
         }
+    }
+
+    /** Replaces each positional marker with the escaped literal of its sample value. */
+    static String inline(String sql, List<Object> params) {
+        StringBuilder inlined = new StringBuilder();
+        int param = 0;
+        for (int i = 0; i < sql.length(); i++) {
+            char ch = sql.charAt(i);
+            if (ch == '?' && param < params.size()) {
+                inlined.append(literal(params.get(param++)));
+            } else {
+                inlined.append(ch);
+            }
+        }
+        return inlined.toString();
+    }
+
+    private static String literal(Object value) {
+        if (value == null) {
+            return "NULL";
+        }
+        if (value instanceof Number || value instanceof Boolean) {
+            return String.valueOf(value);
+        }
+        return "'" + String.valueOf(value).replace("'", "''") + "'";
     }
 
     private static void setShowplan(Connection connection, boolean on) throws SQLException {
