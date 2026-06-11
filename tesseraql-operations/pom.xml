@@ -14,6 +14,11 @@
   <name>Tesseraql Operations</name>
 
   <dependencies>
+    <!-- The built-in CSV codec for file-import/file-export (design ch. 28). -->
+    <dependency>
+      <groupId>org.apache.commons</groupId>
+      <artifactId>commons-csv</artifactId>
+    </dependency>
     <dependency>
       <groupId>io.tesseraql</groupId>
       <artifactId>tesseraql-core</artifactId>

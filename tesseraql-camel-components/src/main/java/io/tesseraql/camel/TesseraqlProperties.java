@@ -24,6 +24,8 @@ public final class TesseraqlProperties {
     public static final String TEMP_STORE_BEAN = "tesseraqlTempStore";
     public static final String IDEMPOTENCY_STORE_BEAN = "tesseraqlIdempotencyStore";
     public static final String OUTBOX_STORE_BEAN = "tesseraqlOutboxStore";
+    /** The asynchronous file import/export service (design ch. 28). */
+    public static final String FILE_TRANSFER_BEAN = "tesseraqlFileTransfers";
     /** An OutboxEventSink contributed by a runtime extension (e.g. SCIM outbound provisioning). */
     public static final String OUTBOX_EVENT_SINK_BEAN = "tesseraqlOutboxEventSink";
     /** The ServiceProviders registry backing the tesseraql-service component (design ch. 47). */

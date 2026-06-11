@@ -225,6 +225,13 @@ public final class TesseraqlRuntime implements AutoCloseable {
         JdbcOutboxStore outboxStore = new JdbcOutboxStore(dataSource);
         outboxStore.ensureSchema();
         context.getRegistry().bind(TesseraqlProperties.OUTBOX_STORE_BEAN, outboxStore);
+        // Asynchronous file imports/exports (design ch. 28); codecs arrive via ServiceLoader, so
+        // adding the optional tesseraql-excel module to the classpath is the whole install.
+        io.tesseraql.operations.files.JdbcFileTransferService fileTransfers =
+                new io.tesseraql.operations.files.JdbcFileTransferService(jobRepository,
+                        tempStore, dataSource, io.tesseraql.core.files.FileCodecs.discover());
+        fileTransfers.ensureSchema();
+        context.getRegistry().bind(TesseraqlProperties.FILE_TRANSFER_BEAN, fileTransfers);
         JobExecutor jobExecutor = new JobExecutor(jobRepository, tempStore, slowSqlLog, tracer);
         Map<String, JobFile> jobs = new LinkedHashMap<>();
         manifest.jobs().forEach(job -> jobs.put(job.definition().id(), job));
@@ -506,6 +513,13 @@ public final class TesseraqlRuntime implements AutoCloseable {
     public void close() {
         closeQuietly(pinningSource);
         closeQuietly(otelSdk);
+        io.tesseraql.operations.files.JdbcFileTransferService fileTransfers =
+                camelContext.getRegistry().lookupByNameAndType(
+                        TesseraqlProperties.FILE_TRANSFER_BEAN,
+                        io.tesseraql.operations.files.JdbcFileTransferService.class);
+        if (fileTransfers != null) {
+            fileTransfers.close();
+        }
         try {
             camelContext.stop();
         } finally {

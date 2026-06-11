@@ -48,6 +48,23 @@ create table if not exists tql_idempotency_record (
   primary key (scope, idempotency_key)
 );
 
+create table if not exists tql_file_transfer (
+  transfer_id varchar(64) primary key,
+  route_id varchar(256) not null,
+  app_name varchar(256) not null,
+  direction varchar(16) not null,
+  format varchar(32) not null,
+  filename varchar(500),
+  spool_uri varchar(1000),
+  row_count bigint not null default 0,
+  error_json text,
+  after_timing varchar(16),
+  after_sql_file varchar(1000),
+  params_json text,
+  downloaded_at timestamp,
+  created_at timestamp not null
+);
+
 create table if not exists tql_outbox_event (
   event_id varchar(64) primary key,
   aggregate_type varchar(128),

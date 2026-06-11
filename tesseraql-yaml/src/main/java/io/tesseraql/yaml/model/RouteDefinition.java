@@ -18,6 +18,8 @@ import java.util.Map;
  * @param sql     SQL execution binding
  * @param queries additional named queries executed after {@code sql}, each bound into the
  *                execution context under its own name so one page can render several result sets
+ * @param fileImport the {@code import:} block of a {@code file-import} route
+ * @param fileExport the {@code export:} block of a {@code file-export} route
  * @param response response shape
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
@@ -34,6 +36,8 @@ public record RouteDefinition(
         OutboxSpec outbox,
         SqlBinding sql,
         Map<String, SqlBinding> queries,
+        @com.fasterxml.jackson.annotation.JsonProperty("import") ImportSpec fileImport,
+        @com.fasterxml.jackson.annotation.JsonProperty("export") ExportSpec fileExport,
         ResponseSpec response) {
 
     public RouteDefinition {

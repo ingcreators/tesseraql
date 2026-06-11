@@ -62,6 +62,12 @@ public final class ErrorResponseRenderer implements Processor {
                 default -> 500;
             };
             case IDEM -> code.number() == 4090 ? 409 : 500;
+            case LD -> switch (code.number()) {
+                case 2820 -> 400; // file-import without an uploaded body
+                case 2822 -> 404; // unknown transfer id
+                case 2823 -> 409; // export not ready for download yet
+                default -> 500;
+            };
             case IAM -> code.number() == 4030 ? 403 : 500;
             case SQL -> switch (code.number()) {
                 case 4001, 4002 -> 400; // not-null / check violation

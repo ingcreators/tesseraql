@@ -50,6 +50,10 @@ Distinctions are URL conventions, not folder rules:
 - `/...` — HTML pages (page / query-html recipes)
 - `.../fragments/<name>` — htmx fragments: partial markup (no `<html>` element) swapped into a
   page by hypermedia requests. Fragments are ordinary, addressable resources.
+- `file-import` / `file-export` routes own their subtree: the route URL starts the asynchronous
+  transfer (the uploaded file is the request body), `{path}/{transferId}` reports its state and
+  `{path}/{transferId}/file` downloads a completed export. Formats: `csv` built in, `excel`
+  (jxls report templates colocated with the route) via the optional `tesseraql-excel` module.
 - `/_tesseraql/...` — reserved for the framework and its system apps
 - `/assets/...` — static assets (`/assets/_tesseraql/*` framework files, `/assets/vendor/*`
   self-hosted WebJars at version-less paths)

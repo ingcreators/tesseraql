@@ -99,6 +99,8 @@ public final class RouteCompiler {
             case "query-json", "command-json" -> buildJson(builder, routeFile);
             case "query-html", "page" -> buildTemplatePage(builder, appHome, routeFile);
             case "query-export" -> buildQueryExport(builder, routeFile);
+            case "file-import" -> buildFileImport(builder, routeFile);
+            case "file-export" -> buildFileExport(builder, routeFile);
             default -> LOG.log(System.Logger.Level.WARNING,
                     // Recipes not yet implemented are skipped so a mixed-recipe app can still boot.
                     "Skipping route {0}: recipe ''{1}'' is not supported yet",
@@ -170,6 +172,85 @@ public final class RouteCompiler {
         applySecurity(route, definition.security());
         applyTenancy(route);
         route.process(new RequestBinder(definition, pathParams(routeFile.urlPath()))).to(sqlUri);
+    }
+
+    /**
+     * file-import (design ch. 28): POST of the raw file body starts an asynchronous import
+     * applying the per-row statement; GET {path}/{transferId} reports its state.
+     */
+    private void buildFileImport(RouteBuilder builder, RouteFile routeFile) {
+        RouteDefinition definition = routeFile.definition();
+        io.tesseraql.yaml.model.ImportSpec spec = definition.fileImport();
+        String routeId = definition.id();
+        Path rowSql = routeFile.source().getParent().resolve(spec.sql().file()).normalize();
+
+        String direct = "direct:" + routeId;
+        if (mountRest) {
+            restEndpoint(builder, routeFile.httpMethod(), routeFile.urlPath()).to(direct);
+        }
+        ProcessorDefinition<?> route = builder.from(direct).routeId(routeId);
+        applyTelemetry(route, routeFile);
+        applySecurity(route, definition.security());
+        route.process(new io.tesseraql.compiler.binding.FileImportProcessor(
+                routeId, routeFile.urlPath(), appName, spec.format(),
+                new io.tesseraql.core.files.FileReadSpec(
+                        spec.columns(), spec.effectiveHeaderRow(), spec.sheet()),
+                rowSql, spec.effectiveOnError()));
+        mountTransferStatus(builder, routeFile, routeId);
+    }
+
+    /**
+     * file-export (design ch. 28): the start request launches an asynchronous extraction into a
+     * generated file; GET {path}/{transferId} reports its state and GET {path}/{transferId}/file
+     * streams the result (triggering a download-timed follow-up statement on first fetch).
+     */
+    private void buildFileExport(RouteBuilder builder, RouteFile routeFile) {
+        RouteDefinition definition = routeFile.definition();
+        io.tesseraql.yaml.model.ExportSpec spec = definition.fileExport();
+        String routeId = definition.id();
+        Path routeDir = routeFile.source().getParent();
+        Path querySql = routeDir.resolve(spec.sql().file()).normalize();
+        String afterTiming = spec.after() == null ? null : spec.after().effectiveTiming();
+        Path afterSql = spec.after() == null
+                ? null : routeDir.resolve(spec.after().sql().file()).normalize();
+        Path template = spec.template() == null
+                ? null : routeDir.resolve(spec.template()).normalize();
+
+        String direct = "direct:" + routeId;
+        if (mountRest) {
+            restEndpoint(builder, routeFile.httpMethod(), routeFile.urlPath()).to(direct);
+        }
+        ProcessorDefinition<?> route = builder.from(direct).routeId(routeId);
+        applyTelemetry(route, routeFile);
+        applySecurity(route, definition.security());
+        route.process(new RequestBinder(definition, pathParams(routeFile.urlPath())))
+                .process(new io.tesseraql.compiler.binding.FileExportStartProcessor(
+                        routeId, routeFile.urlPath(), appName, spec.format(),
+                        new io.tesseraql.core.files.FileWriteSpec(
+                                spec.columns(), spec.sheet(), template),
+                        spec.filename(), querySql, afterTiming, afterSql));
+        mountTransferStatus(builder, routeFile, routeId);
+
+        String fileDirect = "direct:" + routeId + ".file";
+        if (mountRest) {
+            restEndpoint(builder, "GET", routeFile.urlPath() + "/{transferId}/file")
+                    .to(fileDirect);
+        }
+        ProcessorDefinition<?> fileRoute = builder.from(fileDirect).routeId(routeId + ".file");
+        applySecurity(fileRoute, definition.security());
+        fileRoute.process(new io.tesseraql.compiler.binding.FileDownloadProcessor());
+    }
+
+    /** GET {path}/{transferId}: the shared status endpoint, secured like its parent route. */
+    private void mountTransferStatus(RouteBuilder builder, RouteFile routeFile, String routeId) {
+        String direct = "direct:" + routeId + ".status";
+        if (mountRest) {
+            restEndpoint(builder, "GET", routeFile.urlPath() + "/{transferId}").to(direct);
+        }
+        ProcessorDefinition<?> route = builder.from(direct).routeId(routeId + ".status");
+        applySecurity(route, routeFile.definition().security());
+        route.process(new io.tesseraql.compiler.binding.FileTransferStatusProcessor(
+                routeFile.urlPath()));
     }
 
     private static String exportFilename(RouteDefinition definition) {
