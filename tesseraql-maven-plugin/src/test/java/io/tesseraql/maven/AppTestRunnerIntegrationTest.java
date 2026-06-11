@@ -63,7 +63,7 @@ class AppTestRunnerIntegrationTest {
                 .run(appHome, dataSource, RealmConfig.managed("local", "main"), reportDir);
 
         TestReport report = result.report();
-        assertThat(report.results()).hasSize(3);
+        assertThat(report.results()).hasSize(5);
         assertThat(report.allPassed()).isTrue();
         assertThat(Files.exists(reportDir.resolve("junit/TEST-tesseraql.xml"))).isTrue();
         assertThat(Files.exists(reportDir.resolve("tesseraql-result.json"))).isTrue();
@@ -74,7 +74,7 @@ class AppTestRunnerIntegrationTest {
         assertThat(Files.exists(reportDir.resolve("coverage/sonarqube.xml"))).isTrue();
         try (var allureFiles = Files.list(reportDir.resolve("allure-results"))) {
             assertThat(allureFiles.filter(f -> f.toString().endsWith("-result.json")).count())
-                    .isEqualTo(3);
+                    .isEqualTo(5);
         } catch (Exception ex) {
             throw new AssertionError(ex);
         }
@@ -91,6 +91,12 @@ class AppTestRunnerIntegrationTest {
         // No SAML linking and no SCIM in the example app: nothing declared, ratio 1.0.
         assertThat(result.kind("saml").ratio()).isEqualTo(1.0);
         assertThat(result.kind("scim").ratio()).isEqualTo(1.0);
+        // The provision route's userExists rule is declared and the suite evaluates it.
+        assertThat(result.kind("validation").declared())
+                .containsExactly("users.apiProvision.userExists");
+        assertThat(result.kind("validation").covered())
+                .containsExactly("users.apiProvision.userExists");
+        assertThat(result.kind("validation").ratio()).isEqualTo(1.0);
     }
 
     private static DataSource dataSource() {
