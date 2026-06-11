@@ -25,8 +25,7 @@ public class VerifyEvidenceMojo extends AbstractMojo {
     @Parameter(property = "tesseraql.appHome", required = true)
     private File appHome;
 
-    @Parameter(property = "tesseraql.evidenceFile",
-            defaultValue = "${project.build.directory}/tesseraql-evidence/release-evidence.json")
+    @Parameter(property = "tesseraql.evidenceFile", defaultValue = "${project.build.directory}/tesseraql-evidence/release-evidence.json")
     private File evidenceFile;
 
     /** Whether a missing signature envelope fails the verification. */
@@ -45,7 +44,8 @@ public class VerifyEvidenceMojo extends AbstractMojo {
         try {
             String evidence = Files.readString(evidenceFile.toPath());
             String signature = Files.isRegularFile(signatureFile)
-                    ? Files.readString(signatureFile) : null;
+                    ? Files.readString(signatureFile)
+                    : null;
             if (signature == null && requireSignature) {
                 throw new MojoFailureException(
                         "Evidence signature required but " + signatureFile + " is missing");

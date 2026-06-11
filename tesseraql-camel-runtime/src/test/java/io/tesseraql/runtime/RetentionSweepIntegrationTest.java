@@ -35,15 +35,17 @@ class RetentionSweepIntegrationTest {
         new JobRepository(dataSource).ensureSchema();
         new JdbcOutboxStore(dataSource).ensureSchema();
 
-        try (Connection connection = connect(); Statement statement = connection.createStatement()) {
+        try (Connection connection = connect();
+                Statement statement = connection.createStatement()) {
             // Outbox: an old delivered event (sweep), a recent delivered one and a pending one (keep).
             statement.execute(outbox("old-sent", "SENT", "now() - interval '60 days'"));
             statement.execute(outbox("new-sent", "SENT", "now()"));
             statement.execute(outbox("pending", "PENDING", "null"));
             // Jobs: an old finished execution with a step (sweep), a recent and a running one (keep).
             statement.execute(execution("old-done", "COMPLETED", "now() - interval '120 days'"));
-            statement.execute("insert into tql_step_execution (step_execution_id, job_execution_id, "
-                    + "step_id, status, start_time) values ('s1','old-done','load','COMPLETED', now())");
+            statement
+                    .execute("insert into tql_step_execution (step_execution_id, job_execution_id, "
+                            + "step_id, status, start_time) values ('s1','old-done','load','COMPLETED', now())");
             statement.execute(execution("new-done", "COMPLETED", "now()"));
             statement.execute(execution("running", "RUNNING", "null"));
         }
@@ -54,7 +56,8 @@ class RetentionSweepIntegrationTest {
         assertThat(result.outboxEvents()).isEqualTo(1);
         assertThat(result.jobExecutions()).isEqualTo(1);
         assertThat(result.stepExecutions()).isEqualTo(1);
-        try (Connection connection = connect(); Statement statement = connection.createStatement()) {
+        try (Connection connection = connect();
+                Statement statement = connection.createStatement()) {
             assertThat(ids(statement, "select event_id from tql_outbox_event order by event_id"))
                     .containsExactly("new-sent", "pending");
             assertThat(ids(statement,

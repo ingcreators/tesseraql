@@ -68,7 +68,7 @@ class OutboxScheduledDispatchTest {
     void pendingEventsAreDispatchedAutomatically() throws Exception {
         HttpResponse<String> response = HttpClient.newHttpClient().send(
                 HttpRequest.newBuilder(URI.create("http://localhost:" + runtime.port()
-                                + "/api/users/deactivate"))
+                        + "/api/users/deactivate"))
                         .header("Authorization", "Bearer " + token())
                         .header("Content-Type", "application/json")
                         .POST(HttpRequest.BodyPublishers.ofString("{\"name\":\"suzuki\"}"))
@@ -92,10 +92,12 @@ class OutboxScheduledDispatchTest {
         Base64.Encoder enc = Base64.getUrlEncoder().withoutPadding();
         String header = enc.encodeToString("{\"alg\":\"HS256\"}".getBytes(StandardCharsets.UTF_8));
         String payload = enc.encodeToString(MAPPER.writeValueAsBytes(
-                Map.of("sub", "u1", "preferred_username", "admin", "roles", List.of("USER_WRITE"))));
+                Map.of("sub", "u1", "preferred_username", "admin", "roles",
+                        List.of("USER_WRITE"))));
         Mac mac = Mac.getInstance("HmacSHA256");
         mac.init(new SecretKeySpec(
-                "dev-only-secret-change-me-in-production".getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
+                "dev-only-secret-change-me-in-production".getBytes(StandardCharsets.UTF_8),
+                "HmacSHA256"));
         String signature = enc.encodeToString(
                 mac.doFinal((header + "." + payload).getBytes(StandardCharsets.US_ASCII)));
         return header + "." + payload + "." + signature;
@@ -126,7 +128,8 @@ class OutboxScheduledDispatchTest {
                     url: %s
                     username: %s
                     password: %s
-                """.formatted(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword()));
+                """.formatted(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(),
+                POSTGRES.getPassword()));
         Files.writeString(target.resolve("config/tesseraql.yml"), """
 
                   outbox:

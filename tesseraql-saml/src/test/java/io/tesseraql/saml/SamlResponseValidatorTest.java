@@ -55,7 +55,8 @@ class SamlResponseValidatorTest {
 
     @Test
     void validSignedAssertionIsAccepted() throws Exception {
-        String xml = signedResponse(NOW.minusSeconds(60), NOW.plusSeconds(300), AUDIENCE, RECIPIENT, true);
+        String xml = signedResponse(NOW.minusSeconds(60), NOW.plusSeconds(300), AUDIENCE, RECIPIENT,
+                true);
         SamlAssertion assertion = validator().validate(xml, NOW);
         assertThat(assertion.nameId()).isEqualTo("alice@example.com");
         assertThat(assertion.sessionIndex()).isEqualTo("session-1");
@@ -65,13 +66,15 @@ class SamlResponseValidatorTest {
 
     @Test
     void signatureOnResponseRootIsAccepted() throws Exception {
-        String xml = signedResponse(NOW.minusSeconds(60), NOW.plusSeconds(300), AUDIENCE, RECIPIENT, false);
+        String xml = signedResponse(NOW.minusSeconds(60), NOW.plusSeconds(300), AUDIENCE, RECIPIENT,
+                false);
         assertThat(validator().validate(xml, NOW).nameId()).isEqualTo("alice@example.com");
     }
 
     @Test
     void tamperedAssertionIsRejected() throws Exception {
-        String xml = signedResponse(NOW.minusSeconds(60), NOW.plusSeconds(300), AUDIENCE, RECIPIENT, true)
+        String xml = signedResponse(NOW.minusSeconds(60), NOW.plusSeconds(300), AUDIENCE, RECIPIENT,
+                true)
                 .replace("alice@example.com", "mallory@example.com");
         assertThatThrownBy(() -> validator().validate(xml, NOW))
                 .isInstanceOf(SamlException.class);
@@ -124,9 +127,11 @@ class SamlResponseValidatorTest {
 
     @Test
     void signatureWrappingIsResisted() throws Exception {
-        Document document = buildResponse(NOW.minusSeconds(60), NOW.plusSeconds(300), AUDIENCE, RECIPIENT);
+        Document document = buildResponse(NOW.minusSeconds(60), NOW.plusSeconds(300), AUDIENCE,
+                RECIPIENT);
         Element response = document.getDocumentElement();
-        Element realAssertion = (Element) document.getElementsByTagNameNS(ASSERTION_NS, "Assertion").item(0);
+        Element realAssertion = (Element) document.getElementsByTagNameNS(ASSERTION_NS, "Assertion")
+                .item(0);
 
         // Build an unsigned forged assertion (cloned before signing) and inject it ahead of the real
         // one in the Response, simulating an XML-signature-wrapping attack.
@@ -141,7 +146,8 @@ class SamlResponseValidatorTest {
         response.insertBefore(forged, realAssertion);
 
         // The validator binds to the signed assertion, so the forged one is ignored.
-        assertThat(validator().validate(serialize(document), NOW).nameId()).isEqualTo("alice@example.com");
+        assertThat(validator().validate(serialize(document), NOW).nameId())
+                .isEqualTo("alice@example.com");
     }
 
     // --- SAML builder / signer (test only) -------------------------------------------------------
@@ -150,7 +156,8 @@ class SamlResponseValidatorTest {
             String recipient, boolean signAssertion) throws Exception {
         Document document = buildResponse(notBefore, notOnOrAfter, audience, recipient);
         if (signAssertion) {
-            Element assertion = (Element) document.getElementsByTagNameNS(ASSERTION_NS, "Assertion").item(0);
+            Element assertion = (Element) document.getElementsByTagNameNS(ASSERTION_NS, "Assertion")
+                    .item(0);
             assertion.setIdAttribute("ID", true);
             signEnveloped(document, assertion, assertion, firstChild(assertion, "Subject"),
                     "#assertion-id", keyPair.getPrivate());
@@ -197,8 +204,9 @@ class SamlResponseValidatorTest {
                     </saml:AttributeStatement>
                   </saml:Assertion>
                 </samlp:Response>
-                """.formatted(PROTOCOL_NS, ASSERTION_NS, NOW, NOW, notOnOrAfter, recipient,
-                notBefore, notOnOrAfter, audience, NOW);
+                """
+                .formatted(PROTOCOL_NS, ASSERTION_NS, NOW, NOW, notOnOrAfter, recipient,
+                        notBefore, notOnOrAfter, audience, NOW);
         DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
         factory.setNamespaceAware(true);
         return factory.newDocumentBuilder()
@@ -211,7 +219,8 @@ class SamlResponseValidatorTest {
         XMLSignatureFactory factory = XMLSignatureFactory.getInstance("DOM");
         Reference reference = factory.newReference(referenceUri,
                 factory.newDigestMethod(DigestMethod.SHA256, null),
-                List.of(factory.newTransform(Transform.ENVELOPED, (javax.xml.crypto.dsig.spec.TransformParameterSpec) null),
+                List.of(factory.newTransform(Transform.ENVELOPED,
+                        (javax.xml.crypto.dsig.spec.TransformParameterSpec) null),
                         factory.newCanonicalizationMethod(CanonicalizationMethod.EXCLUSIVE,
                                 (javax.xml.crypto.dsig.spec.C14NMethodParameterSpec) null)),
                 null, null);
@@ -231,7 +240,8 @@ class SamlResponseValidatorTest {
     private static Element firstChild(Element parent, String localName) {
         org.w3c.dom.NodeList children = parent.getChildNodes();
         for (int i = 0; i < children.getLength(); i++) {
-            if (children.item(i) instanceof Element child && localName.equals(child.getLocalName())) {
+            if (children.item(i) instanceof Element child
+                    && localName.equals(child.getLocalName())) {
                 return child;
             }
         }

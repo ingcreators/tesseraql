@@ -44,7 +44,8 @@ final class SamlUserLinker {
         Map<String, Object> params = new LinkedHashMap<>();
         params.put("userId", UUID.randomUUID().toString());
         params.put("loginId", loginId);
-        params.put("displayName", displayName == null || displayName.isBlank() ? loginId : displayName);
+        params.put("displayName",
+                displayName == null || displayName.isBlank() ? loginId : displayName);
         params.put("email", email);
         params.put("status", "ACTIVE");
         params.put("tenantId", tenantId);

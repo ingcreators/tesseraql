@@ -70,7 +70,7 @@ class PluginsTest {
     @Test
     void tamperedJarIsRejected() throws Exception {
         Path jar = jar("alpha", "alpha-marker.txt", true);
-        Files.write(jar, new byte[] {0}, StandardOpenOption.APPEND);
+        Files.write(jar, new byte[]{0}, StandardOpenOption.APPEND);
         AppConfig config = config(Map.of("trustedKeys", List.of(keys.publicKey())));
 
         assertThatThrownBy(() -> Plugins.load(config, appHome))

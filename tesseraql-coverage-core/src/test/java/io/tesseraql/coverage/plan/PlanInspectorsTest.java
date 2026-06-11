@@ -14,7 +14,8 @@ class PlanInspectorsTest {
         assertThat(PlanInspectors.find("mysql")).get().isInstanceOf(MysqlPlanInspector.class);
         assertThat(PlanInspectors.find("mariadb")).get().isInstanceOf(MysqlPlanInspector.class);
         assertThat(PlanInspectors.find("oracle")).get().isInstanceOf(OraclePlanInspector.class);
-        assertThat(PlanInspectors.find("sqlserver")).get().isInstanceOf(SqlServerPlanInspector.class);
+        assertThat(PlanInspectors.find("sqlserver")).get()
+                .isInstanceOf(SqlServerPlanInspector.class);
         assertThat(PlanInspectors.find("db2")).isEmpty();
         assertThat(PlanInspectors.find(null)).isEmpty();
     }

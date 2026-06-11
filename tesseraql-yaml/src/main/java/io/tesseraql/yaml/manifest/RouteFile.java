@@ -11,5 +11,6 @@ import java.nio.file.Path;
  * @param source      the source file path, within the app home
  * @param definition  the parsed route definition
  */
-public record RouteFile(String httpMethod, String urlPath, Path source, RouteDefinition definition) {
+public record RouteFile(String httpMethod, String urlPath, Path source,
+        RouteDefinition definition) {
 }

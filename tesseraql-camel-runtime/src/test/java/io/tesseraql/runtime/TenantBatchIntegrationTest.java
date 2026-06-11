@@ -81,7 +81,7 @@ class TenantBatchIntegrationTest {
         try (Connection connection = DriverManager.getConnection(
                 POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword());
                 Statement statement = connection.createStatement()) {
-            for (String tenant : new String[] {"acme", "globex"}) {
+            for (String tenant : new String[]{"acme", "globex"}) {
                 statement.execute("create schema " + tenant);
                 statement.execute("create table " + tenant
                         + ".items (id serial primary key, name varchar(200) not null)");
@@ -136,7 +136,8 @@ class TenantBatchIntegrationTest {
                   file: seed.sql
                   mode: update
                 """);
-        Files.writeString(jobDir.resolve("seed.sql"), "insert into items (name) values ('seeded')\n");
+        Files.writeString(jobDir.resolve("seed.sql"),
+                "insert into items (name) values ('seeded')\n");
         return target;
     }
 

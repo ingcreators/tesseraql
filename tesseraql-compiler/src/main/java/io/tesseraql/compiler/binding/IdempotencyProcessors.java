@@ -35,7 +35,8 @@ public final class IdempotencyProcessors {
             String key = exchange.getMessage().getHeader(KEY_HEADER, String.class);
             if (key == null || key.isBlank()) {
                 if (required) {
-                    throw new TqlException(KEY_REQUIRED, "Missing required " + KEY_HEADER + " header");
+                    throw new TqlException(KEY_REQUIRED,
+                            "Missing required " + KEY_HEADER + " header");
                 }
                 return; // idempotency optional and not requested
             }
@@ -51,11 +52,12 @@ public final class IdempotencyProcessors {
                     exchange.getMessage().setBody(replay.body());
                     exchange.getMessage().setHeader(Exchange.HTTP_RESPONSE_CODE, replay.status());
                     if (replay.contentType() != null) {
-                        exchange.getMessage().setHeader(Exchange.CONTENT_TYPE, replay.contentType());
+                        exchange.getMessage().setHeader(Exchange.CONTENT_TYPE,
+                                replay.contentType());
                     }
                 }
                 case IdempotencyStore.Conflict conflict ->
-                        throw new TqlException(CONFLICT, conflict.reason());
+                    throw new TqlException(CONFLICT, conflict.reason());
             }
         };
     }
@@ -70,16 +72,19 @@ public final class IdempotencyProcessors {
             if (key == null || key.isBlank()) {
                 return;
             }
-            int status = exchange.getMessage().getHeader(Exchange.HTTP_RESPONSE_CODE, 200, Integer.class);
+            int status = exchange.getMessage().getHeader(Exchange.HTTP_RESPONSE_CODE, 200,
+                    Integer.class);
             String body = exchange.getMessage().getBody(String.class);
-            String contentType = exchange.getMessage().getHeader(Exchange.CONTENT_TYPE, String.class);
+            String contentType = exchange.getMessage().getHeader(Exchange.CONTENT_TYPE,
+                    String.class);
             store(exchange).complete(scope, key, status, body, contentType);
         };
     }
 
     private static IdempotencyStore store(Exchange exchange) {
         IdempotencyStore store = exchange.getContext().getRegistry()
-                .lookupByNameAndType(TesseraqlProperties.IDEMPOTENCY_STORE_BEAN, IdempotencyStore.class);
+                .lookupByNameAndType(TesseraqlProperties.IDEMPOTENCY_STORE_BEAN,
+                        IdempotencyStore.class);
         if (store == null) {
             throw new TqlException(CONFLICT, "Idempotency store is not configured");
         }
@@ -100,7 +105,8 @@ public final class IdempotencyProcessors {
 
     private static String sha256(String value) {
         try {
-            byte[] digest = MessageDigest.getInstance("SHA-256").digest(value.getBytes(StandardCharsets.UTF_8));
+            byte[] digest = MessageDigest.getInstance("SHA-256")
+                    .digest(value.getBytes(StandardCharsets.UTF_8));
             StringBuilder hex = new StringBuilder(digest.length * 2);
             for (byte b : digest) {
                 hex.append(Character.forDigit((b >> 4) & 0xF, 16));

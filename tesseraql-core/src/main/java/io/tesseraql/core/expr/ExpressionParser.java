@@ -126,7 +126,8 @@ public final class ExpressionParser {
                 List<String> segments = new ArrayList<>();
                 segments.add(first.text());
                 while (match(TokenType.DOT)) {
-                    segments.add(expect(TokenType.IDENT, "Expected property name after '.'").text());
+                    segments.add(
+                            expect(TokenType.IDENT, "Expected property name after '.'").text());
                 }
                 return new Expr.Path(segments);
             }
@@ -175,9 +176,7 @@ public final class ExpressionParser {
     }
 
     private enum TokenType {
-        IDENT, STRING, NUMBER, DOT,
-        AND, OR, NOT, EQ, NE, LT, GT, LE, GE,
-        LPAREN, RPAREN
+        IDENT, STRING, NUMBER, DOT, AND, OR, NOT, EQ, NE, LT, GT, LE, GE, LPAREN, RPAREN
     }
 
     private record Token(TokenType type, String text) {
@@ -242,7 +241,8 @@ public final class ExpressionParser {
 
         private Token identifier() {
             int start = index;
-            while (index < source.length() && Character.isJavaIdentifierPart(source.charAt(index))) {
+            while (index < source.length()
+                    && Character.isJavaIdentifierPart(source.charAt(index))) {
                 index++;
             }
             return new Token(TokenType.IDENT, source.substring(start, index));

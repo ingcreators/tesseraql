@@ -23,8 +23,8 @@ class OpenTelemetryMeterTest {
         counter.increment(Map.of("routeId", "users.search"));
 
         var metrics = reader.collectAllMetrics();
-        assertThat(metrics).anySatisfy(metric ->
-                assertThat(metric.getName()).isEqualTo("tesseraql.route.invocations"));
+        assertThat(metrics).anySatisfy(
+                metric -> assertThat(metric.getName()).isEqualTo("tesseraql.route.invocations"));
         long total = metrics.stream()
                 .filter(m -> m.getName().equals("tesseraql.route.invocations"))
                 .flatMap(m -> m.getLongSumData().getPoints().stream())

@@ -31,8 +31,7 @@ public class TestMojo extends AbstractMojo {
     @Parameter(property = "tesseraql.realm", defaultValue = "local")
     private String realm;
 
-    @Parameter(property = "tesseraql.reportDir",
-            defaultValue = "${project.build.directory}/tesseraql-reports")
+    @Parameter(property = "tesseraql.reportDir", defaultValue = "${project.build.directory}/tesseraql-reports")
     private File reportDir;
 
     @Parameter(property = "tesseraql.failOnError", defaultValue = "true")
@@ -40,18 +39,22 @@ public class TestMojo extends AbstractMojo {
 
     @Override
     public void execute() throws MojoFailureException {
-        DriverManagerDataSource dataSource = new DriverManagerDataSource(jdbcUrl, username, password);
+        DriverManagerDataSource dataSource = new DriverManagerDataSource(jdbcUrl, username,
+                password);
         TestReport report = new AppTestRunner().run(
-                appHome.toPath(), dataSource, RealmConfig.managed(realm, "main"), reportDir.toPath()).report();
+                appHome.toPath(), dataSource, RealmConfig.managed(realm, "main"),
+                reportDir.toPath()).report();
 
-        getLog().info("TesseraQL tests: " + report.passed() + " passed, " + report.failed() + " failed");
+        getLog().info(
+                "TesseraQL tests: " + report.passed() + " passed, " + report.failed() + " failed");
         for (TestReport.TestResult result : report.results()) {
             if (!result.passed()) {
                 getLog().error("FAIL " + result.name() + ": " + result.message());
             }
         }
         if (failOnError && !report.allPassed()) {
-            throw new MojoFailureException("TesseraQL tests failed: " + report.failed() + " case(s)");
+            throw new MojoFailureException(
+                    "TesseraQL tests failed: " + report.failed() + " case(s)");
         }
     }
 }

@@ -57,7 +57,8 @@ public record ExportSpec(String format, String filename, String template, String
                 columns.stream().map(ColumnSpec::toMapping).toList(),
                 sheet, templatePath,
                 startCell == null || startCell.isBlank()
-                        ? null : io.tesseraql.core.files.CellRef.parse(startCell));
+                        ? null
+                        : io.tesseraql.core.files.CellRef.parse(startCell));
     }
 
     /**

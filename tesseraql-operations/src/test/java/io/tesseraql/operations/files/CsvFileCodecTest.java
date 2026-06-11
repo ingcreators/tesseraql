@@ -66,14 +66,14 @@ class CsvFileCodecTest {
         row.put("fee", new java.math.BigDecimal("1234.5"));
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         codec.write(out, new FileWriteSpec(List.of(
-                        new ColumnMapping("held_on", null, null, null, "yyyy/MM/dd HH:mm"),
-                        new ColumnMapping("fee", null, null, "number", "#,##0.00")),
-                        null, null, null, "de-DE", "Asia/Tokyo"),
+                new ColumnMapping("held_on", null, null, null, "yyyy/MM/dd HH:mm"),
+                new ColumnMapping("fee", null, null, "number", "#,##0.00")),
+                null, null, null, "de-DE", "Asia/Tokyo"),
                 List.of(row).iterator());
 
         assertThat(out.toString(StandardCharsets.UTF_8))
-                .contains("2026/06/11 08:30")   // rendered in the transfer's time zone
-                .contains("\"1.234,50\"");      // German grouping/decimal separators
+                .contains("2026/06/11 08:30") // rendered in the transfer's time zone
+                .contains("\"1.234,50\""); // German grouping/decimal separators
     }
 
     @Test
@@ -83,8 +83,8 @@ class CsvFileCodecTest {
         row.put("productName", "alpha");
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         codec.write(out, new FileWriteSpec(List.of(
-                        new ColumnMapping("productName", "商品名", null),
-                        new ColumnMapping("qty", "数量", null)), null, null, null),
+                new ColumnMapping("productName", "商品名", null),
+                new ColumnMapping("qty", "数量", null)), null, null, null),
                 List.of(row).iterator());
 
         assertThat(out.toString(StandardCharsets.UTF_8))

@@ -54,7 +54,8 @@ class BatchOtelTraceIntegrationTest {
                 .setTracerProvider(SdkTracerProvider.builder()
                         .addSpanProcessor(SimpleSpanProcessor.create(EXPORTER)).build())
                 .build();
-        CompositeTracer tracer = new CompositeTracer(new RingTracer(50), new OpenTelemetryTracer(sdk));
+        CompositeTracer tracer = new CompositeTracer(new RingTracer(50),
+                new OpenTelemetryTracer(sdk));
 
         appHome = prepareAppHome();
         runtime = TesseraqlRuntime.start(appHome, freePort(), tracer, NoopMeter.INSTANCE);
@@ -117,7 +118,8 @@ class BatchOtelTraceIntegrationTest {
                     url: %s
                     username: %s
                     password: %s
-                """.formatted(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword()));
+                """.formatted(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(),
+                POSTGRES.getPassword()));
         return target;
     }
 

@@ -47,7 +47,7 @@ public sealed interface SqlNode {
 
     /** A repeated fragment: {@code /*%for item : items *}{@code / ... /*%end*}{@code /}. */
     record For(String itemVar, String listExpressionSource, Expr listExpression, int sourceLine,
-               List<SqlNode> body) implements SqlNode {
+            List<SqlNode> body) implements SqlNode {
         public For {
             body = List.copyOf(body);
         }

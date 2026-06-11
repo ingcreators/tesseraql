@@ -65,8 +65,7 @@ final class AssetsRouteBuilder extends RouteBuilder {
         // The default platform-http filter drops response caching headers (Cache-Control is in its
         // generic HTTP filter list); assets need them, so use a strategy that only filters
         // Camel-internal headers.
-        org.apache.camel.support.DefaultHeaderFilterStrategy headers =
-                new org.apache.camel.support.DefaultHeaderFilterStrategy();
+        org.apache.camel.support.DefaultHeaderFilterStrategy headers = new org.apache.camel.support.DefaultHeaderFilterStrategy();
         headers.setOutFilterPattern("(?i)(Camel|org\\.apache\\.camel)[\\.|a-zA-Z0-9]*");
         getContext().getRegistry().bind("tqlAssetHeaderFilter", headers);
 

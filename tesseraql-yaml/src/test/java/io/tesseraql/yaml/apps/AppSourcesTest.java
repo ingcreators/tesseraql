@@ -46,7 +46,8 @@ class AppSourcesTest {
         List<AppSource> sources = AppSources.discover(config);
 
         assertThat(sources).extracting(AppSource::name).contains("extra", "test-app");
-        AppSource extra = sources.stream().filter(s -> s.name().equals("extra")).findFirst().orElseThrow();
+        AppSource extra = sources.stream().filter(s -> s.name().equals("extra")).findFirst()
+                .orElseThrow();
         assertThat(extra.materialize(dir)).isEqualTo(dir.resolve("extra"));
     }
 
@@ -64,7 +65,8 @@ class AppSourcesTest {
 
         List<AppSource> sources = AppSources.discover(config);
 
-        AppSource demo = sources.stream().filter(s -> s.name().equals("demo")).findFirst().orElseThrow();
+        AppSource demo = sources.stream().filter(s -> s.name().equals("demo")).findFirst()
+                .orElseThrow();
         assertThat(demo).isInstanceOf(ZipAppSource.class);
         assertThat(Files.readString(demo.materialize(dir).resolve("web/ping/get.yml")))
                 .contains("id: ping");

@@ -11,8 +11,8 @@ import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -38,7 +38,8 @@ class ScimProvisionerTest {
         server.start();
         ScimTarget target = new ScimTarget(
                 "http://localhost:" + server.getAddress().getPort() + "/scim/v2", "secret-token");
-        provisioner = new ScimProvisioner(new ScimOutboundClient(target), new ScimResourceMapping.InMemory());
+        provisioner = new ScimProvisioner(new ScimOutboundClient(target),
+                new ScimResourceMapping.InMemory());
     }
 
     @AfterEach

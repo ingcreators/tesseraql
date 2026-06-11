@@ -20,7 +20,8 @@ public final class InMemorySessionStore implements SessionStore {
 
     public InMemorySessionStore(String cookieName) {
         this.cookieName = cookieName == null || cookieName.isBlank()
-                ? DEFAULT_COOKIE_NAME : cookieName;
+                ? DEFAULT_COOKIE_NAME
+                : cookieName;
     }
 
     @Override

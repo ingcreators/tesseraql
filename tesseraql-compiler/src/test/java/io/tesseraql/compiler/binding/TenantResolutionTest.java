@@ -45,7 +45,8 @@ class TenantResolutionTest {
 
         new TenantResolution(settings).process(exchange);
 
-        TenantContext tenant = exchange.getProperty(TesseraqlProperties.TENANT, TenantContext.class);
+        TenantContext tenant = exchange.getProperty(TesseraqlProperties.TENANT,
+                TenantContext.class);
         assertThat(tenant).isNotNull();
         assertThat(tenant.id()).isEqualTo("acme");
     }
@@ -84,7 +85,8 @@ class TenantResolutionTest {
 
         new TenantResolution(settings).process(exchange);
 
-        TenantContext tenant = exchange.getProperty(TesseraqlProperties.TENANT, TenantContext.class);
+        TenantContext tenant = exchange.getProperty(TesseraqlProperties.TENANT,
+                TenantContext.class);
         assertThat(tenant).isNotNull();
         assertThat(tenant.id()).isEqualTo("globex");
     }

@@ -42,13 +42,15 @@ public final class OpenApiGenerator {
         doc.put("openapi", "3.0.3");
 
         Map<String, Object> info = new LinkedHashMap<>();
-        info.put("title", manifest.config().getString("tesseraql.app.name").orElse("tesseraql-app"));
+        info.put("title",
+                manifest.config().getString("tesseraql.app.name").orElse("tesseraql-app"));
         info.put("version", manifest.config().getString("app.version").orElse("1.0.0"));
         doc.put("info", info);
 
         Map<String, Object> paths = new TreeMap<>();
         for (RouteFile route : manifest.routes()) {
-            pathItem(paths, route.urlPath()).put(route.httpMethod().toLowerCase(), operation(route));
+            pathItem(paths, route.urlPath()).put(route.httpMethod().toLowerCase(),
+                    operation(route));
             addTransferSubpaths(paths, route);
         }
         doc.put("paths", paths);
@@ -67,7 +69,8 @@ public final class OpenApiGenerator {
 
     @SuppressWarnings("unchecked")
     private Map<String, Object> pathItem(Map<String, Object> paths, String path) {
-        return (Map<String, Object>) paths.computeIfAbsent(path, key -> new TreeMap<String, Object>());
+        return (Map<String, Object>) paths.computeIfAbsent(path,
+                key -> new TreeMap<String, Object>());
     }
 
     private Map<String, Object> operation(RouteFile route) {
@@ -86,8 +89,8 @@ public final class OpenApiGenerator {
         boolean queryInputs = "GET".equalsIgnoreCase(route.httpMethod())
                 || "DELETE".equalsIgnoreCase(route.httpMethod());
         if (queryInputs) {
-            new TreeMap<>(definition.input()).forEach((name, field) ->
-                    parameters.add(parameter(name, "query", field.required(), schemaType(field))));
+            new TreeMap<>(definition.input()).forEach((name, field) -> parameters
+                    .add(parameter(name, "query", field.required(), schemaType(field))));
         }
         if (!parameters.isEmpty()) {
             operation.put("parameters", parameters);
@@ -154,7 +157,8 @@ public final class OpenApiGenerator {
 
     private static String exportContentType(RouteDefinition definition) {
         String format = definition.fileExport() == null || definition.fileExport().format() == null
-                ? "csv" : definition.fileExport().format();
+                ? "csv"
+                : definition.fileExport().format();
         return EXPORT_CONTENT_TYPES.getOrDefault(format, "application/octet-stream");
     }
 
@@ -224,7 +228,8 @@ public final class OpenApiGenerator {
         return Map.of("$ref", "#/components/schemas/" + schema);
     }
 
-    private static Map<String, Object> parameter(String name, String in, boolean required, String type) {
+    private static Map<String, Object> parameter(String name, String in, boolean required,
+            String type) {
         Map<String, Object> parameter = new LinkedHashMap<>();
         parameter.put("name", name);
         parameter.put("in", in);

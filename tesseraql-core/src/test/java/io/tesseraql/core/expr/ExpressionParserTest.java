@@ -22,7 +22,8 @@ class ExpressionParserTest {
     void nullAndEmptyStringGuard() {
         assertThat(evalBool("q != null && q != \"\"", Map.of("q", "sato"))).isTrue();
         assertThat(evalBool("q != null && q != \"\"", Map.of("q", ""))).isFalse();
-        assertThat(evalBool("q != null && q != \"\"", java.util.Collections.singletonMap("q", null)))
+        assertThat(
+                evalBool("q != null && q != \"\"", java.util.Collections.singletonMap("q", null)))
                 .isFalse();
     }
 

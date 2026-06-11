@@ -35,7 +35,8 @@ public final class AppCatalog {
             return;
         }
         try {
-            InstalledApp[] loaded = MAPPER.readValue(Files.readAllBytes(catalogFile), InstalledApp[].class);
+            InstalledApp[] loaded = MAPPER.readValue(Files.readAllBytes(catalogFile),
+                    InstalledApp[].class);
             for (InstalledApp app : loaded) {
                 apps.put(app.id(), app);
             }

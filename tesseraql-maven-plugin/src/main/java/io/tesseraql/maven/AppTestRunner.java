@@ -109,13 +109,16 @@ public final class AppTestRunner {
         coverage.reports().forEach((sqlId, report) -> {
             if (report.branchRatio() < 1.0) {
                 findings.add(new SarifReporter.Finding("sql-branch-coverage", "warning",
-                        String.format("Branch coverage %.0f%% for %s", report.branchRatio() * 100, sqlId),
+                        String.format("Branch coverage %.0f%% for %s", report.branchRatio() * 100,
+                                sqlId),
                         sqlId, null));
             }
             if (report.lineRatio() < 1.0) {
                 findings.add(new SarifReporter.Finding("sql-line-coverage", "warning",
-                        String.format("Line coverage %.0f%% (%d/%d) for %s", report.lineRatio() * 100,
-                                report.lineCount(), report.coverableLineCount(), sqlId), sqlId, null));
+                        String.format("Line coverage %.0f%% (%d/%d) for %s",
+                                report.lineRatio() * 100,
+                                report.lineCount(), report.coverableLineCount(), sqlId),
+                        sqlId, null));
             }
         });
         for (ItemCoverage kind : kinds) {
@@ -149,7 +152,8 @@ public final class AppTestRunner {
         }
     }
 
-    private static void writeCoverage(SqlCoverage coverage, List<ItemCoverage> kinds, Path reportDir) {
+    private static void writeCoverage(SqlCoverage coverage, List<ItemCoverage> kinds,
+            Path reportDir) {
         StringBuilder json = new StringBuilder("{\n  \"sql\": {\n");
         var reports = coverage.reports();
         int i = 0;
@@ -203,12 +207,14 @@ public final class AppTestRunner {
             Files.createDirectories(reportDir.resolve("junit"));
             Files.writeString(reportDir.resolve("junit/TEST-tesseraql.xml"),
                     JUnitXmlReporter.toXml(report, "tesseraql"));
-            Files.writeString(reportDir.resolve("tesseraql-result.json"), JsonReporter.toJson(report));
-            Files.writeString(reportDir.resolve("index.html"), HtmlReporter.toHtml(report, "TesseraQL Tests"));
+            Files.writeString(reportDir.resolve("tesseraql-result.json"),
+                    JsonReporter.toJson(report));
+            Files.writeString(reportDir.resolve("index.html"),
+                    HtmlReporter.toHtml(report, "TesseraQL Tests"));
             Path allureDir = reportDir.resolve("allure-results");
             Files.createDirectories(allureDir);
-            for (Map.Entry<String, String> file
-                    : AllureReporter.toResults(report, "tesseraql").entrySet()) {
+            for (Map.Entry<String, String> file : AllureReporter.toResults(report, "tesseraql")
+                    .entrySet()) {
                 Files.writeString(allureDir.resolve(file.getKey()), file.getValue());
             }
         } catch (IOException ex) {

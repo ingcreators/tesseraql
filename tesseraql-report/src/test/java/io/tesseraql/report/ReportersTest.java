@@ -33,7 +33,8 @@ class ReportersTest {
     @Test
     void jsonContainsCountsAndCases() {
         String json = JsonReporter.toJson(report());
-        assertThat(json).contains("\"total\" : 2").contains("\"passed\" : 1").contains("\"failed\" : 1");
+        assertThat(json).contains("\"total\" : 2").contains("\"passed\" : 1")
+                .contains("\"failed\" : 1");
         assertThat(json).contains("search finds sato").contains("rowCount check");
     }
 

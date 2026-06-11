@@ -13,14 +13,10 @@ import picocli.CommandLine.Option;
 /**
  * TesseraQL command-line interface (design ch. 17). The short command alias is {@code tql}.
  */
-@Command(name = "tesseraql",
-        mixinStandardHelpOptions = true,
-        version = "TesseraQL 0.1.0-SNAPSHOT",
-        description = "SQL-first hypermedia and integration framework.",
-        subcommands = {
-                TesseraqlCli.ServeCommand.class,
-                TesseraqlCli.RoutesCommand.class
-        })
+@Command(name = "tesseraql", mixinStandardHelpOptions = true, version = "TesseraQL 0.1.0-SNAPSHOT", description = "SQL-first hypermedia and integration framework.", subcommands = {
+        TesseraqlCli.ServeCommand.class,
+        TesseraqlCli.RoutesCommand.class
+})
 public final class TesseraqlCli implements Runnable {
 
     @Override
@@ -49,7 +45,8 @@ public final class TesseraqlCli implements Runnable {
                     ? TesseraqlRuntime.start(app, port)
                     : TesseraqlRuntime.start(app);
             Runtime.getRuntime().addShutdownHook(new Thread(runtime::close));
-            System.out.println("TesseraQL serving on port " + runtime.port() + ". Press Ctrl+C to stop.");
+            System.out.println(
+                    "TesseraQL serving on port " + runtime.port() + ". Press Ctrl+C to stop.");
             Thread.currentThread().join();
             return 0;
         }

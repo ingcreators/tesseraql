@@ -54,6 +54,7 @@ class ScimPatchTest {
                 """);
         assertThatThrownBy(() -> ScimPatch.apply(sample(), request))
                 .isInstanceOf(ScimException.class)
-                .satisfies(ex -> assertThat(((ScimException) ex).scimType()).isEqualTo("invalidPath"));
+                .satisfies(
+                        ex -> assertThat(((ScimException) ex).scimType()).isEqualTo("invalidPath"));
     }
 }

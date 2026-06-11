@@ -188,7 +188,9 @@ public final class ManifestCoverage {
     }
 
     private static String stripIdentityPrefix(String contract) {
-        return contract.startsWith("identity.") ? contract.substring("identity.".length()) : contract;
+        return contract.startsWith("identity.")
+                ? contract.substring("identity.".length())
+                : contract;
     }
 
     private static boolean flag(AppConfig config, String key) {

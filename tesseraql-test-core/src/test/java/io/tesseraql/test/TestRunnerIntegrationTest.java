@@ -34,7 +34,8 @@ class TestRunnerIntegrationTest {
         seed(dataSource);
         Path appHome = Paths.get("..", "examples", "user-admin-app").toAbsolutePath().normalize();
         IdentityService identity = new IdentityService(name -> dataSource);
-        runner = new TestRunner(dataSource, appHome, identity, RealmConfig.managed("local", "main"));
+        runner = new TestRunner(dataSource, appHome, identity,
+                RealmConfig.managed("local", "main"));
     }
 
     @Test
@@ -92,9 +93,12 @@ class TestRunnerIntegrationTest {
                     + "status varchar(32), tenant_id varchar(64), version bigint default 0)");
             statement.execute("create table tql_roles (role_id varchar(64) primary key, "
                     + "role_code varchar(200), role_name varchar(200))");
-            statement.execute("create table tql_user_roles (user_id varchar(64), role_id varchar(64))");
-            statement.execute("create table tql_user_groups (user_id varchar(64), group_id varchar(64))");
-            statement.execute("create table tql_group_roles (group_id varchar(64), role_id varchar(64))");
+            statement.execute(
+                    "create table tql_user_roles (user_id varchar(64), role_id varchar(64))");
+            statement.execute(
+                    "create table tql_user_groups (user_id varchar(64), group_id varchar(64))");
+            statement.execute(
+                    "create table tql_group_roles (group_id varchar(64), role_id varchar(64))");
             statement.execute("insert into tql_users (user_id, login_id, display_name, status) "
                     + "values ('u1','admin','Admin','ACTIVE')");
             statement.execute("insert into tql_roles (role_id, role_code, role_name) "

@@ -62,7 +62,8 @@ class RouteTestRunnerTest {
         assertThat(report.passed()).isEqualTo(2);
     }
 
-    private static void respond(com.sun.net.httpserver.HttpExchange exchange, int status, String body)
+    private static void respond(com.sun.net.httpserver.HttpExchange exchange, int status,
+            String body)
             throws java.io.IOException {
         byte[] bytes = body.getBytes(StandardCharsets.UTF_8);
         exchange.sendResponseHeaders(status, bytes.length);

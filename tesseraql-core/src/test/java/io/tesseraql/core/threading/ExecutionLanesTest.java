@@ -94,6 +94,7 @@ class ExecutionLanesTest {
         assertThatThrownBy(() -> {
             Future<?> future = lane.executor().submit(() -> "x");
             future.get(1, TimeUnit.SECONDS);
-        }).isInstanceOfAny(java.util.concurrent.RejectedExecutionException.class, ExecutionException.class);
+        }).isInstanceOfAny(java.util.concurrent.RejectedExecutionException.class,
+                ExecutionException.class);
     }
 }

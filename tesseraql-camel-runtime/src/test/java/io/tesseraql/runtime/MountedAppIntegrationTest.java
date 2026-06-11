@@ -52,7 +52,7 @@ class MountedAppIntegrationTest {
         if (runtime != null) {
             runtime.close();
         }
-        for (Path root : new Path[] {appHome, mountedHome}) {
+        for (Path root : new Path[]{appHome, mountedHome}) {
             if (root != null) {
                 deleteRecursively(root);
             }
@@ -82,12 +82,12 @@ class MountedAppIntegrationTest {
     @Test
     void commandRouteRedirectsAfterPost() throws Exception {
         HttpRequest request = HttpRequest.newBuilder(
-                        URI.create("http://localhost:" + runtime.port() + "/sysapp/touch"))
+                URI.create("http://localhost:" + runtime.port() + "/sysapp/touch"))
                 .POST(HttpRequest.BodyPublishers.ofString("{\"n\": 9}"))
                 .header("Content-Type", "application/json")
                 .build();
-        HttpResponse<String> response =
-                HttpClient.newHttpClient().send(request, HttpResponse.BodyHandlers.ofString());
+        HttpResponse<String> response = HttpClient.newHttpClient().send(request,
+                HttpResponse.BodyHandlers.ofString());
 
         assertThat(response.statusCode()).isEqualTo(303);
         assertThat(response.headers().firstValue("location")).hasValue("/sysapp/multi?n=9");
@@ -106,12 +106,12 @@ class MountedAppIntegrationTest {
     @Test
     void fileRouteServesGeneratedDownload() throws Exception {
         HttpRequest request = HttpRequest.newBuilder(
-                        URI.create("http://localhost:" + runtime.port() + "/sysapp/conf"))
+                URI.create("http://localhost:" + runtime.port() + "/sysapp/conf"))
                 .header("Content-Type", "application/x-www-form-urlencoded")
                 .POST(HttpRequest.BodyPublishers.ofString("appName=demo-app"))
                 .build();
-        HttpResponse<String> response =
-                HttpClient.newHttpClient().send(request, HttpResponse.BodyHandlers.ofString());
+        HttpResponse<String> response = HttpClient.newHttpClient().send(request,
+                HttpResponse.BodyHandlers.ofString());
 
         assertThat(response.statusCode()).isEqualTo(200);
         assertThat(response.headers().firstValue("content-type"))
@@ -134,7 +134,7 @@ class MountedAppIntegrationTest {
 
         // Conditional revalidation answers 304.
         HttpRequest conditional = HttpRequest.newBuilder(
-                        URI.create("http://localhost:" + runtime.port() + "/assets/site.css"))
+                URI.create("http://localhost:" + runtime.port() + "/assets/site.css"))
                 .header("If-None-Match", response.headers().firstValue("etag").orElseThrow())
                 .build();
         assertThat(HttpClient.newHttpClient()
@@ -187,17 +187,18 @@ class MountedAppIntegrationTest {
     @Test
     void mainAppRoutesStillWork() throws Exception {
         HttpRequest request = HttpRequest.newBuilder(
-                        URI.create("http://localhost:" + runtime.port() + "/api/users"))
+                URI.create("http://localhost:" + runtime.port() + "/api/users"))
                 .header("Authorization", "Bearer " + token())
                 .build();
-        HttpResponse<String> response =
-                HttpClient.newHttpClient().send(request, HttpResponse.BodyHandlers.ofString());
+        HttpResponse<String> response = HttpClient.newHttpClient().send(request,
+                HttpResponse.BodyHandlers.ofString());
         assertThat(response.statusCode()).isEqualTo(200);
     }
 
     private static HttpResponse<String> get(String path) throws Exception {
         return HttpClient.newHttpClient().send(
-                HttpRequest.newBuilder(URI.create("http://localhost:" + runtime.port() + path)).build(),
+                HttpRequest.newBuilder(URI.create("http://localhost:" + runtime.port() + path))
+                        .build(),
                 HttpResponse.BodyHandlers.ofString());
     }
 
@@ -210,9 +211,11 @@ class MountedAppIntegrationTest {
         javax.crypto.Mac mac = javax.crypto.Mac.getInstance("HmacSHA256");
         mac.init(new javax.crypto.spec.SecretKeySpec(
                 "dev-only-secret-change-me-in-production"
-                        .getBytes(java.nio.charset.StandardCharsets.UTF_8), "HmacSHA256"));
+                        .getBytes(java.nio.charset.StandardCharsets.UTF_8),
+                "HmacSHA256"));
         String signature = encoder.encodeToString(
-                mac.doFinal((header + "." + payload).getBytes(java.nio.charset.StandardCharsets.US_ASCII)));
+                mac.doFinal((header + "." + payload)
+                        .getBytes(java.nio.charset.StandardCharsets.US_ASCII)));
         return header + "." + payload + "." + signature;
     }
 

@@ -89,7 +89,7 @@ public final class EvaluationContext {
     private static Object getterValue(Object target, String name) {
         String capitalized = Character.toUpperCase(name.charAt(0)) + name.substring(1);
         // Record-style accessor (name), then JavaBean getX/isX.
-        for (String accessor : new String[] {name, "get" + capitalized, "is" + capitalized}) {
+        for (String accessor : new String[]{name, "get" + capitalized, "is" + capitalized}) {
             try {
                 Method method = target.getClass().getMethod(accessor);
                 if (method.getParameterCount() == 0 && method.canAccess(target)) {

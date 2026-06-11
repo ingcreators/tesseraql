@@ -39,7 +39,8 @@ public class MigrateMojo extends AbstractMojo {
 
     @Override
     public void execute() {
-        DriverManagerDataSource dataSource = new DriverManagerDataSource(jdbcUrl, username, password);
+        DriverManagerDataSource dataSource = new DriverManagerDataSource(jdbcUrl, username,
+                password);
         AppMigrator.migrate(appHome.toPath(), appName, datasource, dataSource).ifPresentOrElse(
                 result -> getLog().info("Applied " + result.applied() + " migration(s) for app "
                         + appName + ", datasource " + datasource

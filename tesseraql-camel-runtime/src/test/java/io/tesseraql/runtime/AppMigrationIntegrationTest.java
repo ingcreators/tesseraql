@@ -45,7 +45,7 @@ class AppMigrationIntegrationTest {
         if (runtime != null) {
             runtime.close();
         }
-        for (Path root : new Path[] {appHome, mountedHome}) {
+        for (Path root : new Path[]{appHome, mountedHome}) {
             if (root != null) {
                 deleteRecursively(root);
             }
@@ -74,7 +74,8 @@ class AppMigrationIntegrationTest {
         assertThat(historyCount("tql_schema_history_sysapp")).isEqualTo(1);
 
         // The named 'audit' datasource migrated db/audit/migration into its own history table.
-        try (Connection connection = connect(); Statement statement = connection.createStatement();
+        try (Connection connection = connect();
+                Statement statement = connection.createStatement();
                 ResultSet rs = statement.executeQuery("select count(*) from audit_log")) {
             rs.next();
             assertThat(rs.getInt(1)).isEqualTo(1);
@@ -96,7 +97,8 @@ class AppMigrationIntegrationTest {
 
     @Test
     void migratesEveryTenantPoolInSchemaPerTenantMode() throws Exception {
-        try (Connection connection = connect(); Statement statement = connection.createStatement()) {
+        try (Connection connection = connect();
+                Statement statement = connection.createStatement()) {
             statement.execute("create schema if not exists tenant_a");
             statement.execute("create schema if not exists tenant_b");
         }
@@ -105,8 +107,9 @@ class AppMigrationIntegrationTest {
         runtime = TesseraqlRuntime.start(appHome, freePort());
 
         // The same migration ran once per tenant schema.
-        try (Connection connection = connect(); Statement statement = connection.createStatement()) {
-            for (String schema : new String[] {"tenant_a", "tenant_b"}) {
+        try (Connection connection = connect();
+                Statement statement = connection.createStatement()) {
+            for (String schema : new String[]{"tenant_a", "tenant_b"}) {
                 try (ResultSet rs = statement.executeQuery(
                         "select count(*) from " + schema + ".tenant_items")) {
                     rs.next();
@@ -136,7 +139,8 @@ class AppMigrationIntegrationTest {
 
     private HttpResponse<String> get(String path) throws Exception {
         return HttpClient.newHttpClient().send(
-                HttpRequest.newBuilder(URI.create("http://localhost:" + runtime.port() + path)).build(),
+                HttpRequest.newBuilder(URI.create("http://localhost:" + runtime.port() + path))
+                        .build(),
                 HttpResponse.BodyHandlers.ofString());
     }
 

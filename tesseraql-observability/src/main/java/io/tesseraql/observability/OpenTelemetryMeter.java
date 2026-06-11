@@ -28,7 +28,8 @@ public final class OpenTelemetryMeter implements Meter {
         return (delta, attributes) -> counter.add(delta, toAttributes(attributes));
     }
 
-    private static io.opentelemetry.api.common.Attributes toAttributes(Map<String, String> attributes) {
+    private static io.opentelemetry.api.common.Attributes toAttributes(
+            Map<String, String> attributes) {
         AttributesBuilder builder = io.opentelemetry.api.common.Attributes.builder();
         attributes.forEach(builder::put);
         return builder.build();

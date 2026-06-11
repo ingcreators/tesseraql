@@ -27,8 +27,8 @@ final class FrameworkMigrations {
             "security", "V1__framework_sessions.sql",
             "operations", "V1__framework_operations.sql");
     /** Vendors whose Flyway database module ships with the runtime. */
-    private static final Set<String> FLYWAY_BUNDLED =
-            Set.of("postgresql", "mysql", "oracle", "sqlserver");
+    private static final Set<String> FLYWAY_BUNDLED = Set.of("postgresql", "mysql", "oracle",
+            "sqlserver");
 
     private FrameworkMigrations() {
     }
@@ -51,8 +51,7 @@ final class FrameworkMigrations {
                     .baselineOnMigrate(true)
                     .baselineVersion("0")
                     .load()
-                    .migrate()
-                    .migrationsExecuted;
+                    .migrate().migrationsExecuted;
             if (applied > 0) {
                 LOG.info("Applied {} framework migration(s) for {} ({})",
                         applied, component.getKey(), vendor);

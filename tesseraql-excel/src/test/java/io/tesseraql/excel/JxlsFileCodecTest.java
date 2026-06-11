@@ -86,11 +86,12 @@ class JxlsFileCodecTest {
         Path template = writePlacementTemplate();
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         codec.write(out, new FileWriteSpec(List.of(
-                        new ColumnMapping("name", null, ColumnMapping.parseColumn("B")),
-                        new ColumnMapping("qty", null, ColumnMapping.parseColumn("D"))),
-                        null, template, CellRef.parse("B5")), rows().iterator());
+                new ColumnMapping("name", null, ColumnMapping.parseColumn("B")),
+                new ColumnMapping("qty", null, ColumnMapping.parseColumn("D"))),
+                null, template, CellRef.parse("B5")), rows().iterator());
 
-        try (XSSFWorkbook workbook = new XSSFWorkbook(new ByteArrayInputStream(out.toByteArray()))) {
+        try (XSSFWorkbook workbook = new XSSFWorkbook(
+                new ByteArrayInputStream(out.toByteArray()))) {
             Sheet sheet = workbook.getSheetAt(0);
             // The template's title block above the data area is untouched.
             assertThat(sheet.getRow(0).getCell(1).getStringCellValue()).isEqualTo("Order Report");
@@ -112,12 +113,13 @@ class JxlsFileCodecTest {
         row.put("fee", new java.math.BigDecimal("1234.5"));
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         codec.write(out, new FileWriteSpec(List.of(
-                        new ColumnMapping("held_on", null, null, "datetime", "yyyy/mm/dd hh:mm"),
-                        new ColumnMapping("fee", null, null, "number", "#,##0.00")),
-                        null, null, null, null, "Asia/Tokyo"),
+                new ColumnMapping("held_on", null, null, "datetime", "yyyy/mm/dd hh:mm"),
+                new ColumnMapping("fee", null, null, "number", "#,##0.00")),
+                null, null, null, null, "Asia/Tokyo"),
                 List.of(row).iterator());
 
-        try (XSSFWorkbook workbook = new XSSFWorkbook(new ByteArrayInputStream(out.toByteArray()))) {
+        try (XSSFWorkbook workbook = new XSSFWorkbook(
+                new ByteArrayInputStream(out.toByteArray()))) {
             Sheet sheet = workbook.getSheetAt(0);
             org.apache.poi.ss.usermodel.Cell date = sheet.getRow(1).getCell(0);
             // A real date cell in the transfer's time zone, carrying the declared cell format.
@@ -136,7 +138,8 @@ class JxlsFileCodecTest {
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         codec.write(out, new FileWriteSpec(List.of(), null, template, null), rows().iterator());
 
-        try (XSSFWorkbook workbook = new XSSFWorkbook(new ByteArrayInputStream(out.toByteArray()))) {
+        try (XSSFWorkbook workbook = new XSSFWorkbook(
+                new ByteArrayInputStream(out.toByteArray()))) {
             Sheet sheet = workbook.getSheetAt(0);
             assertThat(sheet.getRow(0).getCell(0).getStringCellValue()).isEqualTo("Item Report");
             assertThat(sheet.getRow(1).getCell(0).getStringCellValue()).isEqualTo("alpha");

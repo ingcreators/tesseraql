@@ -23,7 +23,8 @@ public final class PlanGuard {
 
         if (policy.maxEstimatedRows() >= 0 && plan.estimatedRows() > policy.maxEstimatedRows()) {
             violations.add(new PlanViolation(MAX_ROWS, "error",
-                    "Estimated rows " + plan.estimatedRows() + " exceed limit " + policy.maxEstimatedRows()));
+                    "Estimated rows " + plan.estimatedRows() + " exceed limit "
+                            + policy.maxEstimatedRows()));
         }
         if (policy.maxPlanCost() >= 0 && plan.totalCost() > policy.maxPlanCost()) {
             violations.add(new PlanViolation(MAX_COST, "error",

@@ -86,7 +86,8 @@ public final class JdbcFileTransferService implements FileTransferService {
      */
     public void ensureSchema() {
         try {
-            io.tesseraql.core.util.SqlScripts.applyForVendor(dataSource, JdbcFileTransferService.class,
+            io.tesseraql.core.util.SqlScripts.applyForVendor(dataSource,
+                    JdbcFileTransferService.class,
                     "/tesseraql/db/migration/operations/V1__framework_operations.sql");
         } catch (SQLException ex) {
             throw new TqlException(TRANSFER_ERROR,
@@ -119,7 +120,8 @@ public final class JdbcFileTransferService implements FileTransferService {
     }
 
     private SpoolRef spool(java.io.InputStream content) {
-        try (SpoolWriter writer = tempStore.createWriter(SpoolKind.BINARY); content) {
+        SpoolWriter writer = tempStore.createWriter(SpoolKind.BINARY);
+        try (writer; content) {
             byte[] buffer = new byte[64 * 1024];
             int read;
             while ((read = content.read(buffer)) >= 0) {
@@ -129,11 +131,11 @@ public final class JdbcFileTransferService implements FileTransferService {
                     writer.write(chunk);
                 }
             }
-            writer.close();
-            return writer.toRef();
         } catch (IOException ex) {
             throw new UncheckedIOException(ex);
         }
+        // toRef() is only valid after close, which the try-with-resources performed.
+        return writer.toRef();
     }
 
     @Override
@@ -163,7 +165,6 @@ public final class JdbcFileTransferService implements FileTransferService {
                 transfer.rowCount(), transfer.errors(), transfer.filename(),
                 transfer.downloadedAt() != null));
     }
-
 
     /** The connected vendor (for label normalization and the row-limit clause), detected once. */
     private volatile String vendor;
@@ -201,7 +202,8 @@ public final class JdbcFileTransferService implements FileTransferService {
                             rs.getString("direction"),
                             rs.getString("format"),
                             rs.getString("execution_status") == null
-                                    ? "UNKNOWN" : rs.getString("execution_status"),
+                                    ? "UNKNOWN"
+                                    : rs.getString("execution_status"),
                             rs.getLong("row_count"),
                             rs.getString("filename"),
                             rs.getTimestamp("downloaded_at") != null,
@@ -284,7 +286,8 @@ public final class JdbcFileTransferService implements FileTransferService {
                                 if (errors.size() < MAX_RECORDED_ERRORS) {
                                     errors.add(new RowError(rowNumber, ex.getMessage()));
                                 } else if (errors.size() == MAX_RECORDED_ERRORS) {
-                                    errors.add(new RowError(rowNumber, "... further errors omitted"));
+                                    errors.add(
+                                            new RowError(rowNumber, "... further errors omitted"));
                                 }
                             }
                         });
@@ -420,7 +423,8 @@ public final class JdbcFileTransferService implements FileTransferService {
                 try {
                     hasNext = results.next();
                 } catch (SQLException ex) {
-                    throw new TqlException(TRANSFER_ERROR, "Export query failed: " + ex.getMessage());
+                    throw new TqlException(TRANSFER_ERROR,
+                            "Export query failed: " + ex.getMessage());
                 }
             }
             return hasNext;
@@ -456,7 +460,7 @@ public final class JdbcFileTransferService implements FileTransferService {
 
         @Override
         public void write(int b) throws IOException {
-            writer.write(new byte[] {(byte) b});
+            writer.write(new byte[]{(byte) b});
         }
 
         @Override

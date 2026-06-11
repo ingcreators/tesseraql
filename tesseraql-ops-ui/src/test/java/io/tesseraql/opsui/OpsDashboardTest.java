@@ -78,8 +78,8 @@ class OpsDashboardTest {
         OpsDashboard dashboard = new OpsDashboard(null, null, null, tracer, 200L);
 
         assertThat(dashboard.traceTree()).singleElement().satisfies(root ->
-                // self time excludes children (here children are ~0ms, so selfMs ~ durationMs).
-                assertThat(root.selfMs()).isLessThanOrEqualTo(root.durationMs()));
+        // self time excludes children (here children are ~0ms, so selfMs ~ durationMs).
+        assertThat(root.selfMs()).isLessThanOrEqualTo(root.durationMs()));
         assertThat(dashboard.traceSummaries()).singleElement().satisfies(summary -> {
             assertThat(summary.rootSpan()).isEqualTo("tesseraql.route");
             assertThat(summary.spanCount()).isEqualTo(3);
@@ -107,7 +107,8 @@ class OpsDashboardTest {
 
         assertThat(dashboard.traceSummaries()).hasSize(2);
         assertThat(dashboard.traceSummaries("errors"))
-                .singleElement().satisfies(summary -> assertThat(summary.errorCount()).isEqualTo(1));
+                .singleElement()
+                .satisfies(summary -> assertThat(summary.errorCount()).isEqualTo(1));
         // With the threshold low, every span is slow, so the slow filter keeps both traces.
         OpsDashboard slowDashboard = new OpsDashboard(null, null, null, tracer, 0L);
         assertThat(slowDashboard.traceSummaries("slow")).hasSize(2);
@@ -131,8 +132,8 @@ class OpsDashboardTest {
 
         // A per-app grant sees only its own traces; unattributed spans stay hidden.
         java.util.function.Predicate<String> ordersOnly = "orders"::equals;
-        assertThat(dashboard.traceTree(ordersOnly)).singleElement().satisfies(root ->
-                assertThat(root.span().attributes()).containsEntry("app", "orders"));
+        assertThat(dashboard.traceTree(ordersOnly)).singleElement().satisfies(
+                root -> assertThat(root.span().attributes()).containsEntry("app", "orders"));
         assertThat(dashboard.traces(ordersOnly))
                 .hasSize(2)
                 .allSatisfy(span -> assertThat(span.traceId())
@@ -159,10 +160,10 @@ class OpsDashboardTest {
             root.end();
         }
 
-        OpsDashboard.TraceMetrics metrics =
-                new OpsDashboard(null, null, null, tracer, 1_000_000L).traceMetrics();
+        OpsDashboard.TraceMetrics metrics = new OpsDashboard(null, null, null, tracer, 1_000_000L)
+                .traceMetrics();
 
-        assertThat(metrics.spans()).isEqualTo(8);          // 4 traces x 2 spans, all retained
+        assertThat(metrics.spans()).isEqualTo(8); // 4 traces x 2 spans, all retained
         assertThat(metrics.errorSpans()).isEqualTo(1);
         assertThat(metrics.traces()).isEqualTo(4);
         assertThat(metrics.errorTraces()).isEqualTo(1);
@@ -199,7 +200,7 @@ class OpsDashboardTest {
     @Test
     void laneSaturationAndSlowRateRaiseAlerts() {
         ExecutionLanes lanes = ExecutionLanes.of(List.of(LanePolicy.virtual("io", 1)));
-        lanes.lane("io").tryAdmit();           // take the only permit
+        lanes.lane("io").tryAdmit(); // take the only permit
         assertThat(lanes.lane("io").tryAdmit()).isFalse(); // rejected -> saturation
 
         RingTracer tracer = new RingTracer(10);
@@ -216,7 +217,8 @@ class OpsDashboardTest {
 
     @Test
     void pinningEventsRaiseAlertAndSummary() {
-        io.tesseraql.core.diag.PinningMonitor monitor = new io.tesseraql.core.diag.PinningMonitor(8);
+        io.tesseraql.core.diag.PinningMonitor monitor = new io.tesseraql.core.diag.PinningMonitor(
+                8);
         monitor.record(new io.tesseraql.core.diag.PinningEvent("carrier-1", 42, "A.a", 1));
 
         OpsDashboard dashboard = new OpsDashboard(null, null, null, new RingTracer(4), 200L,
@@ -225,7 +227,8 @@ class OpsDashboardTest {
         assertThat(dashboard.pinning().count()).isEqualTo(1);
         assertThat(dashboard.pinning().recent()).singleElement()
                 .satisfies(event -> assertThat(event.carrierThread()).isEqualTo("carrier-1"));
-        assertThat(dashboard.alerts()).extracting(OpsDashboard.Alert::code).contains("TQL-OPS-9005");
+        assertThat(dashboard.alerts()).extracting(OpsDashboard.Alert::code)
+                .contains("TQL-OPS-9005");
     }
 
     @Test
