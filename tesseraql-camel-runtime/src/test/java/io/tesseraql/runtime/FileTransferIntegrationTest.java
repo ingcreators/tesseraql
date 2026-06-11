@@ -203,6 +203,21 @@ class FileTransferIntegrationTest {
     }
 
     @Test
+    void recentTransfersAreListedNewestFirstWithTheirApp() throws Exception {
+        String transferId = startTransfer("/api/items/import", "name,qty\nrecent,1\n");
+        awaitTerminal("/api/items/import/" + transferId);
+
+        var recent = runtime.fileTransfers().recent(10);
+        assertThat(recent).isNotEmpty();
+        assertThat(recent.get(0).appName()).isEqualTo("file-demo");
+        assertThat(recent).anySatisfy(transfer -> {
+            assertThat(transfer.transferId()).isEqualTo(transferId);
+            assertThat(transfer.direction()).isEqualTo("IMPORT");
+            assertThat(transfer.status()).isEqualTo("COMPLETED");
+        });
+    }
+
+    @Test
     void emptyUploadIsRejectedWith400() throws Exception {
         HttpResponse<String> response = HTTP.send(HttpRequest.newBuilder(
                         URI.create("http://localhost:" + runtime.port() + "/api/items/import"))

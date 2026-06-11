@@ -165,6 +165,40 @@ public final class JdbcFileTransferService implements FileTransferService {
     }
 
     @Override
+    public List<TransferSummary> recent(int limit) {
+        List<TransferSummary> summaries = new ArrayList<>();
+        try (Connection connection = dataSource.getConnection();
+                PreparedStatement statement = connection.prepareStatement("""
+                        select t.*, e.status as execution_status
+                        from tql_file_transfer t
+                          left join tql_job_execution e on e.job_execution_id = t.transfer_id
+                        order by t.created_at desc
+                        limit ?""")) {
+            statement.setInt(1, limit);
+            try (ResultSet rs = statement.executeQuery()) {
+                while (rs.next()) {
+                    summaries.add(new TransferSummary(
+                            rs.getString("transfer_id"),
+                            rs.getString("route_id"),
+                            rs.getString("app_name"),
+                            rs.getString("direction"),
+                            rs.getString("format"),
+                            rs.getString("execution_status") == null
+                                    ? "UNKNOWN" : rs.getString("execution_status"),
+                            rs.getLong("row_count"),
+                            rs.getString("filename"),
+                            rs.getTimestamp("downloaded_at") != null,
+                            rs.getTimestamp("created_at").toInstant()));
+                }
+            }
+        } catch (SQLException ex) {
+            throw new TqlException(TRANSFER_ERROR,
+                    "Failed to list file transfers: " + ex.getMessage());
+        }
+        return summaries;
+    }
+
+    @Override
     public Optional<Download> download(String transferId) {
         TransferRow transfer = findTransfer(transferId).orElse(null);
         if (transfer == null || !"EXPORT".equals(transfer.direction())

@@ -47,6 +47,12 @@ public interface FileTransferService {
     record Download(String filename, String contentType, InputStream content) {
     }
 
+    /** One transfer in the operations overview, tagged with its owning app for scoping. */
+    record TransferSummary(String transferId, String routeId, String appName, String direction,
+            String format, String status, long rows, String filename, boolean downloaded,
+            java.time.Instant createdAt) {
+    }
+
     /**
      * Starts an asynchronous import of the uploaded content; returns the transfer id. The stream
      * is consumed (spooled off-heap) before this returns, so arbitrarily large uploads never
@@ -59,6 +65,9 @@ public interface FileTransferService {
 
     /** The transfer state, or empty when the id is unknown. */
     Optional<TransferStatus> status(String transferId);
+
+    /** The most recent transfers, newest first (for the operations console). */
+    List<TransferSummary> recent(int limit);
 
     /**
      * Opens the generated file once the export completed (empty when unknown or not ready). The

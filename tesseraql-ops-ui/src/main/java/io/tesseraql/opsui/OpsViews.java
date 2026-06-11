@@ -46,6 +46,32 @@ public final class OpsViews {
         return model;
     }
 
+    /** The file transfer page model: recent imports/exports, already scope-filtered. */
+    public static Map<String, Object> transfers(
+            List<io.tesseraql.core.files.FileTransferService.TransferSummary> transfers) {
+        List<Map<String, Object>> rows = new ArrayList<>();
+        for (io.tesseraql.core.files.FileTransferService.TransferSummary transfer : transfers) {
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("id", transfer.transferId());
+            row.put("route", transfer.routeId());
+            row.put("app", dash(transfer.appName()));
+            row.put("direction", transfer.direction());
+            row.put("format", transfer.format());
+            row.put("status", dash(transfer.status()));
+            row.put("statusClass", cssClass(transfer.status()));
+            row.put("rows", transfer.rows());
+            row.put("filename", dash(transfer.filename()));
+            row.put("downloaded", transfer.downloaded() ? "yes" : "-");
+            row.put("createdAt", transfer.createdAt() == null
+                    ? "-" : transfer.createdAt().toString());
+            rows.add(row);
+        }
+        Map<String, Object> model = new LinkedHashMap<>();
+        model.put("rows", rows);
+        model.put("hasRows", !rows.isEmpty());
+        return model;
+    }
+
     /** The trace page model: the trace tree flattened with per-node indents. */
     public static Map<String, Object> traces(List<TraceNode> tree) {
         List<Map<String, Object>> rows = new ArrayList<>();

@@ -4,5 +4,7 @@ web/_tesseraql/ops/console/get.yml
 web/_tesseraql/ops/console/overview.html
 web/_tesseraql/ops/console/traces/get.yml
 web/_tesseraql/ops/console/traces/traces.html
+web/_tesseraql/ops/console/transfers/get.yml
+web/_tesseraql/ops/console/transfers/transfers.html
 web/_tesseraql/ops/console/executions/{id}/get.yml
 web/_tesseraql/ops/console/executions/{id}/execution.html

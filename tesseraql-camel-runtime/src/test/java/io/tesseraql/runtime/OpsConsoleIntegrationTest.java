@@ -101,6 +101,17 @@ class OpsConsoleIntegrationTest {
     }
 
     @Test
+    void rendersFileTransfersPage() throws Exception {
+        HttpResponse<String> response = get("/_tesseraql/ops/console/transfers", true);
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(response.body()).startsWith("<!DOCTYPE html>");
+        // No ops.app.* grant on this caller: deny-by-default leaves the table empty.
+        assertThat(response.body()).contains("File transfers")
+                .contains("No file transfers recorded");
+    }
+
+    @Test
     void rendersTraceTreePage() throws Exception {
         HttpResponse<String> response = get("/_tesseraql/ops/console/traces", true);
 

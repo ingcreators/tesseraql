@@ -2,7 +2,7 @@
 <html xmlns:th="http://www.thymeleaf.org"
       th:replace="~{tql/shell :: page('TesseraQL Operations Console', ~{:: #page-header}, ~{:: #page-content})}">
 <th:block id="page-header">
-  <span class="actions"><a href="/_tesseraql/ops/console/traces">traces &rarr;</a> <a href="/_tesseraql/ops/console">refresh</a></span>
+  <span class="actions"><a href="/_tesseraql/ops/console/traces">traces &rarr;</a> <a href="/_tesseraql/ops/console/transfers">transfers &rarr;</a> <a href="/_tesseraql/ops/console">refresh</a></span>
   <span class="hc-badge" data-variant="success" th:if="${ops.ok}">UP</span>
   <span class="hc-badge" data-variant="warning" th:if="${ops.warning}">WARN</span>
 </th:block>

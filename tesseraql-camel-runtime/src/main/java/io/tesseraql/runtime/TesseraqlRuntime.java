@@ -340,6 +340,15 @@ public final class TesseraqlRuntime implements AutoCloseable {
                                                     params.get("permissions")))))
                             .register("ops.traces", params ->
                                     io.tesseraql.opsui.OpsViews.traces(dashboardRef.traceTree()))
+                            .register("ops.transfers", params -> {
+                                java.util.function.Predicate<String> scope =
+                                        io.tesseraql.opsui.OpsScope.allowedApps(
+                                                params.get("permissions"));
+                                return io.tesseraql.opsui.OpsViews.transfers(
+                                        fileTransfers.recent(50).stream()
+                                                .filter(transfer -> scope.test(transfer.appName()))
+                                                .toList());
+                            })
                             .register("ops.execution", params -> {
                                 String id = params.get("id") == null
                                         ? "" : String.valueOf(params.get("id"));
@@ -499,6 +508,13 @@ public final class TesseraqlRuntime implements AutoCloseable {
 
     public JdbcOutboxStore outboxStore() {
         return outboxStore;
+    }
+
+    /** The asynchronous file transfer service (design ch. 28). */
+    public io.tesseraql.core.files.FileTransferService fileTransfers() {
+        return camelContext.getRegistry().lookupByNameAndType(
+                TesseraqlProperties.FILE_TRANSFER_BEAN,
+                io.tesseraql.core.files.FileTransferService.class);
     }
 
     public int port() {
