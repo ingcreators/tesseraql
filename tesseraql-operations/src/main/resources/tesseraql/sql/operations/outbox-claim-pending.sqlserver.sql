@@ -6,6 +6,8 @@ from tql_outbox_event with (updlock, readpast, rowlock)
 where
   (
     status = 'PENDING'
+    -- FAILED rows retry on the next poll until the dispatcher dead-letters them (Phase 20).
+    or status = 'FAILED'
     or (status = 'SENDING' and claimed_at < /* abandonedBefore */ '2026-01-01 00:00:00')
   )
 /*%if apps != null */

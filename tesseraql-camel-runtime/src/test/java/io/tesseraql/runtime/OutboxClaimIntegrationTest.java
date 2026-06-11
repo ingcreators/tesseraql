@@ -118,8 +118,8 @@ class OutboxClaimIntegrationTest {
     }
 
     private static OutboxEvent event(String type, String aggregateId, String appName) {
-        return new OutboxEvent(null, "user", aggregateId, type, "{}", "PENDING", 0, Instant.now(),
-                appName);
+        return new OutboxEvent(null, "user", aggregateId, type, "{}", "PENDING", 0, null,
+                Instant.now(), null, appName);
     }
 
     private static Connection connect() throws Exception {
