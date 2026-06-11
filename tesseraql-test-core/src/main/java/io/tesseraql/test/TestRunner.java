@@ -5,6 +5,7 @@ import io.tesseraql.core.sql.BoundSql;
 import io.tesseraql.core.sql.Sql2WayParser;
 import io.tesseraql.core.sql.SqlNode;
 import io.tesseraql.core.sql.SqlRenderer;
+import io.tesseraql.core.validation.ValidationRules;
 import io.tesseraql.coverage.SqlCoverableLines;
 import io.tesseraql.coverage.SqlCoverage;
 import io.tesseraql.identity.IdentityService;
@@ -12,6 +13,10 @@ import io.tesseraql.identity.RealmConfig;
 import io.tesseraql.test.TestReport.TestResult;
 import io.tesseraql.test.TestSuite.Expectation;
 import io.tesseraql.test.TestSuite.TestCase;
+import io.tesseraql.yaml.manifest.AppManifest;
+import io.tesseraql.yaml.manifest.ManifestLoader;
+import io.tesseraql.yaml.manifest.RouteFile;
+import io.tesseraql.yaml.model.ValidationRule;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.sql.Connection;
@@ -25,8 +30,9 @@ import java.util.Map;
 import javax.sql.DataSource;
 
 /**
- * Runs a declarative {@link TestSuite} against a database, executing SQL files and Identity SQL
- * Contracts and checking the result rows (design ch. 13, 13.2).
+ * Runs a declarative {@link TestSuite} against a database, executing SQL files, Identity SQL
+ * Contracts, and route validation rules and checking the result rows (design ch. 13, 13.2;
+ * roadmap Phase 19 — a validation case's violations are its rows).
  */
 public final class TestRunner {
 
@@ -35,6 +41,7 @@ public final class TestRunner {
     private final IdentityService identity;
     private final RealmConfig realm;
     private final SqlCoverage coverage;
+    private AppManifest manifest;
 
     public TestRunner(DataSource dataSource, Path appHome) {
         this(dataSource, appHome, null, null, null);
@@ -74,6 +81,9 @@ public final class TestRunner {
     }
 
     private List<Map<String, Object>> resultRows(TestCase test) {
+        if (test.validate() != null) {
+            return evaluateValidation(test);
+        }
         if (test.contract() != null && !test.contract().isBlank()) {
             if (identity == null || realm == null) {
                 throw new IllegalStateException(
@@ -82,7 +92,8 @@ public final class TestRunner {
             return identity.execute(realm, stripIdentityPrefix(test.contract()), test.params());
         }
         if (test.sql() == null || test.sql().file() == null) {
-            throw new IllegalArgumentException("Test '" + test.name() + "' has no sql or contract");
+            throw new IllegalArgumentException(
+                    "Test '" + test.name() + "' has no sql, contract, or validate target");
         }
         return executeSql(appHome.resolve(test.sql().file()), test.params());
     }
@@ -110,6 +121,66 @@ public final class TestRunner {
             }
         }
         return TestResult.pass(test.name());
+    }
+
+    /**
+     * Evaluates a route's {@code validate:} rules against the case's params (the execution
+     * context the rules see) and returns the violations as the case's rows (roadmap Phase 19).
+     * SQL rules run against the test datasource and record coverage like SQL-file cases.
+     */
+    private List<Map<String, Object>> evaluateValidation(TestCase test) {
+        RouteFile route = route(test.validate().route());
+        Path routeDir = route.source().getParent();
+        List<ValidationRules.Rule> rules = new ArrayList<>();
+        route.definition().validate().forEach((id, rule) -> {
+            if (test.validate().rule() != null && !test.validate().rule().equals(id)) {
+                return;
+            }
+            rules.add(compileRule(routeDir, id, rule));
+        });
+        if (rules.isEmpty()) {
+            throw new IllegalArgumentException("Route '" + test.validate().route()
+                    + "' declares no matching validation rule"
+                    + (test.validate().rule() == null ? "" : " '" + test.validate().rule() + "'"));
+        }
+        try (Connection connection = dataSource.getConnection()) {
+            return new ValidationRules(rules).evaluate(test.params(), connection,
+                    (rule, bound) -> recordRuleCoverage(rule, bound));
+        } catch (java.sql.SQLException ex) {
+            throw new IllegalStateException("Validation SQL failed: " + ex.getMessage(), ex);
+        }
+    }
+
+    private ValidationRules.Rule compileRule(Path routeDir, String id, ValidationRule rule) {
+        if (rule.isExpression()) {
+            return ValidationRules.expression(id, rule.when(), rule.rule(), rule.field(),
+                    rule.code(), rule.message());
+        }
+        Path file = routeDir.resolve(rule.file()).normalize();
+        return ValidationRules.sql(id, rule.when(), read(file), file.toString(), rule.params(),
+                rule.field(), rule.code(), rule.message());
+    }
+
+    private void recordRuleCoverage(ValidationRules.Rule rule, BoundSql bound) {
+        if (coverage != null && rule.sourcePath() != null) {
+            String sqlId = appHome.relativize(Path.of(rule.sourcePath())).toString()
+                    .replace('\\', '/');
+            coverage.record(sqlId, bound.coverageTrace(), SqlCoverableLines.compute(rule.sql()));
+        }
+    }
+
+    private RouteFile route(String routeId) {
+        if (routeId == null || routeId.isBlank()) {
+            throw new IllegalArgumentException("A validation case needs a validate.route id");
+        }
+        if (manifest == null) {
+            manifest = new ManifestLoader().load(appHome);
+        }
+        return manifest.routes().stream()
+                .filter(route -> routeId.equals(route.definition().id()))
+                .findFirst()
+                .orElseThrow(() -> new IllegalArgumentException(
+                        "Unknown route '" + routeId + "' in validation case"));
     }
 
     private List<Map<String, Object>> executeSql(Path sqlFile, Map<String, Object> params) {

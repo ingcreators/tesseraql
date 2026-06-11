@@ -43,7 +43,8 @@ public final class AppTestRunner {
 
     /**
      * Result of a test run: the aggregated report, the collected SQL coverage, and the derived
-     * item-coverage kinds (assertion, iam-contract, route, security, saml, scim — design ch. 14).
+     * item-coverage kinds (assertion, iam-contract, route, security, saml, scim, validation —
+     * design ch. 14, roadmap Phase 19).
      */
     public record RunResult(TestReport report, SqlCoverage coverage, List<ItemCoverage> kinds) {
 
@@ -91,6 +92,7 @@ public final class AppTestRunner {
             kinds.add(ManifestCoverage.security(manifest, suites));
             kinds.add(ManifestCoverage.saml(manifest, suites));
             kinds.add(ManifestCoverage.scim(manifest, suites));
+            kinds.add(ManifestCoverage.validation(manifest, suites));
         }
         return kinds;
     }
