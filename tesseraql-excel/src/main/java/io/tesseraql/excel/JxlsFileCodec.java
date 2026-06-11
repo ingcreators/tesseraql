@@ -19,19 +19,18 @@ import java.util.List;
 import java.util.Map;
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.CellStyle;
-import org.apache.poi.ss.usermodel.DataFormatter;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
-import org.apache.poi.xssf.streaming.SXSSFWorkbook;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.jxls.builder.JxlsOutput;
 import org.jxls.transform.poi.JxlsPoiTemplateFillerBuilder;
 
 /**
- * The optional Excel (xlsx) codec (design ch. 28). Imports read rows with POI using the shared
- * column resolution - header labels (or explicit positions) name the values, {@code startRow}
- * skips title rows. Exports have three modes: a plain streamed grid without a template;
+ * The optional Excel (xlsx) codec (design ch. 28). Imports stream rows through fastexcel-reader
+ * using the shared column resolution - header labels (or explicit positions) name the values,
+ * {@code startRow} skips title rows, and native date/number cells of typed columns arrive typed.
+ * Exports have three modes: a plain grid streamed through fastexcel's writer;
  * placement mode (template plus {@code startCell}) where the YAML declares where each column
  * lands and the template carries only layout and styles - the {@code startCell} row acts as the
  * style prototype for every data row; and a jx:-annotated jxls report template (advanced) that
@@ -54,51 +53,85 @@ public final class JxlsFileCodec implements FileCodec {
         return ".xlsx";
     }
 
+    /**
+     * Streams the workbook through fastexcel-reader, so imports of any size stay off-heap (POI's
+     * XSSF model would materialize the whole workbook). Native date/number cells of typed
+     * columns surface as typed values directly - no display-format round trip.
+     */
     @Override
     public void read(InputStream in, FileReadSpec spec, RowHandler handler) throws Exception {
-        DataFormatter formatter = new DataFormatter();
-        try (Workbook workbook = new XSSFWorkbook(in)) {
-            Sheet sheet = sheet(workbook, spec.sheet());
-            int next = spec.startRow() - 1;
-            List<String> header = null;
-            if (spec.headerRow()) {
-                header = new ArrayList<>();
-                Row headerRow = sheet.getRow(next++);
-                if (headerRow != null) {
-                    for (Cell cell : headerRow) {
-                        header.add(formatter.formatCellValue(cell));
+        try (org.dhatim.fastexcel.reader.ReadableWorkbook workbook =
+                new org.dhatim.fastexcel.reader.ReadableWorkbook(in)) {
+            org.dhatim.fastexcel.reader.Sheet sheet =
+                    spec.sheet() == null || spec.sheet().isBlank()
+                            ? workbook.getFirstSheet()
+                            : workbook.findSheet(spec.sheet()).orElseThrow(() ->
+                                    new IllegalArgumentException(
+                                            "No sheet named '" + spec.sheet() + "'"));
+            try (java.util.stream.Stream<org.dhatim.fastexcel.reader.Row> rows =
+                    sheet.openStream()) {
+                java.util.Iterator<org.dhatim.fastexcel.reader.Row> iterator = rows.iterator();
+                for (int skip = 1; skip < spec.startRow() && iterator.hasNext(); skip++) {
+                    iterator.next();
+                }
+                List<String> header = null;
+                if (spec.headerRow() && iterator.hasNext()) {
+                    org.dhatim.fastexcel.reader.Row headerRow = iterator.next();
+                    header = new ArrayList<>();
+                    for (int i = 0; i < headerRow.getCellCount(); i++) {
+                        header.add(text(headerRow.getCell(i)));
                     }
                 }
-            }
-            List<ColumnMapping> columns = spec.columns().isEmpty() && header != null
-                    ? header.stream().map(ColumnMapping::of).toList()
-                    : spec.columns();
-            int[] positions = Tables.positions(columns, header);
-            long rowNumber = 0;
-            for (int index = next; index <= sheet.getLastRowNum(); index++) {
-                Row row = sheet.getRow(index);
-                if (row == null) {
-                    continue;
+                List<ColumnMapping> columns = spec.columns().isEmpty() && header != null
+                        ? header.stream().map(ColumnMapping::of).toList()
+                        : spec.columns();
+                int[] positions = Tables.positions(columns, header);
+                long rowNumber = 0;
+                while (iterator.hasNext()) {
+                    org.dhatim.fastexcel.reader.Row row = iterator.next();
+                    rowNumber++;
+                    Map<String, Object> values = new LinkedHashMap<>();
+                    for (int i = 0; i < columns.size(); i++) {
+                        org.dhatim.fastexcel.reader.Cell cell =
+                                positions[i] < 0 || positions[i] >= row.getCellCount()
+                                        ? null : row.getCell(positions[i]);
+                        values.put(columns.get(i).name(), value(columns.get(i), cell));
+                    }
+                    handler.row(rowNumber, values);
                 }
-                rowNumber++;
-                Map<String, Object> values = new LinkedHashMap<>();
-                for (int i = 0; i < columns.size(); i++) {
-                    Cell cell = positions[i] < 0 ? null : row.getCell(positions[i]);
-                    values.put(columns.get(i).name(),
-                            cell == null ? null : formatter.formatCellValue(cell));
-                }
-                handler.row(rowNumber, values);
             }
         }
     }
 
-    private static Sheet sheet(Workbook workbook, String name) {
-        Sheet sheet = name == null || name.isBlank()
-                ? workbook.getSheetAt(0) : workbook.getSheet(name);
-        if (sheet == null) {
-            throw new IllegalArgumentException("No sheet named '" + name + "'");
+    /** A typed column reads native cells natively; everything else surfaces as text. */
+    private static Object value(ColumnMapping column,
+            org.dhatim.fastexcel.reader.Cell cell) {
+        if (cell == null
+                || cell.getType() == org.dhatim.fastexcel.reader.CellType.EMPTY) {
+            return null;
         }
-        return sheet;
+        boolean numericCell =
+                cell.getType() == org.dhatim.fastexcel.reader.CellType.NUMBER;
+        if (numericCell && ("date".equals(column.type()) || "datetime".equals(column.type()))) {
+            return cell.asDate();
+        }
+        if (numericCell && "number".equals(column.type())) {
+            return cell.asNumber();
+        }
+        return text(cell);
+    }
+
+    private static String text(org.dhatim.fastexcel.reader.Cell cell) {
+        if (cell == null) {
+            return null;
+        }
+        return switch (cell.getType()) {
+            case EMPTY -> null;
+            case STRING -> cell.asString();
+            // General-format semantics: 34 reads as "34", not the stored "34.0".
+            case NUMBER -> cell.asNumber().stripTrailingZeros().toPlainString();
+            default -> cell.getRawValue();
+        };
     }
 
     @Override
@@ -112,6 +145,15 @@ public final class JxlsFileCodec implements FileCodec {
         } else {
             writeGrid(out, spec, rows);
         }
+    }
+
+    private static Sheet sheet(Workbook workbook, String name) {
+        Sheet sheet = name == null || name.isBlank()
+                ? workbook.getSheetAt(0) : workbook.getSheet(name);
+        if (sheet == null) {
+            throw new IllegalArgumentException("No sheet named '" + name + "'");
+        }
+        return sheet;
     }
 
     /**
@@ -229,39 +271,65 @@ public final class JxlsFileCodec implements FileCodec {
         }
     }
 
-    /** Plain tabular output, streamed through POI's SXSSF window so memory stays bounded. */
+    /**
+     * Plain tabular output through fastexcel's streaming writer - no POI temp-file repackaging.
+     * Temporal and numeric values become typed cells; a column's declared format (or a default
+     * date format for temporals) applies as the cell format.
+     */
     private static void writeGrid(OutputStream out, FileWriteSpec spec,
             Iterator<Map<String, Object>> rows) throws IOException {
-        try (SXSSFWorkbook workbook = new SXSSFWorkbook(100)) {
-            Sheet sheet = workbook.createSheet(
-                    spec.sheet() == null || spec.sheet().isBlank() ? "data" : spec.sheet());
-            ZoneId zone = io.tesseraql.core.files.ColumnValues.zone(spec.timezone());
-            List<ColumnMapping> columns = new ArrayList<>(spec.columns());
-            CellStyle[] styles = null;
-            int rowIndex = 0;
-            while (rows.hasNext()) {
-                Map<String, Object> row = rows.next();
-                if (columns.isEmpty()) {
-                    row.keySet().forEach(key -> columns.add(ColumnMapping.of(key)));
-                }
-                if (rowIndex == 0) {
-                    styles = columnStyles(workbook, columns, new CellStyle[columns.size()]);
-                    Row header = sheet.createRow(rowIndex++);
-                    for (int i = 0; i < columns.size(); i++) {
-                        header.createCell(i).setCellValue(columns.get(i).effectiveHeader());
-                    }
-                }
-                Row target = sheet.createRow(rowIndex++);
+        org.dhatim.fastexcel.Workbook workbook =
+                new org.dhatim.fastexcel.Workbook(out, "TesseraQL", "1.0");
+        org.dhatim.fastexcel.Worksheet sheet = workbook.newWorksheet(
+                spec.sheet() == null || spec.sheet().isBlank() ? "data" : spec.sheet());
+        ZoneId zone = io.tesseraql.core.files.ColumnValues.zone(spec.timezone());
+        List<ColumnMapping> columns = new ArrayList<>(spec.columns());
+        int rowIndex = 0;
+        while (rows.hasNext()) {
+            Map<String, Object> row = rows.next();
+            if (columns.isEmpty()) {
+                row.keySet().forEach(key -> columns.add(ColumnMapping.of(key)));
+            }
+            if (rowIndex == 0) {
                 for (int i = 0; i < columns.size(); i++) {
-                    Cell cell = target.createCell(i);
-                    if (styles[i] != null) {
-                        cell.setCellStyle(styles[i]);
-                    }
-                    setCell(cell, row.get(columns.get(i).name()), zone);
+                    sheet.value(rowIndex, i, columns.get(i).effectiveHeader());
+                }
+                rowIndex++;
+            }
+            for (int i = 0; i < columns.size(); i++) {
+                writeValue(sheet, rowIndex, i, columns.get(i),
+                        row.get(columns.get(i).name()), zone);
+            }
+            rowIndex++;
+        }
+        workbook.finish();
+    }
+
+    /** Writes one typed grid cell, applying the column's (or the temporal default) format. */
+    private static void writeValue(org.dhatim.fastexcel.Worksheet sheet, int rowIndex,
+            int colIndex, ColumnMapping column, Object value, ZoneId zone) {
+        java.time.ZonedDateTime temporal =
+                io.tesseraql.core.files.ColumnValues.toZoned(value, zone);
+        String format = column.format();
+        if (temporal != null) {
+            sheet.value(rowIndex, colIndex, temporal.toLocalDateTime());
+            // A date cell without a format renders as a raw serial number; default sensibly.
+            sheet.style(rowIndex, colIndex)
+                    .format(format == null || format.isBlank()
+                            ? "yyyy-mm-dd hh:mm" : format)
+                    .set();
+            return;
+        }
+        switch (value) {
+            case null -> { }
+            case Number number -> {
+                sheet.value(rowIndex, colIndex, number);
+                if (format != null && !format.isBlank()) {
+                    sheet.style(rowIndex, colIndex).format(format).set();
                 }
             }
-            workbook.write(out);
-            workbook.dispose();
+            case Boolean bool -> sheet.value(rowIndex, colIndex, bool);
+            default -> sheet.value(rowIndex, colIndex, String.valueOf(value));
         }
     }
 

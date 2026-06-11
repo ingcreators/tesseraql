@@ -140,6 +140,16 @@
         <version>${jxls.version}</version>
       </dependency>
       <dependency>
+        <groupId>org.dhatim</groupId>
+        <artifactId>fastexcel</artifactId>
+        <version>${fastexcel.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.dhatim</groupId>
+        <artifactId>fastexcel-reader</artifactId>
+        <version>${fastexcel.version}</version>
+      </dependency>
+      <dependency>
         <groupId>org.webjars.npm</groupId>
         <artifactId>hypermedia-components__core</artifactId>
         <version>${hypermedia-components.version}</version>

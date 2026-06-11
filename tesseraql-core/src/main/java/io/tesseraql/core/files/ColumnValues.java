@@ -41,7 +41,11 @@ public final class ColumnValues {
         return id == null || id.isBlank() ? ZoneId.systemDefault() : ZoneId.of(id);
     }
 
-    /** Parses every typed column of an imported row; untyped values pass through as text. */
+    /**
+     * Parses every typed column of an imported row; untyped values pass through as-is, and
+     * values a codec already delivered typed (native workbook date/number cells) are normalized
+     * to the declared type without re-parsing.
+     */
     public static Map<String, Object> parseRow(FileReadSpec spec, Map<String, Object> values) {
         if (spec.columns().isEmpty()) {
             return values;
@@ -50,12 +54,23 @@ public final class ColumnValues {
         for (ColumnMapping column : spec.columns()) {
             if (column.type() != null && typed.containsKey(column.name())) {
                 Object raw = typed.get(column.name());
-                typed.put(column.name(),
-                        parse(column, raw == null ? null : String.valueOf(raw),
-                                locale(spec.locale())));
+                typed.put(column.name(), raw instanceof String text
+                        ? parse(column, text, locale(spec.locale()))
+                        : normalize(column, raw));
             }
         }
         return typed;
+    }
+
+    /** Aligns an already-typed value (native workbook cell) with the declared column type. */
+    private static Object normalize(ColumnMapping column, Object value) {
+        if (value == null) {
+            return null;
+        }
+        if ("date".equals(column.type()) && value instanceof LocalDateTime dateTime) {
+            return dateTime.toLocalDate();
+        }
+        return value;
     }
 
     /** Parses one value per the column's type; blank input is null. */

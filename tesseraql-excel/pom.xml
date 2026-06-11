@@ -30,6 +30,15 @@
       <groupId>org.jxls</groupId>
       <artifactId>jxls-poi</artifactId>
     </dependency>
+    <!-- Streaming xlsx I/O for imports and plain grid exports (placement/reports stay POI). -->
+    <dependency>
+      <groupId>org.dhatim</groupId>
+      <artifactId>fastexcel</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.dhatim</groupId>
+      <artifactId>fastexcel-reader</artifactId>
+    </dependency>
     <!-- jxls's JEXL evaluator logs through commons-logging; route it into slf4j. -->
     <dependency>
       <groupId>org.slf4j</groupId>

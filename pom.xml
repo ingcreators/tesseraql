@@ -65,6 +65,7 @@
     <flyway.version>10.20.1</flyway.version>
     <commons-csv.version>1.14.1</commons-csv.version>
     <jxls.version>3.1.0</jxls.version>
+    <fastexcel.version>0.20.2</fastexcel.version>
 
     <!-- Build plugin versions -->
     <maven.compiler.plugin.version>3.13.0</maven.compiler.plugin.version>
@@ -225,6 +226,16 @@
         <groupId>org.jxls</groupId>
         <artifactId>jxls-poi</artifactId>
         <version>${jxls.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.dhatim</groupId>
+        <artifactId>fastexcel</artifactId>
+        <version>${fastexcel.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.dhatim</groupId>
+        <artifactId>fastexcel-reader</artifactId>
+        <version>${fastexcel.version}</version>
       </dependency>
       <!-- The standard template engine (design ch. 12): natural HTML templates with first-class
            fragments/layouts, plus TEXT mode for generated file responses. -->
