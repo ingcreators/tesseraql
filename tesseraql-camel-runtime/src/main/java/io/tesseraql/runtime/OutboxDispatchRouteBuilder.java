@@ -19,18 +19,20 @@ final class OutboxDispatchRouteBuilder extends RouteBuilder {
     private final OutboxEventSink sink;
     private final long periodMs;
     private final java.util.Set<String> hostedApps;
+    private final int maxAttempts;
 
     OutboxDispatchRouteBuilder(OutboxStore store, OutboxEventSink sink, long periodMs,
-            java.util.Set<String> hostedApps) {
+            java.util.Set<String> hostedApps, int maxAttempts) {
         this.store = store;
         this.sink = sink;
         this.periodMs = periodMs;
         this.hostedApps = java.util.Set.copyOf(hostedApps);
+        this.maxAttempts = maxAttempts;
     }
 
     @Override
     public void configure() {
-        OutboxDispatcher dispatcher = new OutboxDispatcher(store, sink, hostedApps);
+        OutboxDispatcher dispatcher = new OutboxDispatcher(store, sink, hostedApps, maxAttempts);
         from("timer:tql-outbox-dispatch?period=" + periodMs + "&delay=" + periodMs)
                 .routeId("system.outbox.dispatcher")
                 .process(exchange -> dispatcher.dispatch(BATCH_SIZE));

@@ -86,17 +86,26 @@ public final class NotifyEvents {
 
         /** Builds the insertable outbox event carrying the notification envelope. */
         public OutboxEvent build(Map<String, Object> context, String appName) {
-            Map<String, Object> envelope = new LinkedHashMap<>();
-            envelope.put("channel", channel);
-            envelope.put("source", source);
-            envelope.put("payload", resolvePayload(context));
-            try {
-                return OutboxEvent.toInsert(AGGREGATE_TYPE, source, EVENT_TYPE,
-                        MAPPER.writeValueAsString(envelope), appName);
-            } catch (JsonProcessingException ex) {
-                throw new TqlException(ENCODE_ERROR,
-                        "Failed to encode notification '" + source + "': " + ex.getMessage());
-            }
+            return event(channel, source, resolvePayload(context), appName);
+        }
+    }
+
+    /**
+     * Builds an insertable notification event directly — operations alerts (job failures,
+     * threshold breaches) enqueue through here, riding the same channels as {@code notify:}.
+     */
+    public static OutboxEvent event(String channel, String source, Map<String, Object> payload,
+            String appName) {
+        Map<String, Object> envelope = new LinkedHashMap<>();
+        envelope.put("channel", channel);
+        envelope.put("source", source);
+        envelope.put("payload", payload == null ? Map.of() : payload);
+        try {
+            return OutboxEvent.toInsert(AGGREGATE_TYPE, source, EVENT_TYPE,
+                    MAPPER.writeValueAsString(envelope), appName);
+        } catch (JsonProcessingException ex) {
+            throw new TqlException(ENCODE_ERROR,
+                    "Failed to encode notification '" + source + "': " + ex.getMessage());
         }
     }
 

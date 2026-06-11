@@ -118,6 +118,16 @@ public final class NotificationChannels {
                     : Optional.of(config.resolve(String.valueOf(value)));
         }
 
+        /**
+         * A setting value without placeholder resolution — for values that are themselves
+         * templates (a mail {@code subject} renders {@code [(${payload.x})]} inline, which must
+         * not be mistaken for a config placeholder).
+         */
+        public Optional<String> raw(String key) {
+            Object value = raw.get(key);
+            return value == null ? Optional.empty() : Optional.of(String.valueOf(value));
+        }
+
         /** A resolved setting value, or {@code TQL-YAML-1102} when not declared. */
         public String require(String key) {
             return setting(key).orElseThrow(() -> new TqlException(INVALID_CHANNEL,
