@@ -63,7 +63,7 @@ class AppTestRunnerIntegrationTest {
                 .run(appHome, dataSource, RealmConfig.managed("local", "main"), reportDir);
 
         TestReport report = result.report();
-        assertThat(report.results()).hasSize(5);
+        assertThat(report.results()).hasSize(8);
         assertThat(report.allPassed()).isTrue();
         assertThat(Files.exists(reportDir.resolve("junit/TEST-tesseraql.xml"))).isTrue();
         assertThat(Files.exists(reportDir.resolve("tesseraql-result.json"))).isTrue();
@@ -74,7 +74,7 @@ class AppTestRunnerIntegrationTest {
         assertThat(Files.exists(reportDir.resolve("coverage/sonarqube.xml"))).isTrue();
         try (var allureFiles = Files.list(reportDir.resolve("allure-results"))) {
             assertThat(allureFiles.filter(f -> f.toString().endsWith("-result.json")).count())
-                    .isEqualTo(5);
+                    .isEqualTo(8);
         } catch (Exception ex) {
             throw new AssertionError(ex);
         }
@@ -97,6 +97,12 @@ class AppTestRunnerIntegrationTest {
         assertThat(result.kind("validation").covered())
                 .containsExactly("users.apiProvision.userExists");
         assertThat(result.kind("validation").ratio()).isEqualTo(1.0);
+        // Phase 20: the provision route's notifications and the maintenance job's notify step
+        // are declared, and the suite's notify cases evaluate all of them.
+        assertThat(result.kind("notification").declared()).containsExactlyInAnyOrder(
+                "users.apiProvision.confirmation", "users.apiProvision.audit",
+                "user.dailyMaintenance.report");
+        assertThat(result.kind("notification").ratio()).isEqualTo(1.0);
     }
 
     private static DataSource dataSource() {

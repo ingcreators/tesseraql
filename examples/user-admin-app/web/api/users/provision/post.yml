@@ -39,6 +39,21 @@ validate:
     code: unknown-user
     message: users.provision.unknown-user
 
+# Phase 20 notifications: enqueued on the outbox in the same transaction, delivered
+# at-least-once by the dispatcher. The confirmation mail only fires for an activation.
+notify:
+  confirmation:
+    channel: user-mail
+    when: body.active == true
+    payload:
+      userName: body.userName
+      givenName: body.givenName
+  audit:
+    channel: audit-webhook
+    payload:
+      userName: body.userName
+      actor: principal.loginId
+
 outbox:
   eventType: USER_PROVISIONED
   aggregateType: User
