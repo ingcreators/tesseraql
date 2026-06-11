@@ -46,29 +46,33 @@ public final class FileImportProcessor implements Processor {
 
     @Override
     public void process(Exchange exchange) throws Exception {
-        byte[] content = body(exchange);
-        if (content == null || content.length == 0) {
-            throw new TqlException(EMPTY_BODY,
-                    "file-import expects the uploaded file as the request body");
-        }
         FileTransferService transfers = exchange.getContext().getRegistry()
                 .lookupByNameAndType(TesseraqlProperties.FILE_TRANSFER_BEAN,
                         FileTransferService.class);
         if (transfers == null) {
             throw new TqlException(NO_SERVICE, "File transfer service is not configured");
         }
-        String transferId = transfers.startImport(new FileTransferService.ImportRequest(
-                routeId, appName, format,
-                readSpec.withLocale(FormatSources.resolve(exchange, localeDeclaration)),
-                rowSqlFile, onError), content);
-        respondAccepted(exchange, urlPath, transferId, false);
+        try (InputStream content = body(exchange)) {
+            if (content == null) {
+                throw new TqlException(EMPTY_BODY,
+                        "file-import expects the uploaded file as the request body");
+            }
+            // The service spools the stream off-heap before returning; large uploads never
+            // materialize in memory here (an empty upload fails with the same 400).
+            String transferId = transfers.startImport(new FileTransferService.ImportRequest(
+                    routeId, appName, format,
+                    readSpec.withLocale(FormatSources.resolve(exchange, localeDeclaration)),
+                    rowSqlFile, onError), content);
+            respondAccepted(exchange, urlPath, transferId, false);
+        }
     }
 
     /**
-     * The uploaded file content: for {@code multipart/form-data} the first file part (a part
-     * named {@code file} preferred), otherwise the raw request body.
+     * The uploaded file content as a stream: for {@code multipart/form-data} the first file part
+     * (a part named {@code file} preferred, streamed from Vert.x's on-disk upload), otherwise the
+     * raw request body.
      */
-    private static byte[] body(Exchange exchange) throws Exception {
+    private static InputStream body(Exchange exchange) throws Exception {
         String contentType = exchange.getMessage().getHeader(Exchange.CONTENT_TYPE, String.class);
         if (contentType != null
                 && contentType.toLowerCase(java.util.Locale.ROOT).startsWith("multipart/")) {
@@ -79,22 +83,21 @@ public final class FileImportProcessor implements Processor {
                 if (part == null) {
                     part = attachments.getAttachments().values().iterator().next();
                 }
-                try (InputStream in = part.getInputStream()) {
-                    return in.readAllBytes();
-                }
+                return part.getInputStream();
             }
         }
         Object body = exchange.getMessage().getBody();
-        if (body instanceof byte[] bytes) {
-            return bytes;
-        }
         if (body instanceof InputStream in) {
-            return in.readAllBytes();
+            return in;
+        }
+        if (body instanceof byte[] bytes) {
+            return new java.io.ByteArrayInputStream(bytes);
         }
         if (body instanceof String text) {
-            return text.getBytes(StandardCharsets.UTF_8);
+            return new java.io.ByteArrayInputStream(text.getBytes(StandardCharsets.UTF_8));
         }
-        return exchange.getMessage().getBody(byte[].class);
+        byte[] converted = exchange.getMessage().getBody(byte[].class);
+        return converted == null ? null : new java.io.ByteArrayInputStream(converted);
     }
 
     /** The shared 202 response: transfer id plus the status (and for exports file) URLs. */

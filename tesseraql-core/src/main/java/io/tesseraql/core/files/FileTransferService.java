@@ -47,8 +47,12 @@ public interface FileTransferService {
     record Download(String filename, String contentType, InputStream content) {
     }
 
-    /** Starts an asynchronous import of the uploaded content; returns the transfer id. */
-    String startImport(ImportRequest request, byte[] content);
+    /**
+     * Starts an asynchronous import of the uploaded content; returns the transfer id. The stream
+     * is consumed (spooled off-heap) before this returns, so arbitrarily large uploads never
+     * materialize in memory.
+     */
+    String startImport(ImportRequest request, java.io.InputStream content);
 
     /** Starts an asynchronous export; returns the transfer id. */
     String startExport(ExportRequest request);

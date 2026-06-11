@@ -18,7 +18,6 @@ import io.tesseraql.core.sql.Sql2WayParser;
 import io.tesseraql.core.sql.SqlNode;
 import io.tesseraql.core.sql.SqlRenderer;
 import io.tesseraql.operations.batch.JobRepository;
-import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.io.UncheckedIOException;
@@ -63,6 +62,7 @@ public final class JdbcFileTransferService implements FileTransferService {
 
     private static final Logger LOG = LoggerFactory.getLogger(JdbcFileTransferService.class);
     private static final TqlErrorCode TRANSFER_ERROR = new TqlErrorCode(TqlDomain.LD, 2810);
+    private static final TqlErrorCode EMPTY_UPLOAD = new TqlErrorCode(TqlDomain.LD, 2820);
     private static final int MAX_RECORDED_ERRORS = 100;
 
     private final JobRepository jobs;
@@ -95,13 +95,45 @@ public final class JdbcFileTransferService implements FileTransferService {
     }
 
     @Override
-    public String startImport(ImportRequest request, byte[] content) {
+    public String startImport(ImportRequest request, java.io.InputStream content) {
         FileCodec codec = codecs.require(request.format());
+        // The upload spools off-heap before the request returns: imports of any size cost only
+        // a copy buffer, and multipart parts (already on disk in Vert.x) move disk-to-disk.
+        SpoolRef upload = spool(content);
+        if (upload.bytes() == 0) {
+            tempStore.delete(upload);
+            throw new TqlException(EMPTY_UPLOAD,
+                    "file-import expects the uploaded file as the request body");
+        }
         String transferId = jobs.startExecution(request.routeId(), request.appName(), "import");
         insertTransfer(transferId, request.routeId(), request.appName(), "IMPORT",
                 request.format(), null, null, null, Map.of());
-        executor.submit(guarded(transferId, () -> runImport(transferId, request, codec, content)));
+        executor.submit(guarded(transferId, () -> {
+            try {
+                runImport(transferId, request, codec, upload);
+            } finally {
+                tempStore.delete(upload);
+            }
+        }));
         return transferId;
+    }
+
+    private SpoolRef spool(java.io.InputStream content) {
+        try (SpoolWriter writer = tempStore.createWriter(SpoolKind.BINARY); content) {
+            byte[] buffer = new byte[64 * 1024];
+            int read;
+            while ((read = content.read(buffer)) >= 0) {
+                if (read > 0) {
+                    byte[] chunk = new byte[read];
+                    System.arraycopy(buffer, 0, chunk, 0, read);
+                    writer.write(chunk);
+                }
+            }
+            writer.close();
+            return writer.toRef();
+        } catch (IOException ex) {
+            throw new UncheckedIOException(ex);
+        }
     }
 
     @Override
@@ -173,15 +205,16 @@ public final class JdbcFileTransferService implements FileTransferService {
     }
 
     private void runImport(String transferId, ImportRequest request, FileCodec codec,
-            byte[] content) {
+            SpoolRef upload) {
         List<SqlNode> rowSql = parse(request.rowSqlFile());
         List<RowError> errors = new ArrayList<>();
         long[] applied = {0};
-        try (Connection connection = dataSource.getConnection()) {
+        try (Connection connection = dataSource.getConnection();
+                java.io.InputStream content = tempStore.openInput(upload)) {
             boolean autoCommit = connection.getAutoCommit();
             connection.setAutoCommit(false);
             try {
-                codec.read(new ByteArrayInputStream(content), request.readSpec(),
+                codec.read(content, request.readSpec(),
                         (rowNumber, values) -> {
                             Savepoint savepoint = connection.setSavepoint();
                             try {

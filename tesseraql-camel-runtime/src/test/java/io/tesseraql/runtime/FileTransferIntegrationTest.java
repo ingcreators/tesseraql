@@ -202,6 +202,16 @@ class FileTransferIntegrationTest {
         assertThat(get("/api/orders/export/no-such-transfer/file").statusCode()).isEqualTo(404);
     }
 
+    @Test
+    void emptyUploadIsRejectedWith400() throws Exception {
+        HttpResponse<String> response = HTTP.send(HttpRequest.newBuilder(
+                        URI.create("http://localhost:" + runtime.port() + "/api/items/import"))
+                .header("Content-Type", "text/csv")
+                .POST(HttpRequest.BodyPublishers.noBody())
+                .build(), HttpResponse.BodyHandlers.ofString());
+        assertThat(response.statusCode()).isEqualTo(400);
+    }
+
     // --- helpers ---
 
     private static String startTransfer(String path, String body) throws Exception {
