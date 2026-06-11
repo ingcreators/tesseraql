@@ -102,6 +102,39 @@ class ExcelTransferIntegrationTest {
         }
     }
 
+    @Test
+    void placementModeExportLandsColumnsAtYamlDeclaredPositions() throws Exception {
+        // Reuses the imported people; runs after the round-trip test by method order is not
+        // guaranteed, so seed independently.
+        HTTP.send(HttpRequest.newBuilder(
+                        URI.create("http://localhost:" + runtime.port() + "/api/people/import"))
+                .POST(HttpRequest.BodyPublishers.ofByteArray(workbook()))
+                .build(), HttpResponse.BodyHandlers.ofString());
+        Thread.sleep(300);
+
+        HttpResponse<String> started = HTTP.send(HttpRequest.newBuilder(
+                        URI.create("http://localhost:" + runtime.port() + "/api/people/report"))
+                .POST(HttpRequest.BodyPublishers.noBody())
+                .build(), HttpResponse.BodyHandlers.ofString());
+        String transferId = MAPPER.readTree(started.body()).get("transferId").asText();
+        assertThat(awaitTerminal("/api/people/report/" + transferId).get("status").asText())
+                .isEqualTo("COMPLETED");
+
+        HttpResponse<byte[]> file = HTTP.send(HttpRequest.newBuilder(
+                        URI.create("http://localhost:" + runtime.port()
+                                + "/api/people/report/" + transferId + "/file")).build(),
+                HttpResponse.BodyHandlers.ofByteArray());
+        try (XSSFWorkbook exported = new XSSFWorkbook(new ByteArrayInputStream(file.body()))) {
+            Sheet sheet = exported.getSheetAt(0);
+            // The template's frame survives; data landed at the YAML-declared B3/D3.
+            assertThat(sheet.getRow(0).getCell(1).getStringCellValue())
+                    .isEqualTo("People Report");
+            assertThat(sheet.getRow(2).getCell(1).getStringCellValue()).isEqualTo("Anne");
+            assertThat(sheet.getRow(2).getCell(3).getNumericCellValue()).isEqualTo(34.0);
+            assertThat(sheet.getRow(3).getCell(1).getStringCellValue()).isEqualTo("Ben");
+        }
+    }
+
     private static byte[] workbook() throws IOException {
         try (XSSFWorkbook workbook = new XSSFWorkbook();
                 ByteArrayOutputStream out = new ByteArrayOutputStream()) {
@@ -205,6 +238,39 @@ class ExcelTransferIntegrationTest {
                 """);
         Files.writeString(exportRoute.resolve("select-people.sql"),
                 "select full_name, age from people order by full_name\n;\n");
+
+        // Placement mode: the YAML declares where each query column lands in the styled
+        // template, so the file-to-SQL correspondence stays reviewable in the route definition.
+        Path reportRoute = home.resolve("web/api/people/report");
+        Files.createDirectories(reportRoute);
+        Files.writeString(reportRoute.resolve("post.yml"), """
+                version: tesseraql/v1
+                id: people.report
+                kind: route
+                recipe: file-export
+                export:
+                  format: excel
+                  filename: people-report.xlsx
+                  template: report-frame.xlsx
+                  startCell: B3
+                  columns:
+                    - { name: full_name, column: B }
+                    - { name: age,       column: D }
+                  sql:
+                    file: select-people.sql
+                """);
+        Files.writeString(reportRoute.resolve("select-people.sql"),
+                "select full_name, age from people order by full_name\n;\n");
+        try (XSSFWorkbook frame = new XSSFWorkbook();
+                java.io.OutputStream out = Files.newOutputStream(
+                        reportRoute.resolve("report-frame.xlsx"))) {
+            Sheet sheet = frame.createSheet("report");
+            sheet.createRow(0).createCell(1).setCellValue("People Report");
+            Row header = sheet.createRow(1);
+            header.createCell(1).setCellValue("Name");
+            header.createCell(3).setCellValue("Age");
+            frame.write(out);
+        }
         return home;
     }
 

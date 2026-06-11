@@ -1,5 +1,6 @@
 package io.tesseraql.operations.files;
 
+import io.tesseraql.core.files.ColumnMapping;
 import io.tesseraql.core.files.FileCodec;
 import io.tesseraql.core.files.FileReadSpec;
 import io.tesseraql.core.files.FileWriteSpec;
@@ -21,10 +22,11 @@ import org.apache.commons.csv.CSVPrinter;
 import org.apache.commons.csv.CSVRecord;
 
 /**
- * The built-in CSV codec (design ch. 28), RFC 4180 via Apache Commons CSV: UTF-8, quoted fields,
- * header row on both sides by default. On read the declared columns name the values (positional
- * without a header row, matched by header otherwise, the header names themselves when no columns
- * are declared); on write the declared columns order the output (the row's own order otherwise).
+ * The built-in CSV codec (design ch. 28), RFC 4180 via Apache Commons CSV: UTF-8, quoted fields.
+ * On read the declared columns resolve to positions through the header row (matching each
+ * column's header label) or their declared order, with explicit {@code column:} positions taking
+ * precedence; {@code startRow} skips leading non-table rows. On write the declared columns
+ * select, order and label the output (the row's own keys otherwise).
  */
 public final class CsvFileCodec implements FileCodec {
 
@@ -45,35 +47,37 @@ public final class CsvFileCodec implements FileCodec {
 
     @Override
     public void read(InputStream in, FileReadSpec spec, RowHandler handler) throws Exception {
-        CSVFormat format = spec.headerRow()
-                ? CSVFormat.RFC4180.builder().setHeader().setSkipHeaderRecord(true).build()
-                : CSVFormat.RFC4180;
         try (CSVParser parser = CSVParser.parse(
-                new InputStreamReader(in, StandardCharsets.UTF_8), format)) {
+                new InputStreamReader(in, StandardCharsets.UTF_8), CSVFormat.RFC4180)) {
+            Iterator<CSVRecord> records = parser.iterator();
+            for (int skip = 1; skip < spec.startRow() && records.hasNext(); skip++) {
+                records.next();
+            }
+            List<String> header = null;
+            if (spec.headerRow() && records.hasNext()) {
+                header = new ArrayList<>();
+                for (String cell : records.next()) {
+                    header.add(cell);
+                }
+            }
+            List<ColumnMapping> columns = spec.columns().isEmpty() && header != null
+                    ? header.stream().map(ColumnMapping::of).toList()
+                    : spec.columns();
+            int[] positions = io.tesseraql.core.files.Tables.positions(columns, header);
             long rowNumber = 0;
-            for (CSVRecord record : parser) {
+            while (records.hasNext()) {
+                CSVRecord record = records.next();
                 rowNumber++;
-                handler.row(rowNumber, values(record, spec, parser));
+                Map<String, Object> values = new LinkedHashMap<>();
+                for (int i = 0; i < columns.size(); i++) {
+                    int position = positions[i];
+                    values.put(columns.get(i).name(),
+                            position >= 0 && position < record.size()
+                                    ? record.get(position) : null);
+                }
+                handler.row(rowNumber, values);
             }
         }
-    }
-
-    private static Map<String, Object> values(CSVRecord record, FileReadSpec spec,
-            CSVParser parser) {
-        Map<String, Object> values = new LinkedHashMap<>();
-        if (!spec.columns().isEmpty()) {
-            for (int i = 0; i < spec.columns().size(); i++) {
-                String column = spec.columns().get(i);
-                values.put(column, spec.headerRow()
-                        ? (record.isMapped(column) ? record.get(column) : null)
-                        : (i < record.size() ? record.get(i) : null));
-            }
-        } else {
-            for (String header : parser.getHeaderNames()) {
-                values.put(header, record.get(header));
-            }
-        }
-        return values;
     }
 
     @Override
@@ -81,18 +85,18 @@ public final class CsvFileCodec implements FileCodec {
             throws IOException {
         CSVPrinter printer = new CSVPrinter(
                 new OutputStreamWriter(out, StandardCharsets.UTF_8), CSVFormat.RFC4180);
-        List<String> columns = new ArrayList<>(spec.columns());
+        List<ColumnMapping> columns = new ArrayList<>(spec.columns());
         while (rows.hasNext()) {
             Map<String, Object> row = rows.next();
             if (columns.isEmpty()) {
-                columns.addAll(row.keySet());
+                row.keySet().forEach(key -> columns.add(ColumnMapping.of(key)));
             }
             if (printer.getRecordCount() == 0) {
-                printer.printRecord(columns);
+                printer.printRecord(columns.stream().map(ColumnMapping::effectiveHeader).toList());
             }
             List<Object> cells = new ArrayList<>(columns.size());
-            for (String column : columns) {
-                cells.add(row.get(column));
+            for (ColumnMapping column : columns) {
+                cells.add(row.get(column.name()));
             }
             printer.printRecord(cells);
         }

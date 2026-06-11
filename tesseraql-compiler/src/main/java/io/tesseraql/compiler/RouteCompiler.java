@@ -193,9 +193,7 @@ public final class RouteCompiler {
         applySecurity(route, definition.security());
         route.process(new io.tesseraql.compiler.binding.FileImportProcessor(
                 routeId, routeFile.urlPath(), appName, spec.format(),
-                new io.tesseraql.core.files.FileReadSpec(
-                        spec.columns(), spec.effectiveHeaderRow(), spec.sheet()),
-                rowSql, spec.effectiveOnError()));
+                spec.toReadSpec(), rowSql, spec.effectiveOnError()));
         mountTransferStatus(builder, routeFile, routeId);
     }
 
@@ -226,8 +224,7 @@ public final class RouteCompiler {
         route.process(new RequestBinder(definition, pathParams(routeFile.urlPath())))
                 .process(new io.tesseraql.compiler.binding.FileExportStartProcessor(
                         routeId, routeFile.urlPath(), appName, spec.format(),
-                        new io.tesseraql.core.files.FileWriteSpec(
-                                spec.columns(), spec.sheet(), template),
+                        spec.toWriteSpec(template),
                         spec.filename(), querySql, afterTiming, afterSql));
         mountTransferStatus(builder, routeFile, routeId);
 

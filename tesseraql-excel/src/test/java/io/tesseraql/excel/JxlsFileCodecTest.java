@@ -2,6 +2,8 @@ package io.tesseraql.excel;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import io.tesseraql.core.files.CellRef;
+import io.tesseraql.core.files.ColumnMapping;
 import io.tesseraql.core.files.FileReadSpec;
 import io.tesseraql.core.files.FileWriteSpec;
 import java.io.ByteArrayInputStream;
@@ -13,6 +15,8 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import org.apache.poi.ss.usermodel.BorderStyle;
+import org.apache.poi.ss.usermodel.CellStyle;
 import org.apache.poi.ss.usermodel.ClientAnchor;
 import org.apache.poi.ss.usermodel.Comment;
 import org.apache.poi.ss.usermodel.CreationHelper;
@@ -46,11 +50,11 @@ class JxlsFileCodecTest {
     @Test
     void gridWriteAndReadRoundTrip() throws Exception {
         ByteArrayOutputStream out = new ByteArrayOutputStream();
-        codec.write(out, new FileWriteSpec(List.of(), "items", null), rows().iterator());
+        codec.write(out, new FileWriteSpec(List.of(), "items", null, null), rows().iterator());
 
         List<Map<String, Object>> read = new ArrayList<>();
         codec.read(new ByteArrayInputStream(out.toByteArray()),
-                new FileReadSpec(List.of(), true, "items"),
+                new FileReadSpec(List.of(), true, "items", 1),
                 (rowNumber, values) -> read.add(values));
 
         assertThat(read).hasSize(2);
@@ -59,26 +63,52 @@ class JxlsFileCodecTest {
     }
 
     @Test
-    void declaredColumnsMapPositionallyWithoutAHeaderRow() throws Exception {
-        ByteArrayOutputStream out = new ByteArrayOutputStream();
-        codec.write(out, new FileWriteSpec(List.of(), null, null), rows().iterator());
+    void headerLabelsAndExplicitPositionsResolveColumns() throws Exception {
+        // A workbook whose table starts at row 3, with localized headers.
+        byte[] workbook = workbookWithTitleRows();
 
-        // Read the same file but treat every row as data, naming cells positionally.
         List<Map<String, Object>> read = new ArrayList<>();
-        codec.read(new ByteArrayInputStream(out.toByteArray()),
-                new FileReadSpec(List.of("col1", "col2"), false, null),
+        codec.read(new ByteArrayInputStream(workbook),
+                new FileReadSpec(List.of(
+                        new ColumnMapping("productName", "商品名", null),
+                        new ColumnMapping("qty", null, ColumnMapping.parseColumn("C"))),
+                        true, null, 3),
                 (rowNumber, values) -> read.add(values));
 
-        assertThat(read).hasSize(3);
-        assertThat(read.get(0).get("col1")).isEqualTo("name");
-        assertThat(read.get(1).get("col1")).isEqualTo("alpha");
+        assertThat(read).hasSize(2);
+        assertThat(read.get(0).get("productName")).isEqualTo("alpha");
+        assertThat(read.get(0).get("qty")).isEqualTo("1");
+        assertThat(read.get(1).get("productName")).isEqualTo("beta");
+    }
+
+    @Test
+    void placementModeWritesAtDeclaredPositionsWithTemplateStyles() throws Exception {
+        Path template = writePlacementTemplate();
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        codec.write(out, new FileWriteSpec(List.of(
+                        new ColumnMapping("name", null, ColumnMapping.parseColumn("B")),
+                        new ColumnMapping("qty", null, ColumnMapping.parseColumn("D"))),
+                        null, template, CellRef.parse("B5")), rows().iterator());
+
+        try (XSSFWorkbook workbook = new XSSFWorkbook(new ByteArrayInputStream(out.toByteArray()))) {
+            Sheet sheet = workbook.getSheetAt(0);
+            // The template's title block above the data area is untouched.
+            assertThat(sheet.getRow(0).getCell(1).getStringCellValue()).isEqualTo("Order Report");
+            // Data landed at B5/D5 and B6/D6.
+            assertThat(sheet.getRow(4).getCell(1).getStringCellValue()).isEqualTo("alpha");
+            assertThat(sheet.getRow(4).getCell(3).getNumericCellValue()).isEqualTo(1.0);
+            assertThat(sheet.getRow(5).getCell(1).getStringCellValue()).isEqualTo("beta");
+            // The startCell row's template style (border) was applied to every data row.
+            assertThat(sheet.getRow(5).getCell(1).getCellStyle().getBorderBottom())
+                    .isEqualTo(BorderStyle.THIN);
+        }
     }
 
     @Test
     void jxlsTemplateRendersReportStyleOutput() throws Exception {
-        Path template = writeTemplate();
+        Path template = writeJxlsTemplate();
         ByteArrayOutputStream out = new ByteArrayOutputStream();
-        codec.write(out, new FileWriteSpec(List.of(), null, template), rows().iterator());
+        codec.write(out, new FileWriteSpec(List.of(), null, template, null), rows().iterator());
 
         try (XSSFWorkbook workbook = new XSSFWorkbook(new ByteArrayInputStream(out.toByteArray()))) {
             Sheet sheet = workbook.getSheetAt(0);
@@ -89,8 +119,51 @@ class JxlsFileCodecTest {
         }
     }
 
+    /** Two title rows, a localized header row at row 3, then two data rows. */
+    private static byte[] workbookWithTitleRows() throws Exception {
+        try (XSSFWorkbook workbook = new XSSFWorkbook();
+                ByteArrayOutputStream out = new ByteArrayOutputStream()) {
+            Sheet sheet = workbook.createSheet("受注");
+            sheet.createRow(0).createCell(0).setCellValue("受注一覧");
+            sheet.createRow(1).createCell(0).setCellValue("2026-06");
+            Row header = sheet.createRow(2);
+            header.createCell(0).setCellValue("商品名");
+            header.createCell(1).setCellValue("備考");
+            header.createCell(2).setCellValue("数量");
+            Row first = sheet.createRow(3);
+            first.createCell(0).setCellValue("alpha");
+            first.createCell(2).setCellValue(1);
+            Row second = sheet.createRow(4);
+            second.createCell(0).setCellValue("beta");
+            second.createCell(2).setCellValue(2);
+            workbook.write(out);
+            return out.toByteArray();
+        }
+    }
+
+    /** A styled placement template: title block, headers, and a bordered prototype row at B5. */
+    private Path writePlacementTemplate() throws Exception {
+        Path template = dir.resolve("orders.xlsx");
+        try (XSSFWorkbook workbook = new XSSFWorkbook()) {
+            Sheet sheet = workbook.createSheet("orders");
+            sheet.createRow(0).createCell(1).setCellValue("Order Report");
+            Row header = sheet.createRow(3);
+            header.createCell(1).setCellValue("Name");
+            header.createCell(3).setCellValue("Qty");
+            CellStyle bordered = workbook.createCellStyle();
+            bordered.setBorderBottom(BorderStyle.THIN);
+            Row prototype = sheet.createRow(4);
+            prototype.createCell(1).setCellStyle(bordered);
+            prototype.createCell(3).setCellStyle(bordered);
+            try (OutputStream out = Files.newOutputStream(template)) {
+                workbook.write(out);
+            }
+        }
+        return template;
+    }
+
     /** A minimal jxls template: a title row plus a jx:each region over {@code rows}. */
-    private Path writeTemplate() throws Exception {
+    private Path writeJxlsTemplate() throws Exception {
         Path template = dir.resolve("report.xlsx");
         try (XSSFWorkbook workbook = new XSSFWorkbook()) {
             Sheet sheet = workbook.createSheet("report");
