@@ -9,6 +9,9 @@ security:
 
 sql:
   service: ops.traces
+  params:
+    # Narrows visibility to the caller's ops.app.<name> grants (deny by default).
+    permissions: principal.permissions
 
 response:
   html:

@@ -89,9 +89,13 @@ public final class JobExecutor {
         context.put("step", stepResults);
         context.put("tenant", tenant);
 
+        // The app attribute drives the ops console's per-app trace scope (design ch. 26.11).
         io.tesseraql.core.telemetry.Span jobSpan = tracer.start("tesseraql.job")
                 .attribute("jobId", job.id())
                 .attribute("trigger", triggerType);
+        if (appName != null) {
+            jobSpan.attribute("app", appName);
+        }
         if (tenant != null) {
             jobSpan.attribute("tenant", tenant.id());
         }

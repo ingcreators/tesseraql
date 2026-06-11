@@ -358,7 +358,7 @@ public final class RouteCompiler {
     /** Inserts the route telemetry step (span + invocation counter) at the route head (ch. 25). */
     private void applyTelemetry(ProcessorDefinition<?> route, RouteFile routeFile) {
         route.process(new io.tesseraql.compiler.binding.RouteTelemetry(
-                routeFile.definition().id(), routeFile.httpMethod(), routeFile.urlPath()));
+                routeFile.definition().id(), routeFile.httpMethod(), routeFile.urlPath(), appName));
     }
 
     /**

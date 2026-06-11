@@ -57,6 +57,9 @@ is a per-host canary.
    -Dtesseraql.adminPasswordFile=... -Dtesseraql.adminRoles=ADMIN
    -Dtesseraql.adminPermissions=ops.app.*` seeds the first administrator. There are no default
    credentials; the role names must match the app's `tesseraql.security.policies`.
+   `ops.app.<name>` permissions scope what an operator sees in the ops console and the
+   `/_tesseraql/ops` API: batch jobs, executions, and traces are attributed to their owning app
+   and hidden outside the caller's grants (deny by default); `ops.app.*` grants everything.
 3. `kamal setup` / `kamal deploy`.
 
 Kamal swaps containers with old and new briefly overlapping, so migrations must stay

@@ -326,8 +326,11 @@ public final class TesseraqlRuntime implements AutoCloseable {
                 }
             }
             context.addRoutes(new AssetsRouteBuilder(appHome.resolve("assets"), appAssets));
+            // The ops API needs each job's owning app so per-app scope can gate listing and runs.
+            Map<String, String> ownedJobs = new LinkedHashMap<>();
+            jobs.keySet().forEach(id -> ownedJobs.put(id, jobOwners.getOrDefault(id, appName)));
             context.addRoutes(new OperationsRouteBuilder(
-                    jobRunner, jobRepository, List.copyOf(jobs.keySet()), opsDashboard));
+                    jobRunner, jobRepository, ownedJobs, opsDashboard));
             // Service providers expose non-SQL runtime state to mounted yaml/template apps
             // (the bundled ops-console and studio apps render these, design ch. 26.11, 16, 47).
             io.tesseraql.opsui.OpsDashboard dashboardRef = opsDashboard;
@@ -340,7 +343,9 @@ public final class TesseraqlRuntime implements AutoCloseable {
                                             io.tesseraql.opsui.OpsScope.allowedApps(
                                                     params.get("permissions")))))
                             .register("ops.traces", params ->
-                                    io.tesseraql.opsui.OpsViews.traces(dashboardRef.traceTree()))
+                                    io.tesseraql.opsui.OpsViews.traces(dashboardRef.traceTree(
+                                            io.tesseraql.opsui.OpsScope.allowedApps(
+                                                    params.get("permissions")))))
                             .register("ops.transfers", params -> {
                                 java.util.function.Predicate<String> scope =
                                         io.tesseraql.opsui.OpsScope.allowedApps(

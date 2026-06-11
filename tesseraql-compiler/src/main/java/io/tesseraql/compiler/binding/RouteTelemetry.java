@@ -21,11 +21,13 @@ public final class RouteTelemetry implements Processor {
     private final String routeId;
     private final String method;
     private final String path;
+    private final String appName;
 
-    public RouteTelemetry(String routeId, String method, String path) {
+    public RouteTelemetry(String routeId, String method, String path, String appName) {
         this.routeId = routeId;
         this.method = method;
         this.path = path;
+        this.appName = appName;
     }
 
     @Override
@@ -33,10 +35,14 @@ public final class RouteTelemetry implements Processor {
         meter(exchange).counter("tesseraql.route.invocations")
                 .increment(Map.of("routeId", routeId, "method", method));
 
+        // The app attribute drives the ops console's per-app trace scope (design ch. 26.11).
         Span span = tracer(exchange).start("tesseraql.route")
                 .attribute("routeId", routeId)
                 .attribute("method", method)
                 .attribute("path", path);
+        if (appName != null) {
+            span.attribute("app", appName);
+        }
         exchange.setProperty(TesseraqlProperties.ROUTE_SPAN, span);
         io.tesseraql.core.telemetry.SpanContext spanContext = span.context();
         if (spanContext != null) {

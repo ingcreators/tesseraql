@@ -175,6 +175,37 @@ class BatchJobIntegrationTest {
     }
 
     @Test
+    void operationsApiDeniesDataOutsideTheCallersAppScope() throws Exception {
+        // Seed at least one execution and trace owned by user-admin.
+        send("POST", "/_tesseraql/ops/batch/jobs/user.dailyMaintenance/run",
+                token(List.of("BATCH_OPERATOR")), "{}");
+
+        // A grant for a different app sees nothing: deny by default (design ch. 26.11).
+        String scoped = token(List.of("BATCH_OPERATOR"), List.of("ops.app.other-app"));
+        assertThat(MAPPER.readTree(
+                send("GET", "/_tesseraql/ops/batch/jobs", scoped, null).body())).isEmpty();
+        assertThat(MAPPER.readTree(
+                send("GET", "/_tesseraql/ops/batch/executions", scoped, null).body())).isEmpty();
+        assertThat(MAPPER.readTree(
+                send("GET", "/_tesseraql/ops/traces/tree", scoped, null).body())).isEmpty();
+        // Running a job outside the scope is indistinguishable from an unknown job.
+        JsonNode denied = MAPPER.readTree(send("POST",
+                "/_tesseraql/ops/batch/jobs/user.dailyMaintenance/run", scoped, "{}").body());
+        assertThat(denied.path("error").path("code").asText()).isEqualTo("TQL-BATCH-4040");
+
+        // The matching per-app grant restores visibility, and executions carry their app.
+        String granted = token(List.of("BATCH_OPERATOR"), List.of("ops.app.user-admin"));
+        JsonNode executions = MAPPER.readTree(
+                send("GET", "/_tesseraql/ops/batch/executions", granted, null).body());
+        assertThat(executions).isNotEmpty();
+        assertThat(executions.get(0).path("app").asText()).isEqualTo("user-admin");
+        JsonNode tree = MAPPER.readTree(
+                send("GET", "/_tesseraql/ops/traces/tree", granted, null).body());
+        assertThat(tree).anySatisfy(root -> assertThat(
+                root.get("span").get("attributes").path("app").asText()).isEqualTo("user-admin"));
+    }
+
+    @Test
     void operationsApiRequiresAuthentication() throws Exception {
         HttpResponse<String> response = send("GET", "/_tesseraql/ops/batch/executions", null, null);
         assertThat(response.statusCode()).isEqualTo(401);
@@ -204,11 +235,16 @@ class BatchJobIntegrationTest {
         return HttpClient.newHttpClient().send(request.build(), HttpResponse.BodyHandlers.ofString());
     }
 
+    /** An operator token with full per-app visibility ({@code ops.app.*}). */
     private static String token(List<String> roles) throws Exception {
+        return token(roles, List.of("ops.app.*"));
+    }
+
+    private static String token(List<String> roles, List<String> permissions) throws Exception {
         Base64.Encoder enc = Base64.getUrlEncoder().withoutPadding();
         String header = enc.encodeToString("{\"alg\":\"HS256\"}".getBytes(StandardCharsets.UTF_8));
         String payload = enc.encodeToString(MAPPER.writeValueAsBytes(
-                Map.of("sub", "ops", "roles", roles)));
+                Map.of("sub", "ops", "roles", roles, "permissions", permissions)));
         Mac mac = Mac.getInstance("HmacSHA256");
         mac.init(new SecretKeySpec(
                 "dev-only-secret-change-me-in-production".getBytes(StandardCharsets.UTF_8), "HmacSHA256"));

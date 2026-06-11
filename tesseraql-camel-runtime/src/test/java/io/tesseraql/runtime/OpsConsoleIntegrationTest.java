@@ -119,7 +119,8 @@ class OpsConsoleIntegrationTest {
         assertThat(response.headers().firstValue("content-type"))
                 .hasValueSatisfying(value -> assertThat(value).contains("text/html"));
         assertThat(response.body()).startsWith("<!DOCTYPE html>");
-        assertThat(response.body()).contains("Traces");
+        // No ops.app.* grant on this caller: deny-by-default leaves the trace table empty.
+        assertThat(response.body()).contains("Traces").contains("No traces retained");
     }
 
     @Test

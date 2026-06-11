@@ -125,6 +125,9 @@ public final class OpsViews {
     private static void flatten(TraceNode node, int depth, List<Map<String, Object>> into) {
         Map<String, Object> row = new LinkedHashMap<>();
         row.put("name", node.span().name());
+        // App attribution is shown on the trace root; child spans inherit it visually.
+        Object app = node.span().attributes().get("app");
+        row.put("app", depth == 0 && app != null ? String.valueOf(app) : "");
         row.put("indentPx", depth * 18);
         row.put("totalMs", node.durationMs());
         row.put("selfMs", node.selfMs());

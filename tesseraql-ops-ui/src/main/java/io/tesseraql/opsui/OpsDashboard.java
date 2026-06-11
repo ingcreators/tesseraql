@@ -64,9 +64,9 @@ public final class OpsDashboard {
     }
 
     /**
-     * Builds the overview with the batch executions narrowed to the apps the caller may operate
-     * (design ch. 26.11 {@code ops.app.<name>} scope); runtime-wide diagnostics (lanes, slow SQL,
-     * traces, pinning) stay unfiltered behind the entry permission.
+     * Builds the overview with the batch executions and traces narrowed to the apps the caller may
+     * operate (design ch. 26.11 {@code ops.app.<name>} scope); runtime-wide diagnostics (lanes,
+     * slow SQL, pinning, aggregate trace metrics) stay unfiltered behind the entry permission.
      */
     public Overview overview(int recentLimit, java.util.function.Predicate<String> appFilter) {
         List<JobExecution> executions = jobs.listExecutions(SCAN_LIMIT).stream()
@@ -82,7 +82,7 @@ public final class OpsDashboard {
                 .toList();
         List<Alert> alerts = alerts();
         return new Overview(new BatchSummary(executions.size(), byStatus, recent),
-                laneStatuses(lanes), slowSql.recent(), traces.recentSpans(), traceMetrics(),
+                laneStatuses(lanes), slowSql.recent(), traces(appFilter), traceMetrics(),
                 pinning(), !alerts.isEmpty(), alerts);
     }
 
@@ -186,10 +186,32 @@ public final class OpsDashboard {
     }
 
     /**
+     * The recent spans narrowed to the caller's app scope (design ch. 26.11): a span is visible
+     * when the root of its retained trace carries an {@code app} attribute the filter accepts.
+     * Spans without app attribution (framework-internal work, or traces whose attributed root has
+     * been evicted from the ring) are visible only to callers the filter lets see everything
+     * ({@code ops.app.*}).
+     */
+    public List<SpanSample> traces(java.util.function.Predicate<String> appFilter) {
+        java.util.Set<String> visible = new java.util.HashSet<>();
+        for (TraceNode root : traceTree(appFilter)) {
+            visible.add(root.span().traceId());
+        }
+        return traces.recentSpans().stream()
+                .filter(span -> visible.contains(span.traceId()))
+                .toList();
+    }
+
+    /**
      * The recent spans assembled into trace trees by parent/child span ids (design ch. 26.11), with
      * root spans (no parent, or whose parent is no longer retained) at the top.
      */
     public List<TraceNode> traceTree() {
+        return traceTree(app -> true);
+    }
+
+    /** The trace trees whose root span's {@code app} attribute passes the caller's scope. */
+    public List<TraceNode> traceTree(java.util.function.Predicate<String> appFilter) {
         List<SpanSample> spans = traces.recentSpans();
         Map<String, java.util.List<SpanSample>> childrenByParent = new LinkedHashMap<>();
         java.util.Set<String> ids = new java.util.HashSet<>();
@@ -204,11 +226,18 @@ public final class OpsDashboard {
         }
         List<TraceNode> roots = new java.util.ArrayList<>();
         for (SpanSample span : spans) {
-            if (span.parentSpanId() == null || !ids.contains(span.parentSpanId())) {
+            if ((span.parentSpanId() == null || !ids.contains(span.parentSpanId()))
+                    && appFilter.test(app(span))) {
                 roots.add(buildNode(span, childrenByParent));
             }
         }
         return roots;
+    }
+
+    /** The root span's app attribution, or null for framework-internal (unattributed) spans. */
+    private static String app(SpanSample span) {
+        Object app = span.attributes().get("app");
+        return app == null ? null : String.valueOf(app);
     }
 
     private TraceNode buildNode(SpanSample span, Map<String, List<SpanSample>> childrenByParent) {
@@ -233,8 +262,14 @@ public final class OpsDashboard {
      * threshold; any other value returns all traces.
      */
     public List<TraceSummary> traceSummaries(String filter) {
+        return traceSummaries(filter, app -> true);
+    }
+
+    /** Per-trace summaries narrowed to the caller's app scope (design ch. 26.11). */
+    public List<TraceSummary> traceSummaries(String filter,
+            java.util.function.Predicate<String> appFilter) {
         List<TraceSummary> summaries = new java.util.ArrayList<>();
-        for (TraceNode root : traceTree()) {
+        for (TraceNode root : traceTree(appFilter)) {
             List<TraceNode> all = flatten(root, new java.util.ArrayList<>());
             TraceNode slowest = all.stream()
                     .max(java.util.Comparator.comparingLong(TraceNode::durationMs))

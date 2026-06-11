@@ -61,7 +61,7 @@ class OpsViewsTest {
     @Test
     void tracesFlattenTreeWithIndents() {
         SpanSample rootSpan = new SpanSample("tesseraql.route", "t1", "s1", null,
-                Map.of(), 120, false, 0);
+                Map.of("app", "user-admin"), 120, false, 0);
         SpanSample childSpan = new SpanSample("tesseraql.sql.execute", "t1", "s2", "s1",
                 Map.of(), 90, true, 0);
         TraceNode child = new TraceNode(childSpan, 90, 90, "1970-01-01T00:00:00Z", true, List.of());
@@ -75,8 +75,11 @@ class OpsViewsTest {
         List<Map<String, Object>> spans = (List<Map<String, Object>>) model.get("spans");
         assertThat(spans).hasSize(2);
         assertThat(spans.get(0)).containsEntry("name", "tesseraql.route")
+                .containsEntry("app", "user-admin")
                 .containsEntry("indentPx", 0).containsEntry("selfMs", 30L);
+        // Child rows leave the app blank; the trace root carries the attribution.
         assertThat(spans.get(1)).containsEntry("name", "tesseraql.sql.execute")
+                .containsEntry("app", "")
                 .containsEntry("indentPx", 18).containsEntry("error", true)
                 .containsEntry("slow", true);
     }

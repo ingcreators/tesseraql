@@ -116,6 +116,36 @@ class OpsDashboardTest {
     }
 
     @Test
+    void traceViewsNarrowToTheRootSpansAppAttribution() {
+        RingTracer tracer = new RingTracer(10);
+        // One trace attributed to each app, plus an unattributed (framework-internal) trace.
+        Span ordersRoot = tracer.start("tesseraql.route").attribute("app", "orders");
+        tracer.start("tesseraql.sql.execute", ordersRoot.context()).end();
+        ordersRoot.end();
+        Span billingRoot = tracer.start("tesseraql.job").attribute("app", "billing");
+        tracer.start("tesseraql.job.step", billingRoot.context()).end();
+        billingRoot.end();
+        tracer.start("tesseraql.outbox.dispatch").end();
+
+        OpsDashboard dashboard = new OpsDashboard(null, null, null, tracer, 200L);
+
+        // A per-app grant sees only its own traces; unattributed spans stay hidden.
+        java.util.function.Predicate<String> ordersOnly = "orders"::equals;
+        assertThat(dashboard.traceTree(ordersOnly)).singleElement().satisfies(root ->
+                assertThat(root.span().attributes()).containsEntry("app", "orders"));
+        assertThat(dashboard.traces(ordersOnly))
+                .hasSize(2)
+                .allSatisfy(span -> assertThat(span.traceId())
+                        .isEqualTo(ordersRoot.context().traceId()));
+        assertThat(dashboard.traceSummaries(null, ordersOnly)).singleElement()
+                .satisfies(summary -> assertThat(summary.rootSpan()).isEqualTo("tesseraql.route"));
+
+        // The wildcard scope (ops.app.*) sees everything, including unattributed traces.
+        assertThat(dashboard.traceTree(app -> true)).hasSize(3);
+        assertThat(dashboard.traces(app -> true)).hasSize(5);
+    }
+
+    @Test
     void traceMetricsReportRetentionAndErrorRate() {
         RingTracer tracer = new RingTracer(50);
         // Four traces, one of which has an error span: 1/4 traces = 25% error rate.
