@@ -41,3 +41,7 @@ response:
         count: sql.rowCount
         limit: params.limit
         offset: params.offset
+    fields:
+      created_at:
+        classification: internal
+        mask: fixed

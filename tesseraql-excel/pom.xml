@@ -1,0 +1,59 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <parent>
+    <groupId>io.tesseraql</groupId>
+    <artifactId>tesseraql-parent</artifactId>
+    <version>0.1.0-SNAPSHOT</version>
+    <relativePath>../pom.xml</relativePath>
+  </parent>
+
+  <artifactId>tesseraql-excel</artifactId>
+  <name>Tesseraql Excel</name>
+  <description>Optional Excel (xlsx) codec for file-import/file-export: jxls template reports
+    on export, POI row reading on import. Putting this jar on the classpath is the whole
+    install (ServiceLoader, design ch. 28, 47).</description>
+
+  <dependencies>
+    <dependency>
+      <groupId>io.tesseraql</groupId>
+      <artifactId>tesseraql-core</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.jxls</groupId>
+      <artifactId>jxls</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.jxls</groupId>
+      <artifactId>jxls-poi</artifactId>
+    </dependency>
+    <!-- Streaming xlsx I/O for imports and plain grid exports (placement/reports stay POI). -->
+    <dependency>
+      <groupId>org.dhatim</groupId>
+      <artifactId>fastexcel</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.dhatim</groupId>
+      <artifactId>fastexcel-reader</artifactId>
+    </dependency>
+    <!-- jxls's JEXL evaluator logs through commons-logging; route it into slf4j. -->
+    <dependency>
+      <groupId>org.slf4j</groupId>
+      <artifactId>jcl-over-slf4j</artifactId>
+    </dependency>
+
+    <dependency>
+      <groupId>org.junit.jupiter</groupId>
+      <artifactId>junit-jupiter</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.assertj</groupId>
+      <artifactId>assertj-core</artifactId>
+      <scope>test</scope>
+    </dependency>
+  </dependencies>
+</project>

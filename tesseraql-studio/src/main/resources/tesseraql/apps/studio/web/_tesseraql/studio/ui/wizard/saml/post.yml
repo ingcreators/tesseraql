@@ -1,0 +1,56 @@
+version: tesseraql/v1
+id: tql.studio.wizard.saml.generate
+kind: route
+recipe: page
+
+input:
+  spAudience:
+    type: string
+    required: true
+  acsUrl:
+    type: string
+    required: true
+  ssoUrl:
+    type: string
+    required: true
+  sloUrl:
+    type: string
+    required: false
+  idpMetadataPath:
+    type: string
+    required: false
+  publicKeyPath:
+    type: string
+    required: false
+  loginIdAttribute:
+    type: string
+    required: true
+  emailAttribute:
+    type: string
+    required: false
+  nameIdFormat:
+    type: string
+    required: false
+  provision:
+    type: string
+    default: "false"
+
+security:
+  auth: bearer
+
+response:
+  file:
+    template: wizard-saml.yml.tpl
+    contentType: text/yaml
+    filename: tesseraql-saml.yml
+    model:
+      spAudience: params.spAudience
+      acsUrl: params.acsUrl
+      ssoUrl: params.ssoUrl
+      sloUrl: params.sloUrl
+      idpMetadataPath: params.idpMetadataPath
+      publicKeyPath: params.publicKeyPath
+      loginIdAttribute: params.loginIdAttribute
+      emailAttribute: params.emailAttribute
+      nameIdFormat: params.nameIdFormat
+      provision: params.provision

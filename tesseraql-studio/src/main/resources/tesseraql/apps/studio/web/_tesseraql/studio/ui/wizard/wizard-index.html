@@ -1,0 +1,16 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{tql/shell :: page('Setup wizards', ~{:: #page-header}, ~{:: #page-content})}">
+<th:block id="page-header">
+  <a class="back" href="/_tesseraql/studio/ui">&larr; explorer</a>
+</th:block>
+<div id="page-content">
+<section class="hc-card">
+  <ul class="wizard-list">
+    <li><a href="/_tesseraql/studio/ui/wizard/saml">SAML SP</a></li>
+    <li><a href="/_tesseraql/studio/ui/wizard/scim">SCIM provisioning</a></li>
+    <li><a href="/_tesseraql/studio/ui/wizard/identity">Identity realm mapping</a></li>
+  </ul>
+</section>
+</div>
+</html>

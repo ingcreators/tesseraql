@@ -26,6 +26,7 @@ ensure_writable_dir "${USER_HOME}/.m2"
 ensure_writable_dir "${USER_HOME}/.m2/repository"
 ensure_writable_dir "${USER_HOME}/.claude"
 ensure_writable_dir "${USER_HOME}/.codex"
+ensure_writable_dir "${USER_HOME}/.config/gh"
 ensure_writable_dir "${USER_HOME}/.npm"
 
 echo "Persistent tool volumes are writable."

@@ -1,0 +1,16 @@
+version: tesseraql/v1
+id: users.export
+kind: route
+recipe: query-export
+
+security:
+  auth: bearer
+  policy: users.read
+
+sql:
+  file: export.sql
+
+# Synchronous download through the shared file codec/column-mapping machinery (design ch. 28.10).
+export:
+  format: csv
+  filename: users.csv

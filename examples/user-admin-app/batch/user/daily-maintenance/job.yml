@@ -1,0 +1,19 @@
+version: tesseraql/v1
+id: user.dailyMaintenance
+kind: job
+recipe: batch-pipeline
+
+trigger:
+  schedule:
+    cron: "0 0 2 * * ?"
+
+params:
+  businessDate:
+    type: string
+    required: false
+
+pipeline:
+  - id: deactivatePending
+    sql:
+      file: deactivate-pending.sql
+      mode: update

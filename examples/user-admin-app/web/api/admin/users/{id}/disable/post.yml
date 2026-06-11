@@ -1,0 +1,20 @@
+version: tesseraql/v1
+id: tql.identity.users.disable
+kind: route
+recipe: command-json
+
+security:
+  auth: bearer
+  policy: users.write
+
+sql:
+  contract: identity.disable-user
+  mode: update
+  params:
+    userId: path.id
+
+response:
+  json:
+    status: 200
+    body:
+      affected: sql.affectedRows

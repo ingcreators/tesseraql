@@ -1,0 +1,37 @@
+version: tesseraql/v1
+id: tql.studio.source
+kind: route
+recipe: query-html
+
+input:
+  path:
+    type: string
+    required: true
+  saved:
+    type: string
+    required: false
+  applied:
+    type: string
+    required: false
+
+security:
+  auth: bearer
+
+sql:
+  service: studio.source
+  params:
+    path: query.path
+
+response:
+  html:
+    status: 200
+    template: source.html
+    model:
+      src: sql
+      saved: params.saved
+      applied: params.applied
+    headers:
+      Content-Security-Policy: "default-src 'self'; style-src 'self' 'unsafe-inline'; frame-ancestors 'none'"
+      X-Content-Type-Options: nosniff
+      X-Frame-Options: DENY
+      Referrer-Policy: no-referrer

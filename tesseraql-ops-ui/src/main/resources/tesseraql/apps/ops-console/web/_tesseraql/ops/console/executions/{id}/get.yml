@@ -1,0 +1,27 @@
+version: tesseraql/v1
+id: tql.opsConsole.execution
+kind: route
+recipe: query-html
+
+security:
+  auth: bearer
+  policy: ops.batch.view
+
+sql:
+  service: ops.execution
+  params:
+    id: path.id
+    # Executions outside the caller's ops.app.<name> grants render as not found.
+    permissions: principal.permissions
+
+response:
+  html:
+    status: 200
+    template: execution.html
+    model:
+      execution: sql
+    headers:
+      Content-Security-Policy: "default-src 'self'; style-src 'self' 'unsafe-inline'; frame-ancestors 'none'"
+      X-Content-Type-Options: nosniff
+      X-Frame-Options: DENY
+      Referrer-Policy: no-referrer

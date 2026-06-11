@@ -1,0 +1,18 @@
+version: tesseraql/v1
+id: tql.iamAdmin.users.enable
+kind: route
+recipe: command-json
+
+security:
+  auth: bearer
+  policy: iam.admin.write
+
+sql:
+  contract: identity.enable-user
+  mode: update
+  params:
+    userId: path.id
+
+response:
+  redirect:
+    location: /_tesseraql/admin/users/{path.id}

@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<!-- Reference page (design ch. 12): the framework hc-shell layout with the shared app
+     navigation, live search over the server-rendered user table fragment (the htmx
+     active-search recipe: the input re-fetches the fragment as you type). -->
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{tql/shell :: shell('Users', ~{templates/nav.html :: app-nav}, ~{}, ~{:: #page-content})}">
+<div id="page-content">
+<section class="hc-card">
+  <h2>Users</h2>
+  <p class="hint">The table is loaded over the authenticated session via htmx; typing filters the results.</p>
+  <input class="hc-input" type="search" name="q" placeholder="Search by name..."
+         hx-get="/users/fragments/table" hx-trigger="input changed delay:300ms, search"
+         hx-target="#user-table-area" hx-swap="innerHTML">
+  <div id="user-table-area" hx-get="/users/fragments/table" hx-trigger="load" hx-swap="innerHTML">
+    <p class="empty">Loading...</p>
+  </div>
+</section>
+</div>
+</html>

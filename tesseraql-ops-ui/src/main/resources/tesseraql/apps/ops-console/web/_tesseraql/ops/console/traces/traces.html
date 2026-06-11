@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{tql/shell :: page('Traces', ~{:: #page-header}, ~{:: #page-content})}">
+<th:block id="page-header">
+  <a class="back" href="/_tesseraql/ops/console">&larr; console</a>
+</th:block>
+<div id="page-content">
+<section class="hc-card">
+  <p class="empty" th:unless="${traces.hasSpans}">No traces retained.</p>
+  <table class="hc-table" th:if="${traces.hasSpans}">
+    <thead><tr><th>Span</th><th>App</th><th>Total (ms)</th><th>Self (ms)</th><th></th></tr></thead>
+    <tbody>
+      <tr th:each="s : ${traces.spans}" th:classappend="${s.slow} ? 'slow'">
+        <td th:style="'padding-left:' + ${s.indentPx} + 'px'"><span class="span-name" th:text="${s.name}"></span></td>
+        <td th:text="${s.app}"></td>
+        <td th:text="${s.totalMs}"></td>
+        <td th:text="${s.selfMs}"></td>
+        <td><span class="span-error" th:if="${s.error}">error</span></td>
+      </tr>
+    </tbody>
+  </table>
+</section>
+</div>
+</html>

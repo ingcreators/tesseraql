@@ -13,4 +13,221 @@
   <artifactId>tesseraql-camel-runtime</artifactId>
   <name>Tesseraql Camel Runtime</name>
 
+  <dependencies>
+    <dependency>
+      <groupId>io.tesseraql</groupId>
+      <artifactId>tesseraql-compiler</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>io.tesseraql</groupId>
+      <artifactId>tesseraql-camel-components</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>io.tesseraql</groupId>
+      <artifactId>tesseraql-security</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>io.tesseraql</groupId>
+      <artifactId>tesseraql-operations</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>io.tesseraql</groupId>
+      <artifactId>tesseraql-identity</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+    <!-- Self-hosted browser libraries (design ch. 12, 50): served at version-less
+         /assets/vendor/<webjar>/... paths so pages never load from a CDN and upgrades are a
+         one-line version bump here. -->
+    <dependency>
+      <groupId>org.webjars.npm</groupId>
+      <artifactId>htmx.org</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.webjars.npm</groupId>
+      <artifactId>hypermedia-components__core</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.webjars</groupId>
+      <artifactId>webjars-locator-lite</artifactId>
+    </dependency>
+    <!-- Flyway-managed app schema migrations, run when an app is mounted (design ch. 31, 32). -->
+    <dependency>
+      <groupId>org.flywaydb</groupId>
+      <artifactId>flyway-core</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.flywaydb</groupId>
+      <artifactId>flyway-database-postgresql</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.flywaydb</groupId>
+      <artifactId>flyway-database-oracle</artifactId>
+      <scope>runtime</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.flywaydb</groupId>
+      <artifactId>flyway-sqlserver</artifactId>
+      <scope>runtime</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.flywaydb</groupId>
+      <artifactId>flyway-mysql</artifactId>
+    </dependency>
+    <!-- Opt-in feature: the runtime has no compile dependency on SCIM; it self-installs via the
+         RuntimeExtension SPI when the jar is on the classpath. Test scope keeps the ITs here. -->
+    <dependency>
+      <groupId>io.tesseraql</groupId>
+      <artifactId>tesseraql-scim</artifactId>
+      <version>${project.version}</version>
+      <scope>test</scope>
+    </dependency>
+    <!-- Opt-in feature: same RuntimeExtension pattern as SCIM above. -->
+    <dependency>
+      <groupId>io.tesseraql</groupId>
+      <artifactId>tesseraql-saml</artifactId>
+      <version>${project.version}</version>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>io.tesseraql</groupId>
+      <artifactId>tesseraql-studio</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>io.tesseraql</groupId>
+      <artifactId>tesseraql-ops-ui</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>io.tesseraql</groupId>
+      <artifactId>tesseraql-observability</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+
+    <dependency>
+      <groupId>org.apache.camel</groupId>
+      <artifactId>camel-main</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.camel</groupId>
+      <artifactId>camel-platform-http</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.camel</groupId>
+      <artifactId>camel-platform-http-vertx</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.camel</groupId>
+      <artifactId>camel-quartz</artifactId>
+    </dependency>
+
+    <dependency>
+      <groupId>com.zaxxer</groupId>
+      <artifactId>HikariCP</artifactId>
+    </dependency>
+
+    <!-- JDBC driver: bundled for the first milestone; externalized as a driver jar later. -->
+    <dependency>
+      <groupId>org.postgresql</groupId>
+      <artifactId>postgresql</artifactId>
+    </dependency>
+
+    <dependency>
+      <groupId>org.slf4j</groupId>
+      <artifactId>slf4j-api</artifactId>
+    </dependency>
+
+    <dependency>
+      <groupId>org.junit.jupiter</groupId>
+      <artifactId>junit-jupiter</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.assertj</groupId>
+      <artifactId>assertj-core</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>io.opentelemetry</groupId>
+      <artifactId>opentelemetry-sdk-testing</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <!-- Gated Oracle/SQL Server portability ITs (-Dtesseraql.dialect.its=true). -->
+    <dependency>
+      <groupId>org.testcontainers</groupId>
+      <artifactId>oracle-free</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.testcontainers</groupId>
+      <artifactId>mssqlserver</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>com.oracle.database.jdbc</groupId>
+      <artifactId>ojdbc11</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>com.microsoft.sqlserver</groupId>
+      <artifactId>mssql-jdbc</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <!-- The optional Excel codec, on the test classpath to prove ServiceLoader discovery. -->
+    <dependency>
+      <groupId>io.tesseraql</groupId>
+      <artifactId>tesseraql-excel</artifactId>
+      <version>${project.version}</version>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.testcontainers</groupId>
+      <artifactId>postgresql</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.testcontainers</groupId>
+      <artifactId>mysql</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>com.mysql</groupId>
+      <artifactId>mysql-connector-j</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.testcontainers</groupId>
+      <artifactId>junit-jupiter</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.slf4j</groupId>
+      <artifactId>slf4j-simple</artifactId>
+      <version>${slf4j.version}</version>
+      <scope>test</scope>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-surefire-plugin</artifactId>
+        <configuration>
+          <systemPropertyVariables>
+            <!--
+              docker-java defaults to an API version (1.32) older than the minimum required by
+              recent Docker daemons. Pin a modern, widely supported version for Testcontainers.
+            -->
+            <api.version>1.43</api.version>
+          </systemPropertyVariables>
+        </configuration>
+      </plugin>
+    </plugins>
+  </build>
+
 </project>

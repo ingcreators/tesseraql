@@ -1,0 +1,36 @@
+version: tesseraql/v1
+id: tql.studio.wizard.identity.generate
+kind: route
+recipe: page
+
+input:
+  realmId:
+    type: string
+    required: true
+  type:
+    type: string
+    required: true
+  datasource:
+    type: string
+    required: true
+  sqlRoot:
+    type: string
+    required: false
+  userManagement:
+    type: string
+    required: false
+
+security:
+  auth: bearer
+
+response:
+  file:
+    template: wizard-identity.yml.tpl
+    contentType: text/yaml
+    filename: tesseraql-identity.yml
+    model:
+      realmId: params.realmId
+      type: params.type
+      datasource: params.datasource
+      sqlRoot: params.sqlRoot
+      userManagement: params.userManagement
