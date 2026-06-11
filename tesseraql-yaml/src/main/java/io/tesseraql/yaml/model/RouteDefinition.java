@@ -16,8 +16,11 @@ import java.util.Map;
  * @param input   declared, whitelisted inputs keyed by name
  * @param security authentication and authorization declaration
  * @param sql     SQL execution binding
+ * @param steps   ordered SQL steps of a {@code command-json} route, executed in one transaction;
+ *                later steps can bind values produced by earlier ones (roadmap Phase 18)
  * @param queries additional named queries executed after {@code sql}, each bound into the
  *                execution context under its own name so one page can render several result sets
+ * @param errors  declarative error mapping, e.g. constraint names to field-level errors
  * @param fileImport the {@code import:} block of a {@code file-import} route
  * @param fileExport the {@code export:} block of a {@code file-export} route
  * @param response response shape
@@ -35,14 +38,19 @@ public record RouteDefinition(
         PolicySpec policy,
         OutboxSpec outbox,
         SqlBinding sql,
+        Map<String, SqlBinding> steps,
         Map<String, SqlBinding> queries,
+        ErrorsSpec errors,
         @com.fasterxml.jackson.annotation.JsonProperty("import") ImportSpec fileImport,
         @com.fasterxml.jackson.annotation.JsonProperty("export") ExportSpec fileExport,
         ResponseSpec response) {
 
     public RouteDefinition {
         input = input == null ? Map.of() : Map.copyOf(input);
-        // Insertion-ordered so named queries execute in their authored order.
+        // Insertion-ordered so command steps and named queries execute in their authored order.
+        steps = steps == null
+                ? Map.of()
+                : java.util.Collections.unmodifiableMap(new java.util.LinkedHashMap<>(steps));
         queries = queries == null
                 ? Map.of()
                 : java.util.Collections.unmodifiableMap(new java.util.LinkedHashMap<>(queries));
