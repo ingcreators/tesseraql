@@ -1,0 +1,52 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <parent>
+    <groupId>io.tesseraql</groupId>
+    <artifactId>tesseraql-parent</artifactId>
+    <version>0.2.0-SNAPSHOT</version>
+    <relativePath>../pom.xml</relativePath>
+  </parent>
+
+  <artifactId>tesseraql-saml</artifactId>
+  <name>Tesseraql SAML</name>
+  <!--
+    SAML 2.0 SP support (design ch. 10.14). XML signature validation uses the JDK's
+    javax.xml.crypto.dsig with secure validation enabled; there is no external SAML or
+    XML-security dependency, keeping the supply chain on Maven Central only.
+  -->
+
+  <dependencies>
+    <dependency>
+      <groupId>io.tesseraql</groupId>
+      <artifactId>tesseraql-core</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+    <!-- RuntimeExtension SPI + Camel/yaml, so the SAML SP routes self-install (design ch. 47). -->
+    <dependency>
+      <groupId>io.tesseraql</groupId>
+      <artifactId>tesseraql-compiler</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+    <!-- Link-or-provision of local users from SAML assertions (design ch. 10.14 userLink). -->
+    <dependency>
+      <groupId>io.tesseraql</groupId>
+      <artifactId>tesseraql-identity</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+
+    <dependency>
+      <groupId>org.junit.jupiter</groupId>
+      <artifactId>junit-jupiter</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.assertj</groupId>
+      <artifactId>assertj-core</artifactId>
+      <scope>test</scope>
+    </dependency>
+  </dependencies>
+
+</project>

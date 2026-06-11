@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{tql/shell :: page('IAM Admin · User', ~{:: #page-header}, ~{:: #page-content})}">
+<th:block id="page-header">
+  <span class="hc-badge" th:each="u : ${user}" th:text="${u.login_id}"></span>
+  <a class="back" href="/_tesseraql/admin/users">&larr; users</a>
+</th:block>
+<div id="page-content">
+<section class="hc-card" th:if="${#lists.isEmpty(user)}"><p class="empty">User not found.</p></section>
+<th:block th:each="u : ${user}">
+<section class="hc-card">
+  <h2>Summary</h2>
+  <table class="hc-table kv"><tbody>
+    <tr><th>User id</th><td th:text="${u.user_id}"></td></tr>
+    <tr><th>Display name</th><td th:text="${u.display_name}"></td></tr>
+    <tr><th>Email</th><td th:text="${u.email}"></td></tr>
+    <tr><th>Status</th><td th:text="${u.status}"></td></tr>
+    <tr><th>Tenant</th><td th:text="${u.tenant_id}"></td></tr>
+  </tbody></table>
+</section>
+<section class="hc-card" id="actions">
+  <h2>Actions</h2>
+  <div class="toolbar">
+    <form method="post" th:action="|/_tesseraql/admin/users/${u.user_id}/enable|">
+      <button type="submit" class="hc-button" data-variant="primary">Enable user</button>
+    </form>
+    <form method="post" th:action="|/_tesseraql/admin/users/${u.user_id}/disable|">
+      <button type="submit" class="hc-button" data-variant="error"
+              th:attr="data-hc-confirm=|Disable user ${u.login_id}?|"
+              data-hc-confirm-title="Confirm disable"
+              data-hc-confirm-ok="Disable" data-hc-confirm-variant="error">Disable user</button>
+    </form>
+  </div>
+</section>
+</th:block>
+<section class="hc-card" id="roles">
+  <h2>Roles</h2>
+  <p class="empty" th:if="${#lists.isEmpty(roles)}">No roles assigned.</p>
+  <table class="hc-table">
+    <thead><tr><th>Code</th><th>Name</th><th>Grant</th></tr></thead>
+    <tbody>
+      <tr th:each="r : ${roles}">
+        <td th:text="${r.role_code}"></td><td th:text="${r.role_name}"></td><td th:text="${r.grant_type}"></td>
+      </tr>
+    </tbody>
+  </table>
+</section>
+<section class="hc-card" id="groups">
+  <h2>Groups</h2>
+  <p class="empty" th:if="${#lists.isEmpty(groups)}">No groups assigned.</p>
+  <table class="hc-table">
+    <thead><tr><th>Code</th><th>Name</th><th>Tenant</th></tr></thead>
+    <tbody>
+      <tr th:each="g : ${groups}">
+        <td th:text="${g.group_code}"></td><td th:text="${g.group_name}"></td><td th:text="${g.tenant_id}"></td>
+      </tr>
+    </tbody>
+  </table>
+</section>
+<section class="hc-card" id="permissions">
+  <h2>Effective permissions</h2>
+  <p class="empty" th:if="${#lists.isEmpty(permissions)}">No permissions granted.</p>
+  <table class="hc-table">
+    <thead><tr><th>Code</th><th>Name</th></tr></thead>
+    <tbody>
+      <tr th:each="p : ${permissions}">
+        <td th:text="${p.permission_code}"></td><td th:text="${p.permission_name}"></td>
+      </tr>
+    </tbody>
+  </table>
+</section>
+</div>
+</html>

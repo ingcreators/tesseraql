@@ -1,0 +1,37 @@
+version: tesseraql/v1
+id: users.apiDeactivate
+kind: route
+recipe: command-json
+
+input:
+  name:
+    type: string
+    required: true
+
+inputPolicy:
+  unknownFields: reject
+
+security:
+  auth: bearer
+  policy: users.write
+
+outbox:
+  eventType: USER_DEACTIVATED
+  aggregateType: User
+  aggregateId: body.name
+  payload:
+    name: body.name
+    actor: principal.loginId
+
+sql:
+  file: deactivate.sql
+  mode: update
+  params:
+    name: body.name
+
+response:
+  json:
+    status: 200
+    body:
+      affected: sql.affectedRows
+      eventId: sql.eventId

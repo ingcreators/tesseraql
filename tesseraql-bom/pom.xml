@@ -6,7 +6,7 @@
   <parent>
     <groupId>io.tesseraql</groupId>
     <artifactId>tesseraql-parent</artifactId>
-    <version>0.1.0-SNAPSHOT</version>
+    <version>0.2.0-SNAPSHOT</version>
     <relativePath>../pom.xml</relativePath>
   </parent>
 
@@ -20,6 +20,165 @@
         <groupId>io.tesseraql</groupId>
         <artifactId>tesseraql-core</artifactId>
         <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>io.tesseraql</groupId>
+        <artifactId>tesseraql-yaml</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>io.tesseraql</groupId>
+        <artifactId>tesseraql-compiler</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>io.tesseraql</groupId>
+        <artifactId>tesseraql-camel-components</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>io.tesseraql</groupId>
+        <artifactId>tesseraql-camel-runtime</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>io.tesseraql</groupId>
+        <artifactId>tesseraql-camel-spring-runtime</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>io.tesseraql</groupId>
+        <artifactId>tesseraql-security</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>io.tesseraql</groupId>
+        <artifactId>tesseraql-test-core</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>io.tesseraql</groupId>
+        <artifactId>tesseraql-identity</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>io.tesseraql</groupId>
+        <artifactId>tesseraql-coverage-core</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>io.tesseraql</groupId>
+        <artifactId>tesseraql-operations</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>io.tesseraql</groupId>
+        <artifactId>tesseraql-observability</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>io.tesseraql</groupId>
+        <artifactId>tesseraql-report</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>io.tesseraql</groupId>
+        <artifactId>tesseraql-studio</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>io.tesseraql</groupId>
+        <artifactId>tesseraql-excel</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>io.tesseraql</groupId>
+        <artifactId>tesseraql-cli</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <!-- Self-hosted browser libraries, vendored as WebJars so the supply chain stays on Maven
+           Central and pages never reference external CDNs (design ch. 12, 50). -->
+      <dependency>
+        <groupId>org.webjars.npm</groupId>
+        <artifactId>htmx.org</artifactId>
+        <version>${htmx.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.thymeleaf</groupId>
+        <artifactId>thymeleaf</artifactId>
+        <version>${thymeleaf.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.flywaydb</groupId>
+        <artifactId>flyway-core</artifactId>
+        <version>${flyway.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.flywaydb</groupId>
+        <artifactId>flyway-database-postgresql</artifactId>
+        <version>${flyway.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.flywaydb</groupId>
+        <artifactId>flyway-mysql</artifactId>
+        <version>${flyway.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.flywaydb</groupId>
+        <artifactId>flyway-database-oracle</artifactId>
+        <version>${flyway.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.flywaydb</groupId>
+        <artifactId>flyway-sqlserver</artifactId>
+        <version>${flyway.version}</version>
+      </dependency>
+      <!-- Tabular file transfers (design ch. 28): CSV built in, Excel as an optional module. -->
+      <dependency>
+        <groupId>org.apache.commons</groupId>
+        <artifactId>commons-csv</artifactId>
+        <version>${commons-csv.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.jxls</groupId>
+        <artifactId>jxls</artifactId>
+        <version>${jxls.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.jxls</groupId>
+        <artifactId>jxls-poi</artifactId>
+        <version>${jxls.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.dhatim</groupId>
+        <artifactId>fastexcel</artifactId>
+        <version>${fastexcel.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.dhatim</groupId>
+        <artifactId>fastexcel-reader</artifactId>
+        <version>${fastexcel.version}</version>
+      </dependency>
+      <!-- Dialect drivers (design ch. 42): Oracle FUTC and MIT licensed respectively. -->
+      <dependency>
+        <groupId>com.oracle.database.jdbc</groupId>
+        <artifactId>ojdbc11</artifactId>
+        <version>${ojdbc.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.microsoft.sqlserver</groupId>
+        <artifactId>mssql-jdbc</artifactId>
+        <version>${mssql-jdbc.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.webjars.npm</groupId>
+        <artifactId>hypermedia-components__core</artifactId>
+        <version>${hypermedia-components.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.webjars</groupId>
+        <artifactId>webjars-locator-lite</artifactId>
+        <version>${webjars-locator.version}</version>
       </dependency>
     </dependencies>
   </dependencyManagement>

@@ -5,12 +5,33 @@
 
   <groupId>io.tesseraql</groupId>
   <artifactId>tesseraql-parent</artifactId>
-  <version>0.1.0-SNAPSHOT</version>
+  <version>0.2.0-SNAPSHOT</version>
   <packaging>pom</packaging>
 
   <name>TesseraQL Parent</name>
   <description>SQL-first hypermedia and integration framework.</description>
   <url>https://github.com/ingcreators/tesseraql</url>
+  <inceptionYear>2026</inceptionYear>
+
+  <licenses>
+    <license>
+      <name>Apache-2.0</name>
+      <url>https://www.apache.org/licenses/LICENSE-2.0.txt</url>
+      <distribution>repo</distribution>
+    </license>
+  </licenses>
+
+  <organization>
+    <name>ingcreators</name>
+    <url>https://github.com/ingcreators</url>
+  </organization>
+
+  <scm>
+    <url>https://github.com/ingcreators/tesseraql</url>
+    <connection>scm:git:https://github.com/ingcreators/tesseraql.git</connection>
+    <developerConnection>scm:git:git@github.com:ingcreators/tesseraql.git</developerConnection>
+    <tag>HEAD</tag>
+  </scm>
 
   <modules>
     <module>tesseraql-bom</module>
@@ -21,10 +42,17 @@
     <module>tesseraql-camel-runtime</module>
     <module>tesseraql-camel-spring-runtime</module>
     <module>tesseraql-security</module>
+    <module>tesseraql-identity</module>
+    <module>tesseraql-scim</module>
+    <module>tesseraql-saml</module>
     <module>tesseraql-test-core</module>
     <module>tesseraql-coverage-core</module>
+    <module>tesseraql-operations</module>
+    <module>tesseraql-observability</module>
     <module>tesseraql-report</module>
     <module>tesseraql-studio</module>
+    <module>tesseraql-ops-ui</module>
+    <module>tesseraql-excel</module>
     <module>tesseraql-cli</module>
     <module>tesseraql-maven-plugin</module>
   </modules>
@@ -35,18 +63,243 @@
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
 
+    <!-- Third-party library versions -->
+    <camel.version>4.18.0</camel.version>
+    <jackson.version>2.21.4</jackson.version>
+    <hikaricp.version>6.2.1</hikaricp.version>
+    <postgresql.version>42.7.4</postgresql.version>
+    <mysql.version>9.1.0</mysql.version>
+    <picocli.version>4.7.6</picocli.version>
+    <slf4j.version>2.0.16</slf4j.version>
+    <maven.api.version>3.9.9</maven.api.version>
+    <maven.plugin.tools.version>3.15.1</maven.plugin.tools.version>
     <junit.version>5.11.4</junit.version>
+    <assertj.version>3.27.0</assertj.version>
+    <testcontainers.version>1.20.4</testcontainers.version>
+    <opentelemetry.version>1.45.0</opentelemetry.version>
+    <spring.version>6.2.1</spring.version>
+    <spring.boot.version>3.4.1</spring.boot.version>
+    <htmx.version>2.0.4</htmx.version>
+    <thymeleaf.version>3.1.3.RELEASE</thymeleaf.version>
+    <hypermedia-components.version>0.0.1-alpha.0</hypermedia-components.version>
+    <webjars-locator.version>1.1.3</webjars-locator.version>
+    <flyway.version>12.8.1</flyway.version>
+    <commons-csv.version>1.14.1</commons-csv.version>
+    <jxls.version>3.1.0</jxls.version>
+    <fastexcel.version>0.20.2</fastexcel.version>
+    <ojdbc.version>23.26.2.0.0</ojdbc.version>
+    <mssql-jdbc.version>13.4.0.jre11</mssql-jdbc.version>
+
+    <!-- Build plugin versions -->
     <maven.compiler.plugin.version>3.13.0</maven.compiler.plugin.version>
     <maven.enforcer.plugin.version>3.5.0</maven.enforcer.plugin.version>
     <maven.surefire.plugin.version>3.5.2</maven.surefire.plugin.version>
+    <maven.failsafe.plugin.version>3.5.2</maven.failsafe.plugin.version>
   </properties>
 
   <dependencyManagement>
     <dependencies>
+      <!-- Apache Camel runtime (imported BOM) -->
+      <dependency>
+        <groupId>org.apache.camel</groupId>
+        <artifactId>camel-bom</artifactId>
+        <version>${camel.version}</version>
+        <type>pom</type>
+        <scope>import</scope>
+      </dependency>
+
+      <!-- Jackson (imported BOM) -->
+      <dependency>
+        <groupId>com.fasterxml.jackson</groupId>
+        <artifactId>jackson-bom</artifactId>
+        <version>${jackson.version}</version>
+        <type>pom</type>
+        <scope>import</scope>
+      </dependency>
+
+      <!-- Testcontainers (imported BOM) -->
+      <dependency>
+        <groupId>org.testcontainers</groupId>
+        <artifactId>testcontainers-bom</artifactId>
+        <version>${testcontainers.version}</version>
+        <type>pom</type>
+        <scope>import</scope>
+      </dependency>
+
+      <!-- OpenTelemetry (imported BOM) -->
+      <dependency>
+        <groupId>io.opentelemetry</groupId>
+        <artifactId>opentelemetry-bom</artifactId>
+        <version>${opentelemetry.version}</version>
+        <type>pom</type>
+        <scope>import</scope>
+      </dependency>
+
+      <!-- Spring Framework (imported BOM) -->
+      <dependency>
+        <groupId>org.springframework</groupId>
+        <artifactId>spring-framework-bom</artifactId>
+        <version>${spring.version}</version>
+        <type>pom</type>
+        <scope>import</scope>
+      </dependency>
+
+      <!--
+        Spring Boot actuator (for HealthIndicator contracts) is pinned directly rather than importing
+        the spring-boot-dependencies BOM at the parent: that BOM would override reactor-wide
+        transitive versions (netty, jackson, ...) and break the Camel runtime.
+      -->
+      <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-actuator</artifactId>
+        <version>${spring.boot.version}</version>
+      </dependency>
+
+      <!-- Standalone third-party dependencies -->
+      <dependency>
+        <groupId>com.zaxxer</groupId>
+        <artifactId>HikariCP</artifactId>
+        <version>${hikaricp.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.postgresql</groupId>
+        <artifactId>postgresql</artifactId>
+        <version>${postgresql.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.mysql</groupId>
+        <artifactId>mysql-connector-j</artifactId>
+        <version>${mysql.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>info.picocli</groupId>
+        <artifactId>picocli</artifactId>
+        <version>${picocli.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.apache.maven</groupId>
+        <artifactId>maven-plugin-api</artifactId>
+        <version>${maven.api.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.apache.maven</groupId>
+        <artifactId>maven-core</artifactId>
+        <version>${maven.api.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.apache.maven.plugin-tools</groupId>
+        <artifactId>maven-plugin-annotations</artifactId>
+        <version>${maven.plugin.tools.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.slf4j</groupId>
+        <artifactId>slf4j-api</artifactId>
+        <version>${slf4j.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.slf4j</groupId>
+        <artifactId>jcl-over-slf4j</artifactId>
+        <version>${slf4j.version}</version>
+      </dependency>
+      <!-- Self-hosted browser libraries, vendored as WebJars so the supply chain stays on Maven
+           Central and pages never reference external CDNs (design ch. 12, 50). -->
+      <dependency>
+        <groupId>org.webjars.npm</groupId>
+        <artifactId>htmx.org</artifactId>
+        <version>${htmx.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.webjars.npm</groupId>
+        <artifactId>hypermedia-components__core</artifactId>
+        <version>${hypermedia-components.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.webjars</groupId>
+        <artifactId>webjars-locator-lite</artifactId>
+        <version>${webjars-locator.version}</version>
+      </dependency>
+      <!-- App schema migrations run at mount time (design ch. 31, 32). -->
+      <dependency>
+        <groupId>org.flywaydb</groupId>
+        <artifactId>flyway-core</artifactId>
+        <version>${flyway.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.flywaydb</groupId>
+        <artifactId>flyway-database-postgresql</artifactId>
+        <version>${flyway.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.flywaydb</groupId>
+        <artifactId>flyway-mysql</artifactId>
+        <version>${flyway.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.flywaydb</groupId>
+        <artifactId>flyway-database-oracle</artifactId>
+        <version>${flyway.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.flywaydb</groupId>
+        <artifactId>flyway-sqlserver</artifactId>
+        <version>${flyway.version}</version>
+      </dependency>
+      <!-- Tabular file transfers (design ch. 28): CSV built in, Excel as an optional module. -->
+      <dependency>
+        <groupId>org.apache.commons</groupId>
+        <artifactId>commons-csv</artifactId>
+        <version>${commons-csv.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.jxls</groupId>
+        <artifactId>jxls</artifactId>
+        <version>${jxls.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.jxls</groupId>
+        <artifactId>jxls-poi</artifactId>
+        <version>${jxls.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.dhatim</groupId>
+        <artifactId>fastexcel</artifactId>
+        <version>${fastexcel.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.dhatim</groupId>
+        <artifactId>fastexcel-reader</artifactId>
+        <version>${fastexcel.version}</version>
+      </dependency>
+      <!-- Dialect drivers (design ch. 42): Oracle FUTC and MIT licensed respectively. -->
+      <dependency>
+        <groupId>com.oracle.database.jdbc</groupId>
+        <artifactId>ojdbc11</artifactId>
+        <version>${ojdbc.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.microsoft.sqlserver</groupId>
+        <artifactId>mssql-jdbc</artifactId>
+        <version>${mssql-jdbc.version}</version>
+      </dependency>
+      <!-- The standard template engine (design ch. 12): natural HTML templates with first-class
+           fragments/layouts, plus TEXT mode for generated file responses. -->
+      <dependency>
+        <groupId>org.thymeleaf</groupId>
+        <artifactId>thymeleaf</artifactId>
+        <version>${thymeleaf.version}</version>
+      </dependency>
+
+      <!-- Test dependencies -->
       <dependency>
         <groupId>org.junit.jupiter</groupId>
         <artifactId>junit-jupiter</artifactId>
         <version>${junit.version}</version>
+        <scope>test</scope>
+      </dependency>
+      <dependency>
+        <groupId>org.assertj</groupId>
+        <artifactId>assertj-core</artifactId>
+        <version>${assertj.version}</version>
         <scope>test</scope>
       </dependency>
     </dependencies>
@@ -61,6 +314,7 @@
           <version>${maven.compiler.plugin.version}</version>
           <configuration>
             <release>${maven.compiler.release}</release>
+            <parameters>true</parameters>
           </configuration>
         </plugin>
 
@@ -75,8 +329,23 @@
 
         <plugin>
           <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-failsafe-plugin</artifactId>
+          <version>${maven.failsafe.plugin.version}</version>
+          <configuration>
+            <useModulePath>false</useModulePath>
+          </configuration>
+        </plugin>
+
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
           <artifactId>maven-enforcer-plugin</artifactId>
           <version>${maven.enforcer.plugin.version}</version>
+        </plugin>
+
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-plugin-plugin</artifactId>
+          <version>${maven.plugin.tools.version}</version>
         </plugin>
       </plugins>
     </pluginManagement>

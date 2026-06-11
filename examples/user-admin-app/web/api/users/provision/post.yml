@@ -1,0 +1,52 @@
+version: tesseraql/v1
+id: users.apiProvision
+kind: route
+recipe: command-json
+
+# Activates a user and, in the same transaction, emits a SCIM provisioning event
+# (USER_PROVISIONED). The outbox payload is assembled into the SCIM User shape via dotted
+# keys, so the downstream SCIM provider receives a structured resource without any glue code.
+
+input:
+  userName:
+    type: string
+    required: true
+  externalId:
+    type: string
+  givenName:
+    type: string
+  familyName:
+    type: string
+  active:
+    type: boolean
+
+inputPolicy:
+  unknownFields: reject
+
+security:
+  auth: bearer
+  policy: users.write
+
+outbox:
+  eventType: USER_PROVISIONED
+  aggregateType: User
+  aggregateId: body.userName
+  payload:
+    userName: body.userName
+    externalId: body.externalId
+    active: body.active
+    name.givenName: body.givenName
+    name.familyName: body.familyName
+
+sql:
+  file: provision.sql
+  mode: update
+  params:
+    userName: body.userName
+
+response:
+  json:
+    status: 200
+    body:
+      affected: sql.affectedRows
+      eventId: sql.eventId

@@ -1,0 +1,11 @@
+version: tesseraql/v1
+id: ping.get
+kind: route
+recipe: query-json
+sql:
+  file: ping.sql
+  mode: query
+response:
+  json:
+    body:
+      data: sql.rows

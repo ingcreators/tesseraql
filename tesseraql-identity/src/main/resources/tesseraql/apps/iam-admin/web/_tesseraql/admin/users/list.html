@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{tql/shell :: page('IAM Admin · Users', ~{:: #page-header}, ~{:: #page-content})}">
+<th:block id="page-header">
+  <span class="hc-badge" th:each="t : ${total}">[[${t.count}]] total</span>
+</th:block>
+<div id="page-content">
+<section class="hc-card">
+  <p class="empty" th:if="${#lists.isEmpty(users)}">No users found.</p>
+  <table class="hc-table">
+    <thead><tr><th>Login</th><th>Display name</th><th>Email</th><th>Status</th><th>Tenant</th></tr></thead>
+    <tbody>
+      <tr th:each="u : ${users}">
+        <td><a th:href="|/_tesseraql/admin/users/${u.user_id}|" th:text="${u.login_id}"></a></td>
+        <td th:text="${u.display_name}"></td>
+        <td th:text="${u.email}"></td>
+        <td th:class="'status-' + ${#strings.toLowerCase(u.status)}" th:text="${u.status}"></td>
+        <td th:text="${u.tenant_id}"></td>
+      </tr>
+    </tbody>
+  </table>
+</section>
+</div>
+</html>

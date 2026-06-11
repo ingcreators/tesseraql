@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{tql/shell :: page('TesseraQL Operations Console', ~{:: #page-header}, ~{:: #page-content})}">
+<th:block id="page-header">
+  <span class="actions"><a href="/_tesseraql/ops/console/traces">traces &rarr;</a> <a href="/_tesseraql/ops/console/transfers">transfers &rarr;</a> <a href="/_tesseraql/ops/console">refresh</a></span>
+  <span class="hc-badge" data-variant="success" th:if="${ops.ok}">UP</span>
+  <span class="hc-badge" data-variant="warning" th:if="${ops.warning}">WARN</span>
+</th:block>
+<div id="page-content" hx-get="/_tesseraql/ops/console" hx-trigger="every 15s"
+     hx-select="#page-content" hx-target="this" hx-swap="outerHTML">
+<section class="hc-card" id="alerts" th:if="${ops.hasAlerts}">
+  <h2>Alerts</h2>
+  <ul class="alerts">
+    <li th:each="a : ${ops.alerts}" class="hc-alert" th:attr="data-variant=${a.severity}"><span class="code" th:text="${a.code}"></span> [[${a.message}]]</li>
+  </ul>
+</section>
+<section class="hc-card" id="batch">
+  <h2>Batch executions</h2>
+  <p class="summary">Total scanned: <strong th:text="${ops.batchTotal}"></strong></p>
+  <ul class="chips">
+    <li th:each="s : ${ops.byStatus}" th:class="'chip ' + ${s.statusClass}">[[${s.status}]]: [[${s.count}]]</li>
+  </ul>
+  <p class="empty" th:unless="${ops.hasRecent}">No batch executions recorded.</p>
+  <table class="hc-table" th:if="${ops.hasRecent}">
+    <thead><tr><th>Execution</th><th>Job</th><th>App</th><th>Status</th><th>Trigger</th><th>Started</th><th>Duration (ms)</th></tr></thead>
+    <tbody>
+      <tr th:each="e : ${ops.recent}">
+        <td><a th:href="|/_tesseraql/ops/console/executions/${e.id}|" th:text="${e.id}"></a></td>
+        <td th:text="${e.jobId}"></td>
+        <td th:text="${e.app}"></td>
+        <td th:class="${e.statusClass}" th:text="${e.status}"></td>
+        <td th:text="${e.trigger}"></td>
+        <td th:text="${e.startTime}"></td>
+        <td th:text="${e.durationMs}"></td>
+      </tr>
+    </tbody>
+  </table>
+</section>
+<section class="hc-card" id="lanes">
+  <h2>Execution lanes</h2>
+  <p class="empty" th:unless="${ops.hasLanes}">No execution lanes registered.</p>
+  <table class="hc-table" th:if="${ops.hasLanes}">
+    <thead><tr><th>Lane</th><th>Type</th><th>In use</th><th>Max</th><th>Admitted</th><th>Rejected</th></tr></thead>
+    <tbody>
+      <tr th:each="l : ${ops.lanes}" th:classappend="${l.warn} ? 'warn'">
+        <td th:text="${l.name}"></td><td th:text="${l.type}"></td><td th:text="${l.inUse}"></td><td th:text="${l.max}"></td><td th:text="${l.admitted}"></td><td th:text="${l.rejected}"></td>
+      </tr>
+    </tbody>
+  </table>
+</section>
+<section class="hc-card" id="traces">
+  <h2>Trace metrics</h2>
+  <ul class="chips">
+    <li class="chip">Spans: <strong th:text="${ops.metrics.spans}"></strong></li>
+    <li class="chip">Span error rate: <strong>[[${ops.metrics.spanErrorRate}]]%</strong></li>
+    <li class="chip">Slow span rate: <strong>[[${ops.metrics.slowRate}]]%</strong></li>
+    <li class="chip">Traces: <strong th:text="${ops.metrics.traces}"></strong></li>
+    <li class="chip">Trace error rate: <strong>[[${ops.metrics.traceErrorRate}]]%</strong></li>
+  </ul>
+</section>
+<section class="hc-card" id="slow-sql">
+  <h2>Slow SQL</h2>
+  <p class="empty" th:unless="${ops.hasSlowSql}">No slow SQL recorded.</p>
+  <table class="hc-table" th:if="${ops.hasSlowSql}">
+    <thead><tr><th>SQL id</th><th>Mode</th><th>Duration (ms)</th><th>Rows</th></tr></thead>
+    <tbody>
+      <tr th:each="q : ${ops.slowSql}">
+        <td th:text="${q.sqlId}"></td><td th:text="${q.mode}"></td><td th:text="${q.durationMs}"></td><td th:text="${q.rowCount}"></td>
+      </tr>
+    </tbody>
+  </table>
+</section>
+<section class="hc-card" id="pinning">
+  <h2>Virtual-thread pinning</h2>
+  <p class="empty" th:unless="${ops.hasPinning}">No pinning events detected.</p>
+  <p class="summary" th:if="${ops.hasPinning}">Pinning events: <strong th:text="${ops.pinningCount}"></strong></p>
+</section>
+</div>
+</html>

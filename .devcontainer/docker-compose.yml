@@ -9,6 +9,11 @@ services:
 
     command: sleep infinity
 
+    # Local-only secrets (gitignored): GH_TOKEN for gh, API keys, etc.
+    env_file:
+      - path: ./devcontainer.local.env
+        required: false
+
     extra_hosts:
       - "host.docker.internal:host-gateway"
 

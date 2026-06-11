@@ -33,4 +33,4 @@ jobs:
           cache: maven
 
       - name: Verify
-        run: mvn -B -ntp verify
+        run: ./mvnw -B -ntp verify

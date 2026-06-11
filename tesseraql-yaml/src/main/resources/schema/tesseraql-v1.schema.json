@@ -1,0 +1,115 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tesseraql.io/schema/tesseraql-v1.schema.json",
+  "title": "TesseraQL Simple YAML v1",
+  "description": "Schema for TesseraQL Simple YAML route and job definitions (design ch. 6).",
+  "type": "object",
+  "required": ["version", "id", "kind"],
+  "properties": {
+    "version": { "const": "tesseraql/v1" },
+    "id": { "type": "string", "minLength": 1 },
+    "kind": { "enum": ["route", "job"] },
+    "recipe": {
+      "enum": [
+        "query-json",
+        "command-json",
+        "query-html",
+        "query-export",
+        "page",
+        "batch-tasklet",
+        "batch-pipeline",
+        "file-import",
+        "file-export"
+      ]
+    },
+    "input": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "type": { "type": "string" },
+          "required": { "type": "boolean" },
+          "default": {},
+          "min": { "type": "integer" },
+          "max": { "type": "integer" },
+          "maxLength": { "type": "integer" },
+          "enum": { "type": "array", "items": { "type": "string" } },
+          "items": { "type": "object" }
+        },
+        "additionalProperties": true
+      }
+    },
+    "security": {
+      "type": "object",
+      "properties": {
+        "auth": { "type": "string" },
+        "policy": { "type": "string" },
+        "provider": { "type": "string" },
+        "csrf": { "type": "boolean" }
+      },
+      "additionalProperties": true
+    },
+    "sql": {
+      "type": "object",
+      "properties": {
+        "file": { "type": "string" },
+        "contract": { "type": "string" },
+        "service": { "type": "string" },
+        "mode": { "type": "string" },
+        "params": { "type": "object", "additionalProperties": { "type": "string" } }
+      },
+      "additionalProperties": true
+    },
+    "queries": {
+      "type": "object",
+      "description": "Additional named queries executed after sql, each bound into the execution context under its name.",
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "file": { "type": "string" },
+          "contract": { "type": "string" },
+          "service": { "type": "string" },
+          "mode": { "type": "string" },
+          "params": { "type": "object", "additionalProperties": { "type": "string" } }
+        },
+        "additionalProperties": true
+      }
+    },
+    "response": {
+      "type": "object",
+      "properties": {
+        "json": {
+          "type": "object",
+          "properties": {
+            "status": { "type": "integer" },
+            "body": {}
+          },
+          "additionalProperties": true
+        },
+        "redirect": {
+          "type": "object",
+          "required": ["location"],
+          "properties": {
+            "status": { "type": "integer" },
+            "location": { "type": "string" }
+          },
+          "additionalProperties": true
+        },
+        "file": {
+          "type": "object",
+          "required": ["template"],
+          "properties": {
+            "status": { "type": "integer" },
+            "template": { "type": "string" },
+            "contentType": { "type": "string" },
+            "filename": { "type": "string" },
+            "model": { "type": "object" }
+          },
+          "additionalProperties": true
+        }
+      },
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": true
+}
