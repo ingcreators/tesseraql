@@ -85,6 +85,8 @@ public final class CsvFileCodec implements FileCodec {
             throws IOException {
         CSVPrinter printer = new CSVPrinter(
                 new OutputStreamWriter(out, StandardCharsets.UTF_8), CSVFormat.RFC4180);
+        java.util.Locale locale = io.tesseraql.core.files.ColumnValues.locale(spec.locale());
+        java.time.ZoneId zone = io.tesseraql.core.files.ColumnValues.zone(spec.timezone());
         List<ColumnMapping> columns = new ArrayList<>(spec.columns());
         while (rows.hasNext()) {
             Map<String, Object> row = rows.next();
@@ -96,7 +98,8 @@ public final class CsvFileCodec implements FileCodec {
             }
             List<Object> cells = new ArrayList<>(columns.size());
             for (ColumnMapping column : columns) {
-                cells.add(row.get(column.name()));
+                cells.add(io.tesseraql.core.files.ColumnValues.format(
+                        column, row.get(column.name()), locale, zone));
             }
             printer.printRecord(cells);
         }

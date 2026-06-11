@@ -11,6 +11,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.file.Files;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
@@ -124,9 +125,10 @@ public final class JxlsFileCodec implements FileCodec {
                 XSSFWorkbook workbook = new XSSFWorkbook(template)) {
             Sheet sheet = sheet(workbook, spec.sheet());
             CellRef start = spec.startCell();
+            ZoneId zone = io.tesseraql.core.files.ColumnValues.zone(spec.timezone());
             List<ColumnMapping> columns = new ArrayList<>(spec.columns());
             int[] positions = null;
-            CellStyle[] prototypes = null;
+            CellStyle[] styles = null;
             int rowIndex = start.row();
             while (rows.hasNext()) {
                 Map<String, Object> row = rows.next();
@@ -135,7 +137,8 @@ public final class JxlsFileCodec implements FileCodec {
                 }
                 if (positions == null) {
                     positions = placementPositions(columns, start.col());
-                    prototypes = prototypeStyles(sheet, start.row(), positions);
+                    styles = columnStyles(workbook, columns,
+                            prototypeStyles(sheet, start.row(), positions));
                 }
                 Row target = sheet.getRow(rowIndex);
                 if (target == null) {
@@ -147,14 +150,37 @@ public final class JxlsFileCodec implements FileCodec {
                     if (cell == null) {
                         cell = target.createCell(positions[i]);
                     }
-                    if (prototypes[i] != null) {
-                        cell.setCellStyle(prototypes[i]);
+                    if (styles[i] != null) {
+                        cell.setCellStyle(styles[i]);
                     }
-                    setCell(cell, row.get(columns.get(i).name()));
+                    setCell(cell, row.get(columns.get(i).name()), zone);
                 }
             }
             workbook.write(out);
         }
+    }
+
+    /**
+     * The per-column cell styles: the template prototype, overlaid with the column's declared
+     * Excel format when one is set (so YAML formats win over the template's placeholder format).
+     */
+    private static CellStyle[] columnStyles(org.apache.poi.ss.usermodel.Workbook workbook,
+            List<ColumnMapping> columns, CellStyle[] prototypes) {
+        CellStyle[] styles = new CellStyle[columns.size()];
+        for (int i = 0; i < columns.size(); i++) {
+            String format = columns.get(i).format();
+            if (format == null || format.isBlank()) {
+                styles[i] = prototypes[i];
+                continue;
+            }
+            CellStyle style = workbook.createCellStyle();
+            if (prototypes[i] != null) {
+                style.cloneStyleFrom(prototypes[i]);
+            }
+            style.setDataFormat(workbook.createDataFormat().getFormat(format));
+            styles[i] = style;
+        }
+        return styles;
     }
 
     /** Explicit positions win; the rest fill sequentially from the start column. */
@@ -209,7 +235,9 @@ public final class JxlsFileCodec implements FileCodec {
         try (SXSSFWorkbook workbook = new SXSSFWorkbook(100)) {
             Sheet sheet = workbook.createSheet(
                     spec.sheet() == null || spec.sheet().isBlank() ? "data" : spec.sheet());
+            ZoneId zone = io.tesseraql.core.files.ColumnValues.zone(spec.timezone());
             List<ColumnMapping> columns = new ArrayList<>(spec.columns());
+            CellStyle[] styles = null;
             int rowIndex = 0;
             while (rows.hasNext()) {
                 Map<String, Object> row = rows.next();
@@ -217,6 +245,7 @@ public final class JxlsFileCodec implements FileCodec {
                     row.keySet().forEach(key -> columns.add(ColumnMapping.of(key)));
                 }
                 if (rowIndex == 0) {
+                    styles = columnStyles(workbook, columns, new CellStyle[columns.size()]);
                     Row header = sheet.createRow(rowIndex++);
                     for (int i = 0; i < columns.size(); i++) {
                         header.createCell(i).setCellValue(columns.get(i).effectiveHeader());
@@ -224,7 +253,11 @@ public final class JxlsFileCodec implements FileCodec {
                 }
                 Row target = sheet.createRow(rowIndex++);
                 for (int i = 0; i < columns.size(); i++) {
-                    setCell(target.createCell(i), row.get(columns.get(i).name()));
+                    Cell cell = target.createCell(i);
+                    if (styles[i] != null) {
+                        cell.setCellStyle(styles[i]);
+                    }
+                    setCell(cell, row.get(columns.get(i).name()), zone);
                 }
             }
             workbook.write(out);
@@ -232,7 +265,14 @@ public final class JxlsFileCodec implements FileCodec {
         }
     }
 
-    private static void setCell(Cell cell, Object value) {
+    /** Writes a typed cell: temporals become real date cells, numbers numeric cells. */
+    private static void setCell(Cell cell, Object value, ZoneId zone) {
+        java.time.ZonedDateTime temporal =
+                io.tesseraql.core.files.ColumnValues.toZoned(value, zone);
+        if (temporal != null) {
+            cell.setCellValue(temporal.toLocalDateTime());
+            return;
+        }
         switch (value) {
             case null -> cell.setBlank();
             case Number number -> cell.setCellValue(number.doubleValue());

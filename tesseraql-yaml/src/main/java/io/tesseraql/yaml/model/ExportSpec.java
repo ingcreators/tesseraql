@@ -44,7 +44,8 @@ import java.util.List;
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public record ExportSpec(String format, String filename, String template, String sheet,
-        String startCell, List<ColumnSpec> columns, SqlBinding sql, AfterSpec after) {
+        String startCell, List<ColumnSpec> columns, String locale, String timezone,
+        SqlBinding sql, AfterSpec after) {
 
     public ExportSpec {
         columns = columns == null ? List.of() : List.copyOf(columns);

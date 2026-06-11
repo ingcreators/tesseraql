@@ -105,6 +105,32 @@ class JxlsFileCodecTest {
     }
 
     @Test
+    void typedColumnsBecomeRealDateAndNumberCellsWithFormats() throws Exception {
+        Map<String, Object> row = new LinkedHashMap<>();
+        row.put("held_on", java.sql.Timestamp.from(
+                java.time.Instant.parse("2026-06-10T23:30:00Z")));
+        row.put("fee", new java.math.BigDecimal("1234.5"));
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        codec.write(out, new FileWriteSpec(List.of(
+                        new ColumnMapping("held_on", null, null, "datetime", "yyyy/mm/dd hh:mm"),
+                        new ColumnMapping("fee", null, null, "number", "#,##0.00")),
+                        null, null, null, null, "Asia/Tokyo"),
+                List.of(row).iterator());
+
+        try (XSSFWorkbook workbook = new XSSFWorkbook(new ByteArrayInputStream(out.toByteArray()))) {
+            Sheet sheet = workbook.getSheetAt(0);
+            org.apache.poi.ss.usermodel.Cell date = sheet.getRow(1).getCell(0);
+            // A real date cell in the transfer's time zone, carrying the declared cell format.
+            assertThat(org.apache.poi.ss.usermodel.DateUtil.isCellDateFormatted(date)).isTrue();
+            assertThat(date.getLocalDateTimeCellValue())
+                    .isEqualTo(java.time.LocalDateTime.of(2026, 6, 11, 8, 30));
+            org.apache.poi.ss.usermodel.Cell fee = sheet.getRow(1).getCell(1);
+            assertThat(fee.getNumericCellValue()).isEqualTo(1234.5);
+            assertThat(fee.getCellStyle().getDataFormatString()).isEqualTo("#,##0.00");
+        }
+    }
+
+    @Test
     void jxlsTemplateRendersReportStyleOutput() throws Exception {
         Path template = writeJxlsTemplate();
         ByteArrayOutputStream out = new ByteArrayOutputStream();

@@ -185,10 +185,14 @@ public final class JdbcFileTransferService implements FileTransferService {
                         (rowNumber, values) -> {
                             Savepoint savepoint = connection.setSavepoint();
                             try {
+                                // Typed columns (date/datetime/number) parse before binding, so
+                                // bad values surface as row errors, not dialect cast failures.
+                                Map<String, Object> typed = io.tesseraql.core.files.ColumnValues
+                                        .parseRow(request.readSpec(), values);
                                 applied[0] += executeUpdate(connection,
-                                        SqlRenderer.render(rowSql, values));
+                                        SqlRenderer.render(rowSql, typed));
                                 connection.releaseSavepoint(savepoint);
-                            } catch (SQLException | TqlException ex) {
+                            } catch (SQLException | RuntimeException ex) {
                                 connection.rollback(savepoint);
                                 if (errors.size() < MAX_RECORDED_ERRORS) {
                                     errors.add(new RowError(rowNumber, ex.getMessage()));

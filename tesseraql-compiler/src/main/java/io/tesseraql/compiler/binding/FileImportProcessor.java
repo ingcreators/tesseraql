@@ -28,16 +28,18 @@ public final class FileImportProcessor implements Processor {
     private final String appName;
     private final String format;
     private final FileReadSpec readSpec;
+    private final String localeDeclaration;
     private final Path rowSqlFile;
     private final String onError;
 
     public FileImportProcessor(String routeId, String urlPath, String appName, String format,
-            FileReadSpec readSpec, Path rowSqlFile, String onError) {
+            FileReadSpec readSpec, String localeDeclaration, Path rowSqlFile, String onError) {
         this.routeId = routeId;
         this.urlPath = urlPath;
         this.appName = appName;
         this.format = format;
         this.readSpec = readSpec;
+        this.localeDeclaration = localeDeclaration;
         this.rowSqlFile = rowSqlFile;
         this.onError = onError;
     }
@@ -56,7 +58,9 @@ public final class FileImportProcessor implements Processor {
             throw new TqlException(NO_SERVICE, "File transfer service is not configured");
         }
         String transferId = transfers.startImport(new FileTransferService.ImportRequest(
-                routeId, appName, format, readSpec, rowSqlFile, onError), content);
+                routeId, appName, format,
+                readSpec.withLocale(FormatSources.resolve(exchange, localeDeclaration)),
+                rowSqlFile, onError), content);
         respondAccepted(exchange, urlPath, transferId, false);
     }
 

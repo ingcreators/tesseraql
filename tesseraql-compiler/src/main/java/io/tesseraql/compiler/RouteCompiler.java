@@ -193,7 +193,8 @@ public final class RouteCompiler {
         applySecurity(route, definition.security());
         route.process(new io.tesseraql.compiler.binding.FileImportProcessor(
                 routeId, routeFile.urlPath(), appName, spec.format(),
-                spec.toReadSpec(), rowSql, spec.effectiveOnError()));
+                spec.toReadSpec(), formatDeclaration(spec.locale(), "tesseraql.files.locale"),
+                rowSql, spec.effectiveOnError()));
         mountTransferStatus(builder, routeFile, routeId);
     }
 
@@ -225,6 +226,8 @@ public final class RouteCompiler {
                 .process(new io.tesseraql.compiler.binding.FileExportStartProcessor(
                         routeId, routeFile.urlPath(), appName, spec.format(),
                         spec.toWriteSpec(template),
+                        formatDeclaration(spec.locale(), "tesseraql.files.locale"),
+                        formatDeclaration(spec.timezone(), "tesseraql.files.timezone"),
                         spec.filename(), querySql, afterTiming, afterSql));
         mountTransferStatus(builder, routeFile, routeId);
 
@@ -236,6 +239,12 @@ public final class RouteCompiler {
         ProcessorDefinition<?> fileRoute = builder.from(fileDirect).routeId(routeId + ".file");
         applySecurity(fileRoute, definition.security());
         fileRoute.process(new io.tesseraql.compiler.binding.FileDownloadProcessor());
+    }
+
+    /** The route's locale/timezone declaration, falling back to the app-wide configuration. */
+    private String formatDeclaration(String declared, String configKey) {
+        return declared != null && !declared.isBlank()
+                ? declared : config.getString(configKey).orElse(null);
     }
 
     /** GET {path}/{transferId}: the shared status endpoint, secured like its parent route. */

@@ -24,19 +24,23 @@ public final class FileExportStartProcessor implements Processor {
     private final String appName;
     private final String format;
     private final FileWriteSpec writeSpec;
+    private final String localeDeclaration;
+    private final String timezoneDeclaration;
     private final String filename;
     private final Path querySqlFile;
     private final String afterTiming;
     private final Path afterSqlFile;
 
     public FileExportStartProcessor(String routeId, String urlPath, String appName, String format,
-            FileWriteSpec writeSpec, String filename, Path querySqlFile, String afterTiming,
-            Path afterSqlFile) {
+            FileWriteSpec writeSpec, String localeDeclaration, String timezoneDeclaration,
+            String filename, Path querySqlFile, String afterTiming, Path afterSqlFile) {
         this.routeId = routeId;
         this.urlPath = urlPath;
         this.appName = appName;
         this.format = format;
         this.writeSpec = writeSpec;
+        this.localeDeclaration = localeDeclaration;
+        this.timezoneDeclaration = timezoneDeclaration;
         this.filename = filename;
         this.querySqlFile = querySqlFile;
         this.afterTiming = afterTiming;
@@ -55,8 +59,11 @@ public final class FileExportStartProcessor implements Processor {
         Map<String, Object> params = exchange.getProperty(
                 TesseraqlProperties.SQL_PARAMS, Map.of(), Map.class);
         String transferId = transfers.startExport(new FileTransferService.ExportRequest(
-                routeId, appName, format, writeSpec, filename, querySqlFile,
-                Map.copyOf(params), afterTiming, afterSqlFile));
+                routeId, appName, format,
+                writeSpec.withFormatting(
+                        FormatSources.resolve(exchange, localeDeclaration),
+                        FormatSources.resolve(exchange, timezoneDeclaration)),
+                filename, querySqlFile, Map.copyOf(params), afterTiming, afterSqlFile));
         FileImportProcessor.respondAccepted(exchange, urlPath, transferId, true);
     }
 }

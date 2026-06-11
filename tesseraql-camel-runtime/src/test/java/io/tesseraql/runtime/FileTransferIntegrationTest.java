@@ -145,6 +145,33 @@ class FileTransferIntegrationTest {
     }
 
     @Test
+    void typedColumnsParseOnImportAndFormatPerLocaleOnExport() throws Exception {
+        // German-formatted upload: typed parsing turns the text into date/numeric binds.
+        String transferId = startTransfer("/api/events/import",
+                "name,held_on,fee\nexpo,2026/06/11,\"1.234,56\"\n");
+        JsonNode status = awaitTerminal("/api/events/import/" + transferId);
+        assertThat(status.get("status").asText()).isEqualTo("COMPLETED");
+        try (Connection connection = connect();
+                Statement statement = connection.createStatement();
+                ResultSet rs = statement.executeQuery(
+                        "select held_on, fee from events where name = 'expo'")) {
+            assertThat(rs.next()).isTrue();
+            assertThat(rs.getDate("held_on").toLocalDate())
+                    .isEqualTo(java.time.LocalDate.of(2026, 6, 11));
+            assertThat(rs.getBigDecimal("fee")).isEqualByComparingTo("1234.56");
+        }
+
+        // The export renders dates and numbers back in the route's locale.
+        String exportId = startTransfer("/api/events/export", "");
+        assertThat(awaitTerminal("/api/events/export/" + exportId).get("status").asText())
+                .isEqualTo("COMPLETED");
+        HttpResponse<String> file = get("/api/events/export/" + exportId + "/file");
+        assertThat(file.body())
+                .contains("2026/06/11")
+                .contains("\"1.234,56\"");
+    }
+
+    @Test
     void unknownTransferIs404AndRunningExportFileIs409() throws Exception {
         assertThat(get("/api/orders/export/no-such-transfer").statusCode()).isEqualTo(404);
         assertThat(get("/api/orders/export/no-such-transfer/file").statusCode()).isEqualTo(404);
@@ -240,6 +267,9 @@ class FileTransferIntegrationTest {
                 create table orders (order_no varchar(64) primary key,
                                      extracted boolean not null default false,
                                      download_only boolean not null default false);
+                create table events (name varchar(100) primary key,
+                                     held_on date not null,
+                                     fee numeric(12, 2) not null);
                 """);
 
         writeImportRoute(home, "web/api/items/import", "items.import", "rollback");
@@ -248,7 +278,57 @@ class FileTransferIntegrationTest {
                 "where not download_only");
         writeExportRoute(home, "web/api/orders/export-on-download", "orders.exportOnDownload",
                 "download", "where download_only");
+        writeTypedRoutes(home);
         return home;
+    }
+
+    /** Typed columns with German number formats, both directions (design ch. 28). */
+    private static void writeTypedRoutes(Path home) throws IOException {
+        Path importRoute = home.resolve("web/api/events/import");
+        Files.createDirectories(importRoute);
+        Files.writeString(importRoute.resolve("post.yml"), """
+                version: tesseraql/v1
+                id: events.import
+                kind: route
+                recipe: file-import
+                import:
+                  format: csv
+                  locale: de-DE
+                  columns:
+                    - name
+                    - { name: held_on, type: date, format: yyyy/MM/dd }
+                    - { name: fee, type: number, format: "#,##0.00" }
+                  sql:
+                    file: upsert-event.sql
+                """);
+        Files.writeString(importRoute.resolve("upsert-event.sql"), """
+                insert into events (name, held_on, fee)
+                values ( /* name */ 'sample', /* held_on */ '2026-01-01', /* fee */ 0 )
+                on conflict (name) do update set held_on = excluded.held_on, fee = excluded.fee
+                ;
+                """);
+
+        Path exportRoute = home.resolve("web/api/events/export");
+        Files.createDirectories(exportRoute);
+        Files.writeString(exportRoute.resolve("post.yml"), """
+                version: tesseraql/v1
+                id: events.export
+                kind: route
+                recipe: file-export
+                export:
+                  format: csv
+                  filename: events.csv
+                  locale: de-DE
+                  timezone: Asia/Tokyo
+                  columns:
+                    - name
+                    - { name: held_on, type: date, format: yyyy/MM/dd }
+                    - { name: fee, type: number, format: "#,##0.00" }
+                  sql:
+                    file: select-events.sql
+                """);
+        Files.writeString(exportRoute.resolve("select-events.sql"),
+                "select name, held_on, fee from events order by name\n;\n");
     }
 
     private static void writeImportRoute(Path home, String dir, String id, String onError)

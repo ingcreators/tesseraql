@@ -33,7 +33,7 @@ import java.util.List;
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public record ImportSpec(String format, List<ColumnSpec> columns, Boolean headerRow,
-        Integer startRow, String sheet, String onError, SqlBinding sql) {
+        Integer startRow, String sheet, String locale, String onError, SqlBinding sql) {
 
     public ImportSpec {
         columns = columns == null ? List.of() : List.copyOf(columns);
