@@ -1,4 +1,5 @@
-FROM mcr.microsoft.com/devcontainers/java:1-21-bookworm
+# JDK stays on the Java 21 baseline; CI checks Java 25 compatibility (docs/build.md).
+FROM mcr.microsoft.com/devcontainers/java:3-21-bookworm
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
