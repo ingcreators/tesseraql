@@ -93,8 +93,7 @@ final class AppMigrations {
                 .baselineOnMigrate(true)
                 .baselineVersion("0")
                 .load()
-                .migrate()
-                .migrationsExecuted;
+                .migrate().migrationsExecuted;
         if (applied > 0) {
             LOG.info("Applied {} migration(s) for app {} on {}", applied, appName, target);
         }

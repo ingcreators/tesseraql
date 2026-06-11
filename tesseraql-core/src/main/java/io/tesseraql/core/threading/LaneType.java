@@ -8,6 +8,5 @@ package io.tesseraql.core.threading;
  * for CPU-bound or pinning-prone work that should not be multiplexed onto carriers.
  */
 public enum LaneType {
-    VIRTUAL,
-    PLATFORM
+    VIRTUAL, PLATFORM
 }

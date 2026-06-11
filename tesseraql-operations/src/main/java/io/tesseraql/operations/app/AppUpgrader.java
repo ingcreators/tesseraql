@@ -34,7 +34,8 @@ public final class AppUpgrader {
     private final AppInstaller installer = new AppInstaller();
 
     /** Validates a candidate package against the current install and the framework version. */
-    public UpgradeReport preflight(Path tqlapp, Path installRoot, SemanticVersion frameworkVersion) {
+    public UpgradeReport preflight(Path tqlapp, Path installRoot,
+            SemanticVersion frameworkVersion) {
         AppInstaller.PackageInfo info = installer.peek(tqlapp);
         Optional<InstalledApp> current = new AppCatalog(installRoot).find(info.id());
         List<String> messages = new ArrayList<>();
@@ -57,7 +58,8 @@ public final class AppUpgrader {
 
         VersionRange required = VersionRange.parse(info.requiresFramework());
         if (!required.includes(frameworkVersion)) {
-            messages.add("Package requires framework " + required + " but runtime is " + frameworkVersion);
+            messages.add("Package requires framework " + required + " but runtime is "
+                    + frameworkVersion);
         }
 
         return new UpgradeReport(messages.isEmpty(), info.id(),
@@ -112,7 +114,8 @@ public final class AppUpgrader {
             throw new TqlException(NO_TARGET, "No staged candidate for app: " + appId);
         }
         int weight = Math.max(0, Math.min(100, weightPercent));
-        writeState(installRoot, appId, new UpgradeState(state.previous(), state.candidate(), weight));
+        writeState(installRoot, appId,
+                new UpgradeState(state.previous(), state.candidate(), weight));
     }
 
     /** The staged canary candidate and its traffic weight, if a canary is in progress. */
@@ -151,7 +154,8 @@ public final class AppUpgrader {
         }
         InstalledApp previous = state.previous();
         if (previous == null) {
-            throw new TqlException(NO_TARGET, "No previous version to roll back to for app: " + appId);
+            throw new TqlException(NO_TARGET,
+                    "No previous version to roll back to for app: " + appId);
         }
         if (!Files.isDirectory(installRoot.resolve(previous.path()))) {
             throw new TqlException(NO_TARGET,
@@ -190,7 +194,8 @@ public final class AppUpgrader {
     }
 
     /** The result of an upgrade. */
-    public record UpgradeResult(String appId, String fromVersion, String toVersion, boolean canary) {
+    public record UpgradeResult(String appId, String fromVersion, String toVersion,
+            boolean canary) {
     }
 
     /** A staged canary candidate and the percentage of traffic it should receive. */

@@ -23,8 +23,7 @@ public class GenerateMojo extends AbstractMojo {
     @Parameter(property = "tesseraql.appHome", required = true)
     private File appHome;
 
-    @Parameter(property = "tesseraql.generatedDir",
-            defaultValue = "${project.build.directory}/tesseraql-generated")
+    @Parameter(property = "tesseraql.generatedDir", defaultValue = "${project.build.directory}/tesseraql-generated")
     private File generatedDir;
 
     @Override

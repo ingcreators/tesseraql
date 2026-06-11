@@ -48,7 +48,8 @@ public final class ScimGroupService {
         try {
             Map<String, Object> row = ScimSql.queryOne(dataSource, contract.findByIdSql(),
                     Map.of("id", id));
-            return row == null ? Optional.empty()
+            return row == null
+                    ? Optional.empty()
                     : Optional.of(ScimGroupMapper.fromRow(row, members(id)));
         } catch (SQLException ex) {
             throw new ScimException(500, null, "SCIM group lookup failed: " + ex.getMessage());
@@ -74,7 +75,8 @@ public final class ScimGroupService {
         if (contract.countSql() == null || contract.countSql().isBlank()) {
             return fallback;
         }
-        return ScimCount.toInt(ScimSql.queryOne(dataSource, contract.countSql(), Map.of()), fallback);
+        return ScimCount.toInt(ScimSql.queryOne(dataSource, contract.countSql(), Map.of()),
+                fallback);
     }
 
     /**
@@ -108,7 +110,8 @@ public final class ScimGroupService {
         desired.forEach(member -> target.add(member.value()));
         java.util.Set<String> current = new java.util.LinkedHashSet<>();
         members(id).forEach(member -> current.add(member.value()));
-        target.stream().filter(value -> !current.contains(value)).forEach(value -> addMember(id, value));
+        target.stream().filter(value -> !current.contains(value))
+                .forEach(value -> addMember(id, value));
         current.stream().filter(value -> !target.contains(value))
                 .forEach(value -> removeMember(id, value));
     }
@@ -151,13 +154,15 @@ public final class ScimGroupService {
             if (SqlErrors.isUniqueViolation(ex)) {
                 return; // membership already present — keep PATCH idempotent
             }
-            throw new ScimException(500, null, "SCIM group " + what + " failed: " + ex.getMessage());
+            throw new ScimException(500, null,
+                    "SCIM group " + what + " failed: " + ex.getMessage());
         }
     }
 
     private List<ScimGroup.Member> members(String groupId) {
         try {
-            return ScimSql.queryAll(dataSource, contract.listMembersSql(), Map.of("groupId", groupId))
+            return ScimSql
+                    .queryAll(dataSource, contract.listMembersSql(), Map.of("groupId", groupId))
                     .stream().map(ScimGroupMapper::memberFromRow).toList();
         } catch (SQLException ex) {
             throw new ScimException(500, null, "SCIM group members failed: " + ex.getMessage());

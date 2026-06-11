@@ -7,6 +7,9 @@ TesseraQL itself.
 ## Preconditions
 
 - All work merged to `main`; CI green on Java 21 and 25.
+- The direct pushes below rely on the `main-protection` ruleset's repository-admin bypass
+  (non-admins must go through a PR). Release tags (`v*`) are immutable by ruleset: they can
+  be created but not moved or deleted.
 - `CHANGELOG.md` has a section for the version with the release date filled in.
 - The gated dialect suites pass against live containers (they are not part of regular CI):
 

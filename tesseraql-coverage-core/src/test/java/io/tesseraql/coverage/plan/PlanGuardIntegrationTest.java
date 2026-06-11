@@ -38,8 +38,10 @@ class PlanGuardIntegrationTest {
     @Test
     void indexedLookupPassesNoSeqScanPolicy() throws Exception {
         try (Connection connection = connection()) {
-            QueryPlan plan = INSPECTOR.explain(connection, "select * from t where id = ?", List.of(500));
-            List<PlanViolation> violations = PlanGuard.evaluate(plan, PlanGuardPolicy.noSeqScan(100));
+            QueryPlan plan = INSPECTOR.explain(connection, "select * from t where id = ?",
+                    List.of(500));
+            List<PlanViolation> violations = PlanGuard.evaluate(plan,
+                    PlanGuardPolicy.noSeqScan(100));
             assertThat(violations).isEmpty();
         }
     }
@@ -48,7 +50,8 @@ class PlanGuardIntegrationTest {
     void fullScanIsRejected() throws Exception {
         try (Connection connection = connection()) {
             QueryPlan plan = INSPECTOR.explain(connection, "select * from t", List.of());
-            List<PlanViolation> violations = PlanGuard.evaluate(plan, PlanGuardPolicy.noSeqScan(10_000));
+            List<PlanViolation> violations = PlanGuard.evaluate(plan,
+                    PlanGuardPolicy.noSeqScan(10_000));
             assertThat(violations).anyMatch(v -> v.code().toString().equals("TQL-PLAN-1001"));
         }
     }

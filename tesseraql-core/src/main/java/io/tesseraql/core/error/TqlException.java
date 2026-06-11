@@ -24,7 +24,8 @@ public class TqlException extends RuntimeException {
         this(code, message, null, null, cause);
     }
 
-    protected TqlException(TqlErrorCode code, String message, String source, Integer line, Throwable cause) {
+    protected TqlException(TqlErrorCode code, String message, String source, Integer line,
+            Throwable cause) {
         super(message, cause);
         this.code = Objects.requireNonNull(code, "code");
         this.source = source;

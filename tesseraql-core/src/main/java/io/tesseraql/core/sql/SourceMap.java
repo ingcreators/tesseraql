@@ -39,7 +39,8 @@ public final class SourceMap {
      */
     public int sourceLineAt(int renderedOffset) {
         for (Segment segment : segments) {
-            if (renderedOffset >= segment.renderedStart() && renderedOffset < segment.renderedEnd()) {
+            if (renderedOffset >= segment.renderedStart()
+                    && renderedOffset < segment.renderedEnd()) {
                 return segment.sourceLine();
             }
         }

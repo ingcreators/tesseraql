@@ -37,8 +37,10 @@ public final class OpsDashboard {
     public OpsDashboard(JobRepository jobs, ExecutionLanes lanes, SqlExecutionLog slowSql,
             TraceLog traces, long slowSpanThresholdMs, double errorRateWarnPercent) {
         this(jobs, lanes, slowSql, traces, slowSpanThresholdMs,
-                new AlertThresholds(errorRateWarnPercent, AlertThresholds.defaults().slowRatePercent(),
-                        AlertThresholds.defaults().batchFailureRatePercent()), null);
+                new AlertThresholds(errorRateWarnPercent,
+                        AlertThresholds.defaults().slowRatePercent(),
+                        AlertThresholds.defaults().batchFailureRatePercent()),
+                null);
     }
 
     public OpsDashboard(JobRepository jobs, ExecutionLanes lanes, SqlExecutionLog slowSql,
@@ -143,7 +145,8 @@ public final class OpsDashboard {
         if (jobs != null) {
             List<JobExecution> executions = jobs.listExecutions(SCAN_LIMIT);
             int failed = (int) executions.stream()
-                    .filter(e -> e.status() == io.tesseraql.operations.batch.JobStatus.FAILED).count();
+                    .filter(e -> e.status() == io.tesseraql.operations.batch.JobStatus.FAILED)
+                    .count();
             double failureRate = percent(failed, executions.size());
             if (!executions.isEmpty() && failureRate >= thresholds.batchFailureRatePercent()) {
                 alerts.add(new Alert("TQL-OPS-9004", "warning",
@@ -162,7 +165,8 @@ public final class OpsDashboard {
         List<SpanSample> spans = traces.recentSpans();
         int spanCount = spans.size();
         int errorSpans = (int) spans.stream().filter(SpanSample::error).count();
-        int slowSpans = (int) spans.stream().filter(s -> s.durationMs() >= slowSpanThresholdMs).count();
+        int slowSpans = (int) spans.stream().filter(s -> s.durationMs() >= slowSpanThresholdMs)
+                .count();
         List<TraceSummary> summaries = traceSummaries();
         int traceCount = summaries.size();
         int errorTraces = (int) summaries.stream().filter(s -> s.errorCount() > 0).count();
@@ -220,7 +224,8 @@ public final class OpsDashboard {
         }
         for (SpanSample span : spans) {
             if (span.parentSpanId() != null && ids.contains(span.parentSpanId())) {
-                childrenByParent.computeIfAbsent(span.parentSpanId(), k -> new java.util.ArrayList<>())
+                childrenByParent
+                        .computeIfAbsent(span.parentSpanId(), k -> new java.util.ArrayList<>())
                         .add(span);
             }
         }
@@ -350,7 +355,8 @@ public final class OpsDashboard {
     }
 
     /** Batch execution summary: total scanned, counts by status, and the most recent executions. */
-    public record BatchSummary(int total, Map<String, Integer> byStatus, List<ExecutionView> recent) {
+    public record BatchSummary(int total, Map<String, Integer> byStatus,
+            List<ExecutionView> recent) {
     }
 
     /** A compact view of a batch execution for the dashboard ({@code startTime} as ISO-8601). */

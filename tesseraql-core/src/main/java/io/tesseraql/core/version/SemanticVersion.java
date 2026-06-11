@@ -8,7 +8,8 @@ import java.util.Objects;
  * <p>Missing components default to zero ({@code 1} == {@code 1.0.0}). Pre-release and build metadata
  * are ignored for ordering; comparison is numeric by major, then minor, then patch.
  */
-public record SemanticVersion(int major, int minor, int patch) implements Comparable<SemanticVersion> {
+public record SemanticVersion(int major, int minor,
+        int patch) implements Comparable<SemanticVersion> {
 
     public SemanticVersion {
         if (major < 0 || minor < 0 || patch < 0) {

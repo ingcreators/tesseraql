@@ -33,7 +33,8 @@ public final class JdbcSessionStore implements SessionStore {
         this.dataSource = dataSource;
         this.timeToLive = timeToLive;
         this.cookieName = cookieName == null || cookieName.isBlank()
-                ? DEFAULT_COOKIE_NAME : cookieName;
+                ? DEFAULT_COOKIE_NAME
+                : cookieName;
     }
 
     /**

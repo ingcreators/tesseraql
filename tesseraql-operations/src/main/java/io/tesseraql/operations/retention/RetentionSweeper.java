@@ -63,7 +63,7 @@ public final class RetentionSweeper {
         try (PreparedStatement ps = connection.prepareStatement(
                 "delete from tql_job_execution where status <> 'RUNNING' and end_time < ?")) {
             ps.setTimestamp(1, Timestamp.from(cutoff));
-            return new int[] {ps.executeUpdate(), steps};
+            return new int[]{ps.executeUpdate(), steps};
         }
     }
 }

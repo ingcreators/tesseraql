@@ -42,8 +42,7 @@ class HttpAppSourceTest {
                 out.write(artifact);
             }
         });
-        server.createContext("/missing.tqlapp", exchange ->
-                exchange.sendResponseHeaders(404, -1));
+        server.createContext("/missing.tqlapp", exchange -> exchange.sendResponseHeaders(404, -1));
         server.start();
     }
 

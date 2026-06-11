@@ -156,7 +156,7 @@ class FileTransferIntegrationTest {
                 + "name,qty\nmulti,9\n\r\n"
                 + "--" + boundary + "--\r\n";
         HttpResponse<String> response = HTTP.send(HttpRequest.newBuilder(
-                        URI.create("http://localhost:" + runtime.port() + "/api/items/import"))
+                URI.create("http://localhost:" + runtime.port() + "/api/items/import"))
                 .header("Content-Type", "multipart/form-data; boundary=" + boundary)
                 .POST(HttpRequest.BodyPublishers.ofString(multipart, StandardCharsets.UTF_8))
                 .build(), HttpResponse.BodyHandlers.ofString());
@@ -198,7 +198,8 @@ class FileTransferIntegrationTest {
 
     @Test
     void synchronousQueryExportSharesColumnMappingAndFormats() throws Exception {
-        try (Connection connection = connect(); Statement statement = connection.createStatement()) {
+        try (Connection connection = connect();
+                Statement statement = connection.createStatement()) {
             statement.execute("insert into events (name, held_on, fee)"
                     + " values ('sync-fest', date '2026-07-01', 1234.50)"
                     + " on conflict (name) do nothing");
@@ -238,7 +239,7 @@ class FileTransferIntegrationTest {
     @Test
     void emptyUploadIsRejectedWith400() throws Exception {
         HttpResponse<String> response = HTTP.send(HttpRequest.newBuilder(
-                        URI.create("http://localhost:" + runtime.port() + "/api/items/import"))
+                URI.create("http://localhost:" + runtime.port() + "/api/items/import"))
                 .header("Content-Type", "text/csv")
                 .POST(HttpRequest.BodyPublishers.noBody())
                 .build(), HttpResponse.BodyHandlers.ofString());
@@ -249,7 +250,7 @@ class FileTransferIntegrationTest {
 
     private static String startTransfer(String path, String body) throws Exception {
         HttpResponse<String> response = HTTP.send(HttpRequest.newBuilder(
-                        URI.create("http://localhost:" + runtime.port() + path))
+                URI.create("http://localhost:" + runtime.port() + path))
                 .header("Content-Type", "text/csv")
                 .POST(HttpRequest.BodyPublishers.ofString(body, StandardCharsets.UTF_8))
                 .build(), HttpResponse.BodyHandlers.ofString());
@@ -274,7 +275,7 @@ class FileTransferIntegrationTest {
 
     private static HttpResponse<String> get(String path) throws Exception {
         return HTTP.send(HttpRequest.newBuilder(
-                        URI.create("http://localhost:" + runtime.port() + path)).build(),
+                URI.create("http://localhost:" + runtime.port() + path)).build(),
                 HttpResponse.BodyHandlers.ofString());
     }
 
@@ -300,7 +301,8 @@ class FileTransferIntegrationTest {
     }
 
     private static void seedOrder(String orderNo, boolean downloadOnly) throws Exception {
-        try (Connection connection = connect(); Statement statement = connection.createStatement()) {
+        try (Connection connection = connect();
+                Statement statement = connection.createStatement()) {
             statement.execute("insert into orders (order_no, extracted, download_only) values ('"
                     + orderNo + "', false, " + downloadOnly + ")");
         }

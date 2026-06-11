@@ -42,6 +42,7 @@ public final class PolicyEngine {
     }
 
     public boolean permits(String policyId, Principal principal) {
-        return principal != null && config.policy(policyId).map(p -> p.permits(principal)).orElse(false);
+        return principal != null
+                && config.policy(policyId).map(p -> p.permits(principal)).orElse(false);
     }
 }

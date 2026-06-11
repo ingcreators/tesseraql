@@ -69,7 +69,8 @@ public final class AppInstaller {
      * Extracts and places {@code tqlapp} into the install root without touching the catalog, returning
      * the resulting entry. Used by upgrades to stage a candidate version (canary) before promotion.
      */
-    public InstalledApp place(Path tqlapp, Path installRoot, Path overlay, List<String> entitledTenants) {
+    public InstalledApp place(Path tqlapp, Path installRoot, Path overlay,
+            List<String> entitledTenants) {
         try {
             Files.createDirectories(installRoot);
             Path staging = Files.createTempDirectory(installRoot, "staging-");
@@ -78,8 +79,9 @@ public final class AppInstaller {
                 applyOverlay(staging, overlay);
 
                 AppConfig config = loadConfig(staging);
-                String id = config.getString("tesseraql.app.name").orElseThrow(() -> new TqlException(
-                        INVALID_PACKAGE, "Package has no tesseraql.app.name: " + tqlapp));
+                String id = config.getString("tesseraql.app.name")
+                        .orElseThrow(() -> new TqlException(
+                                INVALID_PACKAGE, "Package has no tesseraql.app.name: " + tqlapp));
                 String version = config.getString("tesseraql.app.version").orElse("0.0.0");
 
                 Path target = installRoot.resolve(id).resolve(version);
@@ -105,10 +107,12 @@ public final class AppInstaller {
             try {
                 extract(tqlapp, staging);
                 AppConfig config = loadConfig(staging);
-                String id = config.getString("tesseraql.app.name").orElseThrow(() -> new TqlException(
-                        INVALID_PACKAGE, "Package has no tesseraql.app.name: " + tqlapp));
+                String id = config.getString("tesseraql.app.name")
+                        .orElseThrow(() -> new TqlException(
+                                INVALID_PACKAGE, "Package has no tesseraql.app.name: " + tqlapp));
                 String version = config.getString("tesseraql.app.version").orElse("0.0.0");
-                String requiresFramework = config.getString("tesseraql.app.requires.framework").orElse("*");
+                String requiresFramework = config.getString("tesseraql.app.requires.framework")
+                        .orElse("*");
                 return new PackageInfo(id, version, requiresFramework);
             } finally {
                 deleteRecursively(staging);
@@ -130,7 +134,8 @@ public final class AppInstaller {
                 Path resolved = root.resolve(entry.getName()).normalize();
                 if (!resolved.startsWith(root)) {
                     throw new TqlException(INVALID_PACKAGE,
-                            "Package entry escapes install root (design ch. 20.2): " + entry.getName());
+                            "Package entry escapes install root (design ch. 20.2): "
+                                    + entry.getName());
                 }
                 if (entry.isDirectory()) {
                     Files.createDirectories(resolved);

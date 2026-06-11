@@ -42,7 +42,8 @@ class OutboxClaimIntegrationTest {
         dataSource.setPassword(POSTGRES.getPassword());
         store = new JdbcOutboxStore(dataSource);
         store.ensureSchema();
-        try (Connection connection = connect(); Statement statement = connection.createStatement()) {
+        try (Connection connection = connect();
+                Statement statement = connection.createStatement()) {
             statement.execute("delete from tql_outbox_event");
         }
     }
@@ -88,7 +89,8 @@ class OutboxClaimIntegrationTest {
         assertThat(store.claimPending(10)).isEmpty();
 
         // Simulate a dispatcher that crashed mid-delivery: its claim ages past the timeout.
-        try (Connection connection = connect(); Statement statement = connection.createStatement()) {
+        try (Connection connection = connect();
+                Statement statement = connection.createStatement()) {
             statement.execute(
                     "update tql_outbox_event set claimed_at = now() - interval '10 minutes'");
         }

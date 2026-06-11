@@ -69,7 +69,8 @@ class SystemAppsTest {
         AppManifest main = load(app("main", "ping.get", "a/ping"));
         AppManifest mounted = load(app("sys", "ping.get", "b/ping"));
 
-        assertThatThrownBy(() -> SystemApps.requireNoRouteConflicts(main, List.of(new SystemApps.MountedApp("sys", mounted))))
+        assertThatThrownBy(() -> SystemApps.requireNoRouteConflicts(main,
+                List.of(new SystemApps.MountedApp("sys", mounted))))
                 .isInstanceOf(TqlException.class)
                 .hasMessageContaining("Route id 'ping.get'");
     }
@@ -79,7 +80,8 @@ class SystemAppsTest {
         AppManifest main = load(app("main", "a.ping", "shared/ping"));
         AppManifest mounted = load(app("sys", "b.ping", "shared/ping"));
 
-        assertThatThrownBy(() -> SystemApps.requireNoRouteConflicts(main, List.of(new SystemApps.MountedApp("sys", mounted))))
+        assertThatThrownBy(() -> SystemApps.requireNoRouteConflicts(main,
+                List.of(new SystemApps.MountedApp("sys", mounted))))
                 .isInstanceOf(TqlException.class)
                 .hasMessageContaining("Endpoint 'GET /shared/ping'");
     }
@@ -89,6 +91,7 @@ class SystemAppsTest {
         AppManifest main = load(app("main", "a.ping", "a/ping"));
         AppManifest mounted = load(app("sys", "b.ping", "b/ping"));
 
-        SystemApps.requireNoRouteConflicts(main, List.of(new SystemApps.MountedApp("sys", mounted)));
+        SystemApps.requireNoRouteConflicts(main,
+                List.of(new SystemApps.MountedApp("sys", mounted)));
     }
 }

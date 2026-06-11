@@ -26,12 +26,12 @@ public final class NamedQueryBinder implements Processor {
     @Override
     public void process(Exchange exchange) {
         @SuppressWarnings("unchecked")
-        Map<String, Object> context =
-                exchange.getProperty(TesseraqlProperties.CONTEXT, Map.of(), Map.class);
+        Map<String, Object> context = exchange.getProperty(TesseraqlProperties.CONTEXT, Map.of(),
+                Map.class);
         EvaluationContext evaluation = new EvaluationContext(context);
         Map<String, Object> params = new LinkedHashMap<>();
-        binding.params().forEach((bindName, sourceExpr) ->
-                params.put(bindName, evaluation.resolve(Arrays.asList(sourceExpr.split("\\.")))));
+        binding.params().forEach((bindName, sourceExpr) -> params.put(bindName,
+                evaluation.resolve(Arrays.asList(sourceExpr.split("\\.")))));
         exchange.setProperty(TesseraqlProperties.SQL_PARAMS, params);
     }
 }

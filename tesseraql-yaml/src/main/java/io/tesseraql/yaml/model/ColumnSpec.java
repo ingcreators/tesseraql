@@ -46,7 +46,8 @@ public record ColumnSpec(String name, String header, String column, String type,
     public io.tesseraql.core.files.ColumnMapping toMapping() {
         return new io.tesseraql.core.files.ColumnMapping(name, header,
                 column == null || column.isBlank()
-                        ? null : io.tesseraql.core.files.ColumnMapping.parseColumn(column),
+                        ? null
+                        : io.tesseraql.core.files.ColumnMapping.parseColumn(column),
                 type, format);
     }
 }

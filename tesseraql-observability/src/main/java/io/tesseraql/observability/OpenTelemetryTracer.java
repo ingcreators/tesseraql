@@ -70,14 +70,16 @@ public final class OpenTelemetryTracer implements KeyedTracer {
 
         @Override
         public Span attribute(String key, Object value) {
-            span.setAttribute(AttributeKey.stringKey(key), value == null ? "" : String.valueOf(value));
+            span.setAttribute(AttributeKey.stringKey(key),
+                    value == null ? "" : String.valueOf(value));
             return this;
         }
 
         @Override
         public void recordError(Throwable error) {
             span.recordException(error);
-            span.setStatus(StatusCode.ERROR, error.getMessage() == null ? "error" : error.getMessage());
+            span.setStatus(StatusCode.ERROR,
+                    error.getMessage() == null ? "error" : error.getMessage());
         }
 
         @Override

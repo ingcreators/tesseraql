@@ -34,7 +34,9 @@ public record SpMetadata(String entityId, String acsUrl, String nameIdFormat) {
                     <md:AssertionConsumerService Binding="%s" Location="%s" index="0" isDefault="true"/>
                   </md:SPSSODescriptor>
                 </md:EntityDescriptor>
-                """.formatted(MD_NS, escape(entityId), escape(nameIdFormat), POST_BINDING, escape(acsUrl));
+                """
+                .formatted(MD_NS, escape(entityId), escape(nameIdFormat), POST_BINDING,
+                        escape(acsUrl));
     }
 
     private static String escape(String value) {

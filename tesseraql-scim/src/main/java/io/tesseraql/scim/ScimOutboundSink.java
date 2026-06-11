@@ -26,8 +26,8 @@ public final class ScimOutboundSink implements OutboxEventSink {
     public void send(OutboxEvent event) throws Exception {
         switch (event.eventType()) {
             case PROVISION ->
-                    provisioner.provision(event.aggregateId(),
-                            mapper.readValue(event.payloadJson(), ScimUser.class));
+                provisioner.provision(event.aggregateId(),
+                        mapper.readValue(event.payloadJson(), ScimUser.class));
             case DEPROVISION -> provisioner.deprovision(event.aggregateId());
             default -> {
                 // Not a SCIM provisioning event; leave it for other sinks.

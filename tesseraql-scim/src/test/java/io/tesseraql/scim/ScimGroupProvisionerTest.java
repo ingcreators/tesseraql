@@ -65,7 +65,8 @@ class ScimGroupProvisionerTest {
     @Test
     void syncMembersSendsBidirectionalPatch() {
         provisioner.provision("local-2",
-                new ScimGroup(null, null, null, "ops", List.of(new ScimGroup.Member("100", null, null))));
+                new ScimGroup(null, null, null, "ops",
+                        List.of(new ScimGroup.Member("100", null, null))));
 
         provisioner.syncMembers("local-2", List.of("200"), List.of("100"));
 

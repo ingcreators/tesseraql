@@ -7,7 +7,6 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.sql.Statement;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -53,7 +52,8 @@ public final class JobRepository {
         try (Connection connection = dataSource.getConnection()) {
             try (PreparedStatement prune = connection.prepareStatement(
                     "delete from tql_job_claim where claimed_at < ?")) {
-                prune.setTimestamp(1, Timestamp.from(Instant.now().minus(java.time.Duration.ofDays(7))));
+                prune.setTimestamp(1,
+                        Timestamp.from(Instant.now().minus(java.time.Duration.ofDays(7))));
                 prune.executeUpdate();
             }
             try (PreparedStatement insert = connection.prepareStatement(
@@ -154,7 +154,6 @@ public final class JobRepository {
                 });
     }
 
-
     /** The vendor-appropriate trailing row-limit clause, detected once per store. */
     private volatile String fetchClause;
 
@@ -170,7 +169,8 @@ public final class JobRepository {
         List<JobExecution> executions = new ArrayList<>();
         try (Connection connection = dataSource.getConnection();
                 PreparedStatement ps = connection.prepareStatement(
-                        "select * from tql_job_execution order by start_time desc " + fetchClause())) {
+                        "select * from tql_job_execution order by start_time desc "
+                                + fetchClause())) {
             ps.setInt(1, limit);
             try (ResultSet rs = ps.executeQuery()) {
                 while (rs.next()) {
@@ -267,6 +267,7 @@ public final class JobRepository {
     }
 
     private static TqlException error(String message, SQLException ex) {
-        return TqlException.builder(REPO_ERROR).message(message + ": " + ex.getMessage()).cause(ex).build();
+        return TqlException.builder(REPO_ERROR).message(message + ": " + ex.getMessage()).cause(ex)
+                .build();
     }
 }

@@ -8,7 +8,6 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.sql.Statement;
 import java.sql.Timestamp;
 import java.time.Instant;
 import javax.sql.DataSource;
@@ -61,7 +60,8 @@ public final class JdbcIdempotencyStore implements IdempotencyStore {
             return new Conflict("Idempotency key reused for a different request");
         }
         if ("COMPLETED".equals(existing.status)) {
-            return new Replay(existing.responseStatus, existing.responseBody, existing.responseContentType);
+            return new Replay(existing.responseStatus, existing.responseBody,
+                    existing.responseContentType);
         }
         return new Conflict("Request with this idempotency key is already in progress");
     }
@@ -128,7 +128,8 @@ public final class JdbcIdempotencyStore implements IdempotencyStore {
     }
 
     private static TqlException error(String message, SQLException ex) {
-        return TqlException.builder(STORE_ERROR).message(message + ": " + ex.getMessage()).cause(ex).build();
+        return TqlException.builder(STORE_ERROR).message(message + ": " + ex.getMessage()).cause(ex)
+                .build();
     }
 
     private static final class Existing {

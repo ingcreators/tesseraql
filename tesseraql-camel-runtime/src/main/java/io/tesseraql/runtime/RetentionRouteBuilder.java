@@ -43,7 +43,7 @@ final class RetentionRouteBuilder extends RouteBuilder {
                     RetentionSweeper.Result result = sweeper.sweep(outboxRetention, jobRetention);
                     if (result.outboxEvents() > 0 || result.jobExecutions() > 0) {
                         LOG.info("Retention sweep removed {} outbox event(s), {} execution(s), "
-                                        + "{} step(s)", result.outboxEvents(),
+                                + "{} step(s)", result.outboxEvents(),
                                 result.jobExecutions(), result.stepExecutions());
                     }
                 });

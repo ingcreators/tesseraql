@@ -76,8 +76,8 @@ public final class FileImportProcessor implements Processor {
         String contentType = exchange.getMessage().getHeader(Exchange.CONTENT_TYPE, String.class);
         if (contentType != null
                 && contentType.toLowerCase(java.util.Locale.ROOT).startsWith("multipart/")) {
-            org.apache.camel.attachment.AttachmentMessage attachments =
-                    exchange.getMessage(org.apache.camel.attachment.AttachmentMessage.class);
+            org.apache.camel.attachment.AttachmentMessage attachments = exchange
+                    .getMessage(org.apache.camel.attachment.AttachmentMessage.class);
             if (attachments != null && attachments.hasAttachments()) {
                 jakarta.activation.DataHandler part = attachments.getAttachment("file");
                 if (part == null) {
@@ -119,6 +119,5 @@ public final class FileImportProcessor implements Processor {
         }
     }
 
-    static final com.fasterxml.jackson.databind.ObjectMapper MAPPER =
-            new com.fasterxml.jackson.databind.ObjectMapper();
+    static final com.fasterxml.jackson.databind.ObjectMapper MAPPER = new com.fasterxml.jackson.databind.ObjectMapper();
 }

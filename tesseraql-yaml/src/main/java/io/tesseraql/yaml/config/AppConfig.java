@@ -22,8 +22,8 @@ public final class AppConfig {
     private static final TqlErrorCode UNRESOLVED = new TqlErrorCode(TqlDomain.YAML, 1101);
     private static final int MAX_DEPTH = 32;
 
-    private static final io.tesseraql.yaml.secret.SecretResolvers DEFAULT_SECRETS =
-            io.tesseraql.yaml.secret.SecretResolvers.discover();
+    private static final io.tesseraql.yaml.secret.SecretResolvers DEFAULT_SECRETS = io.tesseraql.yaml.secret.SecretResolvers
+            .discover();
 
     private final Map<String, Object> root;
     private final EnvironmentSource environment;
@@ -72,7 +72,8 @@ public final class AppConfig {
             return java.util.OptionalDouble.of(number.doubleValue());
         }
         try {
-            return java.util.OptionalDouble.of(Double.parseDouble(resolve(String.valueOf(raw), 0).trim()));
+            return java.util.OptionalDouble
+                    .of(Double.parseDouble(resolve(String.valueOf(raw), 0).trim()));
         } catch (NumberFormatException ex) {
             throw new TqlException(UNRESOLVED,
                     "Configuration key '" + dottedPath + "' is not a number: " + raw);
@@ -101,7 +102,8 @@ public final class AppConfig {
 
     private String resolve(String value, int depth) {
         if (depth > MAX_DEPTH) {
-            throw new TqlException(UNRESOLVED, "Placeholder resolution too deep (cycle?): " + value);
+            throw new TqlException(UNRESOLVED,
+                    "Placeholder resolution too deep (cycle?): " + value);
         }
         StringBuilder out = new StringBuilder();
         int from = 0;

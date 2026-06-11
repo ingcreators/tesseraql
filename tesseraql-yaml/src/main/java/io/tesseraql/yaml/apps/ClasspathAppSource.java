@@ -36,7 +36,8 @@ public final class ClasspathAppSource implements AppSource {
     public ClasspathAppSource(String name, String resourceRoot, ClassLoader classLoader) {
         this.name = name;
         this.resourceRoot = resourceRoot.endsWith("/")
-                ? resourceRoot.substring(0, resourceRoot.length() - 1) : resourceRoot;
+                ? resourceRoot.substring(0, resourceRoot.length() - 1)
+                : resourceRoot;
         this.classLoader = classLoader;
     }
 

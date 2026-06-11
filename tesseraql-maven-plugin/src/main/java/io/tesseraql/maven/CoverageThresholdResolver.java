@@ -14,8 +14,8 @@ import java.util.Map;
 final class CoverageThresholdResolver {
 
     /** The item-coverage kinds a {@code coverage.thresholds.<kind>} percentage can gate. */
-    private static final List<String> KINDS =
-            List.of("assertion", "iam-contract", "route", "security", "saml", "scim");
+    private static final List<String> KINDS = List.of("assertion", "iam-contract", "route",
+            "security", "saml", "scim");
 
     private CoverageThresholdResolver() {
     }
@@ -28,9 +28,11 @@ final class CoverageThresholdResolver {
      */
     static CoverageThresholds resolve(AppConfig config, double lineDefaultPercent,
             double branchDefaultPercent) {
-        double line = config == null ? lineDefaultPercent
+        double line = config == null
+                ? lineDefaultPercent
                 : config.getDouble("coverage.thresholds.sqlLine").orElse(lineDefaultPercent);
-        double branch = config == null ? branchDefaultPercent
+        double branch = config == null
+                ? branchDefaultPercent
                 : config.getDouble("coverage.thresholds.sqlBranch").orElse(branchDefaultPercent);
         Map<String, Double> kinds = new LinkedHashMap<>();
         if (config != null) {

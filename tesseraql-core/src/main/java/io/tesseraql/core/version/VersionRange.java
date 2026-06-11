@@ -48,7 +48,7 @@ public final class VersionRange {
     private record Constraint(String op, SemanticVersion bound) {
 
         static Constraint parse(String token) {
-            for (String op : new String[] {">=", "<=", ">", "<", "="}) {
+            for (String op : new String[]{">=", "<=", ">", "<", "="}) {
                 if (token.startsWith(op)) {
                     return new Constraint(op, SemanticVersion.parse(token.substring(op.length())));
                 }

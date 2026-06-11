@@ -15,5 +15,6 @@ import java.time.Instant;
  * @param rows      number of rows written
  * @param createdAt creation time
  */
-public record SpoolRef(String id, SpoolKind kind, URI uri, long bytes, long rows, Instant createdAt) {
+public record SpoolRef(String id, SpoolKind kind, URI uri, long bytes, long rows,
+        Instant createdAt) {
 }

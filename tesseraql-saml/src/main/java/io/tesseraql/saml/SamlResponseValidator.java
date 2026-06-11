@@ -78,8 +78,8 @@ public final class SamlResponseValidator {
 
     private Element verifySignature(Document document, Element signatureElement) {
         XMLSignatureFactory factory = XMLSignatureFactory.getInstance("DOM");
-        DOMValidateContext context =
-                new DOMValidateContext(new PinnedKeySelector(config.idpSigningKey()), signatureElement);
+        DOMValidateContext context = new DOMValidateContext(
+                new PinnedKeySelector(config.idpSigningKey()), signatureElement);
         // Enable JDK secure validation: restricts transforms/algorithms, bounds reference count,
         // and rejects weak digests/signatures -- a key defense for untrusted XML signatures.
         context.setProperty("org.jcp.xml.dsig.secureValidation", Boolean.TRUE);
@@ -127,7 +127,8 @@ public final class SamlResponseValidator {
         }
         List<Element> assertions = childElements(signedElement, ASSERTION_NS, "Assertion");
         if (assertions.size() != 1) {
-            throw new SamlException("Expected exactly one signed assertion, found " + assertions.size());
+            throw new SamlException(
+                    "Expected exactly one signed assertion, found " + assertions.size());
         }
         return assertions.get(0);
     }
@@ -187,7 +188,9 @@ public final class SamlResponseValidator {
 
     private SamlAssertion extract(Element assertion) {
         Element subject = firstChild(assertion, ASSERTION_NS, "Subject");
-        Element nameIdElement = subject == null ? null : firstChild(subject, ASSERTION_NS, "NameID");
+        Element nameIdElement = subject == null
+                ? null
+                : firstChild(subject, ASSERTION_NS, "NameID");
         if (nameIdElement == null || text(nameIdElement).isEmpty()) {
             throw new SamlException("Assertion has no subject NameID");
         }
@@ -213,7 +216,9 @@ public final class SamlResponseValidator {
         }
 
         Element conditions = firstChild(assertion, ASSERTION_NS, "Conditions");
-        Instant notOnOrAfter = conditions == null ? null : instant(conditions.getAttribute("NotOnOrAfter"));
+        Instant notOnOrAfter = conditions == null
+                ? null
+                : instant(conditions.getAttribute("NotOnOrAfter"));
         return new SamlAssertion(nameId, nameIdFormat, sessionIndex, attributes, notOnOrAfter);
     }
 
@@ -233,7 +238,8 @@ public final class SamlResponseValidator {
             factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true);
             factory.setFeature("http://xml.org/sax/features/external-general-entities", false);
             factory.setFeature("http://xml.org/sax/features/external-parameter-entities", false);
-            factory.setFeature("http://apache.org/xml/features/nonvalidating/load-external-dtd", false);
+            factory.setFeature("http://apache.org/xml/features/nonvalidating/load-external-dtd",
+                    false);
             factory.setXIncludeAware(false);
             factory.setExpandEntityReferences(false);
             factory.setNamespaceAware(true);

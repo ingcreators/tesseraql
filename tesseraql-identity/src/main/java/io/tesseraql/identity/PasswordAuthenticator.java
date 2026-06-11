@@ -27,8 +27,8 @@ public final class PasswordAuthenticator {
         Map<String, Object> lookup = new LinkedHashMap<>();
         lookup.put("loginId", loginId);
         lookup.put("tenantId", tenantId);
-        List<Map<String, Object>> credentials =
-                identity.execute(realm, IdentityContracts.FIND_CREDENTIAL_BY_LOGIN, lookup);
+        List<Map<String, Object>> credentials = identity.execute(realm,
+                IdentityContracts.FIND_CREDENTIAL_BY_LOGIN, lookup);
         if (credentials.isEmpty()) {
             return Optional.empty();
         }

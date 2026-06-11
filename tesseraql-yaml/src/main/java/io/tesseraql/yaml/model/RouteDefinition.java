@@ -43,7 +43,8 @@ public record RouteDefinition(
     public RouteDefinition {
         input = input == null ? Map.of() : Map.copyOf(input);
         // Insertion-ordered so named queries execute in their authored order.
-        queries = queries == null ? Map.of()
+        queries = queries == null
+                ? Map.of()
                 : java.util.Collections.unmodifiableMap(new java.util.LinkedHashMap<>(queries));
     }
 

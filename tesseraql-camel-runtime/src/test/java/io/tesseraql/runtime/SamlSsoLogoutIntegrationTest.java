@@ -73,12 +73,14 @@ class SamlSsoLogoutIntegrationTest {
     @Test
     void loginRedirectsToIdpWithAuthnRequest() throws Exception {
         HttpResponse<String> response = client.send(
-                HttpRequest.newBuilder(URI.create(url("/_tesseraql/saml/login") + "?RelayState=next"))
+                HttpRequest
+                        .newBuilder(URI.create(url("/_tesseraql/saml/login") + "?RelayState=next"))
                         .GET().build(),
                 HttpResponse.BodyHandlers.ofString());
         assertThat(response.statusCode()).isEqualTo(302);
         String location = response.headers().firstValue("Location").orElseThrow();
-        assertThat(location).startsWith(SSO_URL).contains("SAMLRequest=").contains("RelayState=next");
+        assertThat(location).startsWith(SSO_URL).contains("SAMLRequest=")
+                .contains("RelayState=next");
 
         String xml = SamlRedirect.decodeAndInflate(samlRequestParam(location));
         assertThat(xml).contains("AuthnRequest")
@@ -91,7 +93,8 @@ class SamlSsoLogoutIntegrationTest {
         String acsForm = "SAMLResponse=" + URLEncoder.encode(Base64.getEncoder().encodeToString(
                 SamlTestSupport.signedResponse(keyPair.getPrivate(), "dave@idp.example.com",
                         AUDIENCE, RECIPIENT, NOW, Map.of("uid", List.of("dave")))
-                        .getBytes(StandardCharsets.UTF_8)), StandardCharsets.UTF_8);
+                        .getBytes(StandardCharsets.UTF_8)),
+                StandardCharsets.UTF_8);
         HttpResponse<String> acs = client.send(
                 HttpRequest.newBuilder(URI.create(url("/_tesseraql/saml/acs")))
                         .header("Content-Type", "application/x-www-form-urlencoded")
@@ -109,14 +112,16 @@ class SamlSsoLogoutIntegrationTest {
 
         String xml = SamlRedirect.decodeAndInflate(
                 samlRequestParam(logout.headers().firstValue("Location").orElseThrow()));
-        assertThat(xml).contains("LogoutRequest").contains("<saml:NameID>dave@idp.example.com</saml:NameID>");
+        assertThat(xml).contains("LogoutRequest")
+                .contains("<saml:NameID>dave@idp.example.com</saml:NameID>");
     }
 
     private static String samlRequestParam(String location) {
         String query = URI.create(location).getRawQuery();
         for (String pair : query.split("&")) {
             if (pair.startsWith("SAMLRequest=")) {
-                return URLDecoder.decode(pair.substring("SAMLRequest=".length()), StandardCharsets.UTF_8);
+                return URLDecoder.decode(pair.substring("SAMLRequest=".length()),
+                        StandardCharsets.UTF_8);
             }
         }
         throw new IllegalStateException("No SAMLRequest in " + location);
@@ -134,7 +139,8 @@ class SamlSsoLogoutIntegrationTest {
         }
         Path saml = target.resolve("saml");
         Files.createDirectories(saml);
-        Files.writeString(saml.resolve("idp.pem"), SamlTestSupport.publicKeyPem(keyPair.getPublic()));
+        Files.writeString(saml.resolve("idp.pem"),
+                SamlTestSupport.publicKeyPem(keyPair.getPublic()));
 
         Files.writeString(target.resolve("config/application.yml"), """
                 server:

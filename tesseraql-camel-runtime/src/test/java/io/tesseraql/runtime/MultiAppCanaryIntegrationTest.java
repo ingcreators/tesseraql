@@ -97,7 +97,7 @@ class MultiAppCanaryIntegrationTest {
         try (Connection connection = DriverManager.getConnection(
                 POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword());
                 Statement statement = connection.createStatement()) {
-            for (String tag : new String[] {"stable", "canary"}) {
+            for (String tag : new String[]{"stable", "canary"}) {
                 statement.execute("create schema " + tag);
                 statement.execute("create table " + tag
                         + ".items (id serial primary key, name varchar(200) not null)");
@@ -157,7 +157,8 @@ class MultiAppCanaryIntegrationTest {
                 Stream<Path> files = Files.walk(home)) {
             files.filter(Files::isRegularFile).sorted().forEach(file -> {
                 try {
-                    zip.putNextEntry(new ZipEntry(home.relativize(file).toString().replace('\\', '/')));
+                    zip.putNextEntry(
+                            new ZipEntry(home.relativize(file).toString().replace('\\', '/')));
                     zip.write(Files.readAllBytes(file));
                     zip.closeEntry();
                 } catch (IOException ex) {

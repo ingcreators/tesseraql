@@ -69,7 +69,7 @@ class ExcelTransferIntegrationTest {
     void xlsxUploadImportsAndXlsxExportRoundTrips() throws Exception {
         // Import an uploaded workbook.
         HttpResponse<String> accepted = HTTP.send(HttpRequest.newBuilder(
-                        URI.create("http://localhost:" + runtime.port() + "/api/people/import"))
+                URI.create("http://localhost:" + runtime.port() + "/api/people/import"))
                 .POST(HttpRequest.BodyPublishers.ofByteArray(workbook()))
                 .build(), HttpResponse.BodyHandlers.ofString());
         assertThat(accepted.statusCode()).isEqualTo(202);
@@ -80,7 +80,7 @@ class ExcelTransferIntegrationTest {
 
         // Export the table back as a workbook and parse it.
         HttpResponse<String> started = HTTP.send(HttpRequest.newBuilder(
-                        URI.create("http://localhost:" + runtime.port() + "/api/people/export"))
+                URI.create("http://localhost:" + runtime.port() + "/api/people/export"))
                 .POST(HttpRequest.BodyPublishers.noBody())
                 .build(), HttpResponse.BodyHandlers.ofString());
         String exportId = MAPPER.readTree(started.body()).get("transferId").asText();
@@ -88,8 +88,9 @@ class ExcelTransferIntegrationTest {
         assertThat(status.get("status").asText()).isEqualTo("COMPLETED");
 
         HttpResponse<byte[]> file = HTTP.send(HttpRequest.newBuilder(
-                        URI.create("http://localhost:" + runtime.port()
-                                + "/api/people/export/" + exportId + "/file")).build(),
+                URI.create("http://localhost:" + runtime.port()
+                        + "/api/people/export/" + exportId + "/file"))
+                .build(),
                 HttpResponse.BodyHandlers.ofByteArray());
         assertThat(file.statusCode()).isEqualTo(200);
         assertThat(file.headers().firstValue("content-type").orElse(""))
@@ -107,13 +108,13 @@ class ExcelTransferIntegrationTest {
         // Reuses the imported people; runs after the round-trip test by method order is not
         // guaranteed, so seed independently.
         HTTP.send(HttpRequest.newBuilder(
-                        URI.create("http://localhost:" + runtime.port() + "/api/people/import"))
+                URI.create("http://localhost:" + runtime.port() + "/api/people/import"))
                 .POST(HttpRequest.BodyPublishers.ofByteArray(workbook()))
                 .build(), HttpResponse.BodyHandlers.ofString());
         Thread.sleep(300);
 
         HttpResponse<String> started = HTTP.send(HttpRequest.newBuilder(
-                        URI.create("http://localhost:" + runtime.port() + "/api/people/report"))
+                URI.create("http://localhost:" + runtime.port() + "/api/people/report"))
                 .POST(HttpRequest.BodyPublishers.noBody())
                 .build(), HttpResponse.BodyHandlers.ofString());
         String transferId = MAPPER.readTree(started.body()).get("transferId").asText();
@@ -121,8 +122,9 @@ class ExcelTransferIntegrationTest {
                 .isEqualTo("COMPLETED");
 
         HttpResponse<byte[]> file = HTTP.send(HttpRequest.newBuilder(
-                        URI.create("http://localhost:" + runtime.port()
-                                + "/api/people/report/" + transferId + "/file")).build(),
+                URI.create("http://localhost:" + runtime.port()
+                        + "/api/people/report/" + transferId + "/file"))
+                .build(),
                 HttpResponse.BodyHandlers.ofByteArray());
         try (XSSFWorkbook exported = new XSSFWorkbook(new ByteArrayInputStream(file.body()))) {
             Sheet sheet = exported.getSheetAt(0);
@@ -139,7 +141,7 @@ class ExcelTransferIntegrationTest {
     void synchronousQueryExportStreamsXlsxThroughTheSharedCodec() throws Exception {
         // Seed people through the async import, then download synchronously.
         HttpResponse<String> accepted = HTTP.send(HttpRequest.newBuilder(
-                        URI.create("http://localhost:" + runtime.port() + "/api/people/import"))
+                URI.create("http://localhost:" + runtime.port() + "/api/people/import"))
                 .POST(HttpRequest.BodyPublishers.ofByteArray(workbook()))
                 .build(), HttpResponse.BodyHandlers.ofString());
         String importId = MAPPER.readTree(accepted.body()).get("transferId").asText();
@@ -147,7 +149,7 @@ class ExcelTransferIntegrationTest {
                 .isEqualTo("COMPLETED");
 
         HttpResponse<byte[]> file = HTTP.send(HttpRequest.newBuilder(
-                        URI.create("http://localhost:" + runtime.port() + "/api/people/download"))
+                URI.create("http://localhost:" + runtime.port() + "/api/people/download"))
                 .build(), HttpResponse.BodyHandlers.ofByteArray());
         assertThat(file.statusCode()).isEqualTo(200);
         assertThat(file.headers().firstValue("content-type").orElse(""))
@@ -184,7 +186,7 @@ class ExcelTransferIntegrationTest {
         Instant deadline = Instant.now().plus(Duration.ofSeconds(20));
         while (true) {
             HttpResponse<String> response = HTTP.send(HttpRequest.newBuilder(
-                            URI.create("http://localhost:" + runtime.port() + statusPath)).build(),
+                    URI.create("http://localhost:" + runtime.port() + statusPath)).build(),
                     HttpResponse.BodyHandlers.ofString());
             JsonNode status = MAPPER.readTree(response.body());
             String value = status.get("status").asText();
@@ -200,7 +202,7 @@ class ExcelTransferIntegrationTest {
 
     private static int personCount() throws Exception {
         try (Connection connection = DriverManager.getConnection(
-                        POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword());
+                POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword());
                 Statement statement = connection.createStatement();
                 ResultSet rs = statement.executeQuery("select count(*) from people")) {
             rs.next();

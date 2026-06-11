@@ -30,13 +30,13 @@ final class RuntimeExtensions {
         // Keyed by implementation class so a provider visible through both the classpath and a
         // plugin loader's parent delegation is only installed once.
         Map<String, RuntimeExtension> byClass = new LinkedHashMap<>();
-        ServiceLoader.load(RuntimeExtension.class).forEach(extension ->
-                byClass.putIfAbsent(extension.getClass().getName(), extension));
+        ServiceLoader.load(RuntimeExtension.class).forEach(
+                extension -> byClass.putIfAbsent(extension.getClass().getName(), extension));
         for (Plugins.PluginJar plugin : Plugins.load(config, appHome)) {
             LOG.info("Loaded plugin jar '{}'", plugin.name());
             ServiceLoader.load(RuntimeExtension.class, plugin.classLoader())
-                    .forEach(extension ->
-                            byClass.putIfAbsent(extension.getClass().getName(), extension));
+                    .forEach(extension -> byClass.putIfAbsent(extension.getClass().getName(),
+                            extension));
         }
         List<RuntimeExtension> extensions = new ArrayList<>();
         for (RuntimeExtension extension : byClass.values()) {

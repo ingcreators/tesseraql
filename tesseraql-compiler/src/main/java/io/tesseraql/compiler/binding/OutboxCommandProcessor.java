@@ -10,8 +10,8 @@ import io.tesseraql.core.outbox.OutboxEvent;
 import io.tesseraql.core.outbox.OutboxStore;
 import io.tesseraql.core.sql.BoundParameter;
 import io.tesseraql.core.sql.BoundSql;
-import io.tesseraql.core.sql.SqlNode;
 import io.tesseraql.core.sql.Sql2WayParser;
+import io.tesseraql.core.sql.SqlNode;
 import io.tesseraql.core.sql.SqlRenderer;
 import io.tesseraql.yaml.model.OutboxSpec;
 import java.io.IOException;
@@ -86,7 +86,8 @@ public final class OutboxCommandProcessor implements Processor {
                 exchange.getMessage().setBody(result);
             } catch (RuntimeException | SQLException ex) {
                 connection.rollback();
-                throw new TqlException(TX_ERROR, "Command+outbox transaction failed: " + ex.getMessage());
+                throw new TqlException(TX_ERROR,
+                        "Command+outbox transaction failed: " + ex.getMessage());
             } finally {
                 connection.setAutoCommit(previousAutoCommit);
             }

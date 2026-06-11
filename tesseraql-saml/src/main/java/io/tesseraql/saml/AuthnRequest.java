@@ -32,7 +32,8 @@ public record AuthnRequest(String issuer, String acsUrl, String destination) {
                 <saml:Issuer>%s</saml:Issuer>\
                 </samlp:AuthnRequest>""")
                 .formatted(PROTOCOL_NS, ASSERTION_NS, escapeAttr(id), issueInstant,
-                        escapeAttr(destination), POST_BINDING, escapeAttr(acsUrl), escapeText(issuer));
+                        escapeAttr(destination), POST_BINDING, escapeAttr(acsUrl),
+                        escapeText(issuer));
     }
 
     private static String escapeAttr(String value) {

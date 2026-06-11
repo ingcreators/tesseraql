@@ -126,7 +126,8 @@ public final class SqlRenderer {
             }
             out.append('?');
             parameters.add(new BoundParameter(
-                    listBind.expressionSource() + "[" + i + "]", elements.get(i), listBind.sourceLine()));
+                    listBind.expressionSource() + "[" + i + "]", elements.get(i),
+                    listBind.sourceLine()));
         }
         out.append(')');
         sourceMap.addSegment(start, out.length(), listBind.sourceLine());

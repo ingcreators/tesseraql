@@ -89,6 +89,7 @@
     <fastexcel.version>0.20.2</fastexcel.version>
     <ojdbc.version>23.26.2.0.0</ojdbc.version>
     <mssql-jdbc.version>13.4.0.jre11</mssql-jdbc.version>
+    <spotless.version>3.6.0</spotless.version>
 
     <!-- Build plugin versions -->
     <maven.compiler.plugin.version>3.15.0</maven.compiler.plugin.version>
@@ -315,6 +316,17 @@
           <configuration>
             <release>${maven.compiler.release}</release>
             <parameters>true</parameters>
+            <showWarnings>true</showWarnings>
+            <failOnWarning>true</failOnWarning>
+            <compilerArgs>
+              <!--
+                Warnings fail the build so the IDE problems panel stays empty. Excluded
+                categories: -processing (annotation-processor noise), -serial (no Java
+                serialization contract), -this-escape (constructor-pattern false positives),
+                -classfile (third-party jars referencing absent CLASS-retention annotations).
+              -->
+              <arg>-Xlint:all,-processing,-serial,-this-escape,-classfile</arg>
+            </compilerArgs>
           </configuration>
         </plugin>
 
@@ -367,6 +379,41 @@
                 </requireJavaVersion>
               </rules>
             </configuration>
+          </execution>
+        </executions>
+      </plugin>
+
+      <!--
+        Format gate (single source of truth: config/eclipse-formatter.xml, shared with the
+        VS Code Java formatter). `./mvnw spotless:apply` fixes; the check fails the build.
+      -->
+      <plugin>
+        <groupId>com.diffplug.spotless</groupId>
+        <artifactId>spotless-maven-plugin</artifactId>
+        <version>${spotless.version}</version>
+        <configuration>
+          <java>
+            <eclipse>
+              <file>${maven.multiModuleProjectDirectory}/config/eclipse-formatter.xml</file>
+            </eclipse>
+            <!-- Static imports first, then one alphabetical block (the codebase convention). -->
+            <importOrder>
+              <order>\#,</order>
+            </importOrder>
+            <removeUnusedImports/>
+            <trimTrailingWhitespace/>
+            <endWithNewline/>
+          </java>
+        </configuration>
+        <executions>
+          <execution>
+            <!-- m2e must not run this in IDE builds: Spotless' embedded Eclipse formatter
+                 clashes with the IDE's own JDT classes. VS Code formats via the same
+                 profile through java.format.settings.url; the CLI/CI gate is unaffected. -->
+            <?m2e ignore?>
+            <goals>
+              <goal>check</goal>
+            </goals>
           </execution>
         </executions>
       </plugin>
