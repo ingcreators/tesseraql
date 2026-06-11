@@ -80,9 +80,12 @@ class BatchJobIntegrationTest {
         assertThat(execution.endTime()).isNotNull();
 
         List<StepExecution> steps = runtime.jobRepository().findSteps(execution.id());
-        assertThat(steps).hasSize(1);
+        // Phase 20: the job's pipeline also reports the run through a notify step.
+        assertThat(steps).hasSize(2);
         assertThat(steps.get(0).stepId()).isEqualTo("deactivatePending");
         assertThat(steps.get(0).affectedRows()).isEqualTo(1);
+        assertThat(steps.get(1).stepId()).isEqualTo("report");
+        assertThat(steps.get(1).affectedRows()).isEqualTo(1); // one notification enqueued
 
         assertThat(statusOf("pending-user")).isEqualTo("INACTIVE");
         assertThat(runtime.jobRepository().listExecutions(10)).isNotEmpty();

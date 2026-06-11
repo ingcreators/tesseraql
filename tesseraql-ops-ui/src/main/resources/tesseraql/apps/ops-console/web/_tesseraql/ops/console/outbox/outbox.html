@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{tql/shell :: page('Outbox Deliveries', ~{:: #page-header}, ~{:: #page-content})}">
+<th:block id="page-header">
+  <a class="back" href="/_tesseraql/ops/console">&larr; console</a>
+</th:block>
+<div id="page-content" hx-get="/_tesseraql/ops/console/outbox" hx-trigger="every 15s"
+     hx-select="#page-content" hx-target="this" hx-swap="outerHTML">
+<section class="hc-card">
+  <h2>Outbox deliveries</h2>
+  <ul class="chips">
+    <li th:each="s : ${outbox.byStatus}" th:class="'chip ' + ${s.statusClass}">[[${s.status}]]: [[${s.count}]]</li>
+  </ul>
+  <p class="empty" th:unless="${outbox.hasRows}">No outbox events recorded.</p>
+  <table class="hc-table" th:if="${outbox.hasRows}">
+    <thead><tr><th>Event</th><th>Type</th><th>Source</th><th>App</th><th>Status</th><th>Attempts</th><th>Last error</th><th>Created</th><th>Sent</th></tr></thead>
+    <tbody>
+      <tr th:each="e : ${outbox.rows}">
+        <td th:text="${e.id}"></td>
+        <td th:text="${e.type}"></td>
+        <td th:text="${e.source}"></td>
+        <td th:text="${e.app}"></td>
+        <td th:class="${e.statusClass}" th:text="${e.status}"></td>
+        <td th:text="${e.attempts}"></td>
+        <td th:text="${e.lastError}"></td>
+        <td th:text="${e.createdAt}"></td>
+        <td th:text="${e.sentAt}"></td>
+      </tr>
+    </tbody>
+  </table>
+  <p class="hint">Dead-lettered events can be requeued with
+    <code>POST /_tesseraql/ops/outbox/&lt;event-id&gt;/redeliver</code>.</p>
+</section>
+</div>
+</html>

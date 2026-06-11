@@ -110,4 +110,36 @@ class OpsViewsTest {
         assertThat(model.get("found")).isEqualTo(false);
         assertThat(model.get("id")).isEqualTo("missing");
     }
+
+    @Test
+    void outboxBuildsDeliveryLogModel() {
+        io.tesseraql.core.outbox.OutboxEvent dead = new io.tesseraql.core.outbox.OutboxEvent(
+                "evt-1", "Notification", "users.register.confirmation", "NOTIFICATION", "{}",
+                "DEAD", 10, "Webhook channel 'hooks' answered HTTP 500",
+                java.time.Instant.parse("2026-06-10T00:00:00Z"), null, "demo-app");
+        io.tesseraql.core.outbox.OutboxEvent sent = new io.tesseraql.core.outbox.OutboxEvent(
+                "evt-2", "User", "sato", "USER_PROVISIONED", "{}", "SENT", 1, null,
+                java.time.Instant.parse("2026-06-10T00:00:01Z"),
+                java.time.Instant.parse("2026-06-10T00:00:02Z"), "demo-app");
+
+        Map<String, Object> model = OpsViews.outbox(List.of(dead, sent));
+
+        assertThat(model.get("hasRows")).isEqualTo(true);
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> rows = (List<Map<String, Object>>) model.get("rows");
+        assertThat(rows).hasSize(2);
+        assertThat(rows.get(0))
+                .containsEntry("id", "evt-1")
+                .containsEntry("status", "DEAD")
+                .containsEntry("statusClass", "status-dead")
+                .containsEntry("attempts", 10)
+                .containsEntry("dead", true)
+                .containsEntry("lastError", "Webhook channel 'hooks' answered HTTP 500");
+        assertThat(rows.get(1))
+                .containsEntry("dead", false)
+                .containsEntry("sentAt", "2026-06-10T00:00:02Z");
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> byStatus = (List<Map<String, Object>>) model.get("byStatus");
+        assertThat(byStatus).hasSize(2);
+    }
 }

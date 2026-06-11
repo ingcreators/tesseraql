@@ -39,4 +39,14 @@ public interface OutboxStore {
     void markSent(String eventId);
 
     void markFailed(String eventId, String error);
+
+    /**
+     * Dead-letters an event whose delivery attempts are exhausted (roadmap Phase 20): the event
+     * stops retrying and stays visible to operators until redelivered or swept. The default keeps
+     * pre-Phase-20 store implementations compiling; JDBC stores override it with the
+     * {@code DEAD} status.
+     */
+    default void markDead(String eventId, String error) {
+        markFailed(eventId, error);
+    }
 }

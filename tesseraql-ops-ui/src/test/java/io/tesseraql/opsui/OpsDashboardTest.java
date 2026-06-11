@@ -9,6 +9,7 @@ import io.tesseraql.core.threading.LanePolicy;
 import io.tesseraql.opsui.OpsDashboard.LaneStatus;
 import io.tesseraql.opsui.OpsDashboard.TraceNode;
 import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.Test;
 
 class OpsDashboardTest {
@@ -229,6 +230,21 @@ class OpsDashboardTest {
                 .satisfies(event -> assertThat(event.carrierThread()).isEqualTo("carrier-1"));
         assertThat(dashboard.alerts()).extracting(OpsDashboard.Alert::code)
                 .contains("TQL-OPS-9005");
+    }
+
+    @Test
+    void deadLetteredOutboxEventsRaiseAlert() {
+        OpsDashboard dashboard = new OpsDashboard(null, null, null, new RingTracer(4), 200L)
+                .outboxCounts(() -> Map.of("SENT", 5, "DEAD", 2));
+
+        assertThat(dashboard.alerts()).singleElement().satisfies(alert -> {
+            assertThat(alert.code()).isEqualTo("TQL-OPS-9006");
+            assertThat(alert.message()).contains("2 outbox event(s) dead-lettered");
+        });
+
+        OpsDashboard healthy = new OpsDashboard(null, null, null, new RingTracer(4), 200L)
+                .outboxCounts(() -> Map.of("SENT", 5));
+        assertThat(healthy.alerts()).isEmpty();
     }
 
     @Test

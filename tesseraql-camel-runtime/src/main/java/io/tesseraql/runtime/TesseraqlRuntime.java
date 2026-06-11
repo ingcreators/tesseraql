@@ -247,7 +247,26 @@ public final class TesseraqlRuntime implements AutoCloseable {
                 tempStore, dataSource, io.tesseraql.core.files.FileCodecs.discover());
         fileTransfers.ensureSchema();
         context.getRegistry().bind(TesseraqlProperties.FILE_TRANSFER_BEAN, fileTransfers);
-        JobExecutor jobExecutor = new JobExecutor(jobRepository, tempStore, slowSqlLog, tracer);
+        JobExecutor jobExecutor = new JobExecutor(jobRepository, tempStore, slowSqlLog, tracer)
+                .notificationOutbox(outboxStore);
+        // Notification channels and operations alerts (roadmap Phase 20).
+        io.tesseraql.yaml.notify.NotificationChannels notificationChannels = io.tesseraql.yaml.notify.NotificationChannels
+                .load(manifest.config());
+        String alertChannel = manifest.config()
+                .getString("tesseraql.notifications.alerts.channel").orElse(null);
+        if (alertChannel != null) {
+            // Job failures alert through the same notification channels (roadmap Phase 20),
+            // enqueued on the outbox so the alert inherits at-least-once delivery.
+            jobExecutor.onFailure((jobId, executionId, jobApp, message) -> {
+                Map<String, Object> payload = new LinkedHashMap<>();
+                payload.put("jobId", jobId);
+                payload.put("executionId", executionId);
+                payload.put("app", jobApp);
+                payload.put("error", message == null ? "" : message);
+                outboxStore.insert(io.tesseraql.yaml.notify.NotifyEvents.event(
+                        alertChannel, "ops.jobFailure", payload, jobApp == null ? "app" : jobApp));
+            });
+        }
         Map<String, JobFile> jobs = new LinkedHashMap<>();
         manifest.jobs().forEach(job -> jobs.put(job.definition().id(), job));
         String appName = manifest.config().getString("tesseraql.app.name").orElse("app");
@@ -301,7 +320,9 @@ public final class TesseraqlRuntime implements AutoCloseable {
                             manifest.config()
                                     .getString("tesseraql.diagnostics.batchFailureWarnPercent")
                                     .map(Double::parseDouble).orElse(10.0)),
-                    pinningMonitor);
+                    pinningMonitor)
+                    // Dead-lettered deliveries surface as an operational alert (Phase 20).
+                    .outboxCounts(outboxStore::countByStatus);
             // The app's db/migration runs before anything queries its schema: fresh installs,
             // upgrades and canary activations all converge here (design ch. 31, 32).
             AppMigrations.migrate(appName, appHome, manifest.config(), dataSource,
@@ -346,7 +367,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
             Map<String, String> ownedJobs = new LinkedHashMap<>();
             jobs.keySet().forEach(id -> ownedJobs.put(id, jobOwners.getOrDefault(id, appName)));
             context.addRoutes(new OperationsRouteBuilder(
-                    jobRunner, jobRepository, ownedJobs, opsDashboard));
+                    jobRunner, jobRepository, ownedJobs, opsDashboard, outboxStore));
             // Service providers expose non-SQL runtime state to mounted yaml/template apps
             // (the bundled ops-console and studio apps render these, design ch. 26.11, 16, 47).
             io.tesseraql.opsui.OpsDashboard dashboardRef = opsDashboard;
@@ -368,6 +389,14 @@ public final class TesseraqlRuntime implements AutoCloseable {
                         return io.tesseraql.opsui.OpsViews.transfers(
                                 fileTransfers.recent(50).stream()
                                         .filter(transfer -> scope.test(transfer.appName()))
+                                        .toList());
+                    })
+                    .register("ops.outbox", params -> {
+                        java.util.function.Predicate<String> scope = io.tesseraql.opsui.OpsScope
+                                .allowedApps(params.get("permissions"));
+                        return io.tesseraql.opsui.OpsViews.outbox(
+                                outboxStore.recent(100).stream()
+                                        .filter(event -> scope.test(event.appName()))
                                         .toList());
                     })
                     .register("ops.execution", params -> {
@@ -411,15 +440,25 @@ public final class TesseraqlRuntime implements AutoCloseable {
                     LOG.info("Installed runtime extension '{}'", extension.name());
                 }
             }
-            // The outbox always logs deliveries; an extension-contributed sink (e.g. SCIM outbound
-            // provisioning) is composed on top when bound.
+            // The outbox always logs deliveries; the notification sink (mail/webhooks, roadmap
+            // Phase 20) and an extension-contributed sink (e.g. SCIM outbound provisioning) are
+            // composed on top when configured/bound.
             io.tesseraql.core.outbox.OutboxEventSink extensionSink = context.getRegistry()
                     .lookupByNameAndType(
                             TesseraqlProperties.OUTBOX_EVENT_SINK_BEAN,
                             io.tesseraql.core.outbox.OutboxEventSink.class);
-            outboxSink = extensionSink == null ? LOGGING_SINK : event -> {
+            io.tesseraql.core.outbox.OutboxEventSink notificationSink = notificationChannels
+                    .isEmpty()
+                            ? null
+                            : new NotificationSink(notificationChannels, appHome, context);
+            outboxSink = event -> {
                 LOGGING_SINK.send(event);
-                extensionSink.send(event);
+                if (notificationSink != null) {
+                    notificationSink.send(event);
+                }
+                if (extensionSink != null) {
+                    extensionSink.send(event);
+                }
             };
             if (manifest.config().getString("tesseraql.studio.enabled")
                     .map(Boolean::parseBoolean).orElse(true)) {
@@ -470,7 +509,16 @@ public final class TesseraqlRuntime implements AutoCloseable {
             var outboxDelay = manifest.config().getString("tesseraql.outbox.dispatch.fixedDelay");
             if (outboxDelay.isPresent()) {
                 context.addRoutes(new OutboxDispatchRouteBuilder(outboxStore, outboxSink,
-                        io.tesseraql.core.util.Durations.toMillis(outboxDelay.get()), hostedApps));
+                        io.tesseraql.core.util.Durations.toMillis(outboxDelay.get()), hostedApps,
+                        outboxMaxAttempts(manifest.config())));
+            }
+            if (alertChannel != null) {
+                // Threshold-breach alerts from the dashboard notify through the same channel
+                // (roadmap Phase 20).
+                long alertPeriod = io.tesseraql.core.util.Durations.toMillis(manifest.config()
+                        .getString("tesseraql.notifications.alerts.checkInterval").orElse("60s"));
+                context.addRoutes(new AlertNotifyRouteBuilder(opsDashboard, outboxStore,
+                        alertChannel, alertPeriod, appName));
             }
             context.start();
         } catch (Exception ex) {
@@ -532,7 +580,14 @@ public final class TesseraqlRuntime implements AutoCloseable {
 
     /** Dispatches pending outbox events once, returning the number delivered (design ch. 39.2). */
     public int dispatchOutboxOnce() {
-        return new OutboxDispatcher(outboxStore, outboxSink, hostedApps).dispatch(100);
+        return new OutboxDispatcher(outboxStore, outboxSink, hostedApps,
+                outboxMaxAttempts(config)).dispatch(100);
+    }
+
+    /** The delivery-attempt ceiling before an event dead-letters (roadmap Phase 20). */
+    private static int outboxMaxAttempts(AppConfig config) {
+        return config.getString("tesseraql.outbox.dispatch.maxAttempts")
+                .map(Integer::parseInt).orElse(OutboxDispatcher.DEFAULT_MAX_ATTEMPTS);
     }
 
     public JdbcOutboxStore outboxStore() {

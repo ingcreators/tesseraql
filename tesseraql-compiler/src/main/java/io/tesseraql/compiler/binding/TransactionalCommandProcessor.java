@@ -61,6 +61,11 @@ import org.apache.camel.Processor;
  * transaction: cross-field expression rules against the execution context and validation SQL
  * rules on the command's connection. Any violation rejects the request with a field-scoped
  * {@code 422 Unprocessable Entity} before a single step writes.
+ *
+ * <p>The route's {@code notify:} declarations (roadmap Phase 20) enqueue last, still inside the
+ * transaction: each fired notification becomes a {@code NOTIFICATION} outbox event, so a rolled
+ * back command never notifies and a committed one notifies at-least-once. Event ids publish into
+ * the context as {@code notify.<id>.eventId}.
  */
 public final class TransactionalCommandProcessor implements Processor {
 
@@ -89,10 +94,12 @@ public final class TransactionalCommandProcessor implements Processor {
     private final String routeId;
     private final List<Step> steps;
     private final ValidationRules validation;
+    private final List<io.tesseraql.yaml.notify.NotifyEvents.CompiledNotify> notifications;
     private final boolean singleSql;
     private final String datasourceName;
     private final OutboxEvents outboxEvents;
     private final ErrorsSpec errors;
+    private final String appName;
     private final boolean generatedKeyColumns;
 
     /**
@@ -115,17 +122,21 @@ public final class TransactionalCommandProcessor implements Processor {
      *
      * @param sql      the single-statement {@code sql:} binding, or null when steps are declared
      * @param validate the route's declarative validation rules, keyed by rule id (Phase 19)
+     * @param notify   the route's notifications, keyed by notification id (Phase 20)
      * @param stepFile resolves a step's or rule's SQL file reference to its (dialect-resolved)
      *                 path
      */
     public TransactionalCommandProcessor(String routeId, SqlBinding sql,
             Map<String, SqlBinding> declaredSteps, Map<String, ValidationRule> validate,
+            Map<String, io.tesseraql.yaml.model.NotifySpec> notify,
             java.util.function.Function<String, Path> stepFile,
             String datasourceName, String dialect, OutboxSpec outbox, ErrorsSpec errors,
             String appName) {
         this.routeId = routeId;
         this.datasourceName = datasourceName;
         this.outboxEvents = outbox == null ? null : new OutboxEvents(outbox, appName);
+        this.notifications = io.tesseraql.yaml.notify.NotifyEvents.compileAll(routeId, notify);
+        this.appName = appName;
         this.errors = errors == null ? new ErrorsSpec(null) : errors;
         this.generatedKeyColumns = Dialect.fromId(dialect)
                 .map(d -> d.capabilities().generatedKeyColumns())
@@ -264,11 +275,12 @@ public final class TransactionalCommandProcessor implements Processor {
 
         DataSource dataSource = exchange.getContext().getRegistry()
                 .lookupByNameAndType(datasourceName, DataSource.class);
-        OutboxStore store = outboxEvents == null
+        boolean needsStore = outboxEvents != null || !notifications.isEmpty();
+        OutboxStore store = !needsStore
                 ? null
                 : exchange.getContext().getRegistry().lookupByNameAndType(
                         TesseraqlProperties.OUTBOX_STORE_BEAN, OutboxStore.class);
-        if (outboxEvents != null && store == null) {
+        if (needsStore && store == null) {
             throw new TqlException(NO_STORE, "Outbox store is not configured");
         }
 
@@ -296,13 +308,27 @@ public final class TransactionalCommandProcessor implements Processor {
                         context.put(step.contextKey(), result);
                     }
                 }
-                if (store != null) {
+                if (outboxEvents != null) {
                     String eventId = store.insert(connection, outboxEvents.build(context));
                     context.put("outbox", Map.of("eventId", eventId));
                     if (singleSql) {
                         // Compatibility: the single-statement form exposes sql.eventId.
                         ((Map<String, Object>) context.get("sql")).put("eventId", eventId);
                     }
+                }
+                if (!notifications.isEmpty()) {
+                    // Notifications enqueue in the same transaction (roadmap Phase 20): a rolled
+                    // back command never notifies; a committed one notifies at-least-once.
+                    Map<String, Object> enqueued = new LinkedHashMap<>();
+                    for (var notification : notifications) {
+                        if (!notification.fires(context)) {
+                            continue;
+                        }
+                        String eventId = store.insert(connection,
+                                notification.build(context, appName));
+                        enqueued.put(notification.id(), Map.of("eventId", eventId));
+                    }
+                    context.put("notify", enqueued);
                 }
                 connection.commit();
             } catch (RuntimeException | SQLException ex) {

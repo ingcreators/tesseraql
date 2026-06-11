@@ -13,9 +13,11 @@ import java.time.Instant;
  * @param aggregateId   the aggregate id
  * @param eventType     the event type, e.g. {@code USER_DISABLED}
  * @param payloadJson   the JSON payload
- * @param status        PENDING / SENT / FAILED / DEAD
+ * @param status        PENDING / SENDING / SENT / FAILED / DEAD
  * @param attempts      delivery attempt count
+ * @param lastError     the last delivery error, when a delivery has failed
  * @param createdAt     creation time
+ * @param sentAt        successful delivery time, once SENT
  * @param appName       the app that emitted the event (required), so dispatchers and operators
  *                      can scope a shared outbox table per app
  */
@@ -27,7 +29,9 @@ public record OutboxEvent(
         String payloadJson,
         String status,
         int attempts,
+        String lastError,
         Instant createdAt,
+        Instant sentAt,
         String appName) {
 
     /**
@@ -39,6 +43,6 @@ public record OutboxEvent(
             String eventType, String payloadJson, String appName) {
         java.util.Objects.requireNonNull(appName, "appName");
         return new OutboxEvent(null, aggregateType, aggregateId, eventType, payloadJson,
-                null, 0, null, appName);
+                null, 0, null, null, null, appName);
     }
 }

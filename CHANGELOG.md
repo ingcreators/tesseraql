@@ -18,6 +18,20 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Runtime and recipes
 
+- Notifications (roadmap Phase 20, see [docs/notifications.md](docs/notifications.md)): a
+  `notify:` block on `command-json` routes and a `notify:` pipeline step on batch jobs send
+  through configured channels — SMTP mail (camel-mail) with the body and subject rendered by
+  the standard template engine (app-home-confined templates, credentials resolved at send
+  time through the SecretResolver SPI), and outbound webhooks signed with HMAC-SHA256 over
+  `timestamp.body` (`X-TesseraQL-Signature`/`X-TesseraQL-Timestamp`). Notifications enqueue
+  in the command's transaction and ride the outbox; each publishes `notify.<id>.eventId`.
+- Outbox retries and dead-letters: `FAILED` events retry on later dispatch polls and
+  dead-letter at `tesseraql.outbox.dispatch.maxAttempts` (default 10). The operations
+  console gains an outbox delivery-log screen and API (`GET /_tesseraql/ops/outbox`,
+  `POST /_tesseraql/ops/outbox/{id}/redeliver`), and dead letters raise `TQL-OPS-9006`.
+- Operations alerts reuse the notification channels: with
+  `tesseraql.notifications.alerts.channel` configured, failed job executions notify as
+  `ops.jobFailure` and newly raised dashboard alerts as `ops.alert`.
 - Declarative validation for `command-json` (roadmap Phase 19, see
   [docs/declarative-validation.md](docs/declarative-validation.md)): a `validate:` block of
   cross-field rules in the whitelist-only core expression language plus validation SQL
@@ -45,6 +59,13 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Quality and supply chain
 
+- Declarative suites gain `notify:` cases (roadmap Phase 20): a case evaluates a route's
+  `notify:` block or a job's notify steps against its params — guards and payload
+  expressions run exactly as at runtime — and asserts on the fired notifications as rows,
+  without touching SMTP or HTTP. A new `notification` coverage kind declares every route
+  notification as `<routeId>.<notifyId>` and every job notify step as `<jobId>.<stepId>`,
+  gated via `coverage.thresholds.kinds.notification`. Lint checks the declarations
+  statically (`TQL-YAML-1004`, `TQL-FIELD-2004`, `TQL-SQL-2101`, `TQL-YAML-1102`).
 - Declarative suites gain `validate:` cases (roadmap Phase 19): a case evaluates a route's
   validation rules — SQL rules against the test database, expression rules against the
   case's params — and asserts on the violations as rows, recording SQL coverage along the

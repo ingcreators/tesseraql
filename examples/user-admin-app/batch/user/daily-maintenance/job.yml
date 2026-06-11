@@ -17,3 +17,9 @@ pipeline:
     sql:
       file: deactivate-pending.sql
       mode: update
+  # Phase 20: a notify step reports the run through the audit webhook, riding the outbox.
+  - id: report
+    notify:
+      channel: audit-webhook
+      payload:
+        deactivated: step.deactivatePending.affectedRows

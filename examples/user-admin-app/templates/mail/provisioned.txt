@@ -1,0 +1,5 @@
+Hello [(${payload.givenName})],
+
+your account "[(${payload.userName})]" has been provisioned and is ready to use.
+
+This message was sent by [(${event.app})] (event [(${event.id})]).

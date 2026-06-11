@@ -51,3 +51,51 @@ tests:
         userName: sato
     expect:
       rowCount: 0
+
+  - name: provisioning an active user notifies the confirmation mail and the audit webhook
+    notify:
+      route: users.apiProvision
+    params:
+      body:
+        userName: sato
+        givenName: Hanako
+        active: true
+      principal:
+        loginId: admin
+    expect:
+      rowCount: 2
+      rows:
+        - notify: confirmation
+          channel: user-mail
+          userName: sato
+          givenName: Hanako
+        - notify: audit
+          channel: audit-webhook
+          userName: sato
+          actor: admin
+
+  - name: provisioning an inactive user skips the confirmation mail
+    notify:
+      route: users.apiProvision
+    params:
+      body:
+        userName: sato
+        active: false
+    expect:
+      rowCount: 1
+      rows:
+        - notify: audit
+
+  - name: daily maintenance reports the run through the audit webhook
+    notify:
+      job: user.dailyMaintenance
+    params:
+      step:
+        deactivatePending:
+          affectedRows: 3
+    expect:
+      rowCount: 1
+      rows:
+        - notify: report
+          channel: audit-webhook
+          deactivated: 3

@@ -84,6 +84,9 @@ public final class TestRunner {
         if (test.validate() != null) {
             return evaluateValidation(test);
         }
+        if (test.notifications() != null) {
+            return evaluateNotify(test);
+        }
         if (test.contract() != null && !test.contract().isBlank()) {
             if (identity == null || realm == null) {
                 throw new IllegalStateException(
@@ -167,6 +170,70 @@ public final class TestRunner {
                     .replace('\\', '/');
             coverage.record(sqlId, bound.coverageTrace(), SqlCoverableLines.compute(rule.sql()));
         }
+    }
+
+    /**
+     * Evaluates a route's {@code notify:} block or a job's notify steps against the case's
+     * params (roadmap Phase 20), returning the fired notifications as rows — id, channel,
+     * source, and the resolved payload columns — without touching SMTP or HTTP. Guards
+     * ({@code when:}) and payload expressions evaluate exactly as they would at runtime.
+     */
+    private List<Map<String, Object>> evaluateNotify(TestCase test) {
+        TestSuite.NotifyTarget target = test.notifications();
+        if ((target.route() == null) == (target.job() == null)) {
+            throw new IllegalArgumentException(
+                    "A notify case needs exactly one of notify.route or notify.job");
+        }
+        List<io.tesseraql.yaml.notify.NotifyEvents.CompiledNotify> compiled = new ArrayList<>();
+        if (target.route() != null) {
+            RouteFile route = route(target.route());
+            route.definition().notifications().forEach((id, spec) -> {
+                if (target.id() == null || target.id().equals(id)) {
+                    compiled.add(io.tesseraql.yaml.notify.NotifyEvents
+                            .compile(target.route(), id, spec));
+                }
+            });
+        } else {
+            io.tesseraql.yaml.manifest.JobFile job = job(target.job());
+            for (io.tesseraql.yaml.model.PipelineStep step : job.definition().effectiveSteps()) {
+                if (step.notification() == null
+                        || (target.id() != null && !target.id().equals(step.id()))) {
+                    continue;
+                }
+                compiled.add(io.tesseraql.yaml.notify.NotifyEvents
+                        .compile(target.job(), step.id(), step.notification()));
+            }
+        }
+        if (compiled.isEmpty()) {
+            throw new IllegalArgumentException("'"
+                    + (target.route() != null ? target.route() : target.job())
+                    + "' declares no matching notification"
+                    + (target.id() == null ? "" : " '" + target.id() + "'"));
+        }
+        List<Map<String, Object>> rows = new ArrayList<>();
+        for (io.tesseraql.yaml.notify.NotifyEvents.CompiledNotify notification : compiled) {
+            if (!notification.fires(test.params())) {
+                continue;
+            }
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("notify", notification.id());
+            row.put("channel", notification.channel());
+            row.put("source", notification.source());
+            notification.resolvePayload(test.params()).forEach(row::putIfAbsent);
+            rows.add(row);
+        }
+        return rows;
+    }
+
+    private io.tesseraql.yaml.manifest.JobFile job(String jobId) {
+        if (manifest == null) {
+            manifest = new ManifestLoader().load(appHome);
+        }
+        return manifest.jobs().stream()
+                .filter(job -> jobId.equals(job.definition().id()))
+                .findFirst()
+                .orElseThrow(() -> new IllegalArgumentException(
+                        "Unknown job '" + jobId + "' in notify case"));
     }
 
     private RouteFile route(String routeId) {

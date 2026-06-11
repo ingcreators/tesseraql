@@ -20,6 +20,27 @@ tesseraql:
       username: ${db.main.username}
       password: ${db.main.password}
 
+  # Phase 20 notification channels: notify: declarations reference these by name.
+  # Credentials would ride the SecretResolver SPI (${secret.env.SMTP_PASSWORD}); the local
+  # defaults below point at a dev SMTP server and a dev webhook receiver.
+  notifications:
+    channels:
+      user-mail:
+        type: mail
+        host: ${MAIL_HOST:localhost}
+        port: ${MAIL_PORT:2525}
+        from: noreply@example.com
+        to: ops@example.com
+        subject: "Account provisioned: [(${payload.userName})]"
+        template: templates/mail/provisioned.txt
+      audit-webhook:
+        type: webhook
+        url: ${AUDIT_WEBHOOK_URL:http://localhost:9999/hook}
+        secret: ${AUDIT_WEBHOOK_SECRET:dev-only-webhook-secret}
+    # Operations alerts (job failures, threshold breaches) reuse the same channels:
+    # alerts:
+    #   channel: audit-webhook
+
   identity:
     defaultRealm: local
     realms:
@@ -39,6 +60,7 @@ tesseraql:
         - tesseraql-sql
         - tesseraql-auth
         - tesseraql-html
+        - smtp
       denied:
         - exec
         - script

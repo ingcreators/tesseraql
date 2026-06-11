@@ -6,8 +6,9 @@ import java.util.Map;
 
 /**
  * A declarative test suite (design ch. 13). Each case runs a SQL file, an Identity SQL Contract,
- * or a route's validation rules (roadmap Phase 19) with parameters and asserts on the returned
- * rows — for a validation case, the violations are the rows.
+ * a route's validation rules (roadmap Phase 19), or a route's/job's notifications (roadmap
+ * Phase 20) with parameters and asserts on the returned rows — for a validation case the
+ * violations are the rows, for a notify case the fired notifications are.
  *
  * @param tests the test cases
  */
@@ -19,20 +20,23 @@ public record TestSuite(List<TestCase> tests) {
     }
 
     /**
-     * A single test case (design ch. 13.2). Exactly one of {@code sql}, {@code contract}, or
-     * {@code validate} is set.
+     * A single test case (design ch. 13.2). Exactly one of {@code sql}, {@code contract},
+     * {@code validate}, or {@code notify} is set.
      *
      * @param name     human-readable case name
      * @param sql      a SQL file target
      * @param contract an Identity SQL Contract name
-     * @param params   bind parameters; for a validation case, the execution context the rules
-     *                 see (typically a {@code body:} map)
+     * @param params   bind parameters; for a validation or notify case, the execution context
+     *                 the declarations see (typically a {@code body:} map)
      * @param expect   the expectation
      * @param validate a route's validation rules as the target (roadmap Phase 19)
+     * @param notifications the {@code notify:} target — a route's or job's notifications
+     *                 (roadmap Phase 20; "notify" itself is not a legal record component)
      */
     @JsonIgnoreProperties(ignoreUnknown = true)
     public record TestCase(String name, SqlTarget sql, String contract,
-            Map<String, Object> params, Expectation expect, ValidateTarget validate) {
+            Map<String, Object> params, Expectation expect, ValidateTarget validate,
+            @com.fasterxml.jackson.annotation.JsonProperty("notify") NotifyTarget notifications) {
 
         public TestCase {
             params = params == null ? Map.of() : Map.copyOf(params);
@@ -53,6 +57,20 @@ public record TestSuite(List<TestCase> tests) {
      */
     @JsonIgnoreProperties(ignoreUnknown = true)
     public record ValidateTarget(String route, String rule) {
+    }
+
+    /**
+     * A notification target (roadmap Phase 20): the case evaluates a route's {@code notify:}
+     * block or a job's {@code notify:} pipeline steps against the case's params, without
+     * touching SMTP or HTTP. Each notification that fires is one row carrying {@code notify}
+     * (its id), {@code channel}, {@code source}, and the resolved payload columns.
+     *
+     * @param route the route id whose notifications are evaluated (exactly one of route/job)
+     * @param job   the job id whose notify steps are evaluated
+     * @param id    optional notification/step id; unset, every declaration is evaluated
+     */
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public record NotifyTarget(String route, String job, String id) {
     }
 
     /**

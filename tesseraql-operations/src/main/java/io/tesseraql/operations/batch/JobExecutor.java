@@ -37,17 +37,29 @@ import org.slf4j.LoggerFactory;
  * Runs a batch job's steps sequentially, persisting lifecycle to the {@link JobRepository}
  * (design ch. 6.5, 26). Each step renders and executes its 2-way SQL; step results are exposed
  * to later steps as {@code step.<id>.affectedRows}.
+ *
+ * <p>A {@code notify:} step (roadmap Phase 20) enqueues a notification on the transactional
+ * outbox instead of executing SQL, and an optional {@link FailureListener} observes failed
+ * executions so the runtime can raise job-failure alerts through the same channels.
  */
 public final class JobExecutor {
 
     private static final Logger LOG = LoggerFactory.getLogger(JobExecutor.class);
     private static final TqlErrorCode STEP_ERROR = new TqlErrorCode(TqlDomain.BATCH, 5002);
 
+    /** Observes failed job executions (roadmap Phase 20 operations alerts). */
+    @FunctionalInterface
+    public interface FailureListener {
+        void jobFailed(String jobId, String executionId, String appName, String message);
+    }
+
     private final JobRepository repository;
     private final TempStore tempStore;
     private final io.tesseraql.core.diag.SqlExecutionLog slowSqlLog;
     private final io.tesseraql.core.telemetry.Tracer tracer;
     private final ObjectMapper mapper = new ObjectMapper();
+    private io.tesseraql.operations.outbox.JdbcOutboxStore notificationOutbox;
+    private FailureListener failureListener;
 
     public JobExecutor(JobRepository repository, TempStore tempStore) {
         this(repository, tempStore, io.tesseraql.core.diag.NoopSqlExecutionLog.INSTANCE);
@@ -65,6 +77,19 @@ public final class JobExecutor {
         this.tempStore = tempStore;
         this.slowSqlLog = slowSqlLog;
         this.tracer = tracer;
+    }
+
+    /** Wires the outbox store {@code notify:} steps enqueue on (roadmap Phase 20). */
+    public JobExecutor notificationOutbox(
+            io.tesseraql.operations.outbox.JdbcOutboxStore outbox) {
+        this.notificationOutbox = outbox;
+        return this;
+    }
+
+    /** Wires the failure listener raising job-failure alerts (roadmap Phase 20). */
+    public JobExecutor onFailure(FailureListener listener) {
+        this.failureListener = listener;
+        return this;
     }
 
     /** Runs the job and returns the final execution record (COMPLETED or FAILED). */
@@ -103,7 +128,7 @@ public final class JobExecutor {
         try {
             for (PipelineStep step : job.effectiveSteps()) {
                 runStepTracked(jobFile, step, dataSource, context, stepResults, executionId,
-                        jobContext);
+                        appName, jobContext);
             }
             repository.completeExecution(executionId);
             LOG.info("Job {} execution {} completed", job.id(), executionId);
@@ -111,21 +136,37 @@ public final class JobExecutor {
             jobSpan.recordError(ex);
             repository.failExecution(executionId, ex.getMessage());
             LOG.warn("Job {} execution {} failed: {}", job.id(), executionId, ex.getMessage());
+            notifyFailure(job.id(), executionId, appName, ex.getMessage());
         } finally {
             jobSpan.end();
         }
         return repository.findExecution(executionId).orElseThrow();
     }
 
+    /** A failing alert must never mask the job failure being reported. */
+    private void notifyFailure(String jobId, String executionId, String appName, String message) {
+        if (failureListener == null) {
+            return;
+        }
+        try {
+            failureListener.jobFailed(jobId, executionId, appName, message);
+        } catch (RuntimeException alertFailure) {
+            LOG.warn("Job-failure alert for {} execution {} failed: {}", jobId, executionId,
+                    alertFailure.getMessage());
+        }
+    }
+
     private void runStepTracked(JobFile jobFile, PipelineStep step, DataSource dataSource,
             Map<String, Object> context, Map<String, Object> stepResults, String executionId,
-            io.tesseraql.core.telemetry.SpanContext jobContext) {
+            String appName, io.tesseraql.core.telemetry.SpanContext jobContext) {
         String stepExecutionId = repository.startStep(executionId, step.id());
         io.tesseraql.core.telemetry.Span stepSpan = tracer.start("tesseraql.job.step", jobContext)
                 .attribute("stepId", step.id());
         io.tesseraql.core.telemetry.SpanContext stepContext = stepSpan.context();
         try {
-            Map<String, Object> result = runStep(jobFile, step, dataSource, context, stepContext);
+            Map<String, Object> result = step.notification() != null
+                    ? runNotifyStep(jobFile, step, context, appName)
+                    : runStep(jobFile, step, dataSource, context, stepContext);
             stepResults.put(step.id(), result);
             repository.completeStep(stepExecutionId,
                     ((Number) result.getOrDefault("affectedRows", 0)).intValue());
@@ -136,6 +177,38 @@ public final class JobExecutor {
         } finally {
             stepSpan.end();
         }
+    }
+
+    /**
+     * Enqueues the step's notification on the outbox (roadmap Phase 20). The event always goes
+     * to the framework's outbox table — not a per-tenant datasource — because the dispatcher of
+     * this runtime claims it from there. A skipped guard reports zero affected rows.
+     */
+    private Map<String, Object> runNotifyStep(JobFile jobFile, PipelineStep step,
+            Map<String, Object> context, String appName) {
+        if (step.sql() != null) {
+            throw TqlException.builder(STEP_ERROR)
+                    .message("Step '" + step.id() + "' must declare exactly one of sql: or"
+                            + " notify:")
+                    .build();
+        }
+        if (notificationOutbox == null) {
+            throw TqlException.builder(STEP_ERROR)
+                    .message("Step '" + step.id() + "': notify steps need the runtime's outbox"
+                            + " store")
+                    .build();
+        }
+        io.tesseraql.yaml.notify.NotifyEvents.CompiledNotify notification = io.tesseraql.yaml.notify.NotifyEvents
+                .compile(jobFile.definition().id(), step.id(), step.notification());
+        if (!notification.fires(context)) {
+            return Map.of("affectedRows", 0);
+        }
+        String eventId = notificationOutbox.insert(notification.build(context,
+                appName == null ? "app" : appName));
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("affectedRows", 1);
+        result.put("eventId", eventId);
+        return result;
     }
 
     private Map<String, Object> runStep(JobFile jobFile, PipelineStep step, DataSource dataSource,

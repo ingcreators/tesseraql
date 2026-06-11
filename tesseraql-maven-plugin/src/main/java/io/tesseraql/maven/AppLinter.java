@@ -30,6 +30,9 @@ public final class AppLinter {
         for (RouteFile route : manifest.routes()) {
             lintRoute(appHome, manifest.config(), route, findings);
         }
+        for (io.tesseraql.yaml.manifest.JobFile job : manifest.jobs()) {
+            lintJob(appHome, manifest.config(), job, findings);
+        }
         return findings;
     }
 
@@ -59,6 +62,7 @@ public final class AppLinter {
         });
         lintOptimisticLocking(route, definition, source, findings);
         lintValidation(route, definition, source, findings);
+        lintNotify(config, definition, source, findings);
         if (definition.security() != null && definition.security().policy() != null
                 && config.navigate(
                         "tesseraql.security.policies." + definition.security().policy()) == null) {
@@ -187,6 +191,67 @@ public final class AppLinter {
                                 + " returning violations - it must not write"));
             }
         });
+    }
+
+    /**
+     * Statically checks the {@code notify:} block of a command route (roadmap Phase 20):
+     * notifications only apply to command routes, each declares a {@code channel:} that the
+     * config knows, and its {@code when:} guard parses.
+     */
+    private void lintNotify(AppConfig config, RouteDefinition definition, String source,
+            List<LintFinding> findings) {
+        if (definition.notifications().isEmpty()) {
+            return;
+        }
+        if (!"command-json".equals(definition.recipe())) {
+            findings.add(new LintFinding("TQL-YAML-1004", "error", source,
+                    "notify: is only supported on command-json routes, not '"
+                            + definition.recipe() + "'"));
+        }
+        definition.notifications()
+                .forEach((id, spec) -> lintNotifySpec(config, id, spec, source, findings));
+    }
+
+    /**
+     * Statically checks a batch job's pipeline steps (roadmap Phase 20): a step declares
+     * exactly one of {@code sql:} or {@code notify:}, and notify steps lint like a route's.
+     */
+    private void lintJob(Path appHome, AppConfig config, io.tesseraql.yaml.manifest.JobFile job,
+            List<LintFinding> findings) {
+        String source = appHome.relativize(job.source()).toString().replace('\\', '/');
+        for (io.tesseraql.yaml.model.PipelineStep step : job.definition().pipeline()) {
+            if ((step.sql() == null) == (step.notification() == null)) {
+                findings.add(new LintFinding("TQL-FIELD-2004", "error", source,
+                        "Step '" + step.id() + "' must declare exactly one of sql: or notify:"));
+                continue;
+            }
+            if (step.notification() != null) {
+                lintNotifySpec(config, step.id(), step.notification(), source, findings);
+            }
+        }
+    }
+
+    private void lintNotifySpec(AppConfig config, String id,
+            io.tesseraql.yaml.model.NotifySpec spec, String source, List<LintFinding> findings) {
+        if (spec.channel() == null || spec.channel().isBlank()) {
+            findings.add(new LintFinding("TQL-FIELD-2004", "error", source,
+                    "Notification '" + id + "' needs a channel:"));
+        } else if (config
+                .navigate("tesseraql.notifications.channels." + spec.channel()) == null) {
+            // A warning, not an error: another environment's config may declare the channel.
+            findings.add(new LintFinding("TQL-YAML-1102", "warning", source,
+                    "Notification '" + id + "' references undeclared channel '"
+                            + spec.channel() + "'"));
+        }
+        if (spec.when() != null && !spec.when().isBlank()) {
+            try {
+                io.tesseraql.core.expr.ExpressionParser.parse(spec.when());
+            } catch (RuntimeException ex) {
+                findings.add(new LintFinding("TQL-SQL-2101", "error", source,
+                        "Notification '" + id + "' has a malformed when: expression: "
+                                + ex.getMessage()));
+            }
+        }
     }
 
     private void lintRuleExpression(String ruleId, String expression, String source,
