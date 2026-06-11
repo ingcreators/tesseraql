@@ -19,6 +19,12 @@ public final class IdentityContracts {
     public static final String ENABLE_USER = "enable-user";
     public static final String DISABLE_USER = "disable-user";
 
+    // Bootstrap helpers (design ch. 18 identity goals); managed-pack only, not part of the
+    // standard contract set a sql realm must provide.
+    public static final String SEED_ADMIN_USER = "seed-admin-user";
+    public static final String ENSURE_ROLE = "ensure-role";
+    public static final String ASSIGN_USER_ROLE = "assign-user-role";
+
     private IdentityContracts() {
     }
 
