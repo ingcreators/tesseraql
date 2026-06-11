@@ -20,8 +20,8 @@ import java.util.Set;
  */
 public final class AppLinter {
 
-    private static final Set<String> KNOWN_ROUTE_RECIPES =
-            Set.of("query-json", "command-json", "query-html", "page", "query-export");
+    private static final Set<String> KNOWN_ROUTE_RECIPES = Set.of("query-json", "command-json",
+            "query-html", "page", "query-export", "file-import", "file-export");
 
     /** Loads and lints the app home, returning all findings. */
     public List<LintFinding> lint(Path appHome) {

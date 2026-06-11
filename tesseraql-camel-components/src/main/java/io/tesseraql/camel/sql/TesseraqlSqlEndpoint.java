@@ -16,7 +16,6 @@ public class TesseraqlSqlEndpoint extends DefaultEndpoint {
     private String resultKey = "sql";
     private int maxRows = -1;
     private String onOverflow = "fail";
-    private String format = "csv";
     private String filename = "export.csv";
     private String dialect;
 
@@ -82,15 +81,6 @@ public class TesseraqlSqlEndpoint extends DefaultEndpoint {
     /** Behavior when {@code maxRows} is exceeded: {@code fail} (default) or {@code warn}. */
     public void setOnOverflow(String onOverflow) {
         this.onOverflow = onOverflow;
-    }
-
-    public String getFormat() {
-        return format;
-    }
-
-    /** Export format for {@code query-export} mode. Only {@code csv} is supported initially. */
-    public void setFormat(String format) {
-        this.format = format;
     }
 
     public String getFilename() {

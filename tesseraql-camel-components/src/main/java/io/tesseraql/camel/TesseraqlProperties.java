@@ -15,6 +15,10 @@ public final class TesseraqlProperties {
     public static final String TENANT = "TesseraqlTenant";
     public static final String ROUTE_SPAN = "TesseraqlRouteSpan";
     public static final String TRACE_CONTEXT = "TesseraqlTraceContext";
+    /** The {@code FileCodec} a {@code query-export} route encodes its result with (ch. 28.10). */
+    public static final String EXPORT_CODEC = "TesseraqlExportCodec";
+    /** The {@code FileWriteSpec} (columns, formats, resolved locale/zone) for {@code query-export}. */
+    public static final String EXPORT_SPEC = "TesseraqlExportSpec";
     public static final String TENANT_DATASOURCE_RESOLVER_BEAN = "tesseraqlTenantDataSources";
 
     /** Registry bean names bound by the runtime for security components. */

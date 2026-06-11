@@ -37,6 +37,8 @@ public final class RouteCompiler {
 
     private static final System.Logger LOG = System.getLogger(RouteCompiler.class.getName());
     private static final TqlErrorCode UNSUPPORTED_RECIPE = new TqlErrorCode(TqlDomain.CAMEL, 3100);
+    /** TQL-CAMEL-3101: a query-export route declares export blocks only file-export supports. */
+    private static final TqlErrorCode INVALID_EXPORT = new TqlErrorCode(TqlDomain.CAMEL, 3101);
     private static final String DEFAULT_DATASOURCE = "main";
     private static final int DEFAULT_MAX_ROWS = 10_000;
     private static final long DEFAULT_IDEMPOTENCY_TTL = java.time.Duration.ofHours(24).toMillis();
@@ -152,18 +154,40 @@ public final class RouteCompiler {
         applyIdempotencyComplete(route, definition);
     }
 
+    /**
+     * query-export (design ch. 28.10): a synchronous file download streaming the route's query
+     * through the same codec/column-mapping machinery as {@code file-export}. The optional
+     * {@code export:} block declares format, columns, filename, and locale/timezone; the
+     * extraction query stays in the route's {@code sql:} block, and follow-up statements
+     * ({@code after:}) need the asynchronous {@code file-export} recipe.
+     */
     private void buildQueryExport(RouteBuilder builder, RouteFile routeFile) {
         RouteDefinition definition = routeFile.definition();
+        io.tesseraql.yaml.model.ExportSpec spec = definition.fileExport();
         String routeId = definition.id();
+        Path routeDir = routeFile.source().getParent();
+        if (spec != null && (spec.sql() != null || spec.after() != null)) {
+            throw new TqlException(INVALID_EXPORT, "Route '" + routeId + "': query-export reads"
+                    + " its query from the route's sql: block and has no after: hook - use the"
+                    + " file-export recipe for asynchronous extraction with follow-up statements");
+        }
+        String format = spec != null && spec.format() != null ? spec.format() : "csv";
+        io.tesseraql.core.files.FileCodec codec =
+                io.tesseraql.core.files.FileCodecs.discover().require(format);
+        Path template = spec == null || spec.template() == null
+                ? null : routeDir.resolve(spec.template()).normalize();
+        io.tesseraql.core.files.FileWriteSpec writeSpec = spec == null
+                ? new io.tesseraql.core.files.FileWriteSpec(java.util.List.of(), null, null, null)
+                : spec.toWriteSpec(template);
+
         String direct = "direct:" + routeId;
         if (mountRest) {
             restEndpoint(builder, routeFile.httpMethod(), routeFile.urlPath()).to(direct);
         }
-
-        Path sqlPath = routeFile.source().getParent().resolve(definition.sql().file()).normalize();
+        Path sqlPath = routeDir.resolve(definition.sql().file()).normalize();
         String sqlUri = "tesseraql-sql:file:" + sqlPath
                 + "?datasource=" + DEFAULT_DATASOURCE
-                + "&mode=query-export&format=csv&filename=" + exportFilename(definition);
+                + "&mode=query-export&filename=" + exportFilename(definition, codec);
 
         ProcessorDefinition<?> route = builder.from(direct).routeId(routeId);
         applyTelemetry(route, routeFile);
@@ -171,7 +195,13 @@ public final class RouteCompiler {
         applyLane(route, definition);
         applySecurity(route, definition.security());
         applyTenancy(route);
-        route.process(new RequestBinder(definition, pathParams(routeFile.urlPath()))).to(sqlUri);
+        route.process(new RequestBinder(definition, pathParams(routeFile.urlPath())))
+                .process(new io.tesseraql.compiler.binding.QueryExportBinder(codec, writeSpec,
+                        formatDeclaration(spec == null ? null : spec.locale(),
+                                "tesseraql.files.locale"),
+                        formatDeclaration(spec == null ? null : spec.timezone(),
+                                "tesseraql.files.timezone")))
+                .to(sqlUri);
     }
 
     /**
@@ -259,12 +289,16 @@ public final class RouteCompiler {
                 routeFile.urlPath()));
     }
 
-    private static String exportFilename(RouteDefinition definition) {
+    private static String exportFilename(RouteDefinition definition,
+            io.tesseraql.core.files.FileCodec codec) {
+        if (definition.fileExport() != null && definition.fileExport().filename() != null) {
+            return definition.fileExport().filename();
+        }
         if (definition.response() != null && definition.response().stream() != null
                 && definition.response().stream().filename() != null) {
             return definition.response().stream().filename();
         }
-        return definition.id() + ".csv";
+        return definition.id() + codec.extension();
     }
 
     /**

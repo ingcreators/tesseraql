@@ -54,6 +54,10 @@ Distinctions are URL conventions, not folder rules:
   transfer (the uploaded file is the request body), `{path}/{transferId}` reports its state and
   `{path}/{transferId}/file` downloads a completed export. Formats: `csv` built in, `excel`
   (jxls report templates colocated with the route) via the optional `tesseraql-excel` module.
+- `query-export` is the synchronous sibling: the response streams the file directly, through
+  the same `export:` block (format, columns, headers, locale/timezone formats, templates) and
+  the same codecs. Its query stays in the route's `sql:` block; `after:` follow-up statements
+  need `file-export`.
 - `/_tesseraql/...` — reserved for the framework and its system apps
 - `/assets/...` — static assets (`/assets/_tesseraql/*` framework files, `/assets/vendor/*`
   self-hosted WebJars at version-less paths)

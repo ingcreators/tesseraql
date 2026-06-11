@@ -197,6 +197,24 @@ class FileTransferIntegrationTest {
     }
 
     @Test
+    void synchronousQueryExportSharesColumnMappingAndFormats() throws Exception {
+        try (Connection connection = connect(); Statement statement = connection.createStatement()) {
+            statement.execute("insert into events (name, held_on, fee)"
+                    + " values ('sync-fest', date '2026-07-01', 1234.50)"
+                    + " on conflict (name) do nothing");
+        }
+
+        HttpResponse<String> file = get("/api/events/download");
+        assertThat(file.statusCode()).isEqualTo(200);
+        assertThat(file.headers().firstValue("content-type").orElse("")).contains("text/csv");
+        assertThat(file.headers().firstValue("content-disposition").orElse(""))
+                .contains("events-sync.csv");
+        // Header labels, date pattern, and German number format come from the export block.
+        assertThat(file.body()).startsWith("Event,held_on,fee");
+        assertThat(file.body()).contains("sync-fest,2026/07/01,\"1.234,50\"");
+    }
+
+    @Test
     void unknownTransferIs404AndRunningExportFileIs409() throws Exception {
         assertThat(get("/api/orders/export/no-such-transfer").statusCode()).isEqualTo(404);
         assertThat(get("/api/orders/export/no-such-transfer/file").statusCode()).isEqualTo(404);
@@ -378,6 +396,28 @@ class FileTransferIntegrationTest {
                     file: select-events.sql
                 """);
         Files.writeString(exportRoute.resolve("select-events.sql"),
+                "select name, held_on, fee from events order by name\n;\n");
+
+        // Synchronous download (query-export) through the same codec/column/format machinery.
+        Path downloadRoute = home.resolve("web/api/events/download");
+        Files.createDirectories(downloadRoute);
+        Files.writeString(downloadRoute.resolve("get.yml"), """
+                version: tesseraql/v1
+                id: events.download
+                kind: route
+                recipe: query-export
+                sql:
+                  file: select-events.sql
+                export:
+                  format: csv
+                  filename: events-sync.csv
+                  locale: de-DE
+                  columns:
+                    - { name: name, header: Event }
+                    - { name: held_on, type: date, format: yyyy/MM/dd }
+                    - { name: fee, type: number, format: "#,##0.00" }
+                """);
+        Files.writeString(downloadRoute.resolve("select-events.sql"),
                 "select name, held_on, fee from events order by name\n;\n");
     }
 

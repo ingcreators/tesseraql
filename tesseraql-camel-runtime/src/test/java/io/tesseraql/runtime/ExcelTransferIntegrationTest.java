@@ -135,6 +135,33 @@ class ExcelTransferIntegrationTest {
         }
     }
 
+    @Test
+    void synchronousQueryExportStreamsXlsxThroughTheSharedCodec() throws Exception {
+        // Seed people through the async import, then download synchronously.
+        HttpResponse<String> accepted = HTTP.send(HttpRequest.newBuilder(
+                        URI.create("http://localhost:" + runtime.port() + "/api/people/import"))
+                .POST(HttpRequest.BodyPublishers.ofByteArray(workbook()))
+                .build(), HttpResponse.BodyHandlers.ofString());
+        String importId = MAPPER.readTree(accepted.body()).get("transferId").asText();
+        assertThat(awaitTerminal("/api/people/import/" + importId).get("status").asText())
+                .isEqualTo("COMPLETED");
+
+        HttpResponse<byte[]> file = HTTP.send(HttpRequest.newBuilder(
+                        URI.create("http://localhost:" + runtime.port() + "/api/people/download"))
+                .build(), HttpResponse.BodyHandlers.ofByteArray());
+        assertThat(file.statusCode()).isEqualTo(200);
+        assertThat(file.headers().firstValue("content-type").orElse(""))
+                .contains("spreadsheetml");
+        assertThat(file.headers().firstValue("content-disposition").orElse(""))
+                .contains("people-sync.xlsx");
+        try (XSSFWorkbook exported = new XSSFWorkbook(new ByteArrayInputStream(file.body()))) {
+            Sheet sheet = exported.getSheetAt(0);
+            assertThat(sheet.getRow(0).getCell(0).getStringCellValue()).isEqualTo("full_name");
+            assertThat(sheet.getRow(1).getCell(0).getStringCellValue()).isEqualTo("Anne");
+            assertThat(sheet.getRow(1).getCell(1).getNumericCellValue()).isEqualTo(34.0);
+        }
+    }
+
     private static byte[] workbook() throws IOException {
         try (XSSFWorkbook workbook = new XSSFWorkbook();
                 ByteArrayOutputStream out = new ByteArrayOutputStream()) {
@@ -237,6 +264,23 @@ class ExcelTransferIntegrationTest {
                     file: select-people.sql
                 """);
         Files.writeString(exportRoute.resolve("select-people.sql"),
+                "select full_name, age from people order by full_name\n;\n");
+
+        // Synchronous xlsx download (query-export) through the shared Excel codec.
+        Path downloadRoute = home.resolve("web/api/people/download");
+        Files.createDirectories(downloadRoute);
+        Files.writeString(downloadRoute.resolve("get.yml"), """
+                version: tesseraql/v1
+                id: people.download
+                kind: route
+                recipe: query-export
+                sql:
+                  file: select-people.sql
+                export:
+                  format: excel
+                  filename: people-sync.xlsx
+                """);
+        Files.writeString(downloadRoute.resolve("select-people.sql"),
                 "select full_name, age from people order by full_name\n;\n");
 
         // Placement mode: the YAML declares where each query column lands in the styled

@@ -9,9 +9,8 @@ security:
 
 sql:
   file: export.sql
-  mode: query-export
 
-response:
-  stream:
-    contentType: text/csv
-    filename: users.csv
+# Synchronous download through the shared file codec/column-mapping machinery (design ch. 28.10).
+export:
+  format: csv
+  filename: users.csv

@@ -4,6 +4,8 @@ import io.tesseraql.camel.TesseraqlProperties;
 import io.tesseraql.core.error.TqlDomain;
 import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
+import io.tesseraql.core.files.FileCodec;
+import io.tesseraql.core.files.FileWriteSpec;
 import io.tesseraql.core.sql.BoundParameter;
 import io.tesseraql.core.sql.BoundSql;
 import io.tesseraql.core.spool.FileTempStore;
@@ -14,7 +16,6 @@ import io.tesseraql.core.spool.TempStore;
 import io.tesseraql.core.sql.SqlNode;
 import io.tesseraql.core.sql.Sql2WayParser;
 import io.tesseraql.core.sql.SqlRenderer;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.sql.Connection;
@@ -81,7 +82,7 @@ public class TesseraqlSqlProducer extends DefaultProducer {
             DataSource dataSource = dataSource(exchange);
 
             if ("query-export".equals(mode)) {
-                exportCsv(exchange, dataSource, bound);
+                export(exchange, dataSource, bound);
                 return;
             }
             if (!"query".equals(mode) && !"update".equals(mode)) {
@@ -129,13 +130,18 @@ public class TesseraqlSqlProducer extends DefaultProducer {
     }
 
     /**
-     * Streams the result set to a CSV spool and sets the response body to its input stream
-     * (design ch. 28.6, 28.10) without materializing a List&lt;Map&gt;. The spool is deleted when
-     * the exchange completes.
+     * Streams the result set through the route's {@link FileCodec} into a spool and sets the
+     * response body to its input stream (design ch. 28.6, 28.10) without materializing a
+     * List&lt;Map&gt;. The codec and write spec (columns, formats, resolved locale/zone) are bound
+     * by the compiled route, so synchronous exports share the file-export machinery. The spool is
+     * deleted when the exchange completes.
      */
-    private void exportCsv(Exchange exchange, DataSource dataSource, BoundSql bound) {
-        if (!"csv".equals(endpoint.getFormat())) {
-            throw new TqlException(UNSUPPORTED_MODE, "Unsupported export format: " + endpoint.getFormat());
+    private void export(Exchange exchange, DataSource dataSource, BoundSql bound) {
+        FileCodec codec = exchange.getProperty(TesseraqlProperties.EXPORT_CODEC, FileCodec.class);
+        FileWriteSpec spec = exchange.getProperty(TesseraqlProperties.EXPORT_SPEC, FileWriteSpec.class);
+        if (codec == null || spec == null) {
+            throw new TqlException(UNSUPPORTED_MODE,
+                    "query-export requires the compiled export binding (codec and write spec)");
         }
         TempStore tempStore = tempStore();
         SpoolRef ref;
@@ -152,9 +158,10 @@ public class TesseraqlSqlProducer extends DefaultProducer {
                     ResultSet.TYPE_FORWARD_ONLY, ResultSet.CONCUR_READ_ONLY)) {
                 statement.setFetchSize(profile.fetchSize());
                 bindParameters(statement, bound.parameters());
+                SpoolKind kind = "csv".equals(codec.format()) ? SpoolKind.CSV : SpoolKind.BINARY;
                 try (ResultSet resultSet = statement.executeQuery();
-                        SpoolWriter writer = tempStore.createWriter(SpoolKind.CSV)) {
-                    writeCsv(resultSet, writer);
+                        SpoolWriter writer = tempStore.createWriter(kind)) {
+                    codec.write(new SpoolOutputStream(writer), spec, new ResultRows(resultSet, writer));
                     writer.close();
                     ref = writer.toRef();
                 }
@@ -164,7 +171,9 @@ public class TesseraqlSqlProducer extends DefaultProducer {
                     connection.setAutoCommit(previousAutoCommit);
                 }
             }
-        } catch (java.io.IOException | java.sql.SQLException ex) {
+        } catch (TqlException ex) {
+            throw ex;
+        } catch (Exception ex) {
             throw executionError(ex);
         }
 
@@ -174,7 +183,7 @@ public class TesseraqlSqlProducer extends DefaultProducer {
             throw executionError(ex);
         }
         exchange.getMessage().setHeader(Exchange.HTTP_RESPONSE_CODE, 200);
-        exchange.getMessage().setHeader(Exchange.CONTENT_TYPE, "text/csv; charset=utf-8");
+        exchange.getMessage().setHeader(Exchange.CONTENT_TYPE, codec.contentType());
         exchange.getMessage().setHeader("Content-Disposition",
                 "attachment; filename=\"" + endpoint.getFilename() + "\"");
         exchange.getExchangeExtension().addOnCompletion(new org.apache.camel.spi.Synchronization() {
@@ -190,42 +199,75 @@ public class TesseraqlSqlProducer extends DefaultProducer {
         });
     }
 
-    private void writeCsv(ResultSet resultSet, SpoolWriter writer)
-            throws java.sql.SQLException, java.io.IOException {
-        ResultSetMetaData metaData = resultSet.getMetaData();
-        int columnCount = metaData.getColumnCount();
-        StringBuilder header = new StringBuilder();
-        for (int col = 1; col <= columnCount; col++) {
-            if (col > 1) {
-                header.append(',');
-            }
-            header.append(csvEscape(io.tesseraql.core.dialect.Labels.normalize(
-                    endpoint.getDialect(), metaData.getColumnLabel(col))));
-        }
-        header.append('\n');
-        writer.write(header.toString().getBytes(StandardCharsets.UTF_8));
+    /** Streams result-set rows to the codec as label-normalized maps, counting them as read. */
+    private final class ResultRows implements java.util.Iterator<Map<String, Object>> {
 
-        while (resultSet.next()) {
-            StringBuilder line = new StringBuilder();
-            for (int col = 1; col <= columnCount; col++) {
-                if (col > 1) {
-                    line.append(',');
-                }
-                Object value = normalize(resultSet.getObject(col));
-                line.append(value == null ? "" : csvEscape(String.valueOf(value)));
+        private final ResultSet resultSet;
+        private final SpoolWriter writer;
+        private final List<String> labels = new ArrayList<>();
+        private Boolean pending;
+
+        ResultRows(ResultSet resultSet, SpoolWriter writer) throws java.sql.SQLException {
+            this.resultSet = resultSet;
+            this.writer = writer;
+            ResultSetMetaData metaData = resultSet.getMetaData();
+            for (int col = 1; col <= metaData.getColumnCount(); col++) {
+                labels.add(io.tesseraql.core.dialect.Labels.normalize(
+                        endpoint.getDialect(), metaData.getColumnLabel(col)));
             }
-            line.append('\n');
-            writer.write(line.toString().getBytes(StandardCharsets.UTF_8));
-            writer.incrementRows(1);
+        }
+
+        @Override
+        public boolean hasNext() {
+            try {
+                if (pending == null) {
+                    pending = resultSet.next();
+                }
+                return pending;
+            } catch (java.sql.SQLException ex) {
+                throw executionError(ex);
+            }
+        }
+
+        @Override
+        public Map<String, Object> next() {
+            if (!hasNext()) {
+                throw new java.util.NoSuchElementException();
+            }
+            pending = null;
+            try {
+                Map<String, Object> row = new LinkedHashMap<>();
+                for (int col = 1; col <= labels.size(); col++) {
+                    // Raw JDBC values, like the asynchronous file-export path: the codec's
+                    // ColumnValues formatting decides how temporals and numbers render.
+                    row.put(labels.get(col - 1), resultSet.getObject(col));
+                }
+                writer.incrementRows(1);
+                return row;
+            } catch (java.sql.SQLException ex) {
+                throw executionError(ex);
+            }
         }
     }
 
-    private static String csvEscape(String value) {
-        if (value.indexOf(',') < 0 && value.indexOf('"') < 0
-                && value.indexOf('\n') < 0 && value.indexOf('\r') < 0) {
-            return value;
+    /** Adapts the spool writer to the {@link java.io.OutputStream} the codecs write to. */
+    private static final class SpoolOutputStream extends java.io.OutputStream {
+
+        private final SpoolWriter writer;
+
+        SpoolOutputStream(SpoolWriter writer) {
+            this.writer = writer;
         }
-        return '"' + value.replace("\"", "\"\"") + '"';
+
+        @Override
+        public void write(int b) throws java.io.IOException {
+            writer.write(new byte[] {(byte) b});
+        }
+
+        @Override
+        public void write(byte[] data, int offset, int length) throws java.io.IOException {
+            writer.write(java.util.Arrays.copyOfRange(data, offset, offset + length));
+        }
     }
 
     private TempStore tempStore() {
