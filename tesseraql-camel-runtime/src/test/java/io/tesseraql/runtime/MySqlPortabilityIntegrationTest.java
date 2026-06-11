@@ -80,6 +80,19 @@ class MySqlPortabilityIntegrationTest {
         assertThat(body.path("data").get(0).path("source").asText()).isEqualTo("mysql");
     }
 
+    @Test
+    void managedIdentitySchemaAndBootstrapContractsWorkOnMySql() throws Exception {
+        DialectIdentityChecks.seedAndAuthenticate(mysqlDataSource(), "mysql");
+    }
+
+    private static javax.sql.DataSource mysqlDataSource() {
+        com.mysql.cj.jdbc.MysqlDataSource dataSource = new com.mysql.cj.jdbc.MysqlDataSource();
+        dataSource.setUrl(MYSQL.getJdbcUrl());
+        dataSource.setUser(MYSQL.getUsername());
+        dataSource.setPassword(MYSQL.getPassword());
+        return dataSource;
+    }
+
     private static String token() throws Exception {
         Base64.Encoder enc = Base64.getUrlEncoder().withoutPadding();
         String header = enc.encodeToString("{\"alg\":\"HS256\"}".getBytes(StandardCharsets.UTF_8));
