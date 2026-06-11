@@ -98,28 +98,28 @@ public final class JdbcOutboxStore implements OutboxStore {
     /**
      * As {@link #claimPending(int)}, additionally narrowed to events emitted by the given apps -
      * untagged legacy rows stay claimable by anyone. A null or empty scope claims everything.
+     * The claim query is the bundled {@code outbox-claim-pending.sql} 2-way template (IN
+     * expansion and the optional scope condition render there, not in Java).
      */
     @Override
     public List<OutboxEvent> claimPending(int limit, java.util.Collection<String> apps) {
-        List<String> scope = apps == null ? List.of() : List.copyOf(apps);
-        String appsFilter = scope.isEmpty() ? "" : " and (app_name is null or app_name in ("
-                + String.join(", ", java.util.Collections.nCopies(scope.size(), "?")) + "))";
+        java.util.Map<String, Object> params = new java.util.LinkedHashMap<>();
+        params.put("abandonedBefore", Timestamp.from(
+                Instant.now().minus(java.time.Duration.ofMinutes(5))));
+        params.put("apps", apps == null || apps.isEmpty() ? null : List.copyOf(apps));
+        params.put("limit", limit);
+        io.tesseraql.core.sql.BoundSql bound = io.tesseraql.core.sql.SqlResources.render(
+                JdbcOutboxStore.class, "/tesseraql/sql/operations/outbox-claim-pending.sql",
+                params);
         List<OutboxEvent> events = new ArrayList<>();
         try (Connection connection = dataSource.getConnection()) {
             boolean autoCommit = connection.getAutoCommit();
             connection.setAutoCommit(false);
             try {
-                try (PreparedStatement ps = connection.prepareStatement(
-                        "select * from tql_outbox_event where (status = 'PENDING' "
-                                + "or (status = 'SENDING' and claimed_at < ?))" + appsFilter
-                                + " order by created_at limit ? for update skip locked")) {
-                    ps.setTimestamp(1, Timestamp.from(
-                            Instant.now().minus(java.time.Duration.ofMinutes(5))));
-                    int next = 2;
-                    for (String app : scope) {
-                        ps.setString(next++, app);
+                try (PreparedStatement ps = connection.prepareStatement(bound.sql())) {
+                    for (int i = 0; i < bound.parameters().size(); i++) {
+                        ps.setObject(i + 1, bound.parameters().get(i).value());
                     }
-                    ps.setInt(next, limit);
                     try (ResultSet rs = ps.executeQuery()) {
                         while (rs.next()) {
                             events.add(read(rs));
