@@ -10,7 +10,7 @@ security:
 sql:
   service: ops.overview
   params:
-    # Narrows batch visibility to the caller's ops.app.<name> grants (none = legacy full view).
+    # Narrows batch visibility to the caller's ops.app.<name> grants (deny by default).
     permissions: principal.permissions
 
 response:

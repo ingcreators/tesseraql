@@ -26,11 +26,11 @@ class OpsScopeTest {
     }
 
     @Test
-    void withoutScopedGrantsTheLegacyFullViewRemains() {
-        // Scoping activates only once an ops.app.* permission is granted, so deployments that
-        // gate solely on ops.batch.view keep their runtime-wide console.
-        assertThat(OpsScope.allowedApps(List.of("ops.batch.view")).test("billing")).isTrue();
-        assertThat(OpsScope.allowedApps(null).test("billing")).isTrue();
-        assertThat(OpsScope.allowedApps("not-a-list").test("billing")).isTrue();
+    void withoutScopedGrantsNothingIsVisible() {
+        // Deny by default: the ops.batch.view entry permission opens the console, but batch
+        // data appears only for explicitly granted apps (or ops.app.*).
+        assertThat(OpsScope.allowedApps(List.of("ops.batch.view")).test("billing")).isFalse();
+        assertThat(OpsScope.allowedApps(null).test("billing")).isFalse();
+        assertThat(OpsScope.allowedApps("not-a-list").test("billing")).isFalse();
     }
 }

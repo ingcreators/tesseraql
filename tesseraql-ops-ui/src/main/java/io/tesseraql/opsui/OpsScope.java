@@ -8,10 +8,9 @@ import java.util.stream.Collectors;
 /**
  * Per-user application scope for the operations console (design ch. 26.11): permissions of the
  * form {@code ops.app.<appName>} grant operational visibility into one app, {@code ops.app.*}
- * into all. Scoping activates as soon as the caller holds any {@code ops.app.} permission; a
- * caller with none keeps the legacy runtime-wide view their entry permission
- * ({@code ops.batch.view}) always granted, so existing deployments keep working until they adopt
- * scoped grants.
+ * into all. Deny by default (design ch. 11): a caller without any {@code ops.app.} grant sees no
+ * batch data - the {@code ops.batch.view} entry permission opens the console, the scoped grants
+ * decide what it shows.
  */
 public final class OpsScope {
 
@@ -24,20 +23,16 @@ public final class OpsScope {
 
     /**
      * The app-name filter for a caller, from the {@code principal.permissions} value a route
-     * binds into the service call (a list of permission codes; any other shape means no scoped
-     * grants).
+     * binds into the service call (a list of permission codes; any other shape denies).
      */
     public static Predicate<String> allowedApps(Object permissions) {
         if (!(permissions instanceof List<?> codes)) {
-            return app -> true;
+            return app -> false;
         }
         Set<String> scoped = codes.stream()
                 .map(String::valueOf)
                 .filter(code -> code.startsWith(PERMISSION_PREFIX))
                 .collect(Collectors.toSet());
-        if (scoped.isEmpty()) {
-            return app -> true;
-        }
         if (scoped.contains(ALL)) {
             return app -> true;
         }
