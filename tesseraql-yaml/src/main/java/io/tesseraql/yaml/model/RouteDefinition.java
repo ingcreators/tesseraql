@@ -22,6 +22,8 @@ import java.util.Map;
  *                execution context under its own name so one page can render several result sets
  * @param validate declarative validation rules of a command, keyed by rule id and evaluated in
  *                their authored order before the command's steps (roadmap Phase 19)
+ * @param notifications the {@code notify:} block of a command, keyed by notification id and
+ *                enqueued on the transactional outbox after the steps (roadmap Phase 20)
  * @param errors  declarative error mapping, e.g. constraint names to field-level errors
  * @param fileImport the {@code import:} block of a {@code file-import} route
  * @param fileExport the {@code export:} block of a {@code file-export} route
@@ -43,6 +45,8 @@ public record RouteDefinition(
         Map<String, SqlBinding> steps,
         Map<String, SqlBinding> queries,
         Map<String, ValidationRule> validate,
+        // "notify" itself is not a legal record component (it would hide Object.notify()).
+        @com.fasterxml.jackson.annotation.JsonProperty("notify") Map<String, NotifySpec> notifications,
         ErrorsSpec errors,
         @com.fasterxml.jackson.annotation.JsonProperty("import") ImportSpec fileImport,
         @com.fasterxml.jackson.annotation.JsonProperty("export") ExportSpec fileExport,
@@ -60,6 +64,10 @@ public record RouteDefinition(
         validate = validate == null
                 ? Map.of()
                 : java.util.Collections.unmodifiableMap(new java.util.LinkedHashMap<>(validate));
+        notifications = notifications == null
+                ? Map.of()
+                : java.util.Collections
+                        .unmodifiableMap(new java.util.LinkedHashMap<>(notifications));
     }
 
     /** The input policy, or framework defaults (reject unknown / reject read-only). */
