@@ -385,6 +385,10 @@
             <eclipse>
               <file>${maven.multiModuleProjectDirectory}/config/eclipse-formatter.xml</file>
             </eclipse>
+            <!-- Static imports first, then one alphabetical block (the codebase convention). -->
+            <importOrder>
+              <order>\#,</order>
+            </importOrder>
             <removeUnusedImports/>
             <trimTrailingWhitespace/>
             <endWithNewline/>

@@ -1,9 +1,9 @@
 package io.tesseraql.operations.batch;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import io.tesseraql.core.error.TqlDomain;
 import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.tesseraql.core.expr.EvaluationContext;
 import io.tesseraql.core.spool.SpoolKind;
 import io.tesseraql.core.spool.SpoolRef;

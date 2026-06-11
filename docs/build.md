@@ -16,9 +16,11 @@ TesseraQL 1.x build policy:
 
 Java formatting is enforced in the build: `spotless:check` runs during `verify` against the
 shared profile [config/eclipse-formatter.xml](../config/eclipse-formatter.xml) (4-space
-indent, 100 columns; hand-wrapped lines and comments are left as authored). VS Code applies
-the same profile on save (`java.format.settings.url`, preconfigured in the Dev Container).
-To fix violations:
+indent, 100 columns; hand-wrapped lines and comments are left as authored). Imports are
+normalized too: static imports first, then one alphabetical block, unused imports removed.
+VS Code applies the same profile and import rules on save (`java.format.settings.url`,
+`java.completion.importOrder`, organize-imports on save - preconfigured in the Dev
+Container). To fix violations:
 
 ```bash
 ./mvnw spotless:apply
