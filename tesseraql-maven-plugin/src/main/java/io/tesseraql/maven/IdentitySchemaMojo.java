@@ -17,6 +17,14 @@ import org.apache.maven.plugins.annotations.Parameter;
  * admin password comes from a file ({@code tesseraql.adminPasswordFile}) or the
  * {@code TESSERAQL_ADMIN_PASSWORD} environment variable - never from the POM or the command line,
  * so it cannot leak into build logs or version control.
+ *
+ * <p>There are no default credentials anywhere: a fresh database has no users until this goal
+ * (or equivalent provisioning) runs. The role codes in {@code tesseraql.adminRoles} are only
+ * meaningful if the app's {@code tesseraql.security.policies} reference the same names - check
+ * the app's policy block and pass matching roles (e.g. {@code -Dtesseraql.adminRoles=ADMIN}).
+ * Permission codes in {@code tesseraql.adminPermissions} (e.g. {@code ops.app.*} for runtime-wide
+ * operations visibility) are created and granted to those roles, flowing into the principal's
+ * permissions through the standard role-permission join.
  */
 @Mojo(name = "identity-schema", threadSafe = true)
 public class IdentitySchemaMojo extends AbstractMojo {
@@ -41,9 +49,20 @@ public class IdentitySchemaMojo extends AbstractMojo {
     @Parameter(property = "tesseraql.adminPasswordFile")
     private File adminPasswordFile;
 
-    /** Role codes assigned to the administrator. */
+    /**
+     * Role codes assigned to the administrator. Must match the role names the app's
+     * {@code tesseraql.security.policies} block checks, or the admin can log in but passes no
+     * policy gate.
+     */
     @Parameter(property = "tesseraql.adminRoles", defaultValue = "iam.admin")
     private String adminRoles;
+
+    /**
+     * Permission codes created and granted to the admin roles, e.g.
+     * {@code ops.app.*,iam:admin:write}. Empty by default.
+     */
+    @Parameter(property = "tesseraql.adminPermissions", defaultValue = "")
+    private String adminPermissions;
 
     @Override
     public void execute() throws MojoExecutionException {
@@ -53,15 +72,21 @@ public class IdentitySchemaMojo extends AbstractMojo {
             bootstrap.applySchema(dialect);
             getLog().info("Applied the managed IAM schema (" + dialect + ")");
             if (adminLogin != null && !adminLogin.isBlank()) {
-                List<String> roles = Arrays.stream(adminRoles.split(","))
-                        .map(String::trim).filter(role -> !role.isEmpty()).toList();
-                bootstrap.seedAdmin(adminLogin, adminPassword(), roles);
-                getLog().info("Seeded administrator '" + adminLogin + "' with roles " + roles);
+                List<String> roles = csv(adminRoles);
+                List<String> permissions = csv(adminPermissions);
+                bootstrap.seedAdmin(adminLogin, adminPassword(), roles, permissions);
+                getLog().info("Seeded administrator '" + adminLogin + "' with roles " + roles
+                        + (permissions.isEmpty() ? "" : " and permissions " + permissions));
             }
         } catch (SQLException ex) {
             throw new MojoExecutionException("Identity schema bootstrap failed: "
                     + ex.getMessage(), ex);
         }
+    }
+
+    private static List<String> csv(String values) {
+        return values == null ? List.of() : Arrays.stream(values.split(","))
+                .map(String::trim).filter(value -> !value.isEmpty()).toList();
     }
 
     private String adminPassword() throws MojoExecutionException {

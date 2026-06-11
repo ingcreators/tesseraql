@@ -24,6 +24,8 @@ public final class IdentityContracts {
     public static final String SEED_ADMIN_USER = "seed-admin-user";
     public static final String ENSURE_ROLE = "ensure-role";
     public static final String ASSIGN_USER_ROLE = "assign-user-role";
+    public static final String ENSURE_PERMISSION = "ensure-permission";
+    public static final String ASSIGN_ROLE_PERMISSION = "assign-role-permission";
 
     private IdentityContracts() {
     }

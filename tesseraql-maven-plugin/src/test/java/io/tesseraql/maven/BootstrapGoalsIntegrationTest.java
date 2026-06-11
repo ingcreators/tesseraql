@@ -103,9 +103,11 @@ class BootstrapGoalsIntegrationTest {
         bootstrap.applySchema("postgres");
         bootstrap.applySchema("postgres");
 
-        bootstrap.seedAdmin("admin", "first-password", List.of("iam.admin"));
+        bootstrap.seedAdmin("admin", "first-password", List.of("iam.admin"),
+                List.of("ops.app.*"));
         // Re-seeding rotates the password in place instead of failing on the unique login.
-        bootstrap.seedAdmin("admin", "rotated-password", List.of("iam.admin"));
+        bootstrap.seedAdmin("admin", "rotated-password", List.of("iam.admin"),
+                List.of("ops.app.*"));
 
         try (Connection connection = dataSource.getConnection();
                 Statement statement = connection.createStatement();
@@ -124,6 +126,20 @@ class BootstrapGoalsIntegrationTest {
                     admin.getString("password_algo"), admin.getString("password_params"))).isFalse();
             assertThat(admin.getString("role_code")).isEqualTo("iam.admin");
             assertThat(admin.next()).isFalse();
+        }
+
+        // The granted permission flows to the principal through the standard contract join.
+        try (Connection connection = dataSource.getConnection();
+                Statement statement = connection.createStatement();
+                ResultSet permissions = statement.executeQuery(
+                        "select p.permission_code from tql_user_roles ur"
+                                + " join tql_role_permissions rp on rp.role_id = ur.role_id"
+                                + " join tql_permissions p on p.permission_id = rp.permission_id"
+                                + " join tql_users u on u.user_id = ur.user_id"
+                                + " where u.login_id = 'admin'")) {
+            assertThat(permissions.next()).isTrue();
+            assertThat(permissions.getString(1)).isEqualTo("ops.app.*");
+            assertThat(permissions.next()).isFalse();
         }
     }
 }

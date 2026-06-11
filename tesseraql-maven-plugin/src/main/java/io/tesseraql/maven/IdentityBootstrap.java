@@ -41,19 +41,34 @@ final class IdentityBootstrap {
         }
     }
 
-    /** Creates or updates the administrator and assigns the given role codes. */
-    void seedAdmin(String loginId, String password, List<String> roleCodes) {
+    /**
+     * Creates or updates the administrator, assigns the given role codes and grants the given
+     * permission codes to those roles - so e.g. {@code ops.app.*} flows into the principal's
+     * permissions through the standard role-permission join.
+     */
+    void seedAdmin(String loginId, String password, List<String> roleCodes,
+            List<String> permissionCodes) {
         identity.executeUpdate(realm, IdentityContracts.SEED_ADMIN_USER, Map.of(
                 "userId", loginId,
                 "loginId", loginId,
                 "displayName", loginId,
                 "passwordHash", encoder.encode(password),
                 "passwordParams", encoder.defaultParams()));
+        for (String permissionCode : permissionCodes) {
+            identity.executeUpdate(realm, IdentityContracts.ENSURE_PERMISSION, Map.of(
+                    "permissionId", permissionCode,
+                    "permissionCode", permissionCode,
+                    "permissionName", permissionCode));
+        }
         for (String roleCode : roleCodes) {
             identity.executeUpdate(realm, IdentityContracts.ENSURE_ROLE, Map.of(
                     "roleId", roleCode, "roleCode", roleCode, "roleName", roleCode));
             identity.executeUpdate(realm, IdentityContracts.ASSIGN_USER_ROLE, Map.of(
                     "userId", loginId, "roleCode", roleCode));
+            for (String permissionCode : permissionCodes) {
+                identity.executeUpdate(realm, IdentityContracts.ASSIGN_ROLE_PERMISSION, Map.of(
+                        "roleCode", roleCode, "permissionCode", permissionCode));
+            }
         }
     }
 }
