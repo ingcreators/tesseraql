@@ -146,6 +146,13 @@
       <artifactId>opentelemetry-sdk-testing</artifactId>
       <scope>test</scope>
     </dependency>
+    <!-- The optional Excel codec, on the test classpath to prove ServiceLoader discovery. -->
+    <dependency>
+      <groupId>io.tesseraql</groupId>
+      <artifactId>tesseraql-excel</artifactId>
+      <version>${project.version}</version>
+      <scope>test</scope>
+    </dependency>
     <dependency>
       <groupId>org.testcontainers</groupId>
       <artifactId>postgresql</artifactId>
