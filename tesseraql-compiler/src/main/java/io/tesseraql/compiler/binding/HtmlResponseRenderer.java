@@ -31,12 +31,19 @@ public final class HtmlResponseRenderer implements Processor {
     private final HtmlResponse response;
     private final Path appHome;
     private final String templateName;
+    private final String defaultLocaleTag;
     private final ObjectMapper mapper = new ObjectMapper();
 
     public HtmlResponseRenderer(HtmlResponse response, Path appHome, Path routeDir) {
+        this(response, appHome, routeDir, "en");
+    }
+
+    public HtmlResponseRenderer(HtmlResponse response, Path appHome, Path routeDir,
+            String defaultLocaleTag) {
         this.response = response;
         this.appHome = appHome.toAbsolutePath().normalize();
         this.templateName = resolveTemplate(this.appHome, routeDir, response.template());
+        this.defaultLocaleTag = defaultLocaleTag;
     }
 
     /**
@@ -69,7 +76,11 @@ public final class HtmlResponseRenderer implements Processor {
         response.model().forEach((key, expr) -> model.put(key,
                 evaluation.resolve(Arrays.asList(String.valueOf(expr).split("\\.")))));
 
-        String html = Templates.render(appHome, templateName, model);
+        // The negotiated request locale (roadmap Phase 22) drives #{key} lookups and #locale.
+        String tag = exchange.getProperty(TesseraqlProperties.LOCALE, defaultLocaleTag,
+                String.class);
+        String html = Templates.render(appHome, templateName, model,
+                java.util.Locale.forLanguageTag(tag));
 
         exchange.getMessage().setHeader(Exchange.HTTP_RESPONSE_CODE, response.effectiveStatus());
         exchange.getMessage().setHeader(Exchange.CONTENT_TYPE, "text/html; charset=utf-8");

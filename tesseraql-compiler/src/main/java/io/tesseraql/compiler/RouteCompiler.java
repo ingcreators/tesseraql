@@ -358,7 +358,8 @@ public final class RouteCompiler {
                     routeFile.definition().response().file(), appHome, routeDir));
         } else {
             route.process(new HtmlResponseRenderer(
-                    routeFile.definition().response().html(), appHome, routeDir));
+                    routeFile.definition().response().html(), appHome, routeDir,
+                    i18n.defaultTag()));
         }
     }
 
