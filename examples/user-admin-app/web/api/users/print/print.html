@@ -1,0 +1,32 @@
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+  <title>利用者一覧</title>
+  <style>
+    @page {
+      size: A4;
+      margin: 20mm 15mm;
+      @bottom-center { content: "Page " counter(page) " / " counter(pages); font-size: 8pt; }
+    }
+    body { font-family: 'TesseraQL Sample Gothic'; font-size: 10pt; }
+    h1 { font-size: 14pt; }
+    table { width: 100%; border-collapse: collapse; }
+    thead { display: table-header-group; }
+    th, td { border: 0.5pt solid #444444; padding: 3pt 5pt; text-align: left; }
+    th { background-color: #eeeeee; }
+  </style>
+</head>
+<body>
+  <h1>利用者一覧</h1>
+  <table>
+    <thead>
+      <tr><th th:each="column : ${columns}" th:text="${column.header}">header</th></tr>
+    </thead>
+    <tbody>
+      <tr th:each="row : ${rows}">
+        <td th:text="${row.name}">name</td>
+        <td th:text="${row.status}">status</td>
+      </tr>
+    </tbody>
+  </table>
+</body>
+</html>

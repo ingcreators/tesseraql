@@ -28,6 +28,13 @@
       <artifactId>spring-boot-actuator</artifactId>
     </dependency>
 
+    <!-- The example app the integration test boots declares a pdf export (roadmap Phase 21). -->
+    <dependency>
+      <groupId>io.tesseraql</groupId>
+      <artifactId>tesseraql-pdf</artifactId>
+      <version>${project.version}</version>
+      <scope>test</scope>
+    </dependency>
     <dependency>
       <groupId>org.junit.jupiter</groupId>
       <artifactId>junit-jupiter</artifactId>
