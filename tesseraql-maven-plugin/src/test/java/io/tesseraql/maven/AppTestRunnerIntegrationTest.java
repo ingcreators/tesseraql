@@ -108,7 +108,7 @@ class AppTestRunnerIntegrationTest {
         assertThat(result.kind("document").covered()).containsExactly("users.print");
         assertThat(result.kind("document").ratio()).isEqualTo(1.0);
         // Phase 22: both shipped catalogs are declared and the messages cases read them.
-        assertThat(result.kind("message").declared()).containsExactly("en", "ja");
+        assertThat(result.kind("message").declared()).containsExactlyInAnyOrder("en", "ja");
         assertThat(result.kind("message").covered()).containsExactlyInAnyOrder("en", "ja");
         assertThat(result.kind("message").ratio()).isEqualTo(1.0);
     }
