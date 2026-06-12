@@ -95,15 +95,18 @@ A violating request answers `422` with `TQL-FIELD-4220`:
 ```
 
 `code` defaults to the rule id; `message` is a message key, not display text. htmx callers
-(`HX-Request: true`) receive the same details as an inline Hypermedia Components fragment,
-each item retargetable next to its field:
+(`HX-Request: true`) receive the same details as the Hypermedia Components field-errors
+fragment; the kit's auto-installed `installFieldErrors` behavior distributes each item next
+to the input matching its `data-field` (with `aria-invalid`/`aria-describedby` wiring) and
+resolves `data-message-key` through the kit's message catalog:
 
 ```html
-<div class="hc-alert hc-alert-error" data-error-code="TQL-FIELD-4220">
-  <p class="hc-alert-message">Unprocessable Entity</p>
-  <ul class="hc-field-errors">
-    <li class="hc-field-error" data-field="email" data-code="duplicate"
-        data-message="members.email.duplicate">…</li>
+<div class="hc-alert" data-variant="error" role="alert" data-hc-field-errors
+     data-error-code="TQL-FIELD-4220">
+  <p class="hc-alert__title">Unprocessable Entity</p>
+  <ul class="hc-alert__errors">
+    <li class="hc-alert__error" data-field="email" data-code="duplicate"
+        data-message-key="members.email.duplicate">email: duplicate</li>
   </ul>
 </div>
 ```

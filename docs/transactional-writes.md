@@ -158,14 +158,15 @@ Unmapped violations still classify portably across dialects: unique `TQL-SQL-409
 foreign key `TQL-SQL-4091` (409), not-null `TQL-SQL-4001` (400), check `TQL-SQL-4002`
 (400), serialization `TQL-SQL-4093` (409).
 
-htmx callers (`HX-Request: true`) receive the same details as an inline Hypermedia
-Components fragment instead of JSON:
+htmx callers (`HX-Request: true`) receive the same details as the Hypermedia Components
+field-errors fragment instead of JSON (a conflict hint renders as the alert body):
 
 ```html
-<div class="hc-alert hc-alert-error" data-error-code="TQL-SQL-4091">
-  <p class="hc-alert-message">Conflict</p>
-  <ul class="hc-field-errors">
-    <li class="hc-field-error" data-field="customerId" data-code="unknown-customer">…</li>
+<div class="hc-alert" data-variant="error" role="alert" data-hc-field-errors
+     data-error-code="TQL-SQL-4091">
+  <p class="hc-alert__title">Conflict</p>
+  <ul class="hc-alert__errors">
+    <li class="hc-alert__error" data-field="customerId" data-code="unknown-customer">…</li>
   </ul>
 </div>
 ```

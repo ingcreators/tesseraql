@@ -188,9 +188,9 @@ class TransactionalCommandIntegrationTest {
 
         assertThat(stale.statusCode()).isEqualTo(409);
         assertThat(stale.headers().firstValue("Content-Type").orElse("")).startsWith("text/html");
-        assertThat(stale.body()).contains("hc-alert hc-alert-error")
+        assertThat(stale.body()).contains("class=\"hc-alert\" data-variant=\"error\"")
                 .contains("data-error-code=\"TQL-SQL-4092\"")
-                .contains("hc-alert-hint");
+                .contains("hc-alert__body");
     }
 
     private static HttpResponse<String> post(String path, String json,

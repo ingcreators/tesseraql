@@ -136,12 +136,13 @@ class DeclarativeValidationIntegrationTest {
         assertThat(response.statusCode()).isEqualTo(422);
         assertThat(response.headers().firstValue("Content-Type").orElse(""))
                 .startsWith("text/html");
-        assertThat(response.body()).contains("hc-alert hc-alert-error")
+        assertThat(response.body()).contains("class=\"hc-alert\" data-variant=\"error\"")
+                .contains("data-hc-field-errors")
                 .contains("data-error-code=\"TQL-FIELD-4220\"")
-                .contains("hc-field-error")
+                .contains("hc-alert__error")
                 .contains("data-field=\"email\"")
                 .contains("data-code=\"duplicate\"")
-                .contains("data-message=\"members.email.duplicate\"");
+                .contains("data-message-key=\"members.email.duplicate\"");
     }
 
     private static HttpResponse<String> post(String path, String json,

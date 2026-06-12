@@ -56,30 +56,32 @@ public final class ErrorResponseRenderer implements Processor {
     }
 
     /**
-     * Renders the error as a Hypermedia Components alert fragment for htmx requests: field-level
-     * errors as a list items carry {@code data-field} so a form can retarget them inline, and a
-     * conflict hint renders as the alert's hint line.
+     * Renders the error as the Hypermedia Components field-errors fragment (the kit's documented
+     * contract) for htmx requests: the kit's auto-installed {@code installFieldErrors} behavior
+     * distributes each {@code hc-alert__error} item next to the input matching its
+     * {@code data-field}, and a conflict hint renders as the alert body.
      */
     @SuppressWarnings("unchecked")
     private static String htmxFragment(Map<String, Object> error) {
         StringBuilder html = new StringBuilder();
-        html.append("<div class=\"hc-alert hc-alert-error\" data-error-code=\"")
+        html.append("<div class=\"hc-alert\" data-variant=\"error\" role=\"alert\""
+                + " data-hc-field-errors data-error-code=\"")
                 .append(escape(String.valueOf(error.get("code")))).append("\">");
-        html.append("<p class=\"hc-alert-message\">")
+        html.append("<p class=\"hc-alert__title\">")
                 .append(escape(String.valueOf(error.get("message")))).append("</p>");
         if (error.get("fields") instanceof java.util.List<?> fields && !fields.isEmpty()) {
-            html.append("<ul class=\"hc-field-errors\">");
+            html.append("<ul class=\"hc-alert__errors\">");
             for (Object entry : fields) {
                 Map<String, Object> field = (Map<String, Object>) entry;
-                html.append("<li class=\"hc-field-error\" data-field=\"")
+                html.append("<li class=\"hc-alert__error\" data-field=\"")
                         .append(escape(String.valueOf(field.get("field"))))
                         .append("\" data-code=\"")
                         .append(escape(String.valueOf(field.get("code"))))
                         .append("\"");
-                // A validation rule's message key (Phase 19), for client-side lookup until
-                // localized rendering arrives (Phase 22).
+                // A validation rule's message key (Phase 19), resolved through the kit's
+                // i18n catalog until localized rendering arrives (Phase 22).
                 if (field.get("message") != null) {
-                    html.append(" data-message=\"")
+                    html.append(" data-message-key=\"")
                             .append(escape(String.valueOf(field.get("message"))))
                             .append("\"");
                 }
@@ -91,7 +93,7 @@ public final class ErrorResponseRenderer implements Processor {
         }
         if (error.get("conflict") instanceof Map<?, ?> conflict
                 && conflict.get("hint") != null) {
-            html.append("<p class=\"hc-alert-hint\">")
+            html.append("<p class=\"hc-alert__body\">")
                     .append(escape(String.valueOf(conflict.get("hint")))).append("</p>");
         }
         return html.append("</div>").toString();
