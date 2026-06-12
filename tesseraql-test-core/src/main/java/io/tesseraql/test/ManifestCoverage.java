@@ -137,6 +137,34 @@ public final class ManifestCoverage {
     }
 
     /**
+     * Message coverage (roadmap Phase 22): every {@code messages/<locale>.yml} catalog the app
+     * ships is declared by its language tag, and a suite's messages case covers the catalogs its
+     * locale resolves through — the exact tag and its bare language — when it asserts on the
+     * texts. Gated via {@code coverage.thresholds.kinds.message}.
+     */
+    public static ItemCoverage message(AppManifest manifest, List<TestSuite> suites) {
+        ItemCoverage coverage = new ItemCoverage("message");
+        io.tesseraql.yaml.i18n.MessageCatalog catalog = io.tesseraql.yaml.i18n.MessageCatalog
+                .load(manifest.appHome().resolve("messages"));
+        catalog.tags().forEach(coverage::declare);
+        for (TestSuite suite : suites) {
+            for (TestCase test : suite.tests()) {
+                if (test.messages() == null || test.messages().locale() == null) {
+                    continue;
+                }
+                java.util.Locale locale = java.util.Locale
+                        .forLanguageTag(test.messages().locale().trim());
+                for (String tag : List.of(locale.toLanguageTag(), locale.getLanguage())) {
+                    if (coverage.declared().contains(tag)) {
+                        coverage.cover(tag);
+                    }
+                }
+            }
+        }
+        return coverage;
+    }
+
+    /**
      * SAML coverage: when SAML user linking is enabled ({@code tesseraql.saml.link.enabled}), the
      * SAML login path resolves the principal through Identity SQL Contracts — those contracts are
      * declared and contract test cases cover them. Without SAML (or without linking) the login

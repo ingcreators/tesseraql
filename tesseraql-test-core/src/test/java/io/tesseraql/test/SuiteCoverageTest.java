@@ -15,10 +15,10 @@ class SuiteCoverageTest {
 
     private static final TestSuite SUITE = new TestSuite(List.of(
             new TestCase("asserts-rows", new SqlTarget("a.sql"), null, Map.of(),
-                    new Expectation(1, null), null, null),
-            new TestCase("no-assert", new SqlTarget("b.sql"), null, Map.of(), null, null, null),
+                    new Expectation(1, null), null, null, null),
+            new TestCase("no-assert", new SqlTarget("b.sql"), null, Map.of(), null, null, null, null),
             new TestCase("contract-case", null, "identity.find-user-by-login", Map.of(),
-                    new Expectation(1, null), null, null)));
+                    new Expectation(1, null), null, null, null)));
 
     @Test
     void assertionCoverageCountsCasesThatAssert() {

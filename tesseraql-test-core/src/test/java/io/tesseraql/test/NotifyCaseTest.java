@@ -89,7 +89,7 @@ class NotifyCaseTest {
                                 "email", "sato@example.com"),
                         Map.of("notify", "audit", "channel", "audit-webhook",
                                 "source", "members.register.audit"))),
-                null, new NotifyTarget("members.register", null, null)));
+                null, new NotifyTarget("members.register", null, null), null));
 
         assertThat(report.results()).singleElement()
                 .satisfies(result -> assertThat(result.passed())
@@ -101,7 +101,7 @@ class NotifyCaseTest {
         TestReport report = run(new TestCase("guard skips confirmation", null, null,
                 Map.of("body", Map.of()),
                 new Expectation(0, List.of()),
-                null, new NotifyTarget("members.register", null, "confirmation")));
+                null, new NotifyTarget("members.register", null, "confirmation"), null));
 
         assertThat(report.results()).singleElement()
                 .satisfies(result -> assertThat(result.passed())
@@ -114,7 +114,7 @@ class NotifyCaseTest {
                 Map.of("step", Map.of("purge", Map.of("affectedRows", 7))),
                 new Expectation(1, List.of(
                         Map.of("notify", "report", "channel", "ops-mail", "purged", 7))),
-                null, new NotifyTarget(null, "members.cleanup", null)));
+                null, new NotifyTarget(null, "members.cleanup", null), null));
 
         assertThat(report.results()).singleElement()
                 .satisfies(result -> assertThat(result.passed())
@@ -124,9 +124,9 @@ class NotifyCaseTest {
     @Test
     void anUnknownTargetFailsTheCase() {
         TestReport unknownRoute = run(new TestCase("unknown", null, null, Map.of(), null,
-                null, new NotifyTarget("members.unknown", null, null)));
+                null, new NotifyTarget("members.unknown", null, null), null));
         TestReport bothTargets = run(new TestCase("both", null, null, Map.of(), null,
-                null, new NotifyTarget("members.register", "members.cleanup", null)));
+                null, new NotifyTarget("members.register", "members.cleanup", null), null));
 
         assertThat(unknownRoute.results().get(0).passed()).isFalse();
         assertThat(bothTargets.results().get(0).passed()).isFalse();

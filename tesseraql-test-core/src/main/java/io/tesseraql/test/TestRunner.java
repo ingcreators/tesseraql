@@ -87,6 +87,9 @@ public final class TestRunner {
         if (test.notifications() != null) {
             return evaluateNotify(test);
         }
+        if (test.messages() != null) {
+            return evaluateMessages(test);
+        }
         if (test.contract() != null && !test.contract().isBlank()) {
             if (identity == null || realm == null) {
                 throw new IllegalStateException(
@@ -220,6 +223,35 @@ public final class TestRunner {
             row.put("channel", notification.channel());
             row.put("source", notification.source());
             notification.resolvePayload(test.params()).forEach(row::putIfAbsent);
+            rows.add(row);
+        }
+        return rows;
+    }
+
+    /**
+     * Resolves message-catalog keys for a locale and returns them as rows (roadmap Phase 22):
+     * one row per key with {@code key}, {@code locale}, and {@code text} columns. Lookup reads
+     * the app's {@code messages/<locale>.yml} catalogs with the same exact-tag-then-bare-language
+     * walk as the runtime; an unresolvable key yields a null {@code text}, so an expectation on
+     * it fails visibly.
+     */
+    private List<Map<String, Object>> evaluateMessages(TestCase test) {
+        TestSuite.MessagesTarget target = test.messages();
+        if (target.locale() == null || target.locale().isBlank()) {
+            throw new IllegalArgumentException("A messages case needs a messages.locale tag");
+        }
+        io.tesseraql.yaml.i18n.MessageCatalog catalog = io.tesseraql.yaml.i18n.MessageCatalog
+                .load(appHome.resolve("messages"));
+        String tag = java.util.Locale.forLanguageTag(target.locale().trim()).toLanguageTag();
+        List<String> keys = target.keys() == null || target.keys().isEmpty()
+                ? catalog.forLocale(tag).keySet().stream().sorted().toList()
+                : target.keys();
+        List<Map<String, Object>> rows = new ArrayList<>();
+        for (String key : keys) {
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("key", key);
+            row.put("locale", tag);
+            row.put("text", catalog.resolve(tag, key));
             rows.add(row);
         }
         return rows;

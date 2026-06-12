@@ -21,7 +21,7 @@ public record TestSuite(List<TestCase> tests) {
 
     /**
      * A single test case (design ch. 13.2). Exactly one of {@code sql}, {@code contract},
-     * {@code validate}, or {@code notify} is set.
+     * {@code validate}, {@code notify}, or {@code messages} is set.
      *
      * @param name     human-readable case name
      * @param sql      a SQL file target
@@ -32,11 +32,13 @@ public record TestSuite(List<TestCase> tests) {
      * @param validate a route's validation rules as the target (roadmap Phase 19)
      * @param notifications the {@code notify:} target — a route's or job's notifications
      *                 (roadmap Phase 20; "notify" itself is not a legal record component)
+     * @param messages a message-catalog target (roadmap Phase 22)
      */
     @JsonIgnoreProperties(ignoreUnknown = true)
     public record TestCase(String name, SqlTarget sql, String contract,
             Map<String, Object> params, Expectation expect, ValidateTarget validate,
-            @com.fasterxml.jackson.annotation.JsonProperty("notify") NotifyTarget notifications) {
+            @com.fasterxml.jackson.annotation.JsonProperty("notify") NotifyTarget notifications,
+            MessagesTarget messages) {
 
         public TestCase {
             params = params == null ? Map.of() : Map.copyOf(params);
@@ -71,6 +73,20 @@ public record TestSuite(List<TestCase> tests) {
      */
     @JsonIgnoreProperties(ignoreUnknown = true)
     public record NotifyTarget(String route, String job, String id) {
+    }
+
+    /**
+     * A message-catalog target (roadmap Phase 22): the case resolves keys of the app's
+     * {@code messages/<locale>.yml} catalogs and asserts on the texts — one row per key, with
+     * {@code key}, {@code locale}, and {@code text} columns. Lookup walks the requested tag to
+     * its bare language like the runtime does, so a {@code ja-JP} case reads the {@code ja}
+     * catalog.
+     *
+     * @param locale the BCP-47 tag to resolve with
+     * @param keys   the keys to resolve; unset, every key visible to the locale (sorted)
+     */
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public record MessagesTarget(String locale, List<String> keys) {
     }
 
     /**
