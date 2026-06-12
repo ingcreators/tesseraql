@@ -131,6 +131,27 @@ public final class ErrorResponseRenderer implements Processor {
         error.put("conflict", conflict);
     }
 
+    /**
+     * The entry's interpolation values for the kit's client-side catalog lookup: everything the
+     * server-side interpolation saw except the implicit {@code field}/{@code code} and the
+     * message/messageKey pair itself; null when nothing remains.
+     */
+    private String messageParams(Map<String, Object> field) {
+        Map<String, Object> params = new LinkedHashMap<>(field);
+        params.remove("field");
+        params.remove("code");
+        params.remove("message");
+        params.remove("messageKey");
+        if (params.isEmpty()) {
+            return null;
+        }
+        try {
+            return mapper.writeValueAsString(params);
+        } catch (com.fasterxml.jackson.core.JsonProcessingException ex) {
+            return null;
+        }
+    }
+
     /** The generic response message: the localized status phrase. */
     private String statusMessage(String tag, int status) {
         String resolved = i18n.catalog().resolve(tag, i18n.defaultTag(), "tql.http." + status);
@@ -144,7 +165,7 @@ public final class ErrorResponseRenderer implements Processor {
      * {@code data-field}, and a conflict hint renders as the alert body.
      */
     @SuppressWarnings("unchecked")
-    private static String htmxFragment(Map<String, Object> error) {
+    private String htmxFragment(Map<String, Object> error) {
         StringBuilder html = new StringBuilder();
         html.append("<div class=\"hc-alert\" data-variant=\"error\" role=\"alert\""
                 + " data-hc-field-errors data-error-code=\"")
@@ -161,11 +182,17 @@ public final class ErrorResponseRenderer implements Processor {
                         .append(escape(String.valueOf(field.get("code"))))
                         .append("\"");
                 // A validation rule's message key (Phase 19); the kit's client catalog may
-                // re-resolve it on top of the server-localized text below.
+                // re-resolve it on top of the server-localized text below, interpolating the
+                // entry's params carried as data-message-params (hc 0.1.1).
                 if (field.get("messageKey") != null) {
                     html.append(" data-message-key=\"")
                             .append(escape(String.valueOf(field.get("messageKey"))))
                             .append("\"");
+                    String params = messageParams(field);
+                    if (params != null) {
+                        html.append(" data-message-params=\"").append(escape(params))
+                                .append("\"");
+                    }
                 }
                 Object text = field.get("message") != null
                         ? field.get("message")

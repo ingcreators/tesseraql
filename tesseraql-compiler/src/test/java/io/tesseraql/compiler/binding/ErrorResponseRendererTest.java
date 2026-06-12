@@ -139,7 +139,27 @@ class ErrorResponseRendererTest {
 
         String body = exchange.getMessage().getBody(String.class);
         assertThat(body).contains("data-message-key=\"orders.qty.exceeds\"")
-                .contains("在庫 5 を超えています。");
+                .contains("在庫 5 を超えています。")
+                // The entry's params ride along for the kit's client-side interpolation
+                // (hc 0.1.1 data-message-params; JSON quotes escape as attribute text).
+                .contains("data-message-params=\"{&quot;stock&quot;:5}\"");
+    }
+
+    @Test
+    void parameterlessEntriesOmitDataMessageParams() throws Exception {
+        Exchange exchange = exchangeWith(TqlException
+                .builder(new TqlErrorCode(TqlDomain.FIELD, 4220))
+                .details(Map.of("fields", List.of(
+                        Map.of("field", "email", "code", "duplicate",
+                                "message", "members.email.duplicate"))))
+                .build());
+        exchange.getMessage().setHeader("HX-Request", "true");
+
+        new ErrorResponseRenderer().process(exchange);
+
+        assertThat(exchange.getMessage().getBody(String.class))
+                .contains("data-message-key=\"members.email.duplicate\"")
+                .doesNotContain("data-message-params");
     }
 
     @Test

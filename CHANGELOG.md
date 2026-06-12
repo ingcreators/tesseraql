@@ -37,9 +37,16 @@ All notable changes to TesseraQL are documented here. The format follows
   renders English instead of `Locale.ROOT`.
 - A client-side message catalog for Hypermedia Components:
   `/assets/_tesseraql/messages.js?locale=<tag>` serves an ES module merging the app's
-  catalog over the framework's Japanese translations of the kit's built-in strings via the
-  behaviors bundle's `setMessages`, loaded by the shell before behaviors install
-  (hc adoption Theme 6, folded into Phase 22).
+  catalog over the kit's strings via `setMessages`, loaded by the shell before behaviors
+  install (hc adoption Theme 6, folded into Phase 22).
+- Hypermedia Components 0.1.1 (the upstream answer to the Phase 22 feedback issues
+  #216–#219): the kit's i18n catalog is now a shared singleton across dist bundles, so
+  `setMessages` works from any entry; the client catalog module imports the kit's official
+  `dist/locales/ja.js` pack instead of a framework-maintained translation copy (the
+  hand-kept catalog is gone — packs are completeness-checked upstream); field-error items
+  carry `data-message-params`, so client-side catalog overrides interpolate the violation's
+  values (`{min}`, custom SQL-rule columns) after a swap; and the kit documents the blessed
+  date-field pattern the Phase 23 scaffolds will emit.
 - Hypermedia Components 0.1.0 (from 0.0.1-alpha.0). htmx error fragments now follow the
   kit's documented field-errors contract — `hc-alert` with `data-variant="error"`,
   `role="alert"`, `data-hc-field-errors`, `hc-alert__error` items carrying

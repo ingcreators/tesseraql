@@ -111,11 +111,13 @@ A bad value answers `400` with the matching `tql.input.<type>` field error.
 ## The client catalog (Hypermedia Components)
 
 The shell loads `/assets/_tesseraql/messages.js?locale=<tag>` before the framework
-bootstrap: an ES module that imports `setMessages` from the kit's behaviors bundle and
-merges the app's catalog entries over the framework's Japanese translations of the kit's
-built-in strings (confirm dialog, combobox, calendar, shell). Module scripts execute in
-document order, so the catalog lands before the behaviors install at `DOMContentLoaded`.
-English needs no module content — the kit's own defaults apply.
+bootstrap: an ES module that imports the kit's official locale pack for the language when
+one ships (`dist/locales/ja.js`, hc 0.1.1+) and then merges the app's catalog entries via
+`setMessages()` — later merges win, so app wording layers over the pack. Module scripts
+execute in document order, so the catalog lands before the behaviors install at
+`DOMContentLoaded`. English needs no pack — the kit's own defaults apply. Field-error items
+also carry `data-message-params`, so a client-side catalog override with `{name}`
+placeholders interpolates the violation's values after a swap.
 
 ## Testing and lint
 
