@@ -14,7 +14,7 @@ class ClientMessagesTest {
     Path home;
 
     @Test
-    void japaneseModuleMergesKitTranslationsAndAppCatalog() throws Exception {
+    void japaneseModuleImportsTheKitsLocalePackThenAppEntries() throws Exception {
         Path messages = Files.createDirectories(home.resolve("messages"));
         Files.writeString(messages.resolve("ja.yml"),
                 "users.provision.unknown-user: 指定されたユーザーは存在しません。\n");
@@ -25,11 +25,22 @@ class ClientMessagesTest {
         assertThat(script)
                 .startsWith("import { setMessages } from "
                         + "\"/assets/vendor/hypermedia-components__core/dist/hc.behaviors.min.js\"")
-                .contains("setMessages(")
-                // The kit's built-in strings translate...
-                .contains("\"confirm.cancel\":\"キャンセル\"")
-                // ...and the app's own keys ride along for installFieldErrors.
+                // The kit's official pack (hc 0.1.1) loads first...
+                .contains("import pack from "
+                        + "\"/assets/vendor/hypermedia-components__core/dist/locales/ja.js\"")
+                .contains("setMessages(pack);")
+                // ...then the app's own entries layer over it (later merges win).
                 .contains("\"users.provision.unknown-user\":\"指定されたユーザーは存在しません。\"");
+        assertThat(script.indexOf("setMessages(pack)"))
+                .isLessThan(script.indexOf("users.provision.unknown-user"));
+    }
+
+    @Test
+    void regionalTagsImportTheBareLanguagePack() {
+        String script = new String(new ClientMessages(home, "en").script("ja-JP"),
+                StandardCharsets.UTF_8);
+
+        assertThat(script).contains("dist/locales/ja.js");
     }
 
     @Test
@@ -40,9 +51,9 @@ class ClientMessagesTest {
         String script = new String(new ClientMessages(home, "en").script("en"),
                 StandardCharsets.UTF_8);
 
-        // The kit's English defaults need no override; only app entries ship.
+        // English is the kit's built-in default: no pack ships, no import emitted.
         assertThat(script).contains("\"greeting\":\"Hello\"")
-                .doesNotContain("confirm.cancel");
+                .doesNotContain("dist/locales/");
     }
 
     @Test

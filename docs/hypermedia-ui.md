@@ -99,6 +99,7 @@ shape is in [declarative-validation.md](declarative-validation.md); conflict hin
 - When the alert renders away from its form (an out-of-band swap), point it at the form
   with a selector: `data-hc-field-errors="#member-form"`.
 - The item text arrives server-localized per the request locale, and `data-message-key`
-  still rides along: the kit's catalog — loaded by the shell from
-  `/assets/_tesseraql/messages.js?locale=<tag>` before the behaviors install — can
-  re-resolve it client-side (see [internationalization.md](internationalization.md)).
+  plus `data-message-params` still ride along: the kit's catalog — loaded by the shell from
+  `/assets/_tesseraql/messages.js?locale=<tag>` (the official locale pack layered under the
+  app's entries) before the behaviors install — can re-resolve and interpolate it
+  client-side (see [internationalization.md](internationalization.md)).

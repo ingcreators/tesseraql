@@ -128,7 +128,7 @@ class I18nIntegrationTest {
     }
 
     @Test
-    void theClientCatalogModuleMergesAppKeysOverTheKitsJapanese() throws Exception {
+    void theClientCatalogModuleLayersAppKeysOverTheKitsJapanesePack() throws Exception {
         HttpResponse<String> response = get("/assets/_tesseraql/messages.js?locale=ja", Map.of());
 
         assertThat(response.statusCode()).isEqualTo(200);
@@ -137,8 +137,16 @@ class I18nIntegrationTest {
         assertThat(response.body())
                 .contains("import { setMessages } from "
                         + "\"/assets/vendor/hypermedia-components__core/dist/hc.behaviors.min.js\"")
-                .contains("キャンセル")
+                // The kit's official locale pack (hc 0.1.1) loads before the app entries.
+                .contains("import pack from "
+                        + "\"/assets/vendor/hypermedia-components__core/dist/locales/ja.js\"")
                 .contains("users.provision.unknown-user");
+
+        // The pack itself is servable through the version-less vendor route.
+        HttpResponse<String> pack = get(
+                "/assets/vendor/hypermedia-components__core/dist/locales/ja.js", Map.of());
+        assertThat(pack.statusCode()).isEqualTo(200);
+        assertThat(pack.body()).contains("キャンセル");
     }
 
     private static HttpResponse<String> get(String path, Map<String, String> headers)
