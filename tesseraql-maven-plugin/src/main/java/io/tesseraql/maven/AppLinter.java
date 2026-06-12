@@ -63,6 +63,7 @@ public final class AppLinter {
         lintOptimisticLocking(route, definition, source, findings);
         lintValidation(route, definition, source, findings);
         lintNotify(config, definition, source, findings);
+        lintPdfExport(route, definition, source, findings);
         if (definition.security() != null && definition.security().policy() != null
                 && config.navigate(
                         "tesseraql.security.policies." + definition.security().policy()) == null) {
@@ -251,6 +252,37 @@ public final class AppLinter {
                         "Notification '" + id + "' has a malformed when: expression: "
                                 + ex.getMessage()));
             }
+        }
+    }
+
+    /**
+     * Statically checks a printable-document export (roadmap Phase 21): {@code format: pdf} is a
+     * print format, so the workbook-only options ({@code sheet:}, {@code startCell:}) do not
+     * apply, and the template - rendered through the standard template engine - must be an
+     * {@code .html} file colocated with the route.
+     */
+    private void lintPdfExport(RouteFile route, RouteDefinition definition, String source,
+            List<LintFinding> findings) {
+        io.tesseraql.yaml.model.ExportSpec spec = definition.fileExport();
+        if (spec == null || !"pdf".equals(spec.format())) {
+            return;
+        }
+        if (spec.sheet() != null || spec.startCell() != null) {
+            findings.add(new LintFinding("TQL-YAML-1005", "error", source,
+                    "pdf export: sheet:/startCell: are workbook options - a pdf lays out"
+                            + " through its template, not cell placement"));
+        }
+        if (spec.template() == null) {
+            return;
+        }
+        if (!spec.template().endsWith(".html")) {
+            findings.add(new LintFinding("TQL-YAML-1006", "error", source,
+                    "pdf export template '" + spec.template()
+                            + "' must be an .html file (it renders through the template"
+                            + " engine before PDF conversion)"));
+        } else if (!Files.isRegularFile(route.source().getParent().resolve(spec.template()))) {
+            findings.add(new LintFinding("TQL-YAML-1006", "error", source,
+                    "pdf export references a missing template: " + spec.template()));
         }
     }
 

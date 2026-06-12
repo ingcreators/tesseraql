@@ -125,6 +125,18 @@ public final class ManifestCoverage {
     }
 
     /**
+     * Document coverage (roadmap Phase 21): every route exporting a printable document
+     * ({@code format: pdf} on {@code query-export}/{@code file-export}) is declared and covered
+     * like routes - when a suite case exercises one of its SQL artifacts, the extraction the
+     * document renders is proven.
+     */
+    public static ItemCoverage document(AppManifest manifest, List<TestSuite> suites) {
+        return routeKind("document", manifest, suites,
+                definition -> definition.fileExport() != null
+                        && "pdf".equals(definition.fileExport().format()));
+    }
+
+    /**
      * SAML coverage: when SAML user linking is enabled ({@code tesseraql.saml.link.enabled}), the
      * SAML login path resolves the principal through Identity SQL Contracts — those contracts are
      * declared and contract test cases cover them. Without SAML (or without linking) the login
