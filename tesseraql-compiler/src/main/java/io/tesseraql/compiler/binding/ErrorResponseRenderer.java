@@ -93,8 +93,10 @@ public final class ErrorResponseRenderer implements Processor {
             String key = field.get("message") instanceof String declared && !declared.isBlank()
                     ? declared
                     : null;
-            String resolved = key == null ? null : i18n.catalog().resolve(tag,
-                    i18n.defaultTag(), key);
+            String resolved = key == null
+                    ? null
+                    : i18n.catalog().resolve(tag,
+                            i18n.defaultTag(), key);
             if (resolved == null && field.get("code") != null) {
                 // Mapped constraint violations carry only a code; the framework catalog
                 // translates the built-in ones (duplicate, required, ...).
