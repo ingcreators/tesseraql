@@ -2,25 +2,30 @@
 <html xmlns:th="http://www.thymeleaf.org"
       th:replace="~{tql/shell :: page('IAM Admin · User', ~{:: #page-header}, ~{:: #page-content})}">
 <th:block id="page-header">
-  <span class="hc-badge" th:each="u : ${user}" th:text="${u.login_id}"></span>
-  <a class="back" href="/_tesseraql/admin/users">&larr; users</a>
+  <span class="hc-spacer"></span>
+  <div class="hc-cluster">
+    <span class="hc-badge" th:each="u : ${user}" th:text="${u.login_id}"></span>
+    <a class="hc-button" data-variant="ghost" data-size="sm" href="/_tesseraql/admin/users">&larr; users</a>
+  </div>
 </th:block>
-<div id="page-content">
-<section class="hc-card" th:if="${#lists.isEmpty(user)}"><p class="empty">User not found.</p></section>
+<div id="page-content" class="hc-stack">
+<section class="hc-card" th:if="${#lists.isEmpty(user)}">
+  <div class="hc-empty"><p class="hc-empty__title">User not found.</p></div>
+</section>
 <th:block th:each="u : ${user}">
 <section class="hc-card">
   <h2>Summary</h2>
-  <table class="hc-table kv"><tbody>
-    <tr><th>User id</th><td th:text="${u.user_id}"></td></tr>
-    <tr><th>Display name</th><td th:text="${u.display_name}"></td></tr>
-    <tr><th>Email</th><td th:text="${u.email}"></td></tr>
-    <tr><th>Status</th><td th:text="${u.status}"></td></tr>
-    <tr><th>Tenant</th><td th:text="${u.tenant_id}"></td></tr>
+  <table class="hc-table" data-variant="kv"><tbody>
+    <tr><th scope="row">User id</th><td th:text="${u.user_id}"></td></tr>
+    <tr><th scope="row">Display name</th><td th:text="${u.display_name}"></td></tr>
+    <tr><th scope="row">Email</th><td th:text="${u.email}"></td></tr>
+    <tr><th scope="row">Status</th><td class="hc-status" th:attr="data-variant=${u.status == 'ACTIVE' ? 'success' : 'error'}" th:text="${u.status}"></td></tr>
+    <tr><th scope="row">Tenant</th><td th:text="${u.tenant_id}"></td></tr>
   </tbody></table>
 </section>
 <section class="hc-card" id="actions">
   <h2>Actions</h2>
-  <div class="toolbar">
+  <div class="hc-cluster">
     <form method="post" th:action="|/_tesseraql/admin/users/${u.user_id}/enable|">
       <button type="submit" class="hc-button" data-variant="primary">Enable user</button>
     </form>
@@ -35,7 +40,7 @@
 </th:block>
 <section class="hc-card" id="roles">
   <h2>Roles</h2>
-  <p class="empty" th:if="${#lists.isEmpty(roles)}">No roles assigned.</p>
+  <div class="hc-empty" th:if="${#lists.isEmpty(roles)}"><p class="hc-empty__title">No roles assigned.</p></div>
   <table class="hc-table">
     <thead><tr><th>Code</th><th>Name</th><th>Grant</th></tr></thead>
     <tbody>
@@ -47,7 +52,7 @@
 </section>
 <section class="hc-card" id="groups">
   <h2>Groups</h2>
-  <p class="empty" th:if="${#lists.isEmpty(groups)}">No groups assigned.</p>
+  <div class="hc-empty" th:if="${#lists.isEmpty(groups)}"><p class="hc-empty__title">No groups assigned.</p></div>
   <table class="hc-table">
     <thead><tr><th>Code</th><th>Name</th><th>Tenant</th></tr></thead>
     <tbody>
@@ -59,7 +64,7 @@
 </section>
 <section class="hc-card" id="permissions">
   <h2>Effective permissions</h2>
-  <p class="empty" th:if="${#lists.isEmpty(permissions)}">No permissions granted.</p>
+  <div class="hc-empty" th:if="${#lists.isEmpty(permissions)}"><p class="hc-empty__title">No permissions granted.</p></div>
   <table class="hc-table">
     <thead><tr><th>Code</th><th>Name</th></tr></thead>
     <tbody>

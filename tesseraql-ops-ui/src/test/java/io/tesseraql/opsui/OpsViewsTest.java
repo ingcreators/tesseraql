@@ -47,7 +47,7 @@ class OpsViewsTest {
         @SuppressWarnings("unchecked")
         List<Map<String, Object>> recent = (List<Map<String, Object>>) model.get("recent");
         assertThat(recent.get(0).get("id")).isEqualTo("e-1");
-        assertThat(recent.get(0).get("statusClass")).isEqualTo("status-completed");
+        assertThat(recent.get(0).get("statusVariant")).isEqualTo("success");
         @SuppressWarnings("unchecked")
         List<Map<String, Object>> lanes = (List<Map<String, Object>>) model.get("lanes");
         assertThat(lanes.get(0).get("warn")).isEqualTo(true);
@@ -96,7 +96,7 @@ class OpsViewsTest {
 
         assertThat(model.get("found")).isEqualTo(true);
         assertThat(model.get("jobId")).isEqualTo("nightly");
-        assertThat(model.get("statusClass")).isEqualTo("status-completed");
+        assertThat(model.get("statusVariant")).isEqualTo("success");
         @SuppressWarnings("unchecked")
         List<Map<String, Object>> steps = (List<Map<String, Object>>) model.get("steps");
         assertThat(steps.get(0)).containsEntry("stepId", "load")
@@ -131,7 +131,7 @@ class OpsViewsTest {
         assertThat(rows.get(0))
                 .containsEntry("id", "evt-1")
                 .containsEntry("status", "DEAD")
-                .containsEntry("statusClass", "status-dead")
+                .containsEntry("statusVariant", "error")
                 .containsEntry("attempts", 10)
                 .containsEntry("dead", true)
                 .containsEntry("lastError", "Webhook channel 'hooks' answered HTTP 500");

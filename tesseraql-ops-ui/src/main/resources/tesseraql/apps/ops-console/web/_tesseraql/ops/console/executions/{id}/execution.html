@@ -2,33 +2,39 @@
 <html xmlns:th="http://www.thymeleaf.org"
       th:replace="~{tql/shell :: page(|Execution ${execution.id}|, ~{:: #page-header}, ~{:: #page-content})}">
 <th:block id="page-header">
-  <a class="back" href="/_tesseraql/ops/console">&larr; console</a>
+  <span class="hc-spacer"></span>
+  <div class="hc-cluster">
+    <a class="hc-button" data-variant="ghost" data-size="sm" href="/_tesseraql/ops/console">&larr; console</a>
+  </div>
 </th:block>
-<div id="page-content">
-<section class="hc-card" th:unless="${execution.found}"><p class="empty">Execution not found.</p></section>
+<div id="page-content" class="hc-stack">
+<section class="hc-card" th:unless="${execution.found}">
+  <div class="hc-empty"><p class="hc-empty__title">Execution not found.</p></div>
+</section>
 <th:block th:if="${execution.found}">
 <section class="hc-card">
   <h2>Summary</h2>
-  <table class="hc-table kv"><tbody>
-    <tr><th>Job</th><td th:text="${execution.jobId}"></td></tr>
-    <tr><th>App</th><td th:text="${execution.app}"></td></tr>
-    <tr><th>Status</th><td th:class="${execution.statusClass}" th:text="${execution.status}"></td></tr>
-    <tr><th>Trigger</th><td th:text="${execution.trigger}"></td></tr>
-    <tr><th>Started</th><td th:text="${execution.startTime}"></td></tr>
-    <tr><th>Ended</th><td th:text="${execution.endTime}"></td></tr>
-    <tr><th>Duration (ms)</th><td th:text="${execution.durationMs}"></td></tr>
-    <tr><th>Exit message</th><td th:text="${execution.exitMessage}"></td></tr>
+  <table class="hc-table" data-variant="kv"><tbody>
+    <tr><th scope="row">Job</th><td th:text="${execution.jobId}"></td></tr>
+    <tr><th scope="row">App</th><td th:text="${execution.app}"></td></tr>
+    <tr><th scope="row">Status</th><td class="hc-status" th:attr="data-variant=${execution.statusVariant}" th:text="${execution.status}"></td></tr>
+    <tr><th scope="row">Trigger</th><td th:text="${execution.trigger}"></td></tr>
+    <tr><th scope="row">Started</th><td th:text="${execution.startTime}"></td></tr>
+    <tr><th scope="row">Ended</th><td th:text="${execution.endTime}"></td></tr>
+    <tr><th scope="row">Duration (ms)</th><td th:text="${execution.durationMs}"></td></tr>
+    <tr><th scope="row">Exit message</th><td th:text="${execution.exitMessage}"></td></tr>
   </tbody></table>
 </section>
 <section class="hc-card" id="steps">
   <h2>Steps</h2>
-  <p class="empty" th:unless="${execution.hasSteps}">No steps recorded.</p>
+  <div class="hc-empty" th:unless="${execution.hasSteps}"><p class="hc-empty__title">No steps recorded.</p></div>
   <table class="hc-table" th:if="${execution.hasSteps}">
     <thead><tr><th>Step</th><th>Status</th><th>Rows</th><th>Duration (ms)</th><th>Error</th></tr></thead>
     <tbody>
-      <tr th:each="s : ${execution.steps}" th:classappend="${s.failed} ? 'warn'">
+      <tr th:each="s : ${execution.steps}" th:classappend="${s.failed} ? 'hc-status'"
+          th:attr="data-variant=${s.failed ? 'error' : null},data-fill=${s.failed ? '' : null}">
         <td th:text="${s.stepId}"></td>
-        <td th:class="${s.statusClass}" th:text="${s.status}"></td>
+        <td class="hc-status" th:attr="data-variant=${s.statusVariant}" th:text="${s.status}"></td>
         <td th:text="${s.affectedRows}"></td>
         <td th:text="${s.durationMs}"></td>
         <td th:text="${s.errorMessage}"></td>

@@ -2,14 +2,17 @@
 <html xmlns:th="http://www.thymeleaf.org"
       th:replace="~{tql/shell :: page(|TesseraQL Studio · ${studio.appName}|, ~{:: #page-header}, ~{:: #page-content})}">
 <th:block id="page-header">
-  <span class="actions"><a href="/_tesseraql/studio/ui/wizard">wizards &rarr;</a></span>
-  <span class="hc-badge" data-variant="warning" th:if="${studio.readOnly}">read-only</span>
-  <span class="hc-badge" data-variant="success" th:if="${studio.editable}">editable</span>
+  <span class="hc-spacer"></span>
+  <div class="hc-cluster">
+    <a href="/_tesseraql/studio/ui/wizard">wizards &rarr;</a>
+    <span class="hc-badge" data-variant="warning" th:if="${studio.readOnly}">read-only</span>
+    <span class="hc-badge" data-variant="success" th:if="${studio.editable}">editable</span>
+  </div>
 </th:block>
-<div id="page-content">
+<div id="page-content" class="hc-stack">
 <section class="hc-card">
   <h2>Routes</h2>
-  <p class="empty" th:unless="${studio.hasRoutes}">No routes defined.</p>
+  <div class="hc-empty" th:unless="${studio.hasRoutes}"><p class="hc-empty__title">No routes defined.</p></div>
   <table class="hc-table" th:if="${studio.hasRoutes}">
     <thead><tr><th>Id</th><th>Method</th><th>Path</th><th>Recipe</th><th>Source</th></tr></thead>
     <tbody>
@@ -25,7 +28,7 @@
 </section>
 <section class="hc-card">
   <h2>Jobs</h2>
-  <p class="empty" th:unless="${studio.hasJobs}">No jobs defined.</p>
+  <div class="hc-empty" th:unless="${studio.hasJobs}"><p class="hc-empty__title">No jobs defined.</p></div>
   <table class="hc-table" th:if="${studio.hasJobs}">
     <thead><tr><th>Id</th><th>Recipe</th><th>Source</th></tr></thead>
     <tbody>

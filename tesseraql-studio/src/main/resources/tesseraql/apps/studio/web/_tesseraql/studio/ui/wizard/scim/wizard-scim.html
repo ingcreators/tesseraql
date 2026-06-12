@@ -2,22 +2,33 @@
 <html xmlns:th="http://www.thymeleaf.org"
       th:replace="~{tql/shell :: page('SCIM provisioning wizard', ~{:: #page-header}, ~{:: #page-content})}">
 <th:block id="page-header">
-  <a class="back" href="/_tesseraql/studio/ui/wizard">&larr; wizards</a>
+  <span class="hc-spacer"></span>
+  <div class="hc-cluster">
+    <a class="hc-button" data-variant="ghost" data-size="sm" href="/_tesseraql/studio/ui/wizard">&larr; wizards</a>
+  </div>
 </th:block>
-<div id="page-content">
+<div id="page-content" class="hc-stack">
 <section class="hc-card">
-  <p class="hint">Generates a tesseraql-scim.yml fragment to merge into config/tesseraql.yml.
+  <p class="hc-field__message">Generates a tesseraql-scim.yml fragment to merge into config/tesseraql.yml.
   The outbound token stays an environment-variable reference; never paste the literal secret.</p>
   <form method="post" action="/_tesseraql/studio/ui/wizard/scim">
-    <label>Enable group provisioning<br>
-      <select class="hc-select" name="groups"><option value="false">false</option><option value="true">true</option></select></label>
-    <label>Enable outbound provisioning<br>
-      <select class="hc-select" name="outbound"><option value="false">false</option><option value="true">true</option></select></label>
-    <label>Outbound target URL (when outbound)<br>
-      <input class="hc-input" type="text" name="outboundUrl" placeholder="https://idp.example.com/scim/v2"></label>
-    <label>Outbound token reference (when outbound)<br>
-      <input class="hc-input" type="text" name="tokenRef" value="${SCIM_OUTBOUND_TOKEN}"></label>
-    <div class="toolbar"><button type="submit" class="hc-button" data-variant="primary">Generate &amp; download config</button></div>
+    <div class="hc-field">
+      <label class="hc-field__label" for="scim-groups">Enable group provisioning</label>
+      <select class="hc-select" id="scim-groups" name="groups"><option value="false">false</option><option value="true">true</option></select>
+    </div>
+    <div class="hc-field">
+      <label class="hc-field__label" for="scim-outbound">Enable outbound provisioning</label>
+      <select class="hc-select" id="scim-outbound" name="outbound"><option value="false">false</option><option value="true">true</option></select>
+    </div>
+    <div class="hc-field">
+      <label class="hc-field__label" for="outbound-url">Outbound target URL (when outbound)</label>
+      <input class="hc-input" id="outbound-url" type="text" name="outboundUrl" placeholder="https://idp.example.com/scim/v2">
+    </div>
+    <div class="hc-field">
+      <label class="hc-field__label" for="token-ref">Outbound token reference (when outbound)</label>
+      <input class="hc-input" id="token-ref" type="text" name="tokenRef" value="${SCIM_OUTBOUND_TOKEN}">
+    </div>
+    <div class="hc-cluster"><button type="submit" class="hc-button" data-variant="primary">Generate &amp; download config</button></div>
   </form>
 </section>
 </div>

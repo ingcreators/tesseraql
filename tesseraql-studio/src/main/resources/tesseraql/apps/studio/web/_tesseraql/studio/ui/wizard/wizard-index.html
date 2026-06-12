@@ -2,15 +2,18 @@
 <html xmlns:th="http://www.thymeleaf.org"
       th:replace="~{tql/shell :: page('Setup wizards', ~{:: #page-header}, ~{:: #page-content})}">
 <th:block id="page-header">
-  <a class="back" href="/_tesseraql/studio/ui">&larr; explorer</a>
+  <span class="hc-spacer"></span>
+  <div class="hc-cluster">
+    <a class="hc-button" data-variant="ghost" data-size="sm" href="/_tesseraql/studio/ui">&larr; explorer</a>
+  </div>
 </th:block>
-<div id="page-content">
+<div id="page-content" class="hc-stack">
 <section class="hc-card">
-  <ul class="wizard-list">
-    <li><a href="/_tesseraql/studio/ui/wizard/saml">SAML SP</a></li>
-    <li><a href="/_tesseraql/studio/ui/wizard/scim">SCIM provisioning</a></li>
-    <li><a href="/_tesseraql/studio/ui/wizard/identity">Identity realm mapping</a></li>
-  </ul>
+  <nav class="hc-stack" aria-label="Setup wizards">
+    <a class="hc-item" href="/_tesseraql/studio/ui/wizard/saml">SAML SP</a>
+    <a class="hc-item" href="/_tesseraql/studio/ui/wizard/scim">SCIM provisioning</a>
+    <a class="hc-item" href="/_tesseraql/studio/ui/wizard/identity">Identity realm mapping</a>
+  </nav>
 </section>
 </div>
 </html>

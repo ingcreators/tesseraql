@@ -2,23 +2,36 @@
 <html xmlns:th="http://www.thymeleaf.org"
       th:replace="~{tql/shell :: page('Identity realm wizard', ~{:: #page-header}, ~{:: #page-content})}">
 <th:block id="page-header">
-  <a class="back" href="/_tesseraql/studio/ui/wizard">&larr; wizards</a>
+  <span class="hc-spacer"></span>
+  <div class="hc-cluster">
+    <a class="hc-button" data-variant="ghost" data-size="sm" href="/_tesseraql/studio/ui/wizard">&larr; wizards</a>
+  </div>
 </th:block>
-<div id="page-content">
+<div id="page-content" class="hc-stack">
 <section class="hc-card">
-  <p class="hint">Generates a tesseraql-identity.yml fragment to merge into config/tesseraql.yml.</p>
+  <p class="hc-field__message">Generates a tesseraql-identity.yml fragment to merge into config/tesseraql.yml.</p>
   <form method="post" action="/_tesseraql/studio/ui/wizard/identity">
-    <label>Realm id <span class="req">*</span><br>
-      <input class="hc-input" type="text" name="realmId" required placeholder="local"></label>
-    <label>Realm type <span class="req">*</span><br>
-      <select class="hc-select" name="type"><option value="managed">managed</option><option value="sql">sql</option></select></label>
-    <label>Datasource name <span class="req">*</span><br>
-      <input class="hc-input" type="text" name="datasource" required value="main"></label>
-    <label>SQL contract root (sql realms, optional)<br>
-      <input class="hc-input" type="text" name="sqlRoot" placeholder="security/identity/local"></label>
-    <label>User management capability (optional)<br>
-      <select class="hc-select" name="userManagement"><option value="">-</option><option value="readOnly">readOnly</option><option value="readWrite">readWrite</option></select></label>
-    <div class="toolbar"><button type="submit" class="hc-button" data-variant="primary">Generate &amp; download config</button></div>
+    <div class="hc-field">
+      <label class="hc-field__label" for="realm-id">Realm id</label>
+      <input class="hc-input" id="realm-id" type="text" name="realmId" required placeholder="local">
+    </div>
+    <div class="hc-field">
+      <label class="hc-field__label" for="realm-type">Realm type</label>
+      <select class="hc-select" id="realm-type" name="type" required><option value="managed">managed</option><option value="sql">sql</option></select>
+    </div>
+    <div class="hc-field">
+      <label class="hc-field__label" for="datasource">Datasource name</label>
+      <input class="hc-input" id="datasource" type="text" name="datasource" required value="main">
+    </div>
+    <div class="hc-field">
+      <label class="hc-field__label" for="sql-root">SQL contract root (sql realms, optional)</label>
+      <input class="hc-input" id="sql-root" type="text" name="sqlRoot" placeholder="security/identity/local">
+    </div>
+    <div class="hc-field">
+      <label class="hc-field__label" for="user-management">User management capability (optional)</label>
+      <select class="hc-select" id="user-management" name="userManagement"><option value="">-</option><option value="readOnly">readOnly</option><option value="readWrite">readWrite</option></select>
+    </div>
+    <div class="hc-cluster"><button type="submit" class="hc-button" data-variant="primary">Generate &amp; download config</button></div>
   </form>
 </section>
 </div>
