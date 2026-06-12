@@ -9,6 +9,12 @@ import java.util.List;
  *
  * <p>Inputs are whitelisted: only declared fields are bound from the request, and constraints
  * here drive validation and default application during request binding.
+ *
+ * <p>{@code date}/{@code datetime}/{@code number} inputs parse with the negotiated request
+ * locale and the declared {@code format} pattern (roadmap Phase 22), mirroring the file-transfer
+ * column mappings: {@link java.time.format.DateTimeFormatter} patterns for temporal inputs,
+ * {@link java.text.DecimalFormat} for numbers — so {@code 2026/06/12} or {@code 1.234,56} bind
+ * as typed SQL parameters per the user's locale.
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public record InputField(
@@ -22,6 +28,7 @@ public record InputField(
         Boolean writable,
         String classification,
         String mask,
+        String format,
         InputItems items) {
 
     /** Whether this field may be supplied by the request (design ch. 33.2). Defaults to true. */

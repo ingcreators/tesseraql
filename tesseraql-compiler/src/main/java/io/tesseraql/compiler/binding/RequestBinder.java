@@ -63,8 +63,11 @@ public final class RequestBinder implements Processor {
         Map<String, Object> body = parseBody(exchange);
         guardMassAssignment(body);
 
+        // The negotiated request locale (roadmap Phase 22) drives date/number input parsing.
+        String localeTag = exchange.getProperty(TesseraqlProperties.LOCALE, "en", String.class);
         Map<String, Object> effective = InputBinder.bind(route.input(),
-                name -> rawValue(name, body, exchange));
+                name -> rawValue(name, body, exchange),
+                java.util.Locale.forLanguageTag(localeTag));
 
         Map<String, Object> path = new LinkedHashMap<>();
         for (String name : pathParams) {
