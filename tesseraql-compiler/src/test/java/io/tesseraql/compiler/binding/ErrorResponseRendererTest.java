@@ -57,9 +57,9 @@ class ErrorResponseRendererTest {
         String body = exchange.getMessage().getBody(String.class);
         assertThat(exchange.getMessage().getHeader(Exchange.CONTENT_TYPE, String.class))
                 .startsWith("text/html");
-        assertThat(body).contains("hc-alert hc-alert-error")
+        assertThat(body).contains("class=\"hc-alert\" data-variant=\"error\"")
                 .contains("data-error-code=\"TQL-SQL-4092\"")
-                .contains("hc-alert-hint")
+                .contains("hc-alert__body")
                 .contains("changed by another user");
     }
 
@@ -109,10 +109,10 @@ class ErrorResponseRendererTest {
 
         String body = exchange.getMessage().getBody(String.class);
         assertThat(exchange.getMessage().getHeader(Exchange.HTTP_RESPONSE_CODE)).isEqualTo(422);
-        assertThat(body).contains("hc-field-error")
+        assertThat(body).contains("hc-alert__error")
                 .contains("data-field=\"email\"")
                 .contains("data-code=\"duplicate\"")
-                .contains("data-message=\"members.email.duplicate\"");
+                .contains("data-message-key=\"members.email.duplicate\"");
     }
 
     private static Exchange exchangeWith(Throwable cause) {

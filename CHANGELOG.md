@@ -18,6 +18,15 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Runtime and recipes
 
+- Hypermedia Components 0.1.0 (from 0.0.1-alpha.0). htmx error fragments now follow the
+  kit's documented field-errors contract — `hc-alert` with `data-variant="error"`,
+  `role="alert"`, `data-hc-field-errors`, `hc-alert__error` items carrying
+  `data-message-key` (was `data-message`) — so the kit's auto-installed
+  `installFieldErrors` behavior distributes violations next to their inputs with ARIA
+  wiring and no app JS. Breaking markup change: the invented
+  `hc-alert-error`/`hc-alert-message`/`hc-field-errors`/`hc-field-error`/`hc-alert-hint`
+  classes are gone. The system bootstrap now swaps 4xx field-errors fragments for htmx
+  callers (htmx 2 leaves error responses unswapped by default).
 - Printable documents (roadmap Phase 21, see
   [docs/printable-documents.md](docs/printable-documents.md)): the optional `tesseraql-pdf`
   module adds a `pdf` codec behind the file-codec SPI — `format: pdf` on
