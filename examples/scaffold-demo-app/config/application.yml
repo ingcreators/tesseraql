@@ -1,0 +1,9 @@
+server:
+  port: 8080
+
+db:
+  main:
+    url: jdbc:postgresql://localhost:5432/scaffold_demo
+    username: ${DB_USER:scaffold_demo}
+    password: ${DB_PASSWORD:scaffold_demo}
+    maximumPoolSize: 10

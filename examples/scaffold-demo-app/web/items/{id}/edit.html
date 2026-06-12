@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<!-- tesseraql-scaffold-checksum: sha256:a891e98d29f67f62c183c3fd1b850d1f0aab0374512659d7c4ec11361d4e7fe1 -->
+<!-- Scaffolded edit page for the items table: plain form posts with the
+     post/redirect/get flow; a stale version answers 409 Conflict (Phase 18). -->
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{tql/shell :: shell('Items', ~{templates/nav.html :: app-nav}, ~{:: #page-header}, ~{:: #page-content})}">
+<th:block id="page-header">
+  <span class="hc-spacer"></span>
+  <div class="hc-cluster">
+    <a class="hc-button" data-variant="ghost" data-size="sm" href="/items">&larr; Items</a>
+  </div>
+</th:block>
+<div id="page-content" class="hc-stack">
+<section class="hc-card" th:if="${#lists.isEmpty(rows)}">
+  <div class="hc-empty"><p class="hc-empty__title">Not found.</p></div>
+</section>
+<th:block th:each="r : ${rows}">
+<section class="hc-card">
+  <h2>Edit</h2>
+  <form method="post" th:action="|/items/${r.id}/update|">
+    <div class="hc-stack">
+      <div class="hc-field">
+        <label class="hc-field__label" for="field-name">Name</label>
+        <input class="hc-input" id="field-name" type="text" name="name" maxlength="200" required th:value="${r.name}">
+      </div>
+      <div class="hc-field">
+        <label class="hc-field__label" for="field-quantity">Quantity</label>
+        <input class="hc-input" id="field-quantity" type="number" name="quantity" required th:value="${r.quantity}">
+      </div>
+      <div class="hc-field">
+        <label class="hc-field__label" for="field-unit-price">Unit price</label>
+        <input class="hc-input" id="field-unit-price" type="number" name="unitPrice" step="any" th:value="${r.unit_price}">
+      </div>
+      <div class="hc-field">
+        <label class="hc-field__label" for="field-due-date">Due date</label>
+        <input class="hc-datepicker" id="field-due-date" type="date" name="dueDate" th:value="${r.due_date}">
+      </div>
+      <div class="hc-field">
+        <label class="hc-field__label" for="field-active">Active</label>
+        <input type="hidden" name="active" value="false">
+        <input class="hc-checkbox" id="field-active" type="checkbox" name="active" value="true" th:checked="${r.active}">
+      </div>
+      <div class="hc-field">
+        <label class="hc-field__label" for="field-note">Note</label>
+        <input class="hc-input" id="field-note" type="text" name="note" maxlength="1000" th:value="${r.note}">
+      </div>
+      <input type="hidden" name="version" th:value="${r.version}">
+      <div class="hc-cluster">
+        <button type="submit" class="hc-button" data-variant="primary">Save</button>
+      </div>
+    </div>
+  </form>
+</section>
+<section class="hc-card">
+  <h2>Delete</h2>
+  <form method="post" th:action="|/items/${r.id}/delete|">
+    <input type="hidden" name="version" th:value="${r.version}">
+    <button type="submit" class="hc-button" data-variant="error"
+            data-hc-confirm="Delete this record?" data-hc-confirm-title="Confirm delete"
+            data-hc-confirm-ok="Delete" data-hc-confirm-variant="error">Delete</button>
+  </form>
+</section>
+</th:block>
+</div>
+</html>

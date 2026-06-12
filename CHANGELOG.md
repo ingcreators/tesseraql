@@ -119,8 +119,37 @@ All notable changes to TesseraQL are documented here. The format follows
   `tql_doc_sequence`, V2 framework migration): gapless allocation under the sequence row's
   lock, riding the command transaction.
 
+### Developer experience
+
+- Scaffolding and project generation (roadmap Phase 23, see
+  [docs/scaffolding.md](docs/scaffolding.md)): `tesseraql new <app>` generates a runnable
+  skeleton — config, a Flyway migration whose starter table follows the Phase 18 write
+  conventions, the shared nav template, a home page, a query-json search route, and a smoke
+  suite covering both branches of its 2-way SQL. `tesseraql scaffold crud --table <t>`
+  introspects the table over plain JDBC (the app's main datasource or `--jdbc-url`) and
+  generates its CRUD slice: a list page with htmx live search over a table fragment, create
+  and edit forms in Hypermedia Components markup (hc-field stanzas, the blessed
+  `hc-datepicker` date fields, confirmed deletes), 2-way SQL with canonical audit binds and
+  the optimistic-locking pairing (version predicate + `expect.rows`, `409` on stale edits),
+  unique-index constraint mappings, and a declarative suite with data-independent
+  expectations. Every bind reads the coerced `params.*` input view, so browser form posts
+  and path parameters hit typed columns as typed parameters.
+- Regeneration is idempotent and detects user edits (design ch. 22.20): each generated file
+  carries a `tesseraql-scaffold-checksum` comment over its own content; pristine files
+  regenerate, edited files are skipped and reported (exit 1), unmarked files are never
+  touched, and `--force` overrides both. No ledger outside the files themselves.
+- The example gallery gains `examples/scaffold-demo-app`, built exclusively by the two
+  commands and dogfooded in CI: a Maven-plugin integration test regenerates it from the
+  migration applied to PostgreSQL and asserts the committed tree is byte-identical, lints
+  it, and runs its suites (100% branch coverage on the generated search templates); a
+  runtime integration test drives the full CRUD flow over HTTP, including the stale-version
+  `409` and the duplicate-key field error.
+
 ### Quality and supply chain
 
+- Lint fix: dotted policy ids (`users.read`) now resolve as literal keys of the
+  `tesseraql.security.policies` map, so `TQL-SEC-4030` no longer fires for every defined
+  policy.
 - Declarative suites gain `messages:` cases (roadmap Phase 22): a case resolves keys of the
   app's message catalogs (exact tag, then bare language, like the runtime) and asserts on
   the texts as rows (`key`/`locale`/`text`). A new `message` coverage kind declares every

@@ -1,0 +1,34 @@
+<!-- tesseraql-scaffold-checksum: sha256:9e8139dd469b3c18faa94510780f95cb0589b446fbc69b8204bee08ead891de2 -->
+<!-- Scaffolded table fragment for the items table: partial markup swapped into
+     the list page (the fragments URL convention, design ch. 4). -->
+<div id="items-table" class="hc-card">
+  <table class="hc-table">
+    <thead>
+      <tr>
+        <th>Id</th>
+        <th>Name</th>
+        <th>Quantity</th>
+        <th>Unit price</th>
+        <th>Due date</th>
+        <th>Active</th>
+        <th>Note</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr th:each="r : ${rows}">
+        <td th:text="${r.id}"></td>
+        <td th:text="${r.name}"></td>
+        <td th:text="${r.quantity}"></td>
+        <td th:text="${r.unit_price}"></td>
+        <td th:text="${r.due_date}"></td>
+        <td th:text="${r.active}"></td>
+        <td th:text="${r.note}"></td>
+        <td><a class="hc-button" data-size="sm" th:href="|/items/${r.id}|">Open</a></td>
+      </tr>
+      <tr th:if="${#lists.isEmpty(rows)}">
+        <td colspan="8">No rows</td>
+      </tr>
+    </tbody>
+  </table>
+</div>

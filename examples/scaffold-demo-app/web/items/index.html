@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<!-- tesseraql-scaffold-checksum: sha256:afe488f5b10716857e2ad927f09c07b5183172071bb1d9f75c3e8c966e487c99 -->
+<!-- Scaffolded list page for the items table: the hc-shell layout with live search
+     over the server-rendered table fragment (docs/hypermedia-ui.md). -->
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{tql/shell :: shell('Items', ~{templates/nav.html :: app-nav}, ~{}, ~{:: #page-content})}">
+<div id="page-content" class="hc-stack">
+<section class="hc-card">
+  <div class="hc-cluster">
+    <h2>Items</h2>
+    <span class="hc-spacer"></span>
+    <a class="hc-button" data-variant="primary" href="/items/new">New</a>
+  </div>
+  <input class="hc-input" type="search" name="q" placeholder="Search by name..."
+         hx-get="/items/fragments/table" hx-trigger="input changed delay:300ms, search"
+         hx-target="#items-table-area" hx-swap="innerHTML">
+  <div id="items-table-area" hx-get="/items/fragments/table" hx-trigger="load" hx-swap="innerHTML">
+    <p class="hc-field__message">Loading...</p>
+  </div>
+</section>
+</div>
+</html>
