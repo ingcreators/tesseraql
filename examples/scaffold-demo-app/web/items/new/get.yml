@@ -1,0 +1,15 @@
+# tesseraql-scaffold-checksum: sha256:c4e728221c456779d1f9a36e1d0d299659b809def2a924f795f9af26cd1a5c0c
+# Scaffolded create form page for the items table.
+version: tesseraql/v1
+id: items.new
+kind: route
+recipe: page
+
+response:
+  html:
+    template: new.html
+    headers:
+      Content-Security-Policy: "default-src 'self'; style-src 'self' 'unsafe-inline'; frame-ancestors 'none'"
+      X-Content-Type-Options: nosniff
+      X-Frame-Options: DENY
+      Referrer-Policy: no-referrer

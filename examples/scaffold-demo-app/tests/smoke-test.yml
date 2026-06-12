@@ -1,0 +1,24 @@
+# Starter smoke suite (tesseraql new): proves the migration, the seeded row, and both
+# branches of the search SQL (design ch. 13).
+tests:
+  - name: the items search returns the seeded row
+    sql:
+      file: web/api/items/search.sql
+    params:
+      q: ""
+      limit: 50
+      offset: 0
+    expect:
+      rowCount: 1
+      rows:
+        - name: First item
+
+  - name: the items search filters by exact name
+    sql:
+      file: web/api/items/search.sql
+    params:
+      q: First item
+      limit: 50
+      offset: 0
+    expect:
+      rowCount: 1

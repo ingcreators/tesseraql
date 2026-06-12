@@ -1,0 +1,72 @@
+tesseraql:
+  app:
+    name: scaffold-demo
+    home: ${TESSERAQL_APP_HOME:.}
+    work: ${TESSERAQL_WORK_HOME:${TESSERAQL_APP_HOME}/work}
+
+  runtime:
+    engine: camel
+    profile: ${TESSERAQL_PROFILE:local}
+
+  java:
+    baseline: 21
+    compatibility:
+      - 25
+
+  datasources:
+    main:
+      type: hikari
+      jdbcUrl: ${db.main.url}
+      username: ${db.main.username}
+      password: ${db.main.password}
+
+  identity:
+    defaultRealm: local
+    realms:
+      local:
+        type: managed
+        datasource: main
+
+  camel:
+    components:
+      allowed:
+        - direct
+        - platform-http
+        - timer
+        - quartz
+        - file
+        - log
+        - tesseraql-sql
+        - tesseraql-auth
+        - tesseraql-html
+      denied:
+        - exec
+        - script
+        - groovy
+        - class
+
+  security:
+    defaults:
+      api:
+        auth: bearer
+      htmx:
+        auth: browser
+        csrf: auto
+
+    jwt:
+      secret: ${JWT_SECRET:dev-only-secret-change-me-in-production}
+      rolesClaim: roles
+      permissionsClaim: permissions
+      tenantClaim: tenant_id
+
+    # The starter policies every scaffolded route references; rename or split them
+    # per domain as the app grows (e.g. items.read / items.write).
+    policies:
+      app.read:
+        anyOf:
+          - role: APP_READ
+          - permission: app:read
+      app.write:
+        anyOf:
+          - role: APP_WRITE
+          - permission: app:write

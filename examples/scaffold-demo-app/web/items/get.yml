@@ -1,0 +1,15 @@
+# tesseraql-scaffold-checksum: sha256:6d33a9c649661df8c798b8969885281f257004e5d5c9ecef0608220a8ba39d88
+# Scaffolded list page for the items table (tesseraql scaffold crud --table items).
+version: tesseraql/v1
+id: items.page
+kind: route
+recipe: page
+
+response:
+  html:
+    template: index.html
+    headers:
+      Content-Security-Policy: "default-src 'self'; style-src 'self' 'unsafe-inline'; frame-ancestors 'none'"
+      X-Content-Type-Options: nosniff
+      X-Frame-Options: DENY
+      Referrer-Policy: no-referrer

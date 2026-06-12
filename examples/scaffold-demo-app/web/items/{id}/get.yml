@@ -1,0 +1,28 @@
+# tesseraql-scaffold-checksum: sha256:355096619795fc548fe0802198828031281dd06e5761c2750d5c47aba3b5467c
+# Scaffolded detail and edit page for the items table.
+version: tesseraql/v1
+id: items.detail
+kind: route
+recipe: query-html
+
+security:
+  auth: browser
+  policy: app.read
+
+sql:
+  file: select.sql
+  mode: query
+  params:
+    id: path.id
+
+response:
+  html:
+    status: 200
+    template: edit.html
+    model:
+      rows: sql.rows
+    headers:
+      Content-Security-Policy: "default-src 'self'; style-src 'self' 'unsafe-inline'; frame-ancestors 'none'"
+      X-Content-Type-Options: nosniff
+      X-Frame-Options: DENY
+      Referrer-Policy: no-referrer

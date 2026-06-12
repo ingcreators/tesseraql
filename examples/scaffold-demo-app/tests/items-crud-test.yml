@@ -1,0 +1,24 @@
+# tesseraql-scaffold-checksum: sha256:fdd508b459cf2c1b4910c7b683bac6a74a14c82c89c23ed73a83b6a6be13c7da
+# Scaffolded suite for the items table (design ch. 13): exercises the generated
+# queries with data-independent expectations, so it passes against any contents.
+tests:
+  - name: the items search runs without a filter
+    sql:
+      file: web/items/fragments/table/search.sql
+    params: {}
+
+  - name: the items search filters by name
+    sql:
+      file: web/items/fragments/table/search.sql
+    params:
+      q: no-such-row
+    expect:
+      rowCount: 0
+
+  - name: the items detail select misses for an unknown key
+    sql:
+      file: web/items/{id}/select.sql
+    params:
+      id: -1
+    expect:
+      rowCount: 0

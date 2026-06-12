@@ -1,0 +1,43 @@
+version: tesseraql/v1
+id: items.search
+kind: route
+recipe: query-json
+
+input:
+  q:
+    type: string
+    required: false
+    maxLength: 200
+
+  limit:
+    type: integer
+    default: 50
+    min: 1
+    max: 200
+
+  offset:
+    type: integer
+    default: 0
+    min: 0
+
+security:
+  auth: bearer
+  policy: app.read
+
+sql:
+  file: search.sql
+  mode: query
+  params:
+    q: query.q
+    limit: query.limit
+    offset: query.offset
+
+response:
+  json:
+    status: 200
+    body:
+      data: sql.rows
+      meta:
+        count: sql.rowCount
+        limit: params.limit
+        offset: params.offset
