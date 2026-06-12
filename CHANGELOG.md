@@ -18,6 +18,20 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Runtime and recipes
 
+- Printable documents (roadmap Phase 21, see
+  [docs/printable-documents.md](docs/printable-documents.md)): the optional `tesseraql-pdf`
+  module adds a `pdf` codec behind the file-codec SPI — `format: pdf` on
+  `query-export`/`file-export` renders an app-authored XHTML print template (or a built-in
+  plain grid) through the standard template engine and converts it to PDF with page-oriented
+  CSS (`@page` size/margins, `counter(page)`/`counter(pages)` margin boxes, repeating table
+  headers). Fonts under the app home's `fonts/` directory embed automatically under their own
+  family names, CJK included; template resource resolution is confined to the app home and
+  never fetches the network. Output is normalized — fixed producer, no timestamps or XMP, a
+  seeded trailer `/ID` — so identical data yields byte-identical documents (design ch. 48).
+  The engine choice stays a license-policy decision (design ch. 50): openhtmltopdf (LGPL,
+  full CSS) and a plain Apache PDFBox renderer (Apache-2.0, documented XHTML subset) both
+  ship as prototypes behind the module's `PdfEngine` SPI, selected per deployment via
+  `tesseraql.pdf.engine`.
 - Notifications (roadmap Phase 20, see [docs/notifications.md](docs/notifications.md)): a
   `notify:` block on `command-json` routes and a `notify:` pipeline step on batch jobs send
   through configured channels — SMTP mail (camel-mail) with the body and subject rendered by
@@ -59,6 +73,11 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Quality and supply chain
 
+- A `document` coverage kind (roadmap Phase 21) declares every route exporting a printable
+  document (`format: pdf`) and counts it covered when a suite case exercises one of its SQL
+  artifacts, gated via `coverage.thresholds.kinds.document`. Lint checks pdf exports
+  statically: workbook-only options raise `TQL-YAML-1005`, a non-`.html` or missing template
+  raises `TQL-YAML-1006`.
 - Declarative suites gain `notify:` cases (roadmap Phase 20): a case evaluates a route's
   `notify:` block or a job's notify steps against its params — guards and payload
   expressions run exactly as at runtime — and asserts on the fired notifications as rows,
