@@ -13,9 +13,11 @@ import picocli.CommandLine.Option;
 /**
  * TesseraQL command-line interface (design ch. 17). The short command alias is {@code tql}.
  */
-@Command(name = "tesseraql", mixinStandardHelpOptions = true, version = "TesseraQL 0.1.0-SNAPSHOT", description = "SQL-first hypermedia and integration framework.", subcommands = {
+@Command(name = "tesseraql", mixinStandardHelpOptions = true, version = "TesseraQL 0.2.0-SNAPSHOT", description = "SQL-first hypermedia and integration framework.", subcommands = {
         TesseraqlCli.ServeCommand.class,
-        TesseraqlCli.RoutesCommand.class
+        TesseraqlCli.RoutesCommand.class,
+        NewCommand.class,
+        ScaffoldCommand.class
 })
 public final class TesseraqlCli implements Runnable {
 
