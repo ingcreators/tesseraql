@@ -98,9 +98,9 @@ public final class RouteCompiler {
         switch (definition.recipe()) {
             case "query-json", "command-json" -> buildJson(builder, routeFile);
             case "query-html", "page" -> buildTemplatePage(builder, appHome, routeFile);
-            case "query-export" -> buildQueryExport(builder, routeFile);
+            case "query-export" -> buildQueryExport(builder, appHome, routeFile);
             case "file-import" -> buildFileImport(builder, routeFile);
-            case "file-export" -> buildFileExport(builder, routeFile);
+            case "file-export" -> buildFileExport(builder, appHome, routeFile);
             // Every designed recipe is implemented, so an unknown one is a typo: fail fast
             // instead of silently dropping the route from the served surface (design ch. 20.14).
             default -> throw new TqlException(UNSUPPORTED_RECIPE, "Route '" + definition.id()
@@ -193,7 +193,7 @@ public final class RouteCompiler {
      * extraction query stays in the route's {@code sql:} block, and follow-up statements
      * ({@code after:}) need the asynchronous {@code file-export} recipe.
      */
-    private void buildQueryExport(RouteBuilder builder, RouteFile routeFile) {
+    private void buildQueryExport(RouteBuilder builder, Path appHome, RouteFile routeFile) {
         RouteDefinition definition = routeFile.definition();
         io.tesseraql.yaml.model.ExportSpec spec = definition.fileExport();
         String routeId = definition.id();
@@ -210,8 +210,9 @@ public final class RouteCompiler {
                 ? null
                 : routeDir.resolve(spec.template()).normalize();
         io.tesseraql.core.files.FileWriteSpec writeSpec = spec == null
-                ? new io.tesseraql.core.files.FileWriteSpec(java.util.List.of(), null, null, null)
-                : spec.toWriteSpec(template);
+                ? new io.tesseraql.core.files.FileWriteSpec(java.util.List.of(), null, null, null,
+                        appHome, null, null)
+                : spec.toWriteSpec(template, appHome);
 
         String direct = "direct:" + routeId;
         if (mountRest) {
@@ -266,7 +267,7 @@ public final class RouteCompiler {
      * generated file; GET {path}/{transferId} reports its state and GET {path}/{transferId}/file
      * streams the result (triggering a download-timed follow-up statement on first fetch).
      */
-    private void buildFileExport(RouteBuilder builder, RouteFile routeFile) {
+    private void buildFileExport(RouteBuilder builder, Path appHome, RouteFile routeFile) {
         RouteDefinition definition = routeFile.definition();
         io.tesseraql.yaml.model.ExportSpec spec = definition.fileExport();
         String routeId = definition.id();
@@ -290,7 +291,7 @@ public final class RouteCompiler {
         route.process(new RequestBinder(definition, pathParams(routeFile.urlPath())))
                 .process(new io.tesseraql.compiler.binding.FileExportStartProcessor(
                         routeId, routeFile.urlPath(), appName, spec.format(),
-                        spec.toWriteSpec(template),
+                        spec.toWriteSpec(template, appHome),
                         formatDeclaration(spec.locale(), "tesseraql.files.locale"),
                         formatDeclaration(spec.timezone(), "tesseraql.files.timezone"),
                         spec.filename(), querySql, afterTiming, afterSql));

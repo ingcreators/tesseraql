@@ -51,14 +51,18 @@ public record ExportSpec(String format, String filename, String template, String
         columns = columns == null ? List.of() : List.copyOf(columns);
     }
 
-    /** The core write spec with column and cell references resolved. */
-    public io.tesseraql.core.files.FileWriteSpec toWriteSpec(Path templatePath) {
+    /**
+     * The core write spec with column and cell references resolved; {@code resources} is the
+     * app home, the confinement root for template-referenced resources (fonts, stylesheets).
+     */
+    public io.tesseraql.core.files.FileWriteSpec toWriteSpec(Path templatePath, Path resources) {
         return new io.tesseraql.core.files.FileWriteSpec(
                 columns.stream().map(ColumnSpec::toMapping).toList(),
                 sheet, templatePath,
                 startCell == null || startCell.isBlank()
                         ? null
-                        : io.tesseraql.core.files.CellRef.parse(startCell));
+                        : io.tesseraql.core.files.CellRef.parse(startCell),
+                resources, null, null);
     }
 
     /**
