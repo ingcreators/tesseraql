@@ -28,10 +28,10 @@ All notable changes to TesseraQL are documented here. The format follows
   family names, CJK included; template resource resolution is confined to the app home and
   never fetches the network. Output is normalized — fixed producer, no timestamps or XMP, a
   seeded trailer `/ID` — so identical data yields byte-identical documents (design ch. 48).
-  The engine choice stays a license-policy decision (design ch. 50): openhtmltopdf (LGPL,
-  full CSS) and a plain Apache PDFBox renderer (Apache-2.0, documented XHTML subset) both
-  ship as prototypes behind the module's `PdfEngine` SPI, selected per deployment via
-  `tesseraql.pdf.engine`.
+  Rendering goes through openhtmltopdf, adopted at the ch. 50 decision point after
+  prototyping an Apache PDFBox alternative behind the module's `PdfEngine` SPI; the SPI (and
+  `tesseraql.pdf.engine`) remains the seam for drop-in replacement, and the LGPL dependency
+  stays confined to the opt-in module - apps that never print do not install it.
 - Notifications (roadmap Phase 20, see [docs/notifications.md](docs/notifications.md)): a
   `notify:` block on `command-json` routes and a `notify:` pipeline step on batch jobs send
   through configured channels — SMTP mail (camel-mail) with the body and subject rendered by

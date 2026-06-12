@@ -95,24 +95,17 @@ Registration order is file-name order, deterministic across machines. The exampl
 Rendered documents are normalized so exports stay reproducibility-friendly (design ch. 48):
 the producer is fixed to `TesseraQL`, creation/modification dates and XMP metadata are
 dropped, and the trailer `/ID` derives from a fixed seed. The same rows through the same
-template yield byte-identical PDFs, whichever engine renders them.
+template yield byte-identical PDFs.
 
-## Engines
+## Engine and licensing
 
-The HTML-to-PDF engine choice is a license-policy decision (design ch. 50, decision point 1)
-that is still open, so both candidate stacks ship as prototypes behind the module's
-`PdfEngine` SPI and the `tesseraql.pdf.engine` system property selects one per deployment:
-
-| Engine | Selection | License | Fidelity |
-| --- | --- | --- | --- |
-| openhtmltopdf | `openhtml` (default) | LGPL | full page-oriented CSS |
-| plain Apache PDFBox | `pdfbox` | Apache-2.0 | documented XHTML subset |
-
-The `pdfbox` prototype lays out the subset itself instead of interpreting CSS: `h1`–`h3`,
-`p`/`div`, `table` (header row repeating after page breaks), a `header` element repeating at
-the top of every page, a `footer` element at the bottom, automatic page numbering, fixed A4
-portrait. The first app font carries all text; without app fonts, Helvetica renders ASCII and
-unmappable characters degrade to `?`. When the license decision lands, one stack is kept.
+The renderer is [openhtmltopdf](https://github.com/openhtmltopdf/openhtmltopdf) (LGPL),
+adopted at the design ch. 50 decision point for its full page-oriented CSS support. The LGPL
+dependency never leaks into applications that do not print: `tesseraql-pdf` is an opt-in
+module - no runtime module depends on it, and without the jar a `format: pdf` route fails
+loudly at build time (`TQL-LD-2801`). Inside the module the engine sits behind the
+`PdfEngine` ServiceLoader SPI with the `tesseraql.pdf.engine` system property (default
+`openhtml`), so a replacement stack can ship as a drop-in jar without touching the codec.
 
 ## Testing and coverage
 

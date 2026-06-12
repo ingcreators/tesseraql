@@ -14,10 +14,11 @@
   <name>Tesseraql PDF</name>
   <description>Optional printable-documents (pdf) codec for query-export/file-export (roadmap
     Phase 21): Thymeleaf-rendered HTML templates with page-oriented CSS and embedded CJK
-    fonts, deterministic output, and both engine stacks - openhtmltopdf and plain Apache
-    PDFBox - prototyped behind the module's PdfEngine SPI until the license-policy decision
-    (design ch. 50). Putting this jar on the classpath is the whole install (ServiceLoader,
-    design ch. 28, 47).</description>
+    fonts, deterministic output, rendered through openhtmltopdf (the engine adopted at the
+    ch. 50 license decision, replaceable behind the module's PdfEngine SPI). Apps that never
+    print PDFs simply do not install this jar, so its LGPL dependency stays out of their
+    deployment; putting it on the classpath is the whole install (ServiceLoader, design
+    ch. 28, 47).</description>
 
   <dependencies>
     <dependency>
@@ -30,7 +31,7 @@
       <groupId>org.thymeleaf</groupId>
       <artifactId>thymeleaf</artifactId>
     </dependency>
-    <!-- HTML+CSS engine prototype (LGPL; license decision pending, design ch. 50). -->
+    <!-- The adopted HTML+CSS engine (LGPL; ch. 50 decision point 1, resolved 2026-06-12). -->
     <dependency>
       <groupId>io.github.openhtmltopdf</groupId>
       <artifactId>openhtmltopdf-pdfbox</artifactId>
@@ -40,7 +41,7 @@
       <groupId>io.github.openhtmltopdf</groupId>
       <artifactId>openhtmltopdf-slf4j</artifactId>
     </dependency>
-    <!-- Apache-2.0 engine prototype, font-name reading, and deterministic post-processing. -->
+    <!-- Font-name reading and the deterministic post-processing pass. -->
     <dependency>
       <groupId>org.apache.pdfbox</groupId>
       <artifactId>pdfbox</artifactId>
