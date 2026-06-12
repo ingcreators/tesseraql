@@ -1,0 +1,9 @@
+# Japanese message catalog (roadmap Phase 22).
+users:
+  list:
+    title: ユーザー一覧
+    hint: テーブルは認証済みセッション上で htmx により読み込まれます。入力すると結果が絞り込まれます。
+    searchPlaceholder: 名前で検索...
+    loading: 読み込み中...
+  provision:
+    unknown-user: 指定されたユーザーは存在しません。

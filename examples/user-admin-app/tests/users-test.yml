@@ -108,3 +108,27 @@ tests:
         - notify: report
           channel: audit-webhook
           deactivated: 3
+
+  # Phase 22 message catalogs: every shipped locale is exercised (message coverage kind).
+  - name: the japanese catalog translates the provisioning error and the page chrome
+    messages:
+      locale: ja
+      keys:
+        - users.provision.unknown-user
+        - users.list.title
+    expect:
+      rowCount: 2
+      rows:
+        - key: users.provision.unknown-user
+          text: 指定されたユーザーは存在しません。
+        - key: users.list.title
+          text: ユーザー一覧
+
+  - name: the english catalog is the authoring default
+    messages:
+      locale: en
+      keys:
+        - users.provision.unknown-user
+    expect:
+      rows:
+        - text: The user does not exist.

@@ -3,16 +3,19 @@
      navigation, live search over the server-rendered user table fragment (the htmx
      active-search recipe: the input re-fetches the fragment as you type). -->
 <html xmlns:th="http://www.thymeleaf.org"
-      th:replace="~{tql/shell :: shell('Users', ~{templates/nav.html :: app-nav}, ~{}, ~{:: #page-content})}">
+      th:replace="~{tql/shell :: shell(#{users.list.title}, ~{templates/nav.html :: app-nav}, ~{}, ~{:: #page-content})}">
+<!-- #{...} message expressions resolve from messages/<locale>.yml with the negotiated
+     request locale (roadmap Phase 22); the shell sets the page lang to match. -->
 <div id="page-content" class="hc-stack">
 <section class="hc-card">
-  <h2>Users</h2>
-  <p class="hc-field__message">The table is loaded over the authenticated session via htmx; typing filters the results.</p>
+  <h2 th:text="#{users.list.title}">Users</h2>
+  <p class="hc-field__message" th:text="#{users.list.hint}">The table is loaded over the authenticated session via htmx; typing filters the results.</p>
   <input class="hc-input" type="search" name="q" placeholder="Search by name..."
+         th:placeholder="#{users.list.searchPlaceholder}"
          hx-get="/users/fragments/table" hx-trigger="input changed delay:300ms, search"
          hx-target="#user-table-area" hx-swap="innerHTML">
   <div id="user-table-area" hx-get="/users/fragments/table" hx-trigger="load" hx-swap="innerHTML">
-    <p class="hc-field__message">Loading...</p>
+    <p class="hc-field__message" th:text="#{users.list.loading}">Loading...</p>
   </div>
 </section>
 </div>
