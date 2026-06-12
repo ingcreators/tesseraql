@@ -46,6 +46,42 @@ class AppLinterTest {
     }
 
     @Test
+    void dottedPolicyNamesResolveAsKeysOfThePoliciesMap(@TempDir Path dir) throws Exception {
+        Files.createDirectories(dir.resolve("config"));
+        Files.writeString(dir.resolve("config/tesseraql.yml"), """
+                tesseraql:
+                  app:
+                    name: t
+                  security:
+                    policies:
+                      items.read:
+                        anyOf:
+                          - role: ITEMS_READ
+                """);
+        Files.createDirectories(dir.resolve("web/api/items"));
+        Files.writeString(dir.resolve("web/api/items/search.sql"), "select 1\n");
+        Files.writeString(dir.resolve("web/api/items/get.yml"), """
+                version: tesseraql/v1
+                id: items.search
+                kind: route
+                recipe: query-json
+                security:
+                  auth: bearer
+                  policy: items.read
+                sql:
+                  file: search.sql
+                response:
+                  json:
+                    body:
+                      data: sql.rows
+                """);
+
+        List<LintFinding> findings = new AppLinter().lint(dir);
+
+        assertThat(findings).noneMatch(f -> f.code().equals("TQL-SEC-4030"));
+    }
+
+    @Test
     void lintsNotifyDeclarationsOnRoutesAndJobs(@TempDir Path dir) throws Exception {
         Files.createDirectories(dir.resolve("config"));
         Files.writeString(dir.resolve("config/tesseraql.yml"), """

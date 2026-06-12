@@ -148,13 +148,21 @@ public final class AppLinter {
         lintNotify(config, definition, source, findings);
         lintPdfExport(route, definition, source, findings);
         if (definition.security() != null && definition.security().policy() != null
-                && config.navigate(
-                        "tesseraql.security.policies." + definition.security().policy()) == null) {
+                && !policyDefined(config, definition.security().policy())) {
             findings.add(new LintFinding("TQL-SEC-4030", "warning", source,
                     "Route references undefined policy '" + definition.security().policy()
                             + "' (deny by default)"));
         }
         lintTenantPredicate(config, route, definition, source, findings);
+    }
+
+    /**
+     * Policy ids are dotted names ({@code users.read}): literal keys of the policies map, not
+     * nested config paths, so a {@code navigate} walk on the full path never finds them.
+     */
+    private static boolean policyDefined(AppConfig config, String policy) {
+        return config.navigate("tesseraql.security.policies") instanceof java.util.Map<?, ?> map
+                && map.containsKey(policy);
     }
 
     /**
