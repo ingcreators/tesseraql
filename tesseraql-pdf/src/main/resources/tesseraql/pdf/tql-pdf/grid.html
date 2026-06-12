@@ -1,0 +1,29 @@
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+  <title>export</title>
+  <style>
+    @page {
+      size: A4;
+      margin: 20mm 15mm;
+      @bottom-center { content: "Page " counter(page) " / " counter(pages); font-size: 8pt; }
+    }
+    body { font-size: 9pt; }
+    table { width: 100%; border-collapse: collapse; }
+    thead { display: table-header-group; }
+    th, td { border: 0.5pt solid #444444; padding: 2pt 4pt; text-align: left; }
+    th { background-color: #eeeeee; }
+  </style>
+</head>
+<body th:style="${fontFamilies} == null ? null : 'font-family: ' + ${fontFamilies} + ';'">
+  <table>
+    <thead>
+      <tr><th th:each="column : ${columns}" th:text="${column.header}">header</th></tr>
+    </thead>
+    <tbody>
+      <tr th:each="row : ${rows}">
+        <td th:each="column : ${columns}" th:text="${row[column.name]}">value</td>
+      </tr>
+    </tbody>
+  </table>
+</body>
+</html>
