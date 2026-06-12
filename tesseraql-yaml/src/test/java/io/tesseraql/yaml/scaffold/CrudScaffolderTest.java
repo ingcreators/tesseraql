@@ -116,8 +116,10 @@ class CrudScaffolderTest {
                 content(files, "web/items/{id}/update/post.yml"), "post.yml");
         assertThat(update.sql().expect().rows()).isEqualTo(1);
         assertThat(update.sql().expect().effectiveOnMismatch()).isEqualTo("conflict");
-        assertThat(update.sql().params()).containsEntry("version", "body.version")
-                .containsEntry("id", "path.id");
+        // Binds read the coerced params.* view: raw body/path values are strings (Phase 22).
+        assertThat(update.sql().params()).containsEntry("version", "params.version")
+                .containsEntry("id", "params.id");
+        assertThat(update.input().get("id").type()).isEqualTo("integer");
         assertThat(update.input().get("version").required()).isTrue();
 
         String sql = content(files, "web/items/{id}/update/update.sql");
@@ -184,7 +186,7 @@ class CrudScaffolderTest {
                 "post.yml");
         assertThat(create.steps()).isEmpty();
         assertThat(create.input()).containsKey("code");
-        assertThat(create.response().redirect().location()).isEqualTo("/codes/{body.code}");
+        assertThat(create.response().redirect().location()).isEqualTo("/codes/{params.code}");
 
         // No version column: no locking predicate, no expectation (lint pairing TQL-SQL-2105).
         RouteDefinition update = parser.parseRoute(

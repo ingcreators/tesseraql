@@ -1,9 +1,14 @@
-# tesseraql-scaffold-checksum: sha256:355096619795fc548fe0802198828031281dd06e5761c2750d5c47aba3b5467c
+# tesseraql-scaffold-checksum: sha256:4dbd8c11925e4a13c9b909a6897ac82f4cb78824e8a898b23d0eb27b57ebf51c
 # Scaffolded detail and edit page for the items table.
 version: tesseraql/v1
 id: items.detail
 kind: route
 recipe: query-html
+
+input:
+  id:
+    type: integer
+    required: true
 
 security:
   auth: browser
@@ -13,7 +18,7 @@ sql:
   file: select.sql
   mode: query
   params:
-    id: path.id
+    id: params.id
 
 response:
   html:

@@ -1,7 +1,6 @@
--- tesseraql-scaffold-checksum: sha256:441b5e67cb996a4f86515372a05ab2d533c66b08ee44b016f131a20be44a2e1a
+-- tesseraql-scaffold-checksum: sha256:f2972c7685f49fb1a2631a96d58bb9ad6be15bd3d14f95a13afaf15c2f2b6efe
 -- Scaffolded delete for the items table.
 delete from items
 where
   id = /* id */ 1
   and version = /* version */ 1
-;

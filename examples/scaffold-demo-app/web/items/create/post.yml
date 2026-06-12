@@ -1,4 +1,4 @@
-# tesseraql-scaffold-checksum: sha256:0603c981e7376034d593f3fbf2a6c9702baf5a2da0d0eba8e04c43d6a9c4fe50
+# tesseraql-scaffold-checksum: sha256:de128835f007da1989f6048ebd2c098300851036b5588155f5736217568ea43c
 # Scaffolded create command for the items table: one transaction, audit binds, and
 # field-level constraint errors (docs/transactional-writes.md).
 version: tesseraql/v1
@@ -44,12 +44,12 @@ steps:
     mode: update
     keys: [id]
     params:
-      name: body.name
-      quantity: body.quantity
-      unitPrice: body.unitPrice
-      dueDate: body.dueDate
-      active: body.active
-      note: body.note
+      name: params.name
+      quantity: params.quantity
+      unitPrice: params.unitPrice
+      dueDate: params.dueDate
+      active: params.active
+      note: params.note
 
 response:
   redirect:

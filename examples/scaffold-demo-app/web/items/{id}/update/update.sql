@@ -1,4 +1,4 @@
--- tesseraql-scaffold-checksum: sha256:a5b45c89486a0c71b10a78597804fdea93621d673ef62fb7a8fdb4a1688b849c
+-- tesseraql-scaffold-checksum: sha256:7b391bbb9a1fef3c22a9533766264934028d59bfb2bb450e49c3bf5876ba7074
 -- Scaffolded update for the items table: the version predicate pairs with expect.rows (Phase 18).
 update items
 set
@@ -14,4 +14,3 @@ set
 where
   id = /* id */ 1
   and version = /* version */ 1
-;
