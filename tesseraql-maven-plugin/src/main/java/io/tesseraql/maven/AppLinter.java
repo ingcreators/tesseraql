@@ -33,7 +33,90 @@ public final class AppLinter {
         for (io.tesseraql.yaml.manifest.JobFile job : manifest.jobs()) {
             lintJob(appHome, manifest.config(), job, findings);
         }
+        lintI18n(appHome, manifest, findings);
         return findings;
+    }
+
+    /**
+     * Statically checks the app's message catalogs (roadmap Phase 22) when a {@code messages/}
+     * directory exists: catalog files parse and carry valid BCP-47 names (TQL-YAML-1007), every
+     * locale declared in {@code tesseraql.i18n.locales} has catalog entries to read
+     * (TQL-YAML-1103), translation gaps against the default locale surface per catalog
+     * (TQL-YAML-1008), and every validation-rule / constraint-mapping message key resolves in
+     * the default locale (TQL-FIELD-2005; {@code tql.*} keys resolve through the framework's
+     * built-in catalog and are skipped).
+     */
+    private void lintI18n(Path appHome, AppManifest manifest, List<LintFinding> findings) {
+        if (!Files.isDirectory(appHome.resolve("messages"))) {
+            return;
+        }
+        io.tesseraql.yaml.i18n.MessageCatalog catalog;
+        try {
+            catalog = io.tesseraql.yaml.i18n.MessageCatalog.load(appHome.resolve("messages"));
+        } catch (io.tesseraql.core.error.TqlException ex) {
+            findings.add(new LintFinding("TQL-YAML-1007", "error", "messages", ex.getMessage()));
+            return;
+        }
+        AppConfig config = manifest.config();
+        String defaultTag = java.util.Locale.forLanguageTag(
+                config.getString("tesseraql.i18n.defaultLocale").orElse("en")).toLanguageTag();
+
+        Object declared = config.navigate("tesseraql.i18n.locales");
+        if (declared instanceof List<?> tags) {
+            for (Object tag : tags) {
+                String normalized = java.util.Locale
+                        .forLanguageTag(String.valueOf(tag)).toLanguageTag();
+                if (!normalized.equals(defaultTag)
+                        && catalog.forLocale(normalized).isEmpty()) {
+                    findings.add(new LintFinding("TQL-YAML-1103", "warning", "messages",
+                            "Declared locale '" + tag + "' has no messages/" + normalized
+                                    + ".yml catalog"));
+                }
+            }
+        }
+
+        java.util.Map<String, String> defaults = catalog.forLocale(defaultTag);
+        for (String tag : catalog.tags()) {
+            if (tag.equals(defaultTag)) {
+                continue;
+            }
+            List<String> missing = defaults.keySet().stream()
+                    .filter(key -> catalog.resolve(tag, key) == null)
+                    .sorted()
+                    .toList();
+            if (!missing.isEmpty()) {
+                findings.add(new LintFinding("TQL-YAML-1008", "warning", "messages",
+                        "Catalog '" + tag + "' is missing " + missing.size()
+                                + " key(s) present in the default locale '" + defaultTag
+                                + "' (first: " + missing.get(0) + ")"));
+            }
+        }
+
+        for (RouteFile route : manifest.routes()) {
+            String source = appHome.relativize(route.source()).toString().replace('\\', '/');
+            route.definition().validate().forEach((id, rule) -> lintMessageKey(catalog,
+                    defaultTag, rule.message(), "Validation rule '" + id + "'", source,
+                    findings));
+            if (route.definition().errors() != null) {
+                route.definition().errors().constraints()
+                        .forEach((constraint, mapping) -> lintMessageKey(catalog, defaultTag,
+                                mapping.message(), "Constraint mapping '" + constraint + "'",
+                                source, findings));
+            }
+        }
+    }
+
+    /** Warns when a declared message key has no default-locale text to render. */
+    private void lintMessageKey(io.tesseraql.yaml.i18n.MessageCatalog catalog, String defaultTag,
+            String key, String owner, String source, List<LintFinding> findings) {
+        if (key == null || key.isBlank() || key.startsWith("tql.")) {
+            return;
+        }
+        if (catalog.resolve(defaultTag, key) == null) {
+            findings.add(new LintFinding("TQL-FIELD-2005", "warning", source,
+                    owner + " declares message key '" + key + "' that no messages/" + defaultTag
+                            + ".yml entry resolves"));
+        }
     }
 
     private void lintRoute(Path appHome, AppConfig config, RouteFile route,

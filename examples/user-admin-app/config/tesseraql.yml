@@ -13,6 +13,17 @@ tesseraql:
     compatibility:
       - 25
 
+  # Phase 22 internationalization: the app serves English and Japanese. The request locale
+  # resolves from the ?lang= query parameter (handy for a language toggle), then the signed-in
+  # user's locale claim, then Accept-Language, then the default. Catalogs live in
+  # messages/<locale>.yml.
+  i18n:
+    defaultLocale: en
+    locales: [en, ja]
+    preference:
+      - query.lang
+      - principal.claim.locale
+
   datasources:
     main:
       type: hikari

@@ -362,7 +362,10 @@ public final class TesseraqlRuntime implements AutoCloseable {
                     appAssets.put(mounted.name(), assets);
                 }
             }
-            context.addRoutes(new AssetsRouteBuilder(appHome.resolve("assets"), appAssets));
+            context.addRoutes(new AssetsRouteBuilder(appHome.resolve("assets"), appAssets,
+                    new ClientMessages(appHome,
+                            manifest.config().getString("tesseraql.i18n.defaultLocale")
+                                    .orElse("en"))));
             // The ops API needs each job's owning app so per-app scope can gate listing and runs.
             Map<String, String> ownedJobs = new LinkedHashMap<>();
             jobs.keySet().forEach(id -> ownedJobs.put(id, jobOwners.getOrDefault(id, appName)));

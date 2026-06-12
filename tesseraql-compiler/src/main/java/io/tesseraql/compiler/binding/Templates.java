@@ -13,6 +13,11 @@ import org.thymeleaf.templateresolver.FileTemplateResolver;
  * {@code *.html} templates render in HTML mode (natural templates, escaped by default, fragments
  * via {@code th:fragment}/{@code th:insert}); every other extension renders in TEXT mode for
  * generated file responses ({@code [(${value})]} interpolation, {@code [# th:if]} blocks).
+ *
+ * <p>{@code #{key}} message expressions resolve against the root's {@code messages/<locale>.yml}
+ * catalogs layered over the framework built-ins (roadmap Phase 22), looked up with the rendering
+ * locale — page renders pass the negotiated request locale; locale-less renders (mail bodies,
+ * generated file responses) read the English/default texts.
  */
 public final class Templates {
 
@@ -23,7 +28,13 @@ public final class Templates {
 
     /** Renders {@code templateName} (relative to {@code templateRoot}) against the model. */
     public static String render(Path templateRoot, String templateName, Map<String, Object> model) {
-        Context context = new Context(java.util.Locale.ROOT, model);
+        return render(templateRoot, templateName, model, java.util.Locale.ENGLISH);
+    }
+
+    /** Renders with an explicit locale: {@code #{key}} lookups and {@code #locale} follow it. */
+    public static String render(Path templateRoot, String templateName, Map<String, Object> model,
+            java.util.Locale locale) {
+        Context context = new Context(locale, model);
         return engineFor(templateRoot.toAbsolutePath().normalize()).process(templateName, context);
     }
 
@@ -60,6 +71,9 @@ public final class Templates {
             engine.addTemplateResolver(shared);
             engine.addTemplateResolver(html);
             engine.addTemplateResolver(text);
+            engine.setMessageResolver(new CatalogMessageResolver(
+                    io.tesseraql.yaml.i18n.MessageCatalog.load(key.resolve("messages"))
+                            .withFallback(I18nSettings.builtinCatalog())));
             return engine;
         });
     }

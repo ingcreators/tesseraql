@@ -1,0 +1,34 @@
+# Framework built-in messages (roadmap Phase 22). Apps override any key in their own
+# messages/<locale>.yml; texts may carry {name} placeholders interpolated from the
+# field-error entry (constraint params, violation row columns).
+tql:
+  input:
+    required: This field is required.
+    min: "Must be at least {min}."
+    max: "Must be at most {max}."
+    maxLength: "Must be {maxLength} characters or fewer."
+    enum: "Must be one of {options}."
+    integer: Must be a whole number.
+    number: Must be a number.
+    date: Not a valid date.
+    datetime: Not a valid date and time.
+  constraint:
+    duplicate: Already exists.
+    invalid-reference: The referenced record does not exist.
+    required: This field is required.
+    invalid: Invalid value.
+    constraint-violation: The change violates a data constraint.
+  conflict:
+    stale: >-
+      The record may have been changed or deleted by another user; reload it and retry
+      the operation.
+  http:
+    "400": Bad Request
+    "401": Unauthorized
+    "403": Forbidden
+    "404": Not Found
+    "409": Conflict
+    "422": Unprocessable Entity
+    "429": Too Many Requests
+    "500": Internal Server Error
+    "503": Service Unavailable

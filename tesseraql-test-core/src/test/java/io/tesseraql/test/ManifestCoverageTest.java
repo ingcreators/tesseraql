@@ -33,14 +33,14 @@ class ManifestCoverageTest {
     private static TestSuite sqlSuite(String... sqlFiles) {
         return new TestSuite(java.util.Arrays.stream(sqlFiles)
                 .map(file -> new TestCase("tests " + file, new SqlTarget(file), null, Map.of(),
-                        null, null, null))
+                        null, null, null, null))
                 .toList());
     }
 
     private static TestSuite contractSuite(String... contracts) {
         return new TestSuite(java.util.Arrays.stream(contracts)
                 .map(contract -> new TestCase("tests " + contract, null, contract, Map.of(),
-                        null, null, null))
+                        null, null, null, null))
                 .toList());
     }
 
@@ -129,7 +129,7 @@ class ManifestCoverageTest {
 
     private static TestSuite validateSuite(String route, String rule) {
         return new TestSuite(List.of(new TestCase("validates " + route, null, null, Map.of(),
-                null, new TestSuite.ValidateTarget(route, rule), null)));
+                null, new TestSuite.ValidateTarget(route, rule), null, null)));
     }
 
     @Test
@@ -198,7 +198,7 @@ class ManifestCoverageTest {
 
     private static TestSuite notifySuite(String route, String job, String id) {
         return new TestSuite(List.of(new TestCase("notifies", null, null, Map.of(),
-                null, null, new TestSuite.NotifyTarget(route, job, id))));
+                null, null, new TestSuite.NotifyTarget(route, job, id), null)));
     }
 
     @Test

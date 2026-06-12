@@ -52,8 +52,10 @@ Coverage kinds beyond SQL line/branch (design ch. 14): `assertion` (cases that a
 and the subset declaring `security:` — whose SQL artifacts the suites exercise), `saml` (the
 identity contracts the SAML user-link login path executes, when linking is enabled), `scim`
 (the contract SQL files wired via `tesseraql.scim.*`), `validation` (every `validate:` rule,
-covered by the validate cases that evaluate it), and `notification` (every `notify:`
-declaration of routes and jobs, covered by the notify cases that evaluate it). Kinds with
+covered by the validate cases that evaluate it), `notification` (every `notify:`
+declaration of routes and jobs, covered by the notify cases that evaluate it), `document`
+(every printable-document export, covered like routes), and `message` (every
+`messages/<locale>.yml` catalog, covered by the messages cases that read it). Kinds with
 nothing declared report 1.0.
 
 The `coverage` goal gates on `coverage.thresholds.*` percentages from the app config (or the

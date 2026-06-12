@@ -1,0 +1,10 @@
+# English message catalog (roadmap Phase 22). Nested maps flatten to dotted keys:
+# users.list.title, users.provision.unknown-user, ...
+users:
+  list:
+    title: Users
+    hint: The table is loaded over the authenticated session via htmx; typing filters the results.
+    searchPlaceholder: Search by name...
+    loading: Loading...
+  provision:
+    unknown-user: The user does not exist.

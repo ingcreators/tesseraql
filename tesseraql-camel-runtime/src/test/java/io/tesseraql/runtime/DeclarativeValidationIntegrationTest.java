@@ -105,7 +105,10 @@ class DeclarativeValidationIntegrationTest {
         assertThat(field.path("rule").asText()).isEqualTo("uniqueEmail");
         assertThat(field.path("field").asText()).isEqualTo("email");
         assertThat(field.path("code").asText()).isEqualTo("duplicate");
-        assertThat(field.path("message").asText()).isEqualTo("members.email.duplicate");
+        // The declared key rides as messageKey (roadmap Phase 22); message carries the
+        // localized text, here the built-in tql.constraint.duplicate English fallback.
+        assertThat(field.path("messageKey").asText()).isEqualTo("members.email.duplicate");
+        assertThat(field.path("message").asText()).isEqualTo("Already exists.");
 
         assertThat(count()).isEqualTo(membersBefore); // the rule ran before the insert
     }

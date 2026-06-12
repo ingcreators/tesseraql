@@ -205,7 +205,7 @@ tests:
 
 Every route notification is declared as `<routeId>.<notifyId>` and every job notify step as
 `<jobId>.<stepId>`; a notify case covers the declarations it evaluates. Gaps surface in the
-coverage report and as SARIF findings, and `coverage.thresholds.kinds.notification` gates
+coverage report and as SARIF findings, and `coverage.thresholds.notification` gates
 the build like any other kind.
 
 ## Lint

@@ -1,0 +1,30 @@
+# Japanese translations of the framework built-in messages (roadmap Phase 22).
+tql:
+  input:
+    required: 必須項目です。
+    min: "{min} 以上で入力してください。"
+    max: "{max} 以下で入力してください。"
+    maxLength: "{maxLength} 文字以内で入力してください。"
+    enum: "次のいずれかを指定してください: {options}"
+    integer: 整数で入力してください。
+    number: 数値で入力してください。
+    date: 日付の形式が正しくありません。
+    datetime: 日時の形式が正しくありません。
+  constraint:
+    duplicate: すでに登録されています。
+    invalid-reference: 参照先のレコードが存在しません。
+    required: 必須項目です。
+    invalid: 入力値が正しくありません。
+    constraint-violation: データ制約に違反しています。
+  conflict:
+    stale: 他のユーザーによってレコードが変更または削除された可能性があります。再読み込みのうえ、もう一度実行してください。
+  http:
+    "400": リクエストが正しくありません
+    "401": 認証が必要です
+    "403": 権限がありません
+    "404": 見つかりません
+    "409": 競合が発生しました
+    "422": 入力内容を確認してください
+    "429": リクエストが多すぎます
+    "500": サーバーエラーが発生しました
+    "503": 一時的に利用できません

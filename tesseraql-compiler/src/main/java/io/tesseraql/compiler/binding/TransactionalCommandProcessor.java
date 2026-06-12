@@ -489,8 +489,8 @@ public final class TransactionalCommandProcessor implements Processor {
                         "step", step.name(),
                         "expectedRows", step.expect().rows(),
                         "actualRows", actual,
-                        "hint", "The record may have been changed or deleted by another user;"
-                                + " reload it and retry the operation")))
+                        // A message key: the error renderer localizes it per request locale.
+                        "hint", "tql.conflict.stale")))
                 .build();
     }
 
@@ -530,6 +530,10 @@ public final class TransactionalCommandProcessor implements Processor {
                 field.put("field", mapping.field());
                 field.put("code", mapping.code() != null ? mapping.code() : defaultCode(kind));
                 field.put("constraint", constraint);
+                if (mapping.message() != null && !mapping.message().isBlank()) {
+                    // A message key (roadmap Phase 22), localized by the error renderer.
+                    field.put("message", mapping.message());
+                }
                 fields.add(field);
             }
         });
