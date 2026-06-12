@@ -82,7 +82,10 @@ All notable changes to TesseraQL are documented here. The format follows
   overrides are gone), `hc-empty` empty states, `hc-chips`/`hc-badge` counters, the `kv`
   table variant, `hc-item` sidebar navigation with an `aria-current` marker set by the
   bootstrap, and `hc-spacer`/`hc-cluster` page headers. The app stylesheet shrinks from
-  40 lines to the card heading scale and the Studio source editor.
+  40 lines to the card heading scale and the Studio source editor. The blessed htmx
+  patterns — confirmed actions (`data-hc-confirm` × `hx-trigger="hc:confirmed"`), live data
+  regions, busy indicators, inline field errors — are documented in
+  [docs/hypermedia-ui.md](docs/hypermedia-ui.md).
 - Document-number sequences as a managed SQL contract (`sequence:` steps backed by
   `tql_doc_sequence`, V2 framework migration): gapless allocation under the sequence row's
   lock, riding the command transaction.
