@@ -28,6 +28,9 @@ db/<datasource>/migration[-<vendor>]/
                         tesseraql.datasources.<datasource> with its own history table
                         (tql_schema_history_<app>__<datasource>)
 templates/              shared templates only: app-wide fragments and layouts
+messages/               message catalogs, one <locale>.yml per BCP-47 tag (en.yml, ja.yml);
+                        nested maps flatten to dotted keys, layered over the framework's
+                        built-in tql.* texts (see internationalization.md)
 fonts/                  embeddable fonts (*.ttf / *.otf) for printable documents; the pdf
                         codec registers each under the family name in the font itself
 assets/                 static files, served at /assets/** (mounted apps at /assets/<app>/**)

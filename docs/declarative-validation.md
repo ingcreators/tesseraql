@@ -5,7 +5,8 @@ rules in the core expression language plus validation SQL — SELECTs whose retu
 the violations (uniqueness, existence, balance checks) — executed inside the command's
 transaction, before a single step writes. Violations come back as a field-scoped
 `422 Unprocessable Entity` with a stable error model: rule ids, field paths, rule codes, and
-message keys (localized rendering arrives in Phase 22). Input constraints (`input:` type,
+message keys, localized at render time through the app's message catalogs
+([internationalization.md](internationalization.md)). Input constraints (`input:` type,
 required, range, enum) still reject malformed requests with `400` at bind time; `validate:`
 is the business-rule layer behind them.
 
@@ -33,7 +34,7 @@ validate:
       email: body.email
     field: email                     # the field path violations are reported against
     code: duplicate
-    message: members.email.duplicate # a message key, translated in Phase 22
+    message: members.email.duplicate # a message key (see internationalization.md)
   dateOrder:
     when: body.endDate != null       # optional guard; a falsy guard skips the rule
     rule: body.endDate >= body.startDate   # must hold for the input to be valid
@@ -90,11 +91,15 @@ A violating request answers `422` with `TQL-FIELD-4220`:
 {"error": {"code": "TQL-FIELD-4220", "message": "Unprocessable Entity",
   "fields": [
     {"rule": "uniqueEmail", "field": "email", "code": "duplicate",
-     "message": "members.email.duplicate"},
+     "messageKey": "members.email.duplicate", "message": "Already exists."},
     {"rule": "dateOrder", "field": "endDate", "code": "end-before-start"}]}}
 ```
 
-`code` defaults to the rule id; `message` is a message key, not display text. htmx callers
+`code` defaults to the rule id. The declared message key rides as `messageKey`, and
+`message` carries the localized text resolved with the request locale — the app catalog's
+entry for the key, falling back to the built-in `tql.constraint.<code>` texts
+([internationalization.md](internationalization.md)). The top-level `message` is the
+localized status phrase. htmx callers
 (`HX-Request: true`) receive the same details as the Hypermedia Components field-errors
 fragment; the kit's auto-installed `installFieldErrors` behavior distributes each item next
 to the input matching its `data-field` (with `aria-invalid`/`aria-describedby` wiring) and
@@ -106,7 +111,7 @@ resolves `data-message-key` through the kit's message catalog:
   <p class="hc-alert__title">Unprocessable Entity</p>
   <ul class="hc-alert__errors">
     <li class="hc-alert__error" data-field="email" data-code="duplicate"
-        data-message-key="members.email.duplicate">email: duplicate</li>
+        data-message-key="members.email.duplicate">Already exists.</li>
   </ul>
 </div>
 ```

@@ -126,8 +126,12 @@ route answers `409 Conflict` (`TQL-SQL-4092`) with a usable hint:
 ```json
 {"error": {"code": "TQL-SQL-4092", "message": "Conflict",
   "conflict": {"step": "sql", "expectedRows": 1, "actualRows": 0,
+    "hintKey": "tql.conflict.stale",
     "hint": "The record may have been changed or deleted by another user; reload it and retry the operation"}}}
 ```
+
+The hint resolves through the message catalog with the request locale
+([internationalization.md](internationalization.md)); `hintKey` keeps the stable key.
 
 Lint keeps the two halves paired: an UPDATE with `expect.rows` but no version-column
 predicate warns `TQL-SQL-2104`; a version predicate without `expect.rows` warns
@@ -153,6 +157,10 @@ errors:
   "fields": [{"field": "customerId", "code": "unknown-customer",
               "constraint": "orders_customer_fk"}]}}
 ```
+
+A mapping may declare its own `message:` key; without one, the built-in
+`tql.constraint.<code>` texts localize the standard codes
+([internationalization.md](internationalization.md)).
 
 Unmapped violations still classify portably across dialects: unique `TQL-SQL-4090` (409),
 foreign key `TQL-SQL-4091` (409), not-null `TQL-SQL-4001` (400), check `TQL-SQL-4002`

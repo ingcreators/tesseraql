@@ -18,6 +18,28 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Runtime and recipes
 
+- Internationalization (roadmap Phase 22, see
+  [docs/internationalization.md](docs/internationalization.md)): per-app message catalogs
+  (`messages/<locale>.yml`, nested maps flattened to dotted keys, layered over framework
+  built-ins shipped in English and Japanese); per-request locale resolution after
+  authentication — configured preference sources (`principal.*` claims, `query.*`
+  parameters), then `Accept-Language` (RFC 4647 lookup against `tesseraql.i18n.locales`),
+  then `tesseraql.i18n.defaultLocale` — published as the `request.locale` format source;
+  `#{key}` message lookup in templates with the shell's `lang` following `#locale`;
+  localized validation and error messages (the declared key rides as `messageKey` /
+  `data-message-key`, `message` carries the resolved text, constraint violations fall back
+  to `tql.constraint.<code>`, the conflict hint is the `tql.conflict.stale` key, and the
+  top-level message localizes the status phrase); input-constraint rejections become
+  field-scoped errors with `tql.input.<code>` keys; and locale-aware input parsing —
+  `date`/`datetime`/`number` inputs with an optional `format` pattern parse with the request
+  locale through the file-transfer column machinery. Breaking: a field error's `message` is
+  now display text (the key moved to `messageKey`), and `Templates.render` without a locale
+  renders English instead of `Locale.ROOT`.
+- A client-side message catalog for Hypermedia Components:
+  `/assets/_tesseraql/messages.js?locale=<tag>` serves an ES module merging the app's
+  catalog over the framework's Japanese translations of the kit's built-in strings via the
+  behaviors bundle's `setMessages`, loaded by the shell before behaviors install
+  (hc adoption Theme 6, folded into Phase 22).
 - Hypermedia Components 0.1.0 (from 0.0.1-alpha.0). htmx error fragments now follow the
   kit's documented field-errors contract — `hc-alert` with `data-variant="error"`,
   `role="alert"`, `data-hc-field-errors`, `hc-alert__error` items carrying
@@ -92,6 +114,15 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Quality and supply chain
 
+- Declarative suites gain `messages:` cases (roadmap Phase 22): a case resolves keys of the
+  app's message catalogs (exact tag, then bare language, like the runtime) and asserts on
+  the texts as rows (`key`/`locale`/`text`). A new `message` coverage kind declares every
+  shipped catalog by its language tag and counts it covered when a messages case reads it,
+  gated via `coverage.thresholds.kinds.message`. Lint checks the catalogs statically:
+  malformed files or non-BCP-47 names raise `TQL-YAML-1007`, a declared locale without a
+  catalog warns `TQL-YAML-1103`, translation gaps against the default locale warn
+  `TQL-YAML-1008`, and a validation-rule or constraint-mapping message key with no
+  default-locale text warns `TQL-FIELD-2005`.
 - A `document` coverage kind (roadmap Phase 21) declares every route exporting a printable
   document (`format: pdf`) and counts it covered when a suite case exercises one of its SQL
   artifacts, gated via `coverage.thresholds.kinds.document`. Lint checks pdf exports

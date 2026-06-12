@@ -98,5 +98,7 @@ shape is in [declarative-validation.md](declarative-validation.md); conflict hin
   slot created for them; unknown fields stay in the alert summary.
 - When the alert renders away from its form (an out-of-band swap), point it at the form
   with a selector: `data-hc-field-errors="#member-form"`.
-- `data-message-key` resolves through the kit's message catalog; until per-app catalogs
-  arrive (roadmap Phase 22), the item text — `field: code` — is the display fallback.
+- The item text arrives server-localized per the request locale, and `data-message-key`
+  still rides along: the kit's catalog — loaded by the shell from
+  `/assets/_tesseraql/messages.js?locale=<tag>` before the behaviors install — can
+  re-resolve it client-side (see [internationalization.md](internationalization.md)).
