@@ -1,0 +1,60 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <parent>
+    <groupId>io.tesseraql</groupId>
+    <artifactId>tesseraql-parent</artifactId>
+    <version>0.2.0-SNAPSHOT</version>
+    <relativePath>../pom.xml</relativePath>
+  </parent>
+
+  <artifactId>tesseraql-pdf</artifactId>
+  <name>Tesseraql PDF</name>
+  <description>Optional printable-documents (pdf) codec for query-export/file-export (roadmap
+    Phase 21): Thymeleaf-rendered HTML templates with page-oriented CSS and embedded CJK
+    fonts, deterministic output, and both engine stacks - openhtmltopdf and plain Apache
+    PDFBox - prototyped behind the module's PdfEngine SPI until the license-policy decision
+    (design ch. 50). Putting this jar on the classpath is the whole install (ServiceLoader,
+    design ch. 28, 47).</description>
+
+  <dependencies>
+    <dependency>
+      <groupId>io.tesseraql</groupId>
+      <artifactId>tesseraql-core</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+    <!-- Print templates render through the standard template engine (design ch. 12). -->
+    <dependency>
+      <groupId>org.thymeleaf</groupId>
+      <artifactId>thymeleaf</artifactId>
+    </dependency>
+    <!-- HTML+CSS engine prototype (LGPL; license decision pending, design ch. 50). -->
+    <dependency>
+      <groupId>io.github.openhtmltopdf</groupId>
+      <artifactId>openhtmltopdf-pdfbox</artifactId>
+    </dependency>
+    <!-- openhtmltopdf logs through its own XRLog; route it into slf4j. -->
+    <dependency>
+      <groupId>io.github.openhtmltopdf</groupId>
+      <artifactId>openhtmltopdf-slf4j</artifactId>
+    </dependency>
+    <!-- Apache-2.0 engine prototype, font-name reading, and deterministic post-processing. -->
+    <dependency>
+      <groupId>org.apache.pdfbox</groupId>
+      <artifactId>pdfbox</artifactId>
+    </dependency>
+
+    <dependency>
+      <groupId>org.junit.jupiter</groupId>
+      <artifactId>junit-jupiter</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.assertj</groupId>
+      <artifactId>assertj-core</artifactId>
+      <scope>test</scope>
+    </dependency>
+  </dependencies>
+</project>

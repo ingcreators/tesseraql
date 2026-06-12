@@ -278,4 +278,33 @@ class ManifestCoverageTest {
         assertThat(ManifestCoverage.scim(manifest, List.of()).declared())
                 .containsExactlyInAnyOrder("groups.create");
     }
+
+    private static final String PDF_EXPORT_ROUTE = """
+            version: tesseraql/v1
+            id: users.print
+            kind: route
+            recipe: query-export
+            sql:
+              file: print.sql
+            export:
+              format: pdf
+              template: print.html
+            """;
+
+    @Test
+    void documentCoverageDeclaresPdfExportRoutesAndCoversThemThroughTheirSql() {
+        AppManifest manifest = manifest(Map.of(),
+                route("web/api/users/print/get.yml", PDF_EXPORT_ROUTE),
+                route("web/api/users/get.yml", SEARCH_ROUTE));
+
+        ItemCoverage covered = ManifestCoverage.document(manifest,
+                List.of(sqlSuite("web/api/users/print/print.sql")));
+        ItemCoverage none = ManifestCoverage.document(manifest, List.of());
+
+        assertThat(covered.kind()).isEqualTo("document");
+        // Only the pdf export declares a document; the plain query route does not.
+        assertThat(covered.declared()).containsExactly("users.print");
+        assertThat(covered.covered()).containsExactly("users.print");
+        assertThat(none.covered()).isEmpty();
+    }
 }

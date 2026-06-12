@@ -1,0 +1,22 @@
+version: tesseraql/v1
+id: users.print
+kind: route
+recipe: query-export
+
+security:
+  auth: bearer
+  policy: users.read
+
+sql:
+  file: print.sql
+
+# Printable user list (roadmap Phase 21): the colocated XHTML template renders through the
+# standard template engine and converts to PDF with page-oriented CSS; the app home's fonts/
+# directory embeds the CJK font the template names.
+export:
+  format: pdf
+  filename: users.pdf
+  template: print.html
+  columns:
+    - { name: name,   header: 氏名 }
+    - { name: status, header: 状態 }

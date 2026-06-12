@@ -21,6 +21,15 @@ tests:
     expect:
       rowCount: 1
 
+  - name: the printable user list extraction returns sato
+    sql:
+      file: web/api/users/print/print.sql
+    params: {}
+    expect:
+      rowCount: 1
+      rows:
+        - name: sato
+
   - name: admin user resolves the USER_READ role
     contract: identity.find-roles-by-user-id
     params:

@@ -392,4 +392,59 @@ class AppLinterTest {
         assertThat(new AppLinter().lint(dir))
                 .noneMatch(f -> f.code().equals("TQL-TENANT-3001"));
     }
+
+    @Test
+    void lintsPdfExportDeclarations(@TempDir Path dir) throws Exception {
+        Files.createDirectories(dir.resolve("config"));
+        Files.writeString(dir.resolve("config/tesseraql.yml"), "tesseraql:\n  app:\n    name: t\n");
+        Files.createDirectories(dir.resolve("web/api/users/print"));
+        Files.writeString(dir.resolve("web/api/users/print/print.sql"), "select 1\n");
+        Files.writeString(dir.resolve("web/api/users/print/get.yml"), """
+                version: tesseraql/v1
+                id: users.print
+                kind: route
+                recipe: query-export
+                sql:
+                  file: print.sql
+                export:
+                  format: pdf
+                  sheet: data
+                  template: print.xlsx
+                """);
+
+        List<LintFinding> findings = new AppLinter().lint(dir);
+
+        // sheet: is a workbook option; the template must be .html.
+        assertThat(findings).anyMatch(f -> f.code().equals("TQL-YAML-1005") && f.isError());
+        assertThat(findings).anyMatch(f -> f.code().equals("TQL-YAML-1006") && f.isError());
+    }
+
+    @Test
+    void aMissingPdfTemplateIsAnErrorAndACleanPdfExportPasses(@TempDir Path dir) throws Exception {
+        Files.createDirectories(dir.resolve("config"));
+        Files.writeString(dir.resolve("config/tesseraql.yml"), "tesseraql:\n  app:\n    name: t\n");
+        Files.createDirectories(dir.resolve("web/api/users/print"));
+        Files.writeString(dir.resolve("web/api/users/print/print.sql"), "select 1\n");
+        Files.writeString(dir.resolve("web/api/users/print/get.yml"), """
+                version: tesseraql/v1
+                id: users.print
+                kind: route
+                recipe: query-export
+                sql:
+                  file: print.sql
+                export:
+                  format: pdf
+                  template: print.html
+                """);
+
+        assertThat(new AppLinter().lint(dir))
+                .anyMatch(f -> f.code().equals("TQL-YAML-1006") && f.isError());
+
+        Files.writeString(dir.resolve("web/api/users/print/print.html"),
+                "<html><body>ok</body></html>\n");
+
+        assertThat(new AppLinter().lint(dir))
+                .noneMatch(f -> f.code().startsWith("TQL-YAML-100")
+                        && (f.code().endsWith("5") || f.code().endsWith("6")));
+    }
 }

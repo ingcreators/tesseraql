@@ -28,6 +28,8 @@ db/<datasource>/migration[-<vendor>]/
                         tesseraql.datasources.<datasource> with its own history table
                         (tql_schema_history_<app>__<datasource>)
 templates/              shared templates only: app-wide fragments and layouts
+fonts/                  embeddable fonts (*.ttf / *.otf) for printable documents; the pdf
+                        codec registers each under the family name in the font itself
 assets/                 static files, served at /assets/** (mounted apps at /assets/<app>/**)
 security/               identity contract SQL (sql realms), key material paths
 governance/             approvals.yml - the route review ledger (route id + approved source
@@ -53,7 +55,9 @@ Distinctions are URL conventions, not folder rules:
 - `file-import` / `file-export` routes own their subtree: the route URL starts the asynchronous
   transfer (the uploaded file is the request body), `{path}/{transferId}` reports its state and
   `{path}/{transferId}/file` downloads a completed export. Formats: `csv` built in, `excel`
-  (jxls report templates colocated with the route) via the optional `tesseraql-excel` module.
+  (jxls report templates colocated with the route) via the optional `tesseraql-excel` module,
+  `pdf` (XHTML print templates colocated with the route, see
+  [printable-documents.md](printable-documents.md)) via the optional `tesseraql-pdf` module.
 - `query-export` is the synchronous sibling: the response streams the file directly, through
   the same `export:` block (format, columns, headers, locale/timezone formats, templates) and
   the same codecs. Its query stays in the route's `sql:` block; `after:` follow-up statements
