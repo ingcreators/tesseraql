@@ -37,7 +37,7 @@
 <th:block th:fragment="page(title, header, content)"
           th:replace="~{tql/shell :: shell(${title}, ~{tql/shell :: system-nav}, ${header}, ${content})}"/>
 <th:block th:fragment="system-nav">
-  <a href="/_tesseraql/ops/console">Operations</a>
-  <a href="/_tesseraql/studio/ui">Studio</a>
-  <a href="/_tesseraql/admin/users">IAM Admin</a>
+  <a class="hc-item" href="/_tesseraql/ops/console">Operations</a>
+  <a class="hc-item" href="/_tesseraql/studio/ui">Studio</a>
+  <a class="hc-item" href="/_tesseraql/admin/users">IAM Admin</a>
 </th:block>

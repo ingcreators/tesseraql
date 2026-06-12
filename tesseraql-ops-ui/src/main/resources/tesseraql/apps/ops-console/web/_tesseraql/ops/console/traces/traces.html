@@ -2,20 +2,24 @@
 <html xmlns:th="http://www.thymeleaf.org"
       th:replace="~{tql/shell :: page('Traces', ~{:: #page-header}, ~{:: #page-content})}">
 <th:block id="page-header">
-  <a class="back" href="/_tesseraql/ops/console">&larr; console</a>
+  <span class="hc-spacer"></span>
+  <div class="hc-cluster">
+    <a class="hc-button" data-variant="ghost" data-size="sm" href="/_tesseraql/ops/console">&larr; console</a>
+  </div>
 </th:block>
-<div id="page-content">
+<div id="page-content" class="hc-stack">
 <section class="hc-card">
-  <p class="empty" th:unless="${traces.hasSpans}">No traces retained.</p>
+  <div class="hc-empty" th:unless="${traces.hasSpans}"><p class="hc-empty__title">No traces retained.</p></div>
   <table class="hc-table" th:if="${traces.hasSpans}">
     <thead><tr><th>Span</th><th>App</th><th>Total (ms)</th><th>Self (ms)</th><th></th></tr></thead>
     <tbody>
-      <tr th:each="s : ${traces.spans}" th:classappend="${s.slow} ? 'slow'">
-        <td th:style="'padding-left:' + ${s.indentPx} + 'px'"><span class="span-name" th:text="${s.name}"></span></td>
+      <tr th:each="s : ${traces.spans}">
+        <td th:style="'padding-left:' + ${s.indentPx} + 'px'"><strong th:classappend="${s.slow} ? 'hc-status'"
+            th:attr="data-variant=${s.slow ? 'error' : null}" th:text="${s.name}"></strong></td>
         <td th:text="${s.app}"></td>
         <td th:text="${s.totalMs}"></td>
         <td th:text="${s.selfMs}"></td>
-        <td><span class="span-error" th:if="${s.error}">error</span></td>
+        <td><span class="hc-badge" data-variant="error" th:if="${s.error}">error</span></td>
       </tr>
     </tbody>
   </table>

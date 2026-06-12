@@ -2,13 +2,16 @@
 <html xmlns:th="http://www.thymeleaf.org"
       th:replace="~{tql/shell :: page('File Transfers', ~{:: #page-header}, ~{:: #page-content})}">
 <th:block id="page-header">
-  <a class="back" href="/_tesseraql/ops/console">&larr; console</a>
+  <span class="hc-spacer"></span>
+  <div class="hc-cluster">
+    <a class="hc-button" data-variant="ghost" data-size="sm" href="/_tesseraql/ops/console">&larr; console</a>
+  </div>
 </th:block>
-<div id="page-content" hx-get="/_tesseraql/ops/console/transfers" hx-trigger="every 15s"
+<div id="page-content" class="hc-stack" hx-get="/_tesseraql/ops/console/transfers" hx-trigger="every 15s"
      hx-select="#page-content" hx-target="this" hx-swap="outerHTML">
 <section class="hc-card">
   <h2>File transfers</h2>
-  <p class="empty" th:unless="${transfers.hasRows}">No file transfers recorded.</p>
+  <div class="hc-empty" th:unless="${transfers.hasRows}"><p class="hc-empty__title">No file transfers recorded.</p></div>
   <table class="hc-table" th:if="${transfers.hasRows}">
     <thead><tr><th>Transfer</th><th>Route</th><th>App</th><th>Direction</th><th>Format</th><th>Status</th><th>Rows</th><th>File</th><th>Downloaded</th><th>Started</th></tr></thead>
     <tbody>
@@ -18,7 +21,7 @@
         <td th:text="${t.app}"></td>
         <td th:text="${t.direction}"></td>
         <td th:text="${t.format}"></td>
-        <td th:class="${t.statusClass}" th:text="${t.status}"></td>
+        <td class="hc-status" th:attr="data-variant=${t.statusVariant}" th:text="${t.status}"></td>
         <td th:text="${t.rows}"></td>
         <td th:text="${t.filename}"></td>
         <td th:text="${t.downloaded}"></td>

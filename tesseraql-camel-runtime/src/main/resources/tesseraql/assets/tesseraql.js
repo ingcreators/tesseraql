@@ -17,3 +17,14 @@ document.body.addEventListener("htmx:beforeSwap", (event) => {
         event.detail.isError = false;
     }
 });
+
+// Mark the current sidebar nav item; aria-current="page" drives the hc-item selected
+// style. The longest matching path prefix wins so a section link stays current on its
+// subpages (full page loads only — the sidebar sits outside every htmx swap target).
+const here = location.pathname;
+const current = Array.from(document.querySelectorAll(".hc-shell__sidebar a[href]"))
+    .filter((a) => here === a.pathname || here.startsWith(a.pathname + "/"))
+    .sort((a, b) => b.pathname.length - a.pathname.length)[0];
+if (current) {
+    current.setAttribute("aria-current", "page");
+}

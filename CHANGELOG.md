@@ -76,6 +76,13 @@ All notable changes to TesseraQL are documented here. The format follows
   map to field-level error payloads, rendered as JSON or as an inline `hc-alert` fragment
   for htmx requests. Outbox commands now classify constraint failures like the standard
   pipeline (a NOT NULL violation answers 400, not 500).
+- System apps recomposed on Hypermedia Components 0.1.0 primitives: `hc-field` form stanzas
+  (label association, automatic required marks), a single status→variant mapping rendered
+  through `hc-status`/`data-fill` (the `status-*` classes and their hand-kept dark-theme
+  overrides are gone), `hc-empty` empty states, `hc-chips`/`hc-badge` counters, the `kv`
+  table variant, `hc-item` sidebar navigation with an `aria-current` marker set by the
+  bootstrap, and `hc-spacer`/`hc-cluster` page headers. The app stylesheet shrinks from
+  40 lines to the card heading scale and the Studio source editor.
 - Document-number sequences as a managed SQL contract (`sequence:` steps backed by
   `tql_doc_sequence`, V2 framework migration): gapless allocation under the sequence row's
   lock, riding the command transaction.

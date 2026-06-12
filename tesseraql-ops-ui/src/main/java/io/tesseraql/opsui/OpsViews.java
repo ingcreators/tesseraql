@@ -16,7 +16,7 @@ import java.util.Map;
 
 /**
  * Template-ready views over the operations dashboard (design ch. 26.11, 47): pure mappings from the
- * dashboard records to plain maps, lists and scalars with display fields (status classes, indents,
+ * dashboard records to plain maps, lists and scalars with display fields (status variants, indents,
  * flags) precomputed, served to the bundled ops-console app through the {@code ops.*} service
  * providers.
  */
@@ -58,7 +58,7 @@ public final class OpsViews {
             row.put("direction", transfer.direction());
             row.put("format", transfer.format());
             row.put("status", dash(transfer.status()));
-            row.put("statusClass", cssClass(transfer.status()));
+            row.put("statusVariant", variant(transfer.status()));
             row.put("rows", transfer.rows());
             row.put("filename", dash(transfer.filename()));
             row.put("downloaded", transfer.downloaded() ? "yes" : "-");
@@ -89,7 +89,7 @@ public final class OpsViews {
             row.put("source", dash(event.aggregateId()));
             row.put("app", dash(event.appName()));
             row.put("status", dash(event.status()));
-            row.put("statusClass", cssClass(event.status()));
+            row.put("statusVariant", variant(event.status()));
             row.put("attempts", event.attempts());
             row.put("lastError", dash(event.lastError()));
             row.put("dead", "DEAD".equals(event.status()));
@@ -129,7 +129,7 @@ public final class OpsViews {
         model.put("jobId", execution.jobId());
         model.put("app", dash(execution.appName()));
         model.put("status", name(execution.status()));
-        model.put("statusClass", cssClass(name(execution.status())));
+        model.put("statusVariant", variant(name(execution.status())));
         model.put("trigger", dash(execution.triggerType()));
         model.put("startTime",
                 execution.startTime() == null ? "-" : execution.startTime().toString());
@@ -143,7 +143,7 @@ public final class OpsViews {
             Map<String, Object> row = new LinkedHashMap<>();
             row.put("stepId", step.stepId());
             row.put("status", name(step.status()));
-            row.put("statusClass", cssClass(name(step.status())));
+            row.put("statusVariant", variant(name(step.status())));
             row.put("failed", step.status() != null && "FAILED".equals(step.status().name()));
             row.put("affectedRows", step.affectedRows() == null
                     ? "-"
@@ -187,7 +187,7 @@ public final class OpsViews {
     private static List<Map<String, Object>> byStatus(Map<String, Integer> byStatus) {
         List<Map<String, Object>> rows = new ArrayList<>();
         byStatus.forEach((status, count) -> rows.add(Map.of(
-                "status", status, "count", count, "statusClass", cssClass(status))));
+                "status", status, "count", count, "statusVariant", variant(status))));
         return rows;
     }
 
@@ -199,7 +199,7 @@ public final class OpsViews {
             row.put("jobId", dash(view.jobId()));
             row.put("app", dash(view.app()));
             row.put("status", dash(view.status()));
-            row.put("statusClass", cssClass(view.status()));
+            row.put("statusVariant", variant(view.status()));
             row.put("trigger", dash(view.trigger()));
             row.put("startTime", dash(view.startTime()));
             row.put("durationMs",
@@ -248,8 +248,18 @@ public final class OpsViews {
         return value == null ? "-" : value.name();
     }
 
-    private static String cssClass(String status) {
-        return status == null ? "" : "status-" + status.toLowerCase(java.util.Locale.ROOT);
+    /** Maps an execution/delivery status onto the kit's semantic status variants. */
+    private static String variant(String status) {
+        if (status == null) {
+            return "neutral";
+        }
+        return switch (status.toUpperCase(java.util.Locale.ROOT)) {
+            case "COMPLETED", "SENT", "ACTIVE" -> "success";
+            case "FAILED", "DEAD" -> "error";
+            case "RUNNING", "SENDING", "PENDING" -> "info";
+            case "STOPPED" -> "warning";
+            default -> "neutral";
+        };
     }
 
     private static String dash(String value) {

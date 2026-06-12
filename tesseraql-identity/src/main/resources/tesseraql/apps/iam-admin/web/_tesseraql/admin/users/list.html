@@ -2,11 +2,12 @@
 <html xmlns:th="http://www.thymeleaf.org"
       th:replace="~{tql/shell :: page('IAM Admin · Users', ~{:: #page-header}, ~{:: #page-content})}">
 <th:block id="page-header">
+  <span class="hc-spacer"></span>
   <span class="hc-badge" th:each="t : ${total}">[[${t.count}]] total</span>
 </th:block>
-<div id="page-content">
+<div id="page-content" class="hc-stack">
 <section class="hc-card">
-  <p class="empty" th:if="${#lists.isEmpty(users)}">No users found.</p>
+  <div class="hc-empty" th:if="${#lists.isEmpty(users)}"><p class="hc-empty__title">No users found.</p></div>
   <table class="hc-table">
     <thead><tr><th>Login</th><th>Display name</th><th>Email</th><th>Status</th><th>Tenant</th></tr></thead>
     <tbody>
@@ -14,7 +15,7 @@
         <td><a th:href="|/_tesseraql/admin/users/${u.user_id}|" th:text="${u.login_id}"></a></td>
         <td th:text="${u.display_name}"></td>
         <td th:text="${u.email}"></td>
-        <td th:class="'status-' + ${#strings.toLowerCase(u.status)}" th:text="${u.status}"></td>
+        <td class="hc-status" th:attr="data-variant=${u.status == 'ACTIVE' ? 'success' : 'error'}" th:text="${u.status}"></td>
         <td th:text="${u.tenant_id}"></td>
       </tr>
     </tbody>

@@ -2,16 +2,20 @@
 <html xmlns:th="http://www.thymeleaf.org"
       th:replace="~{tql/shell :: page('Outbox Deliveries', ~{:: #page-header}, ~{:: #page-content})}">
 <th:block id="page-header">
-  <a class="back" href="/_tesseraql/ops/console">&larr; console</a>
+  <span class="hc-spacer"></span>
+  <div class="hc-cluster">
+    <a class="hc-button" data-variant="ghost" data-size="sm" href="/_tesseraql/ops/console">&larr; console</a>
+  </div>
 </th:block>
-<div id="page-content" hx-get="/_tesseraql/ops/console/outbox" hx-trigger="every 15s"
+<div id="page-content" class="hc-stack" hx-get="/_tesseraql/ops/console/outbox" hx-trigger="every 15s"
      hx-select="#page-content" hx-target="this" hx-swap="outerHTML">
 <section class="hc-card">
   <h2>Outbox deliveries</h2>
-  <ul class="chips">
-    <li th:each="s : ${outbox.byStatus}" th:class="'chip ' + ${s.statusClass}">[[${s.status}]]: [[${s.count}]]</li>
+  <ul class="hc-chips">
+    <li th:each="s : ${outbox.byStatus}" class="hc-badge"
+        th:attr="data-variant=${s.statusVariant}">[[${s.status}]]: [[${s.count}]]</li>
   </ul>
-  <p class="empty" th:unless="${outbox.hasRows}">No outbox events recorded.</p>
+  <div class="hc-empty" th:unless="${outbox.hasRows}"><p class="hc-empty__title">No outbox events recorded.</p></div>
   <table class="hc-table" th:if="${outbox.hasRows}">
     <thead><tr><th>Event</th><th>Type</th><th>Source</th><th>App</th><th>Status</th><th>Attempts</th><th>Last error</th><th>Created</th><th>Sent</th></tr></thead>
     <tbody>
@@ -20,7 +24,7 @@
         <td th:text="${e.type}"></td>
         <td th:text="${e.source}"></td>
         <td th:text="${e.app}"></td>
-        <td th:class="${e.statusClass}" th:text="${e.status}"></td>
+        <td class="hc-status" th:attr="data-variant=${e.statusVariant}" th:text="${e.status}"></td>
         <td th:text="${e.attempts}"></td>
         <td th:text="${e.lastError}"></td>
         <td th:text="${e.createdAt}"></td>
@@ -28,7 +32,7 @@
       </tr>
     </tbody>
   </table>
-  <p class="hint">Dead-lettered events can be requeued with
+  <p class="hc-field__message">Dead-lettered events can be requeued with
     <code>POST /_tesseraql/ops/outbox/&lt;event-id&gt;/redeliver</code>.</p>
 </section>
 </div>
