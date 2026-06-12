@@ -8,10 +8,9 @@ import java.util.List;
 import java.util.ServiceLoader;
 
 /**
- * Engine selection (roadmap Phase 21): both prototype stacks register through
- * {@link ServiceLoader}; the {@code tesseraql.pdf.engine} system property picks one per
- * deployment - a license-policy call (design ch. 50), not a per-route option. The default is
- * {@code openhtml}, the full page-oriented-CSS stack.
+ * Engine selection (roadmap Phase 21): engines register through {@link ServiceLoader} and the
+ * {@code tesseraql.pdf.engine} system property picks one per deployment - a packaging call,
+ * not a per-route option. The default (and the adopted ch. 50 engine) is {@code openhtml}.
  */
 final class PdfEngines {
 

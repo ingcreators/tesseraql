@@ -275,10 +275,10 @@
         <artifactId>fastexcel-reader</artifactId>
         <version>${fastexcel.version}</version>
       </dependency>
-      <!-- Printable documents (roadmap Phase 21): the pdf codec prototypes both engine stacks
-           behind its engine SPI - openhtmltopdf (LGPL) and a plain Apache PDFBox renderer
-           (Apache-2.0) - until the license-policy decision (design ch. 50) picks one. PDFBox is
-           pinned to the version openhtmltopdf is built against. -->
+      <!-- Printable documents (roadmap Phase 21): the optional pdf codec renders through
+           openhtmltopdf (LGPL; adopted at the ch. 50 decision point - the dependency stays
+           confined to the opt-in tesseraql-pdf module). PDFBox is pinned to the version
+           openhtmltopdf is built against. -->
       <dependency>
         <groupId>io.github.openhtmltopdf</groupId>
         <artifactId>openhtmltopdf-pdfbox</artifactId>

@@ -6,8 +6,8 @@ import com.openhtmltopdf.util.XRLog;
 import java.io.OutputStream;
 
 /**
- * The openhtmltopdf engine prototype (roadmap Phase 21; LGPL, license decision pending, design
- * ch. 50): full page-oriented CSS - {@code @page} size and margins, margin boxes with
+ * The openhtmltopdf engine (roadmap Phase 21; LGPL, adopted at the ch. 50 decision point):
+ * full page-oriented CSS - {@code @page} size and margins, margin boxes with
  * {@code counter(page)}/{@code counter(pages)}, running headers and footers - rendering through
  * PDFBox. Fonts register under their family names so a template's {@code font-family} works for
  * CJK text, and resource resolution stays confined to the app resource root.

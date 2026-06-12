@@ -258,7 +258,9 @@ Invariants every phase must keep:
 None block Phase 18; flagged for the maintainer as their horizons approach.
 
 1. **PDF engine** (Phase 21): openhtmltopdf (LGPL) vs Apache PDFBox stack (Apache-2.0) —
-   a license-policy call. Proposal: prototype both behind the codec SPI.
+   a license-policy call. Resolved 2026-06-12: both were prototyped behind the codec's engine
+   SPI and openhtmltopdf was adopted (full page-oriented CSS; the LGPL dependency stays
+   confined to the opt-in `tesseraql-pdf` module). The SPI remains the seam for replacing it.
 2. **Workflow engine** (Phase 28): native SQL-contract implementation (proposed — fits the
    philosophy, adds no runtime dependency) vs embedding an external engine.
 3. **Adoption timing**: Maven Central and the docs site sit in Horizon 6; pull them forward
