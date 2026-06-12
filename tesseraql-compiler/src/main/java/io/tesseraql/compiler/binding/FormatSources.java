@@ -24,6 +24,11 @@ final class FormatSources {
         if (declaration == null || !isSourceExpression(declaration)) {
             return declaration;
         }
+        // The negotiated request locale (roadmap Phase 22) lives in an exchange property, so it
+        // resolves even on routes without a request binder (file-import).
+        if ("request.locale".equals(declaration)) {
+            return exchange.getProperty(TesseraqlProperties.LOCALE, String.class);
+        }
         Map<String, Object> context = exchange.getProperty(
                 TesseraqlProperties.CONTEXT, Map.class);
         Object principal = exchange.getProperty(TesseraqlProperties.PRINCIPAL);
@@ -48,6 +53,6 @@ final class FormatSources {
     }
 
     private static boolean isSourceExpression(String declaration) {
-        return declaration.matches("(principal|query|body|params)\\..+");
+        return declaration.matches("(principal|query|body|params|request)\\..+");
     }
 }

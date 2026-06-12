@@ -13,6 +13,8 @@ public final class TesseraqlProperties {
     public static final String SQL_PARAMS = "TesseraqlSqlParams";
     public static final String PRINCIPAL = "TesseraqlPrincipal";
     public static final String TENANT = "TesseraqlTenant";
+    /** The resolved request locale as a BCP-47 language tag (roadmap Phase 22). */
+    public static final String LOCALE = "TesseraqlLocale";
     public static final String ROUTE_SPAN = "TesseraqlRouteSpan";
     public static final String TRACE_CONTEXT = "TesseraqlTraceContext";
     /** The {@code FileCodec} a {@code query-export} route encodes its result with (ch. 28.10). */

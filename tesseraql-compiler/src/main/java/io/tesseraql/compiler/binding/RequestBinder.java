@@ -78,6 +78,11 @@ public final class RequestBinder implements Processor {
         context.put("path", path);
         context.put("principal", exchange.getProperty(TesseraqlProperties.PRINCIPAL));
         context.put("tenant", exchange.getProperty(TesseraqlProperties.TENANT));
+        // The negotiated request locale (roadmap Phase 22), resolvable as request.locale.
+        String locale = exchange.getProperty(TesseraqlProperties.LOCALE, String.class);
+        if (locale != null) {
+            context.put("request", Map.of("locale", locale));
+        }
 
         exchange.setProperty(TesseraqlProperties.CONTEXT, context);
         exchange.setProperty(TesseraqlProperties.SQL_PARAMS, resolveSqlParams(context));

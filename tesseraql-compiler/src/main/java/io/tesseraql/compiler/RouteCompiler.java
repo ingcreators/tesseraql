@@ -43,6 +43,7 @@ public final class RouteCompiler {
 
     private AppConfig config;
     private io.tesseraql.compiler.binding.TenancySettings tenancy;
+    private io.tesseraql.compiler.binding.I18nSettings i18n;
     private boolean mountRest = true;
     private String appName;
 
@@ -71,6 +72,7 @@ public final class RouteCompiler {
             java.util.Set<String> onlyRouteIds) {
         this.config = manifest.config();
         this.tenancy = io.tesseraql.compiler.binding.TenancySettings.from(config);
+        this.i18n = io.tesseraql.compiler.binding.I18nSettings.from(config, manifest.appHome());
         this.mountRest = mountRest;
         if (this.appName == null) {
             this.appName = config.getString("tesseraql.app.name").orElse("app");
@@ -169,6 +171,7 @@ public final class RouteCompiler {
         applyLane(route, definition);
         applySecurity(route, definition.security());
         applyTenancy(route);
+        applyI18n(route);
         applyIdempotencyBegin(route, definition);
         ProcessorDefinition<?> step = route
                 .process(new RequestBinder(definition, pathParams(routeFile.urlPath())))
@@ -229,6 +232,7 @@ public final class RouteCompiler {
         applyLane(route, definition);
         applySecurity(route, definition.security());
         applyTenancy(route);
+        applyI18n(route);
         route.process(new RequestBinder(definition, pathParams(routeFile.urlPath())))
                 .process(new io.tesseraql.compiler.binding.QueryExportBinder(codec, writeSpec,
                         formatDeclaration(spec == null ? null : spec.locale(),
@@ -255,6 +259,7 @@ public final class RouteCompiler {
         ProcessorDefinition<?> route = builder.from(direct).routeId(routeId);
         applyTelemetry(route, routeFile);
         applySecurity(route, definition.security());
+        applyI18n(route);
         route.process(new io.tesseraql.compiler.binding.FileImportProcessor(
                 routeId, routeFile.urlPath(), appName, spec.format(),
                 spec.toReadSpec(), formatDeclaration(spec.locale(), "tesseraql.files.locale"),
@@ -288,6 +293,7 @@ public final class RouteCompiler {
         ProcessorDefinition<?> route = builder.from(direct).routeId(routeId);
         applyTelemetry(route, routeFile);
         applySecurity(route, definition.security());
+        applyI18n(route);
         route.process(new RequestBinder(definition, pathParams(routeFile.urlPath())))
                 .process(new io.tesseraql.compiler.binding.FileExportStartProcessor(
                         routeId, routeFile.urlPath(), appName, spec.format(),
@@ -372,6 +378,7 @@ public final class RouteCompiler {
         applyLane(route, definition);
         applySecurity(route, definition.security());
         applyTenancy(route);
+        applyI18n(route);
         applyIdempotencyBegin(route, definition);
         ProcessorDefinition<?> step = route
                 .process(new RequestBinder(definition, pathParams(routeFile.urlPath())));
@@ -455,6 +462,11 @@ public final class RouteCompiler {
         if (tenancy.enabled()) {
             route.process(new io.tesseraql.compiler.binding.TenantResolution(tenancy));
         }
+    }
+
+    /** Resolves the request locale after authentication, before binding (roadmap Phase 22). */
+    private void applyI18n(ProcessorDefinition<?> route) {
+        route.process(new io.tesseraql.compiler.binding.LocaleResolution(i18n));
     }
 
     /** Inserts per-route rate limit and concurrency guards when declared (design ch. 36.1). */
