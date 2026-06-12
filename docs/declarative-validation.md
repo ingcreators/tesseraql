@@ -160,7 +160,7 @@ SQL rules run against the test database and record line/branch coverage like SQL
 Every rule of every route's `validate:` block is declared as `<routeId>.<ruleId>`; a
 validation case covers the rules it evaluates (the targeted rule, or the route's whole block
 when no `rule:` is named). Gaps surface in the coverage report and as SARIF findings, and a
-`coverage.thresholds.kinds.validation` threshold gates the build like any other kind.
+`coverage.thresholds.validation` threshold gates the build like any other kind.
 
 ## Lint
 

@@ -140,7 +140,7 @@ public final class ManifestCoverage {
      * Message coverage (roadmap Phase 22): every {@code messages/<locale>.yml} catalog the app
      * ships is declared by its language tag, and a suite's messages case covers the catalogs its
      * locale resolves through — the exact tag and its bare language — when it asserts on the
-     * texts. Gated via {@code coverage.thresholds.kinds.message}.
+     * texts. Gated via {@code coverage.thresholds.message}.
      */
     public static ItemCoverage message(AppManifest manifest, List<TestSuite> suites) {
         ItemCoverage coverage = new ItemCoverage("message");

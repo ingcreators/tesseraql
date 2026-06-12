@@ -118,14 +118,14 @@ All notable changes to TesseraQL are documented here. The format follows
   app's message catalogs (exact tag, then bare language, like the runtime) and asserts on
   the texts as rows (`key`/`locale`/`text`). A new `message` coverage kind declares every
   shipped catalog by its language tag and counts it covered when a messages case reads it,
-  gated via `coverage.thresholds.kinds.message`. Lint checks the catalogs statically:
+  gated via `coverage.thresholds.message`. Lint checks the catalogs statically:
   malformed files or non-BCP-47 names raise `TQL-YAML-1007`, a declared locale without a
   catalog warns `TQL-YAML-1103`, translation gaps against the default locale warn
   `TQL-YAML-1008`, and a validation-rule or constraint-mapping message key with no
   default-locale text warns `TQL-FIELD-2005`.
 - A `document` coverage kind (roadmap Phase 21) declares every route exporting a printable
   document (`format: pdf`) and counts it covered when a suite case exercises one of its SQL
-  artifacts, gated via `coverage.thresholds.kinds.document`. Lint checks pdf exports
+  artifacts, gated via `coverage.thresholds.document`. Lint checks pdf exports
   statically: workbook-only options raise `TQL-YAML-1005`, a non-`.html` or missing template
   raises `TQL-YAML-1006`.
 - Declarative suites gain `notify:` cases (roadmap Phase 20): a case evaluates a route's
@@ -133,13 +133,13 @@ All notable changes to TesseraQL are documented here. The format follows
   expressions run exactly as at runtime — and asserts on the fired notifications as rows,
   without touching SMTP or HTTP. A new `notification` coverage kind declares every route
   notification as `<routeId>.<notifyId>` and every job notify step as `<jobId>.<stepId>`,
-  gated via `coverage.thresholds.kinds.notification`. Lint checks the declarations
+  gated via `coverage.thresholds.notification`. Lint checks the declarations
   statically (`TQL-YAML-1004`, `TQL-FIELD-2004`, `TQL-SQL-2101`, `TQL-YAML-1102`).
 - Declarative suites gain `validate:` cases (roadmap Phase 19): a case evaluates a route's
   validation rules — SQL rules against the test database, expression rules against the
   case's params — and asserts on the violations as rows, recording SQL coverage along the
   way. A new `validation` coverage kind declares every rule as `<routeId>.<ruleId>`, tracks
-  the rules the suites evaluated, and gates via `coverage.thresholds.kinds.validation`.
+  the rules the suites evaluated, and gates via `coverage.thresholds.validation`.
 
 ## 0.1.0 - 2026-06-11
 

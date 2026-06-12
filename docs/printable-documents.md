@@ -124,7 +124,7 @@ A suite case that exercises the route's extraction SQL proves the data the docum
 
 The `document` coverage kind declares every route exporting a printable document and counts
 it covered when a suite case exercises one of its SQL artifacts; gate it with
-`coverage.thresholds.kinds.document`.
+`coverage.thresholds.document`.
 
 ## Lint
 

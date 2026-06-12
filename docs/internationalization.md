@@ -133,7 +133,7 @@ Declarative suites assert on catalogs directly — one row per key with `key`, `
 ```
 
 A `message` coverage kind declares every shipped catalog by its language tag and counts it
-covered when a messages case reads it, gated via `coverage.thresholds.kinds.message`.
+covered when a messages case reads it, gated via `coverage.thresholds.message`.
 
 Lint checks the catalogs statically when `messages/` exists:
 
