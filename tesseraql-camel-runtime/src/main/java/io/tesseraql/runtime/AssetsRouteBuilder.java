@@ -46,18 +46,24 @@ final class AssetsRouteBuilder extends RouteBuilder {
     private static final String FRAMEWORK_RESOURCES = "tesseraql/assets/";
     private static final String WEBJAR_RESOURCES = "META-INF/resources/webjars/";
 
+    private static final String MESSAGES_MODULE = FRAMEWORK_PREFIX + "/messages.js";
+
     private final Path mainAssets;
     private final Map<String, Path> appAssets;
+    private final ClientMessages clientMessages;
     private final Map<String, String> etags = new ConcurrentHashMap<>();
     private final org.webjars.WebJarVersionLocator webJars = new org.webjars.WebJarVersionLocator();
 
     /**
      * @param mainAssets the main app's assets directory (may not exist)
      * @param appAssets  mounted-app name to its assets directory (existing directories only)
+     * @param clientMessages the per-locale client message catalog module (roadmap Phase 22)
      */
-    AssetsRouteBuilder(Path mainAssets, Map<String, Path> appAssets) {
+    AssetsRouteBuilder(Path mainAssets, Map<String, Path> appAssets,
+            ClientMessages clientMessages) {
         this.mainAssets = mainAssets.toAbsolutePath().normalize();
         this.appAssets = Map.copyOf(appAssets);
+        this.clientMessages = clientMessages;
     }
 
     @Override
@@ -78,18 +84,26 @@ final class AssetsRouteBuilder extends RouteBuilder {
     private void serve(Exchange exchange) throws IOException {
         String path = requestPath(exchange);
         String ifNoneMatch = exchange.getMessage().getHeader("If-None-Match", String.class);
+        // The ?locale= query parameter of the client catalog module (platform-http exposes
+        // query parameters as headers).
+        String locale = exchange.getMessage().getHeader("locale", String.class);
         // Drop the inbound request headers so they are not echoed into the response.
         exchange.getMessage().getHeaders().clear();
         if (path == null || path.isBlank() || !extensionAllowed(path) || hasHiddenSegment(path)) {
             notFound(exchange);
             return;
         }
-        byte[] bytes = resolve(path);
+        boolean messagesModule = MESSAGES_MODULE.equals(path);
+        byte[] bytes = messagesModule ? clientMessages.script(locale) : resolve(path);
         if (bytes == null) {
             notFound(exchange);
             return;
         }
-        String etag = etags.computeIfAbsent(path, key -> "\"" + sha256(bytes) + "\"");
+        // The catalog module varies per locale, so its cache entry keys on the resolved tag.
+        String etagKey = messagesModule
+                ? path + "|" + clientMessages.normalize(locale)
+                : path;
+        String etag = etags.computeIfAbsent(etagKey, key -> "\"" + sha256(bytes) + "\"");
         exchange.getMessage().setHeader("ETag", etag);
         exchange.getMessage().setHeader("Cache-Control", "public, max-age=300");
         exchange.getMessage().setHeader("X-Content-Type-Options", "nosniff");

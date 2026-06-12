@@ -1,0 +1,26 @@
+# Japanese translations of the Hypermedia Components built-in strings (the kit's
+# DEFAULT_MESSAGES), merged into the client catalog served at
+# /assets/_tesseraql/messages.js (roadmap Phase 22). English needs no file: the kit's
+# own defaults apply.
+combobox.empty: 一致する候補はありません
+combobox.loading: 読み込み中…
+combobox.error: 候補を読み込めませんでした
+combobox.create: 「{value}」を作成
+multicombobox.empty: 一致する候補はありません
+multicombobox.create: 「{value}」を追加
+multicombobox.remove: "{label} を削除"
+calendar.label: カレンダー
+calendar.prevMonth: 前の月
+calendar.nextMonth: 次の月
+calendar.month: 月
+calendar.year: 年
+confirm.message: 続行しますか？
+confirm.title: 確認
+confirm.confirm: 確認
+confirm.cancel: キャンセル
+fieldErrors.unknown: 入力値が正しくありません
+shell.toggleNav: ナビゲーションを開閉
+shell.collapseNav: サイドバーを折りたたむ
+splitter.resize: パネルの幅を変更
+themeToggle.label: テーマを切り替え
+toast.label: 通知
