@@ -31,11 +31,14 @@ public record ErrorsSpec(Map<String, ConstraintMapping> constraints) {
     /**
      * A field-level mapping for one database constraint.
      *
-     * @param field the input field the violation is reported against
-     * @param code  a stable application error code (defaults to the violation kind, e.g.
-     *              {@code duplicate} for unique violations)
+     * @param field   the input field the violation is reported against
+     * @param code    a stable application error code (defaults to the violation kind, e.g.
+     *                {@code duplicate} for unique violations)
+     * @param message an optional message key resolved through the app's message catalog
+     *                (roadmap Phase 22); unset, the framework's {@code tql.constraint.<code>}
+     *                texts apply
      */
     @JsonIgnoreProperties(ignoreUnknown = true)
-    public record ConstraintMapping(String field, String code) {
+    public record ConstraintMapping(String field, String code, String message) {
     }
 }

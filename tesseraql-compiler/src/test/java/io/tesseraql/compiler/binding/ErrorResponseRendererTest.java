@@ -91,8 +91,72 @@ class ErrorResponseRendererTest {
                 .contains("\"message\":\"Unprocessable Entity\"")
                 .contains("\"rule\":\"uniqueEmail\"")
                 .contains("\"field\":\"email\"")
-                .contains("\"message\":\"members.email.duplicate\"")
+                // The declared key rides as messageKey (roadmap Phase 22); the human text under
+                // message falls back to the built-in tql.constraint.<code> translation.
+                .contains("\"messageKey\":\"members.email.duplicate\"")
+                .contains("\"message\":\"Already exists.\"")
                 .doesNotContain("internal detail");
+    }
+
+    @Test
+    void localizesFieldErrorsAndStatusPhrasePerRequestLocale() throws Exception {
+        Exchange exchange = exchangeWith(TqlException
+                .builder(new TqlErrorCode(TqlDomain.FIELD, 4220))
+                .details(Map.of("fields", List.of(
+                        Map.of("field", "email", "code", "duplicate",
+                                "message", "members.email.duplicate"))))
+                .build());
+        exchange.setProperty(io.tesseraql.camel.TesseraqlProperties.LOCALE, "ja");
+
+        new ErrorResponseRenderer().process(exchange);
+
+        String body = exchange.getMessage().getBody(String.class);
+        assertThat(body).contains("\"message\":\"入力内容を確認してください\"")
+                .contains("\"message\":\"すでに登録されています。\"")
+                .contains("\"messageKey\":\"members.email.duplicate\"");
+    }
+
+    @Test
+    void appCatalogResolvesDeclaredKeysWithPlaceholders() throws Exception {
+        io.tesseraql.yaml.i18n.MessageCatalog catalog = io.tesseraql.yaml.i18n.MessageCatalog
+                .parse("ja", new java.io.ByteArrayInputStream(
+                        "orders.qty.exceeds: 在庫 {stock} を超えています。\n"
+                                .getBytes(java.nio.charset.StandardCharsets.UTF_8)),
+                        "ja.yml");
+        I18nSettings i18n = new I18nSettings("en", List.of("en", "ja"),
+                List.of("principal.claim.locale"),
+                catalog.withFallback(I18nSettings.builtinCatalog()));
+        Exchange exchange = exchangeWith(TqlException
+                .builder(new TqlErrorCode(TqlDomain.FIELD, 4220))
+                .details(Map.of("fields", List.of(
+                        Map.of("field", "qty", "code", "stock", "stock", 5,
+                                "message", "orders.qty.exceeds"))))
+                .build());
+        exchange.setProperty(io.tesseraql.camel.TesseraqlProperties.LOCALE, "ja");
+        exchange.getMessage().setHeader("HX-Request", "true");
+
+        new ErrorResponseRenderer(i18n).process(exchange);
+
+        String body = exchange.getMessage().getBody(String.class);
+        assertThat(body).contains("data-message-key=\"orders.qty.exceeds\"")
+                .contains("在庫 5 を超えています。");
+    }
+
+    @Test
+    void localizesConflictHintKeys() throws Exception {
+        Exchange exchange = exchangeWith(TqlException
+                .builder(new TqlErrorCode(TqlDomain.SQL, 4092))
+                .details(Map.of("conflict", Map.of(
+                        "step", "header", "expectedRows", 1, "actualRows", 0,
+                        "hint", "tql.conflict.stale")))
+                .build());
+        exchange.setProperty(io.tesseraql.camel.TesseraqlProperties.LOCALE, "ja");
+
+        new ErrorResponseRenderer().process(exchange);
+
+        String body = exchange.getMessage().getBody(String.class);
+        assertThat(body).contains("\"hintKey\":\"tql.conflict.stale\"")
+                .contains("他のユーザーによってレコードが変更または削除された可能性があります");
     }
 
     @Test

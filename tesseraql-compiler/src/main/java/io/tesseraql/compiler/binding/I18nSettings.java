@@ -40,6 +40,12 @@ public record I18nSettings(String defaultTag, List<String> supportedTags,
     /** Language tags of the framework's built-in {@code tesseraql/messages/<tag>.yml} catalogs. */
     private static final List<String> BUILTIN_TAGS = List.of("en", "ja");
 
+    /** English-only settings over the framework built-ins (for tests and bare processors). */
+    public static I18nSettings defaults() {
+        return new I18nSettings("en", List.of("en"),
+                List.of("principal.claim.locale"), builtinCatalog());
+    }
+
     /** Reads i18n settings from config and the app home's {@code messages/} directory. */
     public static I18nSettings from(AppConfig config, Path appHome) {
         MessageCatalog appCatalog = MessageCatalog.load(appHome.resolve("messages"));

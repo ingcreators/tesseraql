@@ -1,10 +1,14 @@
 package io.tesseraql.compiler.binding;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.tesseraql.camel.TesseraqlProperties;
 import io.tesseraql.core.error.TqlDomain;
 import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
+import io.tesseraql.yaml.i18n.MessageCatalog;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import org.apache.camel.Exchange;
 import org.apache.camel.Processor;
@@ -18,10 +22,25 @@ import org.apache.camel.Processor;
  * field-level constraint errors and optimistic-locking conflict hints (roadmap Phase 18).
  * htmx requests ({@code HX-Request} header) receive those details as an inline HTML fragment
  * instead of JSON, so a form can surface them next to its fields.
+ *
+ * <p>Messages localize through the app's message catalog with the negotiated request locale
+ * (roadmap Phase 22): a field error's declared key keeps riding as {@code messageKey} (and
+ * {@code data-message-key} for the kit's client catalog) while {@code message} carries the
+ * resolved human text — falling back to {@code tql.constraint.<code>} for mapped constraint
+ * violations, and degrading to the key itself when no translation exists.
  */
 public final class ErrorResponseRenderer implements Processor {
 
     private final ObjectMapper mapper = new ObjectMapper();
+    private final I18nSettings i18n;
+
+    public ErrorResponseRenderer() {
+        this(I18nSettings.defaults());
+    }
+
+    public ErrorResponseRenderer(I18nSettings i18n) {
+        this.i18n = i18n;
+    }
 
     @Override
     public void process(Exchange exchange) throws Exception {
@@ -30,13 +49,17 @@ public final class ErrorResponseRenderer implements Processor {
                 ? tql.code()
                 : new TqlErrorCode(TqlDomain.CAMEL, 5000);
         int status = httpStatus(code);
+        String tag = exchange.getProperty(TesseraqlProperties.LOCALE,
+                i18n.defaultTag(), String.class);
 
         Map<String, Object> error = new LinkedHashMap<>();
         error.put("code", code.toString());
-        error.put("message", reasonPhrase(status));
+        error.put("message", statusMessage(tag, status));
         if (cause instanceof TqlException tql) {
             tql.details().forEach((key, value) -> error.putIfAbsent(key, value));
         }
+        localizeFields(error, tag);
+        localizeConflict(error, tag);
         Map<String, Object> body = Map.of("error", error);
 
         // Inbound form fields can surface as multi-line message headers (platform-http); drop them
@@ -53,6 +76,63 @@ public final class ErrorResponseRenderer implements Processor {
         }
         exchange.getMessage().setHeader(Exchange.CONTENT_TYPE, "application/json; charset=utf-8");
         exchange.getMessage().setBody(mapper.writeValueAsString(body));
+    }
+
+    /** Localizes the field-error entries in place: {@code messageKey} + resolved {@code message}. */
+    private void localizeFields(Map<String, Object> error, String tag) {
+        if (!(error.get("fields") instanceof List<?> fields)) {
+            return;
+        }
+        List<Map<String, Object>> localized = new ArrayList<>();
+        for (Object entry : fields) {
+            if (!(entry instanceof Map<?, ?> raw)) {
+                continue;
+            }
+            Map<String, Object> field = new LinkedHashMap<>();
+            raw.forEach((key, value) -> field.put(String.valueOf(key), value));
+            String key = field.get("message") instanceof String declared && !declared.isBlank()
+                    ? declared
+                    : null;
+            String resolved = key == null ? null : i18n.catalog().resolve(tag,
+                    i18n.defaultTag(), key);
+            if (resolved == null && field.get("code") != null) {
+                // Mapped constraint violations carry only a code; the framework catalog
+                // translates the built-in ones (duplicate, required, ...).
+                resolved = i18n.catalog().resolve(tag, i18n.defaultTag(),
+                        "tql.constraint." + field.get("code"));
+            }
+            if (key != null) {
+                field.put("messageKey", key);
+                field.remove("message");
+            }
+            if (resolved != null) {
+                field.put("message", MessageCatalog.interpolate(resolved, field));
+            }
+            localized.add(field);
+        }
+        error.put("fields", localized);
+    }
+
+    /** Resolves a conflict hint declared as a message key; literal hints pass through. */
+    private void localizeConflict(Map<String, Object> error, String tag) {
+        if (!(error.get("conflict") instanceof Map<?, ?> raw) || raw.get("hint") == null) {
+            return;
+        }
+        Map<String, Object> conflict = new LinkedHashMap<>();
+        raw.forEach((key, value) -> conflict.put(String.valueOf(key), value));
+        String hint = String.valueOf(conflict.get("hint"));
+        String resolved = i18n.catalog().resolve(tag, i18n.defaultTag(), hint);
+        if (resolved != null) {
+            conflict.put("hintKey", hint);
+            conflict.put("hint", MessageCatalog.interpolate(resolved, conflict));
+        }
+        error.put("conflict", conflict);
+    }
+
+    /** The generic response message: the localized status phrase. */
+    private String statusMessage(String tag, int status) {
+        String resolved = i18n.catalog().resolve(tag, i18n.defaultTag(), "tql.http." + status);
+        return resolved != null ? resolved : reasonPhrase(status);
     }
 
     /**
@@ -78,16 +158,17 @@ public final class ErrorResponseRenderer implements Processor {
                         .append("\" data-code=\"")
                         .append(escape(String.valueOf(field.get("code"))))
                         .append("\"");
-                // A validation rule's message key (Phase 19), resolved through the kit's
-                // i18n catalog until localized rendering arrives (Phase 22).
-                if (field.get("message") != null) {
+                // A validation rule's message key (Phase 19); the kit's client catalog may
+                // re-resolve it on top of the server-localized text below.
+                if (field.get("messageKey") != null) {
                     html.append(" data-message-key=\"")
-                            .append(escape(String.valueOf(field.get("message"))))
+                            .append(escape(String.valueOf(field.get("messageKey"))))
                             .append("\"");
                 }
-                html.append(">")
-                        .append(escape(field.get("field") + ": " + field.get("code")))
-                        .append("</li>");
+                Object text = field.get("message") != null
+                        ? field.get("message")
+                        : field.get("field") + ": " + field.get("code");
+                html.append(">").append(escape(String.valueOf(text))).append("</li>");
             }
             html.append("</ul>");
         }

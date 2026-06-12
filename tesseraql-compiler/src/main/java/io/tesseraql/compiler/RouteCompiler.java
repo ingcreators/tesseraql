@@ -83,8 +83,10 @@ public final class RouteCompiler {
                 if (mountRest) {
                     restConfiguration().component("platform-http");
                 }
-                onException(TqlException.class).handled(true).process(new ErrorResponseRenderer());
-                onException(Exception.class).handled(true).process(new ErrorResponseRenderer());
+                onException(TqlException.class).handled(true)
+                        .process(new ErrorResponseRenderer(i18n));
+                onException(Exception.class).handled(true)
+                        .process(new ErrorResponseRenderer(i18n));
                 for (RouteFile routeFile : manifest.routes()) {
                     if (onlyRouteIds == null
                             || onlyRouteIds.contains(routeFile.definition().id())) {
