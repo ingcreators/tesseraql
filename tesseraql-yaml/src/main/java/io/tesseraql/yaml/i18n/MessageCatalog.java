@@ -80,7 +80,11 @@ public final class MessageCatalog {
         } catch (IOException ex) {
             throw new UncheckedIOException(ex);
         }
-        return catalogs.isEmpty() ? EMPTY : new MessageCatalog(Map.copyOf(catalogs), null);
+        // Not Map.copyOf: iteration order must stay deterministic (tag-sorted) so derived
+        // artifacts (coverage declarations, the client catalog module) are reproducible.
+        return catalogs.isEmpty()
+                ? EMPTY
+                : new MessageCatalog(java.util.Collections.unmodifiableMap(catalogs), null);
     }
 
     /** Parses one catalog (e.g. a classpath resource) for the given language tag. */
@@ -200,7 +204,7 @@ public final class MessageCatalog {
         }
         Map<String, String> flat = new LinkedHashMap<>();
         flatten("", tree, flat, source);
-        return Map.copyOf(flat);
+        return java.util.Collections.unmodifiableMap(flat);
     }
 
     private static void flatten(String prefix, Object node, Map<String, String> into,
