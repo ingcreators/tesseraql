@@ -44,6 +44,20 @@ class ManifestCoverageTest {
                 ManifestIndex.of(Map.of(), "test"));
     }
 
+    private static io.tesseraql.yaml.manifest.UiResourceFile uiResource(String relativeYmlPath,
+            String uri, String yaml) {
+        return new io.tesseraql.yaml.manifest.UiResourceFile(APP_HOME.resolve(relativeYmlPath),
+                PARSER.parseRoute(yaml, relativeYmlPath), "desc", uri,
+                io.tesseraql.yaml.model.UiSpec.EMPTY);
+    }
+
+    private static AppManifest uiManifest(
+            io.tesseraql.yaml.manifest.UiResourceFile... uiResources) {
+        return new AppManifest(APP_HOME, new AppConfig(Map.of(), name -> null),
+                List.of(), List.of(), List.of(), List.of(), List.of(uiResources),
+                ManifestIndex.of(Map.of(), "test"));
+    }
+
     private static TestSuite sqlSuite(String... sqlFiles) {
         return new TestSuite(java.util.Arrays.stream(sqlFiles)
                 .map(file -> new TestCase("tests " + file, new SqlTarget(file), null, Map.of(),
@@ -125,6 +139,46 @@ class ManifestCoverageTest {
         assertThat(coverage.declared()).containsExactlyInAnyOrder("catalog", "orders");
         assertThat(coverage.covered()).containsExactlyInAnyOrder("catalog");
         assertThat(coverage.uncovered()).containsExactlyInAnyOrder("orders");
+    }
+
+    private static final String BOARD_UI = """
+            version: tesseraql/v1
+            id: board
+            kind: ui
+            recipe: query-html
+            uri: ui://users/board
+            sql:
+              file: board.sql
+            response:
+              html:
+                template: board.html
+            """;
+
+    private static final String GRID_UI = """
+            version: tesseraql/v1
+            id: grid
+            kind: ui
+            recipe: query-html
+            uri: ui://users/grid
+            sql:
+              file: grid.sql
+            response:
+              html:
+                template: grid.html
+            """;
+
+    @Test
+    void mcpUiCoverageDeclaresEveryUiResourceAndCoversTheExercisedOnes() {
+        AppManifest manifest = uiManifest(
+                uiResource("mcp/board.yml", "ui://users/board", BOARD_UI),
+                uiResource("mcp/grid.yml", "ui://users/grid", GRID_UI));
+        ItemCoverage coverage = ManifestCoverage.uiResources(manifest,
+                List.of(sqlSuite("mcp/board.sql")));
+
+        assertThat(coverage.kind()).isEqualTo("mcp-ui");
+        assertThat(coverage.declared()).containsExactlyInAnyOrder("board", "grid");
+        assertThat(coverage.covered()).containsExactlyInAnyOrder("board");
+        assertThat(coverage.uncovered()).containsExactlyInAnyOrder("grid");
     }
 
     @Test
