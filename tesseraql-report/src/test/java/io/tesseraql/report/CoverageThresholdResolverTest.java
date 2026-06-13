@@ -1,4 +1,4 @@
-package io.tesseraql.maven;
+package io.tesseraql.report;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.within;

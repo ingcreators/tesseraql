@@ -19,6 +19,23 @@
       <artifactId>tesseraql-test-core</artifactId>
       <version>${project.version}</version>
     </dependency>
+    <!-- AppTestRunner / CoverageThresholdResolver use these directly (also reachable
+         transitively through tesseraql-test-core; declared explicitly as first-class deps). -->
+    <dependency>
+      <groupId>io.tesseraql</groupId>
+      <artifactId>tesseraql-yaml</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>io.tesseraql</groupId>
+      <artifactId>tesseraql-identity</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>io.tesseraql</groupId>
+      <artifactId>tesseraql-coverage-core</artifactId>
+      <version>${project.version}</version>
+    </dependency>
 
     <dependency>
       <groupId>com.fasterxml.jackson.core</groupId>

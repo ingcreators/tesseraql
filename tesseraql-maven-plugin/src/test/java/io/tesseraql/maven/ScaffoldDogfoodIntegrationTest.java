@@ -3,6 +3,9 @@ package io.tesseraql.maven;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import io.tesseraql.identity.RealmConfig;
+import io.tesseraql.report.AppTestRunner;
+import io.tesseraql.yaml.lint.AppLinter;
+import io.tesseraql.yaml.lint.LintFinding;
 import io.tesseraql.yaml.scaffold.AppScaffolder;
 import io.tesseraql.yaml.scaffold.CrudScaffolder;
 import io.tesseraql.yaml.scaffold.ScaffoldedFile;

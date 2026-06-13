@@ -1,4 +1,4 @@
-package io.tesseraql.maven;
+package io.tesseraql.report;
 
 import io.tesseraql.coverage.CoverageThresholds;
 import io.tesseraql.yaml.config.AppConfig;
@@ -11,7 +11,7 @@ import java.util.Map;
  * config overrides the Maven goal defaults, so thresholds live with the app in {@code tesseraql.yml}
  * but can still be set or raised from the build.
  */
-final class CoverageThresholdResolver {
+public final class CoverageThresholdResolver {
 
     /** The item-coverage kinds a {@code coverage.thresholds.<kind>} percentage can gate. */
     private static final List<String> KINDS = List.of("assertion", "iam-contract", "route",
@@ -26,7 +26,7 @@ final class CoverageThresholdResolver {
      * {@code coverage.thresholds.route}), falling back to the supplied defaults when a key is
      * absent or no config is available. Kinds without a configured key are not gated.
      */
-    static CoverageThresholds resolve(AppConfig config, double lineDefaultPercent,
+    public static CoverageThresholds resolve(AppConfig config, double lineDefaultPercent,
             double branchDefaultPercent) {
         double line = config == null
                 ? lineDefaultPercent

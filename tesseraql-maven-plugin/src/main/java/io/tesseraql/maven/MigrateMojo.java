@@ -1,5 +1,6 @@
 package io.tesseraql.maven;
 
+import io.tesseraql.report.DriverManagerDataSource;
 import java.io.File;
 import org.apache.maven.plugin.AbstractMojo;
 import org.apache.maven.plugins.annotations.Mojo;

@@ -1,17 +1,10 @@
-package io.tesseraql.maven;
+package io.tesseraql.report;
 
 import io.tesseraql.coverage.ItemCoverage;
 import io.tesseraql.coverage.SqlCoverage;
 import io.tesseraql.coverage.SqlCoverageReport;
 import io.tesseraql.identity.IdentityService;
 import io.tesseraql.identity.RealmConfig;
-import io.tesseraql.report.AllureReporter;
-import io.tesseraql.report.CoberturaReporter;
-import io.tesseraql.report.HtmlReporter;
-import io.tesseraql.report.JUnitXmlReporter;
-import io.tesseraql.report.JsonReporter;
-import io.tesseraql.report.SarifReporter;
-import io.tesseraql.report.SonarQubeReporter;
 import io.tesseraql.test.ManifestCoverage;
 import io.tesseraql.test.SuiteCoverage;
 import io.tesseraql.test.TestReport;
