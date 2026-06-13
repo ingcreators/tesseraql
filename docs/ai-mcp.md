@@ -112,16 +112,79 @@ The protocol machinery lives in `tesseraql-mcp`, deliberately free of any dev-to
 `McpServer` (JSON-RPC dispatch), the `McpTool` model (a name, a JSON-Schema input, and a
 handler returning text or structured content), and the transports (`StdioTransport`, and a
 server-agnostic `McpHttpHandler` with a JDK-server binding). The dev-tool server is one
-consumer. The same core is the seam for the next step — letting a TesseraQL **application**
-declare its own MCP endpoints in YAML (a SQL-backed tool served over the runtime's HTTP
-server, under the same deny-by-default security and governance as any route). See the roadmap.
+consumer; the application MCP endpoints below are the second — the runtime drives the same
+`McpHttpHandler` from a Camel route.
+
+## Application MCP endpoints
+
+The same core lets a TesseraQL **application** declare its own MCP tools, so the running
+business application is AI-enabled — the way it already declares HTTP routes. A tool is a
+`query-json` or `command-json` definition placed under `mcp/` instead of `web/`: same recipe,
+input constraints, 2-way SQL, and security as a route — only the entry point differs.
+
+```yaml
+# mcp/find-orders.yml
+version: tesseraql/v1
+id: find-orders
+kind: tool
+recipe: query-json
+description: Find orders for a customer, newest first. Use when asked about a customer's orders.
+
+input:
+  customerId:
+    type: integer
+    required: true
+  limit:
+    type: integer
+    default: 20
+    min: 1
+    max: 100
+
+security:
+  auth: bearer
+  policy: orders.read
+
+sql:
+  file: find-orders.sql
+  mode: query
+  params:
+    customerId: query.customerId
+    limit: query.limit
+```
+
+The runtime serves every declared tool over the Streamable HTTP transport at
+`/_tesseraql/mcp` (the same protocol the dev-tool HTTP transport speaks). On startup the
+compiler turns each tool into an internal route running the full pipeline — telemetry, the
+tool's own authentication and authorization, input validation, the SQL or transactional
+command — and the MCP endpoint dispatches a `tools/call` to it. So:
+
+- **Security is per-tool and identical to a route.** The MCP request's `Authorization: Bearer`
+  rides into the tool's route, where its declared `auth`/`policy` run. A tool with no security
+  is public; a tool with a policy enforces it; an unauthorized call comes back as an MCP tool
+  error. Discovery (`tools/list`) is open so a client can see what the app offers.
+- **The input schema is derived** from the route's `input:` constraints (types, required,
+  ranges, enums), so the model is guided toward valid arguments; validation still runs
+  server-side.
+- **The result** is the SQL/command result as JSON (`{ "rows": [...], "rowCount": n }` for a
+  query), or a custom shape if the tool declares a `response: { json: ... }` block.
+- **Governance, lint, and coverage extend to tools.** A write (command) tool must declare an
+  authorization policy or lint fails (`TQL-MCP-4030`, deny-by-default — an agent must not
+  mutate data unauthorized); the governance gate scores and gates tools like routes (a
+  write tool reachable without authentication is `advanced` and needs approval); and an `mcp`
+  coverage kind tracks which tools your declarative suites exercise.
+
+Set `tesseraql.mcp.enabled: false` to stop serving the endpoint. Resources and MCP Apps UI
+are not modeled yet — see the roadmap.
 
 ## Error codes
 
 | Code | Meaning |
 | --- | --- |
-| `TQL-MCP-4002` | a tool call is missing a required argument |
+| `TQL-MCP-4002` | a dev-tool call is missing a required argument |
 | `TQL-MCP-5001` | no datasource: the call gave no `jdbcUrl` and the app declares no main datasource |
+| `TQL-MCP-1001` | (lint) an application MCP tool uses a recipe other than `query-json` / `command-json` |
+| `TQL-MCP-1002` | (lint, warning) an application MCP tool has no `description` |
+| `TQL-MCP-4030` | (lint) a write MCP tool declares no authorization policy |
 
 Tool failures (a bad argument, a missing datasource, a draft that does not compile) come back
 as an MCP tool result with `isError: true` and the message — the connection stays up so the

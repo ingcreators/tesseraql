@@ -18,6 +18,23 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Runtime and recipes
 
+- Application-declared MCP endpoints (roadmap Phase 24 follow-on, see
+  [docs/ai-mcp.md](docs/ai-mcp.md)): an app declares Model Context Protocol tools under
+  `mcp/` — a `query-json` or `command-json` definition (with a `description`) exposed over MCP
+  instead of HTTP — and the runtime serves them over the Streamable HTTP transport at
+  `/_tesseraql/mcp`, so the running business application is AI-enabled. Each tool compiles to an
+  internal route running the full pipeline (the tool's own authentication and authorization,
+  input validation, 2-way SQL or the transactional command), and the MCP endpoint dispatches a
+  `tools/call` to it carrying the request's bearer token — so a tool is secured exactly like a
+  route (per-tool `auth`/`policy`; discovery is open; an unauthorized call returns an MCP tool
+  error). The advertised input schema is derived from the route's `input:` constraints. The
+  governance gate scores and gates tools like routes (a write tool reachable without
+  authentication is `advanced`); lint requires a write tool to declare a policy
+  (`TQL-MCP-4030`, deny-by-default) and flags unknown recipes / missing descriptions; and a new
+  `mcp` coverage kind tracks tools exercised by declarative suites. Disable with
+  `tesseraql.mcp.enabled: false`. The transport-agnostic protocol core lives in `tesseraql-mcp`
+  (added for the Phase 24 dev-tool server); the runtime reuses its `McpHttpHandler` from a Camel
+  route. `AppManifest` gains `tools()` (discovered from `mcp/`).
 - Internationalization (roadmap Phase 22, see
   [docs/internationalization.md](docs/internationalization.md)): per-app message catalogs
   (`messages/<locale>.yml`, nested maps flattened to dotted keys, layered over framework
