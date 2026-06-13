@@ -54,6 +54,7 @@
     <module>tesseraql-ops-ui</module>
     <module>tesseraql-excel</module>
     <module>tesseraql-pdf</module>
+    <module>tesseraql-mcp</module>
     <module>tesseraql-cli</module>
     <module>tesseraql-maven-plugin</module>
   </modules>
