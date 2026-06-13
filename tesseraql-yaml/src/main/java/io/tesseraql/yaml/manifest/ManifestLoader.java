@@ -45,8 +45,9 @@ public final class ManifestLoader {
         AppConfig config = loadConfig(home);
         List<RouteFile> routes = loadRoutes(home);
         List<JobFile> jobs = loadJobs(home);
+        List<ToolFile> tools = loadTools(home);
         ManifestIndex index = buildIndex(home);
-        return new AppManifest(home, config, routes, jobs, index);
+        return new AppManifest(home, config, routes, jobs, tools, index);
     }
 
     private AppConfig loadConfig(Path home) {
@@ -125,6 +126,31 @@ public final class ManifestLoader {
             throw new UncheckedIOException(ex);
         }
         return jobs;
+    }
+
+    private List<ToolFile> loadTools(Path home) {
+        Path mcpRoot = home.resolve("mcp");
+        if (!Files.isDirectory(mcpRoot)) {
+            return List.of();
+        }
+        List<ToolFile> tools = new ArrayList<>();
+        try (Stream<Path> files = Files.walk(mcpRoot)) {
+            files.filter(Files::isRegularFile)
+                    .filter(p -> p.getFileName().toString().endsWith(".yml"))
+                    .sorted()
+                    .forEach(file -> {
+                        requireInside(home, file);
+                        // A tool reuses the route model (recipe, input, sql, security); the
+                        // description is a tool-only hint read from the same document.
+                        RouteDefinition definition = parser.parseRoute(file);
+                        Object description = parser.parseTree(file).get("description");
+                        tools.add(new ToolFile(file, definition,
+                                description == null ? null : description.toString()));
+                    });
+        } catch (IOException ex) {
+            throw new UncheckedIOException(ex);
+        }
+        return tools;
     }
 
     private RouteFile toRouteFile(Path home, Path webRoot, Path file) {

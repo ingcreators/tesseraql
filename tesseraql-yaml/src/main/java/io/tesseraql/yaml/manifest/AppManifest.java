@@ -12,13 +12,15 @@ import java.util.List;
  * @param config  merged, placeholder-resolving configuration
  * @param routes  route files discovered under {@code web/}
  * @param jobs    job files discovered under {@code batch/}
+ * @param tools   application-declared MCP tool files discovered under {@code mcp/}
  * @param index   checksum index of the manifest source files
  */
 public record AppManifest(Path appHome, AppConfig config, List<RouteFile> routes,
-        List<JobFile> jobs, ManifestIndex index) {
+        List<JobFile> jobs, List<ToolFile> tools, ManifestIndex index) {
 
     public AppManifest {
         routes = List.copyOf(routes);
         jobs = List.copyOf(jobs);
+        tools = List.copyOf(tools);
     }
 }
