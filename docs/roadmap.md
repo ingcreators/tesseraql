@@ -38,7 +38,7 @@ exchange with neighboring systems) still needs, against what 0.1.0 provides:
 | HTTP caching | absent |
 | HA building blocks | solid base: cluster-safe job claiming, JDBC session store; missing K8s assets and zero-downtime guidance |
 | Distribution | GitHub Releases only; no Maven Central, no Gradle plugin, no docs site |
-| AI tooling | dev-tool MCP server and app-declared MCP endpoints shipped (Phase 24) |
+| AI tooling | dev-tool MCP server, app-declared MCP tools and resources shipped (Phase 24) |
 
 ## Horizon 1 — application completeness (0.2.x)
 
@@ -149,19 +149,28 @@ policy), and an `mcp` coverage kind. The dev-tool server was the first consumer 
 core; this is the second, and the reason the core was factored out rather than built into the
 CLI.
 
+**Application MCP resources** (delivered): alongside its tools an application declares read-only
+MCP *resources* — context an agent attaches — as a `kind: resource` document under `mcp/`. A
+resource is a `query-json` definition addressed by a stable `uri` (it takes no arguments) with an
+optional `mimeType`; the compiler builds it into a read-only internal route, and the runtime
+answers `resources/list` / `resources/read` from the same `/_tesseraql/mcp` endpoint under the
+same per-resource security (the bearer token rides into the resource's route; an unauthorized read
+is a `resources/read` JSON-RPC error). Lint keeps resources read-only and uri-addressed, the
+governance gate scores them like read routes (never `advanced`), and an `mcp-resource` coverage
+kind tracks the resources declarative suites exercise.
+
 Still open — further MCP surfaces on the same `tesseraql-mcp` core, deferred to a later
 release once the tool loop has proven itself:
 
-- **MCP resources** — expose app data and documents as MCP *resources* (read-only context an
-  agent attaches), alongside the tools already served, under the same per-resource security.
 - **MCP Apps UI** — let a tool return interactive UI (the MCP Apps extension). TesseraQL's
   Hypermedia Components and htmx markup are the natural renderer, so an app-served tool could
   hand back an `hc-*` fragment instead of only JSON — any gap belongs upstream in the kit
   (mandatory rule 11), not in app CSS.
-- **Mounted-app tools** — serve the MCP tools declared by mounted/system apps (design ch. 32),
-  not only the main app, under the same per-tool security and the route-conflict checks.
+- **Mounted-app tools** — serve the MCP tools and resources declared by mounted/system apps
+  (design ch. 32), not only the main app, under the same per-tool security and the route-conflict
+  checks.
 
-All three stay behind the same SQL-first, governed-recipe invariants (extension principles
+Both stay behind the same SQL-first, governed-recipe invariants (extension principles
 1–4); deeper Studio-copilot ambitions remain gated on the MCP loop proving its worth (decision
 point 4).
 

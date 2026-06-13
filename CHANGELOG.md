@@ -35,6 +35,22 @@ All notable changes to TesseraQL are documented here. The format follows
   `tesseraql.mcp.enabled: false`. The transport-agnostic protocol core lives in `tesseraql-mcp`
   (added for the Phase 24 dev-tool server); the runtime reuses its `McpHttpHandler` from a Camel
   route. `AppManifest` gains `tools()` (discovered from `mcp/`).
+- Application-declared MCP resources (roadmap Phase 24, see
+  [docs/ai-mcp.md](docs/ai-mcp.md)): alongside its tools an app declares read-only Model Context
+  Protocol *resources* — context an agent attaches — as a `kind: resource` document under `mcp/`.
+  A resource is a `query-json` definition addressed by a stable `uri` (no arguments: its uri is
+  the whole address) with an optional `mimeType` (default `application/json`); the compiler builds
+  it into a read-only internal route running the full read pipeline (the resource's own
+  `auth`/`policy`, tenancy and locale resolution, 2-way SQL), and the runtime answers
+  `resources/list` / `resources/read` from it over the same `/_tesseraql/mcp` endpoint, carrying
+  the request's bearer token — so a resource is secured exactly like a read route (discovery is
+  open; an unauthorized read returns a `resources/read` JSON-RPC error). Lint keeps resources
+  read-only and uri-addressed (`TQL-MCP-1003`/`1004`/`1006`, duplicate-uri `TQL-MCP-1007`, missing
+  description `TQL-MCP-1005`); the governance gate scores a resource like a read route (never
+  `advanced`); and an `mcp-resource` coverage kind tracks resources exercised by declarative
+  suites. The protocol core (`tesseraql-mcp`) gains `McpResource` and the `resources/*` methods,
+  advertising the resources capability only when some are registered. `AppManifest` gains
+  `resources()` (discovered from `mcp/` by `kind`).
 - Internationalization (roadmap Phase 22, see
   [docs/internationalization.md](docs/internationalization.md)): per-app message catalogs
   (`messages/<locale>.yml`, nested maps flattened to dotted keys, layered over framework
