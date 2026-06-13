@@ -147,10 +147,23 @@ the bearer token threaded into the tool's route), governance (risk scoring and t
 gate, a write tool reachable unauthenticated is `advanced`), lint (a write tool must declare a
 policy), and an `mcp` coverage kind. The dev-tool server was the first consumer of the protocol
 core; this is the second, and the reason the core was factored out rather than built into the
-CLI. Still open (later): MCP **resources** and **MCP Apps** UI (the kit's hypermedia is the
-natural fit), and serving mounted apps' tools. Scoped behind the same SQL-first,
-governed-recipe invariants (extension principles 1–4); deeper Studio-copilot ambitions remain
-gated on the MCP loop proving its worth (decision point 4).
+CLI.
+
+Still open — further MCP surfaces on the same `tesseraql-mcp` core, deferred to a later
+release once the tool loop has proven itself:
+
+- **MCP resources** — expose app data and documents as MCP *resources* (read-only context an
+  agent attaches), alongside the tools already served, under the same per-resource security.
+- **MCP Apps UI** — let a tool return interactive UI (the MCP Apps extension). TesseraQL's
+  Hypermedia Components and htmx markup are the natural renderer, so an app-served tool could
+  hand back an `hc-*` fragment instead of only JSON — any gap belongs upstream in the kit
+  (mandatory rule 11), not in app CSS.
+- **Mounted-app tools** — serve the MCP tools declared by mounted/system apps (design ch. 32),
+  not only the main app, under the same per-tool security and the route-conflict checks.
+
+All three stay behind the same SQL-first, governed-recipe invariants (extension principles
+1–4); deeper Studio-copilot ambitions remain gated on the MCP loop proving its worth (decision
+point 4).
 
 **Milestone M7** — schema to verified CRUD in under ten minutes by hand, or hands-off via an
 MCP-connected agent.
