@@ -36,13 +36,27 @@ class McpServerTest {
                             throw new TqlException(new TqlErrorCode(TqlDomain.MCP, 4001), "nope");
                         })
                         .build())
+                .resource(McpResource.builder("tesseraql://catalog", "catalog")
+                        .description("the product catalog")
+                        .mimeType("application/json")
+                        .reader(ctx -> "{\"items\":3}")
+                        .build())
+                .resource(McpResource.builder("tesseraql://broken", "broken")
+                        .reader(ctx -> {
+                            throw new TqlException(new TqlErrorCode(TqlDomain.MCP, 4001), "denied");
+                        })
+                        .build())
                 .build();
     }
 
     private JsonNode call(String json) {
+        Optional<JsonNode> response = server().handle(read(json));
+        return response.orElse(null);
+    }
+
+    private JsonNode read(String json) {
         try {
-            Optional<JsonNode> response = server().handle(mapper.readTree(json));
-            return response.orElse(null);
+            return mapper.readTree(json);
         } catch (Exception ex) {
             throw new RuntimeException(ex);
         }
@@ -124,9 +138,71 @@ class McpServerTest {
 
     @Test
     void anUnknownMethodIsMethodNotFound() {
-        JsonNode error = call("{\"jsonrpc\":\"2.0\",\"id\":8,\"method\":\"resources/list\"}")
+        JsonNode error = call("{\"jsonrpc\":\"2.0\",\"id\":8,\"method\":\"prompts/list\"}")
                 .get("error");
         assertThat(error.get("code").asInt()).isEqualTo(-32601);
+    }
+
+    @Test
+    void initializeAdvertisesResourcesOnlyWhenSomeAreRegistered() {
+        JsonNode withResources = call("{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\"}")
+                .get("result").get("capabilities");
+        assertThat(withResources.has("resources")).isTrue();
+        assertThat(withResources.get("resources").get("subscribe").asBoolean()).isFalse();
+
+        McpServer toolsOnly = McpServer.builder("t", "1")
+                .tool(McpTool.builder("noop").handler((a, c) -> McpToolResult.text("")).build())
+                .build();
+        JsonNode caps = toolsOnly
+                .handle(read("{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\"}"))
+                .orElseThrow().get("result").get("capabilities");
+        assertThat(caps.has("resources")).isFalse();
+    }
+
+    @Test
+    void resourcesListReturnsEveryRegisteredResource() {
+        JsonNode resources = call("{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"resources/list\"}")
+                .get("result").get("resources");
+        assertThat(resources).hasSize(2);
+        JsonNode catalog = resources.get(0);
+        assertThat(catalog.get("uri").asText()).isEqualTo("tesseraql://catalog");
+        assertThat(catalog.get("name").asText()).isEqualTo("catalog");
+        assertThat(catalog.get("mimeType").asText()).isEqualTo("application/json");
+    }
+
+    @Test
+    void resourcesReadReturnsContentsTaggedWithTheResourceUriAndMimeType() {
+        JsonNode result = call("{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"resources/read\","
+                + "\"params\":{\"uri\":\"tesseraql://catalog\"}}").get("result");
+        JsonNode entry = result.get("contents").get(0);
+        assertThat(entry.get("uri").asText()).isEqualTo("tesseraql://catalog");
+        assertThat(entry.get("mimeType").asText()).isEqualTo("application/json");
+        assertThat(entry.get("text").asText()).isEqualTo("{\"items\":3}");
+    }
+
+    @Test
+    void resourcesReadOfAnUnknownUriIsTheResourceNotFoundError() {
+        JsonNode error = call("{\"jsonrpc\":\"2.0\",\"id\":4,\"method\":\"resources/read\","
+                + "\"params\":{\"uri\":\"tesseraql://missing\"}}").get("error");
+        assertThat(error.get("code").asInt()).isEqualTo(-32002);
+    }
+
+    @Test
+    void aFailingResourceReadIsAJsonRpcErrorCarryingTheCode() {
+        JsonNode response = call("{\"jsonrpc\":\"2.0\",\"id\":5,\"method\":\"resources/read\","
+                + "\"params\":{\"uri\":\"tesseraql://broken\"}}");
+        assertThat(response.has("result")).isFalse();
+        JsonNode error = response.get("error");
+        assertThat(error.get("code").asInt()).isEqualTo(-32603);
+        assertThat(error.get("message").asText()).contains("TQL-MCP-4001").contains("denied");
+    }
+
+    @Test
+    void resourceTemplatesListIsAnEmptyList() {
+        JsonNode templates = call("{\"jsonrpc\":\"2.0\",\"id\":6,"
+                + "\"method\":\"resources/templates/list\"}")
+                .get("result").get("resourceTemplates");
+        assertThat(templates).isEmpty();
     }
 
     @Test
