@@ -27,7 +27,7 @@ class ManifestCoverageTest {
 
     private static AppManifest manifest(Map<String, Object> config, RouteFile... routes) {
         return new AppManifest(APP_HOME, new AppConfig(config, name -> null),
-                List.of(routes), List.of(), List.of(), List.of(),
+                List.of(routes), List.of(), List.of(), List.of(), List.of(),
                 ManifestIndex.of(Map.of(), "test"));
     }
 
@@ -40,7 +40,7 @@ class ManifestCoverageTest {
     private static AppManifest resourceManifest(
             io.tesseraql.yaml.manifest.ResourceFile... resources) {
         return new AppManifest(APP_HOME, new AppConfig(Map.of(), name -> null),
-                List.of(), List.of(), List.of(), List.of(resources),
+                List.of(), List.of(), List.of(), List.of(resources), List.of(),
                 ManifestIndex.of(Map.of(), "test"));
     }
 
@@ -253,7 +253,7 @@ class ManifestCoverageTest {
     void notificationCoverageDeclaresRouteAndJobNotificationsAndTracksEvaluatedOnes() {
         AppManifest manifest = new AppManifest(APP_HOME, new AppConfig(Map.of(), name -> null),
                 List.of(route("web/members/post.yml", NOTIFYING_ROUTE)),
-                List.of(notifyingJob()), List.of(), List.of(),
+                List.of(notifyingJob()), List.of(), List.of(), List.of(),
                 ManifestIndex.of(Map.of(), "test"));
 
         ItemCoverage all = ManifestCoverage.notification(manifest,

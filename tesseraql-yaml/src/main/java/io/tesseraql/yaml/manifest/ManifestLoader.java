@@ -47,9 +47,10 @@ public final class ManifestLoader {
         List<JobFile> jobs = loadJobs(home);
         List<ToolFile> tools = new ArrayList<>();
         List<ResourceFile> resources = new ArrayList<>();
-        loadMcp(home, tools, resources);
+        List<UiResourceFile> uiResources = new ArrayList<>();
+        loadMcp(home, tools, resources, uiResources);
         ManifestIndex index = buildIndex(home);
-        return new AppManifest(home, config, routes, jobs, tools, resources, index);
+        return new AppManifest(home, config, routes, jobs, tools, resources, uiResources, index);
     }
 
     private AppConfig loadConfig(Path home) {
@@ -132,11 +133,15 @@ public final class ManifestLoader {
 
     /**
      * Loads the {@code mcp/} tree, splitting each document by {@code kind}: a {@code resource}
-     * document becomes a {@link ResourceFile} (read-only context addressed by its {@code uri}),
-     * and everything else a {@link ToolFile}. Both reuse the route model (recipe, input, sql,
-     * security); the {@code description} is the model-facing hint read from the same document.
+     * document becomes a {@link ResourceFile} (read-only JSON context addressed by its {@code uri}),
+     * a {@code ui} document a {@link UiResourceFile} (an MCP Apps UI resource that renders an
+     * {@code hc-*} fragment, addressed by its {@code ui://} uri), and everything else a
+     * {@link ToolFile} (whose {@code ui:} field, when present, links it to a UI resource). All reuse
+     * the route model (recipe, input, sql, security); the {@code description} is the model-facing
+     * hint read from the same document.
      */
-    private void loadMcp(Path home, List<ToolFile> tools, List<ResourceFile> resources) {
+    private void loadMcp(Path home, List<ToolFile> tools, List<ResourceFile> resources,
+            List<UiResourceFile> uiResources) {
         Path mcpRoot = home.resolve("mcp");
         if (!Files.isDirectory(mcpRoot)) {
             return;
@@ -150,11 +155,17 @@ public final class ManifestLoader {
                         RouteDefinition definition = parser.parseRoute(file);
                         Map<String, Object> tree = parser.parseTree(file);
                         String description = string(tree.get("description"));
-                        if ("resource".equals(tree.get("kind"))) {
+                        Object kind = tree.get("kind");
+                        if ("resource".equals(kind)) {
                             resources.add(new ResourceFile(file, definition, description,
                                     string(tree.get("uri")), string(tree.get("mimeType"))));
+                        } else if ("ui".equals(kind)) {
+                            uiResources.add(new UiResourceFile(file, definition, description,
+                                    string(tree.get("uri")),
+                                    io.tesseraql.yaml.model.UiSpec.from(tree.get("ui"))));
                         } else {
-                            tools.add(new ToolFile(file, definition, description));
+                            tools.add(new ToolFile(file, definition, description,
+                                    string(tree.get("ui"))));
                         }
                     });
         } catch (IOException ex) {
