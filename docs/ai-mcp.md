@@ -173,8 +173,8 @@ command — and the MCP endpoint dispatches a `tools/call` to it. So:
   write tool reachable without authentication is `advanced` and needs approval); and an `mcp`
   coverage kind tracks which tools your declarative suites exercise.
 
-Set `tesseraql.mcp.enabled: false` to stop serving the endpoint (tools and resources alike).
-MCP Apps UI is not modeled yet — see the roadmap.
+Set `tesseraql.mcp.enabled: false` to stop serving the endpoint (tools, resources, and UI
+resources alike).
 
 ## Application MCP resources
 
@@ -223,6 +223,75 @@ the MCP endpoint answers `resources/list` and `resources/read` from it. So:
   since it cannot write), and an `mcp-resource` coverage kind tracks which resources your
   declarative suites exercise.
 
+## Application MCP Apps UI
+
+A tool can hand back interactive UI instead of only JSON — the [MCP Apps
+extension](https://modelcontextprotocol.io/community/seps/1865-mcp-apps-interactive-user-interfaces-for-mcp)
+(SEP-1865). TesseraQL's Hypermedia Components (`hc-*` markup) and htmx are the natural renderer,
+so the UI is a server-rendered fragment, not a client-side template: an application declares a
+**UI resource** as a `kind: ui` document under `mcp/` — a `query-html` (or `page`) definition,
+addressed by a stable `ui://` uri — and a `kind: tool` document references it with a `ui:` field.
+
+```yaml
+# mcp/orders-board.yml
+version: tesseraql/v1
+id: orders-board
+kind: ui
+recipe: query-html
+uri: ui://orders/board
+description: A board of open orders, rendered as a Hypermedia Components fragment.
+
+security:
+  auth: bearer
+  policy: orders.read
+
+sql:
+  file: orders-board.sql
+  mode: query
+
+response:
+  html:
+    template: orders-board.html
+    model:
+      orders: sql.rows
+
+ui:
+  prefersBorder: true
+  csp:
+    connectDomains: ["'self'"]
+```
+
+```yaml
+# mcp/find-orders.yml — the tool links to the UI resource it renders into
+ui: ui://orders/board
+```
+
+On startup the compiler turns each UI resource into a read-only internal route that runs the same
+read-and-render pipeline a `query-html` route runs — telemetry, the resource's own authentication
+and authorization, tenancy and locale resolution, the 2-way SQL, then the Thymeleaf template — so
+it renders the same `hc-*` fragment a page would (UI work follows the blessed patterns in
+[docs/hypermedia-ui.md](hypermedia-ui.md); any gap belongs upstream in the kit, not in app CSS).
+The runtime serves it over the same `/_tesseraql/mcp` endpoint as the tools and resources. So:
+
+- **The extension is negotiated.** When the app serves any UI resource, `initialize` advertises it
+  under `capabilities.extensions["io.modelcontextprotocol/ui"]` with `text/html;profile=mcp-app`,
+  the MCP Apps content type.
+- **Discovery and read mirror resources.** `resources/list` advertises every UI resource (its
+  `ui://` uri, `name`, the `text/html;profile=mcp-app` mimeType, `description`, and `_meta.ui`
+  rendering hints — `prefersBorder`, content-security-policy domains); `resources/read { "uri": ... }`
+  runs the route and returns the rendered `hc-*` fragment as the resource's `contents`.
+- **Tools link to a UI resource.** A tool's `ui:` field is advertised as its
+  `_meta.ui.resourceUri`, so a host renders the linked fragment to present the tool's result
+  instead of showing the raw JSON.
+- **Security is per-resource and identical to a route.** The request's `Authorization: Bearer`
+  rides into the UI resource's route, where its declared `auth`/`policy` run; an unauthorized read
+  comes back as a `resources/read` JSON-RPC error. Discovery is open.
+- **Read-only by construction, governed like a read.** Lint keeps a UI resource HTML-rendering and
+  uri-addressed (`TQL-MCP-1008`/`1009`/`1011`), warns on a missing description (`TQL-MCP-1010`),
+  and rejects a tool whose `ui:` link dangles (`TQL-MCP-1012`); the governance gate scores a UI
+  resource like a read route (never `advanced`, since it cannot write); and an `mcp-ui` coverage
+  kind tracks which UI resources your declarative suites exercise.
+
 ## Error codes
 
 | Code | Meaning |
@@ -236,7 +305,12 @@ the MCP endpoint answers `resources/list` and `resources/read` from it. So:
 | `TQL-MCP-1004` | (lint) an application MCP resource declares no `uri` |
 | `TQL-MCP-1005` | (lint, warning) an application MCP resource has no `description` |
 | `TQL-MCP-1006` | (lint) an application MCP resource declares `input:` (a resource takes no arguments) |
-| `TQL-MCP-1007` | (lint) two application MCP resources declare the same `uri` |
+| `TQL-MCP-1007` | (lint) two application MCP resources declare the same `uri` (UI resources share the namespace) |
+| `TQL-MCP-1008` | (lint) an MCP Apps UI resource does not render HTML (use `query-html` or `page`) |
+| `TQL-MCP-1009` | (lint) an MCP Apps UI resource declares no `ui://` uri |
+| `TQL-MCP-1010` | (lint, warning) an MCP Apps UI resource has no `description` |
+| `TQL-MCP-1011` | (lint) an MCP Apps UI resource declares `input:` (a UI resource takes no arguments) |
+| `TQL-MCP-1012` | (lint) a tool's `ui:` link resolves to no declared UI resource |
 
 Tool failures (a bad argument, a missing datasource, a draft that does not compile) come back
 as an MCP tool result with `isError: true` and the message — the connection stays up so the
