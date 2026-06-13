@@ -78,13 +78,27 @@ Conventions are applied when the table opts in:
 - **Command SQL carries no trailing semicolon** (like the transactional-writes examples):
   drivers append `RETURNING` for generated-key capture, which a terminator would break.
 
-The pages compose the framework `tql/shell` layout with `templates/nav.html :: app-nav` and
-post plain HTML forms (the post/redirect/get pattern, graceful without JavaScript); deletes
-gate on the kit's `data-hc-confirm` dialog. The generated security blocks reference the
-`app.read` / `app.write` policies the skeleton defines — the CLI prints a hint when an app
-is missing them or the nav template. Rename policies, move to htmx posts with `csrf: true`
-and the `X-CSRF-Token` header, or add `validate:`/`notify:` blocks by editing the generated
-files like any other source.
+The pages compose the framework `tql/shell` layout with `templates/nav.html :: app-nav`. The
+create and edit forms follow the Hypermedia Components **mutating-form recipe**: an htmx post
+(`hx-post` mirroring `method`/`action`) with an in-form field-errors container, a
+double-submit guard and busy spinner, and the hidden CSRF field — degrading to a plain form
+post with no JavaScript. A failed write swaps the kit's field-errors fragment inline (a `422`
+validation error, a `409` optimistic-locking conflict, or a `409` constraint violation
+distributes to the offending input); a success answers `HX-Redirect` for the htmx caller
+(`204`) and a plain `303 Location` for the no-JS caller. The edit page's delete uses the
+confirmed-destructive variant — `data-hc-confirm` gates the submit and the form fires on
+`hc:confirmed`. The generated security blocks reference the `app.read` / `app.write` policies
+the skeleton defines — the CLI prints a hint when an app is missing them or the nav template.
+
+### CSRF, on by default
+
+The mutation routes declare `csrf: true`, and the form-bearing pages (list, create, edit)
+authenticate as `browser`/`app.read` so the shell renders `<meta name="csrf-token">` with the
+session token. On the htmx path the kit's `installCsrfHeader` behavior reads that tag and
+attaches the `X-CSRF-Token` header to every request; on the no-JS path the hidden `_csrf` form
+field carries the token (the framework's `csrf` step accepts either, and treats `_csrf` as a
+reserved field so it never trips the mass-assignment guard). See
+[docs/hypermedia-ui.md](hypermedia-ui.md) for the full recipe markup and the convention.
 
 ## Regeneration and edit detection (design ch. 22.20)
 
