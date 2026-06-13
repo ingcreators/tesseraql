@@ -32,10 +32,13 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 
 /**
  * The Phase 23 acceptance flow over HTTP: the scaffold-built example gallery app serves a full
- * CRUD round trip — its migration applies at mount, the list page and htmx fragment render, a
- * browser form post creates a row (post/redirect/get with the generated key), an edit updates it,
- * a stale version answers {@code 409 Conflict} (Phase 18 optimistic locking), a duplicate name
- * maps to the scaffolded constraint error, and a confirmed delete removes it.
+ * CRUD round trip — its migration applies at mount, the authenticated list page (carrying the
+ * {@code <meta name="csrf-token">} the htmx forms need) and htmx fragment render, a create
+ * succeeds over the no-JS path (a plain form post with the hidden {@code _csrf} field, redirecting
+ * via {@code Location}), an update succeeds over the htmx path (the {@code X-CSRF-Token} header,
+ * redirecting via {@code HX-Redirect}), a missing token is rejected with {@code 403}, a stale
+ * version answers {@code 409 Conflict} (Phase 18 optimistic locking), a duplicate name maps to the
+ * scaffolded field-errors fragment, and a delete removes the row.
  */
 @Testcontainers
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
@@ -47,6 +50,7 @@ class ScaffoldedCrudIntegrationTest {
     static TesseraqlRuntime runtime;
     static Path appHome;
     static String cookie;
+    static String csrf;
 
     @BeforeAll
     static void startRuntime() throws Exception {
@@ -57,6 +61,7 @@ class ScaffoldedCrudIntegrationTest {
         String sid = sessions.create(new Principal("u001", "sato", "Sato", null,
                 List.of(), List.of("APP_READ", "APP_WRITE"), List.of(), Map.of()));
         cookie = sessions.cookieName() + "=" + sid;
+        csrf = sessions.csrfToken(sid);
     }
 
     @AfterAll
@@ -71,18 +76,26 @@ class ScaffoldedCrudIntegrationTest {
 
     @Test
     @Order(1)
-    void homeAndListPagesServeWithoutAuthentication() throws Exception {
+    void homeIsPublicButItemPagesRequireASessionAndCarryTheCsrfToken() throws Exception {
         HttpResponse<String> home = get("/", null);
         assertThat(home.statusCode()).isEqualTo(200);
         assertThat(home.body()).contains("Welcome to scaffold-demo");
 
-        HttpResponse<String> list = get("/items", null);
-        assertThat(list.statusCode()).isEqualTo(200);
-        assertThat(list.body()).contains("hx-get=\"/items/fragments/table\"");
+        // The list and create-form pages are browser-authed: anonymous → 401.
+        assertThat(get("/items", null).statusCode()).isEqualTo(401);
+        assertThat(get("/items/new", null).statusCode()).isEqualTo(401);
 
-        HttpResponse<String> form = get("/items/new", null);
+        HttpResponse<String> list = get("/items", cookie);
+        assertThat(list.statusCode()).isEqualTo(200);
+        assertThat(list.body()).contains("hx-get=\"/items/fragments/table\"")
+                // The shell publishes the session CSRF token for installCsrfHeader.
+                .contains("<meta name=\"csrf-token\" content=\"" + csrf + "\">");
+
+        HttpResponse<String> form = get("/items/new", cookie);
         assertThat(form.statusCode()).isEqualTo(200);
-        assertThat(form.body()).contains("class=\"hc-datepicker\"");
+        assertThat(form.body()).contains("class=\"hc-datepicker\"")
+                // The hidden field for the no-JS path is rendered with the token.
+                .contains("name=\"_csrf\" value=\"" + csrf + "\"");
     }
 
     @Test
@@ -97,64 +110,65 @@ class ScaffoldedCrudIntegrationTest {
 
     @Test
     @Order(3)
-    void crudRoundTripWithOptimisticLockingAndConstraintMapping() throws Exception {
-        // Create: a plain browser form post redirects to the new record (generated key 2).
-        HttpResponse<String> created = postForm("/items/create", cookie, Map.of(
+    void mutationsRequireCsrfOnBothTheNoJsAndHtmxPaths() throws Exception {
+        // No token at all → rejected.
+        HttpResponse<String> noToken = post("/items/create", cookie, null, null, Map.of(
+                "name", "No CSRF", "quantity", "1", "active", "true"));
+        assertThat(noToken.statusCode()).isEqualTo(403);
+
+        // No-JS path: a plain form post carrying the hidden _csrf field redirects (303 + Location).
+        HttpResponse<String> created = post("/items/create", cookie, null, csrf, Map.of(
                 "name", "Second item",
                 "quantity", "2",
                 "unitPrice", "1.50",
                 "dueDate", "2026-07-01",
                 "active", "true",
-                "note", "Created by the integration test"));
+                "note", "Created over the no-JS path"));
         assertThat(created.statusCode()).as(created::body).isEqualTo(303);
         assertThat(created.headers().firstValue("Location")).contains("/items/2");
+    }
 
+    @Test
+    @Order(4)
+    void htmxUpdateRedirectsViaHxRedirectAndOptimisticLockingHolds() throws Exception {
         // The edit page renders the row with its version for the optimistic-locking flow.
         HttpResponse<String> edit = get("/items/2", cookie);
         assertThat(edit.statusCode()).isEqualTo(200);
         assertThat(edit.body()).contains("value=\"Second item\"")
                 .contains("name=\"version\" value=\"1\"");
 
-        // Update with the current version succeeds and bumps it.
-        HttpResponse<String> updated = postForm("/items/2/update", cookie, Map.of(
+        // htmx path: HX-Request + the X-CSRF-Token header → 204 + HX-Redirect (no Location swap).
+        HttpResponse<String> updated = post("/items/2/update", cookie, csrf, null, Map.of(
                 "name", "Second item (edited)",
                 "quantity", "3",
                 "unitPrice", "2.50",
                 "dueDate", "2026-07-02",
                 "active", "false",
-                "note", "Edited by the integration test",
+                "note", "Edited over the htmx path",
                 "version", "1"));
-        assertThat(updated.statusCode()).as(updated::body).isEqualTo(303);
-        assertThat(updated.headers().firstValue("Location")).contains("/items/2");
+        assertThat(updated.statusCode()).as(updated::body).isEqualTo(204);
+        assertThat(updated.headers().firstValue("HX-Redirect")).contains("/items/2");
+        assertThat(updated.headers().firstValue("Location")).isEmpty();
 
         // Replaying the stale version is the Phase 18 conflict, not a silent lost update.
-        HttpResponse<String> stale = postForm("/items/2/update", cookie, Map.of(
-                "name", "Stale write",
-                "quantity", "9",
-                "unitPrice", "9.99",
-                "dueDate", "2026-07-03",
-                "active", "true",
-                "note", "Must not win",
-                "version", "1"));
+        HttpResponse<String> stale = post("/items/2/update", cookie, csrf, null, Map.of(
+                "name", "Stale write", "quantity", "9", "active", "true", "version", "1"));
         assertThat(stale.statusCode()).as(stale::body).isEqualTo(409);
         assertThat(stale.body()).contains("TQL-SQL-4092");
 
-        // A duplicate name surfaces as the scaffolded field-level constraint mapping.
-        HttpResponse<String> duplicate = postForm("/items/create", cookie, Map.of(
-                "name", "First item",
-                "quantity", "1",
-                "unitPrice", "1.00",
-                "dueDate", "2026-07-04",
-                "active", "true",
-                "note", "Duplicate"));
+        // A duplicate name surfaces as the scaffolded field-level constraint mapping; an htmx
+        // caller gets the kit's field-errors fragment (the X-CSRF carrier marks the request htmx).
+        HttpResponse<String> duplicate = post("/items/create", cookie, csrf, null, Map.of(
+                "name", "First item", "quantity", "1", "active", "true"));
         assertThat(duplicate.statusCode()).as(duplicate::body).isEqualTo(409);
-        assertThat(duplicate.body()).contains("\"field\"").contains("name");
+        assertThat(duplicate.body()).contains("data-hc-field-errors")
+                .contains("data-field=\"name\"");
 
         // Delete with the bumped version, then the fragment no longer lists the row.
-        HttpResponse<String> deleted = postForm("/items/2/delete", cookie,
+        HttpResponse<String> deleted = post("/items/2/delete", cookie, csrf, null,
                 Map.of("version", "2"));
-        assertThat(deleted.statusCode()).as(deleted::body).isEqualTo(303);
-        assertThat(deleted.headers().firstValue("Location")).contains("/items");
+        assertThat(deleted.statusCode()).as(deleted::body).isEqualTo(204);
+        assertThat(deleted.headers().firstValue("HX-Redirect")).contains("/items");
         assertThat(get("/items/fragments/table", cookie).body())
                 .doesNotContain("Second item");
     }
@@ -169,19 +183,31 @@ class ScaffoldedCrudIntegrationTest {
                 HttpResponse.BodyHandlers.ofString());
     }
 
-    private static HttpResponse<String> postForm(String path, String sessionCookie,
-            Map<String, String> fields) throws Exception {
-        String body = fields.entrySet().stream()
+    /**
+     * Posts a form. {@code csrfHeader} sets the htmx-path {@code X-CSRF-Token} header and marks the
+     * request as htmx ({@code HX-Request}); {@code csrfField} adds the no-JS hidden {@code _csrf}
+     * field to the body. Pass one or the other (or neither, to prove rejection).
+     */
+    private static HttpResponse<String> post(String path, String sessionCookie, String csrfHeader,
+            String csrfField, Map<String, String> fields) throws Exception {
+        Map<String, String> body = new java.util.LinkedHashMap<>(fields);
+        if (csrfField != null) {
+            body.put("_csrf", csrfField);
+        }
+        String encoded = body.entrySet().stream()
                 .map(field -> URLEncoder.encode(field.getKey(), StandardCharsets.UTF_8) + "="
                         + URLEncoder.encode(field.getValue(), StandardCharsets.UTF_8))
                 .reduce((a, b) -> a + "&" + b).orElse("");
-        HttpRequest request = HttpRequest
+        HttpRequest.Builder request = HttpRequest
                 .newBuilder(URI.create("http://localhost:" + runtime.port() + path))
                 .header("Content-Type", "application/x-www-form-urlencoded")
                 .header("Cookie", sessionCookie)
-                .POST(HttpRequest.BodyPublishers.ofString(body))
-                .build();
-        return HttpClient.newHttpClient().send(request, HttpResponse.BodyHandlers.ofString());
+                .POST(HttpRequest.BodyPublishers.ofString(encoded));
+        if (csrfHeader != null) {
+            request.header("X-CSRF-Token", csrfHeader).header("HX-Request", "true");
+        }
+        return HttpClient.newHttpClient().send(request.build(),
+                HttpResponse.BodyHandlers.ofString());
     }
 
     /** A working copy of the gallery app pointed at the test container. */

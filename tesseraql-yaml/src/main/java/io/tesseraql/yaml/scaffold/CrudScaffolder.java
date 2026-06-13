@@ -159,12 +159,18 @@ public final class CrudScaffolder {
     // ---------------------------------------------------------------- list page
 
     private static String listRoute(Names names) {
+        // Browser-authed so the page carries the CSRF meta tag (the htmx forms it links to need
+        // it); app.read gates viewing the list.
         return """
                 # Scaffolded list page for the %s table (tesseraql scaffold crud --table %s).
                 version: tesseraql/v1
                 id: %s.page
                 kind: route
                 recipe: page
+
+                security:
+                  auth: browser
+                  policy: app.read
 
                 response:
                   html:
@@ -317,12 +323,17 @@ public final class CrudScaffolder {
     // ---------------------------------------------------------------- create
 
     private static String newRoute(Names names) {
+        // Browser-authed so the create form's page carries the CSRF meta tag.
         return """
                 # Scaffolded create form page for the %s table.
                 version: tesseraql/v1
                 id: %s.new
                 kind: route
                 recipe: page
+
+                security:
+                  auth: browser
+                  policy: app.read
 
                 response:
                   html:
@@ -331,12 +342,14 @@ public final class CrudScaffolder {
     }
 
     private static String newPage(TableSchema table, Names names) {
+        String action = names.url() + "/create";
         StringBuilder html = new StringBuilder();
         html.append(
                 """
                         <!DOCTYPE html>
-                        <!-- Scaffolded create form for the %s table: a plain form post with the
-                             post/redirect/get flow (docs/hypermedia-ui.md). -->
+                        <!-- Scaffolded create form for the %s table: the hc mutating-form recipe —
+                             htmx post with inline field errors and a success redirect, degrading to
+                             a plain form post with no JS (docs/hypermedia-ui.md). -->
                         <html xmlns:th="http://www.thymeleaf.org"
                               th:replace="~{tql/shell :: shell('%s', ~{templates/nav.html :: app-nav}, ~{:: #page-header}, ~{:: #page-content})}">
                         <th:block id="page-header">
@@ -348,19 +361,21 @@ public final class CrudScaffolder {
                         <div id="page-content" class="hc-stack">
                         <section class="hc-card">
                           <h2>New</h2>
-                          <form method="post" action="%s/create">
-                            <div class="hc-stack">
+                          <form id="%s-create-form" method="post" action="%s"
+                                hx-post="%s" hx-target="#%s-create-form-errors" hx-swap="innerHTML"
+                                hx-disabled-elt="find button[type=submit]" hx-indicator="find .hc-spinner">
                         """
                         .formatted(names.table(), names.title(), names.url(), names.title(),
-                                names.url()));
+                                names.table(), action, action, names.table()));
+        html.append(csrfField());
+        html.append(errorContainer(names.table() + "-create-form"));
+        html.append("    <div class=\"hc-stack\">\n");
         for (TableSchema.Column column : formColumns(table, names)) {
             html.append(formField(column, null));
         }
+        html.append(submitCluster("Create"));
         html.append(
                 """
-                              <div class="hc-cluster">
-                                <button type="submit" class="hc-button" data-variant="primary">Create</button>
-                              </div>
                             </div>
                           </form>
                         </section>
@@ -392,6 +407,7 @@ public final class CrudScaffolder {
                 security:
                   auth: browser
                   policy: app.write
+                  csrf: true
                 """);
         route.append(constraintsBlock(table));
         if (generatedKey) {
@@ -511,12 +527,20 @@ public final class CrudScaffolder {
     }
 
     private static String editPage(TableSchema table, Names names) {
+        boolean locked = table.versionColumn().isPresent();
+        String updateAction = "|" + names.url() + "/${r." + names.pkColumn() + "}/update|";
+        String deleteAction = "|" + names.url() + "/${r." + names.pkColumn() + "}/delete|";
+        String versionField = locked
+                ? "      <input type=\"hidden\" name=\"version\" th:value=\"${r.version}\">\n"
+                : "";
         StringBuilder html = new StringBuilder();
         html.append(
                 """
                         <!DOCTYPE html>
-                        <!-- Scaffolded edit page for the %s table: plain form posts with the
-                             post/redirect/get flow; a stale version answers 409 Conflict (Phase 18). -->
+                        <!-- Scaffolded edit page for the %s table: the hc mutating-form recipe —
+                             htmx posts with inline field errors and a success redirect (a stale
+                             version answers 409 Conflict, Phase 18), a confirmed delete, and a no-JS
+                             plain-form fallback (docs/hypermedia-ui.md). -->
                         <html xmlns:th="http://www.thymeleaf.org"
                               th:replace="~{tql/shell :: shell('%s', ~{templates/nav.html :: app-nav}, ~{:: #page-header}, ~{:: #page-content})}">
                         <th:block id="page-header">
@@ -532,39 +556,45 @@ public final class CrudScaffolder {
                         <th:block th:each="r : ${rows}">
                         <section class="hc-card">
                           <h2>Edit</h2>
-                          <form method="post" th:action="|%s/${r.%s}/update|">
-                            <div class="hc-stack">
+                          <form id="%s-update-form" method="post" th:action="%s"
+                                th:attr="hx-post=%s" hx-target="#%s-update-form-errors" hx-swap="innerHTML"
+                                hx-disabled-elt="find button[type=submit]" hx-indicator="find .hc-spinner">
                         """
                         .formatted(names.table(), names.title(), names.url(), names.title(),
-                                names.url(), names.pkColumn()));
+                                names.table(), updateAction, updateAction, names.table()));
+        html.append(csrfField());
+        html.append(errorContainer(names.table() + "-update-form"));
+        html.append("    <div class=\"hc-stack\">\n");
         for (TableSchema.Column column : formColumns(table, names)) {
             html.append(formField(column, "r." + Names.columnName(column)));
         }
-        if (table.versionColumn().isPresent()) {
-            html.append("      <input type=\"hidden\" name=\"version\""
-                    + " th:value=\"${r.version}\">\n");
-        }
-        html.append("""
-                      <div class="hc-cluster">
-                        <button type="submit" class="hc-button" data-variant="primary">Save</button>
-                      </div>
-                    </div>
-                  </form>
-                </section>
-                <section class="hc-card">
-                  <h2>Delete</h2>
-                """.stripIndent());
-        html.append("  <form method=\"post\" th:action=\"|").append(names.url())
-                .append("/${r.").append(names.pkColumn()).append("}/delete|\">\n");
-        if (table.versionColumn().isPresent()) {
-            html.append("    <input type=\"hidden\" name=\"version\""
-                    + " th:value=\"${r.version}\">\n");
-        }
+        html.append(versionField);
+        html.append(submitCluster("Save"));
         html.append(
                 """
+                            </div>
+                          </form>
+                        </section>
+                        <section class="hc-card">
+                          <h2>Delete</h2>
+                          <form id="%s-delete-form" method="post" th:action="%s"
+                                th:attr="hx-post=%s" hx-trigger="hc:confirmed"
+                                hx-target="#%s-delete-form-errors" hx-swap="innerHTML"
+                                hx-disabled-elt="find button[type=submit]" hx-indicator="find .hc-spinner">
+                        """
+                        .stripIndent()
+                        .formatted(names.table(), deleteAction, deleteAction, names.table()));
+        html.append(csrfField());
+        html.append(errorContainer(names.table() + "-delete-form"));
+        html.append(versionField);
+        html.append(
+                """
+                          <span class="hc-action">
                             <button type="submit" class="hc-button" data-variant="error"
                                     data-hc-confirm="Delete this record?" data-hc-confirm-title="Confirm delete"
                                     data-hc-confirm-ok="Delete" data-hc-confirm-variant="error">Delete</button>
+                            <span class="hc-spinner htmx-indicator" aria-hidden="true"></span>
+                          </span>
                           </form>
                         </section>
                         </th:block>
@@ -607,6 +637,7 @@ public final class CrudScaffolder {
                 security:
                   auth: browser
                   policy: app.write
+                  csrf: true
                 """);
         route.append(constraintsBlock(table));
         route.append("""
@@ -694,6 +725,7 @@ public final class CrudScaffolder {
                 security:
                   auth: browser
                   policy: app.write
+                  csrf: true
 
                 sql:
                   file: delete.sql
@@ -825,6 +857,30 @@ public final class CrudScaffolder {
                     .append(Names.camel(column.toLowerCase(Locale.ROOT))).append('\n');
         });
         return errors.toString();
+    }
+
+    /**
+     * The hidden CSRF token field every mutating form carries, so a no-JS plain form post is
+     * protected (the framework shell also publishes the token as {@code <meta name="csrf-token">}
+     * for the htmx path's {@code installCsrfHeader}).
+     */
+    private static String csrfField() {
+        return "    <input type=\"hidden\" name=\"_csrf\" th:value=\"${_csrf}\">\n";
+    }
+
+    /** The in-form container the 4xx field-errors fragment swaps into (the mutating-form recipe). */
+    private static String errorContainer(String formId) {
+        return "    <div id=\"" + formId + "-errors\"></div>\n";
+    }
+
+    /** The submit button paired with the busy spinner inside an {@code hc-action} wrapper. */
+    private static String submitCluster(String label) {
+        return """
+                      <span class="hc-action">
+                        <button type="submit" class="hc-button" data-variant="primary">%s</button>
+                        <span class="hc-spinner htmx-indicator" aria-hidden="true"></span>
+                      </span>
+                """.formatted(label);
     }
 
     /**

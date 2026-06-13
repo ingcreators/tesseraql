@@ -1,4 +1,4 @@
-# tesseraql-scaffold-checksum: sha256:56d357f22681f73ebec99d17d10f0040b128410b22f23a1abc424784fadaee57
+# tesseraql-scaffold-checksum: sha256:214e0b2d8d961bf2b9b98fd5925e32adbea44ed430fe35268e66e8ca5cadf673
 # Scaffolded delete command for the items table.
 version: tesseraql/v1
 id: items.delete
@@ -19,6 +19,7 @@ inputPolicy:
 security:
   auth: browser
   policy: app.write
+  csrf: true
 
 sql:
   file: delete.sql
