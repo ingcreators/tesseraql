@@ -38,7 +38,7 @@ exchange with neighboring systems) still needs, against what 0.1.0 provides:
 | HTTP caching | absent |
 | HA building blocks | solid base: cluster-safe job claiming, JDBC session store; missing K8s assets and zero-downtime guidance |
 | Distribution | GitHub Releases only; no Maven Central, no Gradle plugin, no docs site |
-| AI tooling | absent |
+| AI tooling | dev-tool MCP server shipped (Phase 24); app-declared MCP endpoints next |
 
 ## Horizon 1 — application completeness (0.2.x)
 
@@ -129,6 +129,25 @@ coding agent needs. Turn that into a product surface:
   Studio's draft/apply mechanism, with the same path confinement and review gates).
 - Acceptance: an agent connected only via MCP scaffolds a table-backed route and iterates
   until lint, tests, and coverage pass — no direct filesystem access.
+
+Delivered (see [docs/ai-mcp.md](ai-mcp.md)): `tesseraql mcp` serves those tools over two
+transports — stdio for a local agent subprocess, and a Streamable HTTP endpoint for a shared
+development server (reusing the app's `tesseraql.security.jwt` bearer verification, loopback
+by default, `--read-only` to drop the write tools). The protocol machinery — JSON-RPC
+dispatch, the tool model, and the transports — is a dependency-light, use-case-neutral module
+(`tesseraql-mcp`), so it is reusable beyond the dev tool.
+
+Next step — **application MCP endpoints**: let a TesseraQL application declare its own MCP
+tools (and later resources, and MCP Apps UI) in YAML, the way it declares HTTP routes today,
+so the running business application is AI-enabled. A `mcp:` recipe compiles to a SQL-backed
+`McpTool` whose input schema derives from the route's declared `input:` constraints; the
+runtime serves it through its own HTTP server driving the same `McpHttpHandler`, under the
+same deny-by-default security, governance (route modes, risk scoring, approvals), lint rules,
+and coverage kinds as any route. The dev-tool server above is the first consumer of the
+protocol core; this is the second, and the reason the core was factored out rather than built
+into the CLI. Scoped behind the same SQL-first, governed-recipe invariants (extension
+principles 1–4); deeper Studio-copilot ambitions remain gated on the MCP loop proving its
+worth (decision point 4).
 
 **Milestone M7** — schema to verified CRUD in under ten minutes by hand, or hands-off via an
 MCP-connected agent.
@@ -265,6 +284,8 @@ None block Phase 18; flagged for the maintainer as their horizons approach.
    philosophy, adds no runtime dependency) vs embedding an external engine.
 3. **Adoption timing**: Maven Central and the docs site sit in Horizon 6; pull them forward
    if external adoption becomes a near-term goal.
-4. **AI ambition** (Phase 24): the MCP server is the scoped bet; deeper Studio copilot
-   features only if the MCP loop proves valuable.
+4. **AI ambition** (Phase 24): the dev-tool MCP server is the scoped bet, and it shipped with
+   its protocol core factored out (`tesseraql-mcp`) so the runtime can later serve
+   application-declared MCP endpoints from YAML (the Phase 24 "next step"). Deeper
+   Studio-copilot features only if the MCP loop proves valuable.
 5. **Spring 7 / Boot 4 timing**: proposed alongside Horizon 5, before the 1.0 freeze.

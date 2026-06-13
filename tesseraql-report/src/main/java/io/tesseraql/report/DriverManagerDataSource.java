@@ -1,4 +1,4 @@
-package io.tesseraql.maven;
+package io.tesseraql.report;
 
 import java.io.PrintWriter;
 import java.sql.Connection;
@@ -11,13 +11,13 @@ import javax.sql.DataSource;
  * A minimal {@link DataSource} backed by {@link DriverManager}, used by the test goal so any JDBC
  * driver the build provides works without an extra pool dependency.
  */
-final class DriverManagerDataSource implements DataSource {
+public final class DriverManagerDataSource implements DataSource {
 
     private final String url;
     private final String user;
     private final String password;
 
-    DriverManagerDataSource(String url, String user, String password) {
+    public DriverManagerDataSource(String url, String user, String password) {
         this.url = url;
         this.user = user;
         this.password = password;

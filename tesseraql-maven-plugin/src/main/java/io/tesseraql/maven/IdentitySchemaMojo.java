@@ -1,5 +1,6 @@
 package io.tesseraql.maven;
 
+import io.tesseraql.report.DriverManagerDataSource;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;

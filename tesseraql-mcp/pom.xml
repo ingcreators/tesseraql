@@ -10,33 +10,20 @@
     <relativePath>../pom.xml</relativePath>
   </parent>
 
-  <artifactId>tesseraql-report</artifactId>
-  <name>Tesseraql Report</name>
+  <artifactId>tesseraql-mcp</artifactId>
+  <name>Tesseraql Mcp</name>
+  <description>Transport-agnostic Model Context Protocol (MCP) server core: JSON-RPC dispatch, a
+    tool model, and stdio and Streamable HTTP transports. Reused by the dev-tool MCP server and,
+    later, by the runtime to serve app-declared MCP endpoints (roadmap Phase 24).</description>
 
   <dependencies>
+    <!-- Only the error taxonomy and JSON. No yaml/studio/runtime coupling: this stays a pure
+         protocol layer both the dev tool and the runtime can drive. -->
     <dependency>
       <groupId>io.tesseraql</groupId>
-      <artifactId>tesseraql-test-core</artifactId>
+      <artifactId>tesseraql-core</artifactId>
       <version>${project.version}</version>
     </dependency>
-    <!-- AppTestRunner / CoverageThresholdResolver use these directly (also reachable
-         transitively through tesseraql-test-core; declared explicitly as first-class deps). -->
-    <dependency>
-      <groupId>io.tesseraql</groupId>
-      <artifactId>tesseraql-yaml</artifactId>
-      <version>${project.version}</version>
-    </dependency>
-    <dependency>
-      <groupId>io.tesseraql</groupId>
-      <artifactId>tesseraql-identity</artifactId>
-      <version>${project.version}</version>
-    </dependency>
-    <dependency>
-      <groupId>io.tesseraql</groupId>
-      <artifactId>tesseraql-coverage-core</artifactId>
-      <version>${project.version}</version>
-    </dependency>
-
     <dependency>
       <groupId>com.fasterxml.jackson.core</groupId>
       <artifactId>jackson-databind</artifactId>

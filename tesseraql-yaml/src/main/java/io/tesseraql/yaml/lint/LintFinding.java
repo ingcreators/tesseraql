@@ -1,4 +1,4 @@
-package io.tesseraql.maven;
+package io.tesseraql.yaml.lint;
 
 /**
  * A lint finding for an app (design ch. 18 {@code lint}, 28.17, 33).

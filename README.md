@@ -81,7 +81,8 @@ organized.
 | `tesseraql-test-core` / `tesseraql-coverage-core` / `tesseraql-report` | Declarative tests, coverage kinds, plan guard, report exporters |
 | `tesseraql-studio` / `tesseraql-ops-ui` | Bundled Studio and operations console apps |
 | `tesseraql-excel` | Optional Excel codec (fastexcel reads/writes, jxls report templates) |
-| `tesseraql-cli` | `tesseraql serve` / `routes` / `new` / `scaffold crud` |
+| `tesseraql-mcp` | Model Context Protocol server core: JSON-RPC dispatch, tool model, stdio and HTTP transports |
+| `tesseraql-cli` | `tesseraql serve` / `routes` / `new` / `scaffold crud` / `mcp` |
 | `tesseraql-maven-plugin` | `lint`, `test`, `coverage`, `generate`, `package-app`, `migrate`, `identity-schema`, `release-evidence`, `verify-evidence`, `governance` |
 | `tesseraql-bom` | Dependency BOM for applications |
 

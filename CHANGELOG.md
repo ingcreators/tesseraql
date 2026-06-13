@@ -144,6 +144,26 @@ All notable changes to TesseraQL are documented here. The format follows
   it, and runs its suites (100% branch coverage on the generated search templates); a
   runtime integration test drives the full CRUD flow over HTTP, including the stale-version
   `409` and the duplicate-key field error.
+- AI-assisted development over MCP (roadmap Phase 24, see [docs/ai-mcp.md](docs/ai-mcp.md)):
+  `tesseraql mcp --app <dir>` serves the framework's developer surfaces as Model Context
+  Protocol tools, so an agent connected only over MCP scaffolds a table-backed route and
+  iterates until lint, tests, and coverage pass with no direct filesystem access. Read tools
+  (`manifest_summary`, `source_read`, `schema_introspect`, `lint`, `test`, `ops_status`) and
+  gated write tools (`scaffold_crud` through the checksum-aware writer; `draft_save` /
+  `draft_preview` / `draft_apply` through Studio's draft/apply, so an edit only lands if it
+  compiles) each reuse the same service the CLI and Maven plugin use, all confined to the app
+  home (design ch. 20.2). Two transports: stdio (the default — an agent launches the process;
+  stdout is reserved for protocol frames), or `--transport http` for a shared development
+  server whose Streamable HTTP endpoint reuses the app's `tesseraql.security.jwt` bearer
+  verification and refuses to bind off-loopback without auth unless `--insecure`;
+  `--read-only` drops the write tools. The protocol core is a new dependency-light module,
+  `tesseraql-mcp` (JSON-RPC dispatch, the tool model, and the stdio and HTTP transports),
+  reusable beyond the dev tool. New error domain `MCP` in the `TQL-*` taxonomy.
+- The lint engine and the declarative test/coverage runner moved out of the Maven plugin into
+  libraries so non-Maven callers (the MCP server) reuse them: `AppLinter`/`LintFinding` are
+  now in `tesseraql-yaml` (`io.tesseraql.yaml.lint`), and `AppTestRunner` (with
+  `DriverManagerDataSource` and `CoverageThresholdResolver`) in `tesseraql-report`
+  (`io.tesseraql.report`). The Maven goals are unchanged.
 
 ### Quality and supply chain
 

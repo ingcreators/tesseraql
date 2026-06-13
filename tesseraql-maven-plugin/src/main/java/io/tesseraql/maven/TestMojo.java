@@ -1,6 +1,8 @@
 package io.tesseraql.maven;
 
 import io.tesseraql.identity.RealmConfig;
+import io.tesseraql.report.AppTestRunner;
+import io.tesseraql.report.DriverManagerDataSource;
 import io.tesseraql.test.TestReport;
 import java.io.File;
 import org.apache.maven.plugin.AbstractMojo;

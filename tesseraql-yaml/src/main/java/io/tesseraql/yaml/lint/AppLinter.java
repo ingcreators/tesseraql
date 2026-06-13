@@ -1,4 +1,4 @@
-package io.tesseraql.maven;
+package io.tesseraql.yaml.lint;
 
 import io.tesseraql.yaml.config.AppConfig;
 import io.tesseraql.yaml.manifest.AppManifest;

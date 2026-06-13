@@ -1,5 +1,7 @@
 package io.tesseraql.maven;
 
+import io.tesseraql.yaml.lint.AppLinter;
+import io.tesseraql.yaml.lint.LintFinding;
 import java.io.File;
 import java.util.List;
 import org.apache.maven.plugin.AbstractMojo;
