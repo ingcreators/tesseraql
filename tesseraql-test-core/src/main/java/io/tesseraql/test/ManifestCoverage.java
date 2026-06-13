@@ -50,6 +50,28 @@ public final class ManifestCoverage {
     }
 
     /**
+     * MCP-tool coverage (roadmap Phase 24 follow-on): every application-declared tool under
+     * {@code mcp/} is declared, and a tool counts as covered when a suite exercises one of its SQL
+     * artifacts - the same SQL-file basis as route coverage, since a tool is a query/command.
+     */
+    public static ItemCoverage mcp(AppManifest manifest, List<TestSuite> suites) {
+        ItemCoverage coverage = new ItemCoverage("mcp");
+        Set<Path> testedPaths = testedSqlPaths(manifest.appHome(), suites);
+        Set<String> testedContracts = testedContracts(suites);
+        for (io.tesseraql.yaml.manifest.ToolFile tool : manifest.tools()) {
+            RouteDefinition definition = tool.definition();
+            if (definition.id() == null) {
+                continue;
+            }
+            coverage.declare(definition.id());
+            if (exercised(tool.source().getParent(), definition, testedPaths, testedContracts)) {
+                coverage.cover(definition.id());
+            }
+        }
+        return coverage;
+    }
+
+    /**
      * Validation coverage (roadmap Phase 19): every rule of every route's {@code validate:}
      * block is declared as {@code <routeId>.<ruleId>}, and a suite's validation case covers the
      * rules it evaluates — the targeted rule, or the route's whole block when no rule is named.
@@ -243,8 +265,13 @@ public final class ManifestCoverage {
      */
     private static boolean exercised(RouteFile route, Set<Path> testedPaths,
             Set<String> testedContracts) {
-        Path routeDir = route.source().getParent();
-        for (SqlBinding binding : bindings(route.definition())) {
+        return exercised(route.source().getParent(), route.definition(), testedPaths,
+                testedContracts);
+    }
+
+    private static boolean exercised(Path routeDir, RouteDefinition definition,
+            Set<Path> testedPaths, Set<String> testedContracts) {
+        for (SqlBinding binding : bindings(definition)) {
             if (binding.file() != null
                     && testedPaths.contains(routeDir.resolve(binding.file()).normalize())) {
                 return true;

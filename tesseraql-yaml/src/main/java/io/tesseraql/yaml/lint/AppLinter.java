@@ -22,6 +22,8 @@ public final class AppLinter {
 
     private static final Set<String> KNOWN_ROUTE_RECIPES = Set.of("query-json", "command-json",
             "query-html", "page", "query-export", "file-import", "file-export");
+    /** Recipes an application-declared MCP tool may use (roadmap Phase 24 follow-on). */
+    private static final Set<String> KNOWN_TOOL_RECIPES = Set.of("query-json", "command-json");
 
     /** Loads and lints the app home, returning all findings. */
     public List<LintFinding> lint(Path appHome) {
@@ -33,8 +35,61 @@ public final class AppLinter {
         for (io.tesseraql.yaml.manifest.JobFile job : manifest.jobs()) {
             lintJob(appHome, manifest.config(), job, findings);
         }
+        for (io.tesseraql.yaml.manifest.ToolFile tool : manifest.tools()) {
+            lintTool(appHome, manifest.config(), tool, findings);
+        }
         lintI18n(appHome, manifest, findings);
         return findings;
+    }
+
+    /**
+     * Lints an application-declared MCP tool (roadmap Phase 24 follow-on): its recipe is a tool
+     * recipe, its SQL files exist, its referenced policy is defined, and - deny by default - a write
+     * tool declares an authorization policy, since an AI agent must not mutate data unauthorized. A
+     * missing description is a warning: it is the hint the model uses to decide when to call.
+     */
+    private void lintTool(Path appHome, AppConfig config, io.tesseraql.yaml.manifest.ToolFile tool,
+            List<LintFinding> findings) {
+        RouteDefinition definition = tool.definition();
+        String source = appHome.relativize(tool.source()).toString().replace('\\', '/');
+
+        if (!KNOWN_TOOL_RECIPES.contains(definition.recipe())) {
+            findings.add(new LintFinding("TQL-MCP-1001", "error", source,
+                    "MCP tool '" + definition.id() + "' has recipe '" + definition.recipe()
+                            + "'; only query-json and command-json are supported"));
+        }
+        if (tool.description() == null || tool.description().isBlank()) {
+            findings.add(new LintFinding("TQL-MCP-1002", "warning", source,
+                    "MCP tool '" + definition.id() + "' has no description; it is the hint the"
+                            + " model uses to decide when to call the tool"));
+        }
+        if (definition.sql() != null && !definition.sql().isContract()
+                && definition.sql().file() != null
+                && !Files.isRegularFile(
+                        tool.source().getParent().resolve(definition.sql().file()))) {
+            findings.add(new LintFinding("TQL-SQL-2103", "error", source,
+                    "Referenced SQL file is missing: " + definition.sql().file()));
+        }
+        definition.steps().forEach((name, step) -> {
+            if (step.file() != null
+                    && !Files.isRegularFile(tool.source().getParent().resolve(step.file()))) {
+                findings.add(new LintFinding("TQL-SQL-2103", "error", source,
+                        "Step '" + name + "' references a missing SQL file: " + step.file()));
+            }
+        });
+
+        boolean write = "command-json".equals(definition.recipe())
+                || (definition.sql() != null && "update".equals(definition.sql().effectiveMode()));
+        String policy = definition.security() == null ? null : definition.security().policy();
+        if (write && (policy == null || policy.isBlank())) {
+            findings.add(new LintFinding("TQL-MCP-4030", "error", source,
+                    "Write MCP tool '" + definition.id() + "' must declare a security.policy: an AI"
+                            + " agent must not mutate data without authorization (deny by default)"));
+        }
+        if (policy != null && !policy.isBlank() && !policyDefined(config, policy)) {
+            findings.add(new LintFinding("TQL-SEC-4030", "warning", source,
+                    "MCP tool references undefined policy '" + policy + "' (deny by default)"));
+        }
     }
 
     /**
