@@ -36,6 +36,15 @@ public interface SessionStore {
         return session == null ? null : session.csrfToken();
     }
 
+    /**
+     * Returns the CSRF token for the session named by a {@code Cookie} header, or {@code null} when
+     * no session resolves. Lets a request pipeline publish the token (for example as a
+     * {@code <meta name="csrf-token">} tag) without parsing cookies itself.
+     */
+    default String csrfTokenFromCookie(String cookieHeader) {
+        return csrfToken(Cookies.value(cookieHeader, cookieName()));
+    }
+
     void invalidate(String sessionId);
 
     String cookieName();

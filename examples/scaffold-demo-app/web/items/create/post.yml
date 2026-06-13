@@ -1,4 +1,4 @@
-# tesseraql-scaffold-checksum: sha256:de128835f007da1989f6048ebd2c098300851036b5588155f5736217568ea43c
+# tesseraql-scaffold-checksum: sha256:3cc16e7b118406bcb80e1cacce5f2eae53d943bdd1d80ade81b1cb8e7d48d3f7
 # Scaffolded create command for the items table: one transaction, audit binds, and
 # field-level constraint errors (docs/transactional-writes.md).
 version: tesseraql/v1
@@ -32,6 +32,7 @@ inputPolicy:
 security:
   auth: browser
   policy: app.write
+  csrf: true
 
 errors:
   constraints:

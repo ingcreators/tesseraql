@@ -1,7 +1,8 @@
 <!DOCTYPE html>
-<!-- tesseraql-scaffold-checksum: sha256:2e27868205558a96c50ad720edfab263d70a1951af48006f9bce0eb4b2d8a9d0 -->
-<!-- Scaffolded create form for the items table: a plain form post with the
-     post/redirect/get flow (docs/hypermedia-ui.md). -->
+<!-- tesseraql-scaffold-checksum: sha256:806ace23ab00f26672ac8f45a03681b1a089eb980ea61f6e423d316f5829dfe5 -->
+<!-- Scaffolded create form for the items table: the hc mutating-form recipe —
+     htmx post with inline field errors and a success redirect, degrading to
+     a plain form post with no JS (docs/hypermedia-ui.md). -->
 <html xmlns:th="http://www.thymeleaf.org"
       th:replace="~{tql/shell :: shell('Items', ~{templates/nav.html :: app-nav}, ~{:: #page-header}, ~{:: #page-content})}">
 <th:block id="page-header">
@@ -13,7 +14,11 @@
 <div id="page-content" class="hc-stack">
 <section class="hc-card">
   <h2>New</h2>
-  <form method="post" action="/items/create">
+  <form id="items-create-form" method="post" action="/items/create"
+        hx-post="/items/create" hx-target="#items-create-form-errors" hx-swap="innerHTML"
+        hx-disabled-elt="find button[type=submit]" hx-indicator="find .hc-spinner">
+    <input type="hidden" name="_csrf" th:value="${_csrf}">
+    <div id="items-create-form-errors"></div>
     <div class="hc-stack">
       <div class="hc-field">
         <label class="hc-field__label" for="field-name">Name</label>
@@ -40,9 +45,10 @@
         <label class="hc-field__label" for="field-note">Note</label>
         <input class="hc-input" id="field-note" type="text" name="note" maxlength="1000">
       </div>
-      <div class="hc-cluster">
+      <span class="hc-action">
         <button type="submit" class="hc-button" data-variant="primary">Create</button>
-      </div>
+        <span class="hc-spinner htmx-indicator" aria-hidden="true"></span>
+      </span>
     </div>
   </form>
 </section>

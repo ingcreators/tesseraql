@@ -12,6 +12,12 @@ public final class TesseraqlProperties {
     public static final String CONTEXT = "TesseraqlContext";
     public static final String SQL_PARAMS = "TesseraqlSqlParams";
     public static final String PRINCIPAL = "TesseraqlPrincipal";
+    /**
+     * The authenticated browser session's CSRF token, stashed on {@code browser} authentication so
+     * HTML responses can publish it as {@code <meta name="csrf-token">} for the Hypermedia
+     * Components {@code installCsrfHeader} convention (design ch. 11.3).
+     */
+    public static final String CSRF_TOKEN = "TesseraqlCsrfToken";
     public static final String TENANT = "TesseraqlTenant";
     /** The resolved request locale as a BCP-47 language tag (roadmap Phase 22). */
     public static final String LOCALE = "TesseraqlLocale";

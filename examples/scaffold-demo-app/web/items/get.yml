@@ -1,9 +1,13 @@
-# tesseraql-scaffold-checksum: sha256:6d33a9c649661df8c798b8969885281f257004e5d5c9ecef0608220a8ba39d88
+# tesseraql-scaffold-checksum: sha256:a6dd4e14240ac49aa7cf3fdefe451620e59770a08ea8b03310fa98774b2f92fa
 # Scaffolded list page for the items table (tesseraql scaffold crud --table items).
 version: tesseraql/v1
 id: items.page
 kind: route
 recipe: page
+
+security:
+  auth: browser
+  policy: app.read
 
 response:
   html:

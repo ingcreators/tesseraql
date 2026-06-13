@@ -146,10 +146,55 @@ class CrudScaffolderTest {
         assertThat(edit)
                 .contains("class=\"hc-datepicker\" id=\"field-due-date\" type=\"date\"")
                 .contains("<input type=\"hidden\" name=\"version\" th:value=\"${r.version}\">")
-                .contains("data-hc-confirm=\"Delete this record?\"")
                 .contains("class=\"hc-checkbox\"");
         // The unchecked-checkbox fallback: the hidden false is overridden by the checked value.
         assertThat(edit).contains("type=\"hidden\" name=\"active\" value=\"false\"");
+    }
+
+    @Test
+    void formsFollowTheMutatingFormRecipe() {
+        List<ScaffoldedFile> files = scaffolder.scaffold(items());
+
+        String create = content(files, "web/items/new/new.html");
+        // htmx post + an in-form error container + the double-submit guard, keeping method/action
+        // for the no-JS fallback, with the hidden CSRF field.
+        assertThat(create)
+                .contains("method=\"post\" action=\"/items/create\"")
+                .contains("hx-post=\"/items/create\"")
+                .contains("hx-target=\"#items-create-form-errors\"")
+                .contains("hx-disabled-elt=\"find button[type=submit]\"")
+                .contains("hx-indicator=\"find .hc-spinner\"")
+                .contains("<div id=\"items-create-form-errors\"></div>")
+                .contains("<input type=\"hidden\" name=\"_csrf\" th:value=\"${_csrf}\">")
+                .contains("<span class=\"hc-spinner htmx-indicator\"");
+
+        String edit = content(files, "web/items/{id}/edit.html");
+        // The update form posts via a dynamic hx-post; the delete form fires on the confirm event.
+        assertThat(edit)
+                .contains("th:attr=\"hx-post=|/items/${r.id}/update|\"")
+                .contains("hx-target=\"#items-update-form-errors\"")
+                .contains("th:attr=\"hx-post=|/items/${r.id}/delete|\"")
+                .contains("hx-trigger=\"hc:confirmed\"")
+                .contains("data-hc-confirm=\"Delete this record?\"")
+                .contains("<input type=\"hidden\" name=\"_csrf\" th:value=\"${_csrf}\">");
+    }
+
+    @Test
+    void mutationRoutesEnableCsrfAndPagesAuthenticateToCarryTheToken() {
+        List<ScaffoldedFile> files = scaffolder.scaffold(items());
+
+        // The form-bearing pages authenticate, so the shell renders the CSRF meta tag they need.
+        assertThat(parser.parseRoute(content(files, "web/items/get.yml"), "get.yml")
+                .security().auth()).isEqualTo("browser");
+        assertThat(parser.parseRoute(content(files, "web/items/new/get.yml"), "get.yml")
+                .security().auth()).isEqualTo("browser");
+
+        // Every mutation enforces CSRF.
+        for (String route : List.of("web/items/create/post.yml", "web/items/{id}/update/post.yml",
+                "web/items/{id}/delete/post.yml")) {
+            assertThat(parser.parseRoute(content(files, route), route).security().csrf())
+                    .as(route).isTrue();
+        }
     }
 
     @Test

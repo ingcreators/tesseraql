@@ -103,3 +103,51 @@ shape is in [declarative-validation.md](declarative-validation.md); conflict hin
   `/assets/_tesseraql/messages.js?locale=<tag>` (the official locale pack layered under the
   app's entries) before the behaviors install — can re-resolve and interpolate it
   client-side (see [internationalization.md](internationalization.md)).
+
+## Mutating forms
+
+A form that changes server state follows the kit's `mutating-form` recipe — the composition
+the Phase 23 scaffolds emit. It posts over htmx, swaps inline field errors on a 4xx, and
+redirects on success, while degrading to a plain form post with no JavaScript:
+
+```html
+<form id="member-form" method="post" action="/members"
+      hx-post="/members" hx-target="#member-form-errors" hx-swap="innerHTML"
+      hx-disabled-elt="find button[type=submit]" hx-indicator="find .hc-spinner">
+  <input type="hidden" name="_csrf" th:value="${_csrf}">
+  <div id="member-form-errors"></div>
+  <div class="hc-field">
+    <label class="hc-field__label" for="email">Email</label>
+    <input class="hc-input" id="email" name="email" type="email" required>
+  </div>
+  <span class="hc-action">
+    <button class="hc-button" data-variant="primary" type="submit">Create</button>
+    <span class="hc-spinner htmx-indicator" aria-hidden="true"></span>
+  </span>
+</form>
+```
+
+- **Keep `method`/`action` alongside `hx-post`.** Without JavaScript the form submits
+  natively: the server re-renders the page with the field-errors fragment inline, or
+  redirects. The double-submit guard and spinner are htmx enhancements that simply don't run.
+- **Failure (4xx)** swaps the field-errors fragment into the in-form container (the bootstrap
+  already allows the swap, see above). Because the container is inside the form,
+  `installFieldErrors` distributes items to the inputs.
+- **Success** branches on the `HX-Request` header (the framework's redirect renderer does this
+  automatically): an htmx caller gets `204` + `HX-Redirect` and htmx navigates with a full
+  `window.location` (post/redirect/get intact); a no-JS caller gets the plain `303 Location`.
+  `HX-Location` is deliberately avoided — it does a boosted in-page swap, not a redirect.
+- **A destructive submit** (delete) gates on `data-hc-confirm` and moves htmx's trigger to the
+  confirm event: `hx-trigger="hc:confirmed"` on the form. The no-JS path posts straight
+  through (the server re-validates anyway).
+
+## CSRF tokens
+
+State-changing browser routes declare `csrf: true`. The framework shell publishes the session
+token as `<meta name="csrf-token" content="…">` whenever an authenticated session resolved it,
+and the kit's auto-installed `installCsrfHeader` behavior reads that tag at request time and
+attaches the `X-CSRF-Token` header to every htmx request — so an htmx form needs no per-request
+wiring. The no-JS path can't send a header, so the form also carries a hidden `_csrf` field;
+the framework's `csrf` step accepts the header or the field (the header wins), and treats
+`_csrf` as a reserved request field that never trips the mass-assignment guard. A page that
+hosts a mutating form must therefore be authenticated, so the meta tag is present.

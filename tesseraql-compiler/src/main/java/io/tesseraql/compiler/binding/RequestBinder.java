@@ -29,6 +29,12 @@ public final class RequestBinder implements Processor {
 
     private static final TqlErrorCode FIELD_REJECTED = new TqlErrorCode(TqlDomain.FIELD, 2002);
     private static final System.Logger LOG = System.getLogger(RequestBinder.class.getName());
+    /**
+     * Framework-reserved request fields that are not application inputs and never bound: the
+     * hidden CSRF token a no-JS form post carries (validated by the {@code csrf} step) passes the
+     * mass-assignment guard even under {@code unknownFields: reject}.
+     */
+    private static final java.util.Set<String> RESERVED_FIELDS = java.util.Set.of("_csrf");
 
     private final RouteDefinition route;
     private final java.util.List<String> pathParams;
@@ -144,6 +150,9 @@ public final class RequestBinder implements Processor {
         }
         InputPolicy policy = route.effectiveInputPolicy();
         for (String key : body.keySet()) {
+            if (RESERVED_FIELDS.contains(key)) {
+                continue;
+            }
             InputField field = route.input().get(key);
             if (field == null) {
                 if (policy.rejectsUnknownFields()) {

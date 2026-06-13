@@ -121,6 +121,23 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Developer experience
 
+- Hypermedia Components 0.1.2 (the upstream answer to the Phase 23 feedback issues
+  #244/#245/#246). Adopted across the framework and the scaffolds:
+  - **CSRF on by default** for scaffolded mutations. State-changing browser routes declare
+    `csrf: true`; the framework shell publishes the session token as
+    `<meta name="csrf-token">` (browser authentication stashes it, the HTML renderer injects
+    the reserved `_csrf` model variable), and the kit's auto-installed `installCsrfHeader`
+    behavior attaches the `X-CSRF-Token` header to every htmx request. The no-JS path carries
+    a hidden `_csrf` form field; the `csrf` step accepts the header or the field, and the
+    request binder treats `_csrf` as reserved so it passes the mass-assignment guard.
+  - **The mutating-form recipe** in scaffolded create/edit forms: an htmx post with inline
+    field errors, a success redirect (the redirect renderer answers htmx callers `204` +
+    `HX-Redirect` and no-JS callers a plain `303 Location`), a double-submit guard and busy
+    spinner, the confirmed-destructive delete variant, and a no-JS fallback — see
+    [docs/hypermedia-ui.md](docs/hypermedia-ui.md).
+  - The kit's field-errors fix (same-name groups resolve to the visible control) corrects the
+    ARIA wiring of the boolean checkbox the scaffolds already emit; the boolean field pattern
+    is now blessed upstream.
 - Scaffolding and project generation (roadmap Phase 23, see
   [docs/scaffolding.md](docs/scaffolding.md)): `tesseraql new <app>` generates a runnable
   skeleton — config, a Flyway migration whose starter table follows the Phase 18 write
