@@ -83,7 +83,7 @@
     <spring.boot.version>3.4.1</spring.boot.version>
     <htmx.version>2.0.4</htmx.version>
     <thymeleaf.version>3.1.5.RELEASE</thymeleaf.version>
-    <hypermedia-components.version>0.1.1</hypermedia-components.version>
+    <hypermedia-components.version>0.1.2</hypermedia-components.version>
     <webjars-locator.version>1.1.3</webjars-locator.version>
     <flyway.version>12.8.1</flyway.version>
     <commons-csv.version>1.14.1</commons-csv.version>
