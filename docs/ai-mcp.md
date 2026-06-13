@@ -292,6 +292,32 @@ The runtime serves it over the same `/_tesseraql/mcp` endpoint as the tools and 
   resource like a read route (never `advanced`, since it cannot write); and an `mcp-ui` coverage
   kind tracks which UI resources your declarative suites exercise.
 
+## Mounted-app tools
+
+A TesseraQL runtime hosts the main app and any mounted or bundled system apps (design ch. 32) —
+the ops console, Studio, IAM admin, and apps listed under `tesseraql.apps.<name>`. Each is a plain
+YAML/SQL/template tree compiled by the same route compiler, so each may declare its own MCP tools,
+resources, and UI resources under `mcp/`. The runtime serves them all from the one
+`/_tesseraql/mcp` endpoint, so an agent sees one catalog spanning every hosted app:
+
+- **One endpoint, every app.** `tools/list` and `resources/list` advertise the tools, resources, and
+  UI resources of the main app and every mounted app together; the MCP Apps UI extension is
+  negotiated in `initialize` when *any* hosted app serves a `ui://` resource. The single
+  `tesseraql.mcp.enabled` flag governs the whole endpoint.
+- **Security stays per-route.** A mounted-app tool's `tools/call` (or resource read) runs the
+  route that app declared, with that route's own `auth`/`policy`. The MCP request's bearer token
+  rides into it exactly as for a main-app tool. Mounted apps share the main app's configuration
+  (datasources, security policies, JWT verification), so a policy and the token verifier resolve the
+  same way across apps.
+- **Names and uris are unique across apps.** Because every app's surface shares the one endpoint, a
+  tool name (a tool's `id`), a resource `uri`, and a UI `ui://` uri must be unique across all hosted
+  apps — resources and UI resources share one uri namespace. The startup route-conflict check (the
+  same guard that rejects duplicate HTTP route ids and method+path pairs across mounted apps) rejects
+  the collision with a clear error, so a clash fails the mount rather than silently shadowing a tool.
+
+This needs no new YAML: an app declares its MCP surface the same way whether it runs as the main app
+or is mounted into another.
+
 ## Error codes
 
 | Code | Meaning |

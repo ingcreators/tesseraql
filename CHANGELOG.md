@@ -72,6 +72,17 @@ All notable changes to TesseraQL are documented here. The format follows
   kind tracks UI resources exercised by declarative suites. The protocol core (`tesseraql-mcp`)
   carries an opaque `_meta` on `McpTool`/`McpResource` and negotiates extensions in `initialize`.
   `AppManifest` gains `uiResources()` (discovered from `mcp/` by `kind`).
+- Mounted-app MCP (roadmap Phase 24 mounted-app tools, see [docs/ai-mcp.md](docs/ai-mcp.md)): the
+  runtime serves the MCP tools, resources, and UI resources declared by mounted and bundled system
+  apps (design ch. 32) — not only the main app — from the one `/_tesseraql/mcp` endpoint. Each app's
+  `direct:mcp.*` routes compile as before; the runtime registers every hosted app's MCP surface
+  together and negotiates the MCP Apps UI extension when any hosted app serves a `ui://` resource.
+  Security stays per-route (the bearer token rides into the declaring app's route; mounted apps share
+  the main app's config, so policies and the JWT verifier resolve the same way). The startup
+  route-conflict check now spans the MCP surface too: a tool name, resource uri, or UI uri shared by
+  two apps (resources and UI resources share one uri namespace) is rejected with a clear error rather
+  than failing as a raw duplicate-route-id error. The endpoint is wired whenever any hosted app
+  declares an MCP surface, still governed by the single `tesseraql.mcp.enabled` flag.
 - Internationalization (roadmap Phase 22, see
   [docs/internationalization.md](docs/internationalization.md)): per-app message catalogs
   (`messages/<locale>.yml`, nested maps flattened to dotted keys, layered over framework
