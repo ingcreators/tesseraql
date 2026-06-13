@@ -76,6 +76,14 @@ public final class HtmlResponseRenderer implements Processor {
         response.model().forEach((key, expr) -> model.put(key,
                 evaluation.resolve(Arrays.asList(String.valueOf(expr).split("\\.")))));
 
+        // Publish the browser session's CSRF token (stashed on authentication) as the reserved
+        // model variable `_csrf`, so the shell can emit <meta name="csrf-token"> for the
+        // Hypermedia Components installCsrfHeader convention and forms can carry a hidden field.
+        String csrfToken = exchange.getProperty(TesseraqlProperties.CSRF_TOKEN, String.class);
+        if (csrfToken != null) {
+            model.put("_csrf", csrfToken);
+        }
+
         // The negotiated request locale (roadmap Phase 22) drives #{key} lookups and #locale.
         String tag = exchange.getProperty(TesseraqlProperties.LOCALE, defaultLocaleTag,
                 String.class);

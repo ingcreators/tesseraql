@@ -11,6 +11,10 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- The browser session's CSRF token for the Hypermedia Components installCsrfHeader behavior:
+     it reads this tag at request time and attaches the X-CSRF-Token header to every htmx
+     request (rendered only when an authenticated session resolved the token). -->
+<meta name="csrf-token" th:if="${_csrf}" th:content="${_csrf}">
 <title th:text="${title}">TesseraQL</title>
 <link rel="stylesheet" href="/assets/vendor/hypermedia-components__core/dist/hc.min.css">
 <link rel="stylesheet" href="/assets/_tesseraql/tesseraql.css">

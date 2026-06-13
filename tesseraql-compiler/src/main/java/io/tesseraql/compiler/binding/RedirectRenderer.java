@@ -14,9 +14,16 @@ import org.apache.camel.Processor;
 
 /**
  * Renders a redirect response (design ch. 6.4, post/redirect/get): resolves the
- * {@code {expression}} placeholders of the location template against the execution context,
- * URL-encodes each resolved value, and answers with the configured status (303 by default) and a
- * {@code Location} header.
+ * {@code {expression}} placeholders of the location template against the execution context and
+ * URL-encodes each resolved value.
+ *
+ * <p>The reply branches on whether the caller is htmx (the {@code HX-Request: true} header, set on
+ * every htmx request): an htmx caller gets {@code 204 No Content} with an {@code HX-Redirect}
+ * header — htmx performs a full {@code window.location} navigation, keeping post/redirect/get
+ * intact (the Hypermedia Components mutating-form recipe; {@code HX-Location} is deliberately not
+ * used, as it does a boosted in-page swap). A non-htmx caller (a no-JS form post) gets the plain
+ * {@code Location} redirect with the configured status (303 by default), which the browser follows
+ * natively.
  */
 public final class RedirectRenderer implements Processor {
 
@@ -45,8 +52,18 @@ public final class RedirectRenderer implements Processor {
         }
         matcher.appendTail(location);
 
-        exchange.getMessage().setHeader(Exchange.HTTP_RESPONSE_CODE, redirect.effectiveStatus());
-        exchange.getMessage().setHeader("Location", location.toString());
+        if (isHtmxRequest(exchange)) {
+            exchange.getMessage().setHeader(Exchange.HTTP_RESPONSE_CODE, 204);
+            exchange.getMessage().setHeader("HX-Redirect", location.toString());
+        } else {
+            exchange.getMessage().setHeader(Exchange.HTTP_RESPONSE_CODE,
+                    redirect.effectiveStatus());
+            exchange.getMessage().setHeader("Location", location.toString());
+        }
         exchange.getMessage().setBody("");
+    }
+
+    private static boolean isHtmxRequest(Exchange exchange) {
+        return "true".equalsIgnoreCase(exchange.getMessage().getHeader("HX-Request", String.class));
     }
 }
