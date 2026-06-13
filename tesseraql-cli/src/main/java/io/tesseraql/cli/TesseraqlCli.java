@@ -1,5 +1,6 @@
 package io.tesseraql.cli;
 
+import io.tesseraql.cli.mcp.McpCommand;
 import io.tesseraql.runtime.TesseraqlRuntime;
 import io.tesseraql.yaml.manifest.AppManifest;
 import io.tesseraql.yaml.manifest.ManifestLoader;
@@ -17,7 +18,8 @@ import picocli.CommandLine.Option;
         TesseraqlCli.ServeCommand.class,
         TesseraqlCli.RoutesCommand.class,
         NewCommand.class,
-        ScaffoldCommand.class
+        ScaffoldCommand.class,
+        McpCommand.class
 })
 public final class TesseraqlCli implements Runnable {
 
