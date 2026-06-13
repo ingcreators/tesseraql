@@ -33,11 +33,12 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
 /**
- * End-to-end test for application-declared MCP endpoints (roadmap Phase 24 follow-on): an app
- * declares MCP tools under {@code mcp/}, and the runtime serves them over Streamable HTTP at
+ * End-to-end test for application-declared MCP endpoints (roadmap Phase 24): an app declares MCP
+ * tools and resources under {@code mcp/}, and the runtime serves them over Streamable HTTP at
  * {@code /_tesseraql/mcp}. A query tool reads through 2-way SQL; a command tool writes through the
- * transactional pipeline; both enforce their own route security (the bearer token rides the MCP
- * request), so an unauthenticated or under-privileged call comes back as an MCP tool error.
+ * transactional pipeline; a read-only resource exposes table data addressed by its uri. All enforce
+ * their own route security (the bearer token rides the MCP request), so an unauthenticated or
+ * under-privileged call comes back as an MCP tool error or a {@code resources/read} JSON-RPC error.
  */
 @Testcontainers
 class AppMcpToolIntegrationTest {
@@ -122,12 +123,61 @@ class AppMcpToolIntegrationTest {
         assertThat(rows.get(0).path("status").asText()).isEqualTo("INACTIVE");
     }
 
+    @Test
+    void initializeAdvertisesTheResourcesCapability() throws Exception {
+        JsonNode capabilities = rpc(initializeBody(), null, null).path("result")
+                .path("capabilities");
+        assertThat(capabilities.path("resources").path("subscribe").asBoolean()).isFalse();
+    }
+
+    @Test
+    void resourcesListAdvertisesTheDeclaredResource() throws Exception {
+        JsonNode resources = rpc(rpcBody("resources/list", null), session, null).path("result")
+                .path("resources");
+        JsonNode active = stream(resources)
+                .filter(r -> r.path("uri").asText().equals("tesseraql://users/active"))
+                .findFirst().orElseThrow();
+        assertThat(active.path("name").asText()).isEqualTo("active-users");
+        assertThat(active.path("mimeType").asText()).isEqualTo("application/json");
+        assertThat(active.path("description").asText()).isNotBlank();
+    }
+
+    @Test
+    void aResourceReadRunsItsSqlForAnAuthorizedCaller() throws Exception {
+        JsonNode entry = readResource("tesseraql://users/active", token(List.of("USER_READ")))
+                .path("result").path("contents").get(0);
+        assertThat(entry.path("uri").asText()).isEqualTo("tesseraql://users/active");
+        assertThat(entry.path("mimeType").asText()).isEqualTo("application/json");
+        JsonNode rows = MAPPER.readTree(entry.path("text").asText()).path("rows");
+        List<String> names = new java.util.ArrayList<>();
+        rows.forEach(row -> names.add(row.path("name").asText()));
+        assertThat(names).contains("sato");
+    }
+
+    @Test
+    void aResourceReadIsDeniedForAnUnauthorizedCaller() throws Exception {
+        JsonNode noToken = readResource("tesseraql://users/active", null);
+        assertThat(noToken.path("result").isMissingNode()).isTrue();
+        assertThat(noToken.path("error").path("code").asInt()).isEqualTo(-32603);
+    }
+
+    @Test
+    void aResourceReadOfAnUnknownUriIsTheResourceNotFoundError() throws Exception {
+        JsonNode unknown = readResource("tesseraql://users/nope", token(List.of("USER_READ")));
+        assertThat(unknown.path("error").path("code").asInt()).isEqualTo(-32002);
+    }
+
     // ----- MCP helpers ------------------------------------------------------
 
     private JsonNode call(String tool, Map<String, Object> arguments, String bearer)
             throws Exception {
         String params = MAPPER.writeValueAsString(Map.of("name", tool, "arguments", arguments));
         return rpc(rpcBody("tools/call", params), session, bearer).path("result");
+    }
+
+    private JsonNode readResource(String uri, String bearer) throws Exception {
+        String params = MAPPER.writeValueAsString(Map.of("uri", uri));
+        return rpc(rpcBody("resources/read", params), session, bearer);
     }
 
     private static String initialize() throws Exception {
@@ -250,6 +300,32 @@ class AppMcpToolIntegrationTest {
         Files.writeString(mcp.resolve("deactivate.sql"), """
                 update users set status = 'INACTIVE'
                 where name = /* name */ 'sato'
+                """);
+
+        // The app also declares a read-only MCP resource over the same table: an agent attaches
+        // it as context. It is addressed by its uri, takes no arguments, and enforces users.read.
+        Files.writeString(mcp.resolve("active-users.yml"), """
+                version: tesseraql/v1
+                id: active-users
+                kind: resource
+                recipe: query-json
+                uri: tesseraql://users/active
+                mimeType: application/json
+                description: Active users (id, name). Attach for user-directory context.
+
+                security:
+                  auth: bearer
+                  policy: users.read
+
+                sql:
+                  file: active-users.sql
+                  mode: query
+                """);
+        Files.writeString(mcp.resolve("active-users.sql"), """
+                select u.id, u.name
+                from users u
+                where u.status = 'ACTIVE'
+                order by u.id
                 """);
         return target;
     }

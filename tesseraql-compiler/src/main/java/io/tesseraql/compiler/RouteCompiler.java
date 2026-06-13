@@ -14,6 +14,7 @@ import io.tesseraql.core.error.TqlException;
 import io.tesseraql.core.util.Durations;
 import io.tesseraql.yaml.config.AppConfig;
 import io.tesseraql.yaml.manifest.AppManifest;
+import io.tesseraql.yaml.manifest.ResourceFile;
 import io.tesseraql.yaml.manifest.RouteFile;
 import io.tesseraql.yaml.manifest.ToolFile;
 import io.tesseraql.yaml.model.IdempotencySpec;
@@ -94,12 +95,20 @@ public final class RouteCompiler {
                         buildRoute(this, manifest.appHome(), routeFile);
                     }
                 }
-                // Application-declared MCP tools (roadmap Phase 24 follow-on): each compiles to a
-                // direct: route consumed by the runtime's MCP endpoint, never mounted on HTTP.
+                // Application-declared MCP tools (roadmap Phase 24): each compiles to a direct:
+                // route consumed by the runtime's MCP endpoint, never mounted on HTTP.
                 for (ToolFile toolFile : manifest.tools()) {
                     if (onlyRouteIds == null
                             || onlyRouteIds.contains(toolFile.definition().id())) {
                         buildMcpTool(this, toolFile);
+                    }
+                }
+                // Application-declared MCP resources (roadmap Phase 24): read-only context, served
+                // over the same MCP endpoint; each compiles to a read-only direct: route.
+                for (ResourceFile resourceFile : manifest.resources()) {
+                    if (onlyRouteIds == null
+                            || onlyRouteIds.contains(resourceFile.definition().id())) {
+                        buildMcpResource(this, resourceFile);
                     }
                 }
             }
@@ -450,6 +459,43 @@ public final class RouteCompiler {
         }
         step.process(mcpToolRenderer(definition));
         applyIdempotencyComplete(step, definition);
+    }
+
+    /**
+     * Builds an application-declared MCP resource (roadmap Phase 24) as a read-only {@code direct:}
+     * route, never mounted on HTTP. It runs the same read pipeline a {@code query-json} route runs -
+     * telemetry, the resource's own security (auth + policy), tenancy and locale resolution, and the
+     * 2-way SQL - so a resource is governed exactly like a read route. The runtime's MCP endpoint
+     * sends to {@code direct:mcp.resource.<id>} on {@code resources/read} and returns the JSON body
+     * as the resource contents. A resource declares no {@code input:} (it is addressed only by its
+     * uri), so the binder runs with no path or request parameters; idempotency does not apply to a
+     * read.
+     */
+    private void buildMcpResource(RouteBuilder builder, ResourceFile resourceFile) {
+        RouteDefinition definition = resourceFile.definition();
+        Path resourceDir = resourceFile.source().getParent();
+        String routeId = "mcp.resource." + definition.id();
+        String direct = "direct:" + routeId;
+
+        ProcessorDefinition<?> route = builder.from(direct).routeId(routeId);
+        route.process(new io.tesseraql.compiler.binding.RouteTelemetry(
+                definition.id(), "MCP-RESOURCE", "/" + definition.id(), appName));
+        applyConcurrency(route, definition);
+        applyLane(route, definition);
+        applySecurity(route, definition.security());
+        applyTenancy(route);
+        applyI18n(route);
+        ProcessorDefinition<?> step = route
+                .process(new RequestBinder(definition, java.util.List.of()));
+        if (definition.sql() != null) {
+            step = step.to(executionUri(resourceDir, definition.sql(), "sql"));
+        }
+        for (var entry : definition.queries().entrySet()) {
+            step = step
+                    .process(new io.tesseraql.compiler.binding.NamedQueryBinder(entry.getValue()))
+                    .to(executionUri(resourceDir, entry.getValue(), entry.getKey()));
+        }
+        step.process(mcpToolRenderer(definition));
     }
 
     /** A tool's result renderer: its declared JSON shape, or the raw SQL/command result. */

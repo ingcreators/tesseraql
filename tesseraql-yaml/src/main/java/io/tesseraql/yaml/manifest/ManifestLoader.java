@@ -45,9 +45,11 @@ public final class ManifestLoader {
         AppConfig config = loadConfig(home);
         List<RouteFile> routes = loadRoutes(home);
         List<JobFile> jobs = loadJobs(home);
-        List<ToolFile> tools = loadTools(home);
+        List<ToolFile> tools = new ArrayList<>();
+        List<ResourceFile> resources = new ArrayList<>();
+        loadMcp(home, tools, resources);
         ManifestIndex index = buildIndex(home);
-        return new AppManifest(home, config, routes, jobs, tools, index);
+        return new AppManifest(home, config, routes, jobs, tools, resources, index);
     }
 
     private AppConfig loadConfig(Path home) {
@@ -128,29 +130,40 @@ public final class ManifestLoader {
         return jobs;
     }
 
-    private List<ToolFile> loadTools(Path home) {
+    /**
+     * Loads the {@code mcp/} tree, splitting each document by {@code kind}: a {@code resource}
+     * document becomes a {@link ResourceFile} (read-only context addressed by its {@code uri}),
+     * and everything else a {@link ToolFile}. Both reuse the route model (recipe, input, sql,
+     * security); the {@code description} is the model-facing hint read from the same document.
+     */
+    private void loadMcp(Path home, List<ToolFile> tools, List<ResourceFile> resources) {
         Path mcpRoot = home.resolve("mcp");
         if (!Files.isDirectory(mcpRoot)) {
-            return List.of();
+            return;
         }
-        List<ToolFile> tools = new ArrayList<>();
         try (Stream<Path> files = Files.walk(mcpRoot)) {
             files.filter(Files::isRegularFile)
                     .filter(p -> p.getFileName().toString().endsWith(".yml"))
                     .sorted()
                     .forEach(file -> {
                         requireInside(home, file);
-                        // A tool reuses the route model (recipe, input, sql, security); the
-                        // description is a tool-only hint read from the same document.
                         RouteDefinition definition = parser.parseRoute(file);
-                        Object description = parser.parseTree(file).get("description");
-                        tools.add(new ToolFile(file, definition,
-                                description == null ? null : description.toString()));
+                        Map<String, Object> tree = parser.parseTree(file);
+                        String description = string(tree.get("description"));
+                        if ("resource".equals(tree.get("kind"))) {
+                            resources.add(new ResourceFile(file, definition, description,
+                                    string(tree.get("uri")), string(tree.get("mimeType"))));
+                        } else {
+                            tools.add(new ToolFile(file, definition, description));
+                        }
                     });
         } catch (IOException ex) {
             throw new UncheckedIOException(ex);
         }
-        return tools;
+    }
+
+    private static String string(Object value) {
+        return value == null ? null : value.toString();
     }
 
     private RouteFile toRouteFile(Path home, Path webRoot, Path file) {

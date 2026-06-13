@@ -71,6 +71,87 @@ class AppLinterTest {
     }
 
     @Test
+    void lintsMcpResources(@TempDir Path dir) throws Exception {
+        Files.createDirectories(dir.resolve("config"));
+        Files.writeString(dir.resolve("config/tesseraql.yml"), """
+                tesseraql:
+                  app:
+                    name: t
+                  security:
+                    policies:
+                      catalog.read:
+                        anyOf:
+                          - role: CATALOG_READ
+                """);
+        Files.createDirectories(dir.resolve("mcp"));
+        Files.writeString(dir.resolve("mcp/catalog.sql"), "select 1\n");
+        // A clean read-only resource: query-json, a uri, no input, a description, an existing SQL.
+        Files.writeString(dir.resolve("mcp/catalog.yml"), """
+                version: tesseraql/v1
+                id: catalog
+                kind: resource
+                recipe: query-json
+                uri: tesseraql://catalog
+                description: The product catalog.
+                security:
+                  auth: bearer
+                  policy: catalog.read
+                sql:
+                  file: catalog.sql
+                """);
+        // A broken resource: a write recipe, no uri, declares input, and no description.
+        Files.writeString(dir.resolve("mcp/bad.sql"), "delete from products\n");
+        Files.writeString(dir.resolve("mcp/bad.yml"), """
+                version: tesseraql/v1
+                id: bad-resource
+                kind: resource
+                recipe: command-json
+                input:
+                  q:
+                    type: string
+                sql:
+                  file: bad.sql
+                  mode: update
+                """);
+
+        List<LintFinding> findings = new AppLinter().lint(dir);
+
+        assertThat(findings).anyMatch(f -> f.code().equals("TQL-MCP-1003") && f.isError()
+                && f.source().contains("bad.yml"));
+        assertThat(findings).anyMatch(f -> f.code().equals("TQL-MCP-1004") && f.isError()
+                && f.source().contains("bad.yml"));
+        assertThat(findings).anyMatch(f -> f.code().equals("TQL-MCP-1006") && f.isError()
+                && f.source().contains("bad.yml"));
+        assertThat(findings).anyMatch(f -> f.code().equals("TQL-MCP-1005") && !f.isError()
+                && f.source().contains("bad.yml"));
+        // The clean resource raises nothing.
+        assertThat(findings).noneMatch(f -> f.source().contains("catalog.yml"));
+    }
+
+    @Test
+    void flagsDuplicateMcpResourceUris(@TempDir Path dir) throws Exception {
+        Files.createDirectories(dir.resolve("config"));
+        Files.writeString(dir.resolve("config/tesseraql.yml"), "tesseraql:\n  app:\n    name: t\n");
+        Files.createDirectories(dir.resolve("mcp"));
+        Files.writeString(dir.resolve("mcp/a.sql"), "select 1\n");
+        for (String id : List.of("alpha", "beta")) {
+            Files.writeString(dir.resolve("mcp/" + id + ".yml"), """
+                    version: tesseraql/v1
+                    id: %s
+                    kind: resource
+                    recipe: query-json
+                    uri: tesseraql://shared
+                    description: dup.
+                    sql:
+                      file: a.sql
+                    """.formatted(id));
+        }
+
+        assertThat(new AppLinter().lint(dir))
+                .anyMatch(f -> f.code().equals("TQL-MCP-1007") && f.isError());
+    }
+
+    @Test
     void reportsMissingSqlFileAndUndefinedPolicy(@TempDir Path dir) throws Exception {
         Files.createDirectories(dir.resolve("config"));
         Files.writeString(dir.resolve("config/application.yml"), "server:\n  port: 0\n");

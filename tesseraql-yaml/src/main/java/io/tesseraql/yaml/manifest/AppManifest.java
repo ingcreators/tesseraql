@@ -8,19 +8,22 @@ import java.util.List;
  * The fully loaded TesseraQL application: resolved configuration, compiled-ready route files, and
  * a reproducibility index (design ch. 3, 22.20).
  *
- * @param appHome the external app home directory (design ch. 2.5, 4)
- * @param config  merged, placeholder-resolving configuration
- * @param routes  route files discovered under {@code web/}
- * @param jobs    job files discovered under {@code batch/}
- * @param tools   application-declared MCP tool files discovered under {@code mcp/}
- * @param index   checksum index of the manifest source files
+ * @param appHome   the external app home directory (design ch. 2.5, 4)
+ * @param config    merged, placeholder-resolving configuration
+ * @param routes    route files discovered under {@code web/}
+ * @param jobs      job files discovered under {@code batch/}
+ * @param tools     application-declared MCP tool files discovered under {@code mcp/}
+ * @param resources application-declared MCP resource files discovered under {@code mcp/}
+ * @param index     checksum index of the manifest source files
  */
 public record AppManifest(Path appHome, AppConfig config, List<RouteFile> routes,
-        List<JobFile> jobs, List<ToolFile> tools, ManifestIndex index) {
+        List<JobFile> jobs, List<ToolFile> tools, List<ResourceFile> resources,
+        ManifestIndex index) {
 
     public AppManifest {
         routes = List.copyOf(routes);
         jobs = List.copyOf(jobs);
         tools = List.copyOf(tools);
+        resources = List.copyOf(resources);
     }
 }

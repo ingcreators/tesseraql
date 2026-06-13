@@ -173,8 +173,55 @@ command — and the MCP endpoint dispatches a `tools/call` to it. So:
   write tool reachable without authentication is `advanced` and needs approval); and an `mcp`
   coverage kind tracks which tools your declarative suites exercise.
 
-Set `tesseraql.mcp.enabled: false` to stop serving the endpoint. Resources and MCP Apps UI
-are not modeled yet — see the roadmap.
+Set `tesseraql.mcp.enabled: false` to stop serving the endpoint (tools and resources alike).
+MCP Apps UI is not modeled yet — see the roadmap.
+
+## Application MCP resources
+
+Alongside its tools, an application declares read-only **resources** — context an agent attaches,
+the way a person pastes a document into a chat. A resource is a `query-json` definition placed
+under `mcp/` with `kind: resource`: it is addressed by a stable `uri` instead of a name, takes no
+arguments (its uri is the whole address), and runs the same read pipeline a `query-json` route
+runs.
+
+```yaml
+# mcp/active-users.yml
+version: tesseraql/v1
+id: active-users
+kind: resource
+recipe: query-json
+uri: tesseraql://users/active
+mimeType: application/json
+description: Active users (id, name). Attach for user-directory context.
+
+security:
+  auth: bearer
+  policy: users.read
+
+sql:
+  file: active-users.sql
+  mode: query
+```
+
+The runtime serves every declared resource over the same `/_tesseraql/mcp` endpoint as the tools.
+On startup the compiler turns each resource into a read-only internal route — telemetry, the
+resource's own authentication and authorization, tenancy and locale resolution, the 2-way SQL — and
+the MCP endpoint answers `resources/list` and `resources/read` from it. So:
+
+- **Discovery and read.** `resources/list` advertises every resource (`uri`, `name`, `mimeType`,
+  `description`); `resources/read { "uri": ... }` runs the SQL and returns the JSON result as the
+  resource's `contents`, tagged with its `uri` and `mimeType`. `resources/templates/list` is empty
+  (no URI-templated resources are modeled).
+- **Security is per-resource and identical to a route.** The request's `Authorization: Bearer`
+  rides into the resource's route, where its declared `auth`/`policy` run. Discovery is open;
+  reading an unauthorized resource comes back as a `resources/read` JSON-RPC error (the connection
+  stays up, so the agent can read the message).
+- **Read-only by construction.** Lint rejects a resource that is not `query-json` with query-mode
+  SQL (`TQL-MCP-1003`), that declares no `uri` (`TQL-MCP-1004`) or any `input:` (`TQL-MCP-1006`),
+  and fails fast on a duplicate uri (`TQL-MCP-1007`); a missing `description` is a warning
+  (`TQL-MCP-1005`). The governance gate scores a resource like a read route (never `advanced`,
+  since it cannot write), and an `mcp-resource` coverage kind tracks which resources your
+  declarative suites exercise.
 
 ## Error codes
 
@@ -185,6 +232,11 @@ are not modeled yet — see the roadmap.
 | `TQL-MCP-1001` | (lint) an application MCP tool uses a recipe other than `query-json` / `command-json` |
 | `TQL-MCP-1002` | (lint, warning) an application MCP tool has no `description` |
 | `TQL-MCP-4030` | (lint) a write MCP tool declares no authorization policy |
+| `TQL-MCP-1003` | (lint) an application MCP resource is not read-only (`query-json` with query-mode SQL) |
+| `TQL-MCP-1004` | (lint) an application MCP resource declares no `uri` |
+| `TQL-MCP-1005` | (lint, warning) an application MCP resource has no `description` |
+| `TQL-MCP-1006` | (lint) an application MCP resource declares `input:` (a resource takes no arguments) |
+| `TQL-MCP-1007` | (lint) two application MCP resources declare the same `uri` |
 
 Tool failures (a bad argument, a missing datasource, a draft that does not compile) come back
 as an MCP tool result with `isError: true` and the message — the connection stays up so the

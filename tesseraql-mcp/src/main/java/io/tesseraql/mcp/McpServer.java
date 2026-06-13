@@ -19,12 +19,14 @@ import java.util.Set;
  * instance can be shared across stdio and across concurrent HTTP sessions.
  *
  * <p>Supported methods: {@code initialize}, {@code ping}, {@code tools/list}, {@code tools/call},
- * and the {@code notifications/initialized} notification. Tool failures become {@code isError}
- * results (the MCP contract), not protocol errors, so an agent can read the message and retry.
+ * {@code resources/list}, {@code resources/read}, {@code resources/templates/list}, and the
+ * {@code notifications/initialized} notification. Tool failures become {@code isError} results (the
+ * MCP contract), not protocol errors, so an agent can read the message and retry; a resource read
+ * failure is a JSON-RPC error (the MCP contract for {@code resources/read}), which likewise leaves
+ * the connection up.
  *
- * <p>Resources and prompts are not implemented yet; unknown methods return JSON-RPC
- * {@code method not found}. The dispatch is a method-keyed switch, so those surfaces (and the
- * app-declared tools of a later phase) slot in without reshaping this class.
+ * <p>Prompts are not implemented yet; unknown methods return JSON-RPC {@code method not found}. The
+ * dispatch is a method-keyed switch, so that surface slots in without reshaping this class.
  */
 public final class McpServer {
 
@@ -36,20 +38,25 @@ public final class McpServer {
     static final int INVALID_REQUEST = -32600;
     static final int METHOD_NOT_FOUND = -32601;
     static final int INVALID_PARAMS = -32602;
+    static final int INTERNAL_ERROR = -32603;
+    /** The MCP-reserved code for a {@code resources/read} of a uri the server does not serve. */
+    static final int RESOURCE_NOT_FOUND = -32002;
 
     private final ObjectMapper mapper = new ObjectMapper();
     private final String name;
     private final String version;
     private final String instructions;
     private final Map<String, McpTool> tools;
+    private final Map<String, McpResource> resources;
 
     private McpServer(Builder builder) {
         this.name = builder.name;
         this.version = builder.version;
         this.instructions = builder.instructions;
-        // LinkedHashMap, not Map.copyOf: tools/list must keep registration order (Map.copyOf
+        // LinkedHashMap, not Map.copyOf: list responses must keep registration order (Map.copyOf
         // randomizes iteration order).
         this.tools = Collections.unmodifiableMap(new LinkedHashMap<>(builder.tools));
+        this.resources = Collections.unmodifiableMap(new LinkedHashMap<>(builder.resources));
     }
 
     public static Builder builder(String name, String version) {
@@ -93,6 +100,15 @@ public final class McpServer {
                 return Optional.of(result(id, toolsList()));
             case "tools/call" :
                 return Optional.of(toolsCall(id, params, context));
+            case "resources/list" :
+                return Optional.of(result(id, resourcesList()));
+            case "resources/templates/list" :
+                // No URI-templated resources are modeled; answer with an empty list rather than
+                // method-not-found so a spec-complete client does not treat it as an error.
+                return Optional.of(result(id, mapper.createObjectNode()
+                        .set("resourceTemplates", mapper.createArrayNode())));
+            case "resources/read" :
+                return Optional.of(resourcesRead(id, params, context));
             default :
                 return Optional.of(error(id, METHOD_NOT_FOUND, "Unknown method: " + method));
         }
@@ -106,7 +122,13 @@ public final class McpServer {
 
         ObjectNode result = mapper.createObjectNode();
         result.put("protocolVersion", negotiated);
-        result.putObject("capabilities").putObject("tools").put("listChanged", false);
+        ObjectNode capabilities = result.putObject("capabilities");
+        capabilities.putObject("tools").put("listChanged", false);
+        // Advertise resources only when the server actually serves some, so a tools-only server
+        // (the dev tool) does not claim a surface it has nothing to offer on.
+        if (!resources.isEmpty()) {
+            capabilities.putObject("resources").put("subscribe", false).put("listChanged", false);
+        }
         ObjectNode serverInfo = result.putObject("serverInfo");
         serverInfo.put("name", name);
         serverInfo.put("version", version);
@@ -177,6 +199,54 @@ public final class McpServer {
         return result;
     }
 
+    private ObjectNode resourcesList() {
+        ObjectNode result = mapper.createObjectNode();
+        ArrayNode array = result.putArray("resources");
+        for (McpResource resource : resources.values()) {
+            ObjectNode node = array.addObject();
+            node.put("uri", resource.uri());
+            node.put("name", resource.name());
+            if (resource.title() != null) {
+                node.put("title", resource.title());
+            }
+            if (resource.description() != null) {
+                node.put("description", resource.description());
+            }
+            if (resource.mimeType() != null) {
+                node.put("mimeType", resource.mimeType());
+            }
+        }
+        return result;
+    }
+
+    private JsonNode resourcesRead(JsonNode id, JsonNode params, McpCallContext context) {
+        if (params == null || !params.hasNonNull("uri")) {
+            return error(id, INVALID_PARAMS, "resources/read requires a uri");
+        }
+        String uri = params.get("uri").asText();
+        McpResource resource = resources.get(uri);
+        if (resource == null) {
+            return error(id, RESOURCE_NOT_FOUND, "Unknown resource: " + uri);
+        }
+        String text;
+        try {
+            text = resource.reader().read(context);
+        } catch (TqlException ex) {
+            return error(id, INTERNAL_ERROR, ex.code() + ": " + ex.getMessage());
+        } catch (Exception ex) {
+            return error(id, INTERNAL_ERROR,
+                    ex.getMessage() != null ? ex.getMessage() : ex.toString());
+        }
+        ObjectNode result = mapper.createObjectNode();
+        ObjectNode entry = result.putArray("contents").addObject();
+        entry.put("uri", resource.uri());
+        if (resource.mimeType() != null) {
+            entry.put("mimeType", resource.mimeType());
+        }
+        entry.put("text", text == null ? "" : text);
+        return result(id, result);
+    }
+
     private String pretty(JsonNode node) {
         try {
             return mapper.writerWithDefaultPrettyPrinter().writeValueAsString(node);
@@ -213,6 +283,7 @@ public final class McpServer {
         private final String version;
         private String instructions;
         private final Map<String, McpTool> tools = new LinkedHashMap<>();
+        private final Map<String, McpResource> resources = new LinkedHashMap<>();
 
         private Builder(String name, String version) {
             this.name = name;
@@ -235,6 +306,19 @@ public final class McpServer {
         public Builder tools(List<McpTool> tools) {
             List<McpTool> ordered = new ArrayList<>(tools);
             ordered.forEach(this::tool);
+            return this;
+        }
+
+        public Builder resource(McpResource resource) {
+            if (resources.putIfAbsent(resource.uri(), resource) != null) {
+                throw new IllegalArgumentException("Duplicate resource uri: " + resource.uri());
+            }
+            return this;
+        }
+
+        public Builder resources(List<McpResource> resources) {
+            List<McpResource> ordered = new ArrayList<>(resources);
+            ordered.forEach(this::resource);
             return this;
         }
 

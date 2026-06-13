@@ -329,16 +329,19 @@ public final class TesseraqlRuntime implements AutoCloseable {
                     tenantDataSources, dataSources::get);
             context.addService(new VertxPlatformHttpServer(httpConfig));
             context.addRoutes(new RouteCompiler().appName(appName).compile(manifest));
-            // Application-declared MCP tools (roadmap Phase 24 follow-on): the compiler emitted a
-            // direct:mcp.<id> route per tool; serve them over Streamable HTTP at /_tesseraql/mcp,
-            // each tool's own route security gating the call.
-            if (!manifest.tools().isEmpty() && manifest.config().getString("tesseraql.mcp.enabled")
+            // Application-declared MCP tools and resources (roadmap Phase 24): the compiler emitted
+            // a direct:mcp.<id> route per tool and a direct:mcp.resource.<id> route per resource;
+            // serve them over Streamable HTTP at /_tesseraql/mcp, each one's own route security
+            // gating the call.
+            boolean servesMcp = !manifest.tools().isEmpty() || !manifest.resources().isEmpty();
+            if (servesMcp && manifest.config().getString("tesseraql.mcp.enabled")
                     .map(Boolean::parseBoolean).orElse(true)) {
                 io.tesseraql.mcp.McpServer mcpServer = AppMcpServer.build(manifest, appName,
                         context.createProducerTemplate());
                 context.addRoutes(new McpRouteBuilder(
                         new io.tesseraql.mcp.McpHttpHandler(mcpServer, null)));
-                LOG.info("Serving {} MCP tool(s) at /_tesseraql/mcp", manifest.tools().size());
+                LOG.info("Serving {} MCP tool(s) and {} resource(s) at /_tesseraql/mcp",
+                        manifest.tools().size(), manifest.resources().size());
             }
             // Mounted apps (jar-bundled system apps and config-listed directories, design ch. 32)
             // are plain yaml/sql/template trees compiled exactly like the main app.
