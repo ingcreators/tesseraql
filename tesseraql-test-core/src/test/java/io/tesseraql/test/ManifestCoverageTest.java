@@ -27,7 +27,8 @@ class ManifestCoverageTest {
 
     private static AppManifest manifest(Map<String, Object> config, RouteFile... routes) {
         return new AppManifest(APP_HOME, new AppConfig(config, name -> null),
-                List.of(routes), List.of(), List.of(), ManifestIndex.of(Map.of(), "test"));
+                List.of(routes), List.of(), List.of(), List.of(),
+                ManifestIndex.of(Map.of(), "test"));
     }
 
     private static TestSuite sqlSuite(String... sqlFiles) {
@@ -205,7 +206,8 @@ class ManifestCoverageTest {
     void notificationCoverageDeclaresRouteAndJobNotificationsAndTracksEvaluatedOnes() {
         AppManifest manifest = new AppManifest(APP_HOME, new AppConfig(Map.of(), name -> null),
                 List.of(route("web/members/post.yml", NOTIFYING_ROUTE)),
-                List.of(notifyingJob()), List.of(), ManifestIndex.of(Map.of(), "test"));
+                List.of(notifyingJob()), List.of(), List.of(),
+                ManifestIndex.of(Map.of(), "test"));
 
         ItemCoverage all = ManifestCoverage.notification(manifest,
                 List.of(notifySuite("members.register", null, null)));
