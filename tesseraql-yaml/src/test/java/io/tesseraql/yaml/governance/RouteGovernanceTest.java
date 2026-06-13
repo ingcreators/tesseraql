@@ -109,6 +109,54 @@ class RouteGovernanceTest {
         assertThat(extended.sha256()).hasSize(64);
     }
 
+    private static final String AUTHENTICATED_RESOURCE = """
+            version: tesseraql/v1
+            id: catalog
+            kind: resource
+            recipe: query-json
+            uri: tesseraql://catalog
+            description: The product catalog.
+            security:
+              auth: bearer
+              policy: catalog.read
+            sql:
+              file: catalog.sql
+            """;
+
+    private static final String PUBLIC_RESOURCE = """
+            version: tesseraql/v1
+            id: public-catalog
+            kind: resource
+            recipe: query-json
+            uri: tesseraql://public
+            description: Public catalog.
+            security:
+              auth: public
+            sql:
+              file: catalog.sql
+            """;
+
+    @Test
+    void assessesMcpResourcesAsReadOnlyNeverAdvanced() throws Exception {
+        AppManifest manifest = app(Map.of(
+                "mcp/catalog.yml", AUTHENTICATED_RESOURCE,
+                "mcp/public.yml", PUBLIC_RESOURCE,
+                "mcp/catalog.sql", "select 1\n"), null);
+
+        List<Assessment> assessments = RouteGovernance.assess(manifest);
+
+        Assessment authenticated = byId(assessments, "catalog");
+        assertThat(authenticated.mode()).isEqualTo("managed");
+        assertThat(authenticated.riskScore()).isZero();
+        assertThat(authenticated.sha256()).hasSize(64);
+
+        Assessment open = byId(assessments, "public-catalog");
+        assertThat(open.mode()).isEqualTo("managed");
+        assertThat(open.riskFactors())
+                .anySatisfy(f -> assertThat(f).contains("unauthenticated MCP resource"));
+        assertThat(open.riskScore()).isEqualTo(1);
+    }
+
     @Test
     void gateRequiresApprovalForConfiguredModesAndScores() throws Exception {
         String policy = """

@@ -31,6 +31,19 @@ class ManifestCoverageTest {
                 ManifestIndex.of(Map.of(), "test"));
     }
 
+    private static io.tesseraql.yaml.manifest.ResourceFile resource(String relativeYmlPath,
+            String uri, String yaml) {
+        return new io.tesseraql.yaml.manifest.ResourceFile(APP_HOME.resolve(relativeYmlPath),
+                PARSER.parseRoute(yaml, relativeYmlPath), "desc", uri, "application/json");
+    }
+
+    private static AppManifest resourceManifest(
+            io.tesseraql.yaml.manifest.ResourceFile... resources) {
+        return new AppManifest(APP_HOME, new AppConfig(Map.of(), name -> null),
+                List.of(), List.of(), List.of(), List.of(resources),
+                ManifestIndex.of(Map.of(), "test"));
+    }
+
     private static TestSuite sqlSuite(String... sqlFiles) {
         return new TestSuite(java.util.Arrays.stream(sqlFiles)
                 .map(file -> new TestCase("tests " + file, new SqlTarget(file), null, Map.of(),
@@ -78,6 +91,40 @@ class ManifestCoverageTest {
         assertThat(coverage.declared()).containsExactlyInAnyOrder("health.echo", "users.search");
         assertThat(coverage.covered()).containsExactlyInAnyOrder("users.search");
         assertThat(coverage.uncovered()).containsExactlyInAnyOrder("health.echo");
+    }
+
+    private static final String CATALOG_RESOURCE = """
+            version: tesseraql/v1
+            id: catalog
+            kind: resource
+            recipe: query-json
+            uri: tesseraql://catalog
+            sql:
+              file: catalog.sql
+            """;
+
+    private static final String ORDERS_RESOURCE = """
+            version: tesseraql/v1
+            id: orders
+            kind: resource
+            recipe: query-json
+            uri: tesseraql://orders
+            sql:
+              file: orders.sql
+            """;
+
+    @Test
+    void mcpResourceCoverageDeclaresEveryResourceAndCoversTheExercisedOnes() {
+        AppManifest manifest = resourceManifest(
+                resource("mcp/catalog.yml", "tesseraql://catalog", CATALOG_RESOURCE),
+                resource("mcp/orders.yml", "tesseraql://orders", ORDERS_RESOURCE));
+        ItemCoverage coverage = ManifestCoverage.resources(manifest,
+                List.of(sqlSuite("mcp/catalog.sql")));
+
+        assertThat(coverage.kind()).isEqualTo("mcp-resource");
+        assertThat(coverage.declared()).containsExactlyInAnyOrder("catalog", "orders");
+        assertThat(coverage.covered()).containsExactlyInAnyOrder("catalog");
+        assertThat(coverage.uncovered()).containsExactlyInAnyOrder("orders");
     }
 
     @Test

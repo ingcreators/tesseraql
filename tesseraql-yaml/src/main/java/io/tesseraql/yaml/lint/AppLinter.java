@@ -38,8 +38,81 @@ public final class AppLinter {
         for (io.tesseraql.yaml.manifest.ToolFile tool : manifest.tools()) {
             lintTool(appHome, manifest.config(), tool, findings);
         }
+        for (io.tesseraql.yaml.manifest.ResourceFile resource : manifest.resources()) {
+            lintResource(appHome, manifest.config(), resource, findings);
+        }
+        lintDuplicateResourceUris(appHome, manifest, findings);
         lintI18n(appHome, manifest, findings);
         return findings;
+    }
+
+    /**
+     * Lints an application-declared MCP resource (roadmap Phase 24): it is read-only (the
+     * {@code query-json} recipe, query-mode SQL), declares a {@code uri} the client reads, takes no
+     * {@code input:} (a resource is addressed only by its uri), its SQL file exists, and its
+     * referenced policy is defined. A missing description is a warning: it is the hint the model
+     * uses to decide whether to attach the resource as context.
+     */
+    private void lintResource(Path appHome, AppConfig config,
+            io.tesseraql.yaml.manifest.ResourceFile resource, List<LintFinding> findings) {
+        RouteDefinition definition = resource.definition();
+        String source = appHome.relativize(resource.source()).toString().replace('\\', '/');
+
+        boolean write = !"query-json".equals(definition.recipe())
+                || (definition.sql() != null && "update".equals(definition.sql().effectiveMode()));
+        if (write) {
+            findings.add(new LintFinding("TQL-MCP-1003", "error", source,
+                    "MCP resource '" + definition.id() + "' must be read-only: use the query-json"
+                            + " recipe with query-mode SQL"));
+        }
+        if (resource.uri() == null || resource.uri().isBlank()) {
+            findings.add(new LintFinding("TQL-MCP-1004", "error", source,
+                    "MCP resource '" + definition.id() + "' must declare a uri: it is the address"
+                            + " the client reads the resource by"));
+        }
+        if (!definition.input().isEmpty()) {
+            findings.add(new LintFinding("TQL-MCP-1006", "error", source,
+                    "MCP resource '" + definition.id() + "' must not declare input: a resource is"
+                            + " addressed only by its uri and takes no arguments"));
+        }
+        if (resource.description() == null || resource.description().isBlank()) {
+            findings.add(new LintFinding("TQL-MCP-1005", "warning", source,
+                    "MCP resource '" + definition.id() + "' has no description; it is the hint the"
+                            + " model uses to decide whether to attach the resource"));
+        }
+        if (definition.sql() != null && !definition.sql().isContract()
+                && definition.sql().file() != null
+                && !Files.isRegularFile(
+                        resource.source().getParent().resolve(definition.sql().file()))) {
+            findings.add(new LintFinding("TQL-SQL-2103", "error", source,
+                    "Referenced SQL file is missing: " + definition.sql().file()));
+        }
+        String policy = definition.security() == null ? null : definition.security().policy();
+        if (policy != null && !policy.isBlank() && !policyDefined(config, policy)) {
+            findings.add(new LintFinding("TQL-SEC-4030", "warning", source,
+                    "MCP resource references undefined policy '" + policy + "' (deny by default)"));
+        }
+    }
+
+    /**
+     * Two resources sharing a {@code uri} would collide at startup (the MCP server rejects a
+     * duplicate uri), so flag it at lint time instead - deny by default, fail fast.
+     */
+    private void lintDuplicateResourceUris(Path appHome, AppManifest manifest,
+            List<LintFinding> findings) {
+        java.util.Map<String, String> seen = new java.util.HashMap<>();
+        for (io.tesseraql.yaml.manifest.ResourceFile resource : manifest.resources()) {
+            String uri = resource.uri();
+            if (uri == null || uri.isBlank()) {
+                continue;
+            }
+            String source = appHome.relativize(resource.source()).toString().replace('\\', '/');
+            String previous = seen.putIfAbsent(uri, source);
+            if (previous != null) {
+                findings.add(new LintFinding("TQL-MCP-1007", "error", source,
+                        "MCP resource uri '" + uri + "' is already declared by " + previous));
+            }
+        }
     }
 
     /**

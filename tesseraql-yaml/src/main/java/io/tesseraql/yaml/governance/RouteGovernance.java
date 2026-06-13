@@ -2,6 +2,7 @@ package io.tesseraql.yaml.governance;
 
 import io.tesseraql.core.util.Hashing;
 import io.tesseraql.yaml.manifest.AppManifest;
+import io.tesseraql.yaml.manifest.ResourceFile;
 import io.tesseraql.yaml.manifest.RouteFile;
 import io.tesseraql.yaml.manifest.ToolFile;
 import io.tesseraql.yaml.model.RouteDefinition;
@@ -44,7 +45,7 @@ public final class RouteGovernance {
             List<String> riskFactors, String sha256) {
     }
 
-    /** Assesses every route and application-declared MCP tool in the manifest. */
+    /** Assesses every route, MCP tool, and MCP resource in the manifest. */
     public static List<Assessment> assess(AppManifest manifest) {
         List<Assessment> assessments = new ArrayList<>();
         for (RouteFile route : manifest.routes()) {
@@ -53,7 +54,44 @@ public final class RouteGovernance {
         for (ToolFile tool : manifest.tools()) {
             assessments.add(assessTool(manifest, tool));
         }
+        for (ResourceFile resource : manifest.resources()) {
+            assessments.add(assessResource(manifest, resource));
+        }
         return assessments;
+    }
+
+    /**
+     * Assesses one MCP resource. A resource is read-only, so it is never {@code advanced}: an
+     * unauthenticated resource exposing data scores like a public read, a service binding adds the
+     * usual point, and any request-sourced bind is undeclared input (a resource declares none). The
+     * mode is {@code extended} when it binds a service, else {@code managed}.
+     */
+    public static Assessment assessResource(AppManifest manifest, ResourceFile resource) {
+        RouteDefinition definition = resource.definition();
+        boolean authenticated = isAuthenticated(definition);
+        boolean usesService = usesService(definition);
+
+        List<String> factors = new ArrayList<>();
+        int score = 0;
+        if (!authenticated) {
+            score += 1;
+            factors.add("unauthenticated MCP resource");
+        }
+        if (usesService) {
+            score += 1;
+            factors.add("binds a runtime service provider");
+        }
+        Set<String> undeclared = undeclaredInputs(definition);
+        if (!undeclared.isEmpty()) {
+            score += 2;
+            factors.add("binds undeclared request input(s): " + String.join(", ", undeclared));
+        }
+
+        String mode = usesService ? "extended" : "managed";
+        String source = manifest.appHome().relativize(resource.source()).toString()
+                .replace('\\', '/');
+        return new Assessment(definition.id(), source, mode, score, List.copyOf(factors),
+                sha256(resource.source()));
     }
 
     /**
