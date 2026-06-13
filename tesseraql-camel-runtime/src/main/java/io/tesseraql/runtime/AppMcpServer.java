@@ -13,6 +13,7 @@ import io.tesseraql.yaml.manifest.ResourceFile;
 import io.tesseraql.yaml.manifest.ToolFile;
 import io.tesseraql.yaml.manifest.UiResourceFile;
 import io.tesseraql.yaml.model.UiSpec;
+import java.util.List;
 import java.util.Map;
 import org.apache.camel.Exchange;
 import org.apache.camel.ProducerTemplate;
@@ -33,6 +34,13 @@ import org.apache.camel.ProducerTemplate;
  * {@code _meta.ui.resourceUri}, the UI resource carries its {@code _meta.ui} rendering hints, and the
  * MCP Apps extension is negotiated under {@code capabilities.extensions["io.modelcontextprotocol/ui"]}
  * when the app serves any UI resource.
+ *
+ * <p>The server serves the MCP surface of the main app and every mounted/system app (design ch. 32,
+ * roadmap Phase 24 mounted-app tools) from one endpoint: each app's tools, resources, and UI
+ * resources are registered together. Tool names and resource uris are unique across apps (the host
+ * runs {@link SystemApps#requireNoRouteConflicts} before building this server), and a tool/resource
+ * route is the same {@code direct:mcp.*} route regardless of which app declared it, so a handler
+ * sends to it the same way.
  */
 final class AppMcpServer {
 
@@ -41,15 +49,29 @@ final class AppMcpServer {
     private AppMcpServer() {
     }
 
-    static McpServer build(AppManifest manifest, String appName, ProducerTemplate producer) {
-        McpServer.Builder builder = McpServer.builder(appName, appVersion(manifest))
+    /**
+     * Builds the server serving the MCP surface of every app in {@code apps} (the main app first,
+     * then each mounted app). The server's name and version come from the main app; mounted apps
+     * share its config, so they carry the same version.
+     */
+    static McpServer build(String appName, List<AppManifest> apps, ProducerTemplate producer) {
+        McpServer.Builder builder = McpServer.builder(appName, appVersion(apps.get(0)))
                 .instructions("MCP tools and resources served by the " + appName + " application.");
-        // Negotiate the MCP Apps UI extension when the app serves any ui:// resource (SEP-1865).
-        if (!manifest.uiResources().isEmpty()) {
+        // Negotiate the MCP Apps UI extension when any hosted app serves a ui:// resource (SEP-1865).
+        if (apps.stream().anyMatch(app -> !app.uiResources().isEmpty())) {
             ObjectNode capability = MAPPER.createObjectNode();
             capability.putArray("mimeTypes").add(UiResourceFile.MIME_TYPE);
             builder.extension("io.modelcontextprotocol/ui", capability);
         }
+        for (AppManifest manifest : apps) {
+            register(builder, manifest, producer);
+        }
+        return builder.build();
+    }
+
+    /** Registers one app's tools, resources, and UI resources on the server builder. */
+    private static void register(McpServer.Builder builder, AppManifest manifest,
+            ProducerTemplate producer) {
         for (ToolFile tool : manifest.tools()) {
             String endpoint = "direct:mcp." + tool.definition().id();
             McpTool.Builder toolBuilder = McpTool.builder(tool.definition().id())
@@ -84,7 +106,6 @@ final class AppMcpServer {
             }
             builder.resource(resourceBuilder.build());
         }
-        return builder.build();
     }
 
     /** A linking tool's {@code _meta.ui}: the UI resource it renders into, visible to model and app. */
