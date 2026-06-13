@@ -67,6 +67,62 @@ class ManifestLoaderTest {
     }
 
     @Test
+    void loadsMcpKindsSplittingToolsResourcesAndUi(
+            @org.junit.jupiter.api.io.TempDir Path dir) throws Exception {
+        java.nio.file.Files.createDirectories(dir.resolve("config"));
+        java.nio.file.Files.writeString(dir.resolve("config/tesseraql.yml"),
+                "tesseraql:\n  app:\n    name: t\n");
+        java.nio.file.Files.createDirectories(dir.resolve("mcp"));
+        java.nio.file.Files.writeString(dir.resolve("mcp/board.sql"), "select 1\n");
+        java.nio.file.Files.writeString(dir.resolve("mcp/board.html"),
+                "<section class=\"hc-card\">board</section>\n");
+        // A kind: ui document: a query-html UI resource addressed by a ui:// uri, with _meta hints.
+        java.nio.file.Files.writeString(dir.resolve("mcp/board.yml"), """
+                version: tesseraql/v1
+                id: board
+                kind: ui
+                recipe: query-html
+                uri: ui://users/board
+                description: A board of users.
+                sql:
+                  file: board.sql
+                  mode: query
+                response:
+                  html:
+                    template: board.html
+                ui:
+                  prefersBorder: true
+                  csp:
+                    connectDomains: ["'self'"]
+                """);
+        // A tool that links to the UI resource via its ui: field.
+        java.nio.file.Files.writeString(dir.resolve("mcp/find.sql"), "select 1\n");
+        java.nio.file.Files.writeString(dir.resolve("mcp/find.yml"), """
+                version: tesseraql/v1
+                id: find
+                kind: tool
+                recipe: query-json
+                description: Find users.
+                ui: ui://users/board
+                sql:
+                  file: find.sql
+                  mode: query
+                """);
+
+        AppManifest manifest = new ManifestLoader().load(dir);
+
+        assertThat(manifest.uiResources()).singleElement().satisfies(ui -> {
+            assertThat(ui.uri()).isEqualTo("ui://users/board");
+            assertThat(ui.mimeType()).isEqualTo("text/html;profile=mcp-app");
+            assertThat(ui.ui().prefersBorder()).isTrue();
+            assertThat(ui.ui().cspConnectDomains()).containsExactly("'self'");
+        });
+        assertThat(manifest.tools()).singleElement()
+                .satisfies(tool -> assertThat(tool.uiResource()).isEqualTo("ui://users/board"));
+        assertThat(manifest.resources()).isEmpty();
+    }
+
+    @Test
     void overlayDeepMergesOverConfig(@org.junit.jupiter.api.io.TempDir Path dir) throws Exception {
         java.nio.file.Files.createDirectories(dir.resolve("config"));
         java.nio.file.Files.writeString(dir.resolve("config/tesseraql.yml"), """

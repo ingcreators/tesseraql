@@ -96,6 +96,30 @@ public final class ManifestCoverage {
     }
 
     /**
+     * MCP Apps UI coverage (roadmap Phase 24): every application-declared UI resource under
+     * {@code mcp/} ({@code kind: ui}) is declared, and a UI resource counts as covered when a suite
+     * exercises one of its SQL artifacts - the same SQL-file basis as route, tool, and resource
+     * coverage, since a UI resource is a read-only query that renders an {@code hc-*} fragment.
+     * Gated via {@code coverage.thresholds.mcp-ui}.
+     */
+    public static ItemCoverage uiResources(AppManifest manifest, List<TestSuite> suites) {
+        ItemCoverage coverage = new ItemCoverage("mcp-ui");
+        Set<Path> testedPaths = testedSqlPaths(manifest.appHome(), suites);
+        Set<String> testedContracts = testedContracts(suites);
+        for (io.tesseraql.yaml.manifest.UiResourceFile ui : manifest.uiResources()) {
+            RouteDefinition definition = ui.definition();
+            if (definition.id() == null) {
+                continue;
+            }
+            coverage.declare(definition.id());
+            if (exercised(ui.source().getParent(), definition, testedPaths, testedContracts)) {
+                coverage.cover(definition.id());
+            }
+        }
+        return coverage;
+    }
+
+    /**
      * Validation coverage (roadmap Phase 19): every rule of every route's {@code validate:}
      * block is declared as {@code <routeId>.<ruleId>}, and a suite's validation case covers the
      * rules it evaluates — the targeted rule, or the route's whole block when no rule is named.

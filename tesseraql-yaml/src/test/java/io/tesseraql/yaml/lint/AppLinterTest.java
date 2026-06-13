@@ -152,6 +152,81 @@ class AppLinterTest {
     }
 
     @Test
+    void lintsMcpUiResourcesAndToolLinks(@TempDir Path dir) throws Exception {
+        Files.createDirectories(dir.resolve("config"));
+        Files.writeString(dir.resolve("config/tesseraql.yml"), "tesseraql:\n  app:\n    name: t\n");
+        Files.createDirectories(dir.resolve("mcp"));
+        Files.writeString(dir.resolve("mcp/board.sql"), "select 1\n");
+        Files.writeString(dir.resolve("mcp/board.html"), "<section class=\"hc-card\"></section>\n");
+        // A clean UI resource: query-html, a ui:// uri, no input, a description, an existing SQL.
+        Files.writeString(dir.resolve("mcp/board.yml"), """
+                version: tesseraql/v1
+                id: board
+                kind: ui
+                recipe: query-html
+                uri: ui://users/board
+                description: A board of users.
+                sql:
+                  file: board.sql
+                response:
+                  html:
+                    template: board.html
+                """);
+        // A clean tool that links to the UI resource.
+        Files.writeString(dir.resolve("mcp/find.sql"), "select 1\n");
+        Files.writeString(dir.resolve("mcp/find.yml"), """
+                version: tesseraql/v1
+                id: find
+                kind: tool
+                recipe: query-json
+                description: Find users.
+                ui: ui://users/board
+                sql:
+                  file: find.sql
+                """);
+        // A broken UI resource: a JSON recipe (renders no HTML), no ui:// uri, declares input,
+        // and no description.
+        Files.writeString(dir.resolve("mcp/bad.yml"), """
+                version: tesseraql/v1
+                id: bad-ui
+                kind: ui
+                recipe: query-json
+                input:
+                  q:
+                    type: string
+                sql:
+                  file: board.sql
+                """);
+        // A tool linking a ui:// uri no resource declares (a dangling link).
+        Files.writeString(dir.resolve("mcp/dangling.yml"), """
+                version: tesseraql/v1
+                id: dangling
+                kind: tool
+                recipe: query-json
+                description: Dangling link.
+                ui: ui://users/missing
+                sql:
+                  file: find.sql
+                """);
+
+        List<LintFinding> findings = new AppLinter().lint(dir);
+
+        assertThat(findings).anyMatch(f -> f.code().equals("TQL-MCP-1008") && f.isError()
+                && f.source().contains("bad.yml"));
+        assertThat(findings).anyMatch(f -> f.code().equals("TQL-MCP-1009") && f.isError()
+                && f.source().contains("bad.yml"));
+        assertThat(findings).anyMatch(f -> f.code().equals("TQL-MCP-1011") && f.isError()
+                && f.source().contains("bad.yml"));
+        assertThat(findings).anyMatch(f -> f.code().equals("TQL-MCP-1010") && !f.isError()
+                && f.source().contains("bad.yml"));
+        assertThat(findings).anyMatch(f -> f.code().equals("TQL-MCP-1012") && f.isError()
+                && f.source().contains("dangling.yml"));
+        // The clean UI resource and its linking tool raise nothing.
+        assertThat(findings).noneMatch(f -> f.source().contains("board.yml"));
+        assertThat(findings).noneMatch(f -> f.source().contains("find.yml"));
+    }
+
+    @Test
     void reportsMissingSqlFileAndUndefinedPolicy(@TempDir Path dir) throws Exception {
         Files.createDirectories(dir.resolve("config"));
         Files.writeString(dir.resolve("config/application.yml"), "server:\n  port: 0\n");

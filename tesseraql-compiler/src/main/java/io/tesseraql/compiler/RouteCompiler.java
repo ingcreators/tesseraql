@@ -17,6 +17,7 @@ import io.tesseraql.yaml.manifest.AppManifest;
 import io.tesseraql.yaml.manifest.ResourceFile;
 import io.tesseraql.yaml.manifest.RouteFile;
 import io.tesseraql.yaml.manifest.ToolFile;
+import io.tesseraql.yaml.manifest.UiResourceFile;
 import io.tesseraql.yaml.model.IdempotencySpec;
 import io.tesseraql.yaml.model.PolicySpec;
 import io.tesseraql.yaml.model.RouteDefinition;
@@ -109,6 +110,14 @@ public final class RouteCompiler {
                     if (onlyRouteIds == null
                             || onlyRouteIds.contains(resourceFile.definition().id())) {
                         buildMcpResource(this, resourceFile);
+                    }
+                }
+                // Application-declared MCP Apps UI resources (roadmap Phase 24): each renders an
+                // hc-* fragment, served as a ui:// resource over the same MCP endpoint.
+                for (UiResourceFile uiFile : manifest.uiResources()) {
+                    if (onlyRouteIds == null
+                            || onlyRouteIds.contains(uiFile.definition().id())) {
+                        buildMcpUi(this, manifest.appHome(), uiFile);
                     }
                 }
             }
@@ -496,6 +505,44 @@ public final class RouteCompiler {
                     .to(executionUri(resourceDir, entry.getValue(), entry.getKey()));
         }
         step.process(mcpToolRenderer(definition));
+    }
+
+    /**
+     * Builds an application-declared MCP Apps UI resource (roadmap Phase 24) as a read-only
+     * {@code direct:} route, never mounted on HTTP. It runs the same read-and-render pipeline a
+     * {@code query-html} route runs - telemetry, the resource's own security, tenancy and locale
+     * resolution, the 2-way SQL, then the Thymeleaf template - so the route renders the same
+     * {@code hc-*} fragment a page would. The runtime's MCP endpoint sends to
+     * {@code direct:mcp.ui.<id>} on {@code resources/read} and returns the rendered HTML as the
+     * resource contents. A UI resource declares no {@code input:} (it is addressed only by its
+     * {@code ui://} uri), so the binder runs with no parameters.
+     */
+    private void buildMcpUi(RouteBuilder builder, Path appHome, UiResourceFile uiFile) {
+        RouteDefinition definition = uiFile.definition();
+        Path uiDir = uiFile.source().getParent();
+        String routeId = "mcp.ui." + definition.id();
+        String direct = "direct:" + routeId;
+
+        ProcessorDefinition<?> route = builder.from(direct).routeId(routeId);
+        route.process(new io.tesseraql.compiler.binding.RouteTelemetry(
+                definition.id(), "MCP-UI", "/" + definition.id(), appName));
+        applyConcurrency(route, definition);
+        applyLane(route, definition);
+        applySecurity(route, definition.security());
+        applyTenancy(route);
+        applyI18n(route);
+        ProcessorDefinition<?> step = route
+                .process(new RequestBinder(definition, java.util.List.of()));
+        if (definition.sql() != null) {
+            step = step.to(executionUri(uiDir, definition.sql(), "sql"));
+        }
+        for (var entry : definition.queries().entrySet()) {
+            step = step
+                    .process(new io.tesseraql.compiler.binding.NamedQueryBinder(entry.getValue()))
+                    .to(executionUri(uiDir, entry.getValue(), entry.getKey()));
+        }
+        step.process(new HtmlResponseRenderer(definition.response().html(), appHome, uiDir,
+                i18n.defaultTag()));
     }
 
     /** A tool's result renderer: its declared JSON shape, or the raw SQL/command result. */

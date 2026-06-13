@@ -48,6 +48,7 @@ public final class McpServer {
     private final String instructions;
     private final Map<String, McpTool> tools;
     private final Map<String, McpResource> resources;
+    private final Map<String, JsonNode> extensions;
 
     private McpServer(Builder builder) {
         this.name = builder.name;
@@ -57,6 +58,7 @@ public final class McpServer {
         // randomizes iteration order).
         this.tools = Collections.unmodifiableMap(new LinkedHashMap<>(builder.tools));
         this.resources = Collections.unmodifiableMap(new LinkedHashMap<>(builder.resources));
+        this.extensions = Collections.unmodifiableMap(new LinkedHashMap<>(builder.extensions));
     }
 
     public static Builder builder(String name, String version) {
@@ -129,6 +131,12 @@ public final class McpServer {
         if (!resources.isEmpty()) {
             capabilities.putObject("resources").put("subscribe", false).put("listChanged", false);
         }
+        // Negotiated extensions (SEP-1724), keyed by their reserved identifier - for example the
+        // MCP Apps UI extension "io.modelcontextprotocol/ui" when the app serves ui:// resources.
+        if (!extensions.isEmpty()) {
+            ObjectNode declared = capabilities.putObject("extensions");
+            extensions.forEach(declared::set);
+        }
         ObjectNode serverInfo = result.putObject("serverInfo");
         serverInfo.put("name", name);
         serverInfo.put("version", version);
@@ -151,6 +159,9 @@ public final class McpServer {
                 node.put("description", tool.description());
             }
             node.set("inputSchema", tool.inputSchema());
+            if (tool.meta() != null) {
+                node.set("_meta", tool.meta());
+            }
         }
         return result;
     }
@@ -215,6 +226,9 @@ public final class McpServer {
             if (resource.mimeType() != null) {
                 node.put("mimeType", resource.mimeType());
             }
+            if (resource.meta() != null) {
+                node.set("_meta", resource.meta());
+            }
         }
         return result;
     }
@@ -244,6 +258,9 @@ public final class McpServer {
             entry.put("mimeType", resource.mimeType());
         }
         entry.put("text", text == null ? "" : text);
+        if (resource.meta() != null) {
+            entry.set("_meta", resource.meta());
+        }
         return result(id, result);
     }
 
@@ -284,6 +301,7 @@ public final class McpServer {
         private String instructions;
         private final Map<String, McpTool> tools = new LinkedHashMap<>();
         private final Map<String, McpResource> resources = new LinkedHashMap<>();
+        private final Map<String, JsonNode> extensions = new LinkedHashMap<>();
 
         private Builder(String name, String version) {
             this.name = name;
@@ -293,6 +311,16 @@ public final class McpServer {
         /** Free-text guidance returned in {@code initialize}, shown to the connecting agent. */
         public Builder instructions(String instructions) {
             this.instructions = instructions;
+            return this;
+        }
+
+        /**
+         * Declares a negotiated extension capability (SEP-1724) advertised in {@code initialize}
+         * under {@code capabilities.extensions[<id>]} - for instance the MCP Apps UI extension
+         * {@code io.modelcontextprotocol/ui} with its supported mime types.
+         */
+        public Builder extension(String id, JsonNode capability) {
+            extensions.put(id, capability);
             return this;
         }
 

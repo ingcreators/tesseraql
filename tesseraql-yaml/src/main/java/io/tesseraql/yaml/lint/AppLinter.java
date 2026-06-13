@@ -24,6 +24,10 @@ public final class AppLinter {
             "query-html", "page", "query-export", "file-import", "file-export");
     /** Recipes an application-declared MCP tool may use (roadmap Phase 24 follow-on). */
     private static final Set<String> KNOWN_TOOL_RECIPES = Set.of("query-json", "command-json");
+    /** Recipes an MCP Apps UI resource may use - both render HTML (roadmap Phase 24). */
+    private static final Set<String> KNOWN_UI_RECIPES = Set.of("query-html", "page");
+    /** The MCP Apps uri scheme a UI resource is addressed by (SEP-1865). */
+    private static final String UI_SCHEME = "ui://";
 
     /** Loads and lints the app home, returning all findings. */
     public List<LintFinding> lint(Path appHome) {
@@ -41,9 +45,83 @@ public final class AppLinter {
         for (io.tesseraql.yaml.manifest.ResourceFile resource : manifest.resources()) {
             lintResource(appHome, manifest.config(), resource, findings);
         }
+        for (io.tesseraql.yaml.manifest.UiResourceFile ui : manifest.uiResources()) {
+            lintUiResource(appHome, manifest.config(), ui, findings);
+        }
         lintDuplicateResourceUris(appHome, manifest, findings);
+        lintToolUiLinks(appHome, manifest, findings);
         lintI18n(appHome, manifest, findings);
         return findings;
+    }
+
+    /**
+     * Lints an application-declared MCP Apps UI resource (roadmap Phase 24): it renders HTML (the
+     * {@code query-html} or {@code page} recipe), declares a {@code ui://} uri the client reads and
+     * tools link to, takes no {@code input:} (a UI resource is addressed only by its uri), its SQL
+     * file exists, and its referenced policy is defined. A missing description is a warning: it is
+     * the hint the model uses to decide whether to surface the UI.
+     */
+    private void lintUiResource(Path appHome, AppConfig config,
+            io.tesseraql.yaml.manifest.UiResourceFile ui, List<LintFinding> findings) {
+        RouteDefinition definition = ui.definition();
+        String source = appHome.relativize(ui.source()).toString().replace('\\', '/');
+
+        if (!KNOWN_UI_RECIPES.contains(definition.recipe())) {
+            findings.add(new LintFinding("TQL-MCP-1008", "error", source,
+                    "MCP UI resource '" + definition.id() + "' has recipe '" + definition.recipe()
+                            + "'; a UI resource renders HTML - use query-html or page"));
+        }
+        if (ui.uri() == null || !ui.uri().startsWith(UI_SCHEME)) {
+            findings.add(new LintFinding("TQL-MCP-1009", "error", source,
+                    "MCP UI resource '" + definition.id() + "' must declare a ui:// uri: it is the"
+                            + " address the client reads and a tool links to"));
+        }
+        if (!definition.input().isEmpty()) {
+            findings.add(new LintFinding("TQL-MCP-1011", "error", source,
+                    "MCP UI resource '" + definition.id()
+                            + "' must not declare input: a UI resource"
+                            + " is addressed only by its uri and takes no arguments"));
+        }
+        if (ui.description() == null || ui.description().isBlank()) {
+            findings.add(new LintFinding("TQL-MCP-1010", "warning", source,
+                    "MCP UI resource '" + definition.id() + "' has no description; it is the hint"
+                            + " the model uses to decide whether to surface the UI"));
+        }
+        if (definition.sql() != null && !definition.sql().isContract()
+                && definition.sql().file() != null
+                && !Files.isRegularFile(ui.source().getParent().resolve(definition.sql().file()))) {
+            findings.add(new LintFinding("TQL-SQL-2103", "error", source,
+                    "Referenced SQL file is missing: " + definition.sql().file()));
+        }
+        String policy = definition.security() == null ? null : definition.security().policy();
+        if (policy != null && !policy.isBlank() && !policyDefined(config, policy)) {
+            findings.add(new LintFinding("TQL-SEC-4030", "warning", source,
+                    "MCP UI resource references undefined policy '" + policy
+                            + "' (deny by default)"));
+        }
+    }
+
+    /**
+     * A tool's {@code ui:} link must resolve to a UI resource the app declares; a dangling link
+     * would advertise a {@code _meta.ui.resourceUri} no {@code resources/read} can serve. Fail fast
+     * at lint time rather than at render.
+     */
+    private void lintToolUiLinks(Path appHome, AppManifest manifest, List<LintFinding> findings) {
+        Set<String> declared = new java.util.HashSet<>();
+        for (io.tesseraql.yaml.manifest.UiResourceFile ui : manifest.uiResources()) {
+            if (ui.uri() != null) {
+                declared.add(ui.uri());
+            }
+        }
+        for (io.tesseraql.yaml.manifest.ToolFile tool : manifest.tools()) {
+            String link = tool.uiResource();
+            if (link != null && !link.isBlank() && !declared.contains(link)) {
+                String source = appHome.relativize(tool.source()).toString().replace('\\', '/');
+                findings.add(new LintFinding("TQL-MCP-1012", "error", source,
+                        "MCP tool '" + tool.definition().id() + "' links ui: '" + link
+                                + "' but no kind: ui resource declares that uri"));
+            }
+        }
     }
 
     /**
@@ -95,23 +173,32 @@ public final class AppLinter {
     }
 
     /**
-     * Two resources sharing a {@code uri} would collide at startup (the MCP server rejects a
-     * duplicate uri), so flag it at lint time instead - deny by default, fail fast.
+     * Two resources sharing a {@code uri} would collide at startup (the MCP server keys every
+     * resource by its uri and rejects a duplicate), so flag it at lint time instead - deny by
+     * default, fail fast. UI resources ({@code ui://}) share that single namespace with plain
+     * resources, so they are checked together.
      */
     private void lintDuplicateResourceUris(Path appHome, AppManifest manifest,
             List<LintFinding> findings) {
         java.util.Map<String, String> seen = new java.util.HashMap<>();
         for (io.tesseraql.yaml.manifest.ResourceFile resource : manifest.resources()) {
-            String uri = resource.uri();
-            if (uri == null || uri.isBlank()) {
-                continue;
-            }
-            String source = appHome.relativize(resource.source()).toString().replace('\\', '/');
-            String previous = seen.putIfAbsent(uri, source);
-            if (previous != null) {
-                findings.add(new LintFinding("TQL-MCP-1007", "error", source,
-                        "MCP resource uri '" + uri + "' is already declared by " + previous));
-            }
+            checkDuplicateUri(appHome, resource.uri(), resource.source(), seen, findings);
+        }
+        for (io.tesseraql.yaml.manifest.UiResourceFile ui : manifest.uiResources()) {
+            checkDuplicateUri(appHome, ui.uri(), ui.source(), seen, findings);
+        }
+    }
+
+    private void checkDuplicateUri(Path appHome, String uri, Path file,
+            java.util.Map<String, String> seen, List<LintFinding> findings) {
+        if (uri == null || uri.isBlank()) {
+            return;
+        }
+        String source = appHome.relativize(file).toString().replace('\\', '/');
+        String previous = seen.putIfAbsent(uri, source);
+        if (previous != null) {
+            findings.add(new LintFinding("TQL-MCP-1007", "error", source,
+                    "MCP resource uri '" + uri + "' is already declared by " + previous));
         }
     }
 

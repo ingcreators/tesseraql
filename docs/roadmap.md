@@ -38,7 +38,7 @@ exchange with neighboring systems) still needs, against what 0.1.0 provides:
 | HTTP caching | absent |
 | HA building blocks | solid base: cluster-safe job claiming, JDBC session store; missing K8s assets and zero-downtime guidance |
 | Distribution | GitHub Releases only; no Maven Central, no Gradle plugin, no docs site |
-| AI tooling | dev-tool MCP server, app-declared MCP tools and resources shipped (Phase 24) |
+| AI tooling | dev-tool MCP server, app-declared MCP tools, resources, and Apps UI shipped (Phase 24) |
 
 ## Horizon 1 — application completeness (0.2.x)
 
@@ -159,18 +159,28 @@ is a `resources/read` JSON-RPC error). Lint keeps resources read-only and uri-ad
 governance gate scores them like read routes (never `advanced`), and an `mcp-resource` coverage
 kind tracks the resources declarative suites exercise.
 
-Still open — further MCP surfaces on the same `tesseraql-mcp` core, deferred to a later
-release once the tool loop has proven itself:
+**Application MCP Apps UI** (delivered): a tool can hand back interactive UI instead of only JSON —
+the [MCP Apps extension](https://modelcontextprotocol.io/community/seps/1865-mcp-apps-interactive-user-interfaces-for-mcp)
+(SEP-1865). An application declares a UI resource as a `kind: ui` document under `mcp/` — a
+`query-html` / `page` definition addressed by a stable `ui://` uri — and a `kind: tool` document
+links to one with a `ui:` field. The compiler builds the UI resource into a read-only internal
+route that server-renders an `hc-*` fragment through the existing template pipeline (so any gap
+belongs upstream in the kit, mandatory rule 11, not in app CSS); the runtime serves it over the same
+`/_tesseraql/mcp` endpoint, tagging it `text/html;profile=mcp-app`, carrying its `_meta.ui` rendering
+hints, advertising a linking tool's `_meta.ui.resourceUri`, and negotiating the
+`io.modelcontextprotocol/ui` extension in `initialize`. Security is per-resource (the bearer token
+rides into the route), lint keeps a UI resource HTML-rendering and uri-addressed (and rejects a
+dangling tool link), the governance gate scores it like a read route (never `advanced`), and an
+`mcp-ui` coverage kind tracks the UI resources declarative suites exercise.
 
-- **MCP Apps UI** — let a tool return interactive UI (the MCP Apps extension). TesseraQL's
-  Hypermedia Components and htmx markup are the natural renderer, so an app-served tool could
-  hand back an `hc-*` fragment instead of only JSON — any gap belongs upstream in the kit
-  (mandatory rule 11), not in app CSS.
-- **Mounted-app tools** — serve the MCP tools and resources declared by mounted/system apps
-  (design ch. 32), not only the main app, under the same per-tool security and the route-conflict
-  checks.
+Still open — a further MCP surface on the same `tesseraql-mcp` core, deferred to a later release
+once the tool loop has proven itself:
 
-Both stay behind the same SQL-first, governed-recipe invariants (extension principles
+- **Mounted-app tools** — serve the MCP tools, resources, and UI resources declared by
+  mounted/system apps (design ch. 32), not only the main app, under the same per-tool security and
+  the route-conflict checks.
+
+It stays behind the same SQL-first, governed-recipe invariants (extension principles
 1–4); deeper Studio-copilot ambitions remain gated on the MCP loop proving its worth (decision
 point 4).
 

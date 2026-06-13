@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.tesseraql.core.error.TqlDomain;
 import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
@@ -210,5 +211,69 @@ class McpServerTest {
         JsonNode response = call("{\"jsonrpc\":\"2.0\",\"id\":9,\"method\":\"ping\"}");
         assertThat(response.has("error")).isFalse();
         assertThat(response.get("result").isObject()).isTrue();
+    }
+
+    // ----- MCP Apps UI extension (roadmap Phase 24) -------------------------
+
+    /** A server that serves a UI resource and a tool linked to it via _meta (the MCP Apps shape). */
+    private McpServer uiServer() {
+        ObjectNode toolMeta = mapper.createObjectNode();
+        toolMeta.putObject("ui").put("resourceUri", "ui://board");
+        ObjectNode resourceMeta = mapper.createObjectNode();
+        resourceMeta.putObject("ui").put("prefersBorder", true);
+        ObjectNode uiCapability = mapper.createObjectNode();
+        uiCapability.putArray("mimeTypes").add("text/html;profile=mcp-app");
+        return McpServer.builder("ui-server", "1")
+                .extension("io.modelcontextprotocol/ui", uiCapability)
+                .tool(McpTool.builder("show-board")
+                        .meta(toolMeta)
+                        .handler((a, c) -> McpToolResult.json(Map.of("ok", true)))
+                        .build())
+                .resource(McpResource.builder("ui://board", "board")
+                        .mimeType("text/html;profile=mcp-app")
+                        .meta(resourceMeta)
+                        .reader(c -> "<section class=\"hc-card\">hi</section>")
+                        .build())
+                .build();
+    }
+
+    private JsonNode onUiServer(String json) {
+        return uiServer().handle(read(json)).orElseThrow();
+    }
+
+    @Test
+    void initializeAdvertisesNegotiatedExtensionCapabilities() {
+        JsonNode caps = onUiServer("{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\"}")
+                .get("result").get("capabilities");
+        JsonNode ui = caps.get("extensions").get("io.modelcontextprotocol/ui");
+        assertThat(ui.get("mimeTypes").get(0).asText()).isEqualTo("text/html;profile=mcp-app");
+    }
+
+    @Test
+    void initializeOmitsExtensionsWhenNoneAreDeclared() {
+        JsonNode caps = call("{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\"}")
+                .get("result").get("capabilities");
+        assertThat(caps.has("extensions")).isFalse();
+    }
+
+    @Test
+    void toolsListAdvertisesTheLinkingToolsMeta() {
+        JsonNode tool = onUiServer("{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\"}")
+                .get("result").get("tools").get(0);
+        assertThat(tool.get("_meta").get("ui").get("resourceUri").asText()).isEqualTo("ui://board");
+    }
+
+    @Test
+    void resourcesListAndReadCarryTheUiResourceMeta() {
+        JsonNode listed = onUiServer("{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"resources/list\"}")
+                .get("result").get("resources").get(0);
+        assertThat(listed.get("mimeType").asText()).isEqualTo("text/html;profile=mcp-app");
+        assertThat(listed.get("_meta").get("ui").get("prefersBorder").asBoolean()).isTrue();
+
+        JsonNode entry = onUiServer("{\"jsonrpc\":\"2.0\",\"id\":4,\"method\":\"resources/read\","
+                + "\"params\":{\"uri\":\"ui://board\"}}").get("result").get("contents").get(0);
+        assertThat(entry.get("mimeType").asText()).isEqualTo("text/html;profile=mcp-app");
+        assertThat(entry.get("text").asText()).contains("hc-card");
+        assertThat(entry.get("_meta").get("ui").get("prefersBorder").asBoolean()).isTrue();
     }
 }

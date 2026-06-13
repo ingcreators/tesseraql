@@ -91,6 +91,7 @@ public final class AppTestRunner {
             kinds.add(ManifestCoverage.message(manifest, suites));
             kinds.add(ManifestCoverage.mcp(manifest, suites));
             kinds.add(ManifestCoverage.resources(manifest, suites));
+            kinds.add(ManifestCoverage.uiResources(manifest, suites));
         }
         return kinds;
     }

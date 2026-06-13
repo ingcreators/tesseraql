@@ -157,6 +157,61 @@ class RouteGovernanceTest {
         assertThat(open.riskScore()).isEqualTo(1);
     }
 
+    private static final String AUTHENTICATED_UI = """
+            version: tesseraql/v1
+            id: board
+            kind: ui
+            recipe: query-html
+            uri: ui://users/board
+            description: A board of users.
+            security:
+              auth: bearer
+              policy: catalog.read
+            sql:
+              file: catalog.sql
+            response:
+              html:
+                template: board.html
+            """;
+
+    private static final String PUBLIC_UI = """
+            version: tesseraql/v1
+            id: public-board
+            kind: ui
+            recipe: query-html
+            uri: ui://users/public
+            description: A public board.
+            security:
+              auth: public
+            sql:
+              file: catalog.sql
+            response:
+              html:
+                template: board.html
+            """;
+
+    @Test
+    void assessesMcpUiResourcesAsReadOnlyNeverAdvanced() throws Exception {
+        AppManifest manifest = app(Map.of(
+                "mcp/board.yml", AUTHENTICATED_UI,
+                "mcp/public.yml", PUBLIC_UI,
+                "mcp/catalog.sql", "select 1\n",
+                "mcp/board.html", "<section class=\"hc-card\"></section>\n"), null);
+
+        List<Assessment> assessments = RouteGovernance.assess(manifest);
+
+        Assessment authenticated = byId(assessments, "board");
+        assertThat(authenticated.mode()).isEqualTo("managed");
+        assertThat(authenticated.riskScore()).isZero();
+        assertThat(authenticated.sha256()).hasSize(64);
+
+        Assessment open = byId(assessments, "public-board");
+        assertThat(open.mode()).isEqualTo("managed");
+        assertThat(open.riskFactors())
+                .anySatisfy(f -> assertThat(f).contains("unauthenticated MCP UI resource"));
+        assertThat(open.riskScore()).isEqualTo(1);
+    }
+
     @Test
     void gateRequiresApprovalForConfiguredModesAndScores() throws Exception {
         String policy = """

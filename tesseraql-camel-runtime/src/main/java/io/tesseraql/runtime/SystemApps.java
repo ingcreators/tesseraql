@@ -48,7 +48,7 @@ final class SystemApps {
             AppManifest loaded = new ManifestLoader().load(root);
             apps.add(new MountedApp(source.name(), new AppManifest(loaded.appHome(), mainConfig,
                     loaded.routes(), loaded.jobs(), loaded.tools(), loaded.resources(),
-                    loaded.index())));
+                    loaded.uiResources(), loaded.index())));
             LOG.info("Mounted app '{}' from {} ({} routes, {} jobs)",
                     source.name(), root, loaded.routes().size(), loaded.jobs().size());
         }

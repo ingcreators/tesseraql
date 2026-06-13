@@ -51,6 +51,27 @@ All notable changes to TesseraQL are documented here. The format follows
   suites. The protocol core (`tesseraql-mcp`) gains `McpResource` and the `resources/*` methods,
   advertising the resources capability only when some are registered. `AppManifest` gains
   `resources()` (discovered from `mcp/` by `kind`).
+- Application-declared MCP Apps UI (roadmap Phase 24, see [docs/ai-mcp.md](docs/ai-mcp.md)): a tool
+  can hand back interactive UI instead of only JSON — the [MCP Apps
+  extension](https://modelcontextprotocol.io/community/seps/1865-mcp-apps-interactive-user-interfaces-for-mcp)
+  (SEP-1865). An app declares a UI resource as a `kind: ui` document under `mcp/` — a `query-html` /
+  `page` definition addressed by a stable `ui://` uri, with optional `ui:` rendering hints
+  (`prefersBorder`, content-security-policy domains) — and a `kind: tool` document links to one via a
+  `ui:` field. The compiler builds the UI resource into a read-only internal route that
+  server-renders an `hc-*` fragment through the existing template pipeline (UI work follows the
+  blessed `hc-*` patterns, mandatory rule 11), and the runtime serves it over the same
+  `/_tesseraql/mcp` endpoint: `resources/list` / `resources/read` answer with the rendered fragment
+  tagged `text/html;profile=mcp-app` and its `_meta.ui`, a linking tool advertises
+  `_meta.ui.resourceUri`, and `initialize` negotiates the
+  `capabilities.extensions["io.modelcontextprotocol/ui"]` extension when the app serves any UI
+  resource. Security is per-resource (the bearer token rides into the route; an unauthorized read is
+  a `resources/read` JSON-RPC error). Lint keeps a UI resource HTML-rendering and uri-addressed
+  (`TQL-MCP-1008`/`1009`/`1011`), warns on a missing description (`TQL-MCP-1010`), rejects a dangling
+  tool link (`TQL-MCP-1012`), and folds UI uris into the duplicate-uri check (`TQL-MCP-1007`); the
+  governance gate scores a UI resource like a read route (never `advanced`); and an `mcp-ui` coverage
+  kind tracks UI resources exercised by declarative suites. The protocol core (`tesseraql-mcp`)
+  carries an opaque `_meta` on `McpTool`/`McpResource` and negotiates extensions in `initialize`.
+  `AppManifest` gains `uiResources()` (discovered from `mcp/` by `kind`).
 - Internationalization (roadmap Phase 22, see
   [docs/internationalization.md](docs/internationalization.md)): per-app message catalogs
   (`messages/<locale>.yml`, nested maps flattened to dotted keys, layered over framework

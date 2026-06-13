@@ -11,6 +11,11 @@ import java.util.Objects;
  * (scaffold, lint, run tests); a future app-declared tool will wrap a 2-way-SQL query or command -
  * both are just a name, a schema, and a handler, so the runtime can compile app YAML into this same
  * type (roadmap Phase 24).
+ *
+ * <p>An optional {@code meta} object is advertised verbatim as the tool's {@code _meta} in
+ * {@code tools/list}. The protocol core keeps it opaque so an extension (such as MCP Apps UI, which
+ * links a tool to a {@code ui://} resource via {@code _meta.ui.resourceUri}) can attach metadata
+ * without this module taking on the extension's vocabulary.
  */
 public final class McpTool {
 
@@ -18,6 +23,7 @@ public final class McpTool {
     private final String title;
     private final String description;
     private final ObjectNode inputSchema;
+    private final ObjectNode meta;
     private final McpToolHandler handler;
 
     private McpTool(Builder builder) {
@@ -27,6 +33,7 @@ public final class McpTool {
         this.inputSchema = builder.inputSchema != null
                 ? builder.inputSchema
                 : McpSchema.object().build();
+        this.meta = builder.meta;
         this.handler = Objects.requireNonNull(builder.handler, "handler");
     }
 
@@ -50,6 +57,11 @@ public final class McpTool {
         return inputSchema;
     }
 
+    /** The tool's {@code _meta} object advertised in {@code tools/list}, or null. */
+    public ObjectNode meta() {
+        return meta;
+    }
+
     public McpToolHandler handler() {
         return handler;
     }
@@ -61,6 +73,7 @@ public final class McpTool {
         private String title;
         private String description;
         private ObjectNode inputSchema;
+        private ObjectNode meta;
         private McpToolHandler handler;
 
         private Builder(String name) {
@@ -84,6 +97,12 @@ public final class McpTool {
 
         public Builder inputSchema(McpSchema inputSchema) {
             this.inputSchema = inputSchema.build();
+            return this;
+        }
+
+        /** The tool's {@code _meta} object, advertised verbatim in {@code tools/list}. */
+        public Builder meta(ObjectNode meta) {
+            this.meta = meta;
             return this;
         }
 

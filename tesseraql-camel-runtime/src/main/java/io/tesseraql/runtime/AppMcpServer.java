@@ -2,6 +2,7 @@ package io.tesseraql.runtime;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.tesseraql.mcp.McpCallContext;
 import io.tesseraql.mcp.McpResource;
 import io.tesseraql.mcp.McpServer;
@@ -10,19 +11,28 @@ import io.tesseraql.mcp.McpToolResult;
 import io.tesseraql.yaml.manifest.AppManifest;
 import io.tesseraql.yaml.manifest.ResourceFile;
 import io.tesseraql.yaml.manifest.ToolFile;
+import io.tesseraql.yaml.manifest.UiResourceFile;
+import io.tesseraql.yaml.model.UiSpec;
 import java.util.Map;
 import org.apache.camel.Exchange;
 import org.apache.camel.ProducerTemplate;
 
 /**
- * Builds the {@link McpServer} that serves an application's declared MCP tools and resources
- * (roadmap Phase 24). Each tool's handler bridges to its compiled {@code direct:mcp.<id>} route, and
- * each resource's reader to its {@code direct:mcp.resource.<id>} route, through a
+ * Builds the {@link McpServer} that serves an application's declared MCP tools, resources, and MCP
+ * Apps UI resources (roadmap Phase 24). Each tool's handler bridges to its compiled
+ * {@code direct:mcp.<id>} route, each resource's reader to its {@code direct:mcp.resource.<id>}
+ * route, and each UI resource's reader to its {@code direct:mcp.ui.<id>} route, through a
  * {@link ProducerTemplate}, passing the call's {@code Authorization} header so the route's own
  * authentication, authorization, input validation, and SQL all run unchanged - a tool/resource is
- * governed exactly like a route. The route renders a JSON body; a non-2xx response (an auth,
- * validation, or conflict failure handled by the route's error renderer) becomes an MCP tool error
- * or, for a resource, a {@code resources/read} JSON-RPC error.
+ * governed exactly like a route. A tool/resource route renders a JSON body and a UI route an
+ * {@code hc-*} HTML fragment; a non-2xx response (an auth, validation, or conflict failure handled
+ * by the route's error renderer) becomes an MCP tool error or, for a (UI) resource, a
+ * {@code resources/read} JSON-RPC error.
+ *
+ * <p>A tool that links to a UI resource (its {@code ui:} field) advertises the link as the tool's
+ * {@code _meta.ui.resourceUri}, the UI resource carries its {@code _meta.ui} rendering hints, and the
+ * MCP Apps extension is negotiated under {@code capabilities.extensions["io.modelcontextprotocol/ui"]}
+ * when the app serves any UI resource.
  */
 final class AppMcpServer {
 
@@ -34,13 +44,24 @@ final class AppMcpServer {
     static McpServer build(AppManifest manifest, String appName, ProducerTemplate producer) {
         McpServer.Builder builder = McpServer.builder(appName, appVersion(manifest))
                 .instructions("MCP tools and resources served by the " + appName + " application.");
+        // Negotiate the MCP Apps UI extension when the app serves any ui:// resource (SEP-1865).
+        if (!manifest.uiResources().isEmpty()) {
+            ObjectNode capability = MAPPER.createObjectNode();
+            capability.putArray("mimeTypes").add(UiResourceFile.MIME_TYPE);
+            builder.extension("io.modelcontextprotocol/ui", capability);
+        }
         for (ToolFile tool : manifest.tools()) {
             String endpoint = "direct:mcp." + tool.definition().id();
-            builder.tool(McpTool.builder(tool.definition().id())
+            McpTool.Builder toolBuilder = McpTool.builder(tool.definition().id())
                     .description(tool.description())
                     .inputSchema(McpInputSchema.fromInputs(tool.definition().input()))
-                    .handler((arguments, context) -> invoke(producer, endpoint, arguments, context))
-                    .build());
+                    .handler(
+                            (arguments, context) -> invoke(producer, endpoint, arguments, context));
+            // A tool that renders into a UI resource advertises the link as _meta.ui.resourceUri.
+            if (tool.uiResource() != null && !tool.uiResource().isBlank()) {
+                toolBuilder.meta(toolMeta(tool.uiResource()));
+            }
+            builder.tool(toolBuilder.build());
         }
         for (ResourceFile resource : manifest.resources()) {
             String endpoint = "direct:mcp.resource." + resource.definition().id();
@@ -50,7 +71,51 @@ final class AppMcpServer {
                     .reader(context -> read(producer, endpoint, context))
                     .build());
         }
+        for (UiResourceFile ui : manifest.uiResources()) {
+            String endpoint = "direct:mcp.ui." + ui.definition().id();
+            McpResource.Builder resourceBuilder = McpResource
+                    .builder(ui.uri(), ui.definition().id())
+                    .description(ui.description())
+                    .mimeType(ui.mimeType())
+                    .reader(context -> read(producer, endpoint, context));
+            ObjectNode meta = uiMeta(ui.ui());
+            if (meta != null) {
+                resourceBuilder.meta(meta);
+            }
+            builder.resource(resourceBuilder.build());
+        }
         return builder.build();
+    }
+
+    /** A linking tool's {@code _meta.ui}: the UI resource it renders into, visible to model and app. */
+    private static ObjectNode toolMeta(String uiResourceUri) {
+        ObjectNode meta = MAPPER.createObjectNode();
+        ObjectNode ui = meta.putObject("ui");
+        ui.put("resourceUri", uiResourceUri);
+        ui.putArray("visibility").add("model").add("app");
+        return meta;
+    }
+
+    /** A UI resource's {@code _meta.ui} rendering hints (prefers-border, csp), or null when empty. */
+    private static ObjectNode uiMeta(UiSpec ui) {
+        if (ui == null || ui.isEmpty()) {
+            return null;
+        }
+        ObjectNode meta = MAPPER.createObjectNode();
+        ObjectNode node = meta.putObject("ui");
+        if (ui.prefersBorder() != null) {
+            node.put("prefersBorder", ui.prefersBorder());
+        }
+        if (!ui.cspConnectDomains().isEmpty() || !ui.cspResourceDomains().isEmpty()) {
+            ObjectNode csp = node.putObject("csp");
+            if (!ui.cspConnectDomains().isEmpty()) {
+                ui.cspConnectDomains().forEach(csp.putArray("connectDomains")::add);
+            }
+            if (!ui.cspResourceDomains().isEmpty()) {
+                ui.cspResourceDomains().forEach(csp.putArray("resourceDomains")::add);
+            }
+        }
+        return meta;
     }
 
     /**
