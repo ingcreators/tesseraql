@@ -11,9 +11,12 @@ import com.fasterxml.jackson.databind.JsonNode;
  * throwing: {@link McpServer} catches the throwable and turns it into an {@code isError} result, so
  * an agent sees the message and can correct course rather than the connection breaking (this is the
  * MCP contract - tool failures are results, not JSON-RPC protocol errors).
+ *
+ * <p>The {@link McpCallContext} carries transport metadata (the request's {@code Authorization}
+ * header) so a handler can authenticate; dev-tool handlers ignore it.
  */
 @FunctionalInterface
 public interface McpToolHandler {
 
-    McpToolResult handle(JsonNode arguments) throws Exception;
+    McpToolResult handle(JsonNode arguments, McpCallContext context) throws Exception;
 }

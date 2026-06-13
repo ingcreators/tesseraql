@@ -10,6 +10,7 @@ import io.tesseraql.coverage.CoverageThresholds;
 import io.tesseraql.coverage.ItemCoverage;
 import io.tesseraql.coverage.SqlCoverageReport;
 import io.tesseraql.identity.RealmConfig;
+import io.tesseraql.mcp.McpCallContext;
 import io.tesseraql.mcp.McpSchema;
 import io.tesseraql.mcp.McpServer;
 import io.tesseraql.mcp.McpTool;
@@ -99,7 +100,7 @@ public final class McpDevTools {
         return McpTool.builder("manifest_summary")
                 .description("Summarize the app: name, home, reproducibility hash, and every"
                         + " discovered route and job.")
-                .handler(args -> {
+                .handler((args, ctx) -> {
                     AppManifest manifest = new ManifestLoader().load(appHome);
                     StudioService.Explorer explorer = new StudioService(manifest, true).explorer();
                     return McpToolResult.json(obj(
@@ -118,7 +119,7 @@ public final class McpDevTools {
                         + " path.")
                 .inputSchema(McpSchema.object()
                         .required("path", "string", "app-home-relative file path"))
-                .handler(args -> {
+                .handler((args, ctx) -> {
                     AppManifest manifest = new ManifestLoader().load(appHome);
                     String content = new StudioService(manifest, true)
                             .source(requireText(args, "path"));
@@ -136,7 +137,7 @@ public final class McpDevTools {
                         .property("jdbcUrl", "string", "JDBC URL (default: app main datasource)")
                         .property("username", "string", "database user")
                         .property("password", "string", "database password"))
-                .handler(args -> {
+                .handler((args, ctx) -> {
                     String table = requireText(args, "table");
                     TableSchema schema;
                     try (Connection connection = connect(args, config())) {
@@ -151,7 +152,7 @@ public final class McpDevTools {
         return McpTool.builder("lint")
                 .description("Run the app linter (recipes, SQL files, security policies, tenant and"
                         + " optimistic-locking rules, validation, notify, i18n) and report findings.")
-                .handler(args -> {
+                .handler((args, ctx) -> {
                     List<LintFinding> findings = new AppLinter().lint(appHome);
                     long errors = findings.stream().filter(LintFinding::isError).count();
                     return McpToolResult.json(obj(
@@ -175,7 +176,7 @@ public final class McpDevTools {
                 .build();
     }
 
-    private McpToolResult runTests(JsonNode args) throws Exception {
+    private McpToolResult runTests(JsonNode args, McpCallContext context) throws Exception {
         Datasource ds = resolve(args, config());
         String realm = textOr(args, "realm", "local");
         Path reportDir = appHome.resolve("work/mcp/reports");
@@ -222,7 +223,7 @@ public final class McpDevTools {
                         .property("jdbcUrl", "string", "JDBC URL (default: app main datasource)")
                         .property("username", "string", "database user")
                         .property("password", "string", "database password"))
-                .handler(args -> {
+                .handler((args, ctx) -> {
                     Datasource ds = resolve(args, config());
                     DriverManagerDataSource dataSource = new DriverManagerDataSource(ds.url(),
                             ds.user(), ds.password());
@@ -257,7 +258,7 @@ public final class McpDevTools {
                         .property("jdbcUrl", "string", "JDBC URL (default: app main datasource)")
                         .property("username", "string", "database user")
                         .property("password", "string", "database password"))
-                .handler(args -> {
+                .handler((args, ctx) -> {
                     String table = requireText(args, "table");
                     boolean force = args.path("force").asBoolean(false);
                     TableSchema schema;
@@ -283,7 +284,7 @@ public final class McpDevTools {
                 .inputSchema(McpSchema.object()
                         .required("path", "string", "app-home-relative file path")
                         .required("content", "string", "new file content"))
-                .handler(args -> {
+                .handler((args, ctx) -> {
                     StudioService studio = studio();
                     studio.saveDraft(requireText(args, "path"), requireText(args, "content"));
                     return McpToolResult.json(obj("saved", requireText(args, "path")));
@@ -299,7 +300,7 @@ public final class McpDevTools {
                         .required("path", "string", "app-home-relative file path")
                         .property("content", "string", "content to validate (default: saved draft"
                                 + " or current source)"))
-                .handler(args -> {
+                .handler((args, ctx) -> {
                     StudioService.PreviewResult preview = studio()
                             .preview(requireText(args, "path"), textOrNull(args, "content"));
                     return McpToolResult.json(obj(
@@ -315,7 +316,7 @@ public final class McpDevTools {
                         + " if the draft does not compile.")
                 .inputSchema(McpSchema.object()
                         .required("path", "string", "app-home-relative file path"))
-                .handler(args -> {
+                .handler((args, ctx) -> {
                     String path = requireText(args, "path");
                     studio().applyDraft(path);
                     return McpToolResult.json(obj("applied", path));

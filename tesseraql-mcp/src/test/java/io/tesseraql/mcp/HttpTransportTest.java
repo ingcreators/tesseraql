@@ -19,7 +19,7 @@ class HttpTransportTest {
     void start() throws Exception {
         McpServer server = McpServer.builder("http-e2e", "1.0")
                 .tool(McpTool.builder("echo")
-                        .handler(args -> McpToolResult.text(args.path("text").asText()))
+                        .handler((args, ctx) -> McpToolResult.text(args.path("text").asText()))
                         .build())
                 .build();
         transport = new HttpTransport(new McpHttpHandler(server, null), "127.0.0.1", 0, "/mcp");
