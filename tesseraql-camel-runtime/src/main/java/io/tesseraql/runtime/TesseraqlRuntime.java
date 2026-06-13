@@ -329,19 +329,21 @@ public final class TesseraqlRuntime implements AutoCloseable {
                     tenantDataSources, dataSources::get);
             context.addService(new VertxPlatformHttpServer(httpConfig));
             context.addRoutes(new RouteCompiler().appName(appName).compile(manifest));
-            // Application-declared MCP tools and resources (roadmap Phase 24): the compiler emitted
-            // a direct:mcp.<id> route per tool and a direct:mcp.resource.<id> route per resource;
-            // serve them over Streamable HTTP at /_tesseraql/mcp, each one's own route security
-            // gating the call.
-            boolean servesMcp = !manifest.tools().isEmpty() || !manifest.resources().isEmpty();
+            // Application-declared MCP tools, resources, and UI resources (roadmap Phase 24): the
+            // compiler emitted a direct:mcp.<id> route per tool, a direct:mcp.resource.<id> route
+            // per resource, and a direct:mcp.ui.<id> route per UI resource; serve them over
+            // Streamable HTTP at /_tesseraql/mcp, each one's own route security gating the call.
+            boolean servesMcp = !manifest.tools().isEmpty() || !manifest.resources().isEmpty()
+                    || !manifest.uiResources().isEmpty();
             if (servesMcp && manifest.config().getString("tesseraql.mcp.enabled")
                     .map(Boolean::parseBoolean).orElse(true)) {
                 io.tesseraql.mcp.McpServer mcpServer = AppMcpServer.build(manifest, appName,
                         context.createProducerTemplate());
                 context.addRoutes(new McpRouteBuilder(
                         new io.tesseraql.mcp.McpHttpHandler(mcpServer, null)));
-                LOG.info("Serving {} MCP tool(s) and {} resource(s) at /_tesseraql/mcp",
-                        manifest.tools().size(), manifest.resources().size());
+                LOG.info("Serving {} MCP tool(s), {} resource(s), and {} UI resource(s) at"
+                        + " /_tesseraql/mcp", manifest.tools().size(), manifest.resources().size(),
+                        manifest.uiResources().size());
             }
             // Mounted apps (jar-bundled system apps and config-listed directories, design ch. 32)
             // are plain yaml/sql/template trees compiled exactly like the main app.

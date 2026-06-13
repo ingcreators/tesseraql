@@ -167,6 +167,52 @@ class AppMcpToolIntegrationTest {
         assertThat(unknown.path("error").path("code").asInt()).isEqualTo(-32002);
     }
 
+    @Test
+    void initializeAdvertisesTheMcpAppsUiExtension() throws Exception {
+        JsonNode ui = rpc(initializeBody(), null, null).path("result").path("capabilities")
+                .path("extensions").path("io.modelcontextprotocol/ui");
+        assertThat(ui.path("mimeTypes").get(0).asText()).isEqualTo("text/html;profile=mcp-app");
+    }
+
+    @Test
+    void toolsListLinksALinkingToolToItsUiResource() throws Exception {
+        JsonNode tools = rpc(rpcBody("tools/list", null), session, null).path("result")
+                .path("tools");
+        JsonNode findUsers = stream(tools).filter(t -> t.path("name").asText().equals("find-users"))
+                .findFirst().orElseThrow();
+        assertThat(findUsers.path("_meta").path("ui").path("resourceUri").asText())
+                .isEqualTo("ui://users/board");
+    }
+
+    @Test
+    void resourcesListAdvertisesTheUiResourceWithTheMcpAppProfile() throws Exception {
+        JsonNode resources = rpc(rpcBody("resources/list", null), session, null).path("result")
+                .path("resources");
+        JsonNode board = stream(resources)
+                .filter(r -> r.path("uri").asText().equals("ui://users/board"))
+                .findFirst().orElseThrow();
+        assertThat(board.path("mimeType").asText()).isEqualTo("text/html;profile=mcp-app");
+        assertThat(board.path("_meta").path("ui").path("prefersBorder").asBoolean()).isTrue();
+    }
+
+    @Test
+    void aUiResourceReadRendersTheHcFragmentForAnAuthorizedCaller() throws Exception {
+        JsonNode entry = readResource("ui://users/board", token(List.of("USER_READ")))
+                .path("result").path("contents").get(0);
+        assertThat(entry.path("uri").asText()).isEqualTo("ui://users/board");
+        assertThat(entry.path("mimeType").asText()).isEqualTo("text/html;profile=mcp-app");
+        // The fragment is server-rendered hc-* markup carrying the active users.
+        String html = entry.path("text").asText();
+        assertThat(html).contains("hc-list").contains("sato");
+    }
+
+    @Test
+    void aUiResourceReadIsDeniedForAnUnauthorizedCaller() throws Exception {
+        JsonNode noToken = readResource("ui://users/board", null);
+        assertThat(noToken.path("result").isMissingNode()).isTrue();
+        assertThat(noToken.path("error").path("code").asInt()).isEqualTo(-32603);
+    }
+
     // ----- MCP helpers ------------------------------------------------------
 
     private JsonNode call(String tool, Map<String, Object> arguments, String bearer)
@@ -248,6 +294,7 @@ class AppMcpToolIntegrationTest {
                 kind: tool
                 recipe: query-json
                 description: Search users by name; returns id, name, and status.
+                ui: ui://users/board
 
                 input:
                   q:
@@ -326,6 +373,50 @@ class AppMcpToolIntegrationTest {
                 from users u
                 where u.status = 'ACTIVE'
                 order by u.id
+                """);
+
+        // The app also declares an MCP Apps UI resource (the MCP Apps extension): a query-html
+        // definition that server-renders an hc-* fragment of active users, addressed by a ui:// uri.
+        // The find-users tool links to it via its ui: field.
+        Files.writeString(mcp.resolve("users-board.yml"), """
+                version: tesseraql/v1
+                id: users-board
+                kind: ui
+                recipe: query-html
+                uri: ui://users/board
+                description: A board of active users, rendered as a Hypermedia Components fragment.
+
+                security:
+                  auth: bearer
+                  policy: users.read
+
+                sql:
+                  file: users-board.sql
+                  mode: query
+
+                response:
+                  html:
+                    template: users-board.html
+                    model:
+                      users: sql.rows
+
+                ui:
+                  prefersBorder: true
+                  csp:
+                    connectDomains: ["'self'"]
+                """);
+        Files.writeString(mcp.resolve("users-board.sql"), """
+                select u.id, u.name
+                from users u
+                where u.status = 'ACTIVE'
+                order by u.id
+                """);
+        Files.writeString(mcp.resolve("users-board.html"), """
+                <section class="hc-card" xmlns:th="http://www.thymeleaf.org">
+                  <ul class="hc-list">
+                    <li class="hc-list__item" th:each="u : ${users}" th:text="${u.name}">name</li>
+                  </ul>
+                </section>
                 """);
         return target;
     }
