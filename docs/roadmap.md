@@ -38,7 +38,7 @@ exchange with neighboring systems) still needs, against what 0.1.0 provides:
 | HTTP caching | absent |
 | HA building blocks | solid base: cluster-safe job claiming, JDBC session store; missing K8s assets and zero-downtime guidance |
 | Distribution | GitHub Releases only; no Maven Central, no Gradle plugin, no docs site |
-| AI tooling | dev-tool MCP server, app-declared MCP tools, resources, and Apps UI shipped (Phase 24) |
+| AI tooling | dev-tool MCP server; app-declared MCP tools, resources, and Apps UI — for the main app and mounted apps — shipped (Phase 24) |
 
 ## Horizon 1 — application completeness (0.2.x)
 
@@ -173,16 +173,19 @@ rides into the route), lint keeps a UI resource HTML-rendering and uri-addressed
 dangling tool link), the governance gate scores it like a read route (never `advanced`), and an
 `mcp-ui` coverage kind tracks the UI resources declarative suites exercise.
 
-Still open — a further MCP surface on the same `tesseraql-mcp` core, deferred to a later release
-once the tool loop has proven itself:
+**Mounted-app tools** (delivered): the runtime serves the MCP tools, resources, and UI resources
+declared by mounted and bundled system apps (design ch. 32), not only the main app, from the one
+`/_tesseraql/mcp` endpoint. Each app's `direct:mcp.*` routes are compiled as they already were; the
+runtime now registers every hosted app's MCP surface together (negotiating the MCP Apps UI extension
+when any of them serves a `ui://` resource), and the startup route-conflict guard — which already
+spans HTTP routes across apps — also rejects a tool name, resource uri, or UI uri two apps would
+share. Security stays per-route: the bearer token rides into the declaring app's route, and mounted
+apps share the main app's config so policies and the JWT verifier resolve the same way. The single
+`tesseraql.mcp.enabled` flag governs the whole endpoint.
 
-- **Mounted-app tools** — serve the MCP tools, resources, and UI resources declared by
-  mounted/system apps (design ch. 32), not only the main app, under the same per-tool security and
-  the route-conflict checks.
-
-It stays behind the same SQL-first, governed-recipe invariants (extension principles
-1–4); deeper Studio-copilot ambitions remain gated on the MCP loop proving its worth (decision
-point 4).
+The application MCP surface stays behind the same SQL-first, governed-recipe invariants (extension
+principles 1–4); deeper Studio-copilot ambitions remain gated on the MCP loop proving its worth
+(decision point 4).
 
 **Milestone M7** — schema to verified CRUD in under ten minutes by hand, or hands-off via an
 MCP-connected agent.

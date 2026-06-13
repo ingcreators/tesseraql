@@ -329,24 +329,10 @@ public final class TesseraqlRuntime implements AutoCloseable {
                     tenantDataSources, dataSources::get);
             context.addService(new VertxPlatformHttpServer(httpConfig));
             context.addRoutes(new RouteCompiler().appName(appName).compile(manifest));
-            // Application-declared MCP tools, resources, and UI resources (roadmap Phase 24): the
-            // compiler emitted a direct:mcp.<id> route per tool, a direct:mcp.resource.<id> route
-            // per resource, and a direct:mcp.ui.<id> route per UI resource; serve them over
-            // Streamable HTTP at /_tesseraql/mcp, each one's own route security gating the call.
-            boolean servesMcp = !manifest.tools().isEmpty() || !manifest.resources().isEmpty()
-                    || !manifest.uiResources().isEmpty();
-            if (servesMcp && manifest.config().getString("tesseraql.mcp.enabled")
-                    .map(Boolean::parseBoolean).orElse(true)) {
-                io.tesseraql.mcp.McpServer mcpServer = AppMcpServer.build(manifest, appName,
-                        context.createProducerTemplate());
-                context.addRoutes(new McpRouteBuilder(
-                        new io.tesseraql.mcp.McpHttpHandler(mcpServer, null)));
-                LOG.info("Serving {} MCP tool(s), {} resource(s), and {} UI resource(s) at"
-                        + " /_tesseraql/mcp", manifest.tools().size(), manifest.resources().size(),
-                        manifest.uiResources().size());
-            }
             // Mounted apps (jar-bundled system apps and config-listed directories, design ch. 32)
-            // are plain yaml/sql/template trees compiled exactly like the main app.
+            // are plain yaml/sql/template trees compiled exactly like the main app. They load before
+            // the MCP endpoint is wired so their MCP surface joins the main app's on one endpoint and
+            // the conflict check spans every hosted app.
             List<SystemApps.MountedApp> mountedApps = SystemApps.load(manifest.config(), appHome);
             SystemApps.requireNoRouteConflicts(manifest, mountedApps);
             for (SystemApps.MountedApp mounted : mountedApps) {
@@ -367,6 +353,28 @@ public final class TesseraqlRuntime implements AutoCloseable {
                     jobOwners.put(jobId, mounted.name());
                 }
                 hostedApps.add(mounted.name());
+            }
+            // Application-declared MCP tools, resources, and UI resources (roadmap Phase 24): the
+            // compiler emitted a direct:mcp.<id> route per tool, a direct:mcp.resource.<id> route
+            // per resource, and a direct:mcp.ui.<id> route per UI resource, for the main app and
+            // every mounted app (design ch. 32 mounted-app tools). Serve them all over one Streamable
+            // HTTP endpoint at /_tesseraql/mcp, each route's own security gating the call; the
+            // conflict check above kept tool names and resource uris unique across apps.
+            List<AppManifest> mcpApps = new java.util.ArrayList<>();
+            mcpApps.add(manifest);
+            mountedApps.forEach(mounted -> mcpApps.add(mounted.manifest()));
+            int mcpTools = mcpApps.stream().mapToInt(app -> app.tools().size()).sum();
+            int mcpResources = mcpApps.stream().mapToInt(app -> app.resources().size()).sum();
+            int mcpUiResources = mcpApps.stream().mapToInt(app -> app.uiResources().size()).sum();
+            if ((mcpTools > 0 || mcpResources > 0 || mcpUiResources > 0)
+                    && manifest.config().getString("tesseraql.mcp.enabled")
+                            .map(Boolean::parseBoolean).orElse(true)) {
+                io.tesseraql.mcp.McpServer mcpServer = AppMcpServer.build(appName, mcpApps,
+                        context.createProducerTemplate());
+                context.addRoutes(new McpRouteBuilder(
+                        new io.tesseraql.mcp.McpHttpHandler(mcpServer, null)));
+                LOG.info("Serving {} MCP tool(s), {} resource(s), and {} UI resource(s) at"
+                        + " /_tesseraql/mcp", mcpTools, mcpResources, mcpUiResources);
             }
             // Static assets (design ch. 12, 40): the main app's assets/, each mounted app's
             // assets/ under its name, framework css under /assets/_tesseraql, vendored WebJars
