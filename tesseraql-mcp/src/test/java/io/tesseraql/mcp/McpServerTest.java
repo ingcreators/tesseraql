@@ -21,18 +21,18 @@ class McpServerTest {
                 .tool(McpTool.builder("echo")
                         .description("echoes its text back")
                         .inputSchema(McpSchema.object().required("text", "string", "the text"))
-                        .handler(args -> McpToolResult.text(args.path("text").asText()))
+                        .handler((args, ctx) -> McpToolResult.text(args.path("text").asText()))
                         .build())
                 .tool(McpTool.builder("info")
-                        .handler(args -> McpToolResult.json(Map.of("answer", 42)))
+                        .handler((args, ctx) -> McpToolResult.json(Map.of("answer", 42)))
                         .build())
                 .tool(McpTool.builder("boom")
-                        .handler(args -> {
+                        .handler((args, ctx) -> {
                             throw new IllegalStateException("kaboom");
                         })
                         .build())
                 .tool(McpTool.builder("denied")
-                        .handler(args -> {
+                        .handler((args, ctx) -> {
                             throw new TqlException(new TqlErrorCode(TqlDomain.MCP, 4001), "nope");
                         })
                         .build())

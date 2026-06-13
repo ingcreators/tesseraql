@@ -18,6 +18,59 @@ class AppLinterTest {
     }
 
     @Test
+    void lintsMcpTools(@TempDir Path dir) throws Exception {
+        Files.createDirectories(dir.resolve("config"));
+        Files.writeString(dir.resolve("config/tesseraql.yml"), """
+                tesseraql:
+                  app:
+                    name: t
+                  security:
+                    policies:
+                      catalog.read:
+                        anyOf:
+                          - role: CATALOG_READ
+                """);
+        Files.createDirectories(dir.resolve("mcp"));
+        // A clean read tool: known recipe, defined policy, a description, an existing SQL file.
+        Files.writeString(dir.resolve("mcp/find.sql"), "select 1\n");
+        Files.writeString(dir.resolve("mcp/find-products.yml"), """
+                version: tesseraql/v1
+                id: find-products
+                kind: tool
+                recipe: query-json
+                description: Search products.
+                security:
+                  auth: bearer
+                  policy: catalog.read
+                sql:
+                  file: find.sql
+                """);
+        // A write tool with no policy (deny-by-default violation) and no description.
+        Files.writeString(dir.resolve("mcp/delete.sql"), "delete from products where id = 1\n");
+        Files.writeString(dir.resolve("mcp/purge.yml"), """
+                version: tesseraql/v1
+                id: purge-products
+                kind: tool
+                recipe: command-json
+                security:
+                  auth: bearer
+                sql:
+                  file: delete.sql
+                  mode: update
+                """);
+
+        List<LintFinding> findings = new AppLinter().lint(dir);
+
+        // The write tool without a policy is an error; its missing description is a warning.
+        assertThat(findings).anyMatch(f -> f.code().equals("TQL-MCP-4030") && f.isError()
+                && f.source().contains("purge.yml"));
+        assertThat(findings).anyMatch(f -> f.code().equals("TQL-MCP-1002") && !f.isError()
+                && f.source().contains("purge.yml"));
+        // The clean read tool raises nothing.
+        assertThat(findings).noneMatch(f -> f.source().contains("find-products.yml"));
+    }
+
+    @Test
     void reportsMissingSqlFileAndUndefinedPolicy(@TempDir Path dir) throws Exception {
         Files.createDirectories(dir.resolve("config"));
         Files.writeString(dir.resolve("config/application.yml"), "server:\n  port: 0\n");

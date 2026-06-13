@@ -15,6 +15,7 @@ import io.tesseraql.core.util.Durations;
 import io.tesseraql.yaml.config.AppConfig;
 import io.tesseraql.yaml.manifest.AppManifest;
 import io.tesseraql.yaml.manifest.RouteFile;
+import io.tesseraql.yaml.manifest.ToolFile;
 import io.tesseraql.yaml.model.IdempotencySpec;
 import io.tesseraql.yaml.model.PolicySpec;
 import io.tesseraql.yaml.model.RouteDefinition;
@@ -91,6 +92,14 @@ public final class RouteCompiler {
                     if (onlyRouteIds == null
                             || onlyRouteIds.contains(routeFile.definition().id())) {
                         buildRoute(this, manifest.appHome(), routeFile);
+                    }
+                }
+                // Application-declared MCP tools (roadmap Phase 24 follow-on): each compiles to a
+                // direct: route consumed by the runtime's MCP endpoint, never mounted on HTTP.
+                for (ToolFile toolFile : manifest.tools()) {
+                    if (onlyRouteIds == null
+                            || onlyRouteIds.contains(toolFile.definition().id())) {
+                        buildMcpTool(this, toolFile);
                     }
                 }
             }
@@ -398,6 +407,59 @@ public final class RouteCompiler {
         return step;
     }
 
+    /**
+     * Builds an application-declared MCP tool (roadmap Phase 24 follow-on) as a {@code direct:}
+     * route, never mounted on HTTP. The route is the same pipeline a {@code query-json} /
+     * {@code command-json} route runs - telemetry, the tool's own security (auth + policy), input
+     * binding and validation, SQL or the transactional command - so a tool is governed exactly like
+     * a route. The runtime's MCP endpoint sends to {@code direct:mcp.<id>} and reads the JSON result.
+     */
+    private void buildMcpTool(RouteBuilder builder, ToolFile toolFile) {
+        RouteDefinition definition = toolFile.definition();
+        Path toolDir = toolFile.source().getParent();
+        String routeId = "mcp." + definition.id();
+        String direct = "direct:" + routeId;
+
+        ProcessorDefinition<?> route = builder.from(direct).routeId(routeId);
+        route.process(new io.tesseraql.compiler.binding.RouteTelemetry(
+                definition.id(), "MCP", "/" + definition.id(), appName));
+        applyConcurrency(route, definition);
+        applyLane(route, definition);
+        applySecurity(route, definition.security());
+        applyTenancy(route);
+        applyI18n(route);
+        applyIdempotencyBegin(route, definition);
+        ProcessorDefinition<?> step = route
+                .process(new RequestBinder(definition, java.util.List.of()));
+
+        if (usesTransactionalCommand(definition)) {
+            String dialect = datasourceDialect();
+            java.util.function.Function<String, Path> stepFile = file -> io.tesseraql.core.dialect.DialectSqlResolver
+                    .resolve(toolDir.resolve(file).normalize(), dialect);
+            step = step.process(new io.tesseraql.compiler.binding.TransactionalCommandProcessor(
+                    routeId, definition.sql(), definition.steps(), definition.validate(),
+                    definition.notifications(), stepFile, DEFAULT_DATASOURCE, dialect,
+                    definition.outbox(), definition.errors(), appName));
+        } else if (definition.sql() != null) {
+            step = step.to(executionUri(toolDir, definition.sql(), "sql"));
+        }
+        for (var entry : definition.queries().entrySet()) {
+            step = step
+                    .process(new io.tesseraql.compiler.binding.NamedQueryBinder(entry.getValue()))
+                    .to(executionUri(toolDir, entry.getValue(), entry.getKey()));
+        }
+        step.process(mcpToolRenderer(definition));
+        applyIdempotencyComplete(step, definition);
+    }
+
+    /** A tool's result renderer: its declared JSON shape, or the raw SQL/command result. */
+    private org.apache.camel.Processor mcpToolRenderer(RouteDefinition definition) {
+        if (definition.response() != null && definition.response().json() != null) {
+            return new JsonResponseRenderer(definition.response().json());
+        }
+        return new io.tesseraql.compiler.binding.McpToolResultRenderer();
+    }
+
     /** Extracts {@code {name}} path-parameter names from a URL template. */
     private static java.util.List<String> pathParams(String urlPath) {
         java.util.List<String> names = new java.util.ArrayList<>();
@@ -412,6 +474,13 @@ public final class RouteCompiler {
     /** Builds an execution step URI: a service provider, a tesseraql-iam contract or a SQL file. */
     private String executionUri(RouteFile routeFile, io.tesseraql.yaml.model.SqlBinding binding,
             String resultKey) {
+        return executionUri(routeFile.source().getParent(), binding, resultKey);
+    }
+
+    /** As {@link #executionUri(RouteFile, io.tesseraql.yaml.model.SqlBinding, String)}, resolving
+     * SQL files relative to {@code sourceDir} (shared by routes and MCP tools). */
+    private String executionUri(Path sourceDir, io.tesseraql.yaml.model.SqlBinding binding,
+            String resultKey) {
         if (binding.isService()) {
             return "tesseraql-service:call?name=" + binding.service() + "&resultKey=" + resultKey;
         }
@@ -419,7 +488,7 @@ public final class RouteCompiler {
             return "tesseraql-iam:contract?name=" + binding.contract()
                     + "&mode=" + binding.effectiveMode() + "&resultKey=" + resultKey;
         }
-        Path sqlPath = routeFile.source().getParent().resolve(binding.file()).normalize();
+        Path sqlPath = sourceDir.resolve(binding.file()).normalize();
         return "tesseraql-sql:file:" + sqlPath
                 + "?datasource=" + DEFAULT_DATASOURCE
                 + "&mode=" + binding.effectiveMode()

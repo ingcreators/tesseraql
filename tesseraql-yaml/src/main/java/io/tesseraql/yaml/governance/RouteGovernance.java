@@ -3,11 +3,13 @@ package io.tesseraql.yaml.governance;
 import io.tesseraql.core.util.Hashing;
 import io.tesseraql.yaml.manifest.AppManifest;
 import io.tesseraql.yaml.manifest.RouteFile;
+import io.tesseraql.yaml.manifest.ToolFile;
 import io.tesseraql.yaml.model.RouteDefinition;
 import io.tesseraql.yaml.model.SqlBinding;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -42,13 +44,64 @@ public final class RouteGovernance {
             List<String> riskFactors, String sha256) {
     }
 
-    /** Assesses every route in the manifest. */
+    /** Assesses every route and application-declared MCP tool in the manifest. */
     public static List<Assessment> assess(AppManifest manifest) {
         List<Assessment> assessments = new ArrayList<>();
         for (RouteFile route : manifest.routes()) {
             assessments.add(assess(manifest, route));
         }
+        for (ToolFile tool : manifest.tools()) {
+            assessments.add(assessTool(manifest, tool));
+        }
         return assessments;
+    }
+
+    /**
+     * Assesses one MCP tool. A tool exposed to a model is graded like a route, with no HTTP method
+     * to read: a command (or update-mode) tool is a write, and a write tool reachable without
+     * authentication is {@code advanced} - the same risk weighting and approval gate as a route.
+     */
+    public static Assessment assessTool(AppManifest manifest, ToolFile tool) {
+        RouteDefinition definition = tool.definition();
+        boolean write = "command-json".equals(definition.recipe())
+                || (definition.sql() != null && "update".equals(definition.sql().effectiveMode()));
+        boolean authenticated = isAuthenticated(definition);
+        boolean usesService = usesService(definition);
+
+        List<String> factors = new ArrayList<>();
+        int score = 0;
+        if (write && !authenticated) {
+            score += 4;
+            factors.add("write tool exposed over MCP without authentication");
+        }
+        if (!write && !authenticated) {
+            score += 1;
+            factors.add("unauthenticated MCP tool");
+        }
+        if (write && authenticated
+                && (definition.security() == null || definition.security().policy() == null)) {
+            score += 1;
+            factors.add("write tool without an authorization policy");
+        }
+        if (write && "command-json".equals(definition.recipe())
+                && definition.idempotency() == null) {
+            score += 2;
+            factors.add("write tool without an idempotency declaration");
+        }
+        if (usesService) {
+            score += 1;
+            factors.add("binds a runtime service provider");
+        }
+        Set<String> undeclared = undeclaredInputs(definition);
+        if (!undeclared.isEmpty()) {
+            score += 2;
+            factors.add("binds undeclared request input(s): " + String.join(", ", undeclared));
+        }
+
+        String mode = write && !authenticated ? "advanced" : usesService ? "extended" : "managed";
+        String source = manifest.appHome().relativize(tool.source()).toString().replace('\\', '/');
+        return new Assessment(definition.id(), source, mode, score, List.copyOf(factors),
+                sha256(tool.source()));
     }
 
     /** Assesses one route. */
@@ -152,8 +205,12 @@ public final class RouteGovernance {
     }
 
     private static String sha256(RouteFile route) {
+        return sha256(route.source());
+    }
+
+    private static String sha256(Path source) {
         try {
-            return Hashing.sha256(Files.readAllBytes(route.source()));
+            return Hashing.sha256(Files.readAllBytes(source));
         } catch (IOException ex) {
             throw new UncheckedIOException(ex);
         }

@@ -56,11 +56,17 @@ public final class McpServer {
         return new Builder(name, version);
     }
 
+    /** Handles a request with no transport context (the stdio case). */
+    public Optional<JsonNode> handle(JsonNode message) {
+        return handle(message, McpCallContext.EMPTY);
+    }
+
     /**
      * Handles one request or notification. Returns the response to send for a request, or empty for
-     * a notification (no {@code id}) - the transport sends nothing in that case.
+     * a notification (no {@code id}) - the transport sends nothing in that case. The
+     * {@link McpCallContext} (the request's auth header) is passed through to tool handlers.
      */
-    public Optional<JsonNode> handle(JsonNode message) {
+    public Optional<JsonNode> handle(JsonNode message, McpCallContext context) {
         if (message == null || !message.isObject()) {
             return Optional.of(error(null, INVALID_REQUEST, "Expected a JSON-RPC object"));
         }
@@ -86,7 +92,7 @@ public final class McpServer {
             case "tools/list" :
                 return Optional.of(result(id, toolsList()));
             case "tools/call" :
-                return Optional.of(toolsCall(id, params));
+                return Optional.of(toolsCall(id, params, context));
             default :
                 return Optional.of(error(id, METHOD_NOT_FOUND, "Unknown method: " + method));
         }
@@ -127,7 +133,7 @@ public final class McpServer {
         return result;
     }
 
-    private JsonNode toolsCall(JsonNode id, JsonNode params) {
+    private JsonNode toolsCall(JsonNode id, JsonNode params, McpCallContext context) {
         if (params == null || !params.hasNonNull("name")) {
             return error(id, INVALID_PARAMS, "tools/call requires a tool name");
         }
@@ -142,7 +148,7 @@ public final class McpServer {
         }
         McpToolResult outcome;
         try {
-            outcome = tool.handler().handle(arguments);
+            outcome = tool.handler().handle(arguments, context);
         } catch (TqlException ex) {
             outcome = McpToolResult.error(ex.code() + ": " + ex.getMessage());
         } catch (Exception ex) {

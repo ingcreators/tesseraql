@@ -75,7 +75,8 @@ public final class McpHttpHandler {
         if (!initialize && request.sessionId() != null && !sessions.contains(request.sessionId())) {
             return json(404, errorBody("Unknown or expired session"), Map.of());
         }
-        Optional<JsonNode> response = server.handle(message);
+        Optional<JsonNode> response = server.handle(message,
+                new McpCallContext(request.authorization()));
         Map<String, String> headers = new LinkedHashMap<>();
         if (initialize) {
             String session = UUID.randomUUID().toString();

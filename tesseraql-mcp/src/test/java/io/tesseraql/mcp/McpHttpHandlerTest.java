@@ -13,7 +13,7 @@ class McpHttpHandlerTest {
     private McpServer server() {
         return McpServer.builder("http", "1.0")
                 .tool(McpTool.builder("echo")
-                        .handler(args -> McpToolResult.text(args.path("text").asText()))
+                        .handler((args, ctx) -> McpToolResult.text(args.path("text").asText()))
                         .build())
                 .build();
     }

@@ -38,7 +38,7 @@ exchange with neighboring systems) still needs, against what 0.1.0 provides:
 | HTTP caching | absent |
 | HA building blocks | solid base: cluster-safe job claiming, JDBC session store; missing K8s assets and zero-downtime guidance |
 | Distribution | GitHub Releases only; no Maven Central, no Gradle plugin, no docs site |
-| AI tooling | dev-tool MCP server shipped (Phase 24); app-declared MCP endpoints next |
+| AI tooling | dev-tool MCP server and app-declared MCP endpoints shipped (Phase 24) |
 
 ## Horizon 1 — application completeness (0.2.x)
 
@@ -137,17 +137,20 @@ by default, `--read-only` to drop the write tools). The protocol machinery — J
 dispatch, the tool model, and the transports — is a dependency-light, use-case-neutral module
 (`tesseraql-mcp`), so it is reusable beyond the dev tool.
 
-Next step — **application MCP endpoints**: let a TesseraQL application declare its own MCP
-tools (and later resources, and MCP Apps UI) in YAML, the way it declares HTTP routes today,
-so the running business application is AI-enabled. A `mcp:` recipe compiles to a SQL-backed
-`McpTool` whose input schema derives from the route's declared `input:` constraints; the
-runtime serves it through its own HTTP server driving the same `McpHttpHandler`, under the
-same deny-by-default security, governance (route modes, risk scoring, approvals), lint rules,
-and coverage kinds as any route. The dev-tool server above is the first consumer of the
-protocol core; this is the second, and the reason the core was factored out rather than built
-into the CLI. Scoped behind the same SQL-first, governed-recipe invariants (extension
-principles 1–4); deeper Studio-copilot ambitions remain gated on the MCP loop proving its
-worth (decision point 4).
+**Application MCP endpoints** (delivered): a TesseraQL application declares its own MCP tools
+in YAML, the way it declares HTTP routes, so the running business application is AI-enabled. A
+`query-json` / `command-json` definition placed under `mcp/` compiles to a SQL-backed tool
+whose input schema derives from the route's declared `input:` constraints; the runtime serves
+it over the Streamable HTTP transport at `/_tesseraql/mcp`, driving the same `McpHttpHandler`
+the dev-tool server uses, under the same deny-by-default security (per-tool `auth`/`policy`,
+the bearer token threaded into the tool's route), governance (risk scoring and the approval
+gate, a write tool reachable unauthenticated is `advanced`), lint (a write tool must declare a
+policy), and an `mcp` coverage kind. The dev-tool server was the first consumer of the protocol
+core; this is the second, and the reason the core was factored out rather than built into the
+CLI. Still open (later): MCP **resources** and **MCP Apps** UI (the kit's hypermedia is the
+natural fit), and serving mounted apps' tools. Scoped behind the same SQL-first,
+governed-recipe invariants (extension principles 1–4); deeper Studio-copilot ambitions remain
+gated on the MCP loop proving its worth (decision point 4).
 
 **Milestone M7** — schema to verified CRUD in under ten minutes by hand, or hands-off via an
 MCP-connected agent.
