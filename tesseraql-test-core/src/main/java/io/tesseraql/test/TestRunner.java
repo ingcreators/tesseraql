@@ -87,6 +87,9 @@ public final class TestRunner {
         if (test.notifications() != null) {
             return evaluateNotify(test);
         }
+        if (test.httpCall() != null) {
+            return evaluateHttpCall(test);
+        }
         if (test.messages() != null) {
             return evaluateMessages(test);
         }
@@ -226,6 +229,88 @@ public final class TestRunner {
             rows.add(row);
         }
         return rows;
+    }
+
+    /**
+     * Plans a job's {@code http-call:} steps against the case's params (roadmap Phase 26), without
+     * issuing a network request: each matching step is one row carrying its id, method, the resolved
+     * url and host, whether the host is allow-listed, and the credential name. URL placeholders and
+     * query bindings resolve exactly as they would at runtime, so a case exercises the binding and
+     * the deny-by-default egress rule deterministically.
+     */
+    private List<Map<String, Object>> evaluateHttpCall(TestCase test) {
+        TestSuite.HttpCallTarget target = test.httpCall();
+        if (target.job() == null || target.job().isBlank()) {
+            throw new IllegalArgumentException("An http-call case needs an http-call.job id");
+        }
+        io.tesseraql.yaml.manifest.JobFile job = job(target.job());
+        io.tesseraql.yaml.http.HttpOutbound outbound = io.tesseraql.yaml.http.HttpOutbound
+                .load(manifest.config());
+        List<Map<String, Object>> rows = new ArrayList<>();
+        for (io.tesseraql.yaml.model.PipelineStep step : job.definition().effectiveSteps()) {
+            io.tesseraql.yaml.model.HttpCallSpec spec = step.httpCall();
+            if (spec == null || (target.id() != null && !target.id().equals(step.id()))) {
+                continue;
+            }
+            String url = resolveUrl(manifest.config(), spec, test.params());
+            String host = hostOf(url);
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("http", step.id());
+            row.put("method", spec.effectiveMethod());
+            row.put("url", url);
+            row.put("host", host);
+            row.put("allowed", host != null && outbound.isHostAllowed(host));
+            row.put("credential", spec.credential());
+            rows.add(row);
+        }
+        if (rows.isEmpty()) {
+            throw new IllegalArgumentException("'" + target.job() + "' declares no matching"
+                    + " http-call" + (target.id() == null ? "" : " '" + target.id() + "'"));
+        }
+        return rows;
+    }
+
+    /** Resolves a step's url (config placeholders and bound query params) for a planning row. */
+    private static String resolveUrl(io.tesseraql.yaml.config.AppConfig config,
+            io.tesseraql.yaml.model.HttpCallSpec spec, Map<String, Object> params) {
+        String raw = spec.url() == null ? "" : spec.url();
+        String base;
+        try {
+            base = config.resolve(raw);
+        } catch (RuntimeException ex) {
+            base = raw;
+        }
+        if (spec.query().isEmpty()) {
+            return base;
+        }
+        io.tesseraql.core.expr.EvaluationContext evaluation = new io.tesseraql.core.expr.EvaluationContext(
+                params);
+        List<String> pairs = new ArrayList<>();
+        spec.query().forEach((name, sourceExpr) -> {
+            Object value = evaluation.resolve(java.util.Arrays.asList(sourceExpr.split("\\.")));
+            if (value != null) {
+                pairs.add(encode(name) + "=" + encode(String.valueOf(value)));
+            }
+        });
+        if (pairs.isEmpty()) {
+            return base;
+        }
+        return base + (base.indexOf('?') >= 0 ? "&" : "?") + String.join("&", pairs);
+    }
+
+    private static String encode(String value) {
+        return java.net.URLEncoder.encode(value, java.nio.charset.StandardCharsets.UTF_8);
+    }
+
+    private static String hostOf(String url) {
+        if (url == null) {
+            return null;
+        }
+        try {
+            return java.net.URI.create(url).getHost();
+        } catch (RuntimeException ex) {
+            return null;
+        }
     }
 
     /**

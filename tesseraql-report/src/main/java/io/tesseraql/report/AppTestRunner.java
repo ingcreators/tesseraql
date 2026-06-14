@@ -37,7 +37,8 @@ public final class AppTestRunner {
     /**
      * Result of a test run: the aggregated report, the collected SQL coverage, and the derived
      * item-coverage kinds (assertion, iam-contract, route, security, api-key, mtls, saml, oidc,
-     * scim, validation, notification, document, message — design ch. 14, roadmap Phases 19-25).
+     * scim, validation, notification, http-call, document, message — design ch. 14, roadmap
+     * Phases 19-26).
      */
     public record RunResult(TestReport report, SqlCoverage coverage, List<ItemCoverage> kinds) {
 
@@ -90,6 +91,7 @@ public final class AppTestRunner {
             kinds.add(ManifestCoverage.scim(manifest, suites));
             kinds.add(ManifestCoverage.validation(manifest, suites));
             kinds.add(ManifestCoverage.notification(manifest, suites));
+            kinds.add(ManifestCoverage.httpCall(manifest, suites));
             kinds.add(ManifestCoverage.document(manifest, suites));
             kinds.add(ManifestCoverage.message(manifest, suites));
             kinds.add(ManifestCoverage.mcp(manifest, suites));

@@ -215,6 +215,38 @@ public final class ManifestCoverage {
     }
 
     /**
+     * http-call coverage (roadmap Phase 26): every job's {@code http-call:} pipeline step is
+     * declared as {@code <jobId>.<stepId>}; a suite's http-call case covers the steps it plans —
+     * the targeted one, or the job's whole set when no id is named — so a managed outbound
+     * connector is exercised before it ships.
+     */
+    public static ItemCoverage httpCall(AppManifest manifest, List<TestSuite> suites) {
+        ItemCoverage coverage = new ItemCoverage("http-call");
+        for (io.tesseraql.yaml.manifest.JobFile job : manifest.jobs()) {
+            if (job.definition().id() == null) {
+                continue;
+            }
+            job.definition().effectiveSteps().stream()
+                    .filter(step -> step.httpCall() != null)
+                    .forEach(step -> coverage.declare(job.definition().id() + "." + step.id()));
+        }
+        for (TestSuite suite : suites) {
+            for (TestCase test : suite.tests()) {
+                TestSuite.HttpCallTarget target = test.httpCall();
+                if (target == null || target.job() == null) {
+                    continue;
+                }
+                String prefix = target.job() + ".";
+                coverage.declared().stream()
+                        .filter(item -> item.startsWith(prefix))
+                        .filter(item -> target.id() == null || item.equals(prefix + target.id()))
+                        .forEach(coverage::cover);
+            }
+        }
+        return coverage;
+    }
+
+    /**
      * Document coverage (roadmap Phase 21): every route exporting a printable document
      * ({@code format: pdf} on {@code query-export}/{@code file-export}) is declared and covered
      * like routes - when a suite case exercises one of its SQL artifacts, the extraction the
