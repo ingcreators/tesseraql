@@ -26,7 +26,9 @@ public record SecurityConfig(Map<String, Policy> policies, JwtConfig jwt) {
      *
      * @param algorithm        signature algorithm, {@code HS256} (default) or {@code RS256}
      * @param secret           shared HMAC secret for HS256 verification
+     * @param publicKey        RS256 static verification key (PEM, X.509 certificate, or JWK JSON)
      * @param issuer           expected {@code iss}, or null to skip the check
+     * @param clockSkew        leeway applied to {@code exp}/{@code nbf}; defaults to zero
      * @param rolesClaim       claim holding the roles array
      * @param permissionsClaim claim holding the permissions array
      * @param groupsClaim      claim holding the groups array
@@ -37,7 +39,9 @@ public record SecurityConfig(Map<String, Policy> policies, JwtConfig jwt) {
     public record JwtConfig(
             String algorithm,
             String secret,
+            String publicKey,
             String issuer,
+            java.time.Duration clockSkew,
             String rolesClaim,
             String permissionsClaim,
             String groupsClaim,
@@ -49,6 +53,7 @@ public record SecurityConfig(Map<String, Policy> policies, JwtConfig jwt) {
             algorithm = algorithm == null || algorithm.isBlank()
                     ? "HS256"
                     : algorithm.toUpperCase(java.util.Locale.ROOT);
+            clockSkew = clockSkew == null ? java.time.Duration.ZERO : clockSkew;
             rolesClaim = orDefault(rolesClaim, "roles");
             permissionsClaim = orDefault(permissionsClaim, "permissions");
             groupsClaim = orDefault(groupsClaim, "groups");

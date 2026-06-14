@@ -56,14 +56,22 @@ public final class SecurityConfigFactory {
     }
 
     private static JwtConfig parseJwt(AppConfig config) {
+        // JWT auth is enabled by an HS256 secret or any RS256 key source (publicKey/jwksUri); the
+        // jwt block existing on its own is not enough, so an app without bearer auth binds nothing.
         String secret = config.getString("tesseraql.security.jwt.secret").orElse(null);
-        if (secret == null) {
+        String publicKey = config.getString("tesseraql.security.jwt.publicKey").orElse(null);
+        String jwksUri = config.getString("tesseraql.security.jwt.jwksUri").orElse(null);
+        if (secret == null && publicKey == null && jwksUri == null) {
             return null;
         }
+        java.time.Duration clockSkew = config.getString("tesseraql.security.jwt.clockSkew")
+                .map(io.tesseraql.core.util.Durations::parse).orElse(null);
         return new JwtConfig(
                 config.getString("tesseraql.security.jwt.algorithm").orElse(null),
                 secret,
+                publicKey,
                 config.getString("tesseraql.security.jwt.issuer").orElse(null),
+                clockSkew,
                 config.getString("tesseraql.security.jwt.rolesClaim").orElse(null),
                 config.getString("tesseraql.security.jwt.permissionsClaim").orElse(null),
                 config.getString("tesseraql.security.jwt.groupsClaim").orElse(null),

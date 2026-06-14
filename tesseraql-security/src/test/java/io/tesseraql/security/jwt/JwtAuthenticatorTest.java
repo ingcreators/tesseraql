@@ -20,7 +20,7 @@ class JwtAuthenticatorTest {
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
     private static JwtConfig config() {
-        return new JwtConfig("HS256", SECRET, null, "roles", "permissions", "groups",
+        return new JwtConfig("HS256", SECRET, null, null, null, "roles", "permissions", "groups",
                 "tenant_id", "preferred_username", "name");
     }
 

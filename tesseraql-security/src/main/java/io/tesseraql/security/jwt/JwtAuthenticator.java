@@ -41,9 +41,18 @@ public final class JwtAuthenticator {
     private static SignatureVerifier verifierFor(JwtConfig config) {
         return switch (config.algorithm()) {
             case "HS256" -> new HmacSignatureVerifier(config.secret());
+            case "RS256" -> new RsaSignatureVerifier(rsaKeySource(config));
             default -> throw new TqlException(PolicyEngine.UNAUTHORIZED,
                     "Unsupported JWT algorithm: " + config.algorithm());
         };
+    }
+
+    private static KeySource rsaKeySource(JwtConfig config) {
+        if (config.publicKey() != null && !config.publicKey().isBlank()) {
+            return new StaticKeySource(Jwks.parsePublicKey(config.publicKey()));
+        }
+        throw new TqlException(PolicyEngine.UNAUTHORIZED,
+                "RS256 JWT config must declare a key source (jwksUri or publicKey)");
     }
 
     /** Authenticates the value of an HTTP {@code Authorization} header. */
@@ -86,10 +95,16 @@ public final class JwtAuthenticator {
     }
 
     private void validateClaims(Map<String, Object> claims) {
-        Object exp = claims.get("exp");
-        if (exp instanceof Number expSeconds
-                && System.currentTimeMillis() / 1000L >= expSeconds.longValue()) {
+        long nowSeconds = System.currentTimeMillis() / 1000L;
+        long skew = config.clockSkew().toSeconds();
+        if (claims.get("exp") instanceof Number expSeconds
+                && nowSeconds - skew >= expSeconds.longValue()) {
             throw new TqlException(PolicyEngine.UNAUTHORIZED, "JWT has expired");
+        }
+        // RS256 IdP tokens commonly carry nbf; honor it within the configured leeway.
+        if (claims.get("nbf") instanceof Number nbfSeconds
+                && nbfSeconds.longValue() > nowSeconds + skew) {
+            throw new TqlException(PolicyEngine.UNAUTHORIZED, "JWT is not yet valid");
         }
         if (config.issuer() != null && !config.issuer().equals(claims.get("iss"))) {
             throw new TqlException(PolicyEngine.UNAUTHORIZED, "JWT issuer mismatch");
