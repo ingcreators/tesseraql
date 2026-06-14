@@ -47,6 +47,7 @@ public final class RouteCompiler {
     private AppConfig config;
     private io.tesseraql.compiler.binding.TenancySettings tenancy;
     private io.tesseraql.compiler.binding.I18nSettings i18n;
+    private io.tesseraql.yaml.webhook.WebhookVerifiers webhookVerifiers;
     private boolean mountRest = true;
     private String appName;
 
@@ -132,6 +133,7 @@ public final class RouteCompiler {
             case "query-export" -> buildQueryExport(builder, appHome, routeFile);
             case "file-import" -> buildFileImport(builder, routeFile);
             case "file-export" -> buildFileExport(builder, appHome, routeFile);
+            case "webhook" -> buildWebhook(builder, routeFile);
             // Every designed recipe is implemented, so an unknown one is a typo: fail fast
             // instead of silently dropping the route from the served surface (design ch. 20.14).
             default -> throw new TqlException(UNSUPPORTED_RECIPE, "Route '" + definition.id()
@@ -182,6 +184,16 @@ public final class RouteCompiler {
      * standard execution pipeline.
      */
     private void buildTransactionalCommand(RouteBuilder builder, RouteFile routeFile) {
+        buildTransactionalCommand(builder, routeFile, null);
+    }
+
+    /**
+     * Builds the transactional command pipeline, optionally inserting {@code preCommand} after the
+     * common steps and before request binding — the inbound webhook recipe (roadmap Phase 26) uses
+     * it to verify the signed, replay-protected delivery before a single row is written.
+     */
+    private void buildTransactionalCommand(RouteBuilder builder, RouteFile routeFile,
+            org.apache.camel.Processor preCommand) {
         RouteDefinition definition = routeFile.definition();
         String routeId = definition.id();
         String direct = "direct:" + routeId;
@@ -202,6 +214,9 @@ public final class RouteCompiler {
         applyTenancy(route);
         applyI18n(route);
         applyIdempotencyBegin(route, definition);
+        if (preCommand != null) {
+            route.process(preCommand);
+        }
         ProcessorDefinition<?> step = route
                 .process(new RequestBinder(definition, pathParams(routeFile.urlPath())))
                 .process(new io.tesseraql.compiler.binding.TransactionalCommandProcessor(
@@ -216,6 +231,34 @@ public final class RouteCompiler {
         }
         step.process(responseRenderer(definition));
         applyIdempotencyComplete(step, definition);
+    }
+
+    /**
+     * Builds the inbound webhook recipe (roadmap Phase 26): an HMAC-verified, replay-protected POST
+     * endpoint that runs the route's SQL pipeline once a signed delivery is authenticated. The
+     * verification runs before request binding, so an invalid signature, a stale timestamp, or a
+     * replay is rejected before a single row is written. The named verifier must be configured —
+     * a webhook with no verifier would be unauthenticated, so an unknown provider fails the build.
+     */
+    private void buildWebhook(RouteBuilder builder, RouteFile routeFile) {
+        RouteDefinition definition = routeFile.definition();
+        if (definition.webhook() == null || definition.webhook().provider() == null
+                || definition.webhook().provider().isBlank()) {
+            throw new TqlException(UNSUPPORTED_RECIPE, "Route '" + definition.id()
+                    + "': webhook recipe needs a webhook.provider");
+        }
+        io.tesseraql.yaml.webhook.WebhookVerifiers.Verifier verifier = webhookVerifiers()
+                .require(definition.webhook().provider());
+        buildTransactionalCommand(builder, routeFile,
+                new io.tesseraql.compiler.binding.WebhookVerifyProcessor(definition.id(),
+                        verifier));
+    }
+
+    private io.tesseraql.yaml.webhook.WebhookVerifiers webhookVerifiers() {
+        if (webhookVerifiers == null) {
+            webhookVerifiers = io.tesseraql.yaml.webhook.WebhookVerifiers.load(config);
+        }
+        return webhookVerifiers;
     }
 
     /**

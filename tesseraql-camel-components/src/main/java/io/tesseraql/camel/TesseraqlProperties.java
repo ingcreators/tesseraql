@@ -42,6 +42,8 @@ public final class TesseraqlProperties {
     public static final String DOCUMENT_SEQUENCES_BEAN = "tesseraqlDocumentSequences";
     /** The asynchronous file import/export service (design ch. 28). */
     public static final String FILE_TRANSFER_BEAN = "tesseraqlFileTransfers";
+    /** The inbound-webhook replay store (roadmap Phase 26). */
+    public static final String WEBHOOK_REPLAY_STORE_BEAN = "tesseraqlWebhookReplayStore";
     /** An OutboxEventSink contributed by a runtime extension (e.g. SCIM outbound provisioning). */
     public static final String OUTBOX_EVENT_SINK_BEAN = "tesseraqlOutboxEventSink";
     /** The ServiceProviders registry backing the tesseraql-service component (design ch. 47). */
