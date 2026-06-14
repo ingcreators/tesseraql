@@ -726,21 +726,100 @@ public final class AppLinter {
     }
 
     /**
-     * Statically checks a batch job's pipeline steps (roadmap Phase 20): a step declares
-     * exactly one of {@code sql:} or {@code notify:}, and notify steps lint like a route's.
+     * Statically checks a batch job's pipeline steps (roadmap Phase 20, 26): a step declares
+     * exactly one of {@code sql:}, {@code notify:}, or {@code http-call:}; notify steps lint like a
+     * route's, and http-call steps lint their egress against the allow-list (deny by default).
      */
     private void lintJob(Path appHome, AppConfig config, io.tesseraql.yaml.manifest.JobFile job,
             List<LintFinding> findings) {
         String source = appHome.relativize(job.source()).toString().replace('\\', '/');
         for (io.tesseraql.yaml.model.PipelineStep step : job.definition().pipeline()) {
-            if ((step.sql() == null) == (step.notification() == null)) {
-                findings.add(new LintFinding("TQL-FIELD-2004", "error", source,
-                        "Step '" + step.id() + "' must declare exactly one of sql: or notify:"));
+            int declared = 0;
+            if (step.sql() != null) {
+                declared++;
+            }
+            if (step.notification() != null) {
+                declared++;
+            }
+            if (step.httpCall() != null) {
+                declared++;
+            }
+            if (declared != 1) {
+                findings.add(new LintFinding("TQL-FIELD-2004", "error", source, "Step '"
+                        + step.id()
+                        + "' must declare exactly one of sql:, notify:, or http-call:"));
                 continue;
             }
             if (step.notification() != null) {
                 lintNotifySpec(config, step.id(), step.notification(), source, findings);
+            } else if (step.httpCall() != null) {
+                lintHttpCall(config, step.id(), step.httpCall(), source, findings);
             }
+        }
+    }
+
+    /**
+     * Statically checks an {@code http-call} step's egress (roadmap Phase 26): the target host
+     * must resolve to an allow-listed host ({@code TQL-SEC-4070}, deny by default), the url must be
+     * an absolute http/https URL ({@code TQL-SEC-4071}), and a referenced credential should be
+     * configured ({@code TQL-SEC-4072}, a warning since another environment may declare it). A url
+     * carrying an unresolved {@code ${...}} secret in its host cannot be checked statically and is
+     * left to the runtime's identical deny-by-default guard.
+     */
+    private void lintHttpCall(AppConfig config, String id,
+            io.tesseraql.yaml.model.HttpCallSpec spec, String source, List<LintFinding> findings) {
+        String resolved = null;
+        if (spec.url() != null && !spec.url().isBlank()) {
+            try {
+                resolved = config.resolve(spec.url());
+            } catch (RuntimeException ex) {
+                resolved = spec.url();
+            }
+        }
+        String host = null;
+        String scheme = null;
+        if (resolved != null) {
+            try {
+                java.net.URI uri = java.net.URI.create(resolved);
+                host = uri.getHost();
+                scheme = uri.getScheme();
+            } catch (RuntimeException ex) {
+                host = null;
+            }
+        }
+        boolean absoluteHttp = host != null && scheme != null
+                && ("http".equalsIgnoreCase(scheme) || "https".equalsIgnoreCase(scheme));
+        if (!absoluteHttp) {
+            // Flag a genuinely missing or relative url, but not one we merely cannot resolve yet
+            // (an unresolved ${...} secret in the host is checked by the runtime instead).
+            if (resolved == null || !resolved.contains("${")) {
+                findings.add(new LintFinding("TQL-SEC-4071", "error", source,
+                        "http-call step '" + id + "' needs an absolute http or https url:"));
+            }
+            lintHttpCredential(config, id, spec, source, findings);
+            return;
+        }
+        List<String> allowedHosts = new java.util.ArrayList<>();
+        if (config.navigate("tesseraql.http.outbound.allowedHosts") instanceof List<?> declared) {
+            declared.forEach(value -> allowedHosts.add(String.valueOf(value)));
+        }
+        if (!io.tesseraql.yaml.http.HttpOutbound.hostAllowed(allowedHosts, host)) {
+            findings.add(new LintFinding("TQL-SEC-4070", "error", source, "http-call step '" + id
+                    + "' targets host '" + host + "' which is not in"
+                    + " tesseraql.http.outbound.allowedHosts (deny by default)"));
+        }
+        lintHttpCredential(config, id, spec, source, findings);
+    }
+
+    private void lintHttpCredential(AppConfig config, String id,
+            io.tesseraql.yaml.model.HttpCallSpec spec, String source, List<LintFinding> findings) {
+        String credential = spec.credential();
+        if (credential == null || credential.isBlank()) {
+            return;
+        }
+        if (config.navigate("tesseraql.http.outbound.credentials." + credential) == null) {
+            findings.add(new LintFinding("TQL-SEC-4072", "warning", source, "http-call step '" + id
+                    + "' references undeclared credential '" + credential + "'"));
         }
     }
 

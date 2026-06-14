@@ -234,6 +234,18 @@ kind and config lint (`TQL-SEC-4060..4065`) keep it machine-checkable. **Phase 2
 - All of it surfaces as recipes under the existing governance (route modes, allowlists,
   risk scoring) — Camel's component catalog stays an implementation detail, not user API.
 
+**Outbound `http-call`** (delivered, see [docs/connectors.md](connectors.md)): a batch-pipeline
+`http-call` step issues one synchronous outbound REST request and publishes the response
+(`step.<id>.status`/`.body`/`.headers`) to later SQL steps. It is a job step, not a transactional
+`command-json` step — a synchronous call cannot be rolled back, so a command's outbound
+integration keeps riding the Phase 20 outbox webhook. All outbound HTTP is governed by
+`tesseraql.http.outbound`: deny-by-default egress allow-list (exact or `*.wildcard` hosts),
+SecretResolver-backed credentials resolved at call time, config timeouts with per-step overrides,
+and a per-host circuit breaker that fails fast on systemic failures. Each call is a
+`tesseraql.http.call` trace span. Lint (`TQL-SEC-4070..4072`) checks egress statically and an
+`http-call` coverage kind tracks the steps suites plan. Polling triggers and the inbound webhook
+recipe remain for later slices.
+
 ### Phase 27 — messaging and events
 
 Outbox relay to a broker (Kafka/JMS) and a `queue-consume` recipe (broker → SQL pipeline

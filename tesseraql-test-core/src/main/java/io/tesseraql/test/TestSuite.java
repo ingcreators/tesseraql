@@ -21,27 +21,36 @@ public record TestSuite(List<TestCase> tests) {
 
     /**
      * A single test case (design ch. 13.2). Exactly one of {@code sql}, {@code contract},
-     * {@code validate}, {@code notify}, or {@code messages} is set.
+     * {@code validate}, {@code notify}, {@code messages}, or {@code http-call} is set.
      *
      * @param name     human-readable case name
      * @param sql      a SQL file target
      * @param contract an Identity SQL Contract name
-     * @param params   bind parameters; for a validation or notify case, the execution context
-     *                 the declarations see (typically a {@code body:} map)
+     * @param params   bind parameters; for a validation, notify, or http-call case, the execution
+     *                 context the declarations see (typically a {@code body:} or {@code job:} map)
      * @param expect   the expectation
      * @param validate a route's validation rules as the target (roadmap Phase 19)
      * @param notifications the {@code notify:} target — a route's or job's notifications
      *                 (roadmap Phase 20; "notify" itself is not a legal record component)
      * @param messages a message-catalog target (roadmap Phase 22)
+     * @param httpCall an {@code http-call:} target — a job's outbound REST steps (roadmap Phase 26)
      */
     @JsonIgnoreProperties(ignoreUnknown = true)
     public record TestCase(String name, SqlTarget sql, String contract,
             Map<String, Object> params, Expectation expect, ValidateTarget validate,
             @com.fasterxml.jackson.annotation.JsonProperty("notify") NotifyTarget notifications,
-            MessagesTarget messages) {
+            MessagesTarget messages,
+            @com.fasterxml.jackson.annotation.JsonProperty("http-call") HttpCallTarget httpCall) {
 
         public TestCase {
             params = params == null ? Map.of() : Map.copyOf(params);
+        }
+
+        /** Convenience constructor without an {@code http-call} target (the pre-Phase-26 shape). */
+        public TestCase(String name, SqlTarget sql, String contract, Map<String, Object> params,
+                Expectation expect, ValidateTarget validate, NotifyTarget notifications,
+                MessagesTarget messages) {
+            this(name, sql, contract, params, expect, validate, notifications, messages, null);
         }
     }
 
@@ -73,6 +82,20 @@ public record TestSuite(List<TestCase> tests) {
      */
     @JsonIgnoreProperties(ignoreUnknown = true)
     public record NotifyTarget(String route, String job, String id) {
+    }
+
+    /**
+     * An http-call target (roadmap Phase 26): the case plans a job's {@code http-call:} pipeline
+     * steps against the case's params, without issuing a network request. Each matching step is
+     * one row carrying {@code http} (its id), {@code method}, the resolved {@code url} and
+     * {@code host}, {@code allowed} (whether the host is in the egress allow-list), and the
+     * {@code credential} name. Query bindings resolve exactly as they would at runtime.
+     *
+     * @param job the job id whose http-call steps are planned
+     * @param id  optional step id; unset, every http-call step of the job is planned
+     */
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public record HttpCallTarget(String job, String id) {
     }
 
     /**

@@ -18,6 +18,24 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Runtime and recipes
 
+- Managed connectors — outbound HTTP (roadmap Phase 26, see
+  [docs/connectors.md](docs/connectors.md)): an `http-call` batch-pipeline step issues one
+  synchronous outbound REST request and publishes the response to later steps
+  (`step.<id>.status` / `.body` parsed JSON or text / `.headers`), so a job can fetch from an
+  API and persist the result, or push database rows to a partner system. It is a job step,
+  never a transactional `command-json` step — a synchronous call cannot be rolled back, so a
+  command's outbound integration rides the Phase 20 outbox webhook instead. All outbound HTTP
+  is governed by `tesseraql.http.outbound`: egress is **deny by default** (a call may only
+  target a host in `allowedHosts`, exact or `*.wildcard`), credentials (`bearer`/`basic`/`header`)
+  resolve from the SecretResolver SPI at call time so a step never carries a secret, timeouts
+  come from config with per-step overrides, and a per-host circuit breaker trips on consecutive
+  systemic failures (transport errors and `5xx`) and fails fast for a cooldown. Each call is a
+  `tesseraql.http.call` trace span. Lint catches misconfigured egress before it ships
+  (`TQL-SEC-4070` off-allow-list host, `TQL-SEC-4071` no absolute url, `TQL-SEC-4072` undeclared
+  credential), and a new `http-call` coverage kind tracks the steps declarative suites plan
+  (resolving url, query bindings, and the allow-list without a network call). Camel's component
+  catalog stays an implementation detail, not user API. `PipelineStep` gains an `http-call`
+  member beside `sql` and `notify`.
 - Application-declared MCP endpoints (roadmap Phase 24 follow-on, see
   [docs/ai-mcp.md](docs/ai-mcp.md)): an app declares Model Context Protocol tools under
   `mcp/` — a `query-json` or `command-json` definition (with a `description`) exposed over MCP

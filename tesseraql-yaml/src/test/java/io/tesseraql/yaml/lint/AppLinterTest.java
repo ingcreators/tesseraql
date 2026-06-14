@@ -356,6 +356,78 @@ class AppLinterTest {
     }
 
     @Test
+    void lintsHttpCallStepsAgainstTheEgressAllowList(@TempDir Path dir) throws Exception {
+        Files.createDirectories(dir.resolve("config"));
+        Files.writeString(dir.resolve("config/tesseraql.yml"), """
+                tesseraql:
+                  app:
+                    name: t
+                  notifications:
+                    channels:
+                      member-mail:
+                        type: mail
+                        host: localhost
+                  http:
+                    outbound:
+                      allowedHosts:
+                        - api.partner.example
+                        - "*.internal.example"
+                      credentials:
+                        partner:
+                          type: bearer
+                          token: ${secret.env.PARTNER_TOKEN}
+                """);
+        Files.createDirectories(dir.resolve("batch/sync"));
+        Files.writeString(dir.resolve("batch/sync/job.yml"), """
+                version: tesseraql/v1
+                id: orders.sync
+                kind: job
+                recipe: batch-pipeline
+                pipeline:
+                  - id: allowed
+                    http-call:
+                      url: https://api.partner.example/v1/orders
+                      credential: partner
+                  - id: subdomain
+                    http-call:
+                      url: https://eu.internal.example/v1/rates
+                  - id: denied
+                    http-call:
+                      url: https://evil.example/v1/exfil
+                  - id: relative
+                    http-call:
+                      method: GET
+                  - id: badcred
+                    http-call:
+                      url: https://api.partner.example/v1/y
+                      credential: ghost
+                  - id: ambiguous
+                    http-call:
+                      url: https://api.partner.example/v1/z
+                    notify:
+                      channel: member-mail
+                """);
+
+        List<LintFinding> findings = new AppLinter().lint(dir);
+
+        // Only the off-allow-list host is denied; exact and *.wildcard hosts pass cleanly.
+        assertThat(findings)
+                .filteredOn(f -> f.code().equals("TQL-SEC-4070") && f.isError())
+                .singleElement()
+                .matches(f -> f.message().contains("evil.example"));
+        // A step with no absolute url.
+        assertThat(findings)
+                .filteredOn(f -> f.code().equals("TQL-SEC-4071") && f.isError())
+                .hasSize(1);
+        // An undeclared credential is a warning, not an error.
+        assertThat(findings).anyMatch(f -> f.code().equals("TQL-SEC-4072") && !f.isError()
+                && f.message().contains("ghost"));
+        // A step declaring two kinds at once.
+        assertThat(findings).anyMatch(f -> f.code().equals("TQL-FIELD-2004") && f.isError()
+                && f.message().contains("ambiguous"));
+    }
+
+    @Test
     void nudgesVersionPredicateOnExpectedRowCountUpdates(@TempDir Path dir) throws Exception {
         writeCommandRoute(dir, """
                 steps:

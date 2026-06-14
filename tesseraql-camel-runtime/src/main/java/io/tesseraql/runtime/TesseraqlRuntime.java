@@ -258,7 +258,12 @@ public final class TesseraqlRuntime implements AutoCloseable {
         fileTransfers.ensureSchema();
         context.getRegistry().bind(TesseraqlProperties.FILE_TRANSFER_BEAN, fileTransfers);
         JobExecutor jobExecutor = new JobExecutor(jobRepository, tempStore, slowSqlLog, tracer)
-                .notificationOutbox(outboxStore);
+                .notificationOutbox(outboxStore)
+                // Outbound REST for http-call pipeline steps (roadmap Phase 26): deny-by-default
+                // egress, secret-managed credentials, timeouts, and circuit breaking from config.
+                .httpCall(new io.tesseraql.operations.http.HttpCallClient(
+                        io.tesseraql.yaml.http.HttpOutbound.load(manifest.config()),
+                        manifest.config(), tracer));
         // Notification channels and operations alerts (roadmap Phase 20).
         io.tesseraql.yaml.notify.NotificationChannels notificationChannels = io.tesseraql.yaml.notify.NotificationChannels
                 .load(manifest.config());

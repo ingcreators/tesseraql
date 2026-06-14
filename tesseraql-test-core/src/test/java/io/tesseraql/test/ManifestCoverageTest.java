@@ -381,6 +381,44 @@ class ManifestCoverageTest {
         assertThat(none.covered()).isEmpty();
     }
 
+    private static io.tesseraql.yaml.manifest.JobFile httpCallJob() {
+        return new io.tesseraql.yaml.manifest.JobFile(APP_HOME.resolve("batch/sync/job.yml"),
+                new io.tesseraql.yaml.model.JobDefinition("tesseraql/v1", "orders.sync", "job",
+                        "batch-pipeline", null, Map.of(), null,
+                        List.of(
+                                new io.tesseraql.yaml.model.PipelineStep("pending",
+                                        new io.tesseraql.yaml.model.SqlBinding("pending.sql", null,
+                                                "query", Map.of(), null, null, null, null, null)),
+                                new io.tesseraql.yaml.model.PipelineStep("push", null, null,
+                                        new io.tesseraql.yaml.model.HttpCallSpec("POST",
+                                                "https://api.partner.example/v1/orders", Map.of(),
+                                                Map.of(), "partner", null, 201, null, null))),
+                        false));
+    }
+
+    private static TestSuite httpCallSuite(String job, String id) {
+        return new TestSuite(List.of(new TestCase("calls", null, null, Map.of(),
+                null, null, null, null, new TestSuite.HttpCallTarget(job, id))));
+    }
+
+    @Test
+    void httpCallCoverageDeclaresHttpStepsOnlyAndTracksThePlannedOnes() {
+        AppManifest manifest = new AppManifest(APP_HOME, new AppConfig(Map.of(), name -> null),
+                List.of(), List.of(httpCallJob()), List.of(), List.of(), List.of(),
+                ManifestIndex.of(Map.of(), "test"));
+
+        ItemCoverage all = ManifestCoverage.httpCall(manifest,
+                List.of(httpCallSuite("orders.sync", null)));
+        ItemCoverage none = ManifestCoverage.httpCall(manifest, List.of());
+
+        assertThat(all.kind()).isEqualTo("http-call");
+        // The surrounding SQL step is not an http-call and is not declared.
+        assertThat(all.declared()).containsExactly("orders.sync.push");
+        assertThat(all.covered()).containsExactly("orders.sync.push");
+        assertThat(none.covered()).isEmpty();
+        assertThat(none.ratio()).isZero();
+    }
+
     @Test
     void samlCoverageDeclaresLinkContractsOnlyWhenLinkingIsEnabled() {
         AppManifest linked = manifest(Map.of("tesseraql", Map.of("saml", Map.of(

@@ -1,0 +1,29 @@
+version: tesseraql/v1
+id: directory.sync
+kind: job
+recipe: batch-pipeline
+
+# No trigger: run on demand. A scheduled run would add a fixedDelay/cron trigger; the recipe
+# is the same. Phase 26 managed connector: an http-call step fetches from an allow-listed
+# partner directory, and the next SQL step records the reported headcount.
+
+params:
+  unit:
+    type: string
+    required: false
+
+pipeline:
+  - id: headcount
+    http-call:
+      method: GET
+      url: https://api.directory.example/v1/headcount
+      query:
+        unit: job.unit                 # bound from the job param, allow-listed host only
+      credential: directory            # X-API-Key from the SecretResolver SPI, never inline
+  - id: record
+    sql:
+      file: record-headcount.sql
+      mode: update
+      params:
+        unit: job.unit
+        total: step.headcount.body.total   # the parsed JSON response feeds the SQL step

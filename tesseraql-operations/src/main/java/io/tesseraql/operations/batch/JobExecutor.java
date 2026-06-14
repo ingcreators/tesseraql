@@ -59,6 +59,7 @@ public final class JobExecutor {
     private final io.tesseraql.core.telemetry.Tracer tracer;
     private final ObjectMapper mapper = new ObjectMapper();
     private io.tesseraql.operations.outbox.JdbcOutboxStore notificationOutbox;
+    private io.tesseraql.operations.http.HttpCallClient httpCallClient;
     private FailureListener failureListener;
 
     public JobExecutor(JobRepository repository, TempStore tempStore) {
@@ -83,6 +84,12 @@ public final class JobExecutor {
     public JobExecutor notificationOutbox(
             io.tesseraql.operations.outbox.JdbcOutboxStore outbox) {
         this.notificationOutbox = outbox;
+        return this;
+    }
+
+    /** Wires the outbound HTTP client {@code http-call:} steps issue through (roadmap Phase 26). */
+    public JobExecutor httpCall(io.tesseraql.operations.http.HttpCallClient client) {
+        this.httpCallClient = client;
         return this;
     }
 
@@ -164,9 +171,14 @@ public final class JobExecutor {
                 .attribute("stepId", step.id());
         io.tesseraql.core.telemetry.SpanContext stepContext = stepSpan.context();
         try {
-            Map<String, Object> result = step.notification() != null
-                    ? runNotifyStep(jobFile, step, context, appName)
-                    : runStep(jobFile, step, dataSource, context, stepContext);
+            Map<String, Object> result;
+            if (step.httpCall() != null) {
+                result = runHttpStep(step, context, stepContext);
+            } else if (step.notification() != null) {
+                result = runNotifyStep(jobFile, step, context, appName);
+            } else {
+                result = runStep(jobFile, step, dataSource, context, stepContext);
+            }
             stepResults.put(step.id(), result);
             repository.completeStep(stepExecutionId,
                     ((Number) result.getOrDefault("affectedRows", 0)).intValue());
@@ -209,6 +221,28 @@ public final class JobExecutor {
         result.put("affectedRows", 1);
         result.put("eventId", eventId);
         return result;
+    }
+
+    /**
+     * Issues the step's outbound REST call (roadmap Phase 26) and publishes the response as
+     * {@code step.<id>.status} / {@code step.<id>.body} for later steps to bind. The call is
+     * synchronous and observable in the trace tree; failures fail the step (and so the job).
+     */
+    private Map<String, Object> runHttpStep(PipelineStep step, Map<String, Object> context,
+            io.tesseraql.core.telemetry.SpanContext parentContext) {
+        if (step.sql() != null || step.notification() != null) {
+            throw TqlException.builder(STEP_ERROR)
+                    .message("Step '" + step.id() + "' must declare exactly one of sql:, notify:,"
+                            + " or http-call:")
+                    .build();
+        }
+        if (httpCallClient == null) {
+            throw TqlException.builder(STEP_ERROR)
+                    .message("Step '" + step.id() + "': http-call steps need the runtime's"
+                            + " outbound HTTP client")
+                    .build();
+        }
+        return httpCallClient.call(step.httpCall(), context, parentContext);
     }
 
     private Map<String, Object> runStep(JobFile jobFile, PipelineStep step, DataSource dataSource,
