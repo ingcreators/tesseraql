@@ -122,16 +122,25 @@ public final class HttpOutbound {
     }
 
     /**
-     * Whether the host is permitted by the allow-list. A pattern is either an exact host or a
-     * {@code *.example.com} wildcard matching any sub-domain of {@code example.com} (matching is
-     * case-insensitive). With no allow-list, nothing is reachable (deny by default).
+     * Whether the host is permitted by this instance's allow-list. A pattern is either an exact
+     * host or a {@code *.example.com} wildcard matching any sub-domain of {@code example.com}
+     * (matching is case-insensitive). With no allow-list, nothing is reachable (deny by default).
      */
     public boolean isHostAllowed(String host) {
+        return hostAllowed(allowedHosts, host);
+    }
+
+    /**
+     * Whether the host matches one of the allow-list patterns, exposed statically so lint can
+     * apply the very same deny-by-default rule the runtime enforces without loading the whole
+     * policy (which can fail fast on an unrelated malformed credential).
+     */
+    public static boolean hostAllowed(List<String> patterns, String host) {
         if (host == null || host.isBlank()) {
             return false;
         }
         String candidate = host.toLowerCase(Locale.ROOT);
-        for (String pattern : allowedHosts) {
+        for (String pattern : patterns) {
             String normalized = pattern.toLowerCase(Locale.ROOT);
             if (normalized.startsWith("*.")) {
                 String suffix = normalized.substring(1);
