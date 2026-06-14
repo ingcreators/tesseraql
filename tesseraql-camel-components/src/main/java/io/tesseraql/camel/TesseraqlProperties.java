@@ -33,6 +33,7 @@ public final class TesseraqlProperties {
     public static final String POLICY_ENGINE_BEAN = "tesseraqlPolicyEngine";
     public static final String JWT_AUTHENTICATOR_BEAN = "tesseraqlJwtAuthenticator";
     public static final String API_KEY_AUTHENTICATOR_BEAN = "tesseraqlApiKeyAuthenticator";
+    public static final String MTLS_AUTHENTICATOR_BEAN = "tesseraqlMtlsAuthenticator";
     public static final String SESSION_STORE_BEAN = "tesseraqlSessionStore";
     public static final String TEMP_STORE_BEAN = "tesseraqlTempStore";
     public static final String IDEMPOTENCY_STORE_BEAN = "tesseraqlIdempotencyStore";

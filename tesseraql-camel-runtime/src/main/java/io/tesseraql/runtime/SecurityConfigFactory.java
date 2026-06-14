@@ -4,6 +4,8 @@ import io.tesseraql.security.SecurityConfig;
 import io.tesseraql.security.SecurityConfig.JwtConfig;
 import io.tesseraql.security.apikey.ApiKeyConfig;
 import io.tesseraql.security.apikey.ApiKeyConfig.ApiKeyClient;
+import io.tesseraql.security.mtls.MtlsConfig;
+import io.tesseraql.security.mtls.MtlsConfig.MtlsClient;
 import io.tesseraql.security.policy.Policy;
 import io.tesseraql.yaml.config.AppConfig;
 import java.util.ArrayList;
@@ -26,7 +28,36 @@ public final class SecurityConfigFactory {
             policyMap.forEach((id, spec) -> policies.put(String.valueOf(id),
                     parsePolicy(String.valueOf(id), spec)));
         }
-        return new SecurityConfig(policies, parseJwt(config), parseApiKeys(config));
+        return new SecurityConfig(policies, parseJwt(config), parseApiKeys(config),
+                parseMtls(config));
+    }
+
+    @SuppressWarnings("unchecked")
+    private static MtlsConfig parseMtls(AppConfig config) {
+        if (!(config.navigate("tesseraql.security.mtls.clients") instanceof Map<?, ?> raw)) {
+            return null;
+        }
+        Map<String, MtlsClient> clients = new LinkedHashMap<>();
+        raw.forEach((id, spec) -> {
+            if (spec instanceof Map<?, ?> client) {
+                String prefix = "tesseraql.security.mtls.clients." + id + ".";
+                String status = config.getString(prefix + "status").orElse("ACTIVE");
+                clients.put(String.valueOf(id), new MtlsClient(
+                        config.getString(prefix + "subjectDn").orElse(null),
+                        config.getString(prefix + "san").orElse(null),
+                        config.getString(prefix + "sha256").orElse(null),
+                        config.getString(prefix + "subject").orElse(null),
+                        config.getString(prefix + "tenantId").orElse(null),
+                        stringList(((Map<String, Object>) client).get("roles")),
+                        stringList(((Map<String, Object>) client).get("permissions")),
+                        !"DISABLED".equalsIgnoreCase(status)));
+            }
+        });
+        return new MtlsConfig(
+                config.getString("tesseraql.security.mtls.forwardedHeader").orElse(null),
+                config.getString("tesseraql.security.mtls.trustBundle").orElse(null),
+                duration(config, "tesseraql.security.mtls.clockSkew"),
+                clients);
     }
 
     @SuppressWarnings("unchecked")
