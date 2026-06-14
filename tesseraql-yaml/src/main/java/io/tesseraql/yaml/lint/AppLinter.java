@@ -51,7 +51,98 @@ public final class AppLinter {
         lintDuplicateResourceUris(appHome, manifest, findings);
         lintToolUiLinks(appHome, manifest, findings);
         lintI18n(appHome, manifest, findings);
+        lintSecurityConfig(appHome, manifest, findings);
         return findings;
+    }
+
+    /**
+     * Lints authentication configuration (roadmap Phase 25): a bearer JWT picks a supported
+     * algorithm and a single matching key source (no algorithm confusion), and an
+     * {@code auth: apiKey} route requires API-key config whose clients each store a key hash. Reads
+     * raw config nodes — never resolving secret placeholders — so the lint runs without a live
+     * secret store.
+     */
+    private void lintSecurityConfig(Path appHome, AppManifest manifest,
+            List<LintFinding> findings) {
+        AppConfig config = manifest.config();
+        if (config.navigate("tesseraql.security.jwt") != null) {
+            lintJwtConfig(config, findings);
+        }
+        lintApiKeyConfig(appHome, manifest, config, findings);
+    }
+
+    private void lintJwtConfig(AppConfig config, List<LintFinding> findings) {
+        Object rawAlgorithm = config.navigate("tesseraql.security.jwt.algorithm");
+        String algorithm = rawAlgorithm == null
+                ? "HS256"
+                : String.valueOf(rawAlgorithm).toUpperCase(java.util.Locale.ROOT);
+        boolean secret = config.navigate("tesseraql.security.jwt.secret") != null;
+        boolean publicKey = config.navigate("tesseraql.security.jwt.publicKey") != null;
+        boolean jwksUri = config.navigate("tesseraql.security.jwt.jwksUri") != null;
+        boolean keyMaterial = publicKey || jwksUri;
+        if (!algorithm.equals("HS256") && !algorithm.equals("RS256")) {
+            findings.add(new LintFinding("TQL-SEC-4043", "error", "config",
+                    "Unsupported JWT algorithm '" + algorithm + "'; use HS256 or RS256"));
+            return;
+        }
+        if (algorithm.equals("HS256") && keyMaterial) {
+            findings.add(new LintFinding("TQL-SEC-4042", "error", "config",
+                    "JWT algorithm HS256 declares RS256 key material (publicKey/jwksUri); an"
+                            + " algorithm-confusion risk - pick one algorithm"));
+        }
+        if (algorithm.equals("RS256")) {
+            if (secret) {
+                findings.add(new LintFinding("TQL-SEC-4042", "error", "config",
+                        "JWT algorithm RS256 declares an HS256 secret; an algorithm-confusion risk"
+                                + " - pick one algorithm"));
+            }
+            if (!keyMaterial) {
+                findings.add(new LintFinding("TQL-SEC-4040", "error", "config",
+                        "RS256 JWT config must declare a key source (jwksUri or publicKey)"));
+            } else if (publicKey && jwksUri) {
+                findings.add(new LintFinding("TQL-SEC-4041", "error", "config",
+                        "RS256 JWT config declares conflicting key sources; set exactly one of"
+                                + " jwksUri/publicKey"));
+            }
+        }
+    }
+
+    private void lintApiKeyConfig(Path appHome, AppManifest manifest, AppConfig config,
+            List<LintFinding> findings) {
+        boolean apiKeysConfigured = config.navigate("tesseraql.security.apiKeys") != null;
+        if (!apiKeysConfigured) {
+            for (RouteFile route : manifest.routes()) {
+                io.tesseraql.yaml.model.SecuritySpec security = route.definition().security();
+                if (security != null && "apiKey".equals(security.auth())) {
+                    String source = appHome.relativize(route.source()).toString().replace('\\',
+                            '/');
+                    findings.add(new LintFinding("TQL-SEC-4044", "error", source,
+                            "Route '" + route.definition().id() + "' declares auth: apiKey but no"
+                                    + " tesseraql.security.apiKeys is configured (deny by default)"));
+                }
+            }
+            return;
+        }
+        if (!(config.navigate(
+                "tesseraql.security.apiKeys.clients") instanceof java.util.Map<?, ?> clients)) {
+            return;
+        }
+        clients.forEach((id, spec) -> {
+            java.util.Map<?, ?> client = spec instanceof java.util.Map<?, ?> map
+                    ? map
+                    : java.util.Map.of();
+            if (config.navigate(
+                    "tesseraql.security.apiKeys.clients." + id + ".secretHash") == null) {
+                findings.add(new LintFinding("TQL-SEC-4045", "error", "config",
+                        "API-key client '" + id + "' must declare a secretHash; raw keys are never"
+                                + " stored"));
+            }
+            if (client.get("roles") == null && client.get("permissions") == null) {
+                findings.add(new LintFinding("TQL-SEC-4046", "warning", "config",
+                        "API-key client '" + id + "' grants no roles or permissions; service"
+                                + " callers should be least-privilege"));
+            }
+        });
     }
 
     /**
