@@ -32,11 +32,11 @@ import javax.sql.DataSource;
 public final class AppTestRunner {
 
     /** Coverage kinds whose gaps are framework-inventory hints rather than test gaps. */
-    private static final Set<String> NOTE_KINDS = Set.of("iam-contract", "saml", "scim");
+    private static final Set<String> NOTE_KINDS = Set.of("iam-contract", "saml", "oidc", "scim");
 
     /**
      * Result of a test run: the aggregated report, the collected SQL coverage, and the derived
-     * item-coverage kinds (assertion, iam-contract, route, security, api-key, saml, scim,
+     * item-coverage kinds (assertion, iam-contract, route, security, api-key, saml, oidc, scim,
      * validation, notification, document, message — design ch. 14, roadmap Phases 19-25).
      */
     public record RunResult(TestReport report, SqlCoverage coverage, List<ItemCoverage> kinds) {
@@ -85,6 +85,7 @@ public final class AppTestRunner {
             kinds.add(ManifestCoverage.security(manifest, suites));
             kinds.add(ManifestCoverage.apiKey(manifest, suites));
             kinds.add(ManifestCoverage.saml(manifest, suites));
+            kinds.add(ManifestCoverage.oidc(manifest, suites));
             kinds.add(ManifestCoverage.scim(manifest, suites));
             kinds.add(ManifestCoverage.validation(manifest, suites));
             kinds.add(ManifestCoverage.notification(manifest, suites));

@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{tql/shell :: page('OIDC provider wizard', ~{:: #page-header}, ~{:: #page-content})}">
+<th:block id="page-header">
+  <span class="hc-spacer"></span>
+  <div class="hc-cluster">
+    <a class="hc-button" data-variant="ghost" data-size="sm" href="/_tesseraql/studio/ui/wizard">&larr; wizards</a>
+  </div>
+</th:block>
+<div id="page-content" class="hc-stack">
+<section class="hc-card">
+  <p class="hc-field__message">Generates a tesseraql-oidc.yml fragment to merge into config/tesseraql.yml.
+  The client secret is referenced through the secret provider, never pasted here; the generated file
+  shows how to add it for a confidential client.</p>
+  <form method="post" action="/_tesseraql/studio/ui/wizard/oidc">
+    <div class="hc-field">
+      <label class="hc-field__label" for="discovery-uri">Discovery URL</label>
+      <input class="hc-input" id="discovery-uri" type="text" name="discoveryUri" required placeholder="https://idp.example.com/.well-known/openid-configuration">
+    </div>
+    <div class="hc-field">
+      <label class="hc-field__label" for="client-id">Client ID</label>
+      <input class="hc-input" id="client-id" type="text" name="clientId" required placeholder="my-app">
+    </div>
+    <div class="hc-field">
+      <label class="hc-field__label" for="redirect-uri">Redirect URI</label>
+      <input class="hc-input" id="redirect-uri" type="text" name="redirectUri" required placeholder="https://app.example.com/_tesseraql/oidc/callback">
+    </div>
+    <div class="hc-field">
+      <label class="hc-field__label" for="scopes">Scopes</label>
+      <input class="hc-input" id="scopes" type="text" name="scopes" value="openid profile email" placeholder="openid profile email">
+    </div>
+    <div class="hc-field">
+      <label class="hc-field__label" for="post-login-url">Post-login URL</label>
+      <input class="hc-input" id="post-login-url" type="text" name="postLoginUrl" value="/" placeholder="/">
+    </div>
+    <div class="hc-field">
+      <label class="hc-field__label" for="provision">Auto-provision new users</label>
+      <select class="hc-select" id="provision" name="provision"><option value="false">false</option><option value="true">true</option></select>
+    </div>
+    <div class="hc-cluster"><button type="submit" class="hc-button" data-variant="primary">Generate &amp; download config</button></div>
+  </form>
+</section>
+</div>
+</html>

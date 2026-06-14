@@ -69,6 +69,52 @@ public final class AppLinter {
             lintJwtConfig(config, findings);
         }
         lintApiKeyConfig(appHome, manifest, config, findings);
+        lintOidcConfig(config, findings);
+    }
+
+    /**
+     * Lints the OIDC relying-party config (roadmap Phase 25): when enabled, it must declare a
+     * https (or loopback-http) discovery URI, a client id, and a redirect URI — caught statically
+     * so a misconfigured login fails at lint, not at the first redirect. Reads raw config nodes.
+     */
+    private void lintOidcConfig(AppConfig config, List<LintFinding> findings) {
+        if (!"true".equalsIgnoreCase(rawString(config, "tesseraql.oidc.enabled"))) {
+            return;
+        }
+        String discoveryUri = rawString(config, "tesseraql.oidc.discoveryUri");
+        if (discoveryUri == null) {
+            findings.add(new LintFinding("TQL-SEC-4050", "error", "config",
+                    "OIDC is enabled but tesseraql.oidc.discoveryUri is not configured"));
+        } else if (!discoveryUri.contains("${") && !isHttpsOrLoopback(discoveryUri)) {
+            findings.add(new LintFinding("TQL-SEC-4051", "error", "config",
+                    "OIDC tesseraql.oidc.discoveryUri must be https"
+                            + " (loopback http is allowed for development)"));
+        }
+        if (rawString(config, "tesseraql.oidc.clientId") == null) {
+            findings.add(new LintFinding("TQL-SEC-4052", "error", "config",
+                    "OIDC is enabled but tesseraql.oidc.clientId is not configured"));
+        }
+        if (rawString(config, "tesseraql.oidc.redirectUri") == null) {
+            findings.add(new LintFinding("TQL-SEC-4053", "error", "config",
+                    "OIDC is enabled but tesseraql.oidc.redirectUri is not configured"));
+        }
+    }
+
+    private static String rawString(AppConfig config, String path) {
+        Object value = config.navigate(path);
+        return value == null ? null : String.valueOf(value);
+    }
+
+    private static boolean isHttpsOrLoopback(String uri) {
+        if (uri.startsWith("https://")) {
+            return true;
+        }
+        if (uri.startsWith("http://")) {
+            String host = uri.substring("http://".length());
+            return host.startsWith("localhost") || host.startsWith("127.0.0.1")
+                    || host.startsWith("[::1]") || host.startsWith("::1");
+        }
+        return false;
     }
 
     private void lintJwtConfig(AppConfig config, List<LintFinding> findings) {

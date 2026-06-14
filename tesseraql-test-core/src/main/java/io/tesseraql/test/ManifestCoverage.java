@@ -268,6 +268,29 @@ public final class ManifestCoverage {
     }
 
     /**
+     * OIDC coverage (roadmap Phase 25): when the relying party links federated logins to local
+     * users, the identity contracts the login path runs are declared and contract test cases cover
+     * them. Without OIDC (or without linking) the login path executes no app-authored SQL, so
+     * nothing is declared. Mirrors {@link #saml(AppManifest, List)}.
+     */
+    public static ItemCoverage oidc(AppManifest manifest, List<TestSuite> suites) {
+        ItemCoverage coverage = new ItemCoverage("oidc");
+        AppConfig config = manifest.config();
+        if (flag(config, "tesseraql.oidc.enabled") && flag(config, "tesseraql.oidc.link.enabled")) {
+            coverage.declareAll(List.of(IdentityContracts.FIND_USER_BY_LOGIN,
+                    IdentityContracts.FIND_GROUPS_BY_USER_ID,
+                    IdentityContracts.FIND_ROLES_BY_USER_ID,
+                    IdentityContracts.FIND_PERMISSIONS_BY_USER_ID));
+            if (flag(config, "tesseraql.oidc.link.provision")) {
+                coverage.declare(IdentityContracts.CREATE_USER);
+            }
+            testedContracts(suites).stream().filter(coverage.declared()::contains)
+                    .forEach(coverage::cover);
+        }
+        return coverage;
+    }
+
+    /**
      * SCIM coverage: the contract SQL files wired through {@code tesseraql.scim.users.*} (and
      * {@code tesseraql.scim.groups.*} when group provisioning is on) are declared per operation,
      * and a SQL test case exercising the configured file covers it.

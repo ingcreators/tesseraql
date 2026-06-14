@@ -253,6 +253,34 @@ class StudioIntegrationTest {
     }
 
     @Test
+    void oidcWizardRendersAndGeneratesConfig() throws Exception {
+        HttpResponse<String> index = get("/_tesseraql/studio/ui/wizard", true);
+        assertThat(index.body()).contains("OIDC provider");
+
+        HttpResponse<String> form = get("/_tesseraql/studio/ui/wizard/oidc", true);
+        assertThat(form.statusCode()).isEqualTo(200);
+        assertThat(form.body()).contains("OIDC provider wizard").contains("name=\"discoveryUri\"");
+
+        String body = "discoveryUri="
+                + enc("https://idp.example.com/.well-known/openid-configuration")
+                + "&clientId=my-app"
+                + "&redirectUri=" + enc("https://app.example.com/_tesseraql/oidc/callback")
+                + "&scopes=" + enc("openid profile email")
+                + "&postLoginUrl=" + enc("/") + "&provision=true";
+        HttpResponse<String> result = postForm("/_tesseraql/studio/ui/wizard/oidc", body);
+
+        assertThat(result.statusCode()).isEqualTo(200);
+        assertThat(result.headers().firstValue("content-disposition"))
+                .hasValue("attachment; filename=\"tesseraql-oidc.yml\"");
+        assertThat(result.body())
+                .contains("clientId: \"my-app\"")
+                .contains("discoveryUri: "
+                        + "\"https://idp.example.com/.well-known/openid-configuration\"")
+                .contains("scopes: \"openid profile email\"")
+                .contains("provision: true");
+    }
+
+    @Test
     void wizardSubmitRejectsMissingRequiredField() throws Exception {
         HttpResponse<String> result = postForm("/_tesseraql/studio/ui/wizard/saml",
                 "acsUrl=" + enc("https://app.example.com/acs"));

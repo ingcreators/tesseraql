@@ -92,6 +92,13 @@
       <version>${project.version}</version>
       <scope>test</scope>
     </dependency>
+    <!-- Opt-in feature: same RuntimeExtension pattern as SCIM/SAML above. -->
+    <dependency>
+      <groupId>io.tesseraql</groupId>
+      <artifactId>tesseraql-oidc</artifactId>
+      <version>${project.version}</version>
+      <scope>test</scope>
+    </dependency>
     <dependency>
       <groupId>io.tesseraql</groupId>
       <artifactId>tesseraql-studio</artifactId>

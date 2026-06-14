@@ -208,6 +208,20 @@ All notable changes to TesseraQL are documented here. The format follows
   - **Breaking change.** `SecurityConfig.JwtConfig` gains `algorithm`, `publicKey`, `jwksUri`,
     `jwks`, and `clockSkew` components, and `SecurityConfig` gains an `apiKeys` component
     (a two-arg constructor keeps the no-API-key case). HS256 with a `secret` is unchanged.
+- Authentication completion — OIDC relying party (roadmap Phase 25, see
+  [docs/authentication.md](docs/authentication.md)): a new opt-in leaf module `tesseraql-oidc`
+  self-installs via the `RuntimeExtension` SPI (like SAML/SCIM) when on the classpath and
+  `tesseraql.oidc.enabled` is true, serving the authorization-code + PKCE flow at
+  `/_tesseraql/oidc/{login,callback,logout}`. The provider endpoints are discovered lazily (so app
+  boot does not depend on the OP); `/login` records a single-use `state`/`nonce`/PKCE verifier in
+  `tql_oidc_state` and redirects with an S256 `code_challenge`; `/callback` consumes the state
+  (rejecting a forged, replayed, or `error=` response), exchanges the code (`client_secret_basic`
+  or public PKCE), validates the ID token by reusing the RS256/JWKS verifier (signature, `iss` from
+  discovery, `exp`/`nbf`) plus OIDC `aud`/`nonce` checks, links or provisions the principal via the
+  identity contracts, and issues the standard browser session. JDK-only — no external OIDC/JOSE
+  dependency. Ships an `oidc` coverage kind, config lint (`TQL-SEC-4050..4053`), a Studio **OIDC
+  provider** IAM admin wizard, and a `TqlDomain.OIDC` error domain. The remaining Phase 25
+  follow-on is optional mTLS.
 
 ### Developer experience
 

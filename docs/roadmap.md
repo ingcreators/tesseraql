@@ -204,9 +204,17 @@ dependency); the JWKS key set caches and rotates by `kid` with an unknown-`kid` 
 cannot be flooded, and the expected algorithm is bound from config so `alg: none` and RS256/HS256
 confusion are rejected. Service callers authenticate with `auth: apiKey` against config-declared
 clients holding only a key hash, mapped to an explicit principal so existing policies apply. Lint
-(`TQL-SEC-4040..4046`) and an `api-key` coverage kind keep both machine-checkable. The OIDC relying
-party (with the SAML-style IAM admin wizard) and optional mTLS — which reuse this RS256/JWKS
-verifier — are the remaining follow-ons.
+(`TQL-SEC-4040..4046`) and an `api-key` coverage kind keep both machine-checkable.
+
+**OIDC relying party** (delivered, see [docs/authentication.md](authentication.md)): the new opt-in
+`tesseraql-oidc` leaf module self-installs via the `RuntimeExtension` SPI and serves the
+authorization-code + PKCE flow at `/_tesseraql/oidc/{login,callback,logout}`. Provider endpoints are
+discovered lazily; a single-use `state`/`nonce`/PKCE verifier (in `tql_oidc_state`) defeats CSRF,
+nonce replay, and code injection; the ID token is validated by reusing the RS256/JWKS verifier plus
+OIDC `aud`/`nonce` checks; and the principal is linked/provisioned through the identity contracts
+before the standard browser session is issued. JDK-only, with an `oidc` coverage kind, config lint
+(`TQL-SEC-4050..4053`), and a SAML-style Studio IAM admin wizard. **Optional mTLS is the last
+remaining Phase 25 follow-on.**
 
 ### Phase 26 — managed connectors (files and HTTP)
 
