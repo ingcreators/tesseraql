@@ -64,12 +64,17 @@ public final class SecurityConfigFactory {
         if (secret == null && publicKey == null && jwksUri == null) {
             return null;
         }
-        java.time.Duration clockSkew = config.getString("tesseraql.security.jwt.clockSkew")
-                .map(io.tesseraql.core.util.Durations::parse).orElse(null);
+        java.time.Duration clockSkew = duration(config, "tesseraql.security.jwt.clockSkew");
+        SecurityConfig.JwksConfig jwks = new SecurityConfig.JwksConfig(
+                duration(config, "tesseraql.security.jwt.jwks.cacheTtl"),
+                duration(config, "tesseraql.security.jwt.jwks.refreshFloor"),
+                duration(config, "tesseraql.security.jwt.jwks.requestTimeout"));
         return new JwtConfig(
                 config.getString("tesseraql.security.jwt.algorithm").orElse(null),
                 secret,
                 publicKey,
+                jwksUri,
+                jwks,
                 config.getString("tesseraql.security.jwt.issuer").orElse(null),
                 clockSkew,
                 config.getString("tesseraql.security.jwt.rolesClaim").orElse(null),
@@ -78,5 +83,9 @@ public final class SecurityConfigFactory {
                 config.getString("tesseraql.security.jwt.tenantClaim").orElse(null),
                 config.getString("tesseraql.security.jwt.loginClaim").orElse(null),
                 config.getString("tesseraql.security.jwt.nameClaim").orElse(null));
+    }
+
+    private static java.time.Duration duration(AppConfig config, String key) {
+        return config.getString(key).map(io.tesseraql.core.util.Durations::parse).orElse(null);
     }
 }

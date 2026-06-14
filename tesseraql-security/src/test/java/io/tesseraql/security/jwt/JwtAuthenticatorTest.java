@@ -20,8 +20,8 @@ class JwtAuthenticatorTest {
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
     private static JwtConfig config() {
-        return new JwtConfig("HS256", SECRET, null, null, null, "roles", "permissions", "groups",
-                "tenant_id", "preferred_username", "name");
+        return new JwtConfig("HS256", SECRET, null, null, null, null, null, "roles", "permissions",
+                "groups", "tenant_id", "preferred_username", "name");
     }
 
     private static String token(Map<String, Object> claims) throws Exception {

@@ -39,8 +39,8 @@ class RsaJwtAuthenticatorTest {
         String pem = "-----BEGIN PUBLIC KEY-----\n"
                 + Base64.getMimeEncoder().encodeToString(keyPair.getPublic().getEncoded())
                 + "\n-----END PUBLIC KEY-----\n";
-        return new JwtConfig("RS256", null, pem, null, null, "roles", "permissions", "groups",
-                "tenant_id", "preferred_username", "name");
+        return new JwtConfig("RS256", null, pem, null, null, null, null, "roles", "permissions",
+                "groups", "tenant_id", "preferred_username", "name");
     }
 
     private static String rs256Token(Map<String, Object> claims, PrivateKey signingKey)
@@ -123,7 +123,8 @@ class RsaJwtAuthenticatorTest {
     void honorsClockSkewForRecentlyExpiredToken() throws Exception {
         long justExpired = System.currentTimeMillis() / 1000L - 10;
         String jwt = rs256Token(Map.of("sub", "svc-1", "exp", justExpired), keyPair.getPrivate());
-        JwtConfig lenient = new JwtConfig("RS256", null, rs256Config().publicKey(), null,
+        JwtConfig lenient = new JwtConfig("RS256", null, rs256Config().publicKey(), null, null,
+                null,
                 java.time.Duration.ofMinutes(1), "roles", "permissions", "groups",
                 "tenant_id", "preferred_username", "name");
 
@@ -144,8 +145,8 @@ class RsaJwtAuthenticatorTest {
         String n = ENC.encodeToString(toUnsigned(pub.getModulus().toByteArray()));
         String e = ENC.encodeToString(toUnsigned(pub.getPublicExponent().toByteArray()));
         String jwk = "{\"kty\":\"RSA\",\"n\":\"" + n + "\",\"e\":\"" + e + "\"}";
-        JwtConfig jwkConfig = new JwtConfig("RS256", null, jwk, null, null, "roles", "permissions",
-                "groups", "tenant_id", "preferred_username", "name");
+        JwtConfig jwkConfig = new JwtConfig("RS256", null, jwk, null, null, null, null, "roles",
+                "permissions", "groups", "tenant_id", "preferred_username", "name");
         String jwt = rs256Token(Map.of("sub", "svc-1"), keyPair.getPrivate());
 
         Principal principal = new JwtAuthenticator(jwkConfig).authenticate("Bearer " + jwt);

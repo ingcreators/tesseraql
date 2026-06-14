@@ -27,6 +27,8 @@ public record SecurityConfig(Map<String, Policy> policies, JwtConfig jwt) {
      * @param algorithm        signature algorithm, {@code HS256} (default) or {@code RS256}
      * @param secret           shared HMAC secret for HS256 verification
      * @param publicKey        RS256 static verification key (PEM, X.509 certificate, or JWK JSON)
+     * @param jwksUri          RS256 JWKS endpoint, an alternative to a static {@code publicKey}
+     * @param jwks             JWKS cache settings (never null; defaults applied)
      * @param issuer           expected {@code iss}, or null to skip the check
      * @param clockSkew        leeway applied to {@code exp}/{@code nbf}; defaults to zero
      * @param rolesClaim       claim holding the roles array
@@ -40,6 +42,8 @@ public record SecurityConfig(Map<String, Policy> policies, JwtConfig jwt) {
             String algorithm,
             String secret,
             String publicKey,
+            String jwksUri,
+            JwksConfig jwks,
             String issuer,
             java.time.Duration clockSkew,
             String rolesClaim,
@@ -53,6 +57,7 @@ public record SecurityConfig(Map<String, Policy> policies, JwtConfig jwt) {
             algorithm = algorithm == null || algorithm.isBlank()
                     ? "HS256"
                     : algorithm.toUpperCase(java.util.Locale.ROOT);
+            jwks = jwks == null ? new JwksConfig(null, null, null) : jwks;
             clockSkew = clockSkew == null ? java.time.Duration.ZERO : clockSkew;
             rolesClaim = orDefault(rolesClaim, "roles");
             permissionsClaim = orDefault(permissionsClaim, "permissions");
@@ -64,6 +69,27 @@ public record SecurityConfig(Map<String, Policy> policies, JwtConfig jwt) {
 
         private static String orDefault(String value, String fallback) {
             return value == null || value.isBlank() ? fallback : value;
+        }
+    }
+
+    /**
+     * JWKS fetch and cache settings (design ch. 11.1).
+     *
+     * @param cacheTtl      how long a fetched key set is trusted before a refresh (default 10m)
+     * @param refreshFloor  minimum interval between unknown-{@code kid} refetches (default 1m)
+     * @param requestTimeout JWKS HTTP connect/request timeout (default 5s)
+     */
+    public record JwksConfig(
+            java.time.Duration cacheTtl,
+            java.time.Duration refreshFloor,
+            java.time.Duration requestTimeout) {
+
+        public JwksConfig {
+            cacheTtl = cacheTtl == null ? java.time.Duration.ofMinutes(10) : cacheTtl;
+            refreshFloor = refreshFloor == null ? java.time.Duration.ofMinutes(1) : refreshFloor;
+            requestTimeout = requestTimeout == null
+                    ? java.time.Duration.ofSeconds(5)
+                    : requestTimeout;
         }
     }
 }

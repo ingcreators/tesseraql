@@ -48,8 +48,20 @@ public final class JwtAuthenticator {
     }
 
     private static KeySource rsaKeySource(JwtConfig config) {
-        if (config.publicKey() != null && !config.publicKey().isBlank()) {
+        boolean hasStatic = config.publicKey() != null && !config.publicKey().isBlank();
+        boolean hasJwks = config.jwksUri() != null && !config.jwksUri().isBlank();
+        if (hasStatic && hasJwks) {
+            throw new TqlException(PolicyEngine.UNAUTHORIZED,
+                    "RS256 JWT config declares conflicting"
+                            + " key sources; set exactly one of jwksUri/publicKey");
+        }
+        if (hasStatic) {
             return new StaticKeySource(Jwks.parsePublicKey(config.publicKey()));
+        }
+        if (hasJwks) {
+            io.tesseraql.security.SecurityConfig.JwksConfig jwks = config.jwks();
+            return new JwksKeySource(new HttpJwksFetcher(jwks.requestTimeout()),
+                    java.net.URI.create(config.jwksUri()), jwks.cacheTtl(), jwks.refreshFloor());
         }
         throw new TqlException(PolicyEngine.UNAUTHORIZED,
                 "RS256 JWT config must declare a key source (jwksUri or publicKey)");
