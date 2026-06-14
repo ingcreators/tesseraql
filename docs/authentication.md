@@ -141,6 +141,55 @@ request, so a key cannot escalate across tenants — and the route's authorizati
 as for any other caller. No match denies (`401`); an authenticated key that fails the policy is
 forbidden (`403`).
 
+## OpenID Connect (relying party)
+
+OIDC logs a browser user in through an external identity provider using the **authorization-code
+flow with PKCE**, then issues a TesseraQL browser session — the same session the SAML SP and
+password login produce. It is an opt-in leaf module: add the `tesseraql-oidc` jar to the runtime
+classpath and enable it. The provider's endpoints are **discovered** at runtime, and the ID token is
+validated with the same RS256/JWKS verifier as bearer JWT.
+
+```yaml
+tesseraql:
+  oidc:
+    enabled: true
+    discoveryUri: https://idp.example.com/.well-known/openid-configuration
+    clientId: my-app
+    clientSecret: ${secret.env.OIDC_CLIENT_SECRET}  # omit for a public (PKCE-only) client
+    redirectUri: https://app.example.com/_tesseraql/oidc/callback
+    scopes: [openid, profile, email]                # "openid profile email" (a string) also works
+    postLoginUrl: /                                  # fixed same-origin path after login
+    clockSkew: 60s
+    claims:                                          # ID-token claim → principal mappings
+      login: preferred_username
+      name: name
+      roles: roles
+      groups: groups
+      tenant: tenant_id
+    link:
+      enabled: true       # resolve/authorize via local identity contracts (else IdP-asserted)
+      provision: false    # JIT-provision an unknown user the first time they sign in
+```
+
+It serves three endpoints under `/_tesseraql/oidc`:
+
+- `GET /login` — generates an anti-CSRF `state`, an ID-token `nonce`, and a PKCE `code_verifier`,
+  records them server-side (single-use, in `tql_oidc_state`), and redirects to the provider's
+  authorization endpoint with the `code_challenge` (S256).
+- `GET /callback` — validates and consumes the `state` (a forged, replayed, or expired one is
+  rejected, as is an `error=` response), exchanges the code at the token endpoint
+  (`client_secret_basic` when a secret is set, else a public PKCE client), validates the ID token
+  (signature via JWKS, `iss`, `exp`/`nbf`, `aud` includes the client id, `nonce` matches), resolves
+  or provisions the principal, opens a session, and redirects to the fixed `postLoginUrl`.
+- `GET /logout` — clears the local session and, when the provider advertises one, redirects to its
+  end-session endpoint.
+
+Discovery is **lazy**: the provider is contacted on the first login, not at app startup, so a brief
+provider outage does not stop the app from booting. The expected token issuer is always the
+discovered `issuer`, the post-login redirect is a fixed configured path (never a request parameter,
+so there is no open redirect), and the client secret, code, and tokens are never logged. An IAM
+admin wizard in Studio (**OIDC provider**) generates this config block.
+
 ## Lint rules
 
 | Code | Severity | Meaning |
@@ -152,6 +201,10 @@ forbidden (`403`).
 | `TQL-SEC-4044` | error | A route declares `auth: apiKey` but no `tesseraql.security.apiKeys` is configured. |
 | `TQL-SEC-4045` | error | An API-key client declares no `secretHash`. |
 | `TQL-SEC-4046` | warning | An API-key client grants no roles or permissions (least-privilege hint). |
+| `TQL-SEC-4050` | error | OIDC is enabled but no `discoveryUri` is configured. |
+| `TQL-SEC-4051` | error | The OIDC `discoveryUri` is not https (loopback http is allowed for dev). |
+| `TQL-SEC-4052` | error | OIDC is enabled but no `clientId` is configured. |
+| `TQL-SEC-4053` | error | OIDC is enabled but no `redirectUri` is configured. |
 
 The lint reads raw config — it never resolves secret placeholders — so it runs without a live
 secret store.
@@ -160,8 +213,10 @@ secret store.
 
 The `api-key` coverage kind declares every route authenticated by `auth: apiKey` and marks it
 covered when a declarative suite exercises it, so a test gap on a service-caller route is visible.
-Gate it like any kind with `coverage.thresholds.api-key`. RS256 vs HS256 is a verification detail
-of the same bearer path and is covered by the existing `security`/`route` kinds; its cryptographic
+Gate it like any kind with `coverage.thresholds.api-key`. The `oidc` coverage kind (like `saml`)
+declares the identity contracts the login path runs when user linking is on, covered by contract
+test cases; gate it with `coverage.thresholds.oidc`. RS256 vs HS256 is a verification detail of the
+same bearer path and is covered by the existing `security`/`route` kinds; its cryptographic
 guarantees are pinned by the unit tests in `tesseraql-security`.
 
 ## Testing
@@ -170,4 +225,6 @@ Declarative suites exercise a route's SQL through the same pipeline regardless o
 method. End-to-end authentication wiring is covered by integration tests in `tesseraql-camel-runtime`
 (`RsaJwksIntegrationTest` serves a JWKS document from a local HTTP server and asserts accept /
 reject / rotation; `ApiKeyIntegrationTest` asserts `200`/`401`/`403` for valid, invalid, and
-under-privileged keys).
+under-privileged keys; `OidcLoginIntegrationTest` drives the full authorization-code + PKCE flow
+against a local mock provider and asserts a session is issued and that tampered / replayed state and
+provider errors are rejected). OIDC's PKCE S256 is unit-tested against the RFC 7636 vector.
