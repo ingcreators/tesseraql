@@ -183,6 +183,31 @@ All notable changes to TesseraQL are documented here. The format follows
 - Document-number sequences as a managed SQL contract (`sequence:` steps backed by
   `tql_doc_sequence`, V2 framework migration): gapless allocation under the sequence row's
   lock, riding the command transaction.
+- Authentication completion — RS256/JWKS and API keys (roadmap Phase 25, see
+  [docs/authentication.md](docs/authentication.md)), both behind the existing authentication
+  step and `Principal` model, JDK-only (no JOSE dependency):
+  - **RS256 bearer validation.** `tesseraql.security.jwt.algorithm: RS256` verifies tokens with
+    `SHA256withRSA` against a static `publicKey` (PEM, X.509 certificate, or JWK JSON) or a
+    `jwksUri`. The JWKS key set is cached and refreshed by `kid`; an unknown `kid` (a rotated-in
+    key) triggers at most one refetch per `jwks.refreshFloor`, so random-`kid` tokens cannot
+    flood the JWKS endpoint, and an unknown `kid` that survives a permitted refetch fails closed.
+    The expected algorithm is bound from configuration and checked against the token header before
+    any key is consulted, so an `alg: none` or RS256/HS256-confusion token is rejected. A
+    configurable `clockSkew` leeway applies to `exp` and the now-honored `nbf`.
+  - **API keys for service callers.** A route declares `auth: apiKey`; the key is presented in a
+    configured header (default `X-API-Key`) or as `Authorization: ApiKey <key>`. Clients are
+    declared under `tesseraql.security.apiKeys.clients` with a stored hex SHA-256 of the key
+    (never the raw key, resolvable via the secret SPI), an explicit subject/tenant/roles/
+    permissions, and an enabled flag; the presented key is hashed and compared in constant time,
+    deny-by-default, and the matched client's principal flows through the same authorization
+    policies with its tenant bound from the key, not the request.
+  - **Machine-checkable.** Lint adds `TQL-SEC-4040..4043` (RS256 key-source and algorithm-
+    confusion rules) and `TQL-SEC-4044..4046` (an `auth: apiKey` route needs API-key config; a
+    client needs a `secretHash`; a client granting nothing is warned); a new `api-key` coverage
+    kind tracks API-key-authenticated routes, gatable via `coverage.thresholds.api-key`.
+  - **Breaking change.** `SecurityConfig.JwtConfig` gains `algorithm`, `publicKey`, `jwksUri`,
+    `jwks`, and `clockSkew` components, and `SecurityConfig` gains an `apiKeys` component
+    (a two-arg constructor keeps the no-API-key case). HS256 with a `secret` is unchanged.
 
 ### Developer experience
 

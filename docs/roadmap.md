@@ -198,6 +198,16 @@ OIDC relying party (authorization code + PKCE; tested against Entra ID, Okta, Ke
 RS256/JWKS bearer validation, API keys for service callers, optional mTLS — all behind the
 existing authentication step and principal model, with IAM admin wizards like SAML's.
 
+**RS256/JWKS and API keys** (delivered, see [docs/authentication.md](authentication.md)): bearer
+JWTs verify with `SHA256withRSA` against a static `publicKey` or a `jwksUri` (JDK-only, no JOSE
+dependency); the JWKS key set caches and rotates by `kid` with an unknown-`kid` refetch floor so it
+cannot be flooded, and the expected algorithm is bound from config so `alg: none` and RS256/HS256
+confusion are rejected. Service callers authenticate with `auth: apiKey` against config-declared
+clients holding only a key hash, mapped to an explicit principal so existing policies apply. Lint
+(`TQL-SEC-4040..4046`) and an `api-key` coverage kind keep both machine-checkable. The OIDC relying
+party (with the SAML-style IAM admin wizard) and optional mTLS — which reuse this RS256/JWKS
+verifier — are the remaining follow-ons.
+
 ### Phase 26 — managed connectors (files and HTTP)
 
 - Polling triggers (SFTP/FTPS/local directory) feeding `file-import` pipelines.
