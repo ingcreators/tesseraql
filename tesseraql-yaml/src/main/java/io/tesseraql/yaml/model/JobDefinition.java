@@ -19,6 +19,8 @@ import java.util.Map;
  * @param sql      the single statement for a tasklet job
  * @param pipeline  the steps for a pipeline job
  * @param perTenant when true, the job runs once per configured tenant (design ch. 30.3)
+ * @param fileImport the {@code import:} block of a poll-triggered {@code file-import} job
+ *                 (roadmap Phase 26): the runtime feeds every polled file through it
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public record JobDefinition(
@@ -30,11 +32,19 @@ public record JobDefinition(
         Map<String, InputField> params,
         SqlBinding sql,
         List<PipelineStep> pipeline,
-        boolean perTenant) {
+        boolean perTenant,
+        @com.fasterxml.jackson.annotation.JsonProperty("import") ImportSpec fileImport) {
 
     public JobDefinition {
         params = params == null ? Map.of() : Map.copyOf(params);
         pipeline = pipeline == null ? List.of() : List.copyOf(pipeline);
+    }
+
+    /** Convenience constructor for a job without an {@code import:} block (the pre-Phase-26 shape). */
+    public JobDefinition(String version, String id, String kind, String recipe, TriggerSpec trigger,
+            Map<String, InputField> params, SqlBinding sql, List<PipelineStep> pipeline,
+            boolean perTenant) {
+        this(version, id, kind, recipe, trigger, params, sql, pipeline, perTenant, null);
     }
 
     /** Returns the steps to run: the explicit pipeline, or a single synthetic step for a tasklet. */
