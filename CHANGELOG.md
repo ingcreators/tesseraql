@@ -18,6 +18,21 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Runtime and recipes
 
+- Managed connectors — inbound webhook recipe (roadmap Phase 26, see
+  [docs/connectors.md](docs/connectors.md)): a `webhook` route is an HMAC-verified,
+  replay-protected POST endpoint in front of a SQL pipeline. The recipe authenticates the signed
+  delivery (HMAC over `<timestamp>.<body>`, the scheme the Phase 20 outbound webhook signs with),
+  rejects a stale/future timestamp outside the configured tolerance, and rejects a replay — all
+  before request binding, so an invalid delivery never writes a row. The verifier is configured
+  centrally (`tesseraql.connectors.webhooks.<name>`: secret resolved lazily through the
+  SecretResolver SPI, header names, an optional delivery-id header for the replay key, and the
+  tolerance), so the route carries no secret; the named verifier must be configured (an unknown
+  provider fails the build, since a webhook without a verifier would be unauthenticated). Replay
+  protection is a shared JDBC store (`tql_webhook_seen`, the same basis as SAML assertion replay),
+  so a delivery is processed at most once on any node sharing the database. A bad signature or
+  stale timestamp maps to 401, a replay to 409. Lint (`TQL-SEC-4082..4083`, `TQL-YAML-1008`) and a
+  `webhook` coverage kind keep it machine-checkable. `RouteDefinition` gains a `webhook:` block;
+  the runtime binds the `WebhookReplayStore`. **Phase 26 (managed connectors) is complete.**
 - Managed connectors — polling file triggers (roadmap Phase 26, see
   [docs/connectors.md](docs/connectors.md)): a `file-import` job can be driven by a `poll:`
   trigger instead of an HTTP upload — the runtime watches a local directory or a remote
