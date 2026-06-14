@@ -20,14 +20,18 @@ class JwtAuthenticatorTest {
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
     private static JwtConfig config() {
-        return new JwtConfig(SECRET, null, "roles", "permissions", "groups",
-                "tenant_id", "preferred_username", "name");
+        return new JwtConfig("HS256", SECRET, null, null, null, null, null, "roles", "permissions",
+                "groups", "tenant_id", "preferred_username", "name");
     }
 
     private static String token(Map<String, Object> claims) throws Exception {
+        return token(claims, "HS256");
+    }
+
+    private static String token(Map<String, Object> claims, String alg) throws Exception {
         Base64.Encoder enc = Base64.getUrlEncoder().withoutPadding();
         String header = enc.encodeToString(
-                "{\"alg\":\"HS256\",\"typ\":\"JWT\"}".getBytes(StandardCharsets.UTF_8));
+                ("{\"alg\":\"" + alg + "\",\"typ\":\"JWT\"}").getBytes(StandardCharsets.UTF_8));
         String payload = enc.encodeToString(MAPPER.writeValueAsBytes(claims));
         Mac mac = Mac.getInstance("HmacSHA256");
         mac.init(new SecretKeySpec(SECRET.getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
@@ -77,5 +81,24 @@ class JwtAuthenticatorTest {
         String jwt = token(Map.of("sub", "u001", "exp", 1));
         assertThatThrownBy(() -> new JwtAuthenticator(config()).authenticate("Bearer " + jwt))
                 .isInstanceOf(TqlException.class);
+    }
+
+    @Test
+    void rejectsAlgNone() throws Exception {
+        // A token claiming "none" must never validate against an HS256 config, even though its
+        // (ignored) signature segment is correctly computed: the alg is bound from config.
+        String jwt = token(Map.of("sub", "u001"), "none");
+        assertThatThrownBy(() -> new JwtAuthenticator(config()).authenticate("Bearer " + jwt))
+                .isInstanceOf(TqlException.class)
+                .hasMessageContaining("alg");
+    }
+
+    @Test
+    void rejectsAlgConfusionAgainstHs256Config() throws Exception {
+        // A token forged with header alg=RS256 must not slip past an HS256-configured verifier.
+        String jwt = token(Map.of("sub", "u001"), "RS256");
+        assertThatThrownBy(() -> new JwtAuthenticator(config()).authenticate("Bearer " + jwt))
+                .isInstanceOf(TqlException.class)
+                .hasMessageContaining("alg");
     }
 }

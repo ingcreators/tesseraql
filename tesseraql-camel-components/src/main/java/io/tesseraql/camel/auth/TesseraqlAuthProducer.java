@@ -5,6 +5,7 @@ import io.tesseraql.core.error.TqlDomain;
 import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
 import io.tesseraql.security.Principal;
+import io.tesseraql.security.apikey.ApiKeyAuthenticator;
 import io.tesseraql.security.jwt.JwtAuthenticator;
 import io.tesseraql.security.policy.PolicyEngine;
 import io.tesseraql.security.session.BrowserAuthenticator;
@@ -64,11 +65,31 @@ public class TesseraqlAuthProducer extends DefaultProducer {
                 bean(JwtAuthenticator.class, TesseraqlProperties.JWT_AUTHENTICATOR_BEAN)
                         .authenticate(
                                 exchange.getMessage().getHeader("Authorization", String.class));
+            case "apiKey" -> apiKeyAuthenticate(exchange);
             case "browser" -> browserAuthenticate(exchange);
             default ->
                 throw new TqlException(UNSUPPORTED, "Unsupported auth type: " + endpoint.getAuth());
         };
         exchange.setProperty(TesseraqlProperties.PRINCIPAL, principal);
+    }
+
+    /**
+     * Resolves a service caller's API key, presented either in the configured key header (default
+     * {@code X-API-Key}) or as {@code Authorization: ApiKey <key>} for gateways that forward only
+     * the {@code Authorization} header (design ch. 11.1).
+     */
+    private Principal apiKeyAuthenticate(Exchange exchange) {
+        ApiKeyAuthenticator authenticator = bean(ApiKeyAuthenticator.class,
+                TesseraqlProperties.API_KEY_AUTHENTICATOR_BEAN);
+        String key = exchange.getMessage().getHeader(authenticator.header(), String.class);
+        if (key == null) {
+            String authorization = exchange.getMessage().getHeader("Authorization", String.class);
+            if (authorization != null
+                    && authorization.regionMatches(true, 0, "ApiKey ", 0, "ApiKey ".length())) {
+                key = authorization.substring("ApiKey ".length()).trim();
+            }
+        }
+        return authenticator.authenticate(key);
     }
 
     /**

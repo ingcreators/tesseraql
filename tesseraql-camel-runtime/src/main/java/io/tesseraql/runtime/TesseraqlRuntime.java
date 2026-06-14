@@ -199,6 +199,11 @@ public final class TesseraqlRuntime implements AutoCloseable {
                     TesseraqlProperties.JWT_AUTHENTICATOR_BEAN,
                     new JwtAuthenticator(security.jwt()));
         }
+        if (security.apiKeys() != null) {
+            context.getRegistry().bind(
+                    TesseraqlProperties.API_KEY_AUTHENTICATOR_BEAN,
+                    new io.tesseraql.security.apikey.ApiKeyAuthenticator(security.apiKeys()));
+        }
         // Browser sessions: in-memory per node by default; "jdbc" shares tql_session across all
         // runtime nodes so a login made on one node resolves on every other (design ch. 11.2).
         SessionStore sessionStore;

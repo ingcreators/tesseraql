@@ -50,6 +50,16 @@ public final class ManifestCoverage {
     }
 
     /**
+     * API-key coverage (roadmap Phase 25): routes authenticated by {@code auth: apiKey} — the
+     * service-caller surface — declared and covered like routes, so a suite must exercise every
+     * API-key-protected route.
+     */
+    public static ItemCoverage apiKey(AppManifest manifest, List<TestSuite> suites) {
+        return routeKind("api-key", manifest, suites, definition -> definition.security() != null
+                && "apiKey".equals(definition.security().auth()));
+    }
+
+    /**
      * MCP-tool coverage (roadmap Phase 24 follow-on): every application-declared tool under
      * {@code mcp/} is declared, and a tool counts as covered when a suite exercises one of its SQL
      * artifacts - the same SQL-file basis as route coverage, since a tool is a query/command.

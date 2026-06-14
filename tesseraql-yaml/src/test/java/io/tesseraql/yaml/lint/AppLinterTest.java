@@ -692,4 +692,130 @@ class AppLinterTest {
                 .noneMatch(f -> f.code().startsWith("TQL-YAML-100")
                         && (f.code().endsWith("5") || f.code().endsWith("6")));
     }
+
+    private static List<LintFinding> lintWithConfig(Path dir, String securityYaml)
+            throws Exception {
+        Files.createDirectories(dir.resolve("config"));
+        Files.writeString(dir.resolve("config/tesseraql.yml"), """
+                tesseraql:
+                  app:
+                    name: t
+                """ + securityYaml);
+        return new AppLinter().lint(dir);
+    }
+
+    @Test
+    void flagsRs256JwtWithoutKeySource(@TempDir Path dir) throws Exception {
+        List<LintFinding> findings = lintWithConfig(dir, """
+                  security:
+                    jwt:
+                      algorithm: RS256
+                """);
+        assertThat(findings).anyMatch(f -> f.code().equals("TQL-SEC-4040") && f.isError());
+    }
+
+    @Test
+    void flagsRs256JwtWithConflictingKeySources(@TempDir Path dir) throws Exception {
+        List<LintFinding> findings = lintWithConfig(dir, """
+                  security:
+                    jwt:
+                      algorithm: RS256
+                      publicKey: pem
+                      jwksUri: https://idp.example.com/jwks
+                """);
+        assertThat(findings).anyMatch(f -> f.code().equals("TQL-SEC-4041") && f.isError());
+    }
+
+    @Test
+    void flagsAlgorithmConfusion(@TempDir Path dir) throws Exception {
+        // HS256 with RS256 key material, and RS256 with an HS256 secret, both raise TQL-SEC-4042.
+        assertThat(lintWithConfig(dir, """
+                  security:
+                    jwt:
+                      algorithm: HS256
+                      secret: s
+                      jwksUri: https://idp.example.com/jwks
+                """)).anyMatch(f -> f.code().equals("TQL-SEC-4042") && f.isError());
+    }
+
+    @Test
+    void flagsRs256JwtWithSecret(@TempDir Path dir) throws Exception {
+        assertThat(lintWithConfig(dir, """
+                  security:
+                    jwt:
+                      algorithm: RS256
+                      publicKey: pem
+                      secret: s
+                """)).anyMatch(f -> f.code().equals("TQL-SEC-4042") && f.isError());
+    }
+
+    @Test
+    void flagsUnsupportedJwtAlgorithm(@TempDir Path dir) throws Exception {
+        assertThat(lintWithConfig(dir, """
+                  security:
+                    jwt:
+                      algorithm: none
+                      secret: s
+                """)).anyMatch(f -> f.code().equals("TQL-SEC-4043") && f.isError());
+    }
+
+    @Test
+    void acceptsValidRs256JwksConfig(@TempDir Path dir) throws Exception {
+        assertThat(lintWithConfig(dir, """
+                  security:
+                    jwt:
+                      algorithm: RS256
+                      jwksUri: https://idp.example.com/jwks
+                """)).noneMatch(f -> f.code().startsWith("TQL-SEC-404") && f.isError());
+    }
+
+    @Test
+    void flagsApiKeyClientWithoutSecretHash(@TempDir Path dir) throws Exception {
+        List<LintFinding> findings = lintWithConfig(dir, """
+                  security:
+                    apiKeys:
+                      clients:
+                        billing:
+                          roles: [SERVICE]
+                """);
+        assertThat(findings).anyMatch(f -> f.code().equals("TQL-SEC-4045") && f.isError());
+    }
+
+    @Test
+    void warnsApiKeyClientWithoutGrants(@TempDir Path dir) throws Exception {
+        List<LintFinding> findings = lintWithConfig(dir, """
+                  security:
+                    apiKeys:
+                      clients:
+                        billing:
+                          secretHash: abc123
+                """);
+        assertThat(findings).anyMatch(f -> f.code().equals("TQL-SEC-4046") && !f.isError());
+    }
+
+    @Test
+    void flagsApiKeyRouteWithoutApiKeyConfig(@TempDir Path dir) throws Exception {
+        Files.createDirectories(dir.resolve("config"));
+        Files.writeString(dir.resolve("config/tesseraql.yml"), """
+                tesseraql:
+                  app:
+                    name: t
+                """);
+        Files.createDirectories(dir.resolve("web/api/things"));
+        Files.writeString(dir.resolve("web/api/things/search.sql"), "select 1\n");
+        Files.writeString(dir.resolve("web/api/things/get.yml"), """
+                version: tesseraql/v1
+                id: things.search
+                kind: route
+                recipe: query-json
+                security:
+                  auth: apiKey
+                sql:
+                  file: search.sql
+                  mode: query
+                """);
+
+        assertThat(new AppLinter().lint(dir))
+                .anyMatch(f -> f.code().equals("TQL-SEC-4044") && f.isError());
+    }
 }
