@@ -26,6 +26,9 @@ public final class AppLinter {
     private static final Set<String> KNOWN_TOOL_RECIPES = Set.of("query-json", "command-json");
     /** Recipes an MCP Apps UI resource may use - both render HTML (roadmap Phase 24). */
     private static final Set<String> KNOWN_UI_RECIPES = Set.of("query-html", "page");
+    /** Recipes a {@code publish:} block may ride - the transactional commands (roadmap Phase 27). */
+    private static final Set<String> PUBLISH_RECIPES = Set.of("command-json", "webhook",
+            "queue-consume");
     /** The MCP Apps uri scheme a UI resource is addressed by (SEP-1865). */
     private static final String UI_SCHEME = "ui://";
 
@@ -47,6 +50,9 @@ public final class AppLinter {
         }
         for (io.tesseraql.yaml.manifest.UiResourceFile ui : manifest.uiResources()) {
             lintUiResource(appHome, manifest.config(), ui, findings);
+        }
+        for (RouteFile consumer : manifest.consumers()) {
+            lintConsumer(appHome, manifest.config(), consumer, findings);
         }
         lintDuplicateResourceUris(appHome, manifest, findings);
         lintToolUiLinks(appHome, manifest, findings);
@@ -568,6 +574,12 @@ public final class AppLinter {
         lintValidation(route, definition, source, findings);
         lintNotify(config, definition, source, findings);
         lintWebhook(config, definition, source, findings);
+        lintPublish(config, definition, source, findings);
+        if (definition.consume() != null) {
+            findings.add(new LintFinding("TQL-YAML-1010", "error", source, "consume: is only"
+                    + " supported on a queue-consume route under consume/, not the '"
+                    + definition.recipe() + "' recipe"));
+        }
         lintPdfExport(route, definition, source, findings);
         if (definition.security() != null && definition.security().policy() != null
                 && !policyDefined(config, definition.security().policy())) {
@@ -737,6 +749,80 @@ public final class AppLinter {
             findings.add(new LintFinding("TQL-YAML-1008", "error", source, "webhook route '"
                     + definition.id() + "' needs a sql: or steps: pipeline"));
         }
+    }
+
+    /**
+     * Statically checks a {@code publish:} block (roadmap Phase 27): it rides a transactional
+     * command ({@code TQL-YAML-1010}) and names a channel configured under
+     * {@code tesseraql.messaging.channels} ({@code TQL-SEC-4091}), so a publish never targets a
+     * channel that does not exist.
+     */
+    private void lintPublish(AppConfig config, RouteDefinition definition, String source,
+            List<LintFinding> findings) {
+        var publish = definition.publish();
+        if (publish == null) {
+            return;
+        }
+        if (!PUBLISH_RECIPES.contains(definition.recipe())) {
+            findings.add(new LintFinding("TQL-YAML-1010", "error", source, "publish: is only"
+                    + " supported on command routes (command-json, webhook, queue-consume), not '"
+                    + definition.recipe() + "'"));
+            return;
+        }
+        if (publish.channel() == null || publish.channel().isBlank()) {
+            findings.add(new LintFinding("TQL-SEC-4091", "error", source,
+                    "publish: of '" + definition.id() + "' needs a channel"));
+        } else if (config.navigate("tesseraql.messaging.channels." + publish.channel()) == null) {
+            findings.add(new LintFinding("TQL-SEC-4091", "error", source, "publish: of '"
+                    + definition.id() + "' references channel '" + publish.channel()
+                    + "' not configured under tesseraql.messaging.channels"));
+        }
+    }
+
+    /**
+     * Statically checks a {@code queue-consume} route under {@code consume/} (roadmap Phase 27): it
+     * uses the {@code queue-consume} recipe, names a channel/topic ({@code TQL-YAML-1009}) whose
+     * channel is configured ({@code TQL-SEC-4090}, so a consumer is never wired to a channel that
+     * does not exist), and runs a SQL pipeline. Its {@code publish:} and {@code notify:} blocks are
+     * linted the same way a command route's are.
+     */
+    private void lintConsumer(Path appHome, AppConfig config, RouteFile consumer,
+            List<LintFinding> findings) {
+        RouteDefinition definition = consumer.definition();
+        String source = appHome.relativize(consumer.source()).toString().replace('\\', '/');
+        if (!"queue-consume".equals(definition.recipe())) {
+            findings.add(new LintFinding("TQL-YAML-1010", "error", source, "a consume/ route must"
+                    + " use the queue-consume recipe, not '" + definition.recipe() + "'"));
+            return;
+        }
+        var consume = definition.consume();
+        if (consume == null || consume.channel() == null || consume.channel().isBlank()
+                || consume.topic() == null || consume.topic().isBlank()) {
+            findings.add(new LintFinding("TQL-YAML-1009", "error", source, "queue-consume route '"
+                    + definition.id() + "' needs consume.channel and consume.topic"));
+        } else if (config.navigate("tesseraql.messaging.channels." + consume.channel()) == null) {
+            findings.add(new LintFinding("TQL-SEC-4090", "error", source, "queue-consume route '"
+                    + definition.id() + "' references channel '" + consume.channel()
+                    + "' not configured under tesseraql.messaging.channels"));
+        }
+        if (definition.sql() == null && definition.steps().isEmpty()) {
+            findings.add(new LintFinding("TQL-YAML-1009", "error", source, "queue-consume route '"
+                    + definition.id() + "' needs a sql: or steps: pipeline"));
+        }
+        if (definition.sql() != null && definition.sql().file() != null && !Files.isRegularFile(
+                consumer.source().getParent().resolve(definition.sql().file()))) {
+            findings.add(new LintFinding("TQL-SQL-2103", "error", source,
+                    "Referenced SQL file is missing: " + definition.sql().file()));
+        }
+        definition.steps().forEach((name, step) -> {
+            if (step.file() != null && !Files.isRegularFile(
+                    consumer.source().getParent().resolve(step.file()))) {
+                findings.add(new LintFinding("TQL-SQL-2103", "error", source,
+                        "Step '" + name + "' references a missing SQL file: " + step.file()));
+            }
+        });
+        lintPublish(config, definition, source, findings);
+        lintNotify(config, definition, source, findings);
     }
 
     /**

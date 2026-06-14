@@ -18,6 +18,21 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Runtime and recipes
 
+- Messaging and events — Postgres-native event channel (roadmap Phase 27, see
+  [docs/messaging.md](docs/messaging.md)): a broker-free publish/subscribe transport built on a
+  durable table plus PostgreSQL `LISTEN`/`NOTIFY` — no Kafka, no JMS. A command's `publish:` block
+  emits a domain event on the transactional outbox (so a rolled-back command never publishes); a
+  relay moves committed `EVENT` events onto a durable `tql_event` log and issues a `NOTIFY`; and a
+  `queue-consume` route under `consume/` claims messages with `FOR UPDATE SKIP LOCKED` — woken the
+  instant an event is published, swept by a polling backstop — and runs its SQL pipeline,
+  deduplicated by an idempotency key in `tql_queue_consumed` so at-least-once delivery is effectively
+  exactly-once per business key. `NOTIFY` is only the low-latency signal; the durable table is what
+  makes delivery survive, so the `pg-notify` transport runs on a PostgreSQL main datasource, and the
+  `OutboxEventSink` relay plus the `publish:`/`consume:` YAML are the seam a later Kafka/JMS leaf
+  module plugs into unchanged. Channels are configured centrally
+  (`tesseraql.messaging.channels.<name>`), lint covers them (`TQL-SEC-4090..4091`,
+  `TQL-YAML-1009..1010`, `TQL-YAML-1106`), and a `queue-consume` coverage kind tracks the consumers
+  declarative suites exercise.
 - Managed connectors — inbound webhook recipe (roadmap Phase 26, see
   [docs/connectors.md](docs/connectors.md)): a `webhook` route is an HMAC-verified,
   replay-protected POST endpoint in front of a SQL pipeline. The recipe authenticates the signed

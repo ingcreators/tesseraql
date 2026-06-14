@@ -252,6 +252,14 @@ public final class TesseraqlRuntime implements AutoCloseable {
         webhookReplayStore.ensureSchema();
         context.getRegistry().bind(TesseraqlProperties.WEBHOOK_REPLAY_STORE_BEAN,
                 webhookReplayStore);
+        // Messaging channel event log backing the built-in pg-notify transport (roadmap Phase 27):
+        // the durable bus a publish: relay writes to and a queue-consume route claims from.
+        io.tesseraql.operations.messaging.JdbcEventChannelStore eventChannelStore = new io.tesseraql.operations.messaging.JdbcEventChannelStore(
+                dataSource);
+        eventChannelStore.ensureSchema();
+        context.getRegistry().bind(TesseraqlProperties.EVENT_CHANNEL_STORE_BEAN, eventChannelStore);
+        io.tesseraql.yaml.messaging.MessagingChannels messagingChannels = io.tesseraql.yaml.messaging.MessagingChannels
+                .load(manifest.config());
         // Managed document-number sequences for command steps (roadmap Phase 18).
         io.tesseraql.operations.sequence.JdbcDocumentSequences documentSequences = new io.tesseraql.operations.sequence.JdbcDocumentSequences(
                 dataSource);
@@ -475,6 +483,30 @@ public final class TesseraqlRuntime implements AutoCloseable {
             context.addRoutes(new PollingRouteBuilder(List.copyOf(jobs.values()),
                     io.tesseraql.yaml.connectors.PollConnectors.load(manifest.config()), appName,
                     jobOwners));
+            // Messaging consumers (roadmap Phase 27): a pg-notify listener drains each queue-consume
+            // route's channel, woken by NOTIFY and swept by a backstop poll. The durable tql_event
+            // table is what makes delivery at-least-once; LISTEN/NOTIFY only lowers latency, so this
+            // transport runs only on PostgreSQL (other dialects await a broker transport leaf).
+            List<QueueConsumer.Subscription> subscriptions = new java.util.ArrayList<>();
+            for (io.tesseraql.yaml.manifest.RouteFile consumerFile : manifest.consumers()) {
+                io.tesseraql.yaml.model.ConsumeSpec consume = consumerFile.definition().consume();
+                if (consume != null && consume.channel() != null && consume.topic() != null) {
+                    subscriptions.add(new QueueConsumer.Subscription(consume.channel(),
+                            consume.topic(), consumerFile.definition().id()));
+                }
+            }
+            if (!subscriptions.isEmpty() && "postgresql".equals(
+                    io.tesseraql.core.util.DatabaseVendors.vendor(dataSource).orElse(null))) {
+                QueueConsumer queueConsumer = new QueueConsumer(context, eventChannelStore,
+                        subscriptions, outboxMaxAttempts(manifest.config()));
+                long backstop = io.tesseraql.core.util.Durations.toMillis(manifest.config()
+                        .getString("tesseraql.messaging.backstop").orElse("10s"));
+                context.addService(new PgNotifyListener(dataSource, queueConsumer, backstop));
+            } else if (!subscriptions.isEmpty()) {
+                LOG.warn("{} queue-consume route(s) declared but the main datasource is not"
+                        + " PostgreSQL; the pg-notify transport will not run",
+                        subscriptions.size());
+            }
 
             IdentityService identity = new IdentityService(
                     name -> context.getRegistry().lookupByNameAndType(name,
@@ -506,10 +538,18 @@ public final class TesseraqlRuntime implements AutoCloseable {
                     .isEmpty()
                             ? null
                             : new NotificationSink(notificationChannels, appHome, context);
+            // The channel-publish sink relays publish: EVENT events onto messaging channels
+            // (roadmap Phase 27), composed alongside the notification sink on the same outbox.
+            io.tesseraql.core.outbox.OutboxEventSink channelSink = messagingChannels.isEmpty()
+                    ? null
+                    : new ChannelPublishSink(messagingChannels, eventChannelStore);
             outboxSink = event -> {
                 LOGGING_SINK.send(event);
                 if (notificationSink != null) {
                     notificationSink.send(event);
+                }
+                if (channelSink != null) {
+                    channelSink.send(event);
                 }
                 if (extensionSink != null) {
                     extensionSink.send(event);

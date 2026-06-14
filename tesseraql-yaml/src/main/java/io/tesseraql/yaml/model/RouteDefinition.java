@@ -28,6 +28,10 @@ import java.util.Map;
  * @param fileImport the {@code import:} block of a {@code file-import} route
  * @param fileExport the {@code export:} block of a {@code file-export} route
  * @param webhook the {@code webhook:} block of a {@code webhook} route (roadmap Phase 26)
+ * @param publish the {@code publish:} block of a command route, emitting a domain event to a
+ *                messaging channel through the transactional outbox (roadmap Phase 27)
+ * @param consume the {@code consume:} block of a {@code queue-consume} route, subscribing to a
+ *                messaging channel and running the SQL pipeline per message (roadmap Phase 27)
  * @param response response shape
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
@@ -52,6 +56,8 @@ public record RouteDefinition(
         @com.fasterxml.jackson.annotation.JsonProperty("import") ImportSpec fileImport,
         @com.fasterxml.jackson.annotation.JsonProperty("export") ExportSpec fileExport,
         WebhookSpec webhook,
+        PublishSpec publish,
+        ConsumeSpec consume,
         ResponseSpec response) {
 
     public RouteDefinition {

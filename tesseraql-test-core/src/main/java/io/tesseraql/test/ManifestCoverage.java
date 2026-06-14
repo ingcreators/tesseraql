@@ -80,6 +80,29 @@ public final class ManifestCoverage {
     }
 
     /**
+     * Queue-consume coverage (roadmap Phase 27): every {@code queue-consume} route under
+     * {@code consume/} is declared, and one counts as covered when a suite exercises its SQL — the
+     * same SQL-file basis as route coverage, since a consumer is a command pipeline triggered by a
+     * message. Gated via {@code coverage.thresholds.queue-consume}.
+     */
+    public static ItemCoverage queueConsume(AppManifest manifest, List<TestSuite> suites) {
+        ItemCoverage coverage = new ItemCoverage("queue-consume");
+        Set<Path> testedPaths = testedSqlPaths(manifest.appHome(), suites);
+        Set<String> testedContracts = testedContracts(suites);
+        for (RouteFile consumer : manifest.consumers()) {
+            RouteDefinition definition = consumer.definition();
+            if (definition.id() == null) {
+                continue;
+            }
+            coverage.declare(definition.id());
+            if (exercised(consumer, testedPaths, testedContracts)) {
+                coverage.cover(definition.id());
+            }
+        }
+        return coverage;
+    }
+
+    /**
      * MCP-tool coverage (roadmap Phase 24 follow-on): every application-declared tool under
      * {@code mcp/} is declared, and a tool counts as covered when a suite exercises one of its SQL
      * artifacts - the same SQL-file basis as route coverage, since a tool is a query/command.

@@ -66,6 +66,11 @@ import org.apache.camel.Processor;
  * transaction: each fired notification becomes a {@code NOTIFICATION} outbox event, so a rolled
  * back command never notifies and a committed one notifies at-least-once. Event ids publish into
  * the context as {@code notify.<id>.eventId}.
+ *
+ * <p>The route's {@code publish:} block (roadmap Phase 27) enqueues a domain event onto the same
+ * transactional outbox as an {@code EVENT}, published to a messaging channel after the commit — so
+ * a command emitting events to another system keeps the all-or-nothing guarantee. Its id publishes
+ * into the context as {@code publish.eventId}.
  */
 public final class TransactionalCommandProcessor implements Processor {
 
@@ -95,6 +100,7 @@ public final class TransactionalCommandProcessor implements Processor {
     private final List<Step> steps;
     private final ValidationRules validation;
     private final List<io.tesseraql.yaml.notify.NotifyEvents.CompiledNotify> notifications;
+    private final io.tesseraql.yaml.messaging.PublishEvents.CompiledPublish publish;
     private final boolean singleSql;
     private final String datasourceName;
     private final OutboxEvents outboxEvents;
@@ -123,6 +129,8 @@ public final class TransactionalCommandProcessor implements Processor {
      * @param sql      the single-statement {@code sql:} binding, or null when steps are declared
      * @param validate the route's declarative validation rules, keyed by rule id (Phase 19)
      * @param notify   the route's notifications, keyed by notification id (Phase 20)
+     * @param publish  the route's {@code publish:} block emitting a domain event to a messaging
+     *                 channel through the same transactional outbox (Phase 27), or null
      * @param stepFile resolves a step's or rule's SQL file reference to its (dialect-resolved)
      *                 path
      */
@@ -130,12 +138,16 @@ public final class TransactionalCommandProcessor implements Processor {
             Map<String, SqlBinding> declaredSteps, Map<String, ValidationRule> validate,
             Map<String, io.tesseraql.yaml.model.NotifySpec> notify,
             java.util.function.Function<String, Path> stepFile,
-            String datasourceName, String dialect, OutboxSpec outbox, ErrorsSpec errors,
+            String datasourceName, String dialect, OutboxSpec outbox,
+            io.tesseraql.yaml.model.PublishSpec publish, ErrorsSpec errors,
             String appName) {
         this.routeId = routeId;
         this.datasourceName = datasourceName;
         this.outboxEvents = outbox == null ? null : new OutboxEvents(outbox, appName);
         this.notifications = io.tesseraql.yaml.notify.NotifyEvents.compileAll(routeId, notify);
+        this.publish = publish == null
+                ? null
+                : io.tesseraql.yaml.messaging.PublishEvents.compile(routeId, publish);
         this.appName = appName;
         this.errors = errors == null ? new ErrorsSpec(null) : errors;
         this.generatedKeyColumns = Dialect.fromId(dialect)
@@ -275,7 +287,7 @@ public final class TransactionalCommandProcessor implements Processor {
 
         DataSource dataSource = exchange.getContext().getRegistry()
                 .lookupByNameAndType(datasourceName, DataSource.class);
-        boolean needsStore = outboxEvents != null || !notifications.isEmpty();
+        boolean needsStore = outboxEvents != null || !notifications.isEmpty() || publish != null;
         OutboxStore store = !needsStore
                 ? null
                 : exchange.getContext().getRegistry().lookupByNameAndType(
@@ -329,6 +341,12 @@ public final class TransactionalCommandProcessor implements Processor {
                         enqueued.put(notification.id(), Map.of("eventId", eventId));
                     }
                     context.put("notify", enqueued);
+                }
+                if (publish != null) {
+                    // The published event enqueues in the same transaction (roadmap Phase 27): a
+                    // rolled back command never publishes; a committed one publishes at-least-once.
+                    String eventId = store.insert(connection, publish.build(context, appName));
+                    context.put("publish", Map.of("eventId", eventId));
                 }
                 connection.commit();
             } catch (RuntimeException | SQLException ex) {

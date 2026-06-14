@@ -121,6 +121,15 @@ public final class RouteCompiler {
                         buildMcpUi(this, manifest.appHome(), uiFile);
                     }
                 }
+                // Messaging consumers (roadmap Phase 27): each queue-consume route compiles to a
+                // direct:queue.<id> route the runtime's channel consumer drives, never mounted on
+                // HTTP — so they live outside the REST surface, like MCP tools.
+                for (RouteFile consumerFile : manifest.consumers()) {
+                    if (onlyRouteIds == null
+                            || onlyRouteIds.contains(consumerFile.definition().id())) {
+                        buildQueueConsume(this, consumerFile);
+                    }
+                }
             }
         };
     }
@@ -134,6 +143,7 @@ public final class RouteCompiler {
             case "file-import" -> buildFileImport(builder, routeFile);
             case "file-export" -> buildFileExport(builder, appHome, routeFile);
             case "webhook" -> buildWebhook(builder, routeFile);
+            // queue-consume routes live under consume/, compiled from manifest.consumers(), not here.
             // Every designed recipe is implemented, so an unknown one is a typo: fail fast
             // instead of silently dropping the route from the served surface (design ch. 20.14).
             default -> throw new TqlException(UNSUPPORTED_RECIPE, "Route '" + definition.id()
@@ -222,7 +232,7 @@ public final class RouteCompiler {
                 .process(new io.tesseraql.compiler.binding.TransactionalCommandProcessor(
                         routeId, definition.sql(), definition.steps(), definition.validate(),
                         definition.notifications(), stepFile, DEFAULT_DATASOURCE, dialect,
-                        definition.outbox(), definition.errors(), appName));
+                        definition.outbox(), definition.publish(), definition.errors(), appName));
         // Named queries still run after the command (outside its transaction), in authored order.
         for (var entry : definition.queries().entrySet()) {
             step = step
@@ -259,6 +269,54 @@ public final class RouteCompiler {
             webhookVerifiers = io.tesseraql.yaml.webhook.WebhookVerifiers.load(config);
         }
         return webhookVerifiers;
+    }
+
+    /**
+     * Builds the {@code queue-consume} recipe (roadmap Phase 27) as a {@code direct:queue.<id>}
+     * route, never mounted on HTTP: the runtime's messaging consumer claims a message off the
+     * channel and sends it here. The route binds the message body, deduplicates by idempotency key
+     * (a redelivery short-circuits before a row is written), then runs the SQL pipeline in one
+     * transaction — exactly the command-json pipeline, so a consumer is governed like a command.
+     * At-least-once delivery comes from the durable channel and the consumer's claim/ack, not this
+     * route.
+     */
+    private void buildQueueConsume(RouteBuilder builder, RouteFile routeFile) {
+        RouteDefinition definition = routeFile.definition();
+        io.tesseraql.yaml.model.ConsumeSpec consume = definition.consume();
+        if (consume == null || consume.channel() == null || consume.channel().isBlank()
+                || consume.topic() == null || consume.topic().isBlank()) {
+            throw new TqlException(UNSUPPORTED_RECIPE, "Route '" + definition.id()
+                    + "': queue-consume recipe needs a consume.channel and consume.topic");
+        }
+        Path routeDir = routeFile.source().getParent();
+        String dialect = datasourceDialect();
+        java.util.function.Function<String, Path> stepFile = file -> io.tesseraql.core.dialect.DialectSqlResolver
+                .resolve(routeDir.resolve(file).normalize(), dialect);
+
+        String routeId = "queue." + definition.id();
+        String direct = "direct:" + routeId;
+        ProcessorDefinition<?> route = builder.from(direct).routeId(routeId);
+        route.process(new io.tesseraql.compiler.binding.RouteTelemetry(
+                definition.id(), "QUEUE", "/" + definition.id(), appName));
+        applyConcurrency(route, definition);
+        applyLane(route, definition);
+        applySecurity(route, definition.security());
+        applyTenancy(route);
+        applyI18n(route);
+        route.process(new RequestBinder(definition, java.util.List.of()));
+        route.process(new io.tesseraql.compiler.binding.QueueDedupProcessor(
+                consume.channel(), consume.topic(), consume.idempotencyKey()));
+        // A deduplicated redelivery stops here, before the pipeline writes a row; the consumer
+        // still acknowledges it (the dedup record already records the business key as consumed).
+        route.choice()
+                .when((org.apache.camel.Predicate) exchange -> Boolean.TRUE
+                        .equals(exchange.getProperty(TesseraqlProperties.QUEUE_DUPLICATE)))
+                .stop()
+                .end();
+        route.process(new io.tesseraql.compiler.binding.TransactionalCommandProcessor(
+                routeId, definition.sql(), definition.steps(), definition.validate(),
+                definition.notifications(), stepFile, DEFAULT_DATASOURCE, dialect,
+                definition.outbox(), definition.publish(), definition.errors(), appName));
     }
 
     /**
@@ -500,7 +558,7 @@ public final class RouteCompiler {
             step = step.process(new io.tesseraql.compiler.binding.TransactionalCommandProcessor(
                     routeId, definition.sql(), definition.steps(), definition.validate(),
                     definition.notifications(), stepFile, DEFAULT_DATASOURCE, dialect,
-                    definition.outbox(), definition.errors(), appName));
+                    definition.outbox(), definition.publish(), definition.errors(), appName));
         } else if (definition.sql() != null) {
             step = step.to(executionUri(toolDir, definition.sql(), "sql"));
         }
