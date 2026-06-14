@@ -141,6 +141,17 @@
       <groupId>org.apache.camel</groupId>
       <artifactId>camel-mail</artifactId>
     </dependency>
+    <!-- Managed connectors: directory polling for file-import (roadmap Phase 26). camel-file
+         drives local-directory polling; camel-ftp adds the SFTP/FTPS consumers. Both stay an
+         implementation detail behind the poll: trigger recipe. -->
+    <dependency>
+      <groupId>org.apache.camel</groupId>
+      <artifactId>camel-file</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.camel</groupId>
+      <artifactId>camel-ftp</artifactId>
+    </dependency>
 
     <dependency>
       <groupId>com.zaxxer</groupId>
@@ -230,6 +241,20 @@
     <dependency>
       <groupId>org.testcontainers</groupId>
       <artifactId>junit-jupiter</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <!-- An in-process SFTP server (Apache MINA sshd) for the poll-trigger integration test
+         (roadmap Phase 26); no Docker, so it runs anywhere the build does. -->
+    <dependency>
+      <groupId>org.apache.sshd</groupId>
+      <artifactId>sshd-core</artifactId>
+      <version>${sshd.version}</version>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.sshd</groupId>
+      <artifactId>sshd-sftp</artifactId>
+      <version>${sshd.version}</version>
       <scope>test</scope>
     </dependency>
     <dependency>

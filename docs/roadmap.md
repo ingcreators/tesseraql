@@ -246,6 +246,16 @@ and a per-host circuit breaker that fails fast on systemic failures. Each call i
 `http-call` coverage kind tracks the steps suites plan. Polling triggers and the inbound webhook
 recipe remain for later slices.
 
+**Polling file triggers** (delivered, see [docs/connectors.md](connectors.md)): a `file-import`
+job declares a `poll:` trigger (a local directory or a remote SFTP/FTPS server) instead of an HTTP
+upload; the runtime watches the source and feeds every file through the job's `import:` pipeline
+via the existing asynchronous, off-heap, operations-tracked transfer path, moving each file to a
+done/failed sub-directory. Reaching a remote host is deny-by-default
+(`tesseraql.connectors.poll.allowedHosts`), with SecretResolver-backed credentials; the Camel
+`file`/`sftp`/`ftps` consumer stays an implementation detail. Lint (`TQL-SEC-4080..4081`,
+`TQL-YAML-1005..1006`) and a `file-poll` coverage kind keep it machine-checkable. The inbound
+webhook recipe remains for the last slice.
+
 ### Phase 27 — messaging and events
 
 Outbox relay to a broker (Kafka/JMS) and a `queue-consume` recipe (broker → SQL pipeline

@@ -215,6 +215,32 @@ public final class ManifestCoverage {
     }
 
     /**
+     * file-poll coverage (roadmap Phase 26): every {@code poll:}-triggered file-import job is
+     * declared by its id and covered when a suite exercises its per-row import SQL — the same
+     * SQL-file basis as route and document coverage, since a poll job is a file-import driven by a
+     * directory watch instead of an upload.
+     */
+    public static ItemCoverage filePoll(AppManifest manifest, List<TestSuite> suites) {
+        ItemCoverage coverage = new ItemCoverage("file-poll");
+        Set<Path> testedPaths = testedSqlPaths(manifest.appHome(), suites);
+        for (io.tesseraql.yaml.manifest.JobFile job : manifest.jobs()) {
+            io.tesseraql.yaml.model.JobDefinition definition = job.definition();
+            if (definition.id() == null || definition.trigger() == null
+                    || definition.trigger().poll() == null) {
+                continue;
+            }
+            coverage.declare(definition.id());
+            io.tesseraql.yaml.model.ImportSpec importSpec = definition.fileImport();
+            if (importSpec != null && importSpec.sql() != null && importSpec.sql().file() != null
+                    && testedPaths.contains(job.source().getParent()
+                            .resolve(importSpec.sql().file()).normalize())) {
+                coverage.cover(definition.id());
+            }
+        }
+        return coverage;
+    }
+
+    /**
      * http-call coverage (roadmap Phase 26): every job's {@code http-call:} pipeline step is
      * declared as {@code <jobId>.<stepId>}; a suite's http-call case covers the steps it plans —
      * the targeted one, or the job's whole set when no id is named — so a managed outbound

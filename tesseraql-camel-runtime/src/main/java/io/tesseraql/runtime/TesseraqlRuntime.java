@@ -462,6 +462,12 @@ public final class TesseraqlRuntime implements AutoCloseable {
                     id -> claimKeys.put(id, jobOwners.getOrDefault(id, appName) + ":" + id));
             context.addRoutes(new SchedulingRouteBuilder(
                     jobRunner, jobRepository, List.copyOf(jobs.values()), claimKeys));
+            // Directory-polling consumers for poll-triggered file-import jobs (roadmap Phase 26):
+            // local/SFTP/FTPS sources feed the file-import pipeline, under a deny-by-default host
+            // allow-list. The Camel file/ftp endpoint stays an implementation detail.
+            context.addRoutes(new PollingRouteBuilder(List.copyOf(jobs.values()),
+                    io.tesseraql.yaml.connectors.PollConnectors.load(manifest.config()), appName,
+                    jobOwners));
 
             IdentityService identity = new IdentityService(
                     name -> context.getRegistry().lookupByNameAndType(name,

@@ -18,6 +18,21 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Runtime and recipes
 
+- Managed connectors — polling file triggers (roadmap Phase 26, see
+  [docs/connectors.md](docs/connectors.md)): a `file-import` job can be driven by a `poll:`
+  trigger instead of an HTTP upload — the runtime watches a local directory or a remote
+  SFTP/FTPS server and feeds every file it finds through the job's `import:` pipeline (the same
+  per-row 2-way SQL a `file-import` route applies), ingesting each file through the existing
+  asynchronous, off-heap, operations-tracked transfer path and moving it to a done/failed
+  sub-directory. Reaching a remote host is **deny by default** (`tesseraql.connectors.poll.allowedHosts`,
+  exact or `*.wildcard`); credentials come from `tesseraql.connectors.poll.credentials`, resolved
+  through the SecretResolver SPI when the consumer starts. The underlying Camel `file`/`sftp`/`ftps`
+  consumer stays an implementation detail, not user API. Lint catches a misconfigured poll job
+  (`TQL-SEC-4080` off-allow-list host, `TQL-SEC-4081` undeclared credential, `TQL-YAML-1005`
+  invalid source, `TQL-YAML-1006` missing import block), a job that targets a non-allow-listed host
+  is skipped at startup rather than failing the runtime, and a new `file-poll` coverage kind tracks
+  the poll jobs declarative suites exercise. `TriggerSpec` gains a `poll` member beside `schedule`,
+  and `JobDefinition` an `import:` block. Adds `camel-file`/`camel-ftp`.
 - Managed connectors — outbound HTTP (roadmap Phase 26, see
   [docs/connectors.md](docs/connectors.md)): an `http-call` batch-pipeline step issues one
   synchronous outbound REST request and publishes the response to later steps

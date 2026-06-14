@@ -419,6 +419,37 @@ class ManifestCoverageTest {
         assertThat(none.ratio()).isZero();
     }
 
+    private static io.tesseraql.yaml.manifest.JobFile pollImportJob() {
+        return new io.tesseraql.yaml.manifest.JobFile(APP_HOME.resolve("batch/intake/job.yml"),
+                new io.tesseraql.yaml.model.JobDefinition("tesseraql/v1", "orders.intake", "job",
+                        "file-import",
+                        new io.tesseraql.yaml.model.TriggerSpec(null,
+                                new io.tesseraql.yaml.model.PollSpec("local", null, null,
+                                        "/data/inbound", null, "*.csv", "60s", null, null)),
+                        Map.of(), null, List.of(), false,
+                        new io.tesseraql.yaml.model.ImportSpec("csv", List.of(), null, null, null,
+                                null, null,
+                                new io.tesseraql.yaml.model.SqlBinding("upsert.sql", null, "update",
+                                        Map.of(), null, null, null, null, null))));
+    }
+
+    @Test
+    void filePollCoverageDeclaresPollJobsAndCoversThoseWhoseImportSqlRuns() {
+        AppManifest manifest = new AppManifest(APP_HOME, new AppConfig(Map.of(), name -> null),
+                List.of(), List.of(pollImportJob()), List.of(), List.of(), List.of(),
+                ManifestIndex.of(Map.of(), "test"));
+
+        ItemCoverage covered = ManifestCoverage.filePoll(manifest,
+                List.of(sqlSuite("batch/intake/upsert.sql")));
+        ItemCoverage uncovered = ManifestCoverage.filePoll(manifest, List.of());
+
+        assertThat(covered.kind()).isEqualTo("file-poll");
+        assertThat(covered.declared()).containsExactly("orders.intake");
+        assertThat(covered.covered()).containsExactly("orders.intake");
+        assertThat(uncovered.covered()).isEmpty();
+        assertThat(uncovered.ratio()).isZero();
+    }
+
     @Test
     void samlCoverageDeclaresLinkContractsOnlyWhenLinkingIsEnabled() {
         AppManifest linked = manifest(Map.of("tesseraql", Map.of("saml", Map.of(

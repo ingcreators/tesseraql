@@ -733,6 +733,9 @@ public final class AppLinter {
     private void lintJob(Path appHome, AppConfig config, io.tesseraql.yaml.manifest.JobFile job,
             List<LintFinding> findings) {
         String source = appHome.relativize(job.source()).toString().replace('\\', '/');
+        if (job.definition().trigger() != null && job.definition().trigger().poll() != null) {
+            lintPollJob(config, job, source, findings);
+        }
         for (io.tesseraql.yaml.model.PipelineStep step : job.definition().pipeline()) {
             int declared = 0;
             if (step.sql() != null) {
@@ -755,6 +758,66 @@ public final class AppLinter {
             } else if (step.httpCall() != null) {
                 lintHttpCall(config, step.id(), step.httpCall(), source, findings);
             }
+        }
+    }
+
+    /**
+     * Statically checks a {@code poll:}-triggered file-import job (roadmap Phase 26): the source is
+     * a known kind with a path, a remote source has an allow-listed host
+     * ({@code TQL-SEC-4080}, deny by default) and a configured credential ({@code TQL-SEC-4081}, a
+     * warning), and the job carries an {@code import:} block whose per-row SQL file exists.
+     */
+    private void lintPollJob(AppConfig config, io.tesseraql.yaml.manifest.JobFile job,
+            String source,
+            List<LintFinding> findings) {
+        io.tesseraql.yaml.model.PollSpec poll = job.definition().trigger().poll();
+        if (job.definition().trigger().schedule() != null) {
+            findings.add(new LintFinding("TQL-YAML-1005", "error", source,
+                    "Job '" + job.definition().id()
+                            + "' declares both a schedule and a poll trigger; declare one"));
+        }
+        String kind = poll.effectiveSource();
+        if (!List.of("local", "sftp", "ftps").contains(kind)) {
+            findings.add(new LintFinding("TQL-YAML-1005", "error", source,
+                    "Poll trigger source must be local, sftp, or ftps (was '" + poll.source()
+                            + "')"));
+        }
+        if (poll.path() == null || poll.path().isBlank()) {
+            findings.add(new LintFinding("TQL-YAML-1005", "error", source,
+                    "Poll trigger needs a path: (the directory to poll)"));
+        }
+        if (poll.isRemote()) {
+            if (poll.host() == null || poll.host().isBlank()) {
+                findings.add(new LintFinding("TQL-YAML-1005", "error", source,
+                        "Poll trigger source '" + kind + "' needs a host:"));
+            } else {
+                List<String> allowedHosts = new java.util.ArrayList<>();
+                if (config
+                        .navigate("tesseraql.connectors.poll.allowedHosts") instanceof List<?> h) {
+                    h.forEach(value -> allowedHosts.add(String.valueOf(value)));
+                }
+                if (!io.tesseraql.yaml.http.HttpOutbound.hostAllowed(allowedHosts, poll.host())) {
+                    findings.add(new LintFinding("TQL-SEC-4080", "error", source,
+                            "Poll trigger targets host '" + poll.host() + "' which is not in"
+                                    + " tesseraql.connectors.poll.allowedHosts (deny by default)"));
+                }
+            }
+            if (poll.credential() != null && !poll.credential().isBlank()
+                    && config.navigate(
+                            "tesseraql.connectors.poll.credentials." + poll.credential()) == null) {
+                findings.add(new LintFinding("TQL-SEC-4081", "warning", source,
+                        "Poll trigger references undeclared credential '" + poll.credential()
+                                + "'"));
+            }
+        }
+        io.tesseraql.yaml.model.ImportSpec importSpec = job.definition().fileImport();
+        if (importSpec == null || importSpec.sql() == null || importSpec.sql().file() == null) {
+            findings.add(new LintFinding("TQL-YAML-1006", "error", source, "Poll-triggered job '"
+                    + job.definition().id() + "' needs an import: block with a per-row sql.file"));
+        } else if (!Files.isRegularFile(
+                job.source().getParent().resolve(importSpec.sql().file()))) {
+            findings.add(new LintFinding("TQL-SQL-2103", "error", source,
+                    "Referenced SQL file is missing: " + importSpec.sql().file()));
         }
     }
 

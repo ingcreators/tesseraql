@@ -5,8 +5,9 @@ Phase 26): governed recipes for files and HTTP. Camel's component catalog stays 
 implementation detail — an app never writes a raw endpoint URI; it declares a connector that
 runs under the framework's allow-lists, secrets, lint, and coverage.
 
-This page covers the outbound `http-call` pipeline step. (Polling file triggers and the
-inbound webhook recipe arrive in later slices of the same phase.)
+This page covers the outbound `http-call` pipeline step and the inbound directory-polling
+trigger for `file-import`. (The inbound webhook recipe arrives in a later slice of the same
+phase.)
 
 ## The `http-call` pipeline step
 
@@ -155,3 +156,84 @@ tests:
 ```
 
 Gate coverage with `coverage.thresholds.http-call` like any other kind.
+
+## The `poll:` trigger for `file-import`
+
+A `file-import` job can be driven by a **directory-polling trigger** instead of an HTTP upload:
+the runtime watches a source directory and feeds every file it finds through the job's
+`import:` pipeline (the same per-row 2-way SQL a `file-import` route applies). The source is a
+local directory or a remote SFTP/FTPS server.
+
+```yaml
+version: tesseraql/v1
+id: orders.intake
+kind: job
+recipe: file-import
+
+trigger:
+  poll:
+    source: sftp                 # local | sftp | ftps
+    host: sftp.partner.example   # remote sources only; must be allow-listed
+    port: 22                     # defaults to 22 (sftp) / 21 (ftps)
+    path: /outbound/orders       # directory to poll (a local path, or the remote directory)
+    credential: partner-sftp     # a configured credential, never inline (remote sources)
+    include: "*.csv"             # filename glob (default: every file)
+    delay: 60s                   # poll interval (default 60s)
+    move: .done                  # processed files move here (default .done)
+    moveFailed: .error           # files that could not be ingested move here (default .error)
+
+import:                          # the same import: block a file-import route uses
+  format: csv
+  columns:
+    - orderNo
+    - { name: qty, type: number }
+  onError: skip
+  sql:
+    file: upsert-order.sql       # runs once per row; params are the column names
+```
+
+Each file is ingested through the same asynchronous, off-heap path an HTTP upload takes and is
+tracked as a **transfer** in the operations console — so row-level outcomes (rejected rows under
+`onError: skip`) show up there, exactly like an uploaded file. A file moves to `move` once it has
+been ingested; a file that cannot be read moves to `moveFailed`. The underlying Camel
+`file`/`sftp`/`ftps` consumer is an implementation detail; the YAML never names an endpoint.
+
+### Remote sources
+
+Reaching a remote host is **deny by default**. A remote `poll:` source may only target a host in
+`tesseraql.connectors.poll.allowedHosts`, and its credentials come from
+`tesseraql.connectors.poll.credentials` (resolved through the SecretResolver SPI when the consumer
+starts, never inline):
+
+```yaml
+tesseraql:
+  connectors:
+    poll:
+      allowedHosts:                 # deny-by-default egress allow-list (exact or *.wildcard)
+        - sftp.partner.example
+      credentials:
+        partner-sftp:
+          username: ${secret.env.SFTP_USER}
+          password: ${secret.env.SFTP_PASS}
+```
+
+The SSH host key of an SFTP edge is expected to be verified out of band; set a `knownHostsFile` for
+strict checking in production. FTPS rides the identical recipe and runtime path with
+`source: ftps`; only the endpoint scheme differs.
+
+### Governance and testing
+
+Lint catches a misconfigured poll job before it ships, and at runtime a job that targets a
+non-allow-listed host (or has no `import:` block) is logged and skipped rather than taking the
+app down:
+
+| Code           | Severity | Meaning                                                               |
+| -------------- | -------- | --------------------------------------------------------------------- |
+| `TQL-SEC-4080` | error    | a remote source's host is not in `tesseraql.connectors.poll.allowedHosts` |
+| `TQL-SEC-4081` | warning  | the trigger references a credential not declared under `credentials`  |
+| `TQL-YAML-1005`| error    | the source is not local/sftp/ftps, has no path, or a remote source has no host |
+| `TQL-YAML-1006`| error    | a poll-triggered job has no `import:` block with a per-row SQL         |
+
+A poll job is covered by the `file-poll` coverage kind when a declarative suite exercises its
+per-row import SQL (a plain `sql:` case), the same SQL-file basis as route and document coverage.
+Gate it with `coverage.thresholds.file-poll`.
