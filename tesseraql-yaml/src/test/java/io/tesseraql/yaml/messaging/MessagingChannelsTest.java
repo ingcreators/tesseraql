@@ -18,13 +18,15 @@ class MessagingChannelsTest {
     }
 
     @Test
-    void loadsAPgNotifyChannelAndDefaultsTheTransport() {
+    void loadsBuiltInTransportsAndDefaultsToPgNotify() {
         MessagingChannels channels = MessagingChannels.load(config(Map.of(
                 "events", Map.of("transport", "pg-notify"),
+                "legacy", Map.of("transport", "db-poll"),
                 "audit", Map.of())));
 
         assertThat(channels.isEmpty()).isFalse();
         assertThat(channels.require("events").transport()).isEqualTo(MessagingChannels.PG_NOTIFY);
+        assertThat(channels.require("legacy").transport()).isEqualTo(MessagingChannels.DB_POLL);
         // An unspecified transport defaults to the built-in pg-notify.
         assertThat(channels.require("audit").transport()).isEqualTo(MessagingChannels.PG_NOTIFY);
     }

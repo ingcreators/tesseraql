@@ -45,6 +45,30 @@ final class DialectRuntimeChecks {
         assertThat(runtime.outboxStore().listPending(10)).isEmpty();
     }
 
+    /**
+     * Messaging event channel (roadmap Phase 27): exercises the vendor's {@code SKIP LOCKED} claim
+     * variant for the {@code db-poll} transport — publish, claim (the per-dialect query), then
+     * consume with idempotency-key dedup — directly against the dialect's datasource.
+     */
+    static void eventChannelRoundTrip(javax.sql.DataSource dataSource) {
+        io.tesseraql.operations.messaging.JdbcEventChannelStore store = new io.tesseraql.operations.messaging.JdbcEventChannelStore(
+                dataSource);
+        store.ensureSchema();
+        String id = store.publish("events", "orders.created", "K-1", "{\"orderId\":\"K-1\"}");
+
+        // The claim renders the dialect's variant (Oracle ROWNUM / SQL Server TOP+READPAST); a
+        // claimed-but-unconsumed row is not re-claimed within the abandoned window.
+        assertThat(store.claim("events", "orders.created", 10))
+                .extracting(io.tesseraql.core.messaging.EventMessage::id).contains(id);
+        assertThat(store.claim("events", "orders.created", 10)).isEmpty();
+
+        assertThat(store.consumed("events", "orders.created", "K-1")).isFalse();
+        store.markConsumed(id, "events", "orders.created", "K-1");
+        assertThat(store.consumed("events", "orders.created", "K-1")).isTrue();
+        // A consumed message is never claimed again.
+        assertThat(store.claim("events", "orders.created", 10)).isEmpty();
+    }
+
     /** Typed CSV import + export + download: exercises transfers on the vendor schema. */
     static void fileTransferRoundTrip(TesseraqlRuntime runtime, String appName) throws Exception {
         String importId = startTransfer(runtime, "/api/items/import",

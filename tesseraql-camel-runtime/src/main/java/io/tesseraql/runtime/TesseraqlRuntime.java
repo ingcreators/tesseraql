@@ -483,29 +483,46 @@ public final class TesseraqlRuntime implements AutoCloseable {
             context.addRoutes(new PollingRouteBuilder(List.copyOf(jobs.values()),
                     io.tesseraql.yaml.connectors.PollConnectors.load(manifest.config()), appName,
                     jobOwners));
-            // Messaging consumers (roadmap Phase 27): a pg-notify listener drains each queue-consume
-            // route's channel, woken by NOTIFY and swept by a backstop poll. The durable tql_event
-            // table is what makes delivery at-least-once; LISTEN/NOTIFY only lowers latency, so this
-            // transport runs only on PostgreSQL (other dialects await a broker transport leaf).
-            List<QueueConsumer.Subscription> subscriptions = new java.util.ArrayList<>();
+            // Messaging consumers (roadmap Phase 27): each queue-consume route drains its channel
+            // off the durable tql_event table — that table is what makes delivery at-least-once.
+            // The wake mechanism depends on the channel's transport: pg-notify adds low-latency
+            // LISTEN/NOTIFY (PostgreSQL only), db-poll just sweeps on the backstop interval (every
+            // dialect). Subscriptions split by transport so each runs under the right driver.
+            List<QueueConsumer.Subscription> pgNotifySubs = new java.util.ArrayList<>();
+            List<QueueConsumer.Subscription> dbPollSubs = new java.util.ArrayList<>();
             for (io.tesseraql.yaml.manifest.RouteFile consumerFile : manifest.consumers()) {
                 io.tesseraql.yaml.model.ConsumeSpec consume = consumerFile.definition().consume();
-                if (consume != null && consume.channel() != null && consume.topic() != null) {
-                    subscriptions.add(new QueueConsumer.Subscription(consume.channel(),
-                            consume.topic(), consumerFile.definition().id()));
+                if (consume == null || consume.channel() == null || consume.topic() == null) {
+                    continue;
+                }
+                QueueConsumer.Subscription sub = new QueueConsumer.Subscription(consume.channel(),
+                        consume.topic(), consumerFile.definition().id());
+                String transport = messagingChannels.find(consume.channel())
+                        .map(io.tesseraql.yaml.messaging.MessagingChannels.Channel::transport)
+                        .orElse(io.tesseraql.yaml.messaging.MessagingChannels.PG_NOTIFY);
+                (io.tesseraql.yaml.messaging.MessagingChannels.DB_POLL.equals(transport)
+                        ? dbPollSubs
+                        : pgNotifySubs).add(sub);
+            }
+            int messagingMaxAttempts = outboxMaxAttempts(manifest.config());
+            long backstop = io.tesseraql.core.util.Durations.toMillis(manifest.config()
+                    .getString("tesseraql.messaging.backstop").orElse("10s"));
+            if (!pgNotifySubs.isEmpty()) {
+                if ("postgresql".equals(
+                        io.tesseraql.core.util.DatabaseVendors.vendor(dataSource).orElse(null))) {
+                    context.addService(new PgNotifyListener(dataSource,
+                            new QueueConsumer(context, eventChannelStore, pgNotifySubs,
+                                    messagingMaxAttempts),
+                            backstop));
+                } else {
+                    LOG.warn("{} pg-notify consumer(s) declared but the main datasource is not"
+                            + " PostgreSQL; LISTEN/NOTIFY will not run — use transport: db-poll",
+                            pgNotifySubs.size());
                 }
             }
-            if (!subscriptions.isEmpty() && "postgresql".equals(
-                    io.tesseraql.core.util.DatabaseVendors.vendor(dataSource).orElse(null))) {
-                QueueConsumer queueConsumer = new QueueConsumer(context, eventChannelStore,
-                        subscriptions, outboxMaxAttempts(manifest.config()));
-                long backstop = io.tesseraql.core.util.Durations.toMillis(manifest.config()
-                        .getString("tesseraql.messaging.backstop").orElse("10s"));
-                context.addService(new PgNotifyListener(dataSource, queueConsumer, backstop));
-            } else if (!subscriptions.isEmpty()) {
-                LOG.warn("{} queue-consume route(s) declared but the main datasource is not"
-                        + " PostgreSQL; the pg-notify transport will not run",
-                        subscriptions.size());
+            if (!dbPollSubs.isEmpty()) {
+                context.addRoutes(new QueuePollRouteBuilder(new QueueConsumer(context,
+                        eventChannelStore, dbPollSubs, messagingMaxAttempts), backstop));
             }
 
             IdentityService identity = new IdentityService(

@@ -32,7 +32,13 @@ All notable changes to TesseraQL are documented here. The format follows
   module plugs into unchanged. Channels are configured centrally
   (`tesseraql.messaging.channels.<name>`), lint covers them (`TQL-SEC-4090..4091`,
   `TQL-YAML-1009..1010`, `TQL-YAML-1106`), and a `queue-consume` coverage kind tracks the consumers
-  declarative suites exercise.
+  declarative suites exercise. A second built-in transport, `db-poll`, makes the channel **portable
+  across every dialect** (MySQL, SQL Server, Oracle, and PostgreSQL behind a transaction-pooling
+  proxy that breaks `LISTEN`): the same durable `tql_event` queue, claimed with each dialect's
+  `SKIP LOCKED` equivalent (PostgreSQL/MySQL `LIMIT … FOR UPDATE SKIP LOCKED`, Oracle `ROWNUM`,
+  SQL Server `TOP … WITH (UPDLOCK, READPAST)`, mirroring the outbox dispatcher), polled on the
+  `backstop` interval instead of woken by `NOTIFY`. Same at-least-once, idempotent delivery — only
+  the latency differs; switching `transport:` is the whole change.
 - Managed connectors — inbound webhook recipe (roadmap Phase 26, see
   [docs/connectors.md](docs/connectors.md)): a `webhook` route is an HMAC-verified,
   replay-protected POST endpoint in front of a SQL pipeline. The recipe authenticates the signed
