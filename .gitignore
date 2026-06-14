@@ -29,6 +29,10 @@ Thumbs.db
 *.pem
 *.key
 *.p12
+# Public-certificate test fixtures (mTLS auth) — cert-only PEM, never private keys (*.key/*.p12
+# stay ignored). Needed on the test classpath, so committed despite the *.pem guard above.
+!tesseraql-security/src/test/resources/mtls/*.pem
+!tesseraql-camel-runtime/src/test/resources/mtls/*.pem
 
 # Agent auth/state
 .codex/
