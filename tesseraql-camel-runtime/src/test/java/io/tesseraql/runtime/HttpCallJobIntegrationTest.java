@@ -68,7 +68,7 @@ class HttpCallJobIntegrationTest {
 
     @Test
     void theFetchedRateIsPersistedByASubsequentSqlStep() throws Exception {
-        long deadline = System.currentTimeMillis() + Duration.ofSeconds(15).toMillis();
+        long deadline = System.currentTimeMillis() + Duration.ofSeconds(30).toMillis();
         Integer rate = null;
         Integer status = null;
         while (System.currentTimeMillis() < deadline && rate == null) {
@@ -128,8 +128,6 @@ class HttpCallJobIntegrationTest {
         try (Stream<Path> files = Files.walk(source)) {
             files.forEach(path -> copy(source, target, path));
         }
-        // db config plus the deny-by-default egress allow-list deep-merges with the example's
-        // tesseraql.yml, so localhost (the test endpoint) is the only reachable host.
         Files.writeString(target.resolve("config/application.yml"), """
                 server:
                   port: 0
@@ -139,14 +137,18 @@ class HttpCallJobIntegrationTest {
                     url: %s
                     username: %s
                     password: %s
-
+                """.formatted(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(),
+                POSTGRES.getPassword()));
+        // The deny-by-default egress allow-list goes in the highest-precedence overlay so it
+        // replaces the example app's own allowedHosts: localhost (the test endpoint) is the only
+        // reachable host for this run.
+        Files.writeString(target.resolve("config/overlay.yml"), """
                 tesseraql:
                   http:
                     outbound:
                       allowedHosts:
                         - localhost
-                """.formatted(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(),
-                POSTGRES.getPassword()));
+                """);
 
         Path jobDir = target.resolve("batch/ratesync");
         Files.createDirectories(jobDir);

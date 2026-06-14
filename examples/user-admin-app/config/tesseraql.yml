@@ -52,6 +52,19 @@ tesseraql:
     # alerts:
     #   channel: audit-webhook
 
+  # Phase 26 managed connectors: outbound HTTP for http-call pipeline steps. Egress is
+  # deny-by-default — a call may only target a host in allowedHosts (exact or *.wildcard).
+  # Credentials ride the SecretResolver SPI and resolve at call time, never into artifacts.
+  http:
+    outbound:
+      allowedHosts:
+        - api.directory.example
+      credentials:
+        directory:
+          type: header
+          header: X-API-Key
+          value: ${secret.env.DIRECTORY_API_KEY:dev-only-directory-key}
+
   identity:
     defaultRealm: local
     realms:
