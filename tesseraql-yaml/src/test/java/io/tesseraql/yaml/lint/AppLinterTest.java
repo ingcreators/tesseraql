@@ -861,4 +861,104 @@ class AppLinterTest {
         assertThat(new AppLinter().lint(dir))
                 .anyMatch(f -> f.code().equals("TQL-SEC-4044") && f.isError());
     }
+
+    @Test
+    void flagsMtlsWithoutForwardedHeader(@TempDir Path dir) throws Exception {
+        assertThat(lintWithConfig(dir, """
+                  security:
+                    mtls:
+                      trustBundle: ca-pem
+                      clients:
+                        billing:
+                          subjectDn: "CN=billing,O=Acme"
+                          roles: [SERVICE]
+                """)).anyMatch(f -> f.code().equals("TQL-SEC-4061") && f.isError());
+    }
+
+    @Test
+    void flagsMtlsClientWithNoOrMultipleMatchers(@TempDir Path dir) throws Exception {
+        List<LintFinding> findings = lintWithConfig(dir, """
+                  security:
+                    mtls:
+                      forwardedHeader: ssl-client-cert
+                      trustBundle: ca-pem
+                      clients:
+                        none:
+                          roles: [SERVICE]
+                        both:
+                          subjectDn: "CN=billing,O=Acme"
+                          sha256: "ab:cd"
+                          roles: [SERVICE]
+                """);
+        assertThat(findings).anyMatch(f -> f.code().equals("TQL-SEC-4062") && f.isError()
+                && f.message().contains("'none'"));
+        assertThat(findings).anyMatch(f -> f.code().equals("TQL-SEC-4063") && f.isError()
+                && f.message().contains("'both'"));
+    }
+
+    @Test
+    void warnsMtlsClientWithoutGrants(@TempDir Path dir) throws Exception {
+        assertThat(lintWithConfig(dir, """
+                  security:
+                    mtls:
+                      forwardedHeader: ssl-client-cert
+                      trustBundle: ca-pem
+                      clients:
+                        billing:
+                          subjectDn: "CN=billing,O=Acme"
+                """)).anyMatch(f -> f.code().equals("TQL-SEC-4064") && !f.isError());
+    }
+
+    @Test
+    void warnsMtlsWithoutTrustBundle(@TempDir Path dir) throws Exception {
+        assertThat(lintWithConfig(dir, """
+                  security:
+                    mtls:
+                      forwardedHeader: ssl-client-cert
+                      clients:
+                        billing:
+                          subjectDn: "CN=billing,O=Acme"
+                          roles: [SERVICE]
+                """)).anyMatch(f -> f.code().equals("TQL-SEC-4065") && !f.isError());
+    }
+
+    @Test
+    void acceptsValidMtlsConfig(@TempDir Path dir) throws Exception {
+        assertThat(lintWithConfig(dir, """
+                  security:
+                    mtls:
+                      forwardedHeader: ssl-client-cert
+                      trustBundle: ca-pem
+                      clients:
+                        billing:
+                          subjectDn: "CN=billing,O=Acme"
+                          roles: [SERVICE]
+                """)).noneMatch(f -> f.code().startsWith("TQL-SEC-406") && f.isError());
+    }
+
+    @Test
+    void flagsMtlsRouteWithoutMtlsConfig(@TempDir Path dir) throws Exception {
+        Files.createDirectories(dir.resolve("config"));
+        Files.writeString(dir.resolve("config/tesseraql.yml"), """
+                tesseraql:
+                  app:
+                    name: t
+                """);
+        Files.createDirectories(dir.resolve("web/api/things"));
+        Files.writeString(dir.resolve("web/api/things/search.sql"), "select 1\n");
+        Files.writeString(dir.resolve("web/api/things/get.yml"), """
+                version: tesseraql/v1
+                id: things.search
+                kind: route
+                recipe: query-json
+                security:
+                  auth: mtls
+                sql:
+                  file: search.sql
+                  mode: query
+                """);
+
+        assertThat(new AppLinter().lint(dir))
+                .anyMatch(f -> f.code().equals("TQL-SEC-4060") && f.isError());
+    }
 }

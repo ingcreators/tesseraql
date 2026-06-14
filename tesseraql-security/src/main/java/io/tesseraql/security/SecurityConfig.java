@@ -1,6 +1,7 @@
 package io.tesseraql.security;
 
 import io.tesseraql.security.apikey.ApiKeyConfig;
+import io.tesseraql.security.mtls.MtlsConfig;
 import io.tesseraql.security.policy.Policy;
 import java.util.Map;
 import java.util.Optional;
@@ -12,16 +13,23 @@ import java.util.Optional;
  * @param policies authorization policies keyed by id
  * @param jwt      bearer JWT verification settings, or null when no bearer auth is configured
  * @param apiKeys  API-key settings, or null when no API-key auth is configured
+ * @param mtls     mutual-TLS settings, or null when no mTLS auth is configured
  */
-public record SecurityConfig(Map<String, Policy> policies, JwtConfig jwt, ApiKeyConfig apiKeys) {
+public record SecurityConfig(
+        Map<String, Policy> policies, JwtConfig jwt, ApiKeyConfig apiKeys, MtlsConfig mtls) {
 
     public SecurityConfig {
         policies = policies == null ? Map.of() : Map.copyOf(policies);
     }
 
-    /** A configuration without API-key auth. */
+    /** A configuration without API-key or mTLS auth. */
     public SecurityConfig(Map<String, Policy> policies, JwtConfig jwt) {
-        this(policies, jwt, null);
+        this(policies, jwt, null, null);
+    }
+
+    /** A configuration without mTLS auth. */
+    public SecurityConfig(Map<String, Policy> policies, JwtConfig jwt, ApiKeyConfig apiKeys) {
+        this(policies, jwt, apiKeys, null);
     }
 
     public Optional<Policy> policy(String id) {

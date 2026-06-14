@@ -60,6 +60,16 @@ public final class ManifestCoverage {
     }
 
     /**
+     * mTLS coverage (roadmap Phase 25): routes authenticated by {@code auth: mtls} — the
+     * client-certificate service-caller surface — declared and covered like routes, so a suite must
+     * exercise every mTLS-protected route.
+     */
+    public static ItemCoverage mtls(AppManifest manifest, List<TestSuite> suites) {
+        return routeKind("mtls", manifest, suites, definition -> definition.security() != null
+                && "mtls".equals(definition.security().auth()));
+    }
+
+    /**
      * MCP-tool coverage (roadmap Phase 24 follow-on): every application-declared tool under
      * {@code mcp/} is declared, and a tool counts as covered when a suite exercises one of its SQL
      * artifacts - the same SQL-file basis as route coverage, since a tool is a query/command.

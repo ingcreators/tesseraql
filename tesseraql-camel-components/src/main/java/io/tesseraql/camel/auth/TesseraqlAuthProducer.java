@@ -7,6 +7,7 @@ import io.tesseraql.core.error.TqlException;
 import io.tesseraql.security.Principal;
 import io.tesseraql.security.apikey.ApiKeyAuthenticator;
 import io.tesseraql.security.jwt.JwtAuthenticator;
+import io.tesseraql.security.mtls.MtlsAuthenticator;
 import io.tesseraql.security.policy.PolicyEngine;
 import io.tesseraql.security.session.BrowserAuthenticator;
 import io.tesseraql.security.session.CsrfValidator;
@@ -66,6 +67,7 @@ public class TesseraqlAuthProducer extends DefaultProducer {
                         .authenticate(
                                 exchange.getMessage().getHeader("Authorization", String.class));
             case "apiKey" -> apiKeyAuthenticate(exchange);
+            case "mtls" -> mtlsAuthenticate(exchange);
             case "browser" -> browserAuthenticate(exchange);
             default ->
                 throw new TqlException(UNSUPPORTED, "Unsupported auth type: " + endpoint.getAuth());
@@ -90,6 +92,22 @@ public class TesseraqlAuthProducer extends DefaultProducer {
             }
         }
         return authenticator.authenticate(key);
+    }
+
+    /**
+     * Resolves a service caller's mutual-TLS identity from the client certificate a trusted
+     * TLS-terminating edge forwards in the configured header (URL-encoded PEM). The runtime never
+     * terminates TLS itself, so the certificate arrives as a header value, not from the connection
+     * (design ch. 11.1).
+     */
+    private Principal mtlsAuthenticate(Exchange exchange) {
+        MtlsAuthenticator authenticator = bean(MtlsAuthenticator.class,
+                TesseraqlProperties.MTLS_AUTHENTICATOR_BEAN);
+        String header = authenticator.header();
+        String certificate = header == null
+                ? null
+                : exchange.getMessage().getHeader(header, String.class);
+        return authenticator.authenticate(certificate);
     }
 
     /**

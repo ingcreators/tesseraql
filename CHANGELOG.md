@@ -220,8 +220,20 @@ All notable changes to TesseraQL are documented here. The format follows
   discovery, `exp`/`nbf`) plus OIDC `aud`/`nonce` checks, links or provisions the principal via the
   identity contracts, and issues the standard browser session. JDK-only — no external OIDC/JOSE
   dependency. Ships an `oidc` coverage kind, config lint (`TQL-SEC-4050..4053`), a Studio **OIDC
-  provider** IAM admin wizard, and a `TqlDomain.OIDC` error domain. The remaining Phase 25
-  follow-on is optional mTLS.
+  provider** IAM admin wizard, and a `TqlDomain.OIDC` error domain.
+- Authentication completion — mutual TLS (roadmap Phase 25, see
+  [docs/authentication.md](docs/authentication.md)): a route declares `auth: mtls` to authenticate
+  a service caller by an X.509 client certificate that a TLS-terminating edge (reverse proxy,
+  ingress, or mesh sidecar) forwards in a configured header (URL-encoded PEM). The runtime parses
+  the certificate (JDK only — no third-party PKI dependency), checks its validity window against an
+  optional `clockSkew`, optionally PKIX-validates it against a `trustBundle` CA bundle as
+  defense-in-depth (revocation left to the edge), and matches its identity — exact subject DN
+  (order/case-insensitive RDNs), a SAN value, or its DER SHA-256 fingerprint — against declared
+  clients deny-by-default, resolving to an explicit principal so existing policies apply (`401` on
+  no match / expired / malformed / missing, `403` on policy failure). A certificate is public, so
+  matching is a lookup, not a secret compare; it is never logged. Ships an `mtls` coverage kind and
+  config lint (`TQL-SEC-4060..4065`, including a warning when no `trustBundle` is set). **Phase 25
+  is complete** (RS256/JWKS, API keys, OIDC, and mTLS).
 
 ### Developer experience
 
