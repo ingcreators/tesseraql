@@ -213,8 +213,16 @@ discovered lazily; a single-use `state`/`nonce`/PKCE verifier (in `tql_oidc_stat
 nonce replay, and code injection; the ID token is validated by reusing the RS256/JWKS verifier plus
 OIDC `aud`/`nonce` checks; and the principal is linked/provisioned through the identity contracts
 before the standard browser session is issued. JDK-only, with an `oidc` coverage kind, config lint
-(`TQL-SEC-4050..4053`), and a SAML-style Studio IAM admin wizard. **Optional mTLS is the last
-remaining Phase 25 follow-on.**
+(`TQL-SEC-4050..4053`), and a SAML-style Studio IAM admin wizard.
+
+**Mutual TLS** (delivered, see [docs/authentication.md](authentication.md)): a route declares
+`auth: mtls` to authenticate a service caller by the X.509 client certificate a TLS-terminating edge
+(reverse proxy, ingress, or mesh sidecar) forwards in a configured header (URL-encoded PEM). The
+runtime parses it JDK-only, checks validity against an optional clock skew, optionally
+PKIX-validates it against a `trustBundle` as defense-in-depth, and matches its subject DN (order- and
+case-insensitive RDNs), a SAN value, or its DER SHA-256 fingerprint against declared clients
+deny-by-default — resolving to an explicit principal so existing policies apply. An `mtls` coverage
+kind and config lint (`TQL-SEC-4060..4065`) keep it machine-checkable. **Phase 25 is complete.**
 
 ### Phase 26 — managed connectors (files and HTTP)
 

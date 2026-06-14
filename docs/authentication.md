@@ -141,6 +141,69 @@ request, so a key cannot escalate across tenants — and the route's authorizati
 as for any other caller. No match denies (`401`); an authenticated key that fails the policy is
 forbidden (`403`).
 
+## Mutual TLS (client certificates)
+
+mTLS authenticates **service callers** by an X.509 client certificate. The runtime does not
+terminate TLS itself; a trusted edge — a reverse proxy, ingress controller, or service-mesh sidecar
+(nginx, Envoy/Istio, HAProxy) — terminates TLS, validates the client certificate, and forwards it to
+the runtime in a configured header (URL-encoded PEM, the de-facto `ssl_client_escaped_cert`
+convention). A route opts in with `auth: mtls`:
+
+```yaml
+security:
+  auth: mtls
+  policy: ledger.write
+```
+
+Clients are declared in config, each mapping a certificate identity to an explicit principal:
+
+```yaml
+tesseraql:
+  security:
+    mtls:
+      forwardedHeader: ssl-client-cert        # the header the edge forwards the cert in (no default)
+      trustBundle: ${secret.file.client_ca}   # optional PEM CA bundle; enables in-app PKIX validation
+      clockSkew: 60s                          # leeway for the certificate validity window (default 0)
+      clients:
+        billing-service:
+          subjectDn: "CN=billing-service,O=Acme"   # exactly one matcher (see below)
+          subject: svc:billing                # principal subject; defaults to the client id
+          tenantId: tenant-a
+          roles: [SERVICE]
+          permissions: [invoices:write]
+          status: ACTIVE                      # ACTIVE (default) | DISABLED
+```
+
+Each client declares **exactly one** certificate matcher:
+
+- `subjectDn` — the certificate's subject distinguished name, compared order- and case-insensitively
+  over its RDNs (so a CA that orders or cases the DN differently still matches).
+- `san` — a Subject Alternative Name value the certificate carries (DNS, URI, email, or IP); for
+  example a SPIFFE URI `spiffe://acme/ns/default/sa/billing`.
+- `sha256` — the hex SHA-256 fingerprint of the DER certificate (colons and case are ignored); the
+  strongest binding, pinning one exact certificate.
+
+The forwarded certificate is parsed (JDK only — there is no third-party PKI dependency), its
+validity window checked against `clockSkew`, and its identity matched against the declared clients.
+A match resolves to that client's principal — with its tenant bound from the certificate binding,
+not the request — and the route's authorization policy then applies as for any other caller. No
+match, an expired or malformed certificate, or a missing header denies (`401`); an authenticated
+certificate that fails the policy is forbidden (`403`). Unlike an API key, a certificate is public —
+possession of the private key was proven during the handshake at the edge — so identity matching is
+a lookup, not a secret comparison; the certificate is never logged.
+
+When `trustBundle` is set, the runtime additionally **PKIX-validates** the forwarded certificate
+against the configured CA(s) as defense-in-depth, in addition to the edge's own validation
+(revocation checking is left to the edge, which is positioned to do CRL/OCSP). Omitting it is allowed
+but means the runtime fully trusts the edge's validation — see the lint warning below.
+
+> **Trust contract.** A forwarded certificate header is only trustworthy if callers cannot set it
+> themselves: the edge must overwrite (or strip) the `forwardedHeader` on every inbound request, and
+> the runtime must not be reachable except through that edge. Because certificates are public,
+> fingerprint or DN pinning alone does not stop header injection — network isolation does. Only the
+> URL-encoded (and raw) PEM convention is supported; Envoy/Istio's `x-forwarded-client-cert` (XFCC)
+> envelope is not parsed.
+
 ## OpenID Connect (relying party)
 
 OIDC logs a browser user in through an external identity provider using the **authorization-code
@@ -205,6 +268,12 @@ admin wizard in Studio (**OIDC provider**) generates this config block.
 | `TQL-SEC-4051` | error | The OIDC `discoveryUri` is not https (loopback http is allowed for dev). |
 | `TQL-SEC-4052` | error | OIDC is enabled but no `clientId` is configured. |
 | `TQL-SEC-4053` | error | OIDC is enabled but no `redirectUri` is configured. |
+| `TQL-SEC-4060` | error | A route declares `auth: mtls` but no `tesseraql.security.mtls` is configured. |
+| `TQL-SEC-4061` | error | mTLS is configured but declares no `forwardedHeader` (the certificate has no source). |
+| `TQL-SEC-4062` | error | An mTLS client declares no certificate matcher (`subjectDn`/`san`/`sha256`). |
+| `TQL-SEC-4063` | error | An mTLS client declares more than one certificate matcher; set exactly one. |
+| `TQL-SEC-4064` | warning | An mTLS client grants no roles or permissions (least-privilege hint). |
+| `TQL-SEC-4065` | warning | mTLS declares no `trustBundle`; the runtime does not independently validate the chain. |
 
 The lint reads raw config — it never resolves secret placeholders — so it runs without a live
 secret store.
@@ -213,7 +282,9 @@ secret store.
 
 The `api-key` coverage kind declares every route authenticated by `auth: apiKey` and marks it
 covered when a declarative suite exercises it, so a test gap on a service-caller route is visible.
-Gate it like any kind with `coverage.thresholds.api-key`. The `oidc` coverage kind (like `saml`)
+Gate it like any kind with `coverage.thresholds.api-key`. The `mtls` coverage kind does the same for
+routes authenticated by `auth: mtls`; gate it with `coverage.thresholds.mtls`. The `oidc` coverage
+kind (like `saml`)
 declares the identity contracts the login path runs when user linking is on, covered by contract
 test cases; gate it with `coverage.thresholds.oidc`. RS256 vs HS256 is a verification detail of the
 same bearer path and is covered by the existing `security`/`route` kinds; its cryptographic
@@ -225,6 +296,10 @@ Declarative suites exercise a route's SQL through the same pipeline regardless o
 method. End-to-end authentication wiring is covered by integration tests in `tesseraql-camel-runtime`
 (`RsaJwksIntegrationTest` serves a JWKS document from a local HTTP server and asserts accept /
 reject / rotation; `ApiKeyIntegrationTest` asserts `200`/`401`/`403` for valid, invalid, and
-under-privileged keys; `OidcLoginIntegrationTest` drives the full authorization-code + PKCE flow
-against a local mock provider and asserts a session is issued and that tampered / replayed state and
-provider errors are rejected). OIDC's PKCE S256 is unit-tested against the RFC 7636 vector.
+under-privileged keys; `MtlsIntegrationTest` forwards a client certificate in the configured header
+and asserts `200`/`401`/`403` for a recognized, an expired/unrecognized/missing, and an
+under-privileged certificate; `OidcLoginIntegrationTest` drives the full authorization-code + PKCE
+flow against a local mock provider and asserts a session is issued and that tampered / replayed state
+and provider errors are rejected). mTLS certificate parsing, validity, PKIX trust, and DN/SAN/sha256
+matching are unit-tested in `tesseraql-security` (`MtlsAuthenticatorTest`); OIDC's PKCE S256 is
+unit-tested against the RFC 7636 vector.
