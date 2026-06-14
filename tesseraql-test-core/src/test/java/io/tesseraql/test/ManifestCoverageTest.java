@@ -193,6 +193,31 @@ class ManifestCoverageTest {
         assertThat(coverage.ratio()).isEqualTo(1.0);
     }
 
+    private static final String API_KEY_ROUTE = """
+            version: tesseraql/v1
+            id: invoices.post
+            kind: route
+            recipe: command-json
+            security:
+              auth: apiKey
+              policy: invoices.write
+            sql:
+              file: post.sql
+            """;
+
+    @Test
+    void apiKeyCoverageDeclaresOnlyApiKeyRoutesAndCoversTheExercisedOnes() {
+        AppManifest manifest = manifest(Map.of(),
+                route("web/api/invoices/post.yml", API_KEY_ROUTE),
+                route("web/api/users/get.yml", SEARCH_ROUTE));
+        ItemCoverage coverage = ManifestCoverage.apiKey(manifest,
+                List.of(sqlSuite("web/api/invoices/post.sql")));
+
+        assertThat(coverage.kind()).isEqualTo("api-key");
+        assertThat(coverage.declared()).containsExactlyInAnyOrder("invoices.post");
+        assertThat(coverage.covered()).containsExactlyInAnyOrder("invoices.post");
+    }
+
     @Test
     void routeCoverageLinksContractBindingsToContractCases() {
         AppManifest manifest = manifest(Map.of(), route("web/api/admin/post.yml", """
