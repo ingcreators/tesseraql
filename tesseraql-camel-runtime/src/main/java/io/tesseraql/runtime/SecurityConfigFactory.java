@@ -61,6 +61,7 @@ public final class SecurityConfigFactory {
             return null;
         }
         return new JwtConfig(
+                config.getString("tesseraql.security.jwt.algorithm").orElse(null),
                 secret,
                 config.getString("tesseraql.security.jwt.issuer").orElse(null),
                 config.getString("tesseraql.security.jwt.rolesClaim").orElse(null),

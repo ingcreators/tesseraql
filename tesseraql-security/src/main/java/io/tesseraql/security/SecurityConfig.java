@@ -22,8 +22,9 @@ public record SecurityConfig(Map<String, Policy> policies, JwtConfig jwt) {
     }
 
     /**
-     * HS256 bearer JWT verification settings and claim mappings (design ch. 11.1).
+     * Bearer JWT verification settings and claim mappings (design ch. 11.1).
      *
+     * @param algorithm        signature algorithm, {@code HS256} (default) or {@code RS256}
      * @param secret           shared HMAC secret for HS256 verification
      * @param issuer           expected {@code iss}, or null to skip the check
      * @param rolesClaim       claim holding the roles array
@@ -34,6 +35,7 @@ public record SecurityConfig(Map<String, Policy> policies, JwtConfig jwt) {
      * @param nameClaim        claim holding the display name
      */
     public record JwtConfig(
+            String algorithm,
             String secret,
             String issuer,
             String rolesClaim,
@@ -44,6 +46,9 @@ public record SecurityConfig(Map<String, Policy> policies, JwtConfig jwt) {
             String nameClaim) {
 
         public JwtConfig {
+            algorithm = algorithm == null || algorithm.isBlank()
+                    ? "HS256"
+                    : algorithm.toUpperCase(java.util.Locale.ROOT);
             rolesClaim = orDefault(rolesClaim, "roles");
             permissionsClaim = orDefault(permissionsClaim, "permissions");
             groupsClaim = orDefault(groupsClaim, "groups");
