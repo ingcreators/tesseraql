@@ -21,7 +21,7 @@ import java.util.Set;
 public final class AppLinter {
 
     private static final Set<String> KNOWN_ROUTE_RECIPES = Set.of("query-json", "command-json",
-            "query-html", "page", "query-export", "file-import", "file-export");
+            "query-html", "page", "query-export", "file-import", "file-export", "webhook");
     /** Recipes an application-declared MCP tool may use (roadmap Phase 24 follow-on). */
     private static final Set<String> KNOWN_TOOL_RECIPES = Set.of("query-json", "command-json");
     /** Recipes an MCP Apps UI resource may use - both render HTML (roadmap Phase 24). */
@@ -567,6 +567,7 @@ public final class AppLinter {
         lintOptimisticLocking(route, definition, source, findings);
         lintValidation(route, definition, source, findings);
         lintNotify(config, definition, source, findings);
+        lintWebhook(config, definition, source, findings);
         lintPdfExport(route, definition, source, findings);
         if (definition.security() != null && definition.security().policy() != null
                 && !policyDefined(config, definition.security().policy())) {
@@ -704,6 +705,38 @@ public final class AppLinter {
                                 + " returning violations - it must not write"));
             }
         });
+    }
+
+    /**
+     * Statically checks the inbound {@code webhook} recipe (roadmap Phase 26): the route names a
+     * verifier ({@code TQL-SEC-4082}) that is configured under
+     * {@code tesseraql.connectors.webhooks} ({@code TQL-SEC-4083}, so a webhook is never served
+     * unverified), and runs a SQL pipeline ({@code TQL-YAML-1008}). A {@code webhook:} block on a
+     * non-webhook recipe is a misuse.
+     */
+    private void lintWebhook(AppConfig config, RouteDefinition definition, String source,
+            List<LintFinding> findings) {
+        if (!"webhook".equals(definition.recipe())) {
+            if (definition.webhook() != null) {
+                findings.add(new LintFinding("TQL-YAML-1008", "error", source,
+                        "webhook: is only supported on the webhook recipe, not '"
+                                + definition.recipe() + "'"));
+            }
+            return;
+        }
+        String provider = definition.webhook() == null ? null : definition.webhook().provider();
+        if (provider == null || provider.isBlank()) {
+            findings.add(new LintFinding("TQL-SEC-4082", "error", source,
+                    "webhook route '" + definition.id() + "' needs a webhook.provider"));
+        } else if (config.navigate("tesseraql.connectors.webhooks." + provider) == null) {
+            findings.add(new LintFinding("TQL-SEC-4083", "error", source, "webhook route '"
+                    + definition.id() + "' references verifier '" + provider
+                    + "' not configured under tesseraql.connectors.webhooks"));
+        }
+        if (definition.sql() == null && definition.steps().isEmpty()) {
+            findings.add(new LintFinding("TQL-YAML-1008", "error", source, "webhook route '"
+                    + definition.id() + "' needs a sql: or steps: pipeline"));
+        }
     }
 
     /**

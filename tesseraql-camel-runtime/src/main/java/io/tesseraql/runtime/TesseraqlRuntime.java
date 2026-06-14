@@ -245,6 +245,13 @@ public final class TesseraqlRuntime implements AutoCloseable {
         JdbcOutboxStore outboxStore = new JdbcOutboxStore(dataSource);
         outboxStore.ensureSchema();
         context.getRegistry().bind(TesseraqlProperties.OUTBOX_STORE_BEAN, outboxStore);
+        // Inbound-webhook replay protection (roadmap Phase 26): a delivery is processed at most
+        // once on any node sharing this database.
+        io.tesseraql.operations.webhook.JdbcWebhookReplayStore webhookReplayStore = new io.tesseraql.operations.webhook.JdbcWebhookReplayStore(
+                dataSource);
+        webhookReplayStore.ensureSchema();
+        context.getRegistry().bind(TesseraqlProperties.WEBHOOK_REPLAY_STORE_BEAN,
+                webhookReplayStore);
         // Managed document-number sequences for command steps (roadmap Phase 18).
         io.tesseraql.operations.sequence.JdbcDocumentSequences documentSequences = new io.tesseraql.operations.sequence.JdbcDocumentSequences(
                 dataSource);

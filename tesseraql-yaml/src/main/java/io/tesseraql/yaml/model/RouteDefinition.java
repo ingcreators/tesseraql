@@ -27,6 +27,7 @@ import java.util.Map;
  * @param errors  declarative error mapping, e.g. constraint names to field-level errors
  * @param fileImport the {@code import:} block of a {@code file-import} route
  * @param fileExport the {@code export:} block of a {@code file-export} route
+ * @param webhook the {@code webhook:} block of a {@code webhook} route (roadmap Phase 26)
  * @param response response shape
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
@@ -50,6 +51,7 @@ public record RouteDefinition(
         ErrorsSpec errors,
         @com.fasterxml.jackson.annotation.JsonProperty("import") ImportSpec fileImport,
         @com.fasterxml.jackson.annotation.JsonProperty("export") ExportSpec fileExport,
+        WebhookSpec webhook,
         ResponseSpec response) {
 
     public RouteDefinition {

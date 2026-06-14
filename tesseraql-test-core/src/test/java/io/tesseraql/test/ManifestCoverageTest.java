@@ -243,6 +243,31 @@ class ManifestCoverageTest {
         assertThat(coverage.covered()).containsExactlyInAnyOrder("ledger.post");
     }
 
+    private static final String WEBHOOK_ROUTE = """
+            version: tesseraql/v1
+            id: events.receive
+            kind: route
+            recipe: webhook
+            webhook:
+              provider: partner
+            sql:
+              file: insert.sql
+              mode: update
+            """;
+
+    @Test
+    void webhookCoverageDeclaresOnlyWebhookRoutesAndCoversTheExercisedOnes() {
+        AppManifest manifest = manifest(Map.of(),
+                route("web/hooks/events/post.yml", WEBHOOK_ROUTE),
+                route("web/api/users/get.yml", SEARCH_ROUTE));
+        ItemCoverage coverage = ManifestCoverage.webhook(manifest,
+                List.of(sqlSuite("web/hooks/events/insert.sql")));
+
+        assertThat(coverage.kind()).isEqualTo("webhook");
+        assertThat(coverage.declared()).containsExactlyInAnyOrder("events.receive");
+        assertThat(coverage.covered()).containsExactlyInAnyOrder("events.receive");
+    }
+
     @Test
     void routeCoverageLinksContractBindingsToContractCases() {
         AppManifest manifest = manifest(Map.of(), route("web/api/admin/post.yml", """

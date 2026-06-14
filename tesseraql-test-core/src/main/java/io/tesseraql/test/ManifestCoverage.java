@@ -70,6 +70,16 @@ public final class ManifestCoverage {
     }
 
     /**
+     * Webhook coverage (roadmap Phase 26): routes using the inbound {@code webhook} recipe —
+     * declared and covered like routes (a webhook is a SQL pipeline behind HMAC verification), so a
+     * suite must exercise every webhook route's SQL.
+     */
+    public static ItemCoverage webhook(AppManifest manifest, List<TestSuite> suites) {
+        return routeKind("webhook", manifest, suites,
+                definition -> "webhook".equals(definition.recipe()));
+    }
+
+    /**
      * MCP-tool coverage (roadmap Phase 24 follow-on): every application-declared tool under
      * {@code mcp/} is declared, and a tool counts as covered when a suite exercises one of its SQL
      * artifacts - the same SQL-file basis as route coverage, since a tool is a query/command.

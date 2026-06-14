@@ -220,6 +220,7 @@ public final class ErrorResponseRenderer implements Processor {
             case SEC -> switch (code.number()) {
                 case 4011 -> 401;
                 case 4031, 4032 -> 403;
+                case 4014 -> 409; // an inbound webhook replay (roadmap Phase 26)
                 default -> 401;
             };
             // 4220: declarative validation rejected the input (roadmap Phase 19); other FIELD

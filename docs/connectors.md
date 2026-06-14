@@ -5,9 +5,8 @@ Phase 26): governed recipes for files and HTTP. Camel's component catalog stays 
 implementation detail — an app never writes a raw endpoint URI; it declares a connector that
 runs under the framework's allow-lists, secrets, lint, and coverage.
 
-This page covers the outbound `http-call` pipeline step and the inbound directory-polling
-trigger for `file-import`. (The inbound webhook recipe arrives in a later slice of the same
-phase.)
+This page covers the outbound `http-call` pipeline step, the inbound directory-polling trigger
+for `file-import`, and the inbound `webhook` recipe.
 
 ## The `http-call` pipeline step
 
@@ -237,3 +236,70 @@ app down:
 A poll job is covered by the `file-poll` coverage kind when a declarative suite exercises its
 per-row import SQL (a plain `sql:` case), the same SQL-file basis as route and document coverage.
 Gate it with `coverage.thresholds.file-poll`.
+
+## The inbound `webhook` recipe
+
+A `webhook` route is an HMAC-verified, replay-protected POST endpoint in front of a SQL pipeline:
+the runtime authenticates the signed delivery and rejects replays **before** the route's
+`command-json`-style SQL runs, so an invalid delivery never writes a row.
+
+```yaml
+version: tesseraql/v1
+id: events.receive
+kind: route
+recipe: webhook                  # a post.yml file -> POST endpoint
+webhook:
+  provider: partner              # -> tesseraql.connectors.webhooks.partner
+input:
+  eventId: { type: string, required: true }
+  amount:  { type: number }
+sql:                             # or steps: — the SQL pipeline runs once verified
+  file: insert-event.sql
+  mode: update
+  params:
+    eventId: body.eventId
+    amount: body.amount
+response:
+  json:
+    status: 202
+```
+
+The verifier is configured centrally, so the route carries no secret:
+
+```yaml
+tesseraql:
+  connectors:
+    webhooks:
+      partner:
+        secret: ${secret.env.PARTNER_WEBHOOK_SECRET}   # the HMAC-SHA256 signing key
+        signatureHeader: X-TesseraQL-Signature         # default
+        timestampHeader: X-TesseraQL-Timestamp         # default
+        idHeader: X-TesseraQL-Delivery                 # optional; else the signature is the replay key
+        tolerance: 5m                                  # default; reject timestamps outside this window
+```
+
+### Verification
+
+The signature covers `<timestamp>.<body>` — the same scheme the Phase 20 [outbound
+webhook](notifications.md) signs with, so a TesseraQL app can both send and receive signed
+webhooks. The sender sends the `sha256=<hex>` signature and the epoch-seconds timestamp in the
+configured headers; the recipe:
+
+1. recomputes the HMAC over the received timestamp and **raw body** and compares in constant time
+   (a mismatch is **401**);
+2. rejects a timestamp outside the `tolerance` window — stale or future (**401**);
+3. rejects a **replay** (**409**): the delivery id (the configured `idHeader`, else the signature)
+   is recorded in a shared store until its timestamp tolerance lapses, so a delivery is processed
+   at most once on any node sharing the database — the same store basis as SAML assertion replay.
+
+The named verifier **must** be configured: an unknown `provider` fails the build, since a webhook
+without a verifier would be unauthenticated. Lint catches this and the rest statically:
+
+| Code           | Severity | Meaning                                                                |
+| -------------- | -------- | ---------------------------------------------------------------------- |
+| `TQL-SEC-4082` | error    | the route declares no `webhook.provider`                               |
+| `TQL-SEC-4083` | error    | the named verifier is not configured under `tesseraql.connectors.webhooks` |
+| `TQL-YAML-1008`| error    | the route has no `sql:`/`steps:` pipeline, or `webhook:` is on a non-webhook recipe |
+
+A webhook route is covered by the `webhook` coverage kind when a suite exercises its SQL (the same
+SQL-file basis as route coverage); gate it with `coverage.thresholds.webhook`.

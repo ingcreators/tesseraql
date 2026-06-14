@@ -428,6 +428,73 @@ class AppLinterTest {
     }
 
     @Test
+    void lintsInboundWebhookRoutes(@TempDir Path dir) throws Exception {
+        Files.createDirectories(dir.resolve("config"));
+        Files.writeString(dir.resolve("config/tesseraql.yml"), """
+                tesseraql:
+                  app:
+                    name: t
+                  connectors:
+                    webhooks:
+                      partner:
+                        secret: ${secret.env.WEBHOOK_SECRET}
+                """);
+        // A clean webhook route: a configured verifier and a SQL pipeline whose file exists.
+        Files.createDirectories(dir.resolve("web/hooks/events"));
+        Files.writeString(dir.resolve("web/hooks/events/insert.sql"), "insert into e values (1)\n");
+        Files.writeString(dir.resolve("web/hooks/events/post.yml"), """
+                version: tesseraql/v1
+                id: events.receive
+                kind: route
+                recipe: webhook
+                webhook:
+                  provider: partner
+                sql:
+                  file: insert.sql
+                  mode: update
+                """);
+        // A broken webhook route: an unconfigured verifier and no SQL pipeline.
+        Files.createDirectories(dir.resolve("web/hooks/bad"));
+        Files.writeString(dir.resolve("web/hooks/bad/post.yml"), """
+                version: tesseraql/v1
+                id: bad.receive
+                kind: route
+                recipe: webhook
+                webhook:
+                  provider: ghost
+                """);
+        // A webhook: block on a non-webhook recipe is a misuse.
+        Files.createDirectories(dir.resolve("web/api/items"));
+        Files.writeString(dir.resolve("web/api/items/get.sql"), "select 1\n");
+        Files.writeString(dir.resolve("web/api/items/get.yml"), """
+                version: tesseraql/v1
+                id: items.list
+                kind: route
+                recipe: query-json
+                webhook:
+                  provider: partner
+                sql:
+                  file: get.sql
+                response:
+                  json:
+                    body:
+                      data: sql.rows
+                """);
+
+        List<LintFinding> findings = new AppLinter().lint(dir);
+
+        // Only the unconfigured verifier ('ghost') is flagged; 'partner' is configured.
+        assertThat(findings)
+                .filteredOn(f -> f.code().equals("TQL-SEC-4083") && f.isError())
+                .singleElement()
+                .matches(f -> f.message().contains("ghost"));
+        // The bad route has no SQL pipeline, and the query-json route misuses webhook:.
+        assertThat(findings)
+                .filteredOn(f -> f.code().equals("TQL-YAML-1008") && f.isError())
+                .hasSize(2);
+    }
+
+    @Test
     void lintsPollTriggeredFileImportJobs(@TempDir Path dir) throws Exception {
         Files.createDirectories(dir.resolve("config"));
         Files.writeString(dir.resolve("config/tesseraql.yml"), """
