@@ -218,6 +218,31 @@ class ManifestCoverageTest {
         assertThat(coverage.covered()).containsExactlyInAnyOrder("invoices.post");
     }
 
+    private static final String MTLS_ROUTE = """
+            version: tesseraql/v1
+            id: ledger.post
+            kind: route
+            recipe: command-json
+            security:
+              auth: mtls
+              policy: ledger.write
+            sql:
+              file: post.sql
+            """;
+
+    @Test
+    void mtlsCoverageDeclaresOnlyMtlsRoutesAndCoversTheExercisedOnes() {
+        AppManifest manifest = manifest(Map.of(),
+                route("web/api/ledger/post.yml", MTLS_ROUTE),
+                route("web/api/users/get.yml", SEARCH_ROUTE));
+        ItemCoverage coverage = ManifestCoverage.mtls(manifest,
+                List.of(sqlSuite("web/api/ledger/post.sql")));
+
+        assertThat(coverage.kind()).isEqualTo("mtls");
+        assertThat(coverage.declared()).containsExactlyInAnyOrder("ledger.post");
+        assertThat(coverage.covered()).containsExactlyInAnyOrder("ledger.post");
+    }
+
     @Test
     void routeCoverageLinksContractBindingsToContractCases() {
         AppManifest manifest = manifest(Map.of(), route("web/api/admin/post.yml", """
