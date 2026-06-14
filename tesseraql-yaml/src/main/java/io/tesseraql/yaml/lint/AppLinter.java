@@ -69,6 +69,7 @@ public final class AppLinter {
             lintJwtConfig(config, findings);
         }
         lintApiKeyConfig(appHome, manifest, config, findings);
+        lintMtlsConfig(appHome, manifest, config, findings);
         lintOidcConfig(config, findings);
     }
 
@@ -187,6 +188,74 @@ public final class AppLinter {
                 findings.add(new LintFinding("TQL-SEC-4046", "warning", "config",
                         "API-key client '" + id + "' grants no roles or permissions; service"
                                 + " callers should be least-privilege"));
+            }
+        });
+    }
+
+    /**
+     * Lints the mutual-TLS config (roadmap Phase 25): an {@code auth: mtls} route requires mTLS
+     * config; the config must name the forwarded-certificate header and each client must declare
+     * exactly one certificate matcher (subjectDn/san/sha256). A missing trustBundle is a warning —
+     * without it the runtime does not independently validate the chain and fully trusts the
+     * TLS-terminating edge. Reads raw config nodes — never resolving secret placeholders.
+     */
+    private void lintMtlsConfig(Path appHome, AppManifest manifest, AppConfig config,
+            List<LintFinding> findings) {
+        if (config.navigate("tesseraql.security.mtls") == null) {
+            for (RouteFile route : manifest.routes()) {
+                io.tesseraql.yaml.model.SecuritySpec security = route.definition().security();
+                if (security != null && "mtls".equals(security.auth())) {
+                    String source = appHome.relativize(route.source()).toString().replace('\\',
+                            '/');
+                    findings.add(new LintFinding("TQL-SEC-4060", "error", source,
+                            "Route '" + route.definition().id() + "' declares auth: mtls but no"
+                                    + " tesseraql.security.mtls is configured (deny by default)"));
+                }
+            }
+            return;
+        }
+        if (config.navigate("tesseraql.security.mtls.forwardedHeader") == null) {
+            findings.add(new LintFinding("TQL-SEC-4061", "error", "config",
+                    "tesseraql.security.mtls declares no forwardedHeader; a forwarded client"
+                            + " certificate has no header to be read from"));
+        }
+        if (config.navigate("tesseraql.security.mtls.trustBundle") == null) {
+            findings.add(new LintFinding("TQL-SEC-4065", "warning", "config",
+                    "tesseraql.security.mtls declares no trustBundle; the runtime does not"
+                            + " independently validate the certificate chain and fully trusts the"
+                            + " TLS-terminating edge"));
+        }
+        if (!(config.navigate(
+                "tesseraql.security.mtls.clients") instanceof java.util.Map<?, ?> clients)) {
+            return;
+        }
+        clients.forEach((id, spec) -> {
+            java.util.Map<?, ?> client = spec instanceof java.util.Map<?, ?> map
+                    ? map
+                    : java.util.Map.of();
+            int matchers = 0;
+            if (client.get("subjectDn") != null) {
+                matchers++;
+            }
+            if (client.get("san") != null) {
+                matchers++;
+            }
+            if (client.get("sha256") != null) {
+                matchers++;
+            }
+            if (matchers == 0) {
+                findings.add(new LintFinding("TQL-SEC-4062", "error", "config",
+                        "mTLS client '" + id + "' declares no certificate matcher; set exactly one"
+                                + " of subjectDn/san/sha256"));
+            } else if (matchers > 1) {
+                findings.add(new LintFinding("TQL-SEC-4063", "error", "config",
+                        "mTLS client '" + id + "' declares more than one certificate matcher; set"
+                                + " exactly one of subjectDn/san/sha256"));
+            }
+            if (client.get("roles") == null && client.get("permissions") == null) {
+                findings.add(new LintFinding("TQL-SEC-4064", "warning", "config",
+                        "mTLS client '" + id + "' grants no roles or permissions; service callers"
+                                + " should be least-privilege"));
             }
         });
     }
