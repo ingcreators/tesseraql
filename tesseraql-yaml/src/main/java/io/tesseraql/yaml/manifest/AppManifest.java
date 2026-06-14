@@ -15,11 +15,12 @@ import java.util.List;
  * @param tools       application-declared MCP tool files discovered under {@code mcp/}
  * @param resources   application-declared MCP resource files discovered under {@code mcp/}
  * @param uiResources application-declared MCP Apps UI resource files discovered under {@code mcp/}
+ * @param consumers   queue-consume route files discovered under {@code consume/} (roadmap Phase 27)
  * @param index       checksum index of the manifest source files
  */
 public record AppManifest(Path appHome, AppConfig config, List<RouteFile> routes,
         List<JobFile> jobs, List<ToolFile> tools, List<ResourceFile> resources,
-        List<UiResourceFile> uiResources, ManifestIndex index) {
+        List<UiResourceFile> uiResources, List<RouteFile> consumers, ManifestIndex index) {
 
     public AppManifest {
         routes = List.copyOf(routes);
@@ -27,5 +28,6 @@ public record AppManifest(Path appHome, AppConfig config, List<RouteFile> routes
         tools = List.copyOf(tools);
         resources = List.copyOf(resources);
         uiResources = List.copyOf(uiResources);
+        consumers = List.copyOf(consumers);
     }
 }

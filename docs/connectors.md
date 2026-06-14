@@ -6,7 +6,9 @@ implementation detail — an app never writes a raw endpoint URI; it declares a 
 runs under the framework's allow-lists, secrets, lint, and coverage.
 
 This page covers the outbound `http-call` pipeline step, the inbound directory-polling trigger
-for `file-import`, and the inbound `webhook` recipe.
+for `file-import`, and the inbound `webhook` recipe. For publish/subscribe between commands and
+other systems — domain events on a broker-free PostgreSQL channel or, later, a message broker — see
+[messaging and events](messaging.md).
 
 ## The `http-call` pipeline step
 

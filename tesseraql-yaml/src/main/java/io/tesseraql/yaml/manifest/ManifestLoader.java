@@ -49,8 +49,39 @@ public final class ManifestLoader {
         List<ResourceFile> resources = new ArrayList<>();
         List<UiResourceFile> uiResources = new ArrayList<>();
         loadMcp(home, tools, resources, uiResources);
+        List<RouteFile> consumers = loadConsumers(home);
         ManifestIndex index = buildIndex(home);
-        return new AppManifest(home, config, routes, jobs, tools, resources, uiResources, index);
+        return new AppManifest(home, config, routes, jobs, tools, resources, uiResources, consumers,
+                index);
+    }
+
+    /**
+     * Loads the {@code consume/} tree (roadmap Phase 27): each {@code queue-consume} route subscribes
+     * to a messaging channel and runs its SQL pipeline per message. A consumer is not mounted on
+     * HTTP — the runtime's messaging consumer drives it — so it lives outside {@code web/} and the
+     * derived "method" is the synthetic {@code QUEUE} marker, the directory tree its logical path.
+     */
+    private List<RouteFile> loadConsumers(Path home) {
+        Path consumeRoot = home.resolve("consume");
+        if (!Files.isDirectory(consumeRoot)) {
+            return List.of();
+        }
+        List<RouteFile> consumers = new ArrayList<>();
+        try (Stream<Path> files = Files.walk(consumeRoot)) {
+            files.filter(Files::isRegularFile)
+                    .filter(p -> p.getFileName().toString().endsWith(".yml"))
+                    .sorted()
+                    .forEach(file -> {
+                        requireInside(home, file);
+                        RouteDefinition definition = parser.parseRoute(file);
+                        Path relative = consumeRoot.relativize(file);
+                        consumers.add(new RouteFile("QUEUE", "/" + relative.toString()
+                                .replace(java.io.File.separatorChar, '/'), file, definition));
+                    });
+        } catch (IOException ex) {
+            throw new UncheckedIOException(ex);
+        }
+        return consumers;
     }
 
     private AppConfig loadConfig(Path home) {

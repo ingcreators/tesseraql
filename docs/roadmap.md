@@ -270,6 +270,19 @@ machine-checkable. **Phase 26 (managed connectors) is complete.**
 Outbox relay to a broker (Kafka/JMS) and a `queue-consume` recipe (broker → SQL pipeline
 with idempotency keys); at-least-once semantics documented end to end.
 
+**Postgres-native event channel** (delivered, see [docs/messaging.md](messaging.md)): the built-in
+broker-free `pg-notify` transport answers "can we do messaging without Kafka or JMS?". A command's
+`publish:` block emits a domain event on the transactional outbox; a relay moves it onto a durable
+`tql_event` log and issues a PostgreSQL `NOTIFY`; a `queue-consume` route under `consume/` claims it
+with `FOR UPDATE SKIP LOCKED` (woken by the notification, swept by a polling backstop) and runs its
+SQL pipeline, deduplicated by an idempotency key so at-least-once becomes effectively exactly-once
+per business key. `NOTIFY` is only the low-latency signal — the durable table is what guarantees
+delivery — so the transport is PostgreSQL-only (the portable `SKIP LOCKED` table queue is the seam a
+broker transport reuses). The `OutboxEventSink` relay and the `publish:`/`consume:` YAML are the
+seam Kafka/JMS plug into without changing the DSL. Lint (`TQL-SEC-4090..4091`,
+`TQL-YAML-1009..1010`, `TQL-YAML-1106`) and a `queue-consume` coverage kind keep it
+machine-checkable. The Kafka and JMS broker transports (opt-in leaf modules) remain for later slices.
+
 **Milestone M8** — corporate SSO login, a nightly SFTP exchange with a legacy system, and
 commands emitting events consumed by another system — all declarative, all observable in
 the operations console.

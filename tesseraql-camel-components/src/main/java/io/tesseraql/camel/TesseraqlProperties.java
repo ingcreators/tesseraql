@@ -44,6 +44,14 @@ public final class TesseraqlProperties {
     public static final String FILE_TRANSFER_BEAN = "tesseraqlFileTransfers";
     /** The inbound-webhook replay store (roadmap Phase 26). */
     public static final String WEBHOOK_REPLAY_STORE_BEAN = "tesseraqlWebhookReplayStore";
+    /** The messaging channel event-log store backing the pg-notify transport (roadmap Phase 27). */
+    public static final String EVENT_CHANNEL_STORE_BEAN = "tesseraqlEventChannelStore";
+    /** Exchange header: the message key a queue-consume delivery carries (roadmap Phase 27). */
+    public static final String QUEUE_MESSAGE_KEY = "TesseraqlQueueKey";
+    /** Exchange property: the resolved idempotency key of a queue-consume delivery (Phase 27). */
+    public static final String QUEUE_IDEM_KEY = "TesseraqlQueueIdemKey";
+    /** Exchange property: set when a queue-consume delivery is a deduplicated replay (Phase 27). */
+    public static final String QUEUE_DUPLICATE = "TesseraqlQueueDuplicate";
     /** An OutboxEventSink contributed by a runtime extension (e.g. SCIM outbound provisioning). */
     public static final String OUTBOX_EVENT_SINK_BEAN = "tesseraqlOutboxEventSink";
     /** The ServiceProviders registry backing the tesseraql-service component (design ch. 47). */
