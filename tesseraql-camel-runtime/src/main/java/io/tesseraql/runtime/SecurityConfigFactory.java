@@ -2,6 +2,8 @@ package io.tesseraql.runtime;
 
 import io.tesseraql.security.SecurityConfig;
 import io.tesseraql.security.SecurityConfig.JwtConfig;
+import io.tesseraql.security.apikey.ApiKeyConfig;
+import io.tesseraql.security.apikey.ApiKeyConfig.ApiKeyClient;
 import io.tesseraql.security.policy.Policy;
 import io.tesseraql.yaml.config.AppConfig;
 import java.util.ArrayList;
@@ -24,7 +26,39 @@ public final class SecurityConfigFactory {
             policyMap.forEach((id, spec) -> policies.put(String.valueOf(id),
                     parsePolicy(String.valueOf(id), spec)));
         }
-        return new SecurityConfig(policies, parseJwt(config));
+        return new SecurityConfig(policies, parseJwt(config), parseApiKeys(config));
+    }
+
+    @SuppressWarnings("unchecked")
+    private static ApiKeyConfig parseApiKeys(AppConfig config) {
+        if (!(config.navigate("tesseraql.security.apiKeys.clients") instanceof Map<?, ?> raw)) {
+            return null;
+        }
+        Map<String, ApiKeyClient> clients = new LinkedHashMap<>();
+        raw.forEach((id, spec) -> {
+            if (spec instanceof Map<?, ?> client) {
+                String prefix = "tesseraql.security.apiKeys.clients." + id + ".";
+                String status = config.getString(prefix + "status").orElse("ACTIVE");
+                clients.put(String.valueOf(id), new ApiKeyClient(
+                        config.getString(prefix + "secretHash").orElse(null),
+                        config.getString(prefix + "subject").orElse(null),
+                        config.getString(prefix + "tenantId").orElse(null),
+                        stringList(((Map<String, Object>) client).get("roles")),
+                        stringList(((Map<String, Object>) client).get("permissions")),
+                        !"DISABLED".equalsIgnoreCase(status)));
+            }
+        });
+        return new ApiKeyConfig(config.getString("tesseraql.security.apiKeys.header").orElse(null),
+                clients);
+    }
+
+    private static List<String> stringList(Object value) {
+        if (value instanceof List<?> list) {
+            List<String> result = new ArrayList<>(list.size());
+            list.forEach(element -> result.add(String.valueOf(element)));
+            return result;
+        }
+        return List.of();
     }
 
     @SuppressWarnings("unchecked")
