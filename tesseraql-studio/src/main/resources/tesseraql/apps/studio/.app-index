@@ -12,6 +12,10 @@ web/_tesseraql/studio/ui/wizard/saml/get.yml
 web/_tesseraql/studio/ui/wizard/saml/wizard-saml.html
 web/_tesseraql/studio/ui/wizard/saml/post.yml
 web/_tesseraql/studio/ui/wizard/saml/wizard-saml.yml.tpl
+web/_tesseraql/studio/ui/wizard/oidc/get.yml
+web/_tesseraql/studio/ui/wizard/oidc/wizard-oidc.html
+web/_tesseraql/studio/ui/wizard/oidc/post.yml
+web/_tesseraql/studio/ui/wizard/oidc/wizard-oidc.yml.tpl
 web/_tesseraql/studio/ui/wizard/scim/get.yml
 web/_tesseraql/studio/ui/wizard/scim/wizard-scim.html
 web/_tesseraql/studio/ui/wizard/scim/post.yml

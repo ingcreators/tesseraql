@@ -88,14 +88,24 @@ public record OidcConfig(
     }
 
     private static List<String> scopes(AppConfig config) {
-        if (config.navigate("tesseraql.oidc.scopes") instanceof List<?> list && !list.isEmpty()) {
-            List<String> scopes = new ArrayList<>();
+        Object raw = config.navigate("tesseraql.oidc.scopes");
+        List<String> scopes = new ArrayList<>();
+        if (raw instanceof List<?> list) {
             list.forEach(scope -> scopes.add(String.valueOf(scope)));
-            if (!scopes.contains("openid")) {
-                scopes.add(0, "openid");
+        } else if (raw != null) {
+            // A whitespace-separated string is also accepted (e.g. "openid profile email").
+            for (String scope : String.valueOf(raw).trim().split("\\s+")) {
+                if (!scope.isBlank()) {
+                    scopes.add(scope);
+                }
             }
-            return scopes;
         }
-        return List.of("openid");
+        if (scopes.isEmpty()) {
+            return List.of("openid");
+        }
+        if (!scopes.contains("openid")) {
+            scopes.add(0, "openid");
+        }
+        return scopes;
     }
 }

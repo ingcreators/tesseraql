@@ -1,0 +1,40 @@
+version: tesseraql/v1
+id: tql.studio.wizard.oidc.generate
+kind: route
+recipe: page
+
+input:
+  discoveryUri:
+    type: string
+    required: true
+  clientId:
+    type: string
+    required: true
+  redirectUri:
+    type: string
+    required: true
+  scopes:
+    type: string
+    default: "openid profile email"
+  postLoginUrl:
+    type: string
+    default: "/"
+  provision:
+    type: string
+    default: "false"
+
+security:
+  auth: bearer
+
+response:
+  file:
+    template: wizard-oidc.yml.tpl
+    contentType: text/yaml
+    filename: tesseraql-oidc.yml
+    model:
+      discoveryUri: params.discoveryUri
+      clientId: params.clientId
+      redirectUri: params.redirectUri
+      scopes: params.scopes
+      postLoginUrl: params.postLoginUrl
+      provision: params.provision
