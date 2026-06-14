@@ -15,11 +15,14 @@ import java.util.Optional;
  * the {@code topic} is declared on the route, not here — so the same channel multiplexes many
  * topics.
  *
- * <p>The only built-in transport is {@code pg-notify}: a durable {@code tql_event} table on the
- * app's main datasource, with PostgreSQL {@code LISTEN}/{@code NOTIFY} as the low-latency wake
- * signal and a polling backstop for at-least-once delivery. Brokers (Kafka, JMS) arrive as opt-in
- * leaf modules that register additional transports; the {@code publish:}/{@code consume:} YAML is
- * identical across transports, so an app moves between them by changing only this config.
+ * <p>Two built-in transports share the same durable {@code tql_event} table on the app's main
+ * datasource: {@code pg-notify} adds PostgreSQL {@code LISTEN}/{@code NOTIFY} as a low-latency wake
+ * signal (PostgreSQL only), and {@code db-poll} polls the table on the backstop interval (every
+ * dialect — the portable floor, also the choice on PostgreSQL behind a transaction-pooling proxy
+ * that breaks {@code LISTEN}). Both give the same at-least-once, idempotent delivery; they differ
+ * only in latency. Brokers (Kafka, JMS) arrive as opt-in leaf modules that register additional
+ * transports; the {@code publish:}/{@code consume:} YAML is identical across transports, so an app
+ * moves between them by changing only this config.
  *
  * <p>Settings resolve their {@code ${...}} placeholders lazily, per read, so a secret declared
  * through the SecretResolver SPI is fetched at use time, never at startup — mirroring
@@ -27,8 +30,12 @@ import java.util.Optional;
  */
 public final class MessagingChannels {
 
-    /** The built-in, broker-free transport: a durable table plus PostgreSQL LISTEN/NOTIFY. */
+    /** The built-in PostgreSQL transport: a durable table plus low-latency LISTEN/NOTIFY. */
     public static final String PG_NOTIFY = "pg-notify";
+    /** The built-in portable transport: the same durable table, polled on the backstop interval. */
+    public static final String DB_POLL = "db-poll";
+    private static final java.util.Set<String> BUILT_IN_TRANSPORTS = java.util.Set.of(PG_NOTIFY,
+            DB_POLL);
 
     /** TQL-YAML-1106: an invalid or unknown {@code tesseraql.messaging.channels} declaration. */
     public static final TqlErrorCode INVALID_CONFIG = new TqlErrorCode(TqlDomain.YAML, 1106);
@@ -54,12 +61,12 @@ public final class MessagingChannels {
                 Map<String, Object> values = new LinkedHashMap<>();
                 raw.forEach((key, value) -> values.put(String.valueOf(key), value));
                 Channel channel = loaded.new Channel(String.valueOf(name), values);
-                if (!PG_NOTIFY.equals(channel.transport())) {
-                    // Only the built-in transport ships in the core runtime; a broker transport
+                if (!BUILT_IN_TRANSPORTS.contains(channel.transport())) {
+                    // Only the built-in transports ship in the core runtime; a broker transport
                     // is contributed by an opt-in leaf module, so an unknown one is a typo here.
                     throw new TqlException(INVALID_CONFIG, "Messaging channel '" + name
                             + "' declares unknown transport '" + channel.transport()
-                            + "' (the built-in transport is '" + PG_NOTIFY + "')");
+                            + "' (built-in transports: '" + PG_NOTIFY + "', '" + DB_POLL + "')");
                 }
                 channels.put(String.valueOf(name), channel);
             });

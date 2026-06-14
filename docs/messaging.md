@@ -6,10 +6,16 @@ event on the same transactional outbox it uses for notifications, and a `queue-c
 SQL pipeline for every message it receives, with at-least-once delivery and idempotency-key
 deduplication.
 
-The built-in transport is **`pg-notify`**: a durable PostgreSQL table plus `LISTEN`/`NOTIFY`, so a
-broker-free app gets a real event bus from the database it already runs — no Kafka, no JMS. Broker
-transports arrive later as opt-in leaf modules; the `publish:`/`consume:` YAML is identical across
-transports, so moving between them changes only configuration.
+Two built-in, broker-free transports share the same durable table, so a broker-free app gets a real
+event bus from the database it already runs — no Kafka, no JMS:
+
+- **`pg-notify`** — PostgreSQL `LISTEN`/`NOTIFY` for low-latency wake-ups (PostgreSQL only).
+- **`db-poll`** — the same table, polled on the backstop interval (**every dialect**: MySQL, SQL
+  Server, Oracle, and PostgreSQL behind a transaction-pooling proxy that breaks `LISTEN`).
+
+Both give identical at-least-once, idempotent delivery; they differ only in latency. Broker
+transports (Kafka, JMS) arrive later as opt-in leaf modules. The `publish:`/`consume:` YAML is
+identical across all transports, so moving between them changes only configuration.
 
 ## The signal-and-log model
 
@@ -103,13 +109,26 @@ tesseraql:
   messaging:
     channels:
       events:
-        transport: pg-notify      # the built-in transport; the default if omitted
-    backstop: 10s                 # consumer poll backstop (default 10s)
+        transport: pg-notify      # pg-notify (default) | db-poll
+    backstop: 10s                 # poll interval: the db-poll cadence, and the pg-notify safety net
 ```
 
-The `pg-notify` transport uses the app's main datasource: the `tql_event` log and a dedicated
-`LISTEN` connection. Relaying published events onto channels requires the outbox dispatcher, so
-enable it as for notifications:
+Both transports use the app's main datasource and the same `tql_event` log; `pg-notify` additionally
+holds a dedicated `LISTEN` connection. Choose by dialect and latency:
+
+| Transport   | Dialects                                   | Latency                 | When                                                |
+| ----------- | ------------------------------------------ | ----------------------- | --------------------------------------------------- |
+| `pg-notify` | PostgreSQL only                            | near-instant (NOTIFY)   | the default on PostgreSQL                            |
+| `db-poll`   | PostgreSQL, MySQL, SQL Server, Oracle      | up to the poll interval | MySQL/SQL Server/Oracle, or PostgreSQL behind PgBouncer transaction pooling |
+
+`db-poll` is the portable floor: it claims off `tql_event` with the dialect's `SKIP LOCKED`
+equivalent (PostgreSQL/MySQL `LIMIT … FOR UPDATE SKIP LOCKED`, Oracle `ROWNUM … FOR UPDATE SKIP
+LOCKED`, SQL Server `TOP … WITH (UPDLOCK, READPAST)`), exactly as the outbox dispatcher does. There
+is no in-database push to wait on, so latency is the `backstop` interval — lower it for tighter
+delivery, at the cost of more idle polling.
+
+Relaying published events onto channels requires the outbox dispatcher, so enable it as for
+notifications:
 
 ```yaml
 tesseraql:
@@ -133,19 +152,24 @@ Every hop is durable: the outbox guarantees the event survives the commit, and `
 guarantees it survives until a consumer acknowledges it. A failed consume is retried until a
 dead-letter ceiling (`tesseraql.outbox.maxAttempts`), visible to operators like any outbox event.
 
-## Operational notes (pg-notify)
+## Operational notes
 
-- **Connection pooling**: `LISTEN`/`NOTIFY` needs a session-pinned connection. It does **not** work
-  through PgBouncer in transaction or statement pooling mode — use session pooling or a direct
-  connection for the app's main datasource.
-- **Payload size**: a `NOTIFY` carries only a wake signal, never the payload, so the 8 KB `NOTIFY`
-  limit never applies to message size; the payload lives in `tql_event`.
-- **Throughput**: `NOTIFY` serialises at commit time, which is ample for line-of-business volumes
-  but not a high-throughput firehose. For that, a broker transport (a later slice) is the fit.
-- **Dialect**: the `SKIP LOCKED` table queue is portable, but `LISTEN`/`NOTIFY` is PostgreSQL-only,
-  so the `pg-notify` transport runs only on a PostgreSQL main datasource — consistent with the
-  roadmap's "PostgreSQL first" capability matrix. A queue-consume route declared against another
-  dialect is logged and left idle until a broker transport is configured.
+- **Connection pooling** (pg-notify): `LISTEN`/`NOTIFY` needs a session-pinned connection. It does
+  **not** work through PgBouncer in transaction or statement pooling mode — use session pooling, a
+  direct connection for the app's main datasource, or switch the channel to `db-poll`.
+- **Payload size** (pg-notify): a `NOTIFY` carries only a wake signal, never the payload, so the
+  8 KB `NOTIFY` limit never applies to message size; the payload lives in `tql_event`.
+- **Throughput** (pg-notify): `NOTIFY` serialises at commit time, which is ample for
+  line-of-business volumes but not a high-throughput firehose. For that, a broker transport (a later
+  slice) is the fit.
+- **Latency vs. polling** (db-poll): with no in-database push, a consumer sees a message at most one
+  `backstop` interval after it is published. A shorter interval tightens delivery but polls an idle
+  channel more often; the durable table makes either choice correct, only faster or slower.
+- **Dialect**: the durable `tql_event` queue is portable (`SKIP LOCKED` exists on PostgreSQL, MySQL
+  8.0+, Oracle, and SQL Server via `READPAST`), so `db-poll` runs everywhere. `LISTEN`/`NOTIFY` is
+  PostgreSQL-only, so `pg-notify` runs only on a PostgreSQL main datasource — consistent with the
+  roadmap's "PostgreSQL first" capability matrix. A `pg-notify` channel on a non-PostgreSQL
+  datasource is logged and left idle (switch it to `db-poll`).
 
 ## Governance and testing
 

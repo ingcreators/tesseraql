@@ -66,12 +66,13 @@ public final class JdbcEventChannelStore implements EventChannelStore {
         return safe.toString();
     }
 
-    private boolean isPostgres() {
+    /** The connected vendor (for the per-dialect claim SQL and the NOTIFY guard), detected once. */
+    private String vendor() {
         if (!vendorDetected) {
             vendor = io.tesseraql.core.util.DatabaseVendors.vendor(dataSource).orElse(null);
             vendorDetected = true;
         }
-        return "postgresql".equals(vendor);
+        return vendor;
     }
 
     @Override
@@ -96,8 +97,9 @@ public final class JdbcEventChannelStore implements EventChannelStore {
                     ps.executeUpdate();
                 }
                 // NOTIFY rides the same transaction, so it is delivered exactly when the row is
-                // visible — and only on PostgreSQL, where a consumer can LISTEN for it.
-                if (isPostgres()) {
+                // visible — and only on PostgreSQL, where a consumer can LISTEN for it. The db-poll
+                // transport (every other dialect, and PostgreSQL behind a pooler) just polls.
+                if ("postgresql".equals(vendor())) {
                     try (Statement notify = connection.createStatement()) {
                         notify.execute("NOTIFY " + notifyChannel(channel));
                     }
@@ -118,24 +120,25 @@ public final class JdbcEventChannelStore implements EventChannelStore {
     @Override
     public List<EventMessage> claim(String channel, String topic, int limit) {
         List<EventMessage> messages = new ArrayList<>();
-        Timestamp abandonedBefore = Timestamp.from(Instant.now().minus(ABANDONED_AFTER));
+        // The SKIP LOCKED claim renders per dialect (PostgreSQL/MySQL LIMIT, Oracle ROWNUM, SQL
+        // Server TOP + READPAST) from the bundled event-claim 2-way SQL, the same approach the
+        // outbox dispatcher uses — so the durable-table queue is portable across every dialect.
+        java.util.Map<String, Object> params = new java.util.LinkedHashMap<>();
+        params.put("channel", channel);
+        params.put("topic", topic);
+        params.put("abandonedBefore", Timestamp.from(Instant.now().minus(ABANDONED_AFTER)));
+        params.put("limit", limit);
+        io.tesseraql.core.sql.BoundSql bound = io.tesseraql.core.sql.SqlResources.render(
+                JdbcEventChannelStore.class, "/tesseraql/sql/messaging/event-claim.sql", vendor(),
+                params);
         try (Connection connection = dataSource.getConnection()) {
             boolean autoCommit = connection.getAutoCommit();
             connection.setAutoCommit(false);
             try {
-                try (PreparedStatement ps = connection.prepareStatement("""
-                        select event_id, channel, topic, msg_key, payload_json, attempts
-                          from tql_event
-                         where channel = ? and topic = ?
-                           and consumed_at is null and status <> 'DEAD'
-                           and (claimed_at is null or claimed_at < ?)
-                         order by published_at
-                         limit ?
-                         for update skip locked""")) {
-                    ps.setString(1, channel);
-                    ps.setString(2, topic);
-                    ps.setTimestamp(3, abandonedBefore);
-                    ps.setInt(4, limit);
+                try (PreparedStatement ps = connection.prepareStatement(bound.sql())) {
+                    for (int i = 0; i < bound.parameters().size(); i++) {
+                        ps.setObject(i + 1, bound.parameters().get(i).value());
+                    }
                     try (ResultSet rs = ps.executeQuery()) {
                         while (rs.next()) {
                             messages.add(new EventMessage(rs.getString("event_id"),

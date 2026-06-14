@@ -85,6 +85,11 @@ class SqlServerPortabilityIntegrationTest {
     }
 
     @Test
+    void messagingEventChannelClaimsOnThisDialect() throws Exception {
+        DialectRuntimeChecks.eventChannelRoundTrip(dataSource());
+    }
+
+    @Test
     void fileTransfersRoundTripOnThisDialect() throws Exception {
         DialectRuntimeChecks.fileTransferRoundTrip(runtime, "sqlserver-demo");
     }

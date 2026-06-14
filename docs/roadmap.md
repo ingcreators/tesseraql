@@ -277,11 +277,15 @@ broker-free `pg-notify` transport answers "can we do messaging without Kafka or 
 with `FOR UPDATE SKIP LOCKED` (woken by the notification, swept by a polling backstop) and runs its
 SQL pipeline, deduplicated by an idempotency key so at-least-once becomes effectively exactly-once
 per business key. `NOTIFY` is only the low-latency signal — the durable table is what guarantees
-delivery — so the transport is PostgreSQL-only (the portable `SKIP LOCKED` table queue is the seam a
-broker transport reuses). The `OutboxEventSink` relay and the `publish:`/`consume:` YAML are the
-seam Kafka/JMS plug into without changing the DSL. Lint (`TQL-SEC-4090..4091`,
-`TQL-YAML-1009..1010`, `TQL-YAML-1106`) and a `queue-consume` coverage kind keep it
-machine-checkable. The Kafka and JMS broker transports (opt-in leaf modules) remain for later slices.
+delivery — so `pg-notify` is PostgreSQL-only. A second built-in transport, `db-poll`, makes the same
+durable queue **portable across every dialect** (MySQL, SQL Server, Oracle, and PostgreSQL behind a
+transaction-pooling proxy): it claims with each dialect's `SKIP LOCKED` equivalent and polls on the
+backstop interval instead of waiting on `NOTIFY` — identical at-least-once delivery, only higher
+latency, and switching `transport:` is the whole change. The `OutboxEventSink` relay and the
+`publish:`/`consume:` YAML are the seam Kafka/JMS plug into without changing the DSL. Lint
+(`TQL-SEC-4090..4091`, `TQL-YAML-1009..1010`, `TQL-YAML-1106`) and a `queue-consume` coverage kind
+keep it machine-checkable. The Kafka and JMS broker transports (opt-in leaf modules) remain for later
+slices.
 
 **Milestone M8** — corporate SSO login, a nightly SFTP exchange with a legacy system, and
 commands emitting events consumed by another system — all declarative, all observable in
