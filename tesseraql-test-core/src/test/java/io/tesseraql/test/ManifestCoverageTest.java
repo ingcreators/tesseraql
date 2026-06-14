@@ -377,6 +377,27 @@ class ManifestCoverageTest {
     }
 
     @Test
+    void oidcCoverageDeclaresLinkContractsOnlyWhenLinkingIsEnabled() {
+        AppManifest linked = manifest(Map.of("tesseraql", Map.of("oidc", Map.of(
+                "enabled", "true",
+                "link", Map.of("enabled", "true", "provision", "true")))));
+        ItemCoverage coverage = ManifestCoverage.oidc(linked,
+                List.of(contractSuite("identity.find-user-by-login", "identity.create-user")));
+
+        assertThat(coverage.kind()).isEqualTo("oidc");
+        assertThat(coverage.declared()).containsExactlyInAnyOrder("create-user",
+                "find-groups-by-user-id",
+                "find-permissions-by-user-id", "find-roles-by-user-id", "find-user-by-login");
+        assertThat(coverage.covered()).containsExactlyInAnyOrder("create-user",
+                "find-user-by-login");
+
+        AppManifest unlinked = manifest(
+                Map.of("tesseraql", Map.of("oidc", Map.of("enabled", "true"))));
+        assertThat(ManifestCoverage.oidc(unlinked, List.of()).declared()).isEmpty();
+        assertThat(ManifestCoverage.oidc(unlinked, List.of()).ratio()).isEqualTo(1.0);
+    }
+
+    @Test
     void scimCoverageDeclaresConfiguredContractFilesAndTracksTestedOnes() {
         AppManifest manifest = manifest(Map.of("tesseraql", Map.of("scim", Map.of(
                 "enabled", "true",

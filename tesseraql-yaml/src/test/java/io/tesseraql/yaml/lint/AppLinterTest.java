@@ -794,6 +794,49 @@ class AppLinterTest {
     }
 
     @Test
+    void flagsOidcWithoutDiscoveryUri(@TempDir Path dir) throws Exception {
+        assertThat(lintWithConfig(dir, """
+                  oidc:
+                    enabled: true
+                    clientId: app
+                    redirectUri: https://app.example.com/_tesseraql/oidc/callback
+                """)).anyMatch(f -> f.code().equals("TQL-SEC-4050") && f.isError());
+    }
+
+    @Test
+    void flagsOidcNonHttpsDiscoveryUri(@TempDir Path dir) throws Exception {
+        assertThat(lintWithConfig(dir, """
+                  oidc:
+                    enabled: true
+                    discoveryUri: http://idp.example.com/.well-known/openid-configuration
+                    clientId: app
+                    redirectUri: https://app.example.com/_tesseraql/oidc/callback
+                """)).anyMatch(f -> f.code().equals("TQL-SEC-4051") && f.isError());
+    }
+
+    @Test
+    void flagsOidcWithoutClientIdOrRedirectUri(@TempDir Path dir) throws Exception {
+        List<LintFinding> findings = lintWithConfig(dir, """
+                  oidc:
+                    enabled: true
+                    discoveryUri: https://idp.example.com/.well-known/openid-configuration
+                """);
+        assertThat(findings).anyMatch(f -> f.code().equals("TQL-SEC-4052") && f.isError());
+        assertThat(findings).anyMatch(f -> f.code().equals("TQL-SEC-4053") && f.isError());
+    }
+
+    @Test
+    void acceptsValidOidcConfig(@TempDir Path dir) throws Exception {
+        assertThat(lintWithConfig(dir, """
+                  oidc:
+                    enabled: true
+                    discoveryUri: https://idp.example.com/.well-known/openid-configuration
+                    clientId: app
+                    redirectUri: https://app.example.com/_tesseraql/oidc/callback
+                """)).noneMatch(f -> f.code().startsWith("TQL-SEC-405") && f.isError());
+    }
+
+    @Test
     void flagsApiKeyRouteWithoutApiKeyConfig(@TempDir Path dir) throws Exception {
         Files.createDirectories(dir.resolve("config"));
         Files.writeString(dir.resolve("config/tesseraql.yml"), """
