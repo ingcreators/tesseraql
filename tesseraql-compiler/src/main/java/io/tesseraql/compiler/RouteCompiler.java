@@ -130,6 +130,12 @@ public final class RouteCompiler {
                         buildQueueConsume(this, consumerFile);
                     }
                 }
+                // Approval workflows (roadmap Phase 28): each workflow synthesizes one
+                // transactional-command route per transition, mounted on HTTP — the author declares
+                // states and transitions, not a route per transition.
+                for (io.tesseraql.yaml.manifest.WorkflowFile workflowFile : manifest.workflows()) {
+                    buildWorkflow(this, workflowFile, onlyRouteIds);
+                }
             }
         };
     }
@@ -194,16 +200,25 @@ public final class RouteCompiler {
      * standard execution pipeline.
      */
     private void buildTransactionalCommand(RouteBuilder builder, RouteFile routeFile) {
-        buildTransactionalCommand(builder, routeFile, null);
+        buildTransactionalCommand(builder, routeFile, null, null);
+    }
+
+    private void buildTransactionalCommand(RouteBuilder builder, RouteFile routeFile,
+            org.apache.camel.Processor preCommand) {
+        buildTransactionalCommand(builder, routeFile, preCommand, null);
     }
 
     /**
      * Builds the transactional command pipeline, optionally inserting {@code preCommand} after the
      * common steps and before request binding — the inbound webhook recipe (roadmap Phase 26) uses
-     * it to verify the signed, replay-protected delivery before a single row is written.
+     * it to verify the signed, replay-protected delivery before a single row is written. A
+     * {@code workflow} binding (roadmap Phase 28) makes the command a workflow transition: the
+     * processor advances the document's state, checks the guard, and appends history in the same
+     * transaction.
      */
     private void buildTransactionalCommand(RouteBuilder builder, RouteFile routeFile,
-            org.apache.camel.Processor preCommand) {
+            org.apache.camel.Processor preCommand,
+            io.tesseraql.compiler.binding.WorkflowBinding workflow) {
         RouteDefinition definition = routeFile.definition();
         String routeId = definition.id();
         String direct = "direct:" + routeId;
@@ -232,7 +247,8 @@ public final class RouteCompiler {
                 .process(new io.tesseraql.compiler.binding.TransactionalCommandProcessor(
                         routeId, definition.sql(), definition.steps(), definition.validate(),
                         definition.notifications(), stepFile, DEFAULT_DATASOURCE, dialect,
-                        definition.outbox(), definition.publish(), definition.errors(), appName));
+                        definition.outbox(), definition.publish(), definition.errors(), appName,
+                        workflow));
         // Named queries still run after the command (outside its transaction), in authored order.
         for (var entry : definition.queries().entrySet()) {
             step = step
@@ -241,6 +257,90 @@ public final class RouteCompiler {
         }
         step.process(responseRenderer(definition));
         applyIdempotencyComplete(step, definition);
+    }
+
+    /**
+     * Builds an approval workflow (roadmap Phase 28): one transactional-command route per
+     * transition. State lives in the managed {@code tql_workflow_instance} table or, in app mode, in
+     * a column on the business table — selected per workflow, defaulting to the app-wide
+     * {@code tesseraql.workflow.mode}.
+     */
+    private void buildWorkflow(RouteBuilder builder,
+            io.tesseraql.yaml.manifest.WorkflowFile workflowFile,
+            java.util.Set<String> onlyRouteIds) {
+        io.tesseraql.yaml.model.WorkflowDefinition def = workflowFile.definition();
+        if (def.document() == null) {
+            throw new TqlException(UNSUPPORTED_RECIPE,
+                    "Workflow '" + def.id() + "': a document is required");
+        }
+        boolean managed = workflowManaged(def);
+        String basePath = workflowBasePath(def);
+        io.tesseraql.core.workflow.WorkflowStore appStore = managed
+                ? null
+                : new io.tesseraql.compiler.binding.ColumnWorkflowStore(def.document().table(),
+                        def.document().key(), def.document().stateColumn());
+        for (io.tesseraql.yaml.model.TransitionSpec transition : def.transitions()) {
+            String routeId = def.id() + "." + transition.id();
+            if (onlyRouteIds != null && !onlyRouteIds.contains(routeId)) {
+                continue;
+            }
+            io.tesseraql.yaml.model.SqlBinding command = transition.command() == null
+                    ? null
+                    : new io.tesseraql.yaml.model.SqlBinding(transition.command(), null, "update",
+                            commandParams(transition), null, null, null, null, null);
+            io.tesseraql.yaml.model.SecuritySpec security = transition.security() != null
+                    ? transition.security()
+                    : def.security();
+            RouteDefinition synthesized = new RouteDefinition("tesseraql/v1", routeId, "route",
+                    "command-json", java.util.Map.of(), null, security, null, null, null, command,
+                    java.util.Map.of(), java.util.Map.of(), java.util.Map.of(), java.util.Map.of(),
+                    null, null, null, null, null, null, workflowResponse());
+            String urlPath = basePath + "/{key}/" + transition.id();
+            RouteFile routeFile = new RouteFile("POST", urlPath, workflowFile.source(),
+                    synthesized);
+            io.tesseraql.core.expr.Expr guard = transition.guard() == null
+                    ? null
+                    : io.tesseraql.core.expr.ExpressionParser.parse(transition.guard());
+            io.tesseraql.compiler.binding.WorkflowBinding workflow = new io.tesseraql.compiler.binding.WorkflowBinding(
+                    def.id(), transition.id(),
+                    def.document().type(), def.document().table(), def.document().key(),
+                    "path.key", transition.from(), transition.to(), def.initial(), managed,
+                    guard, appStore);
+            buildTransactionalCommand(builder, routeFile, null, workflow);
+        }
+    }
+
+    /** A synthesized transition's response: 200 with a small confirmation body. */
+    private static io.tesseraql.yaml.model.ResponseSpec workflowResponse() {
+        return new io.tesseraql.yaml.model.ResponseSpec(
+                new io.tesseraql.yaml.model.ResponseSpec.JsonResponse(200,
+                        java.util.Map.of("ok", Boolean.TRUE), null),
+                null, null, null, null);
+    }
+
+    /** The command's binds: the document key (always) plus the transition's declared params. */
+    private static java.util.Map<String, String> commandParams(
+            io.tesseraql.yaml.model.TransitionSpec transition) {
+        java.util.Map<String, String> params = new java.util.LinkedHashMap<>();
+        params.put("key", "path.key");
+        params.putAll(transition.params());
+        return params;
+    }
+
+    private boolean workflowManaged(io.tesseraql.yaml.model.WorkflowDefinition def) {
+        String mode = def.mode();
+        if (mode == null || mode.isBlank()) {
+            mode = config.getString("tesseraql.workflow.mode").orElse("app");
+        }
+        return "managed".equalsIgnoreCase(mode);
+    }
+
+    private static String workflowBasePath(io.tesseraql.yaml.model.WorkflowDefinition def) {
+        String basePath = def.http() == null ? null : def.http().basePath();
+        if (basePath == null || basePath.isBlank()) {
+            basePath = "/" + def.id();
+        }
+        return basePath.startsWith("/") ? basePath : "/" + basePath;
     }
 
     /**

@@ -254,6 +254,13 @@ public final class ErrorResponseRenderer implements Processor {
                 case 4031 -> 403;
                 default -> 404;
             };
+            // Approval workflow (roadmap Phase 28): an illegal/concurrent transition is a conflict,
+            // a falsy guard an unprocessable entity.
+            case WORKFLOW -> switch (code.number()) {
+                case 3201 -> 409;
+                case 3202 -> 422;
+                default -> 500;
+            };
             default -> 500;
         };
     }

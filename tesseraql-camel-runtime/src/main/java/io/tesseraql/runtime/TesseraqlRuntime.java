@@ -275,6 +275,16 @@ public final class TesseraqlRuntime implements AutoCloseable {
             orgUnitStore.ensureSchema();
             context.getRegistry().bind(TesseraqlProperties.ORG_UNIT_STORE_BEAN, orgUnitStore);
         }
+        // Managed approval-workflow state (roadmap Phase 28 slice 1): provisioned and bound when any
+        // declared workflow runs in `managed` mode (the app-wide default or a per-workflow
+        // override); `app` mode keeps state in the business table's column and binds no store (the
+        // transition route carries its own).
+        if (workflowsNeedManagedStore(manifest)) {
+            io.tesseraql.operations.workflow.JdbcWorkflowStore workflowStore = new io.tesseraql.operations.workflow.JdbcWorkflowStore(
+                    dataSource);
+            workflowStore.ensureSchema();
+            context.getRegistry().bind(TesseraqlProperties.WORKFLOW_STORE_BEAN, workflowStore);
+        }
         io.tesseraql.yaml.messaging.MessagingChannels messagingChannels = io.tesseraql.yaml.messaging.MessagingChannels
                 .load(manifest.config());
         // Managed document-number sequences for command steps (roadmap Phase 18).
@@ -660,6 +670,26 @@ public final class TesseraqlRuntime implements AutoCloseable {
         return new TesseraqlRuntime(context, dataSources, port, jobRepository, jobExecutor,
                 outboxStore, jobs, jobOwners, appName, hostedApps, lanes, tenantDataSources,
                 manifest.config(), pinningSource, otelSdk, opsDashboard, outboxSink);
+    }
+
+    /** Whether any declared workflow runs in managed mode (the default or a per-workflow override). */
+    private static boolean workflowsNeedManagedStore(
+            io.tesseraql.yaml.manifest.AppManifest manifest) {
+        if (manifest.workflows().isEmpty()) {
+            return false;
+        }
+        boolean defaultManaged = io.tesseraql.yaml.workflow.WorkflowSettings
+                .from(manifest.config()).managed();
+        for (io.tesseraql.yaml.manifest.WorkflowFile workflow : manifest.workflows()) {
+            String mode = workflow.definition().mode();
+            boolean managed = mode == null || mode.isBlank()
+                    ? defaultManaged
+                    : "managed".equalsIgnoreCase(mode);
+            if (managed) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /** The configured dialect for the main datasource, or inferred from its JDBC URL (design ch. 42). */

@@ -51,9 +51,36 @@ public final class ManifestLoader {
         loadMcp(home, tools, resources, uiResources);
         List<RouteFile> consumers = loadConsumers(home);
         List<ScopeFile> scopes = loadScopes(home);
+        List<WorkflowFile> workflows = loadWorkflows(home);
         ManifestIndex index = buildIndex(home);
         return new AppManifest(home, config, routes, jobs, tools, resources, uiResources, consumers,
-                scopes, index);
+                scopes, workflows, index);
+    }
+
+    /**
+     * Loads the {@code workflow/} tree (roadmap Phase 28): each {@code kind: workflow} document is a
+     * SQL-contract state machine. A workflow is not itself a route — the compiler synthesizes one
+     * transactional-command route per transition — so it lives in its own tree, alongside the 2-way
+     * SQL command, assignee, and history files its transitions reference.
+     */
+    private List<WorkflowFile> loadWorkflows(Path home) {
+        Path workflowRoot = home.resolve("workflow");
+        if (!Files.isDirectory(workflowRoot)) {
+            return List.of();
+        }
+        List<WorkflowFile> workflows = new ArrayList<>();
+        try (Stream<Path> files = Files.walk(workflowRoot)) {
+            files.filter(Files::isRegularFile)
+                    .filter(p -> p.getFileName().toString().endsWith(".yml"))
+                    .sorted()
+                    .forEach(file -> {
+                        requireInside(home, file);
+                        workflows.add(new WorkflowFile(file, parser.parseWorkflow(file)));
+                    });
+        } catch (IOException ex) {
+            throw new UncheckedIOException(ex);
+        }
+        return workflows;
     }
 
     /**

@@ -7,8 +7,10 @@ import io.tesseraql.yaml.config.AppConfig;
 import io.tesseraql.yaml.manifest.AppManifest;
 import io.tesseraql.yaml.manifest.RouteFile;
 import io.tesseraql.yaml.manifest.ScopeFile;
+import io.tesseraql.yaml.manifest.WorkflowFile;
 import io.tesseraql.yaml.model.RouteDefinition;
 import io.tesseraql.yaml.model.SqlBinding;
+import io.tesseraql.yaml.model.TransitionSpec;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -138,6 +140,36 @@ public final class ManifestCoverage {
             for (String name : referencedScopes(route)) {
                 if (declared.contains(name)) {
                     coverage.cover(name);
+                }
+            }
+        }
+        return coverage;
+    }
+
+    /**
+     * Workflow coverage (roadmap Phase 28): every transition declared under {@code workflow/} is
+     * declared as {@code <workflowId>#<transitionId>}, and a transition counts as covered when a
+     * suite exercises its command SQL - the same SQL-file basis as route and {@code data-scope}
+     * coverage. An app with no workflows declares nothing and so reports a 1.0 ratio.
+     */
+    public static ItemCoverage workflow(AppManifest manifest, List<TestSuite> suites) {
+        ItemCoverage coverage = new ItemCoverage("workflow");
+        if (manifest.workflows().isEmpty()) {
+            return coverage;
+        }
+        Set<Path> testedPaths = testedSqlPaths(manifest.appHome(), suites);
+        for (WorkflowFile workflow : manifest.workflows()) {
+            Path dir = workflow.source().getParent();
+            String workflowId = workflow.definition().id();
+            for (TransitionSpec transition : workflow.definition().transitions()) {
+                if (transition.id() == null) {
+                    continue;
+                }
+                String item = workflowId + "#" + transition.id();
+                coverage.declare(item);
+                if (transition.command() != null
+                        && testedPaths.contains(dir.resolve(transition.command()).normalize())) {
+                    coverage.cover(item);
                 }
             }
         }

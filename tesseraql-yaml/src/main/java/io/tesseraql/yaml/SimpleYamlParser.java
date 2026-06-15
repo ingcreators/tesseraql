@@ -125,6 +125,41 @@ public final class SimpleYamlParser {
         return scope;
     }
 
+    /** Parses a workflow YAML file (roadmap Phase 28). */
+    public io.tesseraql.yaml.model.WorkflowDefinition parseWorkflow(Path file) {
+        try {
+            io.tesseraql.yaml.model.WorkflowDefinition workflow = mapper.readValue(
+                    Files.readString(file), io.tesseraql.yaml.model.WorkflowDefinition.class);
+            return validateWorkflow(workflow, file.toString());
+        } catch (IOException ex) {
+            throw new UncheckedIOException(ex);
+        } catch (TqlException ex) {
+            throw ex;
+        } catch (RuntimeException ex) {
+            throw TqlException.builder(SCHEMA_ERROR)
+                    .message("Failed to parse workflow YAML: " + ex.getMessage())
+                    .source(file.toString())
+                    .cause(ex)
+                    .build();
+        }
+    }
+
+    private io.tesseraql.yaml.model.WorkflowDefinition validateWorkflow(
+            io.tesseraql.yaml.model.WorkflowDefinition workflow, String source) {
+        if (workflow == null) {
+            throw error("Empty workflow document", source);
+        }
+        requireField(workflow.version(), "version", source);
+        if (!EXPECTED_VERSION.equals(workflow.version())) {
+            throw error("Unsupported version '" + workflow.version() + "', expected "
+                    + EXPECTED_VERSION, source);
+        }
+        requireField(workflow.id(), "id", source);
+        requireField(workflow.kind(), "kind", source);
+        requireField(workflow.initial(), "initial", source);
+        return workflow;
+    }
+
     /** Parses an arbitrary YAML document into a nested map (for config files). */
     public Map<String, Object> parseTree(Path file) {
         try {
