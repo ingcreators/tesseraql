@@ -33,9 +33,12 @@ import java.util.Map;
  * @param dueWithinMillis the {@code to} state's deadline in milliseconds, set as the opened task's
  *                     {@code due_at}, or {@code null} when the state has no deadline (Phase 28
  *                     slice 3)
+ * @param assignNotify the reminder fired when a task is opened (Phase 20 channels), or {@code null};
+ *                     the resolved {@code assignee} is in its payload scope
  */
 public record WorkflowBinding(String workflowId, String transitionId, String docType, String table,
         String keyColumn, String keyExpr, String from, String to, String initial, boolean managed,
         Expr guard, WorkflowStore appStore, List<SqlNode> assignNodes,
-        Map<String, String> assignParams, Long dueWithinMillis) {
+        Map<String, String> assignParams, Long dueWithinMillis,
+        io.tesseraql.yaml.notify.NotifyEvents.CompiledNotify assignNotify) {
 }

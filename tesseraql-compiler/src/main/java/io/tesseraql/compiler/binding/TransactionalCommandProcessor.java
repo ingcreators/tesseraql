@@ -377,7 +377,7 @@ public final class TransactionalCommandProcessor implements Processor {
                             workflow.docType(), wf.docId(), workflow.transitionId(),
                             wf.fromState(), workflow.to(), (String) audit.get("user"),
                             ((java.sql.Timestamp) audit.get("now")).toInstant(), null));
-                    applyTasks(connection, wf, context, (String) audit.get("user"));
+                    applyTasks(exchange, connection, wf, context, (String) audit.get("user"));
                 }
                 if (outboxEvents != null) {
                     String eventId = store.insert(connection, outboxEvents.build(context));
@@ -529,8 +529,8 @@ public final class TransactionalCommandProcessor implements Processor {
      * inside the transaction, after the command, so the inbox change commits with the transition.
      */
     @SuppressWarnings("unchecked")
-    private void applyTasks(Connection connection, WorkflowExec wf, Map<String, Object> context,
-            String actor) throws SQLException {
+    private void applyTasks(Exchange exchange, Connection connection, WorkflowExec wf,
+            Map<String, Object> context, String actor) throws SQLException {
         if (wf.taskStore() == null) {
             return;
         }
@@ -557,7 +557,31 @@ public final class TransactionalCommandProcessor implements Processor {
             if (assignee != null || candidateGroup != null) {
                 wf.taskStore().openTask(connection, new WorkflowTaskStore.Task(workflow.docType(),
                         wf.docId(), workflow.to(), assignee, candidateGroup, dueAt, wf.tenant()));
+                enqueueAssignReminder(exchange, connection, context, assignee, candidateGroup);
             }
+        }
+    }
+
+    /**
+     * Enqueues the task-assignment reminder on the transaction's outbox (roadmap Phase 28 slice 3,
+     * Phase 20 channels), so a rolled-back transition never notifies and a committed one notifies
+     * at-least-once. The resolved {@code assignee}/{@code candidateGroup} are in the payload scope.
+     */
+    private void enqueueAssignReminder(Exchange exchange, Connection connection,
+            Map<String, Object> context, String assignee, String candidateGroup) {
+        if (workflow.assignNotify() == null) {
+            return;
+        }
+        Map<String, Object> reminderContext = new LinkedHashMap<>(context);
+        reminderContext.put("assignee", assignee);
+        reminderContext.put("candidateGroup", candidateGroup);
+        if (!workflow.assignNotify().fires(reminderContext)) {
+            return;
+        }
+        OutboxStore store = exchange.getContext().getRegistry().lookupByNameAndType(
+                TesseraqlProperties.OUTBOX_STORE_BEAN, OutboxStore.class);
+        if (store != null) {
+            store.insert(connection, workflow.assignNotify().build(reminderContext, appName));
         }
     }
 

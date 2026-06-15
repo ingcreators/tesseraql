@@ -3,11 +3,13 @@ package io.tesseraql.runtime;
 import io.tesseraql.core.error.TqlDomain;
 import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
+import io.tesseraql.core.outbox.OutboxStore;
 import io.tesseraql.core.sql.BoundSql;
 import io.tesseraql.core.sql.SqlNode;
 import io.tesseraql.core.sql.SqlRenderer;
 import io.tesseraql.core.workflow.WorkflowStore;
 import io.tesseraql.core.workflow.WorkflowTaskStore;
+import io.tesseraql.yaml.notify.NotifyEvents.CompiledNotify;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -33,20 +35,28 @@ final class WorkflowSweeper {
     private static final TqlErrorCode SWEEP_ERROR = new TqlErrorCode(TqlDomain.WORKFLOW, 3223);
     private static final int BATCH = 100;
 
-    /** A deadline's escalation: the reassign resolver bound to a document type and state. */
-    record Rule(String docType, String state, List<SqlNode> reassignNodes) {
+    /**
+     * A deadline's escalation: the reassign resolver bound to a document type and state, plus the
+     * optional escalation reminder (roadmap Phase 28 slice 3, Phase 20 channels).
+     */
+    record Rule(String docType, String state, List<SqlNode> reassignNodes,
+            CompiledNotify escalateNotify) {
     }
 
     private final List<Rule> rules;
     private final WorkflowTaskStore taskStore;
     private final WorkflowStore workflowStore;
+    private final OutboxStore outboxStore;
+    private final String appName;
     private final DataSource dataSource;
 
     WorkflowSweeper(List<Rule> rules, WorkflowTaskStore taskStore, WorkflowStore workflowStore,
-            DataSource dataSource) {
+            OutboxStore outboxStore, String appName, DataSource dataSource) {
         this.rules = List.copyOf(rules);
         this.taskStore = taskStore;
         this.workflowStore = workflowStore;
+        this.outboxStore = outboxStore;
+        this.appName = appName;
         this.dataSource = dataSource;
     }
 
@@ -74,6 +84,7 @@ final class WorkflowSweeper {
                                 task.state(), "system", Instant.now(),
                                 "deadline breached; reassigned to " + newAssignee));
                     }
+                    enqueueEscalateReminder(connection, rule, task, newAssignee);
                     escalated++;
                 }
                 connection.commit();
@@ -86,6 +97,25 @@ final class WorkflowSweeper {
             }
         } catch (SQLException ex) {
             throw error(ex);
+        }
+    }
+
+    /**
+     * Enqueues the escalation reminder on the sweep transaction's outbox (roadmap Phase 28 slice 3,
+     * Phase 20 channels): the new assignee, the document, and the state are in its payload scope.
+     */
+    private void enqueueEscalateReminder(Connection connection, Rule rule,
+            WorkflowTaskStore.Overdue task, String newAssignee) {
+        if (rule.escalateNotify() == null || outboxStore == null) {
+            return;
+        }
+        Map<String, Object> reminderContext = new LinkedHashMap<>();
+        reminderContext.put("assignee", newAssignee);
+        reminderContext.put("docType", task.docType());
+        reminderContext.put("docId", task.docId());
+        reminderContext.put("state", task.state());
+        if (rule.escalateNotify().fires(reminderContext)) {
+            outboxStore.insert(connection, rule.escalateNotify().build(reminderContext, appName));
         }
     }
 

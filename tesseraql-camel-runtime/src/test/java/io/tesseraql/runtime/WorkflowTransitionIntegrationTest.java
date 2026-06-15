@@ -169,10 +169,25 @@ class WorkflowTransitionIntegrationTest {
         assertThat(queryString("select due_at from tql_workflow_task "
                 + "where doc_id = ? and status = 'OPEN'", "ER-1")).isNull();
         assertThat(escalateHistoryCount("ER-1")).isEqualTo(1);
+        // The escalation enqueued a reminder notification on the outbox (Phase 20 channels).
+        assertThat(notificationCount("ER-1")).isEqualTo(1);
 
-        // Exactly once: the cleared deadline means a second sweep escalates nothing.
+        // Exactly once: the cleared deadline means a second sweep escalates and notifies nothing.
         assertThat(sweeper.sweep()).isZero();
         assertThat(escalateHistoryCount("ER-1")).isEqualTo(1);
+        assertThat(notificationCount("ER-1")).isEqualTo(1);
+    }
+
+    @Test
+    void assignmentEnqueuesAReminderNotification() throws Exception {
+        assertThat(post("/purchase-requests/PR-8/submit", "requester-1").statusCode())
+                .isEqualTo(200);
+        // Opening the approver's task enqueued a NOTIFICATION outbox event addressed to them.
+        assertThat(notificationCount("PR-8")).isEqualTo(1);
+        assertThat(queryString("select payload_json from tql_outbox_event "
+                + "where event_type = 'NOTIFICATION' and payload_json like ?",
+                "%\"doc\":\"PR-8\"%"))
+                .contains("approver-1");
     }
 
     private static HttpResponse<String> post(String path, String sub) throws Exception {
@@ -195,6 +210,14 @@ class WorkflowTransitionIntegrationTest {
     private static int historyCount(String docId) throws Exception {
         return Integer.parseInt(queryString(
                 "select count(*) from tql_workflow_history where doc_id = ?", docId));
+    }
+
+    /** NOTIFICATION outbox events whose envelope payload names the document (a reminder). */
+    private static int notificationCount(String docId) throws Exception {
+        return Integer.parseInt(queryString("select count(*) from tql_outbox_event "
+                + "where event_type = 'NOTIFICATION' and payload_json like ?",
+                "%\"doc\":\"" + docId
+                        + "\"%"));
     }
 
     private static int escalateHistoryCount(String docId) throws Exception {
@@ -248,7 +271,7 @@ class WorkflowTransitionIntegrationTest {
             statement.execute("insert into purchase_requests (id, title, amount) values "
                     + "('PR-1','Laptop',1000), ('PR-2','Pen',0), ('PR-3','Desk',500), "
                     + "('PR-4','Chair',700), ('PR-5','Lamp',300), ('PR-6','Phone',900), "
-                    + "('PR-7','Mouse',150)");
+                    + "('PR-7','Mouse',150), ('PR-8','Cable',80)");
             // App-mode: state lives in the status column, initialized to the initial state.
             statement.execute("create table expenses (id varchar(64) primary key, "
                     + "amount numeric(12,2) not null, status varchar(32) not null, "
@@ -310,6 +333,12 @@ class WorkflowTransitionIntegrationTest {
                     assign: { file: approver.sql }
                   - { id: approve, from: submitted, to: approved, command: approve.sql }
                   - { id: reject, from: submitted, to: rejected, command: reject.sql }
+                notify:
+                  assigned:
+                    channel: task-reminders
+                    payload:
+                      to: assignee
+                      doc: document.id
                 """);
         Files.writeString(workflowDir.resolve("submit.sql"), "update purchase_requests set "
                 + "last_action = 'submit', acted_by = /* audit.user */ 'x' where id = /* key */ 'x'\n");
@@ -366,6 +395,12 @@ class WorkflowTransitionIntegrationTest {
                   - state: submitted
                     within: 0s
                     onBreach: { reassign: dept_head.sql }
+                notify:
+                  escalated:
+                    channel: task-reminders
+                    payload:
+                      to: assignee
+                      doc: docId
                 """);
         Files.writeString(workflowDir.resolve("e_submit.sql"),
                 "update escalating_requests set last_action = 'submit' where id = /* key */ 'x'\n");

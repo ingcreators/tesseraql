@@ -302,7 +302,9 @@ public final class TesseraqlRuntime implements AutoCloseable {
                 io.tesseraql.core.workflow.WorkflowStore historyStore = context.getRegistry()
                         .lookupByNameAndType(TesseraqlProperties.WORKFLOW_STORE_BEAN,
                                 io.tesseraql.core.workflow.WorkflowStore.class);
-                workflowSweeper = new WorkflowSweeper(rules, taskStore, historyStore, dataSource);
+                workflowSweeper = new WorkflowSweeper(rules, taskStore, historyStore, outboxStore,
+                        manifest.config().getString("tesseraql.app.name").orElse("app"),
+                        dataSource);
                 context.getRegistry().bind(TesseraqlProperties.WORKFLOW_SWEEPER_BEAN,
                         workflowSweeper);
             }
@@ -743,6 +745,8 @@ public final class TesseraqlRuntime implements AutoCloseable {
             String docType = workflow.definition().document() == null
                     ? null
                     : workflow.definition().document().type();
+            io.tesseraql.yaml.notify.NotifyEvents.CompiledNotify escalateNotify = escalateReminder(
+                    workflow.definition());
             for (io.tesseraql.yaml.model.DeadlineSpec deadline : workflow.definition()
                     .deadlines()) {
                 if (deadline.onBreach() == null || deadline.onBreach().reassign() == null
@@ -756,13 +760,24 @@ public final class TesseraqlRuntime implements AutoCloseable {
                 try {
                     rules.add(new WorkflowSweeper.Rule(docType, deadline.state(),
                             io.tesseraql.core.sql.Sql2WayParser
-                                    .parse(java.nio.file.Files.readString(file))));
+                                    .parse(java.nio.file.Files.readString(file)),
+                            escalateNotify));
                 } catch (java.io.IOException ex) {
                     throw new java.io.UncheckedIOException(ex);
                 }
             }
         }
         return rules;
+    }
+
+    /** The compiled escalation reminder (Phase 20 channels), or {@code null} when undeclared. */
+    private static io.tesseraql.yaml.notify.NotifyEvents.CompiledNotify escalateReminder(
+            io.tesseraql.yaml.model.WorkflowDefinition def) {
+        if (def.reminders() == null || def.reminders().escalated() == null) {
+            return null;
+        }
+        return io.tesseraql.yaml.notify.NotifyEvents.compile(def.id(), "escalated",
+                def.reminders().escalated());
     }
 
     /** The configured dialect for the main datasource, or inferred from its JDBC URL (design ch. 42). */
