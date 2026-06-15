@@ -186,7 +186,20 @@ class StudioIntegrationTest {
                 .contains("TesseraQL Docs")
                 .contains("users.search")
                 .contains("/_tesseraql/studio/ui/docs/route?id=users.search")
-                .contains("Migrations");
+                .contains("Migrations")
+                // The live-search input wires htmx to the search fragment.
+                .contains("hx-get=\"/_tesseraql/studio/ui/docs/search\"");
+    }
+
+    @Test
+    void uiDocsSearchReturnsRankedResultFragment() throws Exception {
+        HttpResponse<String> response = get(
+                "/_tesseraql/studio/ui/docs/search?q=" + enc("users provision"), true);
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        // Only the provisioning route matches both terms; the fragment links to its detail page.
+        assertThat(response.body()).contains("users.apiProvision")
+                .contains("/_tesseraql/studio/ui/docs/route?id=users.apiProvision");
     }
 
     @Test

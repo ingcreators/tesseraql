@@ -699,6 +699,11 @@ public final class TesseraqlRuntime implements AutoCloseable {
                             return entry == null
                                     ? Map.of("notFound", true, "id", id)
                                     : io.tesseraql.studio.DocViews.route(entry);
+                        })
+                        .register("docs.search", params -> {
+                            Object query = params.get("q");
+                            String q = query == null ? "" : String.valueOf(query);
+                            return io.tesseraql.studio.DocViews.searchResults(q, doc.search(q));
                         });
             }
             // Retention (design ch. 44): enabled by configuring the sweep interval. When

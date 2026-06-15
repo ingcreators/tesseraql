@@ -14,7 +14,14 @@ import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Set;
+import java.util.regex.Pattern;
 
 /**
  * The backend for the in-Studio documentation portal (documentation portal v1): it serves the
@@ -39,9 +46,12 @@ public final class DocService {
     private static final TqlErrorCode NOT_FOUND = new TqlErrorCode(TqlDomain.STUDIO, 4042);
     private static final ObjectMapper MAPPER = new ObjectMapper()
             .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
+    private static final Pattern NON_WORD = Pattern.compile("[^a-z0-9]+");
 
     private final AppManifest manifest;
     private final Path appHome;
+    private volatile List<Hit> corpus;
+    private volatile Map<String, Set<Integer>> inverted;
 
     public DocService(AppManifest manifest) {
         this.manifest = manifest;
@@ -90,6 +100,98 @@ public final class DocService {
         return null;
     }
 
+    /**
+     * Ranked route hits for a free-text query, over a small in-memory inverted index built once at
+     * first use (option C — sufficient for an app-scoped corpus, adds no dependency). Each route is
+     * a document over its id, path, recipe, inputs, security, bound SQL, and covering tests; a query
+     * term matches a document term exactly or as a prefix (so live-search ranks as the user types),
+     * and a route's score is the number of distinct query terms it matches. A blank query matches
+     * nothing.
+     */
+    public List<Hit> search(String query) {
+        List<String> terms = tokenize(query);
+        if (terms.isEmpty()) {
+            return List.of();
+        }
+        ensureIndex();
+        Map<Integer, Integer> scores = new HashMap<>();
+        for (String term : terms) {
+            Set<Integer> matched = new LinkedHashSet<>();
+            for (Map.Entry<String, Set<Integer>> entry : inverted.entrySet()) {
+                if (entry.getKey().startsWith(term)) {
+                    matched.addAll(entry.getValue());
+                }
+            }
+            for (Integer doc : matched) {
+                scores.merge(doc, 1, Integer::sum);
+            }
+        }
+        return scores.entrySet().stream()
+                .sorted(Comparator.<Map.Entry<Integer, Integer>>comparingInt(Map.Entry::getValue)
+                        .reversed().thenComparing(entry -> corpus.get(entry.getKey()).id()))
+                .map(entry -> corpus.get(entry.getKey()).withScore(entry.getValue()))
+                .toList();
+    }
+
+    private synchronized void ensureIndex() {
+        if (inverted != null) {
+            return;
+        }
+        List<Hit> hits = new ArrayList<>();
+        Map<String, Set<Integer>> index = new HashMap<>();
+        int doc = 0;
+        for (RouteEntry entry : spec().routes()) {
+            RouteSpec route = entry.route();
+            hits.add(new Hit(route.id(), route.method(), route.path(), 0));
+            for (String term : tokenize(searchText(entry))) {
+                index.computeIfAbsent(term, key -> new LinkedHashSet<>()).add(doc);
+            }
+            doc++;
+        }
+        this.corpus = List.copyOf(hits);
+        this.inverted = index;
+    }
+
+    /** The searchable text of one route: its identity, surface, security, SQL, and covering tests. */
+    private static String searchText(RouteEntry entry) {
+        RouteSpec route = entry.route();
+        List<String> parts = new ArrayList<>();
+        add(parts, route.id(), route.method(), route.path(), route.recipe(), route.kind());
+        route.inputs().forEach(input -> add(parts, input.name()));
+        if (route.security() != null) {
+            add(parts, route.security().auth(), route.security().policy());
+        }
+        route.validations().forEach(rule -> add(parts, rule.id()));
+        route.notifications().forEach(notify -> add(parts, notify.id(), notify.channel()));
+        route.sql().forEach(statement -> {
+            add(parts, statement.file(), statement.contract(), statement.service());
+            statement.binds().forEach(bind -> add(parts, bind));
+        });
+        entry.tests().forEach(test -> add(parts, test.name(), test.target()));
+        return String.join(" ", parts);
+    }
+
+    private static void add(List<String> parts, String... values) {
+        for (String value : values) {
+            if (value != null && !value.isBlank()) {
+                parts.add(value);
+            }
+        }
+    }
+
+    private static List<String> tokenize(String text) {
+        if (text == null || text.isBlank()) {
+            return List.of();
+        }
+        List<String> tokens = new ArrayList<>();
+        for (String token : NON_WORD.split(text.toLowerCase(Locale.ROOT))) {
+            if (!token.isBlank()) {
+                tokens.add(token);
+            }
+        }
+        return tokens;
+    }
+
     /** Reads a hand-written Markdown doc under the app home and renders it to CSP-safe HTML. */
     public String markdown(String relativePath) {
         Path file = resolve(relativePath);
@@ -134,5 +236,13 @@ public final class DocService {
 
     /** A covering test case projected to the facts the portal shows. */
     public record TestRef(String name, String kind, String target) {
+    }
+
+    /** A ranked search hit: the matched route's identity and its term-match score. */
+    public record Hit(String id, String method, String path, int score) {
+
+        Hit withScore(int score) {
+            return new Hit(id, method, path, score);
+        }
     }
 }
