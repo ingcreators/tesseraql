@@ -1,10 +1,10 @@
 # Attachments and object storage
 
-> **Status: planned (roadmap Phase 30).** This document is the design; nothing here ships yet.
-> Three slices are planned: attachment core on a durable `BlobStore` with a local default
-> (slice 1); the opt-in `tesseraql-s3` leaf module for S3 and S3-compatible stores (slice 2);
-> the scan-hook SPI and retention wiring that complete the phase (slice 3). Lint codes and config
-> keys below are proposals, confirmed against the linter and config schema at implementation time.
+> **Status: slices 1–2 delivered (roadmap Phase 30); slice 3 planned.** Delivered: attachment core
+> on a durable `BlobStore` with a local default (slice 1); the opt-in `tesseraql-s3` leaf module for
+> S3 and S3-compatible stores (slice 2). Planned: the scan-hook SPI and retention wiring that
+> complete the phase (slice 3). The app-mode 2-way SQL metadata and the `attachment` coverage kind
+> are slice-1 follow-ups.
 
 Attachments let a business record carry files — an invoice PDF, a scanned form, a product image —
 stored as durable objects outside the database and addressed from SQL. The phase adds three things:
@@ -196,10 +196,12 @@ Compatibility settings that the config exposes because they bite in practice:
   `requestChecksumCalculation = WHEN_REQUIRED` / `responseChecksumValidation = WHEN_REQUIRED`,
   restoring compatibility; `default` keeps the SDK behavior for AWS.
 
-`S3BlobStore` self-installs via the `RuntimeExtension` SPI (like the OIDC RP) when
-`provider: s3`, binding itself as the `BlobStore`. **Switching `provider` is the whole change** — no
-DSL touches the bytes, so an app moves from local disk to S3 by config alone. The same module can
-also register an `S3TempStore` for the spool path if an app sets `tesseraql.spool.provider: s3`.
+`S3BlobStore` is contributed by a `BlobStoreProvider` discovered through `ServiceLoader` (the
+PdfEngine/FileCodec idiom) and selected when `provider: s3`, binding itself as the `BlobStore`. (A
+`RuntimeExtension` would install too late — after the attachment service is constructed — so the
+provider factory, resolved inside the same wiring step, is the right seam.) **Switching `provider`
+is the whole change** — no DSL touches the bytes, so an app moves from local disk to S3 by config
+alone.
 
 ## Governance
 
@@ -260,8 +262,8 @@ than crowding the `TQL-YAML` loader-error number space); object-storage egress i
 | `TQL-ATTACH-3403` | error | a `kind: attachment` document is missing `record.entity`/`record.key` | slice 1 |
 | `TQL-ATTACH-3404` | error | the `basePath` does not contain the record key as a path parameter | slice 1 |
 | `TQL-ATTACH-3405` | error | `limits.maxBytes` is missing or unparseable | slice 1 |
-| `TQL-SEC-411x` | error | an attachment's resolved bucket is not in `tesseraql.object-storage.allowedBuckets` (deny-by-default) | slice 2 |
-| `TQL-SEC-411x` | error | `provider: s3` without resolvable credentials, or `scan: require-clean` with no scanner installed | slice 2/3 |
+| `TQL-SEC-4110` | error | with `provider: s3`, an attachment's resolved bucket is not in `tesseraql.object-storage.allowedBuckets` (deny-by-default) | slice 2 |
+| `TQL-SEC-411x` | error | `scan: require-clean` with no scanner installed | slice 3 |
 
 The runtime fails closed: a `404` when an attachment is unknown or owned by a different record (an
 attachment is never leaked across records), a `413` past the size limit, a `415` for a disallowed
@@ -281,7 +283,7 @@ surface machine-checkable in the meantime.
 | `tesseraql-yaml` | the `kind: attachment` model + parser, the `object-storage`/`attachments`/`retention.attachments` config, and the lint (`TQL-YAML-12xx`, `TQL-SEC-411x`) |
 | `tesseraql-compiler` | `buildAttachment` — synthesizes the upload/download routes and binds the `AttachmentStore` |
 | `tesseraql-operations` | `JdbcAttachmentStore` (managed `tql_attachment`), the off-heap upload/download integration with `FileTransferService`, and the `RetentionSweeper` attachments pass |
-| `tesseraql-s3` (new) | `S3BlobStore` (+ optional `S3TempStore`), AWS SDK v2 (Apache-2.0) confined here, the `RuntimeExtension` self-install, and S3/compatible config — added to the root `pom.xml` `<modules>` and the BOM |
+| `tesseraql-s3` (new) | `S3BlobStore` + `S3BlobStoreProvider` (ServiceLoader), AWS SDK v2 (Apache-2.0) confined here, and S3/compatible config — added to the root `pom.xml` `<modules>` and the BOM. The `BlobStoreProvider` SPI + `BlobStores` factory live in `tesseraql-yaml` |
 
 Integration tests for `S3BlobStore` run against **Adobe S3Mock** (Apache-2.0) via Testcontainers —
 not MinIO; see the decision points. They are the compatibility gate that catches the checksum and
@@ -320,10 +322,11 @@ Phase 30 ships in slices, each a reviewable PR with CI green:
    `TQL-ATTACH-34xx` lint. No S3, no new module — ships value on local storage alone. **Delivered**
    for managed mode; app-mode 2-way SQL metadata and the `attachment` coverage kind are the
    immediate slice-1 follow-up.
-2. **`tesseraql-s3` leaf module** — `S3BlobStore` on AWS SDK v2 with the `RuntimeExtension`
-   self-install, the deny-by-default `allowedBuckets` egress and SecretResolver credentials, the
-   `endpoint`/`region`/`pathStyle`/`checksumMode` compatibility settings, the `TQL-SEC-411x` lint,
-   and the Adobe S3Mock compatibility ITs. Switching `provider: s3` is the whole change.
+2. **`tesseraql-s3` leaf module** (delivered) — `S3BlobStore` on AWS SDK v2, contributed by a
+   `BlobStoreProvider` discovered via `ServiceLoader` and selected by `provider: s3`; the
+   deny-by-default `allowedBuckets` egress and SecretResolver credentials; the
+   `endpoint`/`region`/`pathStyle`/`checksumMode` compatibility settings; the `TQL-SEC-4110` lint;
+   and Adobe S3Mock compatibility ITs. Switching `provider: s3` is the whole change.
 3. **Scanning and retention** — the `AttachmentScanner` scan-hook SPI with the no-op default and the
    `require-clean` download gate, and the `RetentionSweeper` attachments pass (orphan GC plus the
    optional age policy). Completes the phase.

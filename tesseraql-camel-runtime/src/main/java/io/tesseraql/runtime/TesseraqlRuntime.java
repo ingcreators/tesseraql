@@ -323,13 +323,14 @@ public final class TesseraqlRuntime implements AutoCloseable {
                 tempStore, dataSource, io.tesseraql.core.files.FileCodecs.discover());
         fileTransfers.ensureSchema();
         context.getRegistry().bind(TesseraqlProperties.FILE_TRANSFER_BEAN, fileTransfers);
-        // Managed attachments (roadmap Phase 30 slice 1): provisioned and bound when the app declares
-        // attachment documents in `managed` mode (the default). The durable file blob store and the
-        // metadata table back the synthesized upload/list/download routes; an app with no attachments
-        // gets neither table nor blob directory.
+        // Managed attachments (roadmap Phase 30): provisioned and bound when the app declares
+        // attachment documents in `managed` mode (the default). The blob store is selected by
+        // tesseraql.object-storage.provider — the local file store by default, or S3 from the opt-in
+        // tesseraql-s3 module (slice 2) — and the metadata table backs the synthesized
+        // upload/list/download routes; an app with no attachments gets neither.
         if (attachmentsNeedManagedStore(manifest)) {
-            io.tesseraql.core.blob.FileBlobStore blobStore = new io.tesseraql.core.blob.FileBlobStore(
-                    appHome.resolve("work/blob/tesseraql"));
+            io.tesseraql.core.blob.BlobStore blobStore = io.tesseraql.yaml.blob.BlobStores.create(
+                    manifest.config(), appHome);
             context.getRegistry().bind(TesseraqlProperties.BLOB_STORE_BEAN, blobStore);
             io.tesseraql.operations.attachment.JdbcAttachmentStore attachmentStore = new io.tesseraql.operations.attachment.JdbcAttachmentStore(
                     dataSource);
