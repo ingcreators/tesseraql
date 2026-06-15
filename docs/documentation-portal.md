@@ -1,12 +1,16 @@
 # Application Documentation Portal
 
-> Status: **v1 & v2 shipped** (2026-06-15). The design brief below records the agreed architecture.
+> Status: **v1 & v2 shipped** (2026-06-15); **v3 (schema introspection) planned**. The design brief
+> below records the agreed architecture.
 > The *v1 (spec layer)* slice is implemented and merged (PR #60–#67). The *v2 (report overlay)*
 > slice is implemented and merged across five sub-slices (report model + `report`/`history.json`
 > sidecar, DocService overlay + badges, coverage dashboard + search filters, per-line SQL coverage
 > highlighting, and run-trend sparklines); its plan is the
 > [Implementation plan — v2 (report overlay)](#implementation-plan--v2-report-overlay) section at
-> the end of this document. Sections describing v3 (schema) remain forward-looking.
+> the end of this document. The *v3 (schema introspection)* slice is planned but not yet built; its
+> plan is the [Implementation plan — v3 (schema introspection)](#implementation-plan--v3-schema-introspection)
+> section. The forward-looking sections above (*Table definitions*, the *v3 — schema* slice) record
+> the agreed scope it implements.
 
 ## Motivation
 
@@ -451,6 +455,130 @@ shape is mirrored as a small studio-side record (as `DocSpec` mirrors the build 
   `AppTestRunnerIntegrationTest` pattern), not H2 in a leaf module.
 - Studio overlay/merge and degradation are covered by plain unit tests (no DB).
 - `report.json` is a generated artifact — never hand-edited (rule 1).
+- Build-file / mojo / reproducibility changes are made deliberately (not auto-accepted).
+- Run `spotless:apply` before the final `mvn -B -ntp verify`; confirm `BUILD SUCCESS`.
+- Land each slice through a PR with CI green (rule 9); never push to `main`.
+
+## Implementation plan — v3 (schema introspection)
+
+v1 ships the **spec** layer and v2 the **report** layer for routes, tests, results, and coverage.
+The remaining content area is **Table definitions** — "the only real gap" (*Content mapping* above).
+v1 already added migration *listing* to `AppManifest` (the cheap, deterministic spec-layer part is
+shipped — the index page renders a migrations table). v3 adds the **rich, run-dependent schema
+view**: introspect the migrated database catalog and surface browsable table reference pages, as one
+more authoritative, drift-free surface of the same portal. Because deny-by-default endpoints already
+expose which SQL runs, a per-table view of the underlying schema rounds out the security/audit story.
+
+This realises the decision recorded under *Table definitions* (report layer: extend
+`TableIntrospector` to catalog scope from the migrated test/CI DB) and the *v3 — schema* slice.
+
+### Scope for this round (decisions)
+
+- **Core only:** catalog-wide introspection + table reference pages. The **SQL→table dependency
+  graph** (which route reads/writes which table) is the hardest semantic piece (table extraction
+  from 2-way SQL, dialect variance, dynamic SQL) and is **deferred to v3.1**, as is a DB-free DDL
+  parser.
+- **Sidecar only:** schema comes from a build-time `schema.json`; when absent the portal shows a
+  "no schema introspected" empty state (mirroring v2's graceful degradation). **No** live
+  dev/edit-mode introspection fallback in this cut.
+
+### Design principles (consistent with v2)
+
+1. **Optional, run-dependent sidecar — never inside `.tqlapp`.** Introspection needs a live,
+   migrated database, so the result is non-deterministic across environments. v3 writes a new
+   `schema.json` **sidecar** into the app home's `.tesseraql/docs/` directory, alongside
+   `report.json` / `history.json`. `AppPackager` already excludes source `.tesseraql/` from the
+   archive, so the schema never leaks into the reproducible `.tqlapp` — the `generate` /
+   `package-app` goals are unchanged.
+2. **Generate from the migrated DB the build already stands up.** The `integration-test` phase
+   already applies migrations (`migrate`) and runs against a database (Testcontainers in CI). v3
+   introspects that same catalog. A dedicated `schema` goal keeps schema generation independent of
+   the test *run* (it still produces a catalog when tests are skipped).
+3. **Reuse the single-table introspector.** Generalise the scaffolding-only
+   [`TableIntrospector`](../tesseraql-yaml/src/main/java/io/tesseraql/yaml/scaffold/TableIntrospector.java)
+   /[`TableSchema`](../tesseraql-yaml/src/main/java/io/tesseraql/yaml/scaffold/TableSchema.java)
+   (already JDBC `DatabaseMetaData`-based) to catalog scope rather than writing new metadata code.
+4. **Graceful degradation + studio stays light.** `DocService` reads `schema.json` exactly as it
+   reads `report.json`; the typed build model is mirrored as a small null-tolerant studio record
+   (as `ReportOverlay` mirrors `ReportDoc`). `tesseraql-studio` opens **no** database (sidecar-only).
+
+### The schema artifact — `schema.json`
+
+A new typed model in `tesseraql-report`, Jackson-serialized, keyed by datasource:
+
+```text
+SchemaDoc(
+  schemaVersion: int,
+  generatedAt: String,                       // ISO-8601, stamped by the mojo
+  datasources: Map<String, CatalogSchema>    // keyed by datasource name
+)
+CatalogSchema(tables: List<Table>)           // tables sorted by name (deterministic)
+Table(
+  name, type,                                // TABLE | VIEW
+  schema,                                     // db schema/namespace, nullable
+  columns: List<Column>,                      // ordered by ordinal position
+  primaryKey: List<String>,                   // ordered key columns
+  foreignKeys: List<ForeignKey>,
+  uniqueIndexes: List<Index>
+)
+Column(name, jdbcType, sqlTypeName, nullable, autoincrement, defaultValue, size)
+ForeignKey(name, columns: List<String>, refTable, refColumns: List<String>)
+Index(name, columns: List<String>, unique)
+```
+
+The introspection itself (`CatalogSchema` + a `CatalogIntrospector`) lives in `tesseraql-yaml`'s
+`scaffold` package beside `TableIntrospector` (JDK `java.sql` only, no new dependency, keeps the
+core/yaml boundary). The serializable `SchemaDoc` wrapper + generator live in `tesseraql-report`.
+
+### Module & class layout
+
+| Module | New / changed | Responsibility |
+| --- | --- | --- |
+| `tesseraql-yaml` (`scaffold`) | **new** `CatalogIntrospector` + `CatalogSchema` | catalog-wide JDBC introspection (`getTables(null, schema, "%", {TABLE,VIEW})` → per table `getColumns`/`getPrimaryKeys`/`getImportedKeys`/`getIndexInfo`) |
+| `tesseraql-report` (`docs`) | **new** `SchemaDoc` + `SchemaGenerator` (`toJson`) | introspect the build DB → typed, deterministic `schema.json` |
+| `tesseraql-maven-plugin` | **new** `SchemaMojo` (goal `schema`, `integration-test`) | after `migrate`, write `appHome/.tesseraql/docs/schema.json`; reuse the `tesseraql.jdbcUrl`/`username`/`password` param block; never fail the build (overlay-only, like `ReportMojo`) |
+| `tesseraql-studio` | **new** `SchemaOverlay` mirror; extend `DocService` (`SCHEMA_PATH`, optional read + degrade) + `DocViews` (`schema()`, `table()`); new bundled pages | read `schema.json` if present; project catalog index + per-table detail; include table/column names in the in-memory search index |
+| `tesseraql-camel-runtime` | register `docs.schema` + `docs.table` providers in `TesseraqlRuntime` (beside `docs.coverage`) | wire the new pages |
+
+Boundary note: `tesseraql-report` already depends on `tesseraql-yaml` and may use JDBC at build time
+(rule 2 restricts only `tesseraql-core`). `SchemaMojo` is kept separate from `ReportMojo` because the
+schema needs only the migrated DB, not the test run (alternative — fold into `ReportMojo` to share
+one connection — rejected for that reason).
+
+### Slices (each a standalone PR, CI-green, merged in order — rule 7)
+
+1. **Schema model + introspector + sidecar (no UI).** `CatalogIntrospector` + `CatalogSchema`
+   (yaml); `SchemaDoc` + `SchemaGenerator` + `toJson` (report); `SchemaMojo` writing
+   `.tesseraql/docs/schema.json`. Unit test asserts deterministic JSON (re-run → identical bytes,
+   sorted output). A Testcontainers IT (Postgres, mirroring `ReportGeneratorIntegrationTest`)
+   asserts introspected tables/columns/PK/FK against known migrations. `AppPackager` test confirms
+   `schema.json` is **not** packed. No portal change yet.
+2. **Schema overlay + table reference pages.** `SchemaOverlay` mirror; `DocService` reads
+   `schema.json` (optional, degrades to empty); `DocViews.schema()` (datasources → tables with
+   column counts) and `DocViews.table()` (columns, PK badges, FKs linked to their target table page,
+   unique indexes). New bundled `query-html` pages `.../ui/docs/schema` and
+   `.../ui/docs/schema/table` (params `ds`, `name`) on `tql/shell` + hc; register `docs.schema` /
+   `docs.table` in `TesseraqlRuntime`; add a "Schema" nav entry; extend the in-memory search index
+   with table + column names. Empty state when the sidecar is absent. Studio unit tests (merge +
+   degradation, view projection from fixture JSON) and a `StudioIntegrationTest` rendering the
+   catalog index + a table page over HTTP. (Split into 2a pages / 2b search if the PR grows large.)
+
+### Deferred (v3.1+)
+
+- The **SQL→table dependency graph** (route↔table cross-links): parse the directive-stripped 2-way
+  SQL skeleton (candidate: JSQLParser, Apache-2.0; reuse the
+  [`SqlCoverableLines`](../tesseraql-coverage-core/src/main/java/io/tesseraql/coverage/SqlCoverableLines.java)
+  AST-visitor pattern over [`Sql2WayParser`](../tesseraql-core/src/main/java/io/tesseraql/core/sql/Sql2WayParser.java)).
+- A DB-free DDL parser (spec-layer schema without a live DB).
+- Multi-datasource introspection beyond the single build-connected datasource.
+- Live dev/edit-mode introspection fallback.
+
+### Verification & conventions
+
+- Catalog introspection is covered by a Testcontainers IT (the `ReportGeneratorIntegrationTest`
+  pattern), not H2 in a leaf module.
+- Studio overlay/merge, degradation, and view projection are covered by plain unit tests (no DB).
+- `schema.json` is a generated artifact — never hand-edited (rule 1).
 - Build-file / mojo / reproducibility changes are made deliberately (not auto-accepted).
 - Run `spotless:apply` before the final `mvn -B -ntp verify`; confirm `BUILD SUCCESS`.
 - Land each slice through a PR with CI green (rule 9); never push to `main`.
