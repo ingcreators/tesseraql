@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{tql/shell :: page(|TesseraQL Coverage · ${cov.appName}|, ~{:: #page-header}, ~{:: #page-content})}">
+<th:block id="page-header">
+  <span class="hc-spacer"></span>
+  <div class="hc-cluster">
+    <a class="hc-button" data-variant="ghost" data-size="sm" href="/_tesseraql/studio/ui/docs">&larr; docs</a>
+  </div>
+</th:block>
+<div id="page-content" class="hc-stack">
+  <section class="hc-card" th:unless="${cov.hasReport}">
+    <h2>Coverage</h2>
+    <div class="hc-empty">
+      <p class="hc-empty__title">No test run recorded yet.</p>
+      <p>Run the <code>tesseraql:report</code> goal to populate test results and coverage.</p>
+    </div>
+  </section>
+  <th:block th:if="${cov.hasReport}">
+    <section class="hc-card">
+      <h2>Coverage summary</h2>
+      <div class="hc-cluster">
+        <span class="hc-badge" th:attr="data-variant=${cov.report.allPassed} ? 'success' : 'error'"
+              th:text="|${cov.report.passed}/${cov.report.total} passed|"></span>
+        <span class="hc-badge" data-variant="info" th:text="|SQL lines ${cov.report.sqlLinePct}%|"></span>
+        <span class="hc-badge" data-variant="info" th:text="|branches ${cov.report.sqlBranchPct}%|"></span>
+        <span class="hc-badge" th:attr="data-variant=${cov.report.gatePassed} ? 'success' : 'error'"
+              th:text="${cov.report.gatePassed} ? 'gate passed' : 'gate failed'"></span>
+      </div>
+      <span class="hc-field__label" th:if="${cov.report.runId}" th:text="|run ${cov.report.runId}|"></span>
+      <ul th:if="${cov.hasGateFailures}">
+        <li th:each="f : ${cov.gateFailures}" th:text="${f}"></li>
+      </ul>
+    </section>
+    <section class="hc-card">
+      <h2>Item coverage</h2>
+      <table class="hc-table" th:if="${cov.hasKinds}">
+        <thead><tr><th>Kind</th><th>Covered</th><th>Ratio</th><th>Uncovered</th></tr></thead>
+        <tbody>
+          <tr th:each="k : ${cov.kinds}">
+            <td th:text="${k.kind}"></td>
+            <td th:text="|${k.covered}/${k.declared}|"></td>
+            <td>
+              <span class="hc-badge" th:attr="data-variant=${k.full} ? 'success' : 'warning'"
+                    th:text="|${k.pct}%|"></span>
+            </td>
+            <td>
+              <span class="hc-badge" data-variant="warning" th:each="u : ${k.uncovered}" th:text="${u}"></span>
+              <span class="hc-field__label" th:if="${k.uncoveredMore > 0}"
+                    th:text="|+${k.uncoveredMore} more|"></span>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+    <section class="hc-card" th:if="${cov.hasFailingCases}">
+      <h2>Failing tests</h2>
+      <table class="hc-table">
+        <thead><tr><th>Route</th><th>Case</th><th>Message</th></tr></thead>
+        <tbody>
+          <tr th:each="c : ${cov.failingCases}">
+            <td th:text="${c.route}"></td>
+            <td th:text="${c.name}"></td>
+            <td th:text="${c.message}"></td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+  </th:block>
+</div>
+</html>

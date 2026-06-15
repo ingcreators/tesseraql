@@ -4,13 +4,14 @@
 <th:block id="page-header">
   <span class="hc-spacer"></span>
   <div class="hc-cluster">
+    <a class="hc-button" data-variant="ghost" data-size="sm" href="/_tesseraql/studio/ui/docs/coverage">coverage</a>
     <a class="hc-button" data-variant="ghost" data-size="sm" href="/_tesseraql/studio/ui">&larr; explorer</a>
   </div>
 </th:block>
 <div id="page-content" class="hc-stack">
 <section class="hc-card">
   <h2>Search</h2>
-  <input class="hc-input" type="search" name="q" autocomplete="off" placeholder="Search routes, paths, SQL, tests&hellip;"
+  <input class="hc-input" type="search" name="q" autocomplete="off" placeholder="Search routes, paths, SQL, tests&hellip; (try status:failing, coverage:untested)"
          hx-get="/_tesseraql/studio/ui/docs/search" hx-trigger="input changed delay:200ms, search"
          hx-target="#docs-search-results" hx-swap="innerHTML">
   <div id="docs-search-results" class="hc-stack"></div>

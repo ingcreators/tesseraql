@@ -116,6 +116,38 @@ class DocViewsTest {
     }
 
     @Test
+    void coverageModelSummarisesKindsGateAndFailingCases() {
+        ReportOverlay.RouteReport search = new ReportOverlay.RouteReport(true,
+                List.of(new ReportOverlay.CaseResult("ok", true, "OK"),
+                        new ReportOverlay.CaseResult("broken", false, "boom")),
+                List.of(), Map.of());
+        ReportOverlay overlay = new ReportOverlay(1, "run-1", "2026-06-15T12:00:00Z",
+                new ReportOverlay.Summary(2, 1, 1, 0.5, 1.0, false),
+                new ReportOverlay.Thresholds(0.8, 0.7, Map.of("route", 1.0)),
+                new ReportOverlay.Gate(false,
+                        List.of("web/x.sql: line coverage 50% < required 80%")),
+                List.of(new ReportOverlay.KindCoverage("route", 0.5, 1, 2, List.of("users.print"))),
+                Map.of("users.search", search));
+
+        Map<String, Object> model = DocViews.coverage("demo", overlay);
+
+        assertThat(model).containsEntry("hasReport", true).containsEntry("hasKinds", true)
+                .containsEntry("hasGateFailures", true).containsEntry("hasFailingCases", true);
+        assertThat(asRows(model.get("kinds"))).singleElement().satisfies(row -> assertThat(row)
+                .containsEntry("kind", "route").containsEntry("pct", 50)
+                .containsEntry("full", false));
+        assertThat(asRows(model.get("failingCases"))).singleElement().satisfies(row -> assertThat(
+                row).containsEntry("route", "users.search").containsEntry("name", "broken"));
+    }
+
+    @Test
+    void coverageModelIsEmptyWithoutAnOverlay() {
+        Map<String, Object> model = DocViews.coverage("demo", null);
+
+        assertThat(model).containsEntry("hasReport", false).doesNotContainKey("kinds");
+    }
+
+    @Test
     void searchResultsModelMapsHitsToDetailLinks() {
         Map<String, Object> model = DocViews.searchResults("user",
                 List.of(new Hit("users.search", "GET", "/api/users", 2)));
