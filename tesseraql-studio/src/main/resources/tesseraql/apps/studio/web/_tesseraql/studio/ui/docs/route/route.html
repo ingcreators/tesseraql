@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{tql/shell :: page(|TesseraQL Docs · ${doc.id}|, ~{:: #page-header}, ~{:: #page-content})}">
+<th:block id="page-header">
+  <span class="hc-spacer"></span>
+  <div class="hc-cluster">
+    <a class="hc-button" data-variant="ghost" data-size="sm" href="/_tesseraql/studio/ui/docs">&larr; docs</a>
+  </div>
+</th:block>
+<div id="page-content" class="hc-stack">
+  <section class="hc-card" th:if="${doc.notFound}">
+    <div class="hc-empty"><p class="hc-empty__title">No route <span th:text="${doc.id}"></span>.</p></div>
+  </section>
+  <th:block th:unless="${doc.notFound}">
+    <section class="hc-card">
+      <div class="hc-cluster">
+        <span class="hc-badge" th:text="${doc.method}"></span>
+        <code th:text="${doc.path}"></code>
+        <span class="hc-badge" data-variant="info" th:text="${doc.recipe}"></span>
+      </div>
+      <h2 th:text="${doc.id}"></h2>
+    </section>
+    <section class="hc-card" th:if="${doc.security}">
+      <h3>Security</h3>
+      <div class="hc-cluster">
+        <span class="hc-badge" th:if="${doc.security.auth}" th:text="|auth: ${doc.security.auth}|"></span>
+        <span class="hc-badge" th:if="${doc.security.policy}" th:text="|policy: ${doc.security.policy}|"></span>
+        <span class="hc-badge" th:if="${doc.security.provider}" th:text="|provider: ${doc.security.provider}|"></span>
+        <span class="hc-badge" data-variant="warning" th:if="${doc.security.csrf}">CSRF</span>
+      </div>
+    </section>
+    <section class="hc-card" th:if="${doc.hasInputs}">
+      <h3>Inputs</h3>
+      <table class="hc-table">
+        <thead><tr><th>Name</th><th>Type</th><th>Required</th><th>Constraints</th></tr></thead>
+        <tbody>
+          <tr th:each="i : ${doc.inputs}">
+            <td th:text="${i.name}"></td>
+            <td th:text="${i.type}"></td>
+            <td th:text="${i.required}"></td>
+            <td><span class="hc-badge" th:each="c : ${i.constraints}" th:text="${c}"></span></td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+    <section class="hc-card" th:if="${doc.hasValidations}">
+      <h3>Validation</h3>
+      <table class="hc-table">
+        <thead><tr><th>Rule</th><th>Kind</th><th>Expression / file</th><th>Field</th></tr></thead>
+        <tbody>
+          <tr th:each="v : ${doc.validations}">
+            <td th:text="${v.id}"></td>
+            <td th:text="${v.kind}"></td>
+            <td th:text="${v.expression} ?: ${v.file}"></td>
+            <td th:text="${v.field}"></td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+    <section class="hc-card" th:if="${doc.hasNotifications}">
+      <h3>Notifications</h3>
+      <table class="hc-table">
+        <thead><tr><th>Id</th><th>Channel</th><th>When</th><th>Payload</th></tr></thead>
+        <tbody>
+          <tr th:each="n : ${doc.notifications}">
+            <td th:text="${n.id}"></td>
+            <td th:text="${n.channel}"></td>
+            <td th:text="${n.when}"></td>
+            <td><span class="hc-badge" th:each="p : ${n.payload}" th:text="${p}"></span></td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+    <section class="hc-card" th:if="${doc.response}">
+      <h3>Response</h3>
+      <div class="hc-cluster">
+        <span class="hc-badge" data-variant="info" th:text="${doc.response.kind}"></span>
+        <span class="hc-badge" th:if="${doc.response.status}" th:text="|status: ${doc.response.status}|"></span>
+        <span class="hc-badge" th:if="${doc.response.template}" th:text="|template: ${doc.response.template}|"></span>
+        <span class="hc-badge" th:if="${doc.response.contentType}" th:text="${doc.response.contentType}"></span>
+        <span class="hc-badge" th:if="${doc.response.location}" th:text="|&rarr; ${doc.response.location}|"></span>
+      </div>
+    </section>
+    <section class="hc-card" th:if="${doc.hasSql}">
+      <h3>SQL</h3>
+      <div class="hc-stack" th:each="s : ${doc.sql}">
+        <div class="hc-cluster">
+          <span class="hc-badge" th:text="${s.label}"></span>
+          <code th:if="${s.file}" th:text="${s.file}"></code>
+          <code th:if="${s.contract}" th:text="|contract: ${s.contract}|"></code>
+          <code th:if="${s.service}" th:text="|service: ${s.service}|"></code>
+          <span class="hc-badge" th:text="|mode: ${s.mode}|"></span>
+        </div>
+        <div class="hc-cluster" th:unless="${#lists.isEmpty(s.binds)}">
+          <span class="hc-field__label">binds</span>
+          <span class="hc-badge" th:each="b : ${s.binds}" th:text="${b}"></span>
+        </div>
+        <ul th:unless="${#lists.isEmpty(s.structure)}">
+          <li th:each="c : ${s.structure}" th:text="|${c.kind} ${c.expression}|"></li>
+        </ul>
+        <pre class="source" th:if="${s.statement}" th:text="${s.statement}"></pre>
+      </div>
+    </section>
+    <section class="hc-card" th:if="${doc.hasTests}">
+      <h3>Tests</h3>
+      <table class="hc-table">
+        <thead><tr><th>Name</th><th>Kind</th><th>Target</th></tr></thead>
+        <tbody>
+          <tr th:each="t : ${doc.tests}">
+            <td th:text="${t.name}"></td>
+            <td th:text="${t.kind}"></td>
+            <td th:text="${t.target}"></td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+  </th:block>
+</div>
+</html>

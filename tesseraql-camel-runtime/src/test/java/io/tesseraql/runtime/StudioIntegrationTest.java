@@ -176,6 +176,45 @@ class StudioIntegrationTest {
     }
 
     @Test
+    void uiDocsIndexRendersRoutesAndMigrationListing() throws Exception {
+        HttpResponse<String> response = get("/_tesseraql/studio/ui/docs", true);
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(response.headers().firstValue("content-security-policy"))
+                .hasValueSatisfying(value -> assertThat(value).contains("default-src 'self'"));
+        assertThat(response.body()).startsWith("<!DOCTYPE html>")
+                .contains("TesseraQL Docs")
+                .contains("users.search")
+                .contains("/_tesseraql/studio/ui/docs/route?id=users.search")
+                .contains("Migrations");
+    }
+
+    @Test
+    void uiDocsRouteRendersTheRouteReference() throws Exception {
+        HttpResponse<String> response = get(
+                "/_tesseraql/studio/ui/docs/route?id=" + enc("users.search"), true);
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        // The live-fallback model renders the request surface, security, and bound SQL.
+        assertThat(response.body()).contains("users.search").contains("/api/users")
+                .contains("query-json").contains("Inputs").contains("search.sql");
+    }
+
+    @Test
+    void uiDocsRouteRendersNotFoundForUnknownId() throws Exception {
+        HttpResponse<String> response = get(
+                "/_tesseraql/studio/ui/docs/route?id=" + enc("no.such.route"), true);
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(response.body()).contains("No route").contains("no.such.route");
+    }
+
+    @Test
+    void uiDocsRequiresAuthentication() throws Exception {
+        assertThat(get("/_tesseraql/studio/ui/docs", false).statusCode()).isEqualTo(401);
+    }
+
+    @Test
     void uiSaveAndApplyDraftViaForm() throws Exception {
         String path = "web/api/formtest/get.yml";
         String content = """
