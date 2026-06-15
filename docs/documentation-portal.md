@@ -1,8 +1,10 @@
 # Application Documentation Portal
 
-> Status: **proposal / design brief** (2026-06-15). Not yet on the roadmap, not yet
-> implemented. This brief records the agreed architecture so a future phase can be sliced from
-> it. It describes intended behaviour, not shipped behaviour.
+> Status: **v1 shipped; v2 in progress** (2026-06-15). The design brief below records the agreed
+> architecture. The *v1 (spec layer)* slice is implemented and merged (PR #60–#67). The
+> *v2 (report overlay)* slice is now being built — its detailed plan is the
+> [Implementation plan — v2 (report overlay)](#implementation-plan--v2-report-overlay) section at
+> the end of this document. Sections describing v3 (schema) remain forward-looking.
 
 ## Motivation
 
@@ -321,3 +323,132 @@ SSG/Node tooling.
 - Tests accompany each behavioural commit (rule 7); DB-backed paths are not needed in v1.
 - Run `spotless` before the final `verify` (codebase convention).
 - Land through a PR with CI green (rule 9); never push to `main`.
+
+## Implementation plan — v2 (report overlay)
+
+v1 ships the **spec** layer: a byte-stable `spec.json` (DB-free) that links each route to the
+declarative test cases that *cover* it (`TestRef{name, kind, target}`), but carries **no run
+results** — no pass/fail, no coverage numbers, no gate verdict. v2 adds the **report** layer: it
+overlays the last test run's results and coverage onto those same routes, without compromising the
+spec layer's reproducibility guarantee (design ch. 48, *Two layers* above).
+
+The raw material already exists. [`AppTestRunner`](../tesseraql-report/src/main/java/io/tesseraql/report/AppTestRunner.java)
+runs the declarative suites against a database (wired by the `test`/`coverage` Maven goals in the
+`integration-test` phase) and produces `tesseraql-result.json` (pass/fail per case) and
+`coverage/sql-coverage.json` (SQL line/branch + 21 item-coverage kinds). v2 **ingests** this — it
+never re-runs tests.
+
+### Design principles (the load-bearing decisions)
+
+1. **The overlay is a separate, optional, sidecar artifact — never inside `.tqlapp`.** `spec.json`
+   is byte-stable and packaged into the reproducible `.tqlapp` by `PackageAppMojo`. Test results are
+   run-dependent and non-deterministic; folding them into the archive would break artifact
+   reproducibility (a flagged-sensitive concern). v2 writes a new `report.json` **sidecar** into the
+   app home's `.tesseraql/docs/` directory, alongside (not inside) the packaged spec. The `generate`
+   / `package-app` goals and `AppPackager` are unchanged.
+2. **Phase ordering forces the sidecar.** The default Maven lifecycle runs `package` (which seals the
+   `.tqlapp`) **before** `integration-test` (where `AppTestRunner` runs). The report therefore cannot
+   be packaged into the already-sealed archive even if we wanted to — sidecar is the only coherent
+   placement, and it is also the correct one.
+3. **Graceful degradation.** When `report.json` is absent (an app that has never run its tests, or a
+   pure source/dev run), the portal behaves exactly as v1 and renders "no test run recorded yet"
+   empty states — mirroring the v1 live-fallback for a missing `spec.json`.
+4. **Join once, at generation time, by id/name.** The spec already lists each route's covering test
+   *names*; the run produces results by *name*; route coverage is the `kinds.route.covered` set of
+   route ids. The generator (which holds the manifest, the `RunResult`, and the
+   `CrossReferenceIndex`) performs the route→test→result and route→SQL joins **once**, emitting a
+   **route-keyed** `report.json`. The runtime then overlays `report.routes[id]` onto
+   `spec.routes[id]` with no key-normalization guesswork.
+5. **The existing `sql-coverage.json` is lossy; v2 needs a richer artifact.** `AppTestRunner`'s
+   hand-built `writeCoverage` serializes only *counts* (`lineCount()`, `coverableLineCount()`), not
+   the `Set<Integer>` line sets in [`SqlCoverageReport`](../tesseraql-coverage-core/src/main/java/io/tesseraql/coverage/SqlCoverageReport.java).
+   Line-level highlighting (the rich target) needs those line numbers, so v2 introduces a typed,
+   Jackson-serialized `ReportGenerator` that preserves them — superseding the ad-hoc string builder.
+
+### The report artifact — `report.json`
+
+A new typed model in `tesseraql-report`, Jackson-serialized (no hand-built JSON), route-keyed:
+
+```text
+ReportDoc(
+  schemaVersion: int,
+  runId: String,            // overridable via tesseraql.runId (e.g. CI build id); default = generatedAt
+  generatedAt: String,      // ISO-8601, stamped by the mojo
+  summary: Summary(total, passed, failed, sqlLineRatio, sqlBranchRatio, gatePassed),
+  thresholds: Thresholds(sqlLine, sqlBranch, kinds: Map<String,Double>),   // from CoverageThresholds
+  gate: Gate(passed, failures: List<String>),                              // from CoverageGate
+  kinds: List<KindCoverage(kind, ratio, covered, declared, uncovered: List<String>)>,  // 21 kinds
+  routes: Map<String, RouteReport>          // keyed by RouteSpec.id
+)
+RouteReport(
+  covered: boolean,                                   // route id ∈ kinds.route.covered
+  tests: List<CaseResult(name, passed, message)>,     // spec cross-ref names ∩ run results, by name
+  sql: List<SqlCoverage(file, lineRatio, branchRatio, branchCount, branchOutcomes,
+                        coveredLines: List<Integer>, coverableLines: List<Integer>)>,
+  itemCoverage: Map<String, Double>                   // per-kind ratio relevant to the route
+)
+```
+
+Sources: `summary`/`tests` from [`TestReport`/`TestResult`](../tesseraql-test-core/src/main/java/io/tesseraql/test/TestReport.java);
+`kinds`/`itemCoverage` from [`ItemCoverage`](../tesseraql-coverage-core/src/main/java/io/tesseraql/coverage/ItemCoverage.java);
+`sql` from `SqlCoverageReport` (now keeping its line sets); `thresholds`/`gate` from
+[`CoverageThresholds`](../tesseraql-coverage-core/src/main/java/io/tesseraql/coverage/CoverageThresholds.java)
++ `CoverageGate`.
+
+**History.** Each run also appends a compact `HistoryEntry(runId, generatedAt, total, passed,
+failed, sqlLineRatio, sqlBranchRatio, gatePassed)` to `.tesseraql/docs/history.json`, kept as a
+**ring of the last 20 runs** so the app home never grows unbounded. `report.json` always holds only
+the latest run; `history.json` feeds the trend sparklines.
+
+### Module & class layout
+
+| Module | New / changed | Responsibility |
+| --- | --- | --- |
+| `tesseraql-report` | **new** `ReportGenerator` → `ReportDoc` + `toJson`; reuse `CrossReferenceIndex` for the route→test join | turn a `RunResult` (+ manifest + thresholds/gate + runId) into the typed `report.json`; append the `history.json` ring |
+| `tesseraql-maven-plugin` | **new** `ReportMojo` (goal `report`, `integration-test`), or extend `TestMojo`/`CoverageMojo` | run the suites, then write `appHome/.tesseraql/docs/report.json` + `history.json`; **not** added to the `.tqlapp` |
+| `tesseraql-studio` | extend `DocService` (`REPORT_PATH`, optional read + overlay) + `DocViews`; new bundled `coverage` page; CSS-only additions in `tesseraql.css` | read `report.json` if present, overlay onto `RouteEntry`, render badges / dashboard / SQL line highlighting / trend |
+| `tesseraql-camel-runtime` | register `docs.coverage` provider beside `docs.index`/`docs.route`/`docs.search` in `TesseraqlRuntime` | wire the dashboard page |
+
+Boundary note: `report.json` is read by `DocService` exactly as `spec.json` is today — an
+**artifact-read** path. No new heavy dependency enters `tesseraql-studio`; the typed `ReportDoc`
+shape is mirrored as a small studio-side record (as `DocSpec` mirrors the build model).
+
+### Slices (each a standalone PR, CI-green, merged in order)
+
+1. **Report model + generator + mojo** (no UI). `ReportDoc` records + `ReportGenerator` (typed,
+   deterministic JSON, name-join, preserves SQL line sets) in `tesseraql-report`; `ReportMojo`
+   writing `report.json` + `history.json` into `appHome/.tesseraql/docs/`, explicitly excluded from
+   the `.tqlapp`. Unit tests for the generator; a Testcontainers IT (extending
+   `AppTestRunnerIntegrationTest`, which already stands up Postgres) asserts the artifacts and
+   schema. No portal change yet.
+2. **DocService overlay + badges.** `DocService` reads `report.json` when present and overlays it onto
+   `RouteEntry`; `DocViews` exposes the merged model. Add pass/fail and coverage badges to the index
+   and per-route pages, plus an index summary strip. Graceful empty states when the overlay is
+   absent. Studio unit tests for the merge + degradation.
+3. **Coverage dashboard + search filters.** New `query-html` route `.../ui/docs/coverage` with a
+   `docs.coverage` provider and a `tql/shell` + hc template: per-kind ratio bars, gate verdict,
+   aggregate SQL line/branch, uncovered and failing-case lists, and a nav entry. Extend the in-memory
+   search to filter `status:failing` / `coverage:untested`.
+4. **SQL line-level highlighting.** Render each route's SQL source (from the spec's statement text)
+   line-by-line, coloured by membership in `coveredLines` / `coverableLines`. CSP-safe (server-side
+   classes + hc styles, no inline JS — AGENTS rule 11).
+5. **History / trend.** Read `history.json` and render pass-rate and SQL line/branch sparklines on the
+   dashboard; document the 20-run retention.
+
+### Resolved open items
+
+- **`runId`:** the mojo stamps `generatedAt` (ISO-8601) and defaults `runId` to it; CI may override
+  via the `tesseraql.runId` parameter (e.g. the build number) for stable trend identity.
+- **History retention:** `history.json` is a ring of the **last 20 runs**.
+- **Provider namespace:** the dashboard stays in the `docs.*` family (`docs.coverage`), consistent
+  with v1's `docs.index`/`docs.route`/`docs.search`.
+
+### Verification & conventions
+
+- DB-backed report generation is covered by Testcontainers ITs (the existing
+  `AppTestRunnerIntegrationTest` pattern), not H2 in a leaf module.
+- Studio overlay/merge and degradation are covered by plain unit tests (no DB).
+- `report.json` is a generated artifact — never hand-edited (rule 1).
+- Build-file / mojo / reproducibility changes are made deliberately (not auto-accepted).
+- Run `spotless:apply` before the final `mvn -B -ntp verify`; confirm `BUILD SUCCESS`.
+- Land each slice through a PR with CI green (rule 9); never push to `main`.
