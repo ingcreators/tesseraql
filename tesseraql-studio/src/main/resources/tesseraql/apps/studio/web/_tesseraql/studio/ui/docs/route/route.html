@@ -98,6 +98,10 @@
     </section>
     <section class="hc-card" th:if="${doc.hasSql}">
       <h3>SQL</h3>
+      <div class="hc-cluster" th:if="${doc.hasReport}">
+        <span class="cov-swatch cov-line--covered"></span><span class="hc-field__label">covered</span>
+        <span class="cov-swatch cov-line--missed"></span><span class="hc-field__label">not covered</span>
+      </div>
       <div class="hc-stack" th:each="s : ${doc.sql}">
         <div class="hc-cluster">
           <span class="hc-badge" th:text="${s.label}"></span>
@@ -117,7 +121,10 @@
         <ul th:unless="${#lists.isEmpty(s.structure)}">
           <li th:each="c : ${s.structure}" th:text="|${c.kind} ${c.expression}|"></li>
         </ul>
-        <pre class="source" th:if="${s.statement}" th:text="${s.statement}"></pre>
+        <div class="source source--coverage" th:if="${s.lines}">
+          <div class="cov-line" th:each="ln : ${s.lines}" th:classappend="|cov-line--${ln.state}|"><span class="cov-line__no" th:text="${ln.number}"></span><span class="cov-line__src" th:text="${ln.text}"></span></div>
+        </div>
+        <pre class="source" th:if="${s.statement != null and s.lines == null}" th:text="${s.statement}"></pre>
       </div>
     </section>
     <section class="hc-card" th:if="${doc.hasTests}">
