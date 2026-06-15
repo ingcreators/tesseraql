@@ -8,6 +8,8 @@ import io.tesseraql.studio.DocService.RouteEntry;
 import io.tesseraql.studio.DocService.TestRef;
 import io.tesseraql.yaml.docs.RouteSpec;
 import io.tesseraql.yaml.docs.RouteSpecModel;
+import io.tesseraql.yaml.scaffold.CatalogSchema;
+import java.sql.Types;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
@@ -197,14 +199,103 @@ class DocViewsTest {
 
     @Test
     void searchResultsModelMapsHitsToDetailLinks() {
-        Map<String, Object> model = DocViews.searchResults("user",
-                List.of(new Hit("users.search", "GET", "/api/users", 2)));
+        Map<String, Object> model = DocViews.searchResults("user", List.of(new Hit("users.search",
+                "GET", "/api/users", "/_tesseraql/studio/ui/docs/route?id=users.search", 2)));
 
         assertThat(model).containsEntry("query", "user").containsEntry("hasResults", true);
         assertThat(asRows(model.get("results"))).singleElement().satisfies(row -> {
             assertThat(row).containsEntry("id", "users.search").containsEntry("method", "GET");
             assertThat((String) row.get("detailUrl")).contains("docs/route?id=users.search");
         });
+    }
+
+    @Test
+    void searchResultsModelLinksTableHitsToTablePages() {
+        Map<String, Object> model = DocViews.searchResults("customers", List.of(new Hit("customers",
+                "TABLE", "main", "/_tesseraql/studio/ui/docs/schema/table?ds=main&name=customers",
+                1)));
+
+        assertThat(asRows(model.get("results"))).singleElement().satisfies(row -> {
+            assertThat(row).containsEntry("id", "customers").containsEntry("method", "TABLE");
+            assertThat((String) row.get("detailUrl"))
+                    .contains("schema/table?ds=main&name=customers");
+        });
+    }
+
+    private static SchemaOverlay sampleSchema() {
+        CatalogSchema.Table customers = new CatalogSchema.Table("customers", "TABLE", "public",
+                List.of(new CatalogSchema.Column("id", Types.BIGINT, "bigserial", 19, false, true,
+                        "nextval('customers_id_seq')"),
+                        new CatalogSchema.Column("email", Types.VARCHAR, "varchar", 320, false,
+                                false, null)),
+                List.of("id"), List.of(),
+                List.of(new CatalogSchema.Index("customers_email_key", List.of("email"), true)));
+        CatalogSchema.Table orders = new CatalogSchema.Table("orders", "TABLE", "public",
+                List.of(new CatalogSchema.Column("id", Types.BIGINT, "bigserial", 19, false, true,
+                        null),
+                        new CatalogSchema.Column("customer_id", Types.BIGINT, "bigint", 19, false,
+                                false, null)),
+                List.of("id"),
+                List.of(new CatalogSchema.ForeignKey("orders_customer_id_fkey",
+                        List.of("customer_id"), "customers", List.of("id"))),
+                List.of());
+        return new SchemaOverlay(1, "2026-06-15T12:00:00Z",
+                Map.of("main", new CatalogSchema(List.of(customers, orders))));
+    }
+
+    @Test
+    void schemaModelListsDatasourcesAndTablesWithLinks() {
+        Map<String, Object> model = DocViews.schema("demo", sampleSchema());
+
+        assertThat(model).containsEntry("appName", "demo").containsEntry("hasSchema", true);
+        assertThat(asRows(model.get("datasources"))).singleElement().satisfies(ds -> {
+            assertThat(ds).containsEntry("name", "main").containsEntry("tableCount", 2);
+            assertThat(asRows(ds.get("tables"))).anySatisfy(table -> {
+                assertThat(table).containsEntry("name", "customers").containsEntry("type", "TABLE")
+                        .containsEntry("columnCount", 2).containsEntry("primaryKey", "id");
+                assertThat((String) table.get("detailUrl"))
+                        .contains("schema/table?ds=main&name=customers");
+            });
+        });
+    }
+
+    @Test
+    void schemaModelIsEmptyWithoutAnOverlay() {
+        assertThat(DocViews.schema("demo", null)).containsEntry("hasSchema", false)
+                .doesNotContainKey("datasources");
+    }
+
+    @Test
+    void tableModelProjectsColumnsKeysForeignKeysAndIndexes() {
+        CatalogSchema.Table orders = sampleSchema().datasource("main").tables().stream()
+                .filter(table -> table.name().equals("orders")).findFirst().orElseThrow();
+
+        Map<String, Object> model = DocViews.table("main", orders);
+
+        assertThat(model).containsEntry("name", "orders").containsEntry("type", "TABLE")
+                .containsEntry("primaryKey", "id").containsEntry("hasForeignKeys", true);
+        assertThat(asRows(model.get("columns"))).anySatisfy(column -> assertThat(column)
+                .containsEntry("name", "id").containsEntry("primaryKey", true)
+                .containsEntry("autoincrement", true));
+        assertThat(asRows(model.get("foreignKeys"))).singleElement().satisfies(fk -> {
+            assertThat(fk).containsEntry("columns", "customer_id")
+                    .containsEntry("refTable", "customers").containsEntry("refColumns", "id");
+            assertThat((String) fk.get("refUrl")).contains("schema/table?ds=main&name=customers");
+        });
+    }
+
+    @Test
+    void tableModelRendersCharacterTypeLengthAndUniqueIndex() {
+        CatalogSchema.Table customers = sampleSchema().datasource("main").tables().stream()
+                .filter(table -> table.name().equals("customers")).findFirst().orElseThrow();
+
+        Map<String, Object> model = DocViews.table("main", customers);
+
+        assertThat(asRows(model.get("columns"))).anySatisfy(column -> assertThat(column)
+                .containsEntry("name", "email").containsEntry("type", "varchar(320)"));
+        assertThat(model).containsEntry("hasUniqueIndexes", true);
+        assertThat(asRows(model.get("uniqueIndexes"))).singleElement()
+                .satisfies(index -> assertThat(index).containsEntry("columns", "email"));
     }
 
     @SuppressWarnings("unchecked")

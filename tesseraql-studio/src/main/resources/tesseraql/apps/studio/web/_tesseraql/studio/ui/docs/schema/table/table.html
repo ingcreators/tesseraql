@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{tql/shell :: page(|TesseraQL Table · ${tbl.name}|, ~{:: #page-header}, ~{:: #page-content})}">
+<th:block id="page-header">
+  <span class="hc-spacer"></span>
+  <div class="hc-cluster">
+    <a class="hc-button" data-variant="ghost" data-size="sm" href="/_tesseraql/studio/ui/docs/schema">&larr; schema</a>
+  </div>
+</th:block>
+<div id="page-content" class="hc-stack">
+  <section class="hc-card" th:if="${tbl.notFound}">
+    <h2>Table</h2>
+    <div class="hc-empty"><p class="hc-empty__title" th:text="|No such table: ${tbl.name}|"></p></div>
+  </section>
+  <th:block th:unless="${tbl.notFound}">
+    <section class="hc-card">
+      <h2 th:text="${tbl.name}"></h2>
+      <div class="hc-cluster">
+        <span class="hc-badge" data-variant="info" th:text="${tbl.type}"></span>
+        <span class="hc-field__label" th:text="|datasource ${tbl.datasource}|"></span>
+        <span class="hc-field__label" th:if="${tbl.schema}" th:text="|schema ${tbl.schema}|"></span>
+        <span class="hc-field__label" th:if="${tbl.hasPrimaryKey}" th:text="|primary key (${tbl.primaryKey})|"></span>
+      </div>
+    </section>
+    <section class="hc-card">
+      <h2>Columns</h2>
+      <table class="hc-table">
+        <thead><tr><th>Column</th><th>Type</th><th>Nullable</th><th>Default</th><th>Key</th></tr></thead>
+        <tbody>
+          <tr th:each="c : ${tbl.columns}">
+            <td th:text="${c.name}"></td>
+            <td><code th:text="${c.type}"></code></td>
+            <td th:text="${c.nullable} ? 'yes' : 'no'"></td>
+            <td>
+              <code th:if="${c.defaultValue}" th:text="${c.defaultValue}"></code>
+              <span th:unless="${c.defaultValue}">&mdash;</span>
+            </td>
+            <td>
+              <span class="hc-badge" th:if="${c.primaryKey}" data-variant="success">PK</span>
+              <span class="hc-badge" th:if="${c.autoincrement}" data-variant="info">auto</span>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+    <section class="hc-card" th:if="${tbl.hasForeignKeys}">
+      <h2>Foreign keys</h2>
+      <table class="hc-table">
+        <thead><tr><th>Constraint</th><th>Columns</th><th>References</th></tr></thead>
+        <tbody>
+          <tr th:each="f : ${tbl.foreignKeys}">
+            <td th:text="${f.name}"></td>
+            <td th:text="${f.columns}"></td>
+            <td><a th:href="${f.refUrl}" th:text="|${f.refTable}(${f.refColumns})|"></a></td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+    <section class="hc-card" th:if="${tbl.hasUniqueIndexes}">
+      <h2>Unique indexes</h2>
+      <table class="hc-table">
+        <thead><tr><th>Index</th><th>Columns</th></tr></thead>
+        <tbody>
+          <tr th:each="i : ${tbl.uniqueIndexes}">
+            <td th:text="${i.name}"></td>
+            <td th:text="${i.columns}"></td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+  </th:block>
+</div>
+</html>

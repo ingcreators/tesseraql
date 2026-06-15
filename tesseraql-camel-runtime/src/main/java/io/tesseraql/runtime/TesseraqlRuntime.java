@@ -687,9 +687,10 @@ public final class TesseraqlRuntime implements AutoCloseable {
                             reloader.reload();
                             return Map.of("applied", path);
                         });
-                // Providers backing the bundled documentation portal (documentation portal v1/v2):
+                // Providers backing the bundled documentation portal (documentation portal v1/v2/v3):
                 // they read the packaged spec.json, falling back to a live model from the manifest,
-                // and overlay the optional run report.json (test results + coverage) when present.
+                // and overlay the optional run report.json (test results + coverage) and schema.json
+                // (introspected table definitions) when present.
                 io.tesseraql.studio.DocService doc = new io.tesseraql.studio.DocService(manifest);
                 serviceProviders
                         .register("docs.index", params -> io.tesseraql.studio.DocViews
@@ -710,7 +711,19 @@ public final class TesseraqlRuntime implements AutoCloseable {
                             return io.tesseraql.studio.DocViews.searchResults(q, doc.search(q));
                         })
                         .register("docs.coverage", params -> io.tesseraql.studio.DocViews
-                                .coverage(doc.appName(), doc.report(), doc.history()));
+                                .coverage(doc.appName(), doc.report(), doc.history()))
+                        .register("docs.schema", params -> io.tesseraql.studio.DocViews
+                                .schema(doc.appName(), doc.schema()))
+                        .register("docs.table", params -> {
+                            String ds = String.valueOf(params.get("ds"));
+                            String name = String.valueOf(params.get("name"));
+                            io.tesseraql.yaml.scaffold.CatalogSchema.Table table = doc.table(ds,
+                                    name);
+                            if (table == null) {
+                                return Map.of("notFound", true, "name", name, "datasource", ds);
+                            }
+                            return io.tesseraql.studio.DocViews.table(ds, table);
+                        });
             }
             // Retention (design ch. 44): enabled by configuring the sweep interval. When
             // tesseraql.retention.attachments is set and the managed attachment store is bound, the

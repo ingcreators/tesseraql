@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{tql/shell :: page(|TesseraQL Schema · ${sch.appName}|, ~{:: #page-header}, ~{:: #page-content})}">
+<th:block id="page-header">
+  <span class="hc-spacer"></span>
+  <div class="hc-cluster">
+    <a class="hc-button" data-variant="ghost" data-size="sm" href="/_tesseraql/studio/ui/docs">&larr; docs</a>
+  </div>
+</th:block>
+<div id="page-content" class="hc-stack">
+  <section class="hc-card" th:unless="${sch.hasSchema}">
+    <h2>Schema</h2>
+    <div class="hc-empty">
+      <p class="hc-empty__title">No schema introspected yet.</p>
+      <p>Run the <code>tesseraql:schema</code> goal against the migrated database to populate table definitions.</p>
+    </div>
+  </section>
+  <section class="hc-card" th:if="${sch.hasSchema}" th:each="ds : ${sch.datasources}">
+    <h2 th:text="|Datasource: ${ds.name}|"></h2>
+    <span class="hc-field__label" th:text="|${ds.tableCount} tables|"></span>
+    <table class="hc-table">
+      <thead><tr><th>Table</th><th>Type</th><th>Columns</th><th>Primary key</th><th>FKs</th></tr></thead>
+      <tbody>
+        <tr th:each="t : ${ds.tables}">
+          <td><a th:href="${t.detailUrl}" th:text="${t.name}"></a></td>
+          <td><span class="hc-badge" data-variant="info" th:text="${t.type}"></span></td>
+          <td th:text="${t.columnCount}"></td>
+          <td th:text="${t.primaryKey}"></td>
+          <td th:text="${t.foreignKeyCount}"></td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+</div>
+</html>

@@ -231,4 +231,92 @@ class DocServiceTest {
                 .isInstanceOf(TqlException.class)
                 .hasMessageContaining("escapes app home");
     }
+
+    private static final String SCHEMA_JSON = """
+            { "schemaVersion": 1, "generatedAt": "2026-06-15T12:00:00Z",
+              "datasources": { "main": { "tables": [
+                { "name": "customers", "type": "TABLE", "schema": "public",
+                  "columns": [
+                    { "name": "id", "jdbcType": -5, "sqlTypeName": "bigserial", "size": 19,
+                      "nullable": false, "autoincrement": true, "defaultValue": null },
+                    { "name": "email", "jdbcType": 12, "sqlTypeName": "varchar", "size": 320,
+                      "nullable": false, "autoincrement": false, "defaultValue": null } ],
+                  "primaryKey": ["id"], "foreignKeys": [],
+                  "uniqueIndexes": [ { "name": "customers_email_key", "columns": ["email"],
+                                      "unique": true } ] },
+                { "name": "orders", "type": "TABLE", "schema": "public",
+                  "columns": [
+                    { "name": "id", "jdbcType": -5, "sqlTypeName": "bigserial", "size": 19,
+                      "nullable": false, "autoincrement": true, "defaultValue": null },
+                    { "name": "customer_id", "jdbcType": -5, "sqlTypeName": "bigint", "size": 19,
+                      "nullable": false, "autoincrement": false, "defaultValue": null } ],
+                  "primaryKey": ["id"],
+                  "foreignKeys": [ { "name": "orders_customer_id_fkey", "columns": ["customer_id"],
+                                     "refTable": "customers", "refColumns": ["id"] } ],
+                  "uniqueIndexes": [] }
+              ] } } }
+            """;
+
+    @Test
+    void readsTheSchemaOverlayAndLooksUpTables(@TempDir Path dir) throws Exception {
+        Files.createDirectories(dir.resolve("config"));
+        Files.writeString(dir.resolve("config/tesseraql.yml"),
+                "tesseraql:\n  app:\n    name: demo\n");
+        Files.createDirectories(dir.resolve(".tesseraql/docs"));
+        Files.writeString(dir.resolve(".tesseraql/docs/schema.json"), SCHEMA_JSON);
+        DocService service = new DocService(new ManifestLoader().load(dir));
+
+        assertThat(service.hasSchema()).isTrue();
+        SchemaOverlay schema = service.schema();
+        assertThat(schema).isNotNull();
+        assertThat(schema.datasources()).containsKey("main");
+        assertThat(service.table("main", "orders")).isNotNull().satisfies(table -> assertThat(
+                table.foreignKeys()).singleElement()
+                .satisfies(fk -> assertThat(fk.refTable()).isEqualTo("customers")));
+        assertThat(service.table("main", "nope")).isNull();
+        assertThat(service.table("other", "orders")).isNull();
+    }
+
+    @Test
+    void degradesGracefullyWhenSchemaIsAbsentOrCorrupt(@TempDir Path dir) throws Exception {
+        // Absent schema (the example app has none): no overlay, portal still works on the spec.
+        DocService noSchema = new DocService(exampleManifest());
+        assertThat(noSchema.hasSchema()).isFalse();
+        assertThat(noSchema.schema()).isNull();
+        assertThat(noSchema.table("main", "x")).isNull();
+
+        // Corrupt schema: present but unreadable -> degrade to null rather than break the portal.
+        Files.createDirectories(dir.resolve("config"));
+        Files.writeString(dir.resolve("config/tesseraql.yml"),
+                "tesseraql:\n  app:\n    name: demo\n");
+        Files.createDirectories(dir.resolve(".tesseraql/docs"));
+        Files.writeString(dir.resolve(".tesseraql/docs/schema.json"), "{ not valid json");
+        DocService corrupt = new DocService(new ManifestLoader().load(dir));
+        assertThat(corrupt.hasSchema()).isTrue();
+        assertThat(corrupt.schema()).isNull();
+    }
+
+    @Test
+    void searchSurfacesSchemaTablesAndColumns(@TempDir Path dir) throws Exception {
+        Files.createDirectories(dir.resolve("config"));
+        Files.writeString(dir.resolve("config/tesseraql.yml"),
+                "tesseraql:\n  app:\n    name: demo\n");
+        Files.createDirectories(dir.resolve(".tesseraql/docs"));
+        Files.writeString(dir.resolve(".tesseraql/docs/spec.json"),
+                "{ \"routes\": [], \"migrations\": [] }");
+        Files.writeString(dir.resolve(".tesseraql/docs/schema.json"), SCHEMA_JSON);
+        DocService service = new DocService(new ManifestLoader().load(dir));
+
+        // A table name resolves to a table hit linking to the table page.
+        assertThat(service.search("customers")).anySatisfy(hit -> {
+            assertThat(hit.method()).isEqualTo("TABLE");
+            assertThat(hit.url()).contains("schema/table?ds=main&name=customers");
+        });
+        // A column name surfaces the table that declares it.
+        assertThat(service.search("customer_id")).extracting(DocService.Hit::id)
+                .contains("orders");
+        // Status/coverage filters are route-only: table hits never satisfy them.
+        assertThat(service.search("coverage:untested"))
+                .noneMatch(hit -> "TABLE".equals(hit.method()));
+    }
 }
