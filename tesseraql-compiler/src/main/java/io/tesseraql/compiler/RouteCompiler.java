@@ -136,8 +136,82 @@ public final class RouteCompiler {
                 for (io.tesseraql.yaml.manifest.WorkflowFile workflowFile : manifest.workflows()) {
                     buildWorkflow(this, workflowFile, onlyRouteIds);
                 }
+                // Attachments (roadmap Phase 30): each attachment document synthesizes an off-heap
+                // upload route, a list route, and a download route, mounted on HTTP under its
+                // basePath — the author declares the owning record and limits, not a route apiece.
+                for (io.tesseraql.yaml.manifest.AttachmentFile attachmentFile : manifest
+                        .attachments()) {
+                    buildAttachment(this, attachmentFile, onlyRouteIds);
+                }
             }
         };
+    }
+
+    /**
+     * Builds an attachment document's three routes (roadmap Phase 30 slice 1): an off-heap multipart
+     * upload {@code POST basePath}, a metadata list {@code GET basePath}, and a download
+     * {@code GET basePath/{attachmentId}}. Each carries the document's {@code security:}; the owning
+     * record key in {@code basePath} scopes list and download to that record.
+     */
+    private void buildAttachment(RouteBuilder builder,
+            io.tesseraql.yaml.manifest.AttachmentFile attachmentFile,
+            java.util.Set<String> onlyRouteIds) {
+        io.tesseraql.yaml.model.AttachmentDefinition def = attachmentFile.definition();
+        String basePath = def.basePath();
+        io.tesseraql.yaml.model.AttachmentDefinition.RecordSpec record = def.record();
+        String entity = record == null ? null : record.entity();
+        String recordKey = record == null ? null : record.key();
+        io.tesseraql.yaml.model.AttachmentDefinition.Limits limits = def.limits();
+        long maxBytes = limits == null ? 0 : Math.max(0, limits.maxBytesValue());
+        java.util.List<String> contentTypes = limits == null
+                ? java.util.List.of()
+                : limits.contentTypes();
+        SecuritySpec security = def.security();
+        String idParam = "attachmentId";
+
+        String uploadId = def.id() + ".upload";
+        if (onlyRouteIds == null || onlyRouteIds.contains(uploadId)) {
+            String direct = "direct:" + uploadId;
+            if (mountRest) {
+                restEndpoint(builder, "POST", basePath).to(direct);
+            }
+            ProcessorDefinition<?> route = builder.from(direct).routeId(uploadId);
+            route.process(new io.tesseraql.compiler.binding.RouteTelemetry(uploadId, "POST",
+                    basePath, appName));
+            applySecurity(route, security);
+            applyI18n(route);
+            route.process(new io.tesseraql.compiler.binding.AttachmentUploadProcessor(
+                    entity, recordKey, def.bucket(), maxBytes, contentTypes));
+        }
+
+        String listId = def.id() + ".list";
+        if (onlyRouteIds == null || onlyRouteIds.contains(listId)) {
+            String direct = "direct:" + listId;
+            if (mountRest) {
+                restEndpoint(builder, "GET", basePath).to(direct);
+            }
+            ProcessorDefinition<?> route = builder.from(direct).routeId(listId);
+            route.process(new io.tesseraql.compiler.binding.RouteTelemetry(listId, "GET", basePath,
+                    appName));
+            applySecurity(route, security);
+            route.process(new io.tesseraql.compiler.binding.AttachmentListProcessor(entity,
+                    recordKey));
+        }
+
+        String downloadId = def.id() + ".download";
+        if (onlyRouteIds == null || onlyRouteIds.contains(downloadId)) {
+            String urlPath = basePath + "/{" + idParam + "}";
+            String direct = "direct:" + downloadId;
+            if (mountRest) {
+                restEndpoint(builder, "GET", urlPath).to(direct);
+            }
+            ProcessorDefinition<?> route = builder.from(direct).routeId(downloadId);
+            route.process(new io.tesseraql.compiler.binding.RouteTelemetry(downloadId, "GET",
+                    urlPath, appName));
+            applySecurity(route, security);
+            route.process(new io.tesseraql.compiler.binding.AttachmentDownloadProcessor(entity,
+                    recordKey, idParam));
+        }
     }
 
     private void buildRoute(RouteBuilder builder, Path appHome, RouteFile routeFile) {

@@ -15,9 +15,32 @@ All notable changes to TesseraQL are documented here. The format follows
   `auto` for MySQL/SQL Server).
 - `TqlException` carries an explicit client-safe `details` payload, rendered into error
   responses (field-level errors, conflict hints) without leaking internals.
+- Durable object storage SPI (roadmap Phase 30 slice 1, see [docs/attachments.md](docs/attachments.md)):
+  a `BlobStore` (`io.tesseraql.core.blob`) — a sibling of the ephemeral `TempStore` for retained,
+  retention-governed objects — with a `FileBlobStore` default that streams to local disk and computes
+  a SHA-256 checksum and byte count while writing (no second pass). The surface is the minimal
+  portable intersection of S3-compatible stores (put/get/exists/delete plus an optional pre-signed
+  GET), so an S3 implementation plugs in unchanged in slice 2. Attachment metadata has its own SPIs,
+  `AttachmentStore` and `AttachmentService`, in the same SQL-first managed/app spirit as the workflow
+  and org-unit stores.
 
 ### Runtime and recipes
 
+- Attachments and object storage — attachment core (roadmap Phase 30 slice 1, see
+  [docs/attachments.md](docs/attachments.md)): a `kind: attachment` document under `attachments/`
+  binds uploaded files to an owning business record and synthesizes three HTTP routes — an off-heap
+  multipart upload `POST {basePath}`, a metadata list `GET {basePath}`, and a download
+  `GET {basePath}/{attachmentId}`. The upload streams the body off-heap into the `BlobStore` (its
+  size and SHA-256 computed while streaming), enforces the declared `limits` (size → `413`, content
+  type → `415`), then records a row in the managed `tql_attachment` table; the download loads that row
+  scoped to the owning record (an attachment owned by a different record reads as `404`, never leaked)
+  and streams the blob with a sanitized `Content-Disposition`. The blob write is non-transactional —
+  an upload that fails after the blob is written leaves an orphan the retention sweep reclaims
+  (slice 3). Metadata uses the managed/app duality (`tesseraql.attachments.mode`, default `managed`);
+  the managed store and the file blob store are provisioned only when the app declares attachments.
+  Lint (`TQL-ATTACH-3401..3405`) checks the document's kind, base path, owning record, path-parameter
+  binding, and size limit. S3-compatible storage, app-mode 2-way SQL metadata, the scan-hook, and
+  retention are later slices.
 - Approval workflow — `onBreach.escalate` auto-transition (roadmap Phase 28, see
   [docs/approval-workflow.md](docs/approval-workflow.md)): on a deadline breach the cluster-safe
   sweeper can now auto-fire a named transition **as the system** instead of reassigning — it advances

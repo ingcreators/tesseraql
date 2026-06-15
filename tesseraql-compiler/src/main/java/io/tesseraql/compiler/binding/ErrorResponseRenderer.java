@@ -240,6 +240,10 @@ public final class ErrorResponseRenderer implements Processor {
                 case 2820 -> 400; // file-import without an uploaded body
                 case 2822 -> 404; // unknown transfer id
                 case 2823 -> 409; // export not ready for download yet
+                case 2841 -> 400; // attachment upload carried no content (roadmap Phase 30)
+                case 2842 -> 415; // attachment content type not allowed
+                case 2843 -> 413; // attachment exceeds the declared size limit
+                case 2844 -> 404; // unknown attachment
                 default -> 500;
             };
             case IAM -> code.number() == 4030 ? 403 : 500;
@@ -273,6 +277,8 @@ public final class ErrorResponseRenderer implements Processor {
             case 403 -> "Forbidden";
             case 404 -> "Not Found";
             case 409 -> "Conflict";
+            case 413 -> "Payload Too Large";
+            case 415 -> "Unsupported Media Type";
             case 422 -> "Unprocessable Entity";
             case 429 -> "Too Many Requests";
             case 503 -> "Service Unavailable";

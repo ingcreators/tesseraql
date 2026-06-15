@@ -125,6 +125,40 @@ public final class SimpleYamlParser {
         return scope;
     }
 
+    /** Parses an attachment YAML file (roadmap Phase 30). */
+    public io.tesseraql.yaml.model.AttachmentDefinition parseAttachment(Path file) {
+        try {
+            io.tesseraql.yaml.model.AttachmentDefinition attachment = mapper.readValue(
+                    Files.readString(file), io.tesseraql.yaml.model.AttachmentDefinition.class);
+            return validateAttachment(attachment, file.toString());
+        } catch (IOException ex) {
+            throw new UncheckedIOException(ex);
+        } catch (TqlException ex) {
+            throw ex;
+        } catch (RuntimeException ex) {
+            throw TqlException.builder(SCHEMA_ERROR)
+                    .message("Failed to parse attachment YAML: " + ex.getMessage())
+                    .source(file.toString())
+                    .cause(ex)
+                    .build();
+        }
+    }
+
+    private io.tesseraql.yaml.model.AttachmentDefinition validateAttachment(
+            io.tesseraql.yaml.model.AttachmentDefinition attachment, String source) {
+        if (attachment == null) {
+            throw error("Empty attachment document", source);
+        }
+        requireField(attachment.version(), "version", source);
+        if (!EXPECTED_VERSION.equals(attachment.version())) {
+            throw error("Unsupported version '" + attachment.version() + "', expected "
+                    + EXPECTED_VERSION, source);
+        }
+        requireField(attachment.id(), "id", source);
+        requireField(attachment.kind(), "kind", source);
+        return attachment;
+    }
+
     /** Parses a workflow YAML file (roadmap Phase 28). */
     public io.tesseraql.yaml.model.WorkflowDefinition parseWorkflow(Path file) {
         try {

@@ -52,9 +52,36 @@ public final class ManifestLoader {
         List<RouteFile> consumers = loadConsumers(home);
         List<ScopeFile> scopes = loadScopes(home);
         List<WorkflowFile> workflows = loadWorkflows(home);
+        List<AttachmentFile> attachments = loadAttachments(home);
         ManifestIndex index = buildIndex(home);
         return new AppManifest(home, config, routes, jobs, tools, resources, uiResources, consumers,
-                scopes, workflows, index);
+                scopes, workflows, attachments, index);
+    }
+
+    /**
+     * Loads the {@code attachments/} tree (roadmap Phase 30): each {@code kind: attachment} document
+     * binds uploaded files to an owning business record. An attachment document is not itself a
+     * route — the compiler synthesizes the upload, list, and download routes — so it lives in its own
+     * tree.
+     */
+    private List<AttachmentFile> loadAttachments(Path home) {
+        Path attachmentRoot = home.resolve("attachments");
+        if (!Files.isDirectory(attachmentRoot)) {
+            return List.of();
+        }
+        List<AttachmentFile> attachments = new ArrayList<>();
+        try (Stream<Path> files = Files.walk(attachmentRoot)) {
+            files.filter(Files::isRegularFile)
+                    .filter(p -> p.getFileName().toString().endsWith(".yml"))
+                    .sorted()
+                    .forEach(file -> {
+                        requireInside(home, file);
+                        attachments.add(new AttachmentFile(file, parser.parseAttachment(file)));
+                    });
+        } catch (IOException ex) {
+            throw new UncheckedIOException(ex);
+        }
+        return attachments;
     }
 
     /**
