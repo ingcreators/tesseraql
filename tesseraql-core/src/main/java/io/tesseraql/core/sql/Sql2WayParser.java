@@ -97,16 +97,19 @@ public final class Sql2WayParser {
 
     private SqlNode parseIf(Directive first) {
         List<SqlNode.If.Branch> branches = new ArrayList<>();
-        branches.add(new SqlNode.If.Branch(
-                ExpressionParser.parse(first.argument("if")), first.sourceLine(), parseBlock()));
+        String ifCondition = first.argument("if");
+        branches.add(new SqlNode.If.Branch(ExpressionParser.parse(ifCondition), ifCondition,
+                first.sourceLine(), parseBlock()));
         while (true) {
             Directive terminator = requireTerminator("if");
             switch (terminator.keyword()) {
-                case "elseif" -> branches.add(new SqlNode.If.Branch(
-                        ExpressionParser.parse(terminator.argument("elseif")),
-                        terminator.sourceLine(), parseBlock()));
+                case "elseif" -> {
+                    String elseifCondition = terminator.argument("elseif");
+                    branches.add(new SqlNode.If.Branch(ExpressionParser.parse(elseifCondition),
+                            elseifCondition, terminator.sourceLine(), parseBlock()));
+                }
                 case "else" -> branches.add(new SqlNode.If.Branch(
-                        null, terminator.sourceLine(), parseBlock()));
+                        null, null, terminator.sourceLine(), parseBlock()));
                 case "end" -> {
                     pendingTerminator = null;
                     return new SqlNode.If(branches);
