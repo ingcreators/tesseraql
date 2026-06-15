@@ -299,7 +299,8 @@ A SQL-contract state machine, consistent with IAM's managed/SQL realm duality: m
 `tql_workflow_*` tables or app-owned contracts. YAML declares states, transitions, guards
 (expression language), and assignee resolution (SQL contracts); htmx task-inbox components;
 delegation, escalation, and deadlines via the scheduler; a full audit trail; a `workflow`
-coverage kind.
+coverage kind. The full design — resolving decision point 2 in favour of the native engine — is in
+[docs/approval-workflow.md](approval-workflow.md).
 
 Assignee resolution, the task inbox, and scoped transitions all build on the org-unit
 foundation delivered in Phase 29 (the two are duals over one org graph — see Phase 29 and
@@ -423,8 +424,13 @@ None block Phase 18; flagged for the maintainer as their horizons approach.
    a license-policy call. Resolved 2026-06-12: both were prototyped behind the codec's engine
    SPI and openhtmltopdf was adopted (full page-oriented CSS; the LGPL dependency stays
    confined to the opt-in `tesseraql-pdf` module). The SPI remains the seam for replacing it.
-2. **Workflow engine** (Phase 28): native SQL-contract implementation (proposed — fits the
-   philosophy, adds no runtime dependency) vs embedding an external engine.
+2. **Workflow engine** (Phase 28): native SQL-contract implementation vs embedding an external
+   engine. Resolved 2026-06-15 in favour of the native state machine: it reuses the transactional
+   write engine (Phase 18), row scoping and the org-unit foundation (Phase 29), the core expression
+   language, and the cluster-safe scheduler, adding no runtime dependency — where an external engine
+   would break SQL-first (principle 1) and the module boundaries (principle 5). The `WorkflowStore`
+   SPI and the `kind: workflow` document keep the seam an external engine could later plug into. The
+   full design is in [docs/approval-workflow.md](approval-workflow.md).
 3. **Adoption timing**: Maven Central and the docs site sit in Horizon 6; pull them forward
    if external adoption becomes a near-term goal.
 4. **AI ambition** (Phase 24): the dev-tool MCP server is the scoped bet, and it shipped with
