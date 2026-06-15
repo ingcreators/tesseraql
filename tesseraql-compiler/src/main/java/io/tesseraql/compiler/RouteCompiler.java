@@ -305,8 +305,31 @@ public final class RouteCompiler {
                     def.id(), transition.id(),
                     def.document().type(), def.document().table(), def.document().key(),
                     "path.key", transition.from(), transition.to(), def.initial(), managed,
-                    guard, appStore);
+                    guard, appStore, compileAssign(workflowFile, transition),
+                    transition.assign() == null
+                            ? java.util.Map.of()
+                            : transition.assign().params());
             buildTransactionalCommand(builder, routeFile, null, workflow);
+        }
+    }
+
+    /**
+     * Parses a transition's assignee-resolution SQL (a {@code SELECT} returning
+     * {@code assignee}/{@code candidate_group} rows), dialect-resolved, or {@code null} when the
+     * transition assigns no task (roadmap Phase 28 slice 2).
+     */
+    private java.util.List<io.tesseraql.core.sql.SqlNode> compileAssign(
+            io.tesseraql.yaml.manifest.WorkflowFile workflowFile,
+            io.tesseraql.yaml.model.TransitionSpec transition) {
+        if (transition.assign() == null || transition.assign().file() == null) {
+            return null;
+        }
+        Path file = io.tesseraql.core.dialect.DialectSqlResolver.resolve(workflowFile.source()
+                .getParent().resolve(transition.assign().file()).normalize(), datasourceDialect());
+        try {
+            return io.tesseraql.core.sql.Sql2WayParser.parse(java.nio.file.Files.readString(file));
+        } catch (java.io.IOException ex) {
+            throw new java.io.UncheckedIOException(ex);
         }
     }
 

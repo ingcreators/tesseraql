@@ -285,6 +285,15 @@ public final class TesseraqlRuntime implements AutoCloseable {
             workflowStore.ensureSchema();
             context.getRegistry().bind(TesseraqlProperties.WORKFLOW_STORE_BEAN, workflowStore);
         }
+        // Managed approval-workflow task inbox (roadmap Phase 28 slice 2): provisioned and bound when
+        // any transition assigns a task, independent of where the workflow keeps its state, so one
+        // inbox spans managed-state and app-state workflows alike.
+        if (workflowsAssignTasks(manifest)) {
+            io.tesseraql.operations.workflow.JdbcWorkflowTaskStore taskStore = new io.tesseraql.operations.workflow.JdbcWorkflowTaskStore(
+                    dataSource);
+            taskStore.ensureSchema();
+            context.getRegistry().bind(TesseraqlProperties.WORKFLOW_TASK_STORE_BEAN, taskStore);
+        }
         io.tesseraql.yaml.messaging.MessagingChannels messagingChannels = io.tesseraql.yaml.messaging.MessagingChannels
                 .load(manifest.config());
         // Managed document-number sequences for command steps (roadmap Phase 18).
@@ -687,6 +696,19 @@ public final class TesseraqlRuntime implements AutoCloseable {
                     : "managed".equalsIgnoreCase(mode);
             if (managed) {
                 return true;
+            }
+        }
+        return false;
+    }
+
+    /** Whether any declared workflow has a transition that assigns a task (roadmap Phase 28 slice 2). */
+    private static boolean workflowsAssignTasks(io.tesseraql.yaml.manifest.AppManifest manifest) {
+        for (io.tesseraql.yaml.manifest.WorkflowFile workflow : manifest.workflows()) {
+            for (io.tesseraql.yaml.model.TransitionSpec transition : workflow.definition()
+                    .transitions()) {
+                if (transition.assign() != null && transition.assign().file() != null) {
+                    return true;
+                }
             }
         }
         return false;

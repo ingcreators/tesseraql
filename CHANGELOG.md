@@ -18,6 +18,17 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Runtime and recipes
 
+- Approval workflow — assignee resolution and task inbox (roadmap Phase 28 slice 2, see
+  [docs/approval-workflow.md](docs/approval-workflow.md)): a transition's `assign` contract — a 2-way
+  SQL `SELECT` returning `assignee`/`candidate_group` rows (consuming the Phase 29 org-unit
+  foundation unchanged) — opens a task in the managed `tql_workflow_task` inbox for the resulting
+  state, completing the prior state's tasks in the same transaction. Authority is framework-enforced:
+  a document with open tasks may only be transitioned by a caller who holds one (the direct assignee
+  or a candidate group), else `TQL-WORKFLOW-3203` (403) — the dual of a scope over the task table,
+  which an app may still author for its inbox query. The `WorkflowTaskStore`/`JdbcWorkflowTaskStore`
+  is provisioned whenever any transition assigns, independent of the state mode (managed instance row
+  or app column), so one inbox spans every workflow. Deadlines, escalation, and delegation are
+  slice 3.
 - Approval workflow — workflow core (roadmap Phase 28 slice 1, see
   [docs/approval-workflow.md](docs/approval-workflow.md)): a SQL-contract state machine driving a
   business document through declared states by transitions, with the IAM managed/SQL realm duality.

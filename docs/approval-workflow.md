@@ -1,9 +1,10 @@
 # Approval workflow
 
-> **Status: planned (roadmap Phase 28, Horizon 4 — not yet implemented).** This document is the
-> design the phase will build to, not a description of shipped behaviour. The further-out parts are
-> direction; revisit at each minor release. It resolves roadmap decision point 2 in favour of a
-> native SQL-contract state machine (see [Decision](#decision-native-sql-contract-state-machine)).
+> **Status: in progress — slices 1–2 delivered (roadmap Phase 28, Horizon 4).** The workflow core
+> (slice 1) and assignee resolution + task inbox (slice 2) ship; deadlines, escalation, and
+> delegation (slice 3) remain design. The further-out parts are direction; revisit at each minor
+> release. It resolves roadmap decision point 2 in favour of a native SQL-contract state machine
+> (see [Decision](#decision-native-sql-contract-state-machine)).
 
 An approval workflow drives a **business document** — a purchase request, an expense claim, a leave
 application — through a sequence of states by way of human decisions: submit, approve, reject, return
@@ -321,20 +322,27 @@ seams this phase plugs into, so Phase 28 introduces no second org model
 
 Phase 28 ships in slices, each a reviewable PR with CI green, mirroring how Phase 29 shipped:
 
-1. **Workflow core** — the `kind: workflow` document (parser, manifest loading, `WorkflowDefinition`
-   model), the `WorkflowStore` SPI and `JdbcWorkflowStore` with managed DDL (four dialects), the
-   `tesseraql.workflow.mode` toggle, the transition recipe (state check → guard → state advance →
-   Phase 18 transactional command → history, in one transaction), the `TQL-WORKFLOW-31xx` lint, and
-   the `workflow` coverage kind. No UI, no scheduler. Detailed design below.
-   - *Acceptance:* a draft→submitted→approved/rejected machine drives a business document through its
-     transitions; an undeclared transition is rejected with a `409`, a falsy guard with a `422`; the
-     workflow is testable via the `workflow` coverage kind, and lint flags a transition naming an
-     undeclared state.
-2. **Assignee resolution and task inbox** — assignee-resolution SQL contracts (consuming the Phase 29
-   org-unit foundation unchanged), the `tql_workflow_task` model, the inbox scope and the `hc-table`
-   inbox fragment, and the transition's scoped write confining who may act.
-   - *Acceptance:* assignees see their inbox; a non-assignee's transition is denied by the scope; the
-     inbox and the scoped transition are testable.
+1. **Workflow core** (delivered) — the `kind: workflow` document (parser, manifest loading,
+   `WorkflowDefinition` model), the `WorkflowStore` SPI and `JdbcWorkflowStore` with managed DDL
+   (four dialects), the `tesseraql.workflow.mode` toggle, the transition recipe (state check → guard
+   → state advance → Phase 18 transactional command → history, in one transaction), the
+   `TQL-WORKFLOW-31xx` lint, and the `workflow` coverage kind. No UI, no scheduler. Detailed design
+   below.
+   - *Acceptance (met):* a draft→submitted→approved/rejected machine drives a business document
+     through its transitions; an undeclared transition is rejected with a `409`, a falsy guard with a
+     `422`; the workflow is testable via the `workflow` coverage kind, and lint flags a transition
+     naming an undeclared state.
+2. **Assignee resolution and task inbox** (delivered) — a transition's `assign` contract (a 2-way SQL
+   `SELECT` returning `assignee`/`candidate_group` rows, consuming the Phase 29 org-unit foundation
+   unchanged) opens a task in the managed `tql_workflow_task` table for the resulting state; the
+   prior state's tasks are completed in the same transaction. Authority is framework-enforced rather
+   than left to an app-authored scope: a document with open tasks may only be transitioned by a
+   caller who holds one (the direct assignee or a candidate group), else `TQL-WORKFLOW-3203` (403) —
+   the dual of a scope over the task table, which an app may still author for the inbox query (`my
+   open tasks`). The task store (`WorkflowTaskStore`/`JdbcWorkflowTaskStore`) is provisioned whenever
+   any transition assigns, independent of the state mode, so one inbox spans every workflow.
+   - *Acceptance (met):* submitting opens the resolved approver's task; the assignee can act and the
+     task completes; a non-assignee's transition is denied (403); all testable end to end.
 3. **Deadlines, escalation, and delegation** — per-state deadlines, the cluster-safe sweeper job,
    escalation (auto-transition) and reassignment, delegation as a reassigning transition, and Phase
    20 notifications on assignment/escalation.

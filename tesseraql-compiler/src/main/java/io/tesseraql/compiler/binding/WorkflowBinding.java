@@ -1,7 +1,10 @@
 package io.tesseraql.compiler.binding;
 
 import io.tesseraql.core.expr.Expr;
+import io.tesseraql.core.sql.SqlNode;
 import io.tesseraql.core.workflow.WorkflowStore;
+import java.util.List;
+import java.util.Map;
 
 /**
  * The workflow context a synthesized transition route carries into the
@@ -23,8 +26,13 @@ import io.tesseraql.core.workflow.WorkflowStore;
  * @param guard        the parsed guard expression, or {@code null} for an unconditional transition
  * @param appStore     the app-mode store (a {@link ColumnWorkflowStore}), or {@code null} when
  *                     managed (the runtime-bound {@link WorkflowStore} bean is used instead)
+ * @param assignNodes  the parsed assignee-resolution SQL (a {@code SELECT} returning {@code assignee}
+ *                     / {@code candidate_group} rows), or {@code null} when the transition assigns no
+ *                     task (roadmap Phase 28 slice 2)
+ * @param assignParams the assignee-resolution binds, resolved against the request context per call
  */
 public record WorkflowBinding(String workflowId, String transitionId, String docType, String table,
         String keyColumn, String keyExpr, String from, String to, String initial, boolean managed,
-        Expr guard, WorkflowStore appStore) {
+        Expr guard, WorkflowStore appStore, List<SqlNode> assignNodes,
+        Map<String, String> assignParams) {
 }
