@@ -1,6 +1,7 @@
 package io.tesseraql.yaml.manifest;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.tuple;
 
 import io.tesseraql.yaml.model.RouteDefinition;
 import java.nio.file.Path;
@@ -143,5 +144,59 @@ class ManifestLoaderTest {
         // Overlay overrides the leaf, deep-merge preserves the sibling key.
         assertThat(manifest.config().requireString("tenancy.enabled")).isEqualTo("true");
         assertThat(manifest.config().requireString("tenancy.mode")).isEqualTo("shared-schema");
+    }
+
+    @Test
+    void listsMigrationsPerDatasourceWithVendorOverlays(
+            @org.junit.jupiter.api.io.TempDir Path dir) throws Exception {
+        java.nio.file.Files.createDirectories(dir.resolve("config"));
+        java.nio.file.Files.writeString(dir.resolve("config/tesseraql.yml"),
+                "tesseraql:\n  app:\n    name: t\n");
+        // Main datasource: db/migration plus a postgresql vendor overlay.
+        java.nio.file.Files.createDirectories(dir.resolve("db/migration"));
+        java.nio.file.Files.writeString(dir.resolve("db/migration/V1__create_items.sql"),
+                "create table items (id int);\n");
+        java.nio.file.Files.writeString(dir.resolve("db/migration/V2__add_email.sql"),
+                "alter table items add email varchar(255);\n");
+        // A non-migration file in the directory is ignored (no DDL parsing, Flyway naming only).
+        java.nio.file.Files.writeString(dir.resolve("db/migration/notes.txt"), "ignore me\n");
+        java.nio.file.Files.createDirectories(dir.resolve("db/migration-postgresql"));
+        java.nio.file.Files.writeString(dir.resolve("db/migration-postgresql/V3__pg_index.sql"),
+                "create index on items (email);\n");
+        // A named datasource: db/orders/migration plus a mysql overlay.
+        java.nio.file.Files.createDirectories(dir.resolve("db/orders/migration"));
+        java.nio.file.Files.writeString(dir.resolve("db/orders/migration/V1__orders.sql"),
+                "create table orders (id int);\n");
+        java.nio.file.Files.createDirectories(dir.resolve("db/orders/migration-mysql"));
+        java.nio.file.Files.writeString(dir.resolve("db/orders/migration-mysql/V2__orders_my.sql"),
+                "alter table orders add note text;\n");
+
+        AppManifest manifest = new ManifestLoader().load(dir);
+
+        // Sorted deterministically: by datasource, common set before vendor overlays, then version.
+        assertThat(manifest.migrations())
+                .extracting(MigrationFile::datasource, MigrationFile::vendor,
+                        MigrationFile::version, MigrationFile::description)
+                .containsExactly(
+                        tuple("main", null, "1", "create_items"),
+                        tuple("main", null, "2", "add_email"),
+                        tuple("main", "postgresql", "3", "pg_index"),
+                        tuple("orders", null, "1", "orders"),
+                        tuple("orders", "mysql", "2", "orders_my"));
+        // Reproducibility: the migration SQL files are part of the checksum index (full-tree walk).
+        assertThat(manifest.index().fileChecksums())
+                .containsKey("db/migration/V1__create_items.sql")
+                .containsKey("db/migration-postgresql/V3__pg_index.sql")
+                .containsKey("db/orders/migration/V1__orders.sql");
+    }
+
+    @Test
+    void listsNoMigrationsWhenTheAppHasNoDbDirectory(
+            @org.junit.jupiter.api.io.TempDir Path dir) throws Exception {
+        java.nio.file.Files.createDirectories(dir.resolve("config"));
+        java.nio.file.Files.writeString(dir.resolve("config/tesseraql.yml"),
+                "tesseraql:\n  app:\n    name: t\n");
+
+        assertThat(new ManifestLoader().load(dir).migrations()).isEmpty();
     }
 }
