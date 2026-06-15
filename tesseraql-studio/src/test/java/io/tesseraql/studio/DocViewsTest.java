@@ -33,10 +33,10 @@ class DocViewsTest {
                 new RouteSpecModel.Migration("main", null, "1", "init",
                         "db/migration/V1__init.sql")));
 
-        Map<String, Object> model = DocViews.index("demo", spec);
+        Map<String, Object> model = DocViews.index("demo", spec, null);
 
         assertThat(model).containsEntry("appName", "demo").containsEntry("hasRoutes", true)
-                .containsEntry("hasMigrations", true);
+                .containsEntry("hasMigrations", true).containsEntry("hasReport", false);
         assertThat(asRows(model.get("routes"))).singleElement().satisfies(row -> {
             assertThat(row).containsEntry("id", "users.search").containsEntry("testCount", 1);
             assertThat((String) row.get("detailUrl")).contains("docs/route?id=users.search");
@@ -47,10 +47,10 @@ class DocViewsTest {
 
     @Test
     void routeModelProjectsInputsSecuritySqlStructureAndTests() {
-        Map<String, Object> model = DocViews.route(searchRoute());
+        Map<String, Object> model = DocViews.route(searchRoute(), null);
 
         assertThat(model).containsEntry("id", "users.search").containsEntry("hasSql", true)
-                .containsEntry("hasTests", true);
+                .containsEntry("hasTests", true).containsEntry("hasReport", false);
         assertThat(asMap(model.get("security"))).containsEntry("auth", "bearer")
                 .containsEntry("csrf", false);
         assertThat(asRows(model.get("inputs"))).singleElement().satisfies(row -> {
@@ -67,6 +67,52 @@ class DocViewsTest {
         });
         assertThat(asRows(model.get("tests"))).singleElement()
                 .satisfies(row -> assertThat(row).containsEntry("kind", "sql"));
+    }
+
+    private static ReportOverlay overlayForSearch() {
+        ReportOverlay.RouteReport report = new ReportOverlay.RouteReport(true,
+                List.of(new ReportOverlay.CaseResult("finds sato", true, "OK")),
+                List.of(new ReportOverlay.SqlFileCoverage("web/api/users/search.sql", 0.5, 1.0, 1,
+                        2,
+                        List.of(1), List.of(1, 2))),
+                Map.of());
+        return new ReportOverlay(1, "run-1", "2026-06-15T12:00:00Z",
+                new ReportOverlay.Summary(1, 1, 0, 0.5, 1.0, true),
+                new ReportOverlay.Thresholds(0.0, 0.0, Map.of()),
+                new ReportOverlay.Gate(true, List.of()), List.of(),
+                Map.of("users.search", report));
+    }
+
+    @Test
+    void indexOverlaysRunStatusAndCoverageWhenAReportIsPresent() {
+        DocSpec spec = new DocSpec(List.of(searchRoute()), List.of());
+
+        Map<String, Object> model = DocViews.index("demo", spec, overlayForSearch());
+
+        assertThat(model).containsEntry("hasReport", true);
+        assertThat(asMap(model.get("report"))).containsEntry("passed", 1L)
+                .containsEntry("total", 1).containsEntry("sqlLinePct", 50)
+                .containsEntry("gatePassed", true);
+        assertThat(asRows(model.get("routes"))).singleElement().satisfies(row -> {
+            assertThat(row).containsEntry("hasReport", true).containsEntry("covered", true)
+                    .containsEntry("testsPassed", 1L).containsEntry("testsRun", 1)
+                    .containsEntry("allPassed", true).containsEntry("linePct", 50);
+        });
+    }
+
+    @Test
+    void routeMergesTestResultsAndSqlCoverageFromTheOverlay() {
+        ReportOverlay.RouteReport report = overlayForSearch().routeReport("users.search");
+
+        Map<String, Object> model = DocViews.route(searchRoute(), report);
+
+        assertThat(model).containsEntry("hasReport", true).containsEntry("covered", true)
+                .containsEntry("testsPassed", 1L).containsEntry("sqlLinePct", 50)
+                .containsEntry("sqlBranchPct", 100);
+        assertThat(asRows(model.get("tests"))).singleElement()
+                .satisfies(row -> assertThat(row).containsEntry("passed", true));
+        assertThat(asRows(model.get("sql"))).singleElement().satisfies(row -> assertThat(row)
+                .containsEntry("linePct", 50).containsEntry("branchPct", 100));
     }
 
     @Test

@@ -76,6 +76,65 @@ class DocServiceTest {
     }
 
     @Test
+    void readsTheRunOverlayWhenPresent(@TempDir Path dir) throws Exception {
+        Files.createDirectories(dir.resolve("config"));
+        Files.writeString(dir.resolve("config/tesseraql.yml"),
+                "tesseraql:\n  app:\n    name: demo\n");
+        Files.createDirectories(dir.resolve(".tesseraql/docs"));
+        Files.writeString(dir.resolve(".tesseraql/docs/report.json"), """
+                {
+                  "schemaVersion": 1, "runId": "run-1", "generatedAt": "2026-06-15T12:00:00Z",
+                  "summary": { "total": 1, "passed": 1, "failed": 0, "sqlLineRatio": 0.5,
+                               "sqlBranchRatio": 1.0, "gatePassed": true },
+                  "thresholds": { "sqlLine": 0.0, "sqlBranch": 0.0, "kinds": {} },
+                  "gate": { "passed": true, "failures": [] },
+                  "kinds": [ { "kind": "route", "ratio": 1.0, "covered": 1, "declared": 1,
+                               "uncovered": [] } ],
+                  "routes": {
+                    "users.search": { "covered": true,
+                      "tests": [ { "name": "finds sato", "passed": true, "message": "OK" } ],
+                      "sql": [ { "file": "web/api/users/search.sql", "lineRatio": 0.5,
+                                 "branchRatio": 1.0, "branchCount": 1, "branchOutcomes": 2,
+                                 "coveredLines": [1], "coverableLines": [1, 2] } ],
+                      "itemCoverage": { "validation": 1.0 } }
+                  }
+                }
+                """);
+        DocService service = new DocService(new ManifestLoader().load(dir));
+
+        assertThat(service.hasReport()).isTrue();
+        ReportOverlay overlay = service.report();
+        assertThat(overlay).isNotNull();
+        assertThat(overlay.runId()).isEqualTo("run-1");
+        assertThat(overlay.summary().passed()).isEqualTo(1);
+        assertThat(overlay.routeReport("users.search")).satisfies(route -> {
+            assertThat(route.covered()).isTrue();
+            assertThat(route.tests()).singleElement()
+                    .satisfies(test -> assertThat(test.passed()).isTrue());
+            assertThat(route.sql()).singleElement()
+                    .satisfies(sql -> assertThat(sql.coverableLines()).containsExactly(1, 2));
+        });
+    }
+
+    @Test
+    void degradesGracefullyWhenTheOverlayIsAbsentOrCorrupt(@TempDir Path dir) throws Exception {
+        // Absent overlay (the example app has none): no report, portal still works on the spec.
+        DocService noReport = new DocService(exampleManifest());
+        assertThat(noReport.hasReport()).isFalse();
+        assertThat(noReport.report()).isNull();
+
+        // Corrupt overlay: present but unreadable -> degrade to null rather than break the portal.
+        Files.createDirectories(dir.resolve("config"));
+        Files.writeString(dir.resolve("config/tesseraql.yml"),
+                "tesseraql:\n  app:\n    name: demo\n");
+        Files.createDirectories(dir.resolve(".tesseraql/docs"));
+        Files.writeString(dir.resolve(".tesseraql/docs/report.json"), "{ not valid json");
+        DocService corrupt = new DocService(new ManifestLoader().load(dir));
+        assertThat(corrupt.hasReport()).isTrue();
+        assertThat(corrupt.report()).isNull();
+    }
+
+    @Test
     void searchScoresByMatchedTermsAndSupportsPrefixMatching() {
         DocService service = new DocService(exampleManifest());
 
