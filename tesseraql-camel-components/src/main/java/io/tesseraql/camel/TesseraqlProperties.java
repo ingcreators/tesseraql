@@ -32,6 +32,8 @@ public final class TesseraqlProperties {
     public static final String SCOPE_RESOLVER_BEAN = "tesseraqlScopeResolver";
     /** The managed org-unit hierarchy store, bound in {@code managed} mode (roadmap Phase 29). */
     public static final String ORG_UNIT_STORE_BEAN = "tesseraqlOrgUnitStore";
+    /** The approval-workflow state store, bound when an app declares workflows (roadmap Phase 28). */
+    public static final String WORKFLOW_STORE_BEAN = "tesseraqlWorkflowStore";
 
     /** Registry bean names bound by the runtime for security components. */
     public static final String POLICY_ENGINE_BEAN = "tesseraqlPolicyEngine";

@@ -1,0 +1,30 @@
+package io.tesseraql.compiler.binding;
+
+import io.tesseraql.core.expr.Expr;
+import io.tesseraql.core.workflow.WorkflowStore;
+
+/**
+ * The workflow context a synthesized transition route carries into the
+ * {@link TransactionalCommandProcessor} (roadmap Phase 28 slice 1). When present, the processor —
+ * inside the command's transaction — loads the document, checks the transition is legal for the
+ * current state, evaluates the guard, advances the state, and appends a history row, around the
+ * author's command.
+ *
+ * @param workflowId   the owning workflow id (for messages and history)
+ * @param transitionId the transition id (for messages and history)
+ * @param docType      the workflow {@code document.type} (managed instance addressing)
+ * @param table        the business table the document lives in (for the guard's document load)
+ * @param keyColumn    the SQL column holding the document key
+ * @param keyExpr      the context path yielding the key value, e.g. {@code path.key}
+ * @param from         the state the document must be in
+ * @param to           the state the transition moves it to
+ * @param initial      the workflow's initial state (the current state of a never-transitioned doc)
+ * @param managed      whether state lives in the managed {@code tql_workflow_instance} table
+ * @param guard        the parsed guard expression, or {@code null} for an unconditional transition
+ * @param appStore     the app-mode store (a {@link ColumnWorkflowStore}), or {@code null} when
+ *                     managed (the runtime-bound {@link WorkflowStore} bean is used instead)
+ */
+public record WorkflowBinding(String workflowId, String transitionId, String docType, String table,
+        String keyColumn, String keyExpr, String from, String to, String initial, boolean managed,
+        Expr guard, WorkflowStore appStore) {
+}

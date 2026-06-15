@@ -1,20 +1,30 @@
 package io.tesseraql.yaml.lint;
 
+import io.tesseraql.core.expr.Expr;
+import io.tesseraql.core.expr.ExpressionParser;
 import io.tesseraql.yaml.config.AppConfig;
 import io.tesseraql.yaml.manifest.AppManifest;
 import io.tesseraql.yaml.manifest.ManifestLoader;
 import io.tesseraql.yaml.manifest.RouteFile;
 import io.tesseraql.yaml.manifest.ScopeFile;
+import io.tesseraql.yaml.manifest.WorkflowFile;
+import io.tesseraql.yaml.model.DeadlineSpec;
 import io.tesseraql.yaml.model.MatchArm;
 import io.tesseraql.yaml.model.RouteDefinition;
 import io.tesseraql.yaml.model.ScopeDefinition;
 import io.tesseraql.yaml.model.SqlBinding;
+import io.tesseraql.yaml.model.StateSpec;
+import io.tesseraql.yaml.model.TransitionSpec;
 import io.tesseraql.yaml.model.WhenCondition;
+import io.tesseraql.yaml.model.WorkflowDefinition;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Deque;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -70,7 +80,18 @@ public final class AppLinter {
         lintSecurityConfig(appHome, manifest, findings);
         lintScopes(appHome, manifest, findings);
         lintOrgUnitConfig(manifest.config(), findings);
+        lintWorkflows(appHome, manifest, findings);
+        lintWorkflowConfig(manifest.config(), findings);
         return findings;
+    }
+
+    /** Validates approval-workflow configuration (roadmap Phase 28): a known {@code mode}. */
+    private void lintWorkflowConfig(AppConfig config, List<LintFinding> findings) {
+        String mode = config.getString("tesseraql.workflow.mode").orElse(null);
+        if (mode != null && !"managed".equalsIgnoreCase(mode) && !"app".equalsIgnoreCase(mode)) {
+            findings.add(new LintFinding("TQL-WORKFLOW-3110", "error", "config",
+                    "tesseraql.workflow.mode must be 'managed' or 'app', not '" + mode + "'"));
+        }
     }
 
     /** Validates org-unit configuration (roadmap Phase 29 slice 2): a known {@code mode}. */
@@ -759,6 +780,217 @@ public final class AppLinter {
                 }
             }
         }
+    }
+
+    /** The roots a transition guard may reference (roadmap Phase 28); {@code task} arrives in slice 2. */
+    private static final Set<String> GUARD_ROOTS = Set.of("document", "task", "principal");
+
+    /**
+     * Lints approval workflows (roadmap Phase 28): each workflow's states and transitions are
+     * well-formed (no undeclared/unreachable states, no dead ends), guards are valid whitelist
+     * expressions over the allowed roots, referenced files exist, and the declared mode matches the
+     * document fields it needs.
+     */
+    private void lintWorkflows(Path appHome, AppManifest manifest, List<LintFinding> findings) {
+        for (WorkflowFile workflow : manifest.workflows()) {
+            lintWorkflow(appHome, manifest.config(), workflow, findings);
+        }
+    }
+
+    private void lintWorkflow(Path appHome, AppConfig config, WorkflowFile workflow,
+            List<LintFinding> findings) {
+        String source = relative(appHome, workflow.source());
+        WorkflowDefinition def = workflow.definition();
+        String id = def.id();
+        Path dir = workflow.source().getParent();
+
+        Set<String> states = new LinkedHashSet<>();
+        int initialMarked = 0;
+        for (StateSpec state : def.states()) {
+            if (state.id() != null) {
+                states.add(state.id());
+            }
+            if (state.isInitial()) {
+                initialMarked++;
+            }
+        }
+        if (def.initial() != null && !states.contains(def.initial())) {
+            findings.add(new LintFinding("TQL-WORKFLOW-3101", "error", source, "workflow '" + id
+                    + "' initial state '" + def.initial() + "' is not declared in states"));
+        }
+        if (initialMarked > 1) {
+            findings.add(new LintFinding("TQL-WORKFLOW-3102", "error", source,
+                    "workflow '" + id + "' declares more than one initial state"));
+        }
+
+        Set<String> transitionIds = new LinkedHashSet<>();
+        Map<String, List<String>> outgoing = new LinkedHashMap<>();
+        for (TransitionSpec t : def.transitions()) {
+            if (t.id() != null) {
+                transitionIds.add(t.id());
+            }
+            String where = "workflow '" + id + "' transition '" + t.id() + "'";
+            if (t.from() == null || !states.contains(t.from())) {
+                findings.add(new LintFinding("TQL-WORKFLOW-3101", "error", source,
+                        where + " from-state '" + t.from() + "' is not declared in states"));
+            } else {
+                outgoing.computeIfAbsent(t.from(), k -> new ArrayList<>()).add(t.to());
+            }
+            if (t.to() == null || !states.contains(t.to())) {
+                findings.add(new LintFinding("TQL-WORKFLOW-3101", "error", source,
+                        where + " to-state '" + t.to() + "' is not declared in states"));
+            }
+            lintGuard(t.guard(), where, source, findings);
+            if (t.command() != null && !Files.isRegularFile(dir.resolve(t.command()))) {
+                findings.add(new LintFinding("TQL-WORKFLOW-3104", "error", source,
+                        where + " references missing command '" + t.command() + "'"));
+            }
+            if (t.assign() != null && t.assign().file() != null
+                    && !Files.isRegularFile(dir.resolve(t.assign().file()))) {
+                findings.add(new LintFinding("TQL-WORKFLOW-3104", "error", source,
+                        where + " references missing assignee file '" + t.assign().file() + "'"));
+            }
+        }
+
+        if (def.initial() != null && states.contains(def.initial())) {
+            Set<String> reachable = reachableStates(def.initial(), outgoing);
+            for (StateSpec state : def.states()) {
+                if (state.id() != null && !reachable.contains(state.id())) {
+                    findings.add(new LintFinding("TQL-WORKFLOW-3102", "error", source,
+                            "workflow '" + id + "' state '" + state.id()
+                                    + "' is unreachable from the initial state"));
+                }
+            }
+        }
+        for (StateSpec state : def.states()) {
+            boolean hasOutgoing = outgoing.containsKey(state.id());
+            if (state.isTerminal() && hasOutgoing) {
+                findings.add(new LintFinding("TQL-WORKFLOW-3105", "warning", source,
+                        "workflow '" + id + "' terminal state '" + state.id()
+                                + "' has an outgoing transition"));
+            }
+            if (!state.isTerminal() && !hasOutgoing) {
+                findings.add(new LintFinding("TQL-WORKFLOW-3105", "warning", source,
+                        "workflow '" + id + "' non-terminal state '" + state.id()
+                                + "' has no outgoing transition (dead end)"));
+            }
+        }
+
+        for (DeadlineSpec deadline : def.deadlines()) {
+            String where = "workflow '" + id + "' deadline on '" + deadline.state() + "'";
+            if (deadline.state() != null && !states.contains(deadline.state())) {
+                findings.add(new LintFinding("TQL-WORKFLOW-3101", "error", source,
+                        where + " names a state not declared in states"));
+            }
+            DeadlineSpec.OnBreachSpec onBreach = deadline.onBreach();
+            if (onBreach != null) {
+                if (onBreach.escalate() != null && !transitionIds.contains(onBreach.escalate())) {
+                    findings.add(new LintFinding("TQL-WORKFLOW-3104", "error", source,
+                            where + " escalate '" + onBreach.escalate()
+                                    + "' is not a declared transition"));
+                }
+                if (onBreach.reassign() != null
+                        && !Files.isRegularFile(dir.resolve(onBreach.reassign()))) {
+                    findings.add(new LintFinding("TQL-WORKFLOW-3104", "error", source, where
+                            + " references missing reassign file '" + onBreach.reassign() + "'"));
+                }
+            }
+        }
+
+        lintWorkflowMode(def, config, source, findings);
+    }
+
+    /** Parses a guard and checks every path it reads is rooted at an allowed variable. */
+    private void lintGuard(String guard, String where, String source, List<LintFinding> findings) {
+        if (guard == null || guard.isBlank()) {
+            return;
+        }
+        Expr expr;
+        try {
+            expr = ExpressionParser.parse(guard);
+        } catch (RuntimeException ex) {
+            findings.add(new LintFinding("TQL-WORKFLOW-3103", "error", source,
+                    where + " guard is not a valid expression: " + ex.getMessage()));
+            return;
+        }
+        List<List<String>> paths = new ArrayList<>();
+        collectGuardPaths(expr, paths);
+        for (List<String> path : paths) {
+            if (!path.isEmpty() && !GUARD_ROOTS.contains(path.get(0))) {
+                findings.add(new LintFinding("TQL-WORKFLOW-3103", "error", source,
+                        where + " guard references '" + String.join(".", path)
+                                + "'; allowed roots are document, task, principal"));
+            }
+        }
+    }
+
+    private static void collectGuardPaths(Expr expr, List<List<String>> out) {
+        if (expr instanceof Expr.Path p) {
+            out.add(p.segments());
+        } else if (expr instanceof Expr.Not n) {
+            collectGuardPaths(n.operand(), out);
+        } else if (expr instanceof Expr.Logical l) {
+            collectGuardPaths(l.left(), out);
+            collectGuardPaths(l.right(), out);
+        } else if (expr instanceof Expr.Comparison c) {
+            collectGuardPaths(c.left(), out);
+            collectGuardPaths(c.right(), out);
+        }
+    }
+
+    private static Set<String> reachableStates(String start, Map<String, List<String>> outgoing) {
+        Set<String> reachable = new LinkedHashSet<>();
+        Deque<String> queue = new ArrayDeque<>();
+        queue.add(start);
+        reachable.add(start);
+        while (!queue.isEmpty()) {
+            String state = queue.poll();
+            for (String next : outgoing.getOrDefault(state, List.of())) {
+                if (next != null && reachable.add(next)) {
+                    queue.add(next);
+                }
+            }
+        }
+        return reachable;
+    }
+
+    /** Checks the document fields the declared mode requires are present (roadmap Phase 28). */
+    private void lintWorkflowMode(WorkflowDefinition def, AppConfig config, String source,
+            List<LintFinding> findings) {
+        String mode = def.mode();
+        if (mode == null || mode.isBlank()) {
+            mode = config.getString("tesseraql.workflow.mode").orElse("app");
+        }
+        boolean managed = "managed".equalsIgnoreCase(mode);
+        WorkflowDefinition.DocumentSpec doc = def.document();
+        if (doc == null) {
+            findings.add(new LintFinding("TQL-WORKFLOW-3106", "error", source,
+                    "workflow '" + def.id() + "' declares no document"));
+            return;
+        }
+        List<String> missing = new ArrayList<>();
+        if (isBlank(doc.table())) {
+            missing.add("document.table");
+        }
+        if (isBlank(doc.key())) {
+            missing.add("document.key");
+        }
+        if (managed) {
+            if (isBlank(doc.type())) {
+                missing.add("document.type");
+            }
+        } else if (isBlank(doc.stateColumn())) {
+            missing.add("document.stateColumn");
+        }
+        if (!missing.isEmpty()) {
+            findings.add(new LintFinding("TQL-WORKFLOW-3106", "error", source,
+                    "workflow '" + def.id() + "' in " + (managed ? "managed" : "app")
+                            + " mode requires " + String.join(", ", missing)));
+        }
+    }
+
+    private static boolean isBlank(String value) {
+        return value == null || value.isBlank();
     }
 
     /** The non-contract SQL files a route references (its {@code sql}, {@code steps}, {@code queries}). */

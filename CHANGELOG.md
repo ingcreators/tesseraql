@@ -18,6 +18,23 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Runtime and recipes
 
+- Approval workflow — workflow core (roadmap Phase 28 slice 1, see
+  [docs/approval-workflow.md](docs/approval-workflow.md)): a SQL-contract state machine driving a
+  business document through declared states by transitions, with the IAM managed/SQL realm duality.
+  A `kind: workflow` document under `workflow/` declares the `document`, `states` (one `initial`,
+  zero or more `terminal`), and `transitions` (`from`/`to`, an optional whitelist-only `guard` over
+  `document.*`/`principal.*`, a 2-way SQL `command`); the compiler synthesizes one
+  transactional-command route per transition (`POST {basePath}/{key}/{transitionId}`). A transition
+  reuses the Phase 18 command engine to, in one transaction, load the document, check the current
+  state allows the transition, evaluate the guard, advance the state, run the command, and append an
+  immutable history row — so a rejected transition rolls back entirely. `tesseraql.workflow.mode:
+  managed` provisions `tql_workflow_instance` / `tql_workflow_history` behind a `WorkflowStore` SPI
+  (`tesseraql-core`) with a `JdbcWorkflowStore` impl; `mode: app` (the default) keeps state in the
+  business table's `stateColumn` and provisions nothing (per-workflow override allowed). An illegal
+  or concurrent transition is `TQL-WORKFLOW-3201` (409), a falsy guard `TQL-WORKFLOW-3202` (422).
+  Lint (`TQL-WORKFLOW-31xx`: undeclared/unreachable states, bad guards, missing files, mode
+  mismatch) and a `workflow` coverage kind (one item per transition) keep it machine-checkable. The
+  task inbox, assignee resolution, deadlines, and escalation are later slices.
 - Organizational data scoping — row-level masking (roadmap Phase 29 slice 3, completing the phase,
   see [docs/data-scoping.md](docs/data-scoping.md)): a field is masked in the rows outside the
   caller's scope. The query selects the scope predicate as a per-row flag with the new

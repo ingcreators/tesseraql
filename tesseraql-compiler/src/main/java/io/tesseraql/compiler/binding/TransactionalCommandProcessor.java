@@ -15,6 +15,7 @@ import io.tesseraql.core.sql.Sql2WayParser;
 import io.tesseraql.core.sql.SqlNode;
 import io.tesseraql.core.sql.SqlRenderer;
 import io.tesseraql.core.validation.ValidationRules;
+import io.tesseraql.core.workflow.WorkflowStore;
 import io.tesseraql.security.Principal;
 import io.tesseraql.yaml.model.ErrorsSpec;
 import io.tesseraql.yaml.model.OutboxSpec;
@@ -92,6 +93,14 @@ public final class TransactionalCommandProcessor implements Processor {
     private static final TqlErrorCode NOT_NULL_VIOLATION = new TqlErrorCode(TqlDomain.SQL, 4001);
     private static final TqlErrorCode CHECK_VIOLATION = new TqlErrorCode(TqlDomain.SQL, 4002);
     private static final TqlErrorCode SERIALIZATION = new TqlErrorCode(TqlDomain.SQL, 4093);
+    /** TQL-WORKFLOW-3201: a transition is not legal for the document's current state (HTTP 409). */
+    private static final TqlErrorCode ILLEGAL_TRANSITION = new TqlErrorCode(TqlDomain.WORKFLOW,
+            3201);
+    /** TQL-WORKFLOW-3202: a transition guard rejected the request (HTTP 422). */
+    private static final TqlErrorCode GUARD_FAILED = new TqlErrorCode(TqlDomain.WORKFLOW, 3202);
+    /** TQL-WORKFLOW-3210: a managed transition needs the runtime's WorkflowStore bean. */
+    private static final TqlErrorCode NO_WORKFLOW_STORE = new TqlErrorCode(TqlDomain.WORKFLOW,
+            3210);
 
     /** The reserved bind namespace for the canonical audit binds. */
     private static final String AUDIT = "audit";
@@ -107,6 +116,7 @@ public final class TransactionalCommandProcessor implements Processor {
     private final ErrorsSpec errors;
     private final String appName;
     private final boolean generatedKeyColumns;
+    private final WorkflowBinding workflow;
 
     /**
      * A compiled step: a parsed 2-way SQL statement or a managed sequence allocation.
@@ -141,6 +151,23 @@ public final class TransactionalCommandProcessor implements Processor {
             String datasourceName, String dialect, OutboxSpec outbox,
             io.tesseraql.yaml.model.PublishSpec publish, ErrorsSpec errors,
             String appName) {
+        this(routeId, sql, declaredSteps, validate, notify, stepFile, datasourceName, dialect,
+                outbox, publish, errors, appName, null);
+    }
+
+    /**
+     * Builds the processor for a synthesized workflow transition route (roadmap Phase 28): the
+     * {@code workflow} binding makes the processor advance the document's state, check the
+     * transition's guard, and append history in the command's transaction.
+     */
+    public TransactionalCommandProcessor(String routeId, SqlBinding sql,
+            Map<String, SqlBinding> declaredSteps, Map<String, ValidationRule> validate,
+            Map<String, io.tesseraql.yaml.model.NotifySpec> notify,
+            java.util.function.Function<String, Path> stepFile,
+            String datasourceName, String dialect, OutboxSpec outbox,
+            io.tesseraql.yaml.model.PublishSpec publish, ErrorsSpec errors,
+            String appName, WorkflowBinding workflow) {
+        this.workflow = workflow;
         this.routeId = routeId;
         this.datasourceName = datasourceName;
         this.outboxEvents = outbox == null ? null : new OutboxEvents(outbox, appName);
@@ -156,7 +183,9 @@ public final class TransactionalCommandProcessor implements Processor {
         if (sql != null && !declaredSteps.isEmpty()) {
             throw invalid("declare either sql: or steps:, not both");
         }
-        if (sql == null && declaredSteps.isEmpty()) {
+        // A plain command needs a statement; a workflow transition may be state-only (the framework
+        // advances the state and appends history with no author command of its own).
+        if (sql == null && declaredSteps.isEmpty() && workflow == null) {
             throw invalid("a command route needs a sql: or steps: declaration");
         }
         this.singleSql = sql != null;
@@ -300,6 +329,13 @@ public final class TransactionalCommandProcessor implements Processor {
             boolean previousAutoCommit = connection.getAutoCommit();
             connection.setAutoCommit(false);
             try {
+                // A workflow transition (roadmap Phase 28) checks legality and the guard inside the
+                // transaction, before validation: load the document, verify the current state allows
+                // this transition, evaluate the guard. The document is bound as `document` so the
+                // guard and the command SQL can read it.
+                WorkflowExec wf = workflow == null
+                        ? null
+                        : beginWorkflow(exchange, connection, context);
                 // Validation runs first, inside the transaction (roadmap Phase 19): expression
                 // rules against the bound context, SQL rules on the command's connection. A
                 // violation rejects the request before a single step writes.
@@ -311,6 +347,16 @@ public final class TransactionalCommandProcessor implements Processor {
                             .details(Map.of("fields", violations))
                             .build();
                 }
+                // Advance the state before the command: the conditional UPDATE affects zero rows
+                // when the document is no longer in `from` (a concurrent transition), which is a 409.
+                if (wf != null) {
+                    int advanced = wf.store().advanceState(connection, workflow.docType(),
+                            wf.docId(), workflow.from(), workflow.to());
+                    if (advanced == 0) {
+                        throw illegalTransition(wf.fromState(),
+                                "the document changed state concurrently");
+                    }
+                }
                 for (Step step : steps) {
                     Map<String, Object> result = step.isSequence()
                             ? allocateSequence(exchange, connection, step)
@@ -319,6 +365,14 @@ public final class TransactionalCommandProcessor implements Processor {
                     if (singleSql) {
                         context.put(step.contextKey(), result);
                     }
+                }
+                // Append the immutable history row in the same transaction (roadmap Phase 28), so
+                // the audit record commits or rolls back with the state change.
+                if (wf != null) {
+                    wf.store().appendHistory(connection, new WorkflowStore.History(null,
+                            workflow.docType(), wf.docId(), workflow.transitionId(),
+                            wf.fromState(), workflow.to(), (String) audit.get("user"),
+                            ((java.sql.Timestamp) audit.get("now")).toInstant(), null));
                 }
                 if (outboxEvents != null) {
                     String eventId = store.insert(connection, outboxEvents.build(context));
@@ -370,6 +424,86 @@ public final class TransactionalCommandProcessor implements Processor {
         audit.put("user", user);
         audit.put("now", java.sql.Timestamp.from(Instant.now()));
         return audit;
+    }
+
+    /** The store and resolved document identity for an in-flight workflow transition. */
+    private record WorkflowExec(WorkflowStore store, String docId, String fromState) {
+    }
+
+    /**
+     * Prepares a workflow transition inside the transaction: resolves the store, ensures the managed
+     * instance exists, loads the document for the guard, verifies the current state allows this
+     * transition, and evaluates the guard. Returns the store and the document's current state.
+     */
+    private WorkflowExec beginWorkflow(Exchange exchange, Connection connection,
+            Map<String, Object> context) throws SQLException {
+        WorkflowStore store = workflow.managed()
+                ? lookupWorkflowStore(exchange)
+                : workflow.appStore();
+        EvaluationContext evaluation = new EvaluationContext(context);
+        Object keyValue = evaluation.resolve(Arrays.asList(workflow.keyExpr().split("\\.")));
+        String docId = keyValue == null ? null : String.valueOf(keyValue);
+        Object tenant = context.get("tenant");
+        store.ensureInstance(connection, workflow.docType(), docId, workflow.initial(),
+                tenant == null ? null : String.valueOf(tenant));
+        context.put("document", loadDocument(connection, docId));
+        String current = store.currentState(connection, workflow.docType(), docId);
+        String from = current != null ? current : workflow.initial();
+        if (!java.util.Objects.equals(workflow.from(), from)) {
+            throw illegalTransition(from, "the document is in state '" + from + "'");
+        }
+        if (workflow.guard() != null
+                && !workflow.guard().evalBoolean(new EvaluationContext(context))) {
+            throw TqlException.builder(GUARD_FAILED)
+                    .message("Workflow '" + workflow.workflowId() + "': transition '"
+                            + workflow.transitionId() + "' guard rejected the request")
+                    .build();
+        }
+        return new WorkflowExec(store, docId, from);
+    }
+
+    /** Loads the document row by key, lower-casing column labels so the guard reads `document.col`. */
+    private Map<String, Object> loadDocument(Connection connection, String docId)
+            throws SQLException {
+        try (PreparedStatement ps = connection.prepareStatement("select * from " + workflow.table()
+                + " where " + workflow.keyColumn() + " = ?")) {
+            ps.setString(1, docId);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (!rs.next()) {
+                    return Map.of();
+                }
+                java.sql.ResultSetMetaData metaData = rs.getMetaData();
+                Map<String, Object> row = new LinkedHashMap<>();
+                for (int col = 1; col <= metaData.getColumnCount(); col++) {
+                    row.put(metaData.getColumnLabel(col).toLowerCase(Locale.ROOT),
+                            rs.getObject(col));
+                }
+                return row;
+            }
+        }
+    }
+
+    private WorkflowStore lookupWorkflowStore(Exchange exchange) {
+        WorkflowStore store = exchange.getContext().getRegistry()
+                .lookupByNameAndType(TesseraqlProperties.WORKFLOW_STORE_BEAN, WorkflowStore.class);
+        if (store == null) {
+            throw new TqlException(NO_WORKFLOW_STORE, "Workflow '" + workflow.workflowId()
+                    + "' is managed but no workflow store is configured");
+        }
+        return store;
+    }
+
+    private TqlException illegalTransition(String actualState, String reason) {
+        return TqlException.builder(ILLEGAL_TRANSITION)
+                .message("Workflow '" + workflow.workflowId() + "': transition '"
+                        + workflow.transitionId() + "' requires state '" + workflow.from()
+                        + "' but "
+                        + reason)
+                .details(Map.of("conflict", Map.of(
+                        "expectedState", String.valueOf(workflow.from()),
+                        "actualState", String.valueOf(actualState),
+                        "hint", "tql.workflow.illegal-transition")))
+                .build();
     }
 
     private Map<String, Object> allocateSequence(Exchange exchange, Connection connection,
