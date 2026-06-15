@@ -3,6 +3,7 @@ package io.tesseraql.studio;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import io.tesseraql.studio.DocService.DocSpec;
+import io.tesseraql.studio.DocService.Hit;
 import io.tesseraql.studio.DocService.RouteEntry;
 import io.tesseraql.studio.DocService.TestRef;
 import io.tesseraql.yaml.docs.RouteSpec;
@@ -66,6 +67,18 @@ class DocViewsTest {
         });
         assertThat(asRows(model.get("tests"))).singleElement()
                 .satisfies(row -> assertThat(row).containsEntry("kind", "sql"));
+    }
+
+    @Test
+    void searchResultsModelMapsHitsToDetailLinks() {
+        Map<String, Object> model = DocViews.searchResults("user",
+                List.of(new Hit("users.search", "GET", "/api/users", 2)));
+
+        assertThat(model).containsEntry("query", "user").containsEntry("hasResults", true);
+        assertThat(asRows(model.get("results"))).singleElement().satisfies(row -> {
+            assertThat(row).containsEntry("id", "users.search").containsEntry("method", "GET");
+            assertThat((String) row.get("detailUrl")).contains("docs/route?id=users.search");
+        });
     }
 
     @SuppressWarnings("unchecked")

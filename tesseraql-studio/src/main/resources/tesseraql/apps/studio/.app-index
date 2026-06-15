@@ -6,6 +6,8 @@ web/_tesseraql/studio/ui/docs/get.yml
 web/_tesseraql/studio/ui/docs/docs.html
 web/_tesseraql/studio/ui/docs/route/get.yml
 web/_tesseraql/studio/ui/docs/route/route.html
+web/_tesseraql/studio/ui/docs/search/get.yml
+web/_tesseraql/studio/ui/docs/search/results.html
 web/_tesseraql/studio/ui/source/get.yml
 web/_tesseraql/studio/ui/source/source.html
 web/_tesseraql/studio/ui/save/post.yml

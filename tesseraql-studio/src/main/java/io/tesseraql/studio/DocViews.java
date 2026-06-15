@@ -84,6 +84,24 @@ public final class DocViews {
         return model;
     }
 
+    /** The live-search results fragment model: the query echo and the ranked route hits. */
+    public static Map<String, Object> searchResults(String query, List<DocService.Hit> hits) {
+        Map<String, Object> model = new LinkedHashMap<>();
+        model.put("query", query == null ? "" : query);
+        List<Map<String, Object>> results = new ArrayList<>();
+        for (DocService.Hit hit : hits) {
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("id", hit.id());
+            row.put("method", hit.method());
+            row.put("path", hit.path());
+            row.put("detailUrl", routeUrl(hit.id()));
+            results.add(row);
+        }
+        model.put("results", results);
+        model.put("hasResults", !results.isEmpty());
+        return model;
+    }
+
     private static List<Map<String, Object>> inputs(List<RouteSpec.Input> inputs) {
         List<Map<String, Object>> rows = new ArrayList<>();
         for (RouteSpec.Input input : inputs) {

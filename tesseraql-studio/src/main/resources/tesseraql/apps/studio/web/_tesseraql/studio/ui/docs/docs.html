@@ -9,6 +9,13 @@
 </th:block>
 <div id="page-content" class="hc-stack">
 <section class="hc-card">
+  <h2>Search</h2>
+  <input class="hc-input" type="search" name="q" autocomplete="off" placeholder="Search routes, paths, SQL, tests&hellip;"
+         hx-get="/_tesseraql/studio/ui/docs/search" hx-trigger="input changed delay:200ms, search"
+         hx-target="#docs-search-results" hx-swap="innerHTML">
+  <div id="docs-search-results" class="hc-stack"></div>
+</section>
+<section class="hc-card">
   <h2>Routes &amp; pages</h2>
   <div class="hc-empty" th:unless="${docs.hasRoutes}"><p class="hc-empty__title">No routes defined.</p></div>
   <table class="hc-table" th:if="${docs.hasRoutes}">

@@ -10,6 +10,8 @@ import io.tesseraql.yaml.manifest.ManifestLoader;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.Comparator;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -71,6 +73,22 @@ class DocServiceTest {
                 .satisfies(migration -> assertThat(migration.version()).isEqualTo("1"));
         assertThat(service.route("users.search")).isNotNull();
         assertThat(service.route("nope")).isNull();
+    }
+
+    @Test
+    void searchScoresByMatchedTermsAndSupportsPrefixMatching() {
+        DocService service = new DocService(exampleManifest());
+
+        List<DocService.Hit> hits = service.search("users provision");
+        // The provisioning routes surface, and hits come back ordered by descending match score.
+        assertThat(hits).extracting(DocService.Hit::id)
+                .contains("users.apiProvision", "groups.apiProvision");
+        assertThat(hits).isSortedAccordingTo(
+                Comparator.comparingInt(DocService.Hit::score).reversed());
+        // A prefix matches a path/id token (live-search as the user types).
+        assertThat(service.search("provis")).anySatisfy(
+                hit -> assertThat(hit.id()).isEqualTo("users.apiProvision"));
+        assertThat(service.search("   ")).isEmpty();
     }
 
     @Test
