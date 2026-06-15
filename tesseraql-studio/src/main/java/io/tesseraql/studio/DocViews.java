@@ -5,8 +5,10 @@ import io.tesseraql.studio.DocService.RouteEntry;
 import io.tesseraql.studio.DocService.TestRef;
 import io.tesseraql.yaml.docs.RouteSpec;
 import io.tesseraql.yaml.docs.RouteSpecModel;
+import io.tesseraql.yaml.scaffold.CatalogSchema;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.sql.Types;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -23,6 +25,7 @@ import java.util.Set;
 public final class DocViews {
 
     private static final String ROUTE_URL = "/_tesseraql/studio/ui/docs/route?id=";
+    private static final String TABLE_URL = "/_tesseraql/studio/ui/docs/schema/table?";
 
     private DocViews() {
     }
@@ -149,6 +152,116 @@ public final class DocViews {
         return model;
     }
 
+    /**
+     * The schema index model (documentation portal v3): per datasource, the tables and views it
+     * holds with their column counts, primary key, and detail links. Empty (just the app name) when
+     * no schema overlay is present.
+     */
+    public static Map<String, Object> schema(String appName, SchemaOverlay overlay) {
+        Map<String, Object> model = new LinkedHashMap<>();
+        model.put("appName", appName);
+        boolean has = overlay != null && !overlay.datasources().isEmpty();
+        model.put("hasSchema", has);
+        if (!has) {
+            return model;
+        }
+        List<Map<String, Object>> datasources = new ArrayList<>();
+        for (Map.Entry<String, CatalogSchema> entry : overlay.datasources().entrySet()) {
+            Map<String, Object> ds = new LinkedHashMap<>();
+            ds.put("name", entry.getKey());
+            List<Map<String, Object>> tables = new ArrayList<>();
+            for (CatalogSchema.Table table : entry.getValue().tables()) {
+                Map<String, Object> row = new LinkedHashMap<>();
+                row.put("name", table.name());
+                row.put("type", table.type());
+                row.put("columnCount", table.columns().size());
+                row.put("primaryKey", String.join(", ", table.primaryKey()));
+                row.put("foreignKeyCount", table.foreignKeys().size());
+                row.put("detailUrl", tableUrl(entry.getKey(), table.name()));
+                tables.add(row);
+            }
+            ds.put("tables", tables);
+            ds.put("tableCount", tables.size());
+            datasources.add(ds);
+        }
+        model.put("datasources", datasources);
+        return model;
+    }
+
+    /**
+     * The per-table reference model (documentation portal v3): the columns (readable type,
+     * nullability, default, primary-key/auto-increment flags), the primary key, the foreign keys
+     * (each linked to its referenced table page), and the unique indexes.
+     */
+    public static Map<String, Object> table(String datasource, CatalogSchema.Table table) {
+        Set<String> pk = new HashSet<>(table.primaryKey());
+        Map<String, Object> model = new LinkedHashMap<>();
+        model.put("datasource", datasource);
+        model.put("name", table.name());
+        model.put("type", table.type());
+        model.put("schema", table.schema());
+        model.put("primaryKey", String.join(", ", table.primaryKey()));
+        model.put("hasPrimaryKey", !table.primaryKey().isEmpty());
+
+        List<Map<String, Object>> columns = new ArrayList<>();
+        for (CatalogSchema.Column column : table.columns()) {
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("name", column.name());
+            row.put("type", columnType(column));
+            row.put("nullable", column.nullable());
+            row.put("autoincrement", column.autoincrement());
+            row.put("defaultValue", column.defaultValue());
+            row.put("primaryKey", pk.contains(column.name()));
+            columns.add(row);
+        }
+        model.put("columns", columns);
+
+        List<Map<String, Object>> foreignKeys = new ArrayList<>();
+        for (CatalogSchema.ForeignKey fk : table.foreignKeys()) {
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("name", fk.name());
+            row.put("columns", String.join(", ", fk.columns()));
+            row.put("refTable", fk.refTable());
+            row.put("refColumns", String.join(", ", fk.refColumns()));
+            row.put("refUrl", tableUrl(datasource, fk.refTable()));
+            foreignKeys.add(row);
+        }
+        model.put("foreignKeys", foreignKeys);
+        model.put("hasForeignKeys", !foreignKeys.isEmpty());
+
+        List<Map<String, Object>> indexes = new ArrayList<>();
+        for (CatalogSchema.Index index : table.uniqueIndexes()) {
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("name", index.name());
+            row.put("columns", String.join(", ", index.columns()));
+            indexes.add(row);
+        }
+        model.put("uniqueIndexes", indexes);
+        model.put("hasUniqueIndexes", !indexes.isEmpty());
+        return model;
+    }
+
+    /** A readable column type: the SQL type name, with a length appended for character types. */
+    private static String columnType(CatalogSchema.Column column) {
+        if (column.size() > 0 && isCharacter(column.jdbcType())) {
+            return column.sqlTypeName() + "(" + column.size() + ")";
+        }
+        return column.sqlTypeName();
+    }
+
+    private static boolean isCharacter(int jdbcType) {
+        return switch (jdbcType) {
+            case Types.CHAR, Types.VARCHAR, Types.NCHAR, Types.NVARCHAR -> true;
+            default -> false;
+        };
+    }
+
+    private static String tableUrl(String datasource, String name) {
+        return TABLE_URL + "ds="
+                + URLEncoder.encode(datasource == null ? "" : datasource, StandardCharsets.UTF_8)
+                + "&name=" + URLEncoder.encode(name == null ? "" : name, StandardCharsets.UTF_8);
+    }
+
     /** The Markdown doc-body model: the doc path and its pre-rendered, CSP-safe HTML. */
     public static Map<String, Object> doc(String path, String html) {
         Map<String, Object> model = new LinkedHashMap<>();
@@ -167,7 +280,7 @@ public final class DocViews {
             row.put("id", hit.id());
             row.put("method", hit.method());
             row.put("path", hit.path());
-            row.put("detailUrl", routeUrl(hit.id()));
+            row.put("detailUrl", hit.url());
             results.add(row);
         }
         model.put("results", results);

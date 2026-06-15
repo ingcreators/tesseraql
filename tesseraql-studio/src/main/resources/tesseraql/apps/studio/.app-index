@@ -10,6 +10,10 @@ web/_tesseraql/studio/ui/docs/search/get.yml
 web/_tesseraql/studio/ui/docs/search/results.html
 web/_tesseraql/studio/ui/docs/coverage/get.yml
 web/_tesseraql/studio/ui/docs/coverage/coverage.html
+web/_tesseraql/studio/ui/docs/schema/get.yml
+web/_tesseraql/studio/ui/docs/schema/schema.html
+web/_tesseraql/studio/ui/docs/schema/table/get.yml
+web/_tesseraql/studio/ui/docs/schema/table/table.html
 web/_tesseraql/studio/ui/source/get.yml
 web/_tesseraql/studio/ui/source/source.html
 web/_tesseraql/studio/ui/save/post.yml

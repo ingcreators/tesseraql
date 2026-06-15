@@ -287,6 +287,33 @@ class StudioIntegrationTest {
     }
 
     @Test
+    void uiDocsSchemaIndexRendersTheIntrospectedCatalog() throws Exception {
+        HttpResponse<String> response = get("/_tesseraql/studio/ui/docs/schema", true);
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        // The schema.json overlay (v3) renders each datasource's tables with detail links.
+        assertThat(response.body()).startsWith("<!DOCTYPE html>")
+                .contains("Datasource: main").contains("customers").contains("orders")
+                .contains("schema/table?ds=main&amp;name=customers");
+    }
+
+    @Test
+    void uiDocsSchemaTableRendersColumnsKeysAndForeignKeys() throws Exception {
+        HttpResponse<String> response = get(
+                "/_tesseraql/studio/ui/docs/schema/table?ds=main&name=" + enc("orders"), true);
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        // The table page lists columns, the primary key, and the foreign key linked to its target.
+        assertThat(response.body()).contains("Columns").contains("customer_id")
+                .contains("Foreign keys").contains("schema/table?ds=main&amp;name=customers");
+    }
+
+    @Test
+    void uiDocsSchemaRequiresAuthentication() throws Exception {
+        assertThat(get("/_tesseraql/studio/ui/docs/schema", false).statusCode()).isEqualTo(401);
+    }
+
+    @Test
     void uiDocsRequiresAuthentication() throws Exception {
         assertThat(get("/_tesseraql/studio/ui/docs", false).statusCode()).isEqualTo(401);
     }
@@ -513,6 +540,34 @@ class StudioIntegrationTest {
                   { "runId": "it-run", "generatedAt": "2026-06-15T12:00:00Z", "total": 2,
                     "passed": 2, "failed": 0, "sqlLineRatio": 0.8, "sqlBranchRatio": 1.0,
                     "gatePassed": true } ]
+                """);
+        // A schema overlay exercises the portal's schema-layer rendering (documentation portal v3).
+        // Hand-authored to the schema.json shape the schema goal emits.
+        Files.writeString(target.resolve(".tesseraql/docs/schema.json"), """
+                { "schemaVersion": 1, "generatedAt": "2026-06-15T12:00:00Z",
+                  "datasources": { "main": { "tables": [
+                    { "name": "customers", "type": "TABLE", "schema": "public",
+                      "columns": [
+                        { "name": "id", "jdbcType": -5, "sqlTypeName": "bigserial", "size": 19,
+                          "nullable": false, "autoincrement": true, "defaultValue": null },
+                        { "name": "email", "jdbcType": 12, "sqlTypeName": "varchar", "size": 320,
+                          "nullable": false, "autoincrement": false, "defaultValue": null } ],
+                      "primaryKey": ["id"], "foreignKeys": [],
+                      "uniqueIndexes": [ { "name": "customers_email_key", "columns": ["email"],
+                                          "unique": true } ] },
+                    { "name": "orders", "type": "TABLE", "schema": "public",
+                      "columns": [
+                        { "name": "id", "jdbcType": -5, "sqlTypeName": "bigserial", "size": 19,
+                          "nullable": false, "autoincrement": true, "defaultValue": null },
+                        { "name": "customer_id", "jdbcType": -5, "sqlTypeName": "bigint",
+                          "size": 19, "nullable": false, "autoincrement": false,
+                          "defaultValue": null } ],
+                      "primaryKey": ["id"],
+                      "foreignKeys": [ { "name": "orders_customer_id_fkey",
+                                         "columns": ["customer_id"], "refTable": "customers",
+                                         "refColumns": ["id"] } ],
+                      "uniqueIndexes": [] }
+                  ] } } }
                 """);
         return target;
     }

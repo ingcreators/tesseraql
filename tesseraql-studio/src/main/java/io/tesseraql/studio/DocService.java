@@ -9,8 +9,11 @@ import io.tesseraql.yaml.docs.RouteSpec;
 import io.tesseraql.yaml.docs.RouteSpecGenerator;
 import io.tesseraql.yaml.docs.RouteSpecModel;
 import io.tesseraql.yaml.manifest.AppManifest;
+import io.tesseraql.yaml.scaffold.CatalogSchema;
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -46,6 +49,12 @@ public final class DocService {
 
     /** App-home-relative location the {@code report} goal writes the run-trend ring at (portal v2). */
     public static final String HISTORY_PATH = ".tesseraql/docs/history.json";
+
+    /** App-home-relative location the {@code schema} goal writes the catalog overlay at (portal v3). */
+    public static final String SCHEMA_PATH = ".tesseraql/docs/schema.json";
+
+    private static final String ROUTE_URL = "/_tesseraql/studio/ui/docs/route?id=";
+    private static final String TABLE_URL = "/_tesseraql/studio/ui/docs/schema/table?";
 
     private static final TqlErrorCode TRAVERSAL = new TqlErrorCode(TqlDomain.STUDIO, 4003);
     private static final TqlErrorCode READ_ERROR = new TqlErrorCode(TqlDomain.STUDIO, 4041);
@@ -139,6 +148,43 @@ public final class DocService {
         }
     }
 
+    /** Whether the schema overlay ({@code schema.json}) is present in the app home (portal v3). */
+    public boolean hasSchema() {
+        return Files.isRegularFile(appHome.resolve(SCHEMA_PATH));
+    }
+
+    /**
+     * The schema overlay ({@code schema.json}) when present, otherwise {@code null}. Like the run
+     * overlay it is optional and run-dependent (not packed into the {@code .tqlapp}); a corrupt or
+     * unreadable file degrades to {@code null} so the spec-layer portal keeps working.
+     */
+    public SchemaOverlay schema() {
+        Path file = appHome.resolve(SCHEMA_PATH);
+        if (!Files.isRegularFile(file)) {
+            return null;
+        }
+        try {
+            return MAPPER.readValue(file.toFile(), SchemaOverlay.class);
+        } catch (IOException ex) {
+            return null;
+        }
+    }
+
+    /** One introspected table by datasource and name, or {@code null} when no such table exists. */
+    public CatalogSchema.Table table(String datasource, String name) {
+        SchemaOverlay overlay = schema();
+        if (overlay == null || name == null) {
+            return null;
+        }
+        CatalogSchema catalog = overlay.datasource(datasource);
+        if (catalog == null) {
+            return null;
+        }
+        return catalog.tables().stream()
+                .filter(table -> name.equals(table.name()))
+                .findFirst().orElse(null);
+    }
+
     /** The doc entry for one route id, or {@code null} when no such route exists. */
     public RouteEntry route(String id) {
         for (RouteEntry entry : spec().routes()) {
@@ -181,7 +227,11 @@ public final class DocService {
             return hits;
         }
         ReportOverlay overlay = report();
-        return hits.stream().filter(hit -> matchesFilters(hit.id(), overlay, filters)).toList();
+        // Status/coverage filters are route-only concepts; schema (table) hits drop out under them.
+        return hits.stream()
+                .filter(hit -> !"TABLE".equals(hit.method())
+                        && matchesFilters(hit.id(), overlay, filters))
+                .toList();
     }
 
     /** Routes ranked by the number of distinct query terms they match (descending), then by id. */
@@ -243,14 +293,47 @@ public final class DocService {
         int doc = 0;
         for (RouteEntry entry : spec().routes()) {
             RouteSpec route = entry.route();
-            hits.add(new Hit(route.id(), route.method(), route.path(), 0));
+            hits.add(new Hit(route.id(), route.method(), route.path(), routeUrl(route.id()), 0));
             for (String term : tokenize(searchText(entry))) {
                 index.computeIfAbsent(term, key -> new LinkedHashSet<>()).add(doc);
             }
             doc++;
         }
+        // Schema tables join the corpus so a table or column name resolves to its table page
+        // (portal v3). They carry the synthetic "TABLE" method so status/coverage filters skip them.
+        SchemaOverlay schema = schema();
+        if (schema != null) {
+            for (Map.Entry<String, CatalogSchema> ds : schema.datasources().entrySet()) {
+                for (CatalogSchema.Table table : ds.getValue().tables()) {
+                    hits.add(new Hit(table.name(), "TABLE", ds.getKey(),
+                            tableUrl(ds.getKey(), table.name()), 0));
+                    for (String term : tokenize(tableSearchText(ds.getKey(), table))) {
+                        index.computeIfAbsent(term, key -> new LinkedHashSet<>()).add(doc);
+                    }
+                    doc++;
+                }
+            }
+        }
         this.corpus = List.copyOf(hits);
         this.inverted = index;
+    }
+
+    /** The searchable text of one table: its datasource, name, type, and column names. */
+    private static String tableSearchText(String datasource, CatalogSchema.Table table) {
+        List<String> parts = new ArrayList<>();
+        add(parts, datasource, table.name(), table.type());
+        table.columns().forEach(column -> add(parts, column.name()));
+        return String.join(" ", parts);
+    }
+
+    private static String routeUrl(String id) {
+        return ROUTE_URL + URLEncoder.encode(id == null ? "" : id, StandardCharsets.UTF_8);
+    }
+
+    private static String tableUrl(String datasource, String name) {
+        return TABLE_URL + "ds="
+                + URLEncoder.encode(datasource == null ? "" : datasource, StandardCharsets.UTF_8)
+                + "&name=" + URLEncoder.encode(name == null ? "" : name, StandardCharsets.UTF_8);
     }
 
     /** The searchable text of one route: its identity, surface, security, SQL, and covering tests. */
@@ -345,11 +428,15 @@ public final class DocService {
             double sqlLineRatio, double sqlBranchRatio, boolean gatePassed) {
     }
 
-    /** A ranked search hit: the matched route's identity and its term-match score. */
-    public record Hit(String id, String method, String path, int score) {
+    /**
+     * A ranked search hit: the matched document's identity, its detail link, and its term-match
+     * score. A hit is a route (an HTTP {@code method} and route id) or a schema table (the synthetic
+     * {@code TABLE} method, the datasource as {@code path}, and the table name as {@code id}).
+     */
+    public record Hit(String id, String method, String path, String url, int score) {
 
         Hit withScore(int score) {
-            return new Hit(id, method, path, score);
+            return new Hit(id, method, path, url, score);
         }
     }
 }
