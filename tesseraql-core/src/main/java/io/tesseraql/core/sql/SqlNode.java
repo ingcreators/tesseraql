@@ -65,7 +65,11 @@ public sealed interface SqlNode {
      * in a plain SQL tool; at render time a {@link ScopeResolver} replaces it with a predicate
      * derived from the request principal, parameterized. {@code alias} (from {@code on <alias>})
      * qualifies the scoped column for a multi-table query; it is {@code null} for a single table.
+     *
+     * <p>With {@code asBoolean} (the {@code as boolean} directive suffix) the predicate renders as a
+     * {@code case when … then 1 else 0 end} scalar for a SELECT list — a per-row scope flag a field
+     * policy keys off for row-level masking (roadmap Phase 29 slice 3) — instead of a WHERE filter.
      */
-    record Scope(String name, String alias, int sourceLine) implements SqlNode {
+    record Scope(String name, String alias, boolean asBoolean, int sourceLine) implements SqlNode {
     }
 }

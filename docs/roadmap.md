@@ -326,10 +326,11 @@ design is in [docs/data-scoping.md](data-scoping.md); in summary:
 - Masking integration: column-level role masking already works via `FieldPolicy.policy`; this adds
   row-level masking keyed off a scope flag column (`unmaskWhen`).
 
-Three slices: (1) **scope core** (attribute-based, no hierarchy) — *delivered*; (2) the **shared
+Three slices, all delivered: (1) **scope core** (attribute-based, no hierarchy); (2) the **shared
 org-unit foundation** (`managed` `tql_org_unit`/`tql_org_closure` maintained by an `OrgUnitStore`,
-or `app`-owned tables, the IAM managed/SQL realm duality) that Phase 28 also consumes — *delivered*;
-(3) masking integration.
+or `app`-owned tables, the IAM managed/SQL realm duality) that Phase 28 also consumes; (3) **masking
+integration** (the `/*%scope … as boolean */` flag directive plus `FieldPolicy.unmaskWhen`, masking a
+field in rows outside the caller's scope). **Phase 29 is complete.**
 
 Acceptance (slice 1, met): the same query, run by principals with different roles/claims, returns
 each caller's rows only (a bypass role sees all, an unscoped caller sees none, roles compose

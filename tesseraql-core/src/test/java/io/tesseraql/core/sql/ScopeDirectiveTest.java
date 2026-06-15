@@ -36,6 +36,20 @@ class ScopeDirectiveTest {
     }
 
     @Test
+    void asBooleanRendersAScopeFlagForTheSelectList() {
+        String sql = "select id, /*%scope s on o as boolean */ (1=1) as _in_scope from t o";
+        ScopeResolver resolver = resolver("(o.region in /* regions */ ('z'))",
+                Map.of("regions", List.of("R1", "R2")));
+
+        BoundSql bound = SqlRenderer.render(Sql2WayParser.parse(sql), Map.of(), resolver, Map.of());
+
+        assertThat(bound.sql())
+                .contains("case when (o.region in (?, ?)) then 1 else 0 end as _in_scope");
+        assertThat(bound.parameters()).extracting(BoundParameter::value)
+                .containsExactly("R1", "R2");
+    }
+
+    @Test
     void parsesScopeWithoutAlias() {
         List<SqlNode> nodes = Sql2WayParser.parse("where /*%scope s */ (1=1)");
         assertThat(nodes).anySatisfy(node -> {

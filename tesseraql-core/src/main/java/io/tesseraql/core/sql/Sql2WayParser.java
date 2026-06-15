@@ -153,6 +153,12 @@ public final class Sql2WayParser {
 
     private SqlNode parseScope(Directive directive) {
         String argument = directive.argument("scope").trim();
+        // `as boolean` renders the scope as a SELECT-list flag (case when … then 1 else 0 end) for
+        // row-level masking, rather than a WHERE predicate (roadmap Phase 29 slice 3).
+        boolean asBoolean = argument.endsWith(" as boolean");
+        if (asBoolean) {
+            argument = argument.substring(0, argument.length() - " as boolean".length()).trim();
+        }
         String name = argument;
         String alias = null;
         int on = argument.indexOf(" on ");
@@ -174,7 +180,7 @@ public final class Sql2WayParser {
                     + "e.g. /*%scope " + name + " */ (1=1)");
         }
         skipParenGroup();
-        return new SqlNode.Scope(name, alias, directive.sourceLine());
+        return new SqlNode.Scope(name, alias, asBoolean, directive.sourceLine());
     }
 
     private Directive requireTerminator(String block) {

@@ -1,9 +1,9 @@
 # Organizational data scoping
 
-> **Status: slices 1-2 delivered; slice 3 (masking integration) planned (roadmap Phase 29).** The scope
-> document, the `/*%scope ... */` directive, additive role-conditional match arms, the lint, and the
-> `data-scope` coverage kind are implemented. The shared org-unit foundation and masking integration
-> are designed below but not yet built; those sections are written in design voice.
+> **Status: delivered (roadmap Phase 29 complete).** All three slices are implemented: the scope
+> document, the `/*%scope ... */` directive with additive role-conditional match arms, the lint and
+> `data-scope` coverage kind (slice 1); the managed org-unit hierarchy (slice 2); and row-level
+> masking via `unmaskWhen` (slice 3).
 
 Organizational data scoping confines what rows a request can see, derived from the authenticated
 **principal** (roles, groups, claims) rather than hand-written into every query. It is the row-level
@@ -199,12 +199,14 @@ Phase 29 therefore reserves the seams Phase 28 plugs into — the assignee-resol
 candidate-group derivation, and the write-scope injection point — without implementing the workflow
 engine itself.
 
-## Masking integration (slice 3, planned)
+## Masking integration (slice 3, delivered)
 
-Column-level, role-conditional masking already works today through `FieldPolicy.policy` (the field
-is shown only when the principal satisfies a `Policy`). Phase 29 adds **row-level** masking: a
-field is masked in rows *outside* the caller's scope. Rather than evaluate a predicate per row in
-Java, the query selects the scope predicate as a boolean flag and the field policy keys off it:
+Column-level, role-conditional masking already works through `FieldPolicy.policy` (the field is shown
+only when the principal satisfies a `Policy`). Slice 3 adds **row-level** masking: a field is masked
+in rows *outside* the caller's scope. Rather than evaluate a predicate per row in Java, the query
+selects the scope predicate as a boolean flag (the `as boolean` directive renders it as a portable
+`case when … then 1 else 0 end`) and the field policy keys off it with `unmaskWhen`; the flag column
+is stripped from the response:
 
 ```sql
 select o.id, o.salary,
@@ -256,4 +258,6 @@ Phase 29 ships in slices, each a reviewable PR with CI green:
 2. **Shared org-unit foundation** (delivered) — the `managed`/`app` org-unit model (the duality
    above): managed `tql_org_unit`/`tql_org_closure` with an `OrgUnitStore` that maintains the
    closure, and subtree scopes that join it. Designed for Phase 28 to consume unchanged.
-3. **Masking integration** (planned) — row-level `unmaskWhen` keyed off a scope flag column.
+3. **Masking integration** (delivered) — the `/*%scope … as boolean */` flag directive plus
+   `FieldPolicy.unmaskWhen`, masking a field in rows outside the caller's scope (the flag column is
+   stripped from the response).

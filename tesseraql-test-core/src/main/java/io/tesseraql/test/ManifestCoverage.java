@@ -159,6 +159,11 @@ public final class ManifestCoverage {
             Matcher matcher = SCOPE_DIRECTIVE.matcher(readQuietly(file));
             while (matcher.find()) {
                 String content = matcher.group(1).trim();
+                // Drop the `as boolean` suffix so a scope-flag directive resolves to its scope name.
+                if (content.endsWith(" as boolean")) {
+                    content = content.substring(0, content.length() - " as boolean".length())
+                            .trim();
+                }
                 int on = content.indexOf(" on ");
                 names.add(on >= 0 ? content.substring(0, on).trim() : content);
             }
