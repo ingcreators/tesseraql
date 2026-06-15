@@ -223,6 +223,28 @@ class StudioIntegrationTest {
     }
 
     @Test
+    void uiDocsIndexRendersTheRunOverlay() throws Exception {
+        HttpResponse<String> response = get("/_tesseraql/studio/ui/docs", true);
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        // The report.json overlay renders the run summary strip and per-route status columns.
+        assertThat(response.body()).contains("Last test run")
+                .contains("2/2 passed").contains("gate passed")
+                .contains("covered").contains("lines");
+    }
+
+    @Test
+    void uiDocsRouteRendersTheRunOverlay() throws Exception {
+        HttpResponse<String> response = get(
+                "/_tesseraql/studio/ui/docs/route?id=" + enc("users.search"), true);
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        // The route page shows the run status card and the bound SQL's line/branch coverage.
+        assertThat(response.body()).contains("Last test run").contains("covered")
+                .contains("lines").contains("branches");
+    }
+
+    @Test
     void uiDocsRequiresAuthentication() throws Exception {
         assertThat(get("/_tesseraql/studio/ui/docs", false).statusCode()).isEqualTo(401);
     }
@@ -418,6 +440,29 @@ class StudioIntegrationTest {
                     readOnly: false
                 """.formatted(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(),
                 POSTGRES.getPassword()));
+        // A run overlay in the reserved namespace exercises the portal's report-layer rendering
+        // (documentation portal v2). Hand-authored to the report.json shape the report goal emits.
+        Files.createDirectories(target.resolve(".tesseraql/docs"));
+        Files.writeString(target.resolve(".tesseraql/docs/report.json"), """
+                {
+                  "schemaVersion": 1, "runId": "it-run", "generatedAt": "2026-06-15T12:00:00Z",
+                  "summary": { "total": 2, "passed": 2, "failed": 0, "sqlLineRatio": 0.8,
+                               "sqlBranchRatio": 1.0, "gatePassed": true },
+                  "thresholds": { "sqlLine": 0.0, "sqlBranch": 0.0, "kinds": {} },
+                  "gate": { "passed": true, "failures": [] },
+                  "kinds": [ { "kind": "route", "ratio": 1.0, "covered": 1, "declared": 1,
+                               "uncovered": [] } ],
+                  "routes": {
+                    "users.search": { "covered": true,
+                      "tests": [ { "name": "search finds sato by name", "passed": true,
+                                   "message": "OK" } ],
+                      "sql": [ { "file": "web/api/users/search.sql", "lineRatio": 0.8,
+                                 "branchRatio": 1.0, "branchCount": 1, "branchOutcomes": 2,
+                                 "coveredLines": [1, 2], "coverableLines": [1, 2, 3] } ],
+                      "itemCoverage": {} }
+                  }
+                }
+                """);
         return target;
     }
 

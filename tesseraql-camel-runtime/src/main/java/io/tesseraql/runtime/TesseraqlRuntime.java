@@ -687,18 +687,22 @@ public final class TesseraqlRuntime implements AutoCloseable {
                             reloader.reload();
                             return Map.of("applied", path);
                         });
-                // Providers backing the bundled documentation portal (documentation portal v1):
-                // they read the packaged spec.json, falling back to a live model from the manifest.
+                // Providers backing the bundled documentation portal (documentation portal v1/v2):
+                // they read the packaged spec.json, falling back to a live model from the manifest,
+                // and overlay the optional run report.json (test results + coverage) when present.
                 io.tesseraql.studio.DocService doc = new io.tesseraql.studio.DocService(manifest);
                 serviceProviders
                         .register("docs.index", params -> io.tesseraql.studio.DocViews
-                                .index(doc.appName(), doc.spec()))
+                                .index(doc.appName(), doc.spec(), doc.report()))
                         .register("docs.route", params -> {
                             String id = String.valueOf(params.get("id"));
                             io.tesseraql.studio.DocService.RouteEntry entry = doc.route(id);
-                            return entry == null
-                                    ? Map.of("notFound", true, "id", id)
-                                    : io.tesseraql.studio.DocViews.route(entry);
+                            if (entry == null) {
+                                return Map.of("notFound", true, "id", id);
+                            }
+                            io.tesseraql.studio.ReportOverlay overlay = doc.report();
+                            return io.tesseraql.studio.DocViews.route(entry,
+                                    overlay == null ? null : overlay.routeReport(id));
                         })
                         .register("docs.search", params -> {
                             Object query = params.get("q");

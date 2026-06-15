@@ -20,6 +20,20 @@
       </div>
       <h2 th:text="${doc.id}"></h2>
     </section>
+    <section class="hc-card" th:if="${doc.hasReport}">
+      <h3>Last test run</h3>
+      <div class="hc-cluster">
+        <span class="hc-badge" th:if="${doc.covered}" data-variant="success">covered</span>
+        <span class="hc-badge" th:unless="${doc.covered}" data-variant="warning">untested</span>
+        <span class="hc-badge" th:if="${doc.testsRun > 0}"
+              th:attr="data-variant=${doc.allPassed} ? 'success' : 'error'"
+              th:text="|${doc.testsPassed}/${doc.testsRun} passed|"></span>
+        <span class="hc-badge" data-variant="info" th:if="${doc.sqlLinePct != null}"
+              th:text="|lines ${doc.sqlLinePct}%|"></span>
+        <span class="hc-badge" data-variant="info" th:if="${doc.sqlBranchPct != null}"
+              th:text="|branches ${doc.sqlBranchPct}%|"></span>
+      </div>
+    </section>
     <section class="hc-card" th:if="${doc.security}">
       <h3>Security</h3>
       <div class="hc-cluster">
@@ -90,6 +104,10 @@
           <code th:if="${s.contract}" th:text="|contract: ${s.contract}|"></code>
           <code th:if="${s.service}" th:text="|service: ${s.service}|"></code>
           <span class="hc-badge" th:text="|mode: ${s.mode}|"></span>
+          <span class="hc-badge" data-variant="info" th:if="${s.linePct != null}"
+                th:text="|lines ${s.linePct}%|"></span>
+          <span class="hc-badge" data-variant="info" th:if="${s.branchPct != null}"
+                th:text="|branches ${s.branchPct}%|"></span>
         </div>
         <div class="hc-cluster" th:unless="${#lists.isEmpty(s.binds)}">
           <span class="hc-field__label">binds</span>
@@ -104,12 +122,19 @@
     <section class="hc-card" th:if="${doc.hasTests}">
       <h3>Tests</h3>
       <table class="hc-table">
-        <thead><tr><th>Name</th><th>Kind</th><th>Target</th></tr></thead>
+        <thead><tr><th>Name</th><th>Kind</th><th>Target</th>
+          <th th:if="${doc.hasReport}">Result</th></tr></thead>
         <tbody>
           <tr th:each="t : ${doc.tests}">
             <td th:text="${t.name}"></td>
             <td th:text="${t.kind}"></td>
             <td th:text="${t.target}"></td>
+            <td th:if="${doc.hasReport}">
+              <span class="hc-badge" th:if="${t.passed != null}" th:title="${t.message}"
+                    th:attr="data-variant=${t.passed} ? 'success' : 'error'"
+                    th:text="${t.passed} ? 'pass' : 'fail'"></span>
+              <span th:if="${t.passed == null}">&mdash;</span>
+            </td>
           </tr>
         </tbody>
       </table>

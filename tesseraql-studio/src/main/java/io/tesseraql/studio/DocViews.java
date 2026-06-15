@@ -25,8 +25,12 @@ public final class DocViews {
     private DocViews() {
     }
 
-    /** The docs index model: the app name, the route summaries, and the migration listing. */
-    public static Map<String, Object> index(String appName, DocSpec spec) {
+    /**
+     * The docs index model: the app name, the route summaries, the migration listing, and — when a
+     * run overlay is present — a coverage summary strip plus per-route status (covered, pass/fail,
+     * line coverage). The overlay is optional; columns degrade to absent when it is {@code null}.
+     */
+    public static Map<String, Object> index(String appName, DocSpec spec, ReportOverlay overlay) {
         Map<String, Object> model = new LinkedHashMap<>();
         model.put("appName", appName);
         List<Map<String, Object>> routes = new ArrayList<>();
@@ -39,10 +43,13 @@ public final class DocViews {
             row.put("recipe", route.recipe());
             row.put("testCount", entry.tests().size());
             row.put("detailUrl", routeUrl(route.id()));
+            applyRouteOverlay(row, overlay == null ? null : overlay.routeReport(route.id()));
             routes.add(row);
         }
         model.put("routes", routes);
         model.put("hasRoutes", !routes.isEmpty());
+        model.put("hasReport", overlay != null);
+        model.put("report", reportSummary(overlay));
         List<Map<String, Object>> migrations = new ArrayList<>();
         for (RouteSpecModel.Migration migration : spec.migrations()) {
             migrations.add(migrationRow(migration));
@@ -52,9 +59,15 @@ public final class DocViews {
         return model;
     }
 
-    /** The full per-route reference model. */
-    public static Map<String, Object> route(RouteEntry entry) {
+    /**
+     * The full per-route reference model. When {@code report} is non-null (a run overlay is present
+     * for this route) it merges the run facts: a status badge row (covered, pass/fail, line/branch
+     * coverage), each test's pass/fail, and each SQL statement's coverage.
+     */
+    public static Map<String, Object> route(RouteEntry entry, ReportOverlay.RouteReport report) {
         RouteSpec route = entry.route();
+        Map<String, ReportOverlay.CaseResult> resultsByName = resultsByName(report);
+        Map<String, ReportOverlay.SqlFileCoverage> coverageByName = coverageByName(report);
         Map<String, Object> model = new LinkedHashMap<>();
         model.put("id", route.id());
         model.put("method", route.method());
@@ -69,10 +82,11 @@ public final class DocViews {
         model.put("notifications", notifications(route.notifications()));
         model.put("hasNotifications", !route.notifications().isEmpty());
         model.put("response", response(route.response()));
-        model.put("sql", statements(route.sql()));
+        model.put("sql", statements(route.sql(), coverageByName));
         model.put("hasSql", !route.sql().isEmpty());
-        model.put("tests", tests(entry.tests()));
+        model.put("tests", tests(entry.tests(), resultsByName));
         model.put("hasTests", !entry.tests().isEmpty());
+        applyRouteSummary(model, report);
         return model;
     }
 
@@ -193,7 +207,8 @@ public final class DocViews {
         return model;
     }
 
-    private static List<Map<String, Object>> statements(List<RouteSpec.SqlStatement> statements) {
+    private static List<Map<String, Object>> statements(List<RouteSpec.SqlStatement> statements,
+            Map<String, ReportOverlay.SqlFileCoverage> coverageByName) {
         List<Map<String, Object>> rows = new ArrayList<>();
         for (RouteSpec.SqlStatement statement : statements) {
             Map<String, Object> row = new LinkedHashMap<>();
@@ -213,21 +228,145 @@ public final class DocViews {
                 structure.add(node);
             }
             row.put("structure", structure);
+            ReportOverlay.SqlFileCoverage coverage = coverageByName.get(basename(statement.file()));
+            if (coverage != null) {
+                row.put("linePct", pct(coverage.lineRatio()));
+                row.put("branchPct",
+                        coverage.branchCount() == 0 ? null : pct(coverage.branchRatio()));
+            }
             rows.add(row);
         }
         return rows;
     }
 
-    private static List<Map<String, Object>> tests(List<TestRef> tests) {
+    private static List<Map<String, Object>> tests(List<TestRef> tests,
+            Map<String, ReportOverlay.CaseResult> resultsByName) {
         List<Map<String, Object>> rows = new ArrayList<>();
         for (TestRef test : tests) {
             Map<String, Object> row = new LinkedHashMap<>();
             row.put("name", test.name());
             row.put("kind", test.kind());
             row.put("target", test.target());
+            ReportOverlay.CaseResult result = resultsByName.get(test.name());
+            if (result != null) {
+                row.put("passed", result.passed());
+                row.put("message", result.message());
+            }
             rows.add(row);
         }
         return rows;
+    }
+
+    /** Adds the per-route overlay status to an index row (no-op without an overlay for the route). */
+    private static void applyRouteOverlay(Map<String, Object> row,
+            ReportOverlay.RouteReport report) {
+        row.put("hasReport", report != null);
+        if (report == null) {
+            return;
+        }
+        long passed = report.tests().stream().filter(ReportOverlay.CaseResult::passed).count();
+        row.put("covered", report.covered());
+        row.put("testsRun", report.tests().size());
+        row.put("testsPassed", passed);
+        row.put("testsFailed", report.tests().size() - passed);
+        row.put("allPassed", report.tests().size() > 0 && passed == report.tests().size());
+        row.put("linePct", linePct(report.sql()));
+    }
+
+    /** Adds the route page's run summary (covered, pass/fail counts, line/branch coverage). */
+    private static void applyRouteSummary(Map<String, Object> model,
+            ReportOverlay.RouteReport report) {
+        model.put("hasReport", report != null);
+        if (report == null) {
+            return;
+        }
+        long passed = report.tests().stream().filter(ReportOverlay.CaseResult::passed).count();
+        model.put("covered", report.covered());
+        model.put("testsRun", report.tests().size());
+        model.put("testsPassed", passed);
+        model.put("testsFailed", report.tests().size() - passed);
+        model.put("allPassed", report.tests().size() > 0 && passed == report.tests().size());
+        model.put("sqlLinePct", linePct(report.sql()));
+        model.put("sqlBranchPct", branchPct(report.sql()));
+    }
+
+    /** The index coverage-summary strip, or {@code null} when no overlay is present. */
+    private static Map<String, Object> reportSummary(ReportOverlay overlay) {
+        if (overlay == null || overlay.summary() == null) {
+            return null;
+        }
+        ReportOverlay.Summary summary = overlay.summary();
+        Map<String, Object> model = new LinkedHashMap<>();
+        model.put("runId", overlay.runId());
+        model.put("generatedAt", overlay.generatedAt());
+        model.put("total", summary.total());
+        model.put("passed", summary.passed());
+        model.put("failed", summary.failed());
+        model.put("allPassed", summary.failed() == 0);
+        model.put("sqlLinePct", pct(summary.sqlLineRatio()));
+        model.put("sqlBranchPct", pct(summary.sqlBranchRatio()));
+        model.put("gatePassed", summary.gatePassed());
+        return model;
+    }
+
+    private static Map<String, ReportOverlay.CaseResult> resultsByName(
+            ReportOverlay.RouteReport report) {
+        Map<String, ReportOverlay.CaseResult> byName = new LinkedHashMap<>();
+        if (report != null) {
+            for (ReportOverlay.CaseResult result : report.tests()) {
+                byName.putIfAbsent(result.name(), result);
+            }
+        }
+        return byName;
+    }
+
+    /** SQL coverage keyed by file basename, so route-relative spec files join app-relative keys. */
+    private static Map<String, ReportOverlay.SqlFileCoverage> coverageByName(
+            ReportOverlay.RouteReport report) {
+        Map<String, ReportOverlay.SqlFileCoverage> byName = new LinkedHashMap<>();
+        if (report != null) {
+            for (ReportOverlay.SqlFileCoverage coverage : report.sql()) {
+                byName.putIfAbsent(basename(coverage.file()), coverage);
+            }
+        }
+        return byName;
+    }
+
+    /** Aggregate covered-of-coverable SQL line percentage, or {@code null} when the route has no SQL. */
+    private static Integer linePct(List<ReportOverlay.SqlFileCoverage> sql) {
+        if (sql.isEmpty()) {
+            return null;
+        }
+        long coverable = 0;
+        long hit = 0;
+        for (ReportOverlay.SqlFileCoverage file : sql) {
+            coverable += file.coverableLines().size();
+            hit += file.coverableLines().stream().filter(file.coveredLines()::contains).count();
+        }
+        return coverable == 0 ? 100 : (int) Math.round(100.0 * hit / coverable);
+    }
+
+    /** Aggregate branch-outcome percentage, or {@code null} when the route's SQL has no branches. */
+    private static Integer branchPct(List<ReportOverlay.SqlFileCoverage> sql) {
+        long branches = 0;
+        long outcomes = 0;
+        for (ReportOverlay.SqlFileCoverage file : sql) {
+            branches += file.branchCount();
+            outcomes += file.branchOutcomes();
+        }
+        return branches == 0 ? null : (int) Math.round(100.0 * outcomes / (2.0 * branches));
+    }
+
+    private static int pct(double ratio) {
+        return (int) Math.round(ratio * 100);
+    }
+
+    private static String basename(String file) {
+        if (file == null) {
+            return null;
+        }
+        int slash = file.lastIndexOf('/');
+        return slash < 0 ? file : file.substring(slash + 1);
     }
 
     private static Map<String, Object> migrationRow(RouteSpecModel.Migration migration) {

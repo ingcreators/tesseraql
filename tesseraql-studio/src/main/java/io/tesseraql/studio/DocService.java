@@ -41,6 +41,9 @@ public final class DocService {
     /** App-home-relative location the build packages the documentation spec at (see AppPackager). */
     public static final String SPEC_PATH = ".tesseraql/docs/spec.json";
 
+    /** App-home-relative location the {@code report} goal writes the run overlay at (portal v2). */
+    public static final String REPORT_PATH = ".tesseraql/docs/report.json";
+
     private static final TqlErrorCode TRAVERSAL = new TqlErrorCode(TqlDomain.STUDIO, 4003);
     private static final TqlErrorCode READ_ERROR = new TqlErrorCode(TqlDomain.STUDIO, 4041);
     private static final TqlErrorCode NOT_FOUND = new TqlErrorCode(TqlDomain.STUDIO, 4042);
@@ -88,6 +91,28 @@ public final class DocService {
             routes.add(new RouteEntry(route, List.of()));
         }
         return new DocSpec(routes, live.migrations());
+    }
+
+    /** Whether the run overlay ({@code report.json}) is present in the app home (portal v2). */
+    public boolean hasReport() {
+        return Files.isRegularFile(appHome.resolve(REPORT_PATH));
+    }
+
+    /**
+     * The run overlay ({@code report.json}) when present, otherwise {@code null}. The overlay is
+     * optional and run-dependent (it is not packed into the {@code .tqlapp}); a corrupt or
+     * unreadable overlay degrades to {@code null} so the spec-layer portal keeps working.
+     */
+    public ReportOverlay report() {
+        Path report = appHome.resolve(REPORT_PATH);
+        if (!Files.isRegularFile(report)) {
+            return null;
+        }
+        try {
+            return MAPPER.readValue(report.toFile(), ReportOverlay.class);
+        } catch (IOException ex) {
+            return null;
+        }
     }
 
     /** The doc entry for one route id, or {@code null} when no such route exists. */

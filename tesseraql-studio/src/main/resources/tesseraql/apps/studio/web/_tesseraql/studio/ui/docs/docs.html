@@ -15,11 +15,27 @@
          hx-target="#docs-search-results" hx-swap="innerHTML">
   <div id="docs-search-results" class="hc-stack"></div>
 </section>
+<section class="hc-card" th:if="${docs.hasReport}">
+  <h2>Last test run</h2>
+  <div class="hc-cluster">
+    <span class="hc-badge" th:attr="data-variant=${docs.report.allPassed} ? 'success' : 'error'"
+          th:text="|${docs.report.passed}/${docs.report.total} passed|"></span>
+    <span class="hc-badge" data-variant="info" th:text="|SQL lines ${docs.report.sqlLinePct}%|"></span>
+    <span class="hc-badge" data-variant="info" th:text="|branches ${docs.report.sqlBranchPct}%|"></span>
+    <span class="hc-badge" th:attr="data-variant=${docs.report.gatePassed} ? 'success' : 'error'"
+          th:text="${docs.report.gatePassed} ? 'gate passed' : 'gate failed'"></span>
+  </div>
+  <span class="hc-field__label" th:if="${docs.report.runId}" th:text="|run ${docs.report.runId}|"></span>
+</section>
 <section class="hc-card">
   <h2>Routes &amp; pages</h2>
   <div class="hc-empty" th:unless="${docs.hasRoutes}"><p class="hc-empty__title">No routes defined.</p></div>
   <table class="hc-table" th:if="${docs.hasRoutes}">
-    <thead><tr><th>Id</th><th>Method</th><th>Path</th><th>Recipe</th><th>Tests</th></tr></thead>
+    <thead><tr>
+      <th>Id</th><th>Method</th><th>Path</th><th>Recipe</th><th>Tests</th>
+      <th th:if="${docs.hasReport}">Result</th>
+      <th th:if="${docs.hasReport}">Coverage</th>
+    </tr></thead>
     <tbody>
       <tr th:each="r : ${docs.routes}">
         <td><a th:href="${r.detailUrl}" th:text="${r.id}"></a></td>
@@ -27,6 +43,21 @@
         <td th:text="${r.path}"></td>
         <td th:text="${r.recipe}"></td>
         <td th:text="${r.testCount}"></td>
+        <td th:if="${docs.hasReport}">
+          <th:block th:if="${r.hasReport}">
+            <span class="hc-badge" th:if="${r.covered}" data-variant="success">covered</span>
+            <span class="hc-badge" th:unless="${r.covered}" data-variant="warning">untested</span>
+            <span class="hc-badge" th:if="${r.testsRun > 0}"
+                  th:attr="data-variant=${r.allPassed} ? 'success' : 'error'"
+                  th:text="|${r.testsPassed}/${r.testsRun}|"></span>
+          </th:block>
+          <span th:unless="${r.hasReport}">&mdash;</span>
+        </td>
+        <td th:if="${docs.hasReport}">
+          <span class="hc-badge" data-variant="info" th:if="${r.linePct != null}"
+                th:text="|${r.linePct}% lines|"></span>
+          <span th:if="${r.linePct == null}">&mdash;</span>
+        </td>
       </tr>
     </tbody>
   </table>
