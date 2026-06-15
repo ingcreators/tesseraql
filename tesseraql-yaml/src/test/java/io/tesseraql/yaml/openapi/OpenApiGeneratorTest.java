@@ -90,7 +90,7 @@ class OpenApiGeneratorTest {
                 new io.tesseraql.yaml.config.AppConfig(java.util.Map.of(), name -> null),
                 java.util.List.of(importRoute, exportRoute, commandRoute), java.util.List.of(),
                 java.util.List.of(), java.util.List.of(), java.util.List.of(), java.util.List.of(),
-                java.util.List.of(), java.util.List.of(), java.util.List.of(),
+                java.util.List.of(), java.util.List.of(), java.util.List.of(), java.util.List.of(),
                 io.tesseraql.yaml.manifest.ManifestIndex.of(java.util.Map.of(), "test"));
 
         java.util.Map<String, Object> doc = new OpenApiGenerator().generate(manifest);

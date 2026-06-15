@@ -14,6 +14,7 @@ import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -53,9 +54,76 @@ public final class ManifestLoader {
         List<ScopeFile> scopes = loadScopes(home);
         List<WorkflowFile> workflows = loadWorkflows(home);
         List<AttachmentFile> attachments = loadAttachments(home);
+        List<MigrationFile> migrations = loadMigrations(home);
         ManifestIndex index = buildIndex(home);
         return new AppManifest(home, config, routes, jobs, tools, resources, uiResources, consumers,
-                scopes, workflows, attachments, index);
+                scopes, workflows, attachments, migrations, index);
+    }
+
+    /**
+     * Lists the app's Flyway migrations (spec layer; no DDL parsing), mirroring how
+     * {@code AppMigrations} resolves them: the {@code main} set under {@code db/migration} and its
+     * {@code db/migration-<vendor>} overlays, plus one set per named datasource under
+     * {@code db/<datasource>/migration} (with {@code migration-<vendor>} overlays). The listing is
+     * sorted into a deterministic order so the derived spec artifact stays byte-stable.
+     */
+    private List<MigrationFile> loadMigrations(Path home) {
+        Path db = home.resolve("db");
+        if (!Files.isDirectory(db)) {
+            return List.of();
+        }
+        List<MigrationFile> migrations = new ArrayList<>();
+        // The main datasource: db/migration and its db/migration-<vendor> overlay siblings.
+        collectMigrationFamily(home, db, "main", migrations);
+        // Each named datasource: db/<datasource>/migration and its overlays (the migration* dirs
+        // under db/ are the main set, not datasources, so they are excluded here).
+        try (Stream<Path> entries = Files.list(db)) {
+            entries.filter(Files::isDirectory)
+                    .filter(dir -> !dir.getFileName().toString().startsWith("migration"))
+                    .forEach(dir -> collectMigrationFamily(home, dir,
+                            dir.getFileName().toString(), migrations));
+        } catch (IOException ex) {
+            throw new UncheckedIOException(ex);
+        }
+        Collections.sort(migrations);
+        return migrations;
+    }
+
+    /**
+     * Collects the migration family rooted at {@code parent}: the common {@code migration} directory
+     * (vendor {@code null}) and each {@code migration-<vendor>} overlay sibling, all bound to
+     * {@code datasource}.
+     */
+    private void collectMigrationFamily(Path home, Path parent, String datasource,
+            List<MigrationFile> out) {
+        collectMigrationDir(home, parent.resolve("migration"), datasource, null, out);
+        try (Stream<Path> siblings = Files.list(parent)) {
+            siblings.filter(Files::isDirectory)
+                    .filter(dir -> dir.getFileName().toString().startsWith("migration-"))
+                    .forEach(dir -> collectMigrationDir(home, dir, datasource,
+                            dir.getFileName().toString().substring("migration-".length()), out));
+        } catch (IOException ex) {
+            throw new UncheckedIOException(ex);
+        }
+    }
+
+    /** Adds every Flyway-named SQL file found recursively under {@code dir} (as Flyway scans it). */
+    private void collectMigrationDir(Path home, Path dir, String datasource, String vendor,
+            List<MigrationFile> out) {
+        if (!Files.isDirectory(dir)) {
+            return;
+        }
+        try (Stream<Path> files = Files.walk(dir)) {
+            files.filter(Files::isRegularFile).forEach(file -> {
+                requireInside(home, file);
+                MigrationFile migration = MigrationFile.parse(datasource, vendor, file);
+                if (migration != null) {
+                    out.add(migration);
+                }
+            });
+        } catch (IOException ex) {
+            throw new UncheckedIOException(ex);
+        }
     }
 
     /**
