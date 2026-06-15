@@ -34,4 +34,14 @@ public record WorkflowSettings(String mode) {
     public static WorkflowSettings from(AppConfig config) {
         return new WorkflowSettings(config.getString("tesseraql.workflow.mode").orElse(null));
     }
+
+    /**
+     * The deadline sweeper's interval in milliseconds, from {@code tesseraql.workflow.sweep.interval}
+     * (default 60s), roadmap Phase 28 slice 3.
+     */
+    public static long sweepIntervalMillis(AppConfig config) {
+        return config.getString("tesseraql.workflow.sweep.interval")
+                .map(io.tesseraql.core.util.Durations::toMillis)
+                .orElse(60_000L);
+    }
 }

@@ -18,6 +18,15 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Runtime and recipes
 
+- Approval workflow — deadlines, escalation, and delegation (roadmap Phase 28 slice 3, completing the
+  phase, see [docs/approval-workflow.md](docs/approval-workflow.md)): a state's `deadlines` set the
+  opened task's `due_at`; a cluster-safe sweeper (a timer claimed through `tql_job_claim` at
+  `tesseraql.workflow.sweep.interval`, default 60s) reassigns each overdue task to the fallback
+  resolver named by `onBreach.reassign` (a 2-way SQL `SELECT` returning the new assignee), clearing
+  `due_at` so it escalates exactly once even across nodes and recording an `escalate` history row.
+  Delegation is a built-in `POST {basePath}/{key}/delegate/{to}` that reassigns the document's open
+  task to a chosen delegate (only a current holder may delegate, else `TQL-WORKFLOW-3203`/403). The
+  `onBreach.escalate` auto-transition and Phase 20 reminder notifications remain a refinement.
 - Approval workflow — assignee resolution and task inbox (roadmap Phase 28 slice 2, see
   [docs/approval-workflow.md](docs/approval-workflow.md)): a transition's `assign` contract — a 2-way
   SQL `SELECT` returning `assignee`/`candidate_group` rows (consuming the Phase 29 org-unit

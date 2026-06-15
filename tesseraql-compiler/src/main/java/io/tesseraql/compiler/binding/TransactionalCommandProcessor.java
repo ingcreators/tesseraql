@@ -544,6 +544,10 @@ public final class TransactionalCommandProcessor implements Processor {
                 evaluation.resolve(Arrays.asList(sourceExpr.split("\\.")))));
         BoundSql bound = SqlRenderer.render(workflow.assignNodes(), params);
         Map<String, Object> result = executeQuery(connection, bound);
+        // The opened task's deadline (roadmap Phase 28 slice 3): the to state's `within`, if any.
+        Instant dueAt = workflow.dueWithinMillis() == null
+                ? null
+                : Instant.now().plusMillis(workflow.dueWithinMillis());
         for (Map<String, Object> row : (List<Map<String, Object>>) result.get("rows")) {
             String assignee = row.get("assignee") == null
                     ? null
@@ -552,7 +556,7 @@ public final class TransactionalCommandProcessor implements Processor {
             String candidateGroup = group == null ? null : String.valueOf(group);
             if (assignee != null || candidateGroup != null) {
                 wf.taskStore().openTask(connection, new WorkflowTaskStore.Task(workflow.docType(),
-                        wf.docId(), workflow.to(), assignee, candidateGroup, wf.tenant()));
+                        wf.docId(), workflow.to(), assignee, candidateGroup, dueAt, wf.tenant()));
             }
         }
     }

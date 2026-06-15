@@ -30,9 +30,12 @@ import java.util.Map;
  *                     / {@code candidate_group} rows), or {@code null} when the transition assigns no
  *                     task (roadmap Phase 28 slice 2)
  * @param assignParams the assignee-resolution binds, resolved against the request context per call
+ * @param dueWithinMillis the {@code to} state's deadline in milliseconds, set as the opened task's
+ *                     {@code due_at}, or {@code null} when the state has no deadline (Phase 28
+ *                     slice 3)
  */
 public record WorkflowBinding(String workflowId, String transitionId, String docType, String table,
         String keyColumn, String keyExpr, String from, String to, String initial, boolean managed,
         Expr guard, WorkflowStore appStore, List<SqlNode> assignNodes,
-        Map<String, String> assignParams) {
+        Map<String, String> assignParams, Long dueWithinMillis) {
 }
