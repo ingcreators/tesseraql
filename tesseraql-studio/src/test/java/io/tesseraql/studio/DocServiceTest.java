@@ -151,6 +151,26 @@ class DocServiceTest {
     }
 
     @Test
+    void readsTheRunHistoryAndDegradesWhenAbsent(@TempDir Path dir) throws Exception {
+        Files.createDirectories(dir.resolve("config"));
+        Files.writeString(dir.resolve("config/tesseraql.yml"),
+                "tesseraql:\n  app:\n    name: demo\n");
+        Files.createDirectories(dir.resolve(".tesseraql/docs"));
+        Files.writeString(dir.resolve(".tesseraql/docs/history.json"), """
+                [ { "runId": "r1", "generatedAt": "t1", "total": 2, "passed": 1, "failed": 1,
+                    "sqlLineRatio": 0.5, "sqlBranchRatio": 0.5, "gatePassed": false },
+                  { "runId": "r2", "generatedAt": "t2", "total": 2, "passed": 2, "failed": 0,
+                    "sqlLineRatio": 1.0, "sqlBranchRatio": 1.0, "gatePassed": true } ]
+                """);
+        DocService service = new DocService(new ManifestLoader().load(dir));
+
+        assertThat(service.history()).extracting(DocService.HistoryPoint::runId)
+                .containsExactly("r1", "r2");
+        // An app with no history.json degrades to an empty list.
+        assertThat(new DocService(exampleManifest()).history()).isEmpty();
+    }
+
+    @Test
     void searchFiltersByRunStatusAndCoverageFromTheOverlay(@TempDir Path dir) throws Exception {
         Files.createDirectories(dir.resolve("config"));
         Files.writeString(dir.resolve("config/tesseraql.yml"),

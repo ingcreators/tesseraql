@@ -148,7 +148,7 @@ class DocViewsTest {
                 List.of(new ReportOverlay.KindCoverage("route", 0.5, 1, 2, List.of("users.print"))),
                 Map.of("users.search", search));
 
-        Map<String, Object> model = DocViews.coverage("demo", overlay);
+        Map<String, Object> model = DocViews.coverage("demo", overlay, List.of());
 
         assertThat(model).containsEntry("hasReport", true).containsEntry("hasKinds", true)
                 .containsEntry("hasGateFailures", true).containsEntry("hasFailingCases", true);
@@ -161,9 +161,38 @@ class DocViewsTest {
 
     @Test
     void coverageModelIsEmptyWithoutAnOverlay() {
-        Map<String, Object> model = DocViews.coverage("demo", null);
+        Map<String, Object> model = DocViews.coverage("demo", null, List.of());
 
         assertThat(model).containsEntry("hasReport", false).doesNotContainKey("kinds");
+    }
+
+    private static ReportOverlay passingOverlay() {
+        return new ReportOverlay(1, "r", "t", new ReportOverlay.Summary(2, 2, 0, 1.0, 1.0, true),
+                new ReportOverlay.Thresholds(0.0, 0.0, Map.of()),
+                new ReportOverlay.Gate(true, List.of()), List.of(), Map.of());
+    }
+
+    @Test
+    void coverageModelBuildsSparklineTrendFromHistory() {
+        List<DocService.HistoryPoint> history = List.of(
+                new DocService.HistoryPoint("r1", "t1", 2, 1, 1, 0.5, 0.5, false),
+                new DocService.HistoryPoint("r2", "t2", 2, 2, 0, 1.0, 1.0, true));
+
+        Map<String, Object> model = DocViews.coverage("demo", passingOverlay(), history);
+
+        Map<String, Object> trend = asMap(model.get("trend"));
+        assertThat(trend).containsEntry("runs", 2).containsEntry("passPct", 100)
+                .containsEntry("linePct", 100);
+        // Two runs -> two scaled points "x,y x,y": pass rate rises 50% -> 100% (y 12 -> 0).
+        assertThat((String) trend.get("passSpark")).isEqualTo("0,12 120,0");
+    }
+
+    @Test
+    void coverageModelHasNoTrendWithFewerThanTwoRuns() {
+        Map<String, Object> model = DocViews.coverage("demo", passingOverlay(),
+                List.of(new DocService.HistoryPoint("r", "t", 2, 2, 0, 1.0, 1.0, true)));
+
+        assertThat(model.get("trend")).isNull();
     }
 
     @Test

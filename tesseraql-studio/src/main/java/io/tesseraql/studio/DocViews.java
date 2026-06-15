@@ -100,7 +100,8 @@ public final class DocViews {
      * its violations, each item-coverage kind's standing with a capped uncovered list, and every
      * failing test case across the app. Empty (just the app name) when no run overlay is present.
      */
-    public static Map<String, Object> coverage(String appName, ReportOverlay overlay) {
+    public static Map<String, Object> coverage(String appName, ReportOverlay overlay,
+            List<DocService.HistoryPoint> history) {
         Map<String, Object> model = new LinkedHashMap<>();
         model.put("appName", appName);
         model.put("hasReport", overlay != null);
@@ -108,6 +109,7 @@ public final class DocViews {
             return model;
         }
         model.put("report", reportSummary(overlay));
+        model.put("trend", trend(history));
         List<String> gateFailures = overlay.gate() == null ? List.of() : overlay.gate().failures();
         model.put("gateFailures", gateFailures);
         model.put("hasGateFailures", !gateFailures.isEmpty());
@@ -441,6 +443,54 @@ public final class DocViews {
             lines.add(line);
         }
         return lines;
+    }
+
+    /** Sparkline viewBox the dashboard renders the trend polylines into (no inline styles). */
+    private static final int SPARK_WIDTH = 120;
+    private static final int SPARK_HEIGHT = 24;
+
+    /**
+     * The run-trend model from the bounded history: pass-rate, SQL line, and SQL branch sparklines
+     * (as SVG {@code polyline} point strings) plus their latest percentages. {@code null} when there
+     * are fewer than two runs (a single point is not a trend).
+     */
+    private static Map<String, Object> trend(List<DocService.HistoryPoint> history) {
+        if (history == null || history.size() < 2) {
+            return null;
+        }
+        List<Double> pass = new ArrayList<>();
+        List<Double> line = new ArrayList<>();
+        List<Double> branch = new ArrayList<>();
+        for (DocService.HistoryPoint point : history) {
+            pass.add(point.total() > 0 ? (double) point.passed() / point.total() : 1.0);
+            line.add(point.sqlLineRatio());
+            branch.add(point.sqlBranchRatio());
+        }
+        Map<String, Object> model = new LinkedHashMap<>();
+        model.put("runs", history.size());
+        model.put("passSpark", spark(pass));
+        model.put("passPct", pct(pass.get(pass.size() - 1)));
+        model.put("lineSpark", spark(line));
+        model.put("linePct", pct(line.get(line.size() - 1)));
+        model.put("branchSpark", spark(branch));
+        model.put("branchPct", pct(branch.get(branch.size() - 1)));
+        return model;
+    }
+
+    /** An SVG {@code polyline} point string for a ratio series, scaled to the sparkline viewBox. */
+    private static String spark(List<Double> values) {
+        int n = values.size();
+        StringBuilder points = new StringBuilder();
+        for (int i = 0; i < n; i++) {
+            double ratio = Math.max(0.0, Math.min(1.0, values.get(i)));
+            int x = n == 1 ? 0 : (int) Math.round((double) i / (n - 1) * SPARK_WIDTH);
+            int y = (int) Math.round(SPARK_HEIGHT - ratio * SPARK_HEIGHT);
+            if (i > 0) {
+                points.append(' ');
+            }
+            points.append(x).append(',').append(y);
+        }
+        return points.toString();
     }
 
     private static int pct(double ratio) {

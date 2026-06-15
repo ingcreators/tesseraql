@@ -710,7 +710,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
                             return io.tesseraql.studio.DocViews.searchResults(q, doc.search(q));
                         })
                         .register("docs.coverage", params -> io.tesseraql.studio.DocViews
-                                .coverage(doc.appName(), doc.report()));
+                                .coverage(doc.appName(), doc.report(), doc.history()));
             }
             // Retention (design ch. 44): enabled by configuring the sweep interval. When
             // tesseraql.retention.attachments is set and the managed attachment store is bound, the

@@ -31,6 +31,36 @@
         <li th:each="f : ${cov.gateFailures}" th:text="${f}"></li>
       </ul>
     </section>
+    <section class="hc-card" th:if="${cov.trend}">
+      <h2>Trend <span class="hc-field__label" th:text="|last ${cov.trend.runs} runs|"></span></h2>
+      <div class="hc-cluster">
+        <div class="hc-stack">
+          <span class="hc-field__label">Pass rate</span>
+          <svg class="spark" viewBox="0 0 120 24" preserveAspectRatio="none"
+               xmlns="http://www.w3.org/2000/svg" role="img" aria-label="pass rate trend">
+            <polyline class="spark-line" th:attr="points=${cov.trend.passSpark}"></polyline>
+          </svg>
+          <span class="hc-badge" data-variant="info" th:text="|${cov.trend.passPct}%|"></span>
+        </div>
+        <div class="hc-stack">
+          <span class="hc-field__label">SQL lines</span>
+          <svg class="spark" viewBox="0 0 120 24" preserveAspectRatio="none"
+               xmlns="http://www.w3.org/2000/svg" role="img" aria-label="SQL line coverage trend">
+            <polyline class="spark-line" th:attr="points=${cov.trend.lineSpark}"></polyline>
+          </svg>
+          <span class="hc-badge" data-variant="info" th:text="|${cov.trend.linePct}%|"></span>
+        </div>
+        <div class="hc-stack">
+          <span class="hc-field__label">Branches</span>
+          <svg class="spark" viewBox="0 0 120 24" preserveAspectRatio="none"
+               xmlns="http://www.w3.org/2000/svg" role="img" aria-label="SQL branch coverage trend">
+            <polyline class="spark-line" th:attr="points=${cov.trend.branchSpark}"></polyline>
+          </svg>
+          <span class="hc-badge" data-variant="info" th:text="|${cov.trend.branchPct}%|"></span>
+        </div>
+      </div>
+      <span class="hc-field__label">Trend keeps the last 20 runs.</span>
+    </section>
     <section class="hc-card">
       <h2>Item coverage</h2>
       <table class="hc-table" th:if="${cov.hasKinds}">

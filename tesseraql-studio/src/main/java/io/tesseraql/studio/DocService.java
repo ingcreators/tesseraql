@@ -44,6 +44,9 @@ public final class DocService {
     /** App-home-relative location the {@code report} goal writes the run overlay at (portal v2). */
     public static final String REPORT_PATH = ".tesseraql/docs/report.json";
 
+    /** App-home-relative location the {@code report} goal writes the run-trend ring at (portal v2). */
+    public static final String HISTORY_PATH = ".tesseraql/docs/history.json";
+
     private static final TqlErrorCode TRAVERSAL = new TqlErrorCode(TqlDomain.STUDIO, 4003);
     private static final TqlErrorCode READ_ERROR = new TqlErrorCode(TqlDomain.STUDIO, 4041);
     private static final TqlErrorCode NOT_FOUND = new TqlErrorCode(TqlDomain.STUDIO, 4042);
@@ -117,6 +120,22 @@ public final class DocService {
             return MAPPER.readValue(report.toFile(), ReportOverlay.class);
         } catch (IOException ex) {
             return null;
+        }
+    }
+
+    /**
+     * The bounded run-trend history ({@code history.json}), oldest run first, or an empty list when
+     * the file is absent or unreadable. Feeds the coverage dashboard's trend sparklines (portal v2).
+     */
+    public List<HistoryPoint> history() {
+        Path file = appHome.resolve(HISTORY_PATH);
+        if (!Files.isRegularFile(file)) {
+            return List.of();
+        }
+        try {
+            return List.of(MAPPER.readValue(file.toFile(), HistoryPoint[].class));
+        } catch (IOException ex) {
+            return List.of();
         }
     }
 
@@ -318,6 +337,12 @@ public final class DocService {
 
     /** A covering test case projected to the facts the portal shows. */
     public record TestRef(String name, String kind, String target) {
+    }
+
+    /** One run's trend point from {@code history.json} (studio-side mirror of the build's entry). */
+    public record HistoryPoint(String runId, String generatedAt, int total, long passed,
+            long failed,
+            double sqlLineRatio, double sqlBranchRatio, boolean gatePassed) {
     }
 
     /** A ranked search hit: the matched route's identity and its term-match score. */

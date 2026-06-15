@@ -14,3 +14,7 @@ textarea.source{width:100%;resize:vertical}
 .cov-line--covered{background:rgba(63,185,80,.18)}
 .cov-line--missed{background:rgba(248,81,73,.18)}
 .cov-swatch{display:inline-block;width:10px;height:10px;border-radius:2px;vertical-align:middle}
+
+/* Documentation portal v2: coverage-trend sparklines (inline SVG, no script, CSP-safe). */
+.spark{width:120px;height:24px;display:block}
+.spark-line{fill:none;stroke:var(--hc-color-accent,#58a6ff);stroke-width:1.5}

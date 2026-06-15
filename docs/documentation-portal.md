@@ -1,8 +1,10 @@
 # Application Documentation Portal
 
-> Status: **v1 shipped; v2 in progress** (2026-06-15). The design brief below records the agreed
-> architecture. The *v1 (spec layer)* slice is implemented and merged (PR #60–#67). The
-> *v2 (report overlay)* slice is now being built — its detailed plan is the
+> Status: **v1 & v2 shipped** (2026-06-15). The design brief below records the agreed architecture.
+> The *v1 (spec layer)* slice is implemented and merged (PR #60–#67). The *v2 (report overlay)*
+> slice is implemented and merged across five sub-slices (report model + `report`/`history.json`
+> sidecar, DocService overlay + badges, coverage dashboard + search filters, per-line SQL coverage
+> highlighting, and run-trend sparklines); its plan is the
 > [Implementation plan — v2 (report overlay)](#implementation-plan--v2-report-overlay) section at
 > the end of this document. Sections describing v3 (schema) remain forward-looking.
 
