@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{tql/shell :: page(|TesseraQL Docs · ${docs.appName}|, ~{:: #page-header}, ~{:: #page-content})}">
+<th:block id="page-header">
+  <span class="hc-spacer"></span>
+  <div class="hc-cluster">
+    <a class="hc-button" data-variant="ghost" data-size="sm" href="/_tesseraql/studio/ui">&larr; explorer</a>
+  </div>
+</th:block>
+<div id="page-content" class="hc-stack">
+<section class="hc-card">
+  <h2>Routes &amp; pages</h2>
+  <div class="hc-empty" th:unless="${docs.hasRoutes}"><p class="hc-empty__title">No routes defined.</p></div>
+  <table class="hc-table" th:if="${docs.hasRoutes}">
+    <thead><tr><th>Id</th><th>Method</th><th>Path</th><th>Recipe</th><th>Tests</th></tr></thead>
+    <tbody>
+      <tr th:each="r : ${docs.routes}">
+        <td><a th:href="${r.detailUrl}" th:text="${r.id}"></a></td>
+        <td th:text="${r.method}"></td>
+        <td th:text="${r.path}"></td>
+        <td th:text="${r.recipe}"></td>
+        <td th:text="${r.testCount}"></td>
+      </tr>
+    </tbody>
+  </table>
+</section>
+<section class="hc-card">
+  <h2>Migrations</h2>
+  <div class="hc-empty" th:unless="${docs.hasMigrations}"><p class="hc-empty__title">No migrations listed.</p></div>
+  <table class="hc-table" th:if="${docs.hasMigrations}">
+    <thead><tr><th>Datasource</th><th>Vendor</th><th>Version</th><th>Description</th><th>Path</th></tr></thead>
+    <tbody>
+      <tr th:each="m : ${docs.migrations}">
+        <td th:text="${m.datasource}"></td>
+        <td th:text="${m.vendor}"></td>
+        <td th:text="${m.version}"></td>
+        <td th:text="${m.description}"></td>
+        <td th:text="${m.path}"></td>
+      </tr>
+    </tbody>
+  </table>
+</section>
+</div>
+</html>

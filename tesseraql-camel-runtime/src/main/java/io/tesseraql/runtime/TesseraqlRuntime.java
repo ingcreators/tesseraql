@@ -687,6 +687,19 @@ public final class TesseraqlRuntime implements AutoCloseable {
                             reloader.reload();
                             return Map.of("applied", path);
                         });
+                // Providers backing the bundled documentation portal (documentation portal v1):
+                // they read the packaged spec.json, falling back to a live model from the manifest.
+                io.tesseraql.studio.DocService doc = new io.tesseraql.studio.DocService(manifest);
+                serviceProviders
+                        .register("docs.index", params -> io.tesseraql.studio.DocViews
+                                .index(doc.appName(), doc.spec()))
+                        .register("docs.route", params -> {
+                            String id = String.valueOf(params.get("id"));
+                            io.tesseraql.studio.DocService.RouteEntry entry = doc.route(id);
+                            return entry == null
+                                    ? Map.of("notFound", true, "id", id)
+                                    : io.tesseraql.studio.DocViews.route(entry);
+                        });
             }
             // Retention (design ch. 44): enabled by configuring the sweep interval. When
             // tesseraql.retention.attachments is set and the managed attachment store is bound, the
