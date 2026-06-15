@@ -91,6 +91,40 @@ public final class SimpleYamlParser {
         return job;
     }
 
+    /** Parses a scope YAML file (roadmap Phase 29). */
+    public io.tesseraql.yaml.model.ScopeDefinition parseScope(Path file) {
+        try {
+            io.tesseraql.yaml.model.ScopeDefinition scope = mapper.readValue(
+                    Files.readString(file), io.tesseraql.yaml.model.ScopeDefinition.class);
+            return validateScope(scope, file.toString());
+        } catch (IOException ex) {
+            throw new UncheckedIOException(ex);
+        } catch (TqlException ex) {
+            throw ex;
+        } catch (RuntimeException ex) {
+            throw TqlException.builder(SCHEMA_ERROR)
+                    .message("Failed to parse scope YAML: " + ex.getMessage())
+                    .source(file.toString())
+                    .cause(ex)
+                    .build();
+        }
+    }
+
+    private io.tesseraql.yaml.model.ScopeDefinition validateScope(
+            io.tesseraql.yaml.model.ScopeDefinition scope, String source) {
+        if (scope == null) {
+            throw error("Empty scope document", source);
+        }
+        requireField(scope.version(), "version", source);
+        if (!EXPECTED_VERSION.equals(scope.version())) {
+            throw error("Unsupported version '" + scope.version() + "', expected "
+                    + EXPECTED_VERSION, source);
+        }
+        requireField(scope.id(), "id", source);
+        requireField(scope.kind(), "kind", source);
+        return scope;
+    }
+
     /** Parses an arbitrary YAML document into a nested map (for config files). */
     public Map<String, Object> parseTree(Path file) {
         try {

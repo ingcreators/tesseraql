@@ -50,9 +50,36 @@ public final class ManifestLoader {
         List<UiResourceFile> uiResources = new ArrayList<>();
         loadMcp(home, tools, resources, uiResources);
         List<RouteFile> consumers = loadConsumers(home);
+        List<ScopeFile> scopes = loadScopes(home);
         ManifestIndex index = buildIndex(home);
         return new AppManifest(home, config, routes, jobs, tools, resources, uiResources, consumers,
-                index);
+                scopes, index);
+    }
+
+    /**
+     * Loads the {@code scope/} tree (roadmap Phase 29): each {@code kind: scope} document is a named
+     * row-level predicate derived from the principal, applied to a query through a
+     * {@code /*%scope%/} directive. Scope documents are not routes — they carry no HTTP binding — so
+     * they live in their own tree, alongside the 2-way SQL fragment files their match arms reference.
+     */
+    private List<ScopeFile> loadScopes(Path home) {
+        Path scopeRoot = home.resolve("scope");
+        if (!Files.isDirectory(scopeRoot)) {
+            return List.of();
+        }
+        List<ScopeFile> scopes = new ArrayList<>();
+        try (Stream<Path> files = Files.walk(scopeRoot)) {
+            files.filter(Files::isRegularFile)
+                    .filter(p -> p.getFileName().toString().endsWith(".yml"))
+                    .sorted()
+                    .forEach(file -> {
+                        requireInside(home, file);
+                        scopes.add(new ScopeFile(file, parser.parseScope(file)));
+                    });
+        } catch (IOException ex) {
+            throw new UncheckedIOException(ex);
+        }
+        return scopes;
     }
 
     /**

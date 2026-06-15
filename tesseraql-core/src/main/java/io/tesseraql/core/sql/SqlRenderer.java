@@ -27,10 +27,15 @@ public final class SqlRenderer {
     private final CoverageTrace coverage = new CoverageTrace();
     private final Map<String, Object> scope;
     private final EvaluationContext context;
+    private final ScopeResolver scopeResolver;
+    private final Map<String, Object> scopeContext;
 
-    private SqlRenderer(Map<String, Object> params) {
+    private SqlRenderer(Map<String, Object> params, ScopeResolver scopeResolver,
+            Map<String, Object> scopeContext) {
         this.scope = new HashMap<>(params);
         this.context = new EvaluationContext(scope);
+        this.scopeResolver = scopeResolver;
+        this.scopeContext = scopeContext;
     }
 
     /** Parses and renders a 2-way SQL template against the given parameters. */
@@ -40,7 +45,17 @@ public final class SqlRenderer {
 
     /** Renders an already-parsed node tree against the given parameters. */
     public static BoundSql render(List<SqlNode> nodes, Map<String, Object> params) {
-        SqlRenderer renderer = new SqlRenderer(params);
+        return render(nodes, params, ScopeResolver.UNSUPPORTED, Map.of());
+    }
+
+    /**
+     * Renders a node tree, expanding any {@code /*%scope%/} directive through {@code scopeResolver}
+     * against {@code scopeContext} (roadmap Phase 29). The render paths that never carry a scope
+     * directive use the two-argument overload, whose default resolver rejects one outright.
+     */
+    public static BoundSql render(List<SqlNode> nodes, Map<String, Object> params,
+            ScopeResolver scopeResolver, Map<String, Object> scopeContext) {
+        SqlRenderer renderer = new SqlRenderer(params, scopeResolver, scopeContext);
         renderer.renderNodes(nodes);
         return new BoundSql(
                 renderer.out.toString(),
@@ -58,8 +73,37 @@ public final class SqlRenderer {
                 case SqlNode.ListBind listBind -> appendListBind(listBind);
                 case SqlNode.If ifNode -> renderIf(ifNode);
                 case SqlNode.For forNode -> renderFor(forNode);
+                case SqlNode.Scope scopeNode -> renderScope(scopeNode);
             }
         }
+    }
+
+    /**
+     * Expands a {@code /*%scope%/} directive (roadmap Phase 29): the resolver decides the predicate
+     * sub-template and its bind values from the principal; we render that sub-template inline, with
+     * its bindings layered onto the scope so the fragment's own {@code /* expr *}{@code /} binds
+     * resolve (and restored afterwards so they cannot leak into the rest of the statement).
+     */
+    private void renderScope(SqlNode.Scope node) {
+        ScopeResolver.Resolved resolved = scopeResolver.resolve(node.name(), node.alias(),
+                scopeContext);
+        Map<String, Object> saved = new HashMap<>();
+        java.util.Set<String> added = new java.util.HashSet<>();
+        for (Map.Entry<String, Object> binding : resolved.bindings().entrySet()) {
+            if (scope.containsKey(binding.getKey())) {
+                saved.put(binding.getKey(), scope.get(binding.getKey()));
+            } else {
+                added.add(binding.getKey());
+            }
+            scope.put(binding.getKey(), binding.getValue());
+        }
+        try {
+            renderNodes(resolved.nodes());
+        } finally {
+            saved.forEach(scope::put);
+            added.forEach(scope::remove);
+        }
+        coverage.coverLine(node.sourceLine());
     }
 
     private void renderIf(SqlNode.If ifNode) {

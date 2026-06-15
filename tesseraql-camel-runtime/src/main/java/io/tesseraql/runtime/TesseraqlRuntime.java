@@ -194,6 +194,14 @@ public final class TesseraqlRuntime implements AutoCloseable {
         SecurityConfig security = SecurityConfigFactory.build(manifest.config());
         context.getRegistry().bind(TesseraqlProperties.POLICY_ENGINE_BEAN,
                 new PolicyEngine(security));
+        // Organizational data scoping (roadmap Phase 29): the resolver expands /*%scope ... */
+        // into principal-derived predicates. Bound only when the app declares scopes, so the SQL
+        // producer falls back to its reject-any-scope default everywhere else.
+        if (!manifest.scopes().isEmpty()) {
+            context.getRegistry().bind(TesseraqlProperties.SCOPE_RESOLVER_BEAN,
+                    new io.tesseraql.compiler.binding.CompiledScopeResolver(
+                            manifest.scopes(), datasourceDialect(manifest.config())));
+        }
         if (security.jwt() != null) {
             context.getRegistry().bind(
                     TesseraqlProperties.JWT_AUTHENTICATOR_BEAN,

@@ -32,6 +32,7 @@ public final class SqlCoverableLines {
                 case SqlNode.If conditional -> conditional.branches()
                         .forEach(branch -> collect(branch.body(), out));
                 case SqlNode.For loop -> collect(loop.body(), out);
+                case SqlNode.Scope scope -> out.add(scope.sourceLine());
             }
         }
     }

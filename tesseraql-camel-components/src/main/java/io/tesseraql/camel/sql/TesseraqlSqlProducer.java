@@ -13,6 +13,7 @@ import io.tesseraql.core.spool.SpoolWriter;
 import io.tesseraql.core.spool.TempStore;
 import io.tesseraql.core.sql.BoundParameter;
 import io.tesseraql.core.sql.BoundSql;
+import io.tesseraql.core.sql.ScopeResolver;
 import io.tesseraql.core.sql.Sql2WayParser;
 import io.tesseraql.core.sql.SqlNode;
 import io.tesseraql.core.sql.SqlRenderer;
@@ -81,7 +82,10 @@ public class TesseraqlSqlProducer extends DefaultProducer {
         try {
             Map<String, Object> params = exchange.getProperty(
                     TesseraqlProperties.SQL_PARAMS, Map.of(), Map.class);
-            BoundSql bound = SqlRenderer.render(nodes, params);
+            Map<String, Object> scopeContext = exchange.getProperty(
+                    TesseraqlProperties.CONTEXT, Map.of(), Map.class);
+            BoundSql bound = SqlRenderer.render(nodes, params, scopeResolver(exchange),
+                    scopeContext);
             DataSource dataSource = dataSource(exchange);
 
             if ("query-export".equals(mode)) {
@@ -125,6 +129,17 @@ public class TesseraqlSqlProducer extends DefaultProducer {
                 .lookupByNameAndType(TesseraqlProperties.TRACER_BEAN,
                         io.tesseraql.core.telemetry.Tracer.class);
         return tracer != null ? tracer : io.tesseraql.core.telemetry.NoopTracer.INSTANCE;
+    }
+
+    /**
+     * The data-scope resolver bound by the runtime (roadmap Phase 29), or a resolver that rejects
+     * any {@code /*%scope%/} directive when none is configured — so a scope directive in an app
+     * without scopes fails loudly rather than silently bypassing scoping.
+     */
+    private ScopeResolver scopeResolver(Exchange exchange) {
+        ScopeResolver resolver = exchange.getContext().getRegistry()
+                .lookupByNameAndType(TesseraqlProperties.SCOPE_RESOLVER_BEAN, ScopeResolver.class);
+        return resolver != null ? resolver : ScopeResolver.UNSUPPORTED;
     }
 
     private io.tesseraql.core.diag.SqlExecutionLog slowSqlLog(Exchange exchange) {
