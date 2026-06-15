@@ -255,6 +255,9 @@ class StudioIntegrationTest {
         assertThat(response.body()).startsWith("<!DOCTYPE html>")
                 .contains("Coverage summary").contains("2/2 passed")
                 .contains("gate passed").contains("Item coverage").contains("route");
+        // Slice 5: the two-run history renders the trend sparklines.
+        assertThat(response.body()).contains("Trend").contains("spark-line")
+                .contains("polyline");
     }
 
     @Test
@@ -501,6 +504,15 @@ class StudioIntegrationTest {
                       "itemCoverage": {} }
                   }
                 }
+                """);
+        // A two-run history exercises the dashboard's coverage-trend sparklines.
+        Files.writeString(target.resolve(".tesseraql/docs/history.json"), """
+                [ { "runId": "it-run-0", "generatedAt": "2026-06-14T12:00:00Z", "total": 2,
+                    "passed": 1, "failed": 1, "sqlLineRatio": 0.5, "sqlBranchRatio": 0.5,
+                    "gatePassed": false },
+                  { "runId": "it-run", "generatedAt": "2026-06-15T12:00:00Z", "total": 2,
+                    "passed": 2, "failed": 0, "sqlLineRatio": 0.8, "sqlBranchRatio": 1.0,
+                    "gatePassed": true } ]
                 """);
         return target;
     }
