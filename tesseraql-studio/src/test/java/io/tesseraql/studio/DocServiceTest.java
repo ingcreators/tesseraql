@@ -151,6 +151,53 @@ class DocServiceTest {
     }
 
     @Test
+    void searchFiltersByRunStatusAndCoverageFromTheOverlay(@TempDir Path dir) throws Exception {
+        Files.createDirectories(dir.resolve("config"));
+        Files.writeString(dir.resolve("config/tesseraql.yml"),
+                "tesseraql:\n  app:\n    name: demo\n");
+        Files.createDirectories(dir.resolve(".tesseraql/docs"));
+        Files.writeString(dir.resolve(".tesseraql/docs/spec.json"), """
+                { "routes": [
+                    { "route": { "id": "users.search", "method": "GET", "path": "/api/users",
+                                 "recipe": "query-json", "kind": "route", "inputs": [],
+                                 "validations": [], "notifications": [], "sql": [] }, "tests": [] },
+                    { "route": { "id": "users.print", "method": "GET", "path": "/api/users/print",
+                                 "recipe": "query-json", "kind": "route", "inputs": [],
+                                 "validations": [], "notifications": [], "sql": [] }, "tests": [] }
+                  ], "migrations": [] }
+                """);
+        Files.writeString(dir.resolve(".tesseraql/docs/report.json"), """
+                { "schemaVersion": 1, "runId": "r", "generatedAt": "t",
+                  "summary": { "total": 2, "passed": 1, "failed": 1, "sqlLineRatio": 1.0,
+                               "sqlBranchRatio": 1.0, "gatePassed": false },
+                  "thresholds": { "sqlLine": 0.0, "sqlBranch": 0.0, "kinds": {} },
+                  "gate": { "passed": false, "failures": [] }, "kinds": [],
+                  "routes": {
+                    "users.search": { "covered": true,
+                      "tests": [ { "name": "a", "passed": true, "message": "OK" } ],
+                      "sql": [], "itemCoverage": {} },
+                    "users.print": { "covered": false,
+                      "tests": [ { "name": "b", "passed": false, "message": "boom" } ],
+                      "sql": [], "itemCoverage": {} }
+                  } }
+                """);
+        DocService service = new DocService(new ManifestLoader().load(dir));
+
+        assertThat(service.search("coverage:covered")).extracting(DocService.Hit::id)
+                .containsExactly("users.search");
+        assertThat(service.search("coverage:untested")).extracting(DocService.Hit::id)
+                .containsExactly("users.print");
+        assertThat(service.search("status:failing")).extracting(DocService.Hit::id)
+                .containsExactly("users.print");
+        assertThat(service.search("status:passing")).extracting(DocService.Hit::id)
+                .containsExactly("users.search");
+        // A free-text term combines with a filter (matches both, then narrows to the failing one).
+        assertThat(service.search("users")).hasSize(2);
+        assertThat(service.search("users status:failing")).extracting(DocService.Hit::id)
+                .containsExactly("users.print");
+    }
+
+    @Test
     void rendersMarkdownDocsAndRejectsTraversal(@TempDir Path dir) throws Exception {
         Files.createDirectories(dir.resolve("config"));
         Files.writeString(dir.resolve("config/tesseraql.yml"),

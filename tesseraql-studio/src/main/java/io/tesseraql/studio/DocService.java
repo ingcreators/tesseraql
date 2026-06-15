@@ -50,6 +50,11 @@ public final class DocService {
     private static final ObjectMapper MAPPER = new ObjectMapper()
             .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
     private static final Pattern NON_WORD = Pattern.compile("[^a-z0-9]+");
+    private static final Pattern WHITESPACE = Pattern.compile("\\s+");
+
+    /** Overlay-aware search filters: {@code key:value} tokens that narrow by the run report. */
+    private static final Set<String> FILTERS = Set.of("status:failing", "status:passing",
+            "coverage:covered", "coverage:untested");
 
     private final AppManifest manifest;
     private final Path appHome;
@@ -134,11 +139,34 @@ public final class DocService {
      * nothing.
      */
     public List<Hit> search(String query) {
-        List<String> terms = tokenize(query);
-        if (terms.isEmpty()) {
+        if (query == null) {
+            return List.of();
+        }
+        Set<String> filters = new LinkedHashSet<>();
+        StringBuilder free = new StringBuilder();
+        for (String token : WHITESPACE.split(query.trim())) {
+            String lower = token.toLowerCase(Locale.ROOT);
+            if (FILTERS.contains(lower)) {
+                filters.add(lower);
+            } else if (!token.isBlank()) {
+                free.append(token).append(' ');
+            }
+        }
+        List<String> terms = tokenize(free.toString());
+        if (terms.isEmpty() && filters.isEmpty()) {
             return List.of();
         }
         ensureIndex();
+        List<Hit> hits = terms.isEmpty() ? allHits() : scoredHits(terms);
+        if (filters.isEmpty()) {
+            return hits;
+        }
+        ReportOverlay overlay = report();
+        return hits.stream().filter(hit -> matchesFilters(hit.id(), overlay, filters)).toList();
+    }
+
+    /** Routes ranked by the number of distinct query terms they match (descending), then by id. */
+    private List<Hit> scoredHits(List<String> terms) {
         Map<Integer, Integer> scores = new HashMap<>();
         for (String term : terms) {
             Set<Integer> matched = new LinkedHashSet<>();
@@ -156,6 +184,35 @@ public final class DocService {
                         .reversed().thenComparing(entry -> corpus.get(entry.getKey()).id()))
                 .map(entry -> corpus.get(entry.getKey()).withScore(entry.getValue()))
                 .toList();
+    }
+
+    /** Every indexed route, by id — the candidate set for a filter-only query (no free-text terms). */
+    private List<Hit> allHits() {
+        return corpus.stream().sorted(Comparator.comparing(Hit::id)).toList();
+    }
+
+    /** Whether a route satisfies every overlay status/coverage filter, AND-combined. */
+    private static boolean matchesFilters(String routeId, ReportOverlay overlay,
+            Set<String> filters) {
+        ReportOverlay.RouteReport report = overlay == null ? null : overlay.routeReport(routeId);
+        for (String filter : filters) {
+            if (!matchesFilter(report, filter)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static boolean matchesFilter(ReportOverlay.RouteReport report, String filter) {
+        return switch (filter) {
+            case "coverage:covered" -> report != null && report.covered();
+            case "coverage:untested" -> report == null || !report.covered();
+            case "status:failing" -> report != null
+                    && report.tests().stream().anyMatch(test -> !test.passed());
+            case "status:passing" -> report != null && !report.tests().isEmpty()
+                    && report.tests().stream().allMatch(ReportOverlay.CaseResult::passed);
+            default -> true;
+        };
     }
 
     private synchronized void ensureIndex() {

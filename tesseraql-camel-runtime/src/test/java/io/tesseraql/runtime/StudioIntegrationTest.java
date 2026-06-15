@@ -245,6 +245,42 @@ class StudioIntegrationTest {
     }
 
     @Test
+    void uiDocsCoverageRendersTheDashboard() throws Exception {
+        HttpResponse<String> response = get("/_tesseraql/studio/ui/docs/coverage", true);
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(response.body()).startsWith("<!DOCTYPE html>")
+                .contains("Coverage summary").contains("2/2 passed")
+                .contains("gate passed").contains("Item coverage").contains("route");
+    }
+
+    @Test
+    void uiDocsSearchFiltersByCoverageAndStatus() throws Exception {
+        // coverage:covered keeps only the covered route from the overlay.
+        HttpResponse<String> covered = get(
+                "/_tesseraql/studio/ui/docs/search?q=" + enc("coverage:covered"), true);
+        assertThat(covered.statusCode()).isEqualTo(200);
+        assertThat(covered.body()).contains("id=users.search");
+
+        // coverage:untested excludes the covered route and surfaces the rest.
+        HttpResponse<String> untested = get(
+                "/_tesseraql/studio/ui/docs/search?q=" + enc("coverage:untested"), true);
+        assertThat(untested.body()).doesNotContain("id=users.search")
+                .contains("id=users.apiProvision");
+
+        // status:passing keeps only the route whose cases all passed.
+        HttpResponse<String> passing = get(
+                "/_tesseraql/studio/ui/docs/search?q=" + enc("status:passing"), true);
+        assertThat(passing.body()).contains("id=users.search")
+                .doesNotContain("id=users.apiProvision");
+    }
+
+    @Test
+    void uiDocsCoverageRequiresAuthentication() throws Exception {
+        assertThat(get("/_tesseraql/studio/ui/docs/coverage", false).statusCode()).isEqualTo(401);
+    }
+
+    @Test
     void uiDocsRequiresAuthentication() throws Exception {
         assertThat(get("/_tesseraql/studio/ui/docs", false).statusCode()).isEqualTo(401);
     }

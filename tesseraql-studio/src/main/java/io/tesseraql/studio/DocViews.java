@@ -90,6 +90,61 @@ public final class DocViews {
         return model;
     }
 
+    /** Number of uncovered item ids listed per kind before collapsing to a "+N more" hint. */
+    private static final int UNCOVERED_LIMIT = 10;
+
+    /**
+     * The coverage dashboard model (documentation portal v2): the run summary, the gate verdict and
+     * its violations, each item-coverage kind's standing with a capped uncovered list, and every
+     * failing test case across the app. Empty (just the app name) when no run overlay is present.
+     */
+    public static Map<String, Object> coverage(String appName, ReportOverlay overlay) {
+        Map<String, Object> model = new LinkedHashMap<>();
+        model.put("appName", appName);
+        model.put("hasReport", overlay != null);
+        if (overlay == null) {
+            return model;
+        }
+        model.put("report", reportSummary(overlay));
+        List<String> gateFailures = overlay.gate() == null ? List.of() : overlay.gate().failures();
+        model.put("gateFailures", gateFailures);
+        model.put("hasGateFailures", !gateFailures.isEmpty());
+
+        List<Map<String, Object>> kinds = new ArrayList<>();
+        for (ReportOverlay.KindCoverage kind : overlay.kinds()) {
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("kind", kind.kind());
+            row.put("covered", kind.covered());
+            row.put("declared", kind.declared());
+            row.put("pct", pct(kind.ratio()));
+            row.put("full", kind.covered() >= kind.declared());
+            List<String> uncovered = kind.uncovered();
+            row.put("uncovered", uncovered.size() > UNCOVERED_LIMIT
+                    ? uncovered.subList(0, UNCOVERED_LIMIT)
+                    : uncovered);
+            row.put("uncoveredMore", Math.max(0, uncovered.size() - UNCOVERED_LIMIT));
+            kinds.add(row);
+        }
+        model.put("kinds", kinds);
+        model.put("hasKinds", !kinds.isEmpty());
+
+        List<Map<String, Object>> failing = new ArrayList<>();
+        for (Map.Entry<String, ReportOverlay.RouteReport> entry : overlay.routes().entrySet()) {
+            for (ReportOverlay.CaseResult test : entry.getValue().tests()) {
+                if (!test.passed()) {
+                    Map<String, Object> row = new LinkedHashMap<>();
+                    row.put("route", entry.getKey());
+                    row.put("name", test.name());
+                    row.put("message", test.message());
+                    failing.add(row);
+                }
+            }
+        }
+        model.put("failingCases", failing);
+        model.put("hasFailingCases", !failing.isEmpty());
+        return model;
+    }
+
     /** The Markdown doc-body model: the doc path and its pre-rendered, CSP-safe HTML. */
     public static Map<String, Object> doc(String path, String html) {
         Map<String, Object> model = new LinkedHashMap<>();
