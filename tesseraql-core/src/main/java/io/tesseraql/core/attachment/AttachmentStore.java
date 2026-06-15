@@ -22,9 +22,17 @@ public interface AttachmentStore {
     /** Lists the attachments of one owning record, newest first. */
     List<Attachment> list(String entity, String entityId);
 
-    /** A metadata row to insert; the id, scan status, and timestamp are assigned by the store. */
+    /**
+     * Deletes rows created before {@code cutoff} and returns their storage keys, so the caller can
+     * reclaim the blobs (roadmap Phase 30 slice 3 retention). The blob delete is the caller's
+     * concern — the store only owns the metadata.
+     */
+    List<String> deleteOlderThan(Instant cutoff);
+
+    /** A metadata row to insert; the id and timestamp are assigned by the store. */
     record NewAttachment(String entity, String entityId, String filename, String contentType,
-            long byteSize, String checksum, String storageKey, String createdBy) {
+            long byteSize, String checksum, String storageKey, String scanStatus,
+            String createdBy) {
     }
 
     /** A stored attachment: its metadata and the {@code storageKey} that addresses its blob. */

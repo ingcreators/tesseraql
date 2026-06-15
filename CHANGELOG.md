@@ -26,6 +26,21 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Runtime and recipes
 
+- Attachments and object storage — scanning and retention (roadmap Phase 30 slice 3, completing the
+  phase, see [docs/attachments.md](docs/attachments.md)): a malware scan-hook SPI and age-based
+  retention. `AttachmentScanner` (`tesseraql-core` `io.tesseraql.core.scan`, ServiceLoader-discovered
+  via `AttachmentScanners.discover()`, no-op default) is the seam for ClamAV or a cloud scanner — an
+  app enables real scanning by adding a scanner module, no config flag. Scanning is synchronous on
+  upload: the verdict is recorded as `scan_status`, an `INFECTED` object is never served (the
+  download gate refuses any non-clean object with `409`, `TQL-LD-2848`) and is kept or removed per
+  `tesseraql.attachments.scan.onInfected` (`quarantine` default / `delete`), and a scanner `ERROR`
+  fails the upload closed (`503`, `TQL-LD-2847`). Retention wires into the ch. 44 `RetentionSweeper`:
+  when `tesseraql.retention.attachments` is set and the managed store is bound, the cluster-safe
+  sweep also deletes attachment metadata past the window and reclaims each blob (best-effort, so a
+  racing node or an already-removed blob is harmless). Orphan GC (a blob with no metadata row) is a
+  later refinement — it needs a `BlobStore` listing capability the minimal SPI does not yet expose;
+  the upload path's best-effort delete-on-failure covers the common case. This completes the
+  attachments leg of Milestone M9.
 - Attachments and object storage — S3 and S3-compatible storage (roadmap Phase 30 slice 2, see
   [docs/attachments.md](docs/attachments.md)): a new opt-in `tesseraql-s3` leaf module ships an
   `S3BlobStore` on AWS SDK for Java v2 (Apache-2.0, confined to the module), contributed by a
