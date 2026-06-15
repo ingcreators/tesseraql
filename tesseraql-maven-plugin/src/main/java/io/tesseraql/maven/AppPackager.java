@@ -12,9 +12,13 @@ import java.util.zip.ZipOutputStream;
  * Packages an app home into a deterministic {@code .tqlapp} archive (design ch. 32.3, 48.7).
  *
  * <p>Entries are sorted and given a fixed timestamp so the archive is reproducible; the {@code work}
- * directory is excluded. Build-generated documentation artifacts are merged in under the reserved
+ * directory and the reserved {@code .tesseraql/} namespace are excluded from the source scan.
+ * Build-generated documentation artifacts are merged in under the reserved
  * {@link #GENERATED_DOCS_PREFIX} prefix so the runtime can resolve {@code spec.json} from the
- * mounted app home without the source tree carrying derived files.
+ * mounted app home without the source tree carrying derived files. Excluding source-tree
+ * {@code .tesseraql/} keeps run-dependent overlays a later phase may write there (the v2
+ * {@code report.json}/{@code history.json}) out of the reproducible archive, regardless of goal
+ * ordering — only freshly generated docs enter the reserved namespace.
  */
 public final class AppPackager {
 
@@ -36,12 +40,16 @@ public final class AppPackager {
     public Path pack(Path appHome, Path generatedDocs, Path output) throws IOException {
         Path home = appHome.toAbsolutePath().normalize();
         Path work = home.resolve("work");
+        Path reserved = home.resolve(".tesseraql");
         // Entry name -> source file, sorted by name so the archive order is deterministic across
-        // both the source tree and the merged generated docs.
+        // both the source tree and the merged generated docs. The reserved .tesseraql/ namespace is
+        // populated only from generatedDocs below, never from the source tree, so run-dependent
+        // overlays written there never leak into the reproducible archive.
         TreeMap<String, Path> entries = new TreeMap<>();
         try (var stream = Files.walk(home)) {
             stream.filter(Files::isRegularFile)
                     .filter(path -> !path.normalize().startsWith(work))
+                    .filter(path -> !path.normalize().startsWith(reserved))
                     .forEach(path -> entries.put(
                             home.relativize(path).toString().replace('\\', '/'), path));
         }
