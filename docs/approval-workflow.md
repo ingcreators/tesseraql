@@ -1,10 +1,11 @@
 # Approval workflow
 
-> **Status: in progress — slices 1–2 delivered (roadmap Phase 28, Horizon 4).** The workflow core
-> (slice 1) and assignee resolution + task inbox (slice 2) ship; deadlines, escalation, and
-> delegation (slice 3) remain design. The further-out parts are direction; revisit at each minor
-> release. It resolves roadmap decision point 2 in favour of a native SQL-contract state machine
-> (see [Decision](#decision-native-sql-contract-state-machine)).
+> **Status: delivered (roadmap Phase 28, Horizon 4 — all three slices ship).** The workflow core
+> (slice 1), assignee resolution + task inbox (slice 2), and deadlines + escalation + delegation
+> (slice 3) are implemented. It resolves roadmap decision point 2 in favour of a native SQL-contract
+> state machine (see [Decision](#decision-native-sql-contract-state-machine)). One refinement remains
+> design: `onBreach.escalate` (auto-firing a transition on breach) — slice 3 ships the reassign-based
+> escalation (`onBreach.reassign`), which the cluster-safe sweeper applies exactly once.
 
 An approval workflow drives a **business document** — a purchase request, an expense claim, a leave
 application — through a sequence of states by way of human decisions: submit, approve, reject, return
@@ -257,18 +258,30 @@ server-side.
 
 ## Deadlines, escalation, and delegation
 
-A workflow declares deadlines per state (`within: 48h`). A managed **sweeper job** — a fixed-delay
-timer route claimed cluster-safe through `tql_job_claim` (`JobRepository.tryClaimFiring`, the same
-machinery scheduled jobs use) — periodically calls `WorkflowStore.overdue(...)` and, for each breach:
+A workflow declares deadlines per state; the opened task carries a `due_at` set from the `to` state's
+`within` (e.g. `within: 48h`). A managed **sweeper** — a fixed-delay timer route claimed cluster-safe
+through `tql_job_claim` (`JobRepository.tryClaimFiring`, the same machinery scheduled jobs use, at the
+`tesseraql.workflow.sweep.interval`, default 60s) — calls `WorkflowTaskStore.overdue(...)` and, for
+each breach, **reassigns** the overdue task to the fallback resolver named by `onBreach.reassign` (a
+2-way SQL `SELECT` returning the new assignee), clearing the task's `due_at` so it escalates **exactly
+once** even across nodes, and recording an `escalate` history row (actor `system`):
 
-- **escalates** by auto-running a declared transition (e.g. `approve`), recording the actor as the
-  workflow itself in the history; or
-- **reassigns** the task to a fallback resolver (`assignees/dept_head.sql`).
+```yaml
+deadlines:
+  - state: submitted
+    within: 48h
+    onBreach: { reassign: dept_head.sql }   # the sweeper reassigns an overdue task to this resolver
+```
 
-Cluster-safe claiming guarantees an overdue task escalates **exactly once** even across nodes.
-**Delegation** is just a transition that reassigns a task to another principal; it appears in the
-delegate's inbox immediately (the inbox scope's `delegated_to` arm) and is recorded in history.
-Reminders reuse the Phase 20 notification channels.
+**Delegation** is a built-in operation, not a transition (it changes no state): the current assignee
+reassigns the document's open task to another principal at `POST {basePath}/{key}/delegate/{to}`, who
+then sees it in their inbox (the task store reassigns the open tasks to `{to}`). Only a caller who
+holds the task may delegate, else `TQL-WORKFLOW-3203` (403).
+
+> **Design refinement, not yet shipped:** `onBreach.escalate` (auto-firing a declared transition on
+> breach, recording the workflow itself as actor) and Phase 20 reminder notifications on
+> assignment/escalation. Slice 3 ships the reassign-based escalation above and the built-in
+> delegation.
 
 ## Audit trail
 
@@ -343,11 +356,15 @@ Phase 28 ships in slices, each a reviewable PR with CI green, mirroring how Phas
    any transition assigns, independent of the state mode, so one inbox spans every workflow.
    - *Acceptance (met):* submitting opens the resolved approver's task; the assignee can act and the
      task completes; a non-assignee's transition is denied (403); all testable end to end.
-3. **Deadlines, escalation, and delegation** — per-state deadlines, the cluster-safe sweeper job,
-   escalation (auto-transition) and reassignment, delegation as a reassigning transition, and Phase
-   20 notifications on assignment/escalation.
-   - *Acceptance:* an overdue task escalates exactly once across a cluster; a delegated task appears
-     in the delegate's inbox; the history shows who acted, when, and why for every transition.
+3. **Deadlines, escalation, and delegation** (delivered) — per-state deadlines set the opened task's
+   `due_at`; the cluster-safe sweeper (`tql_job_claim` claim, `tesseraql.workflow.sweep.interval`)
+   reassigns each overdue task to its `onBreach.reassign` resolver, clearing `due_at` so it escalates
+   exactly once and recording an `escalate` history row; delegation is a built-in
+   `POST {basePath}/{key}/delegate/{to}` that reassigns the open task to a chosen delegate. The
+   `onBreach.escalate` auto-transition and Phase 20 reminder notifications remain a design refinement.
+   - *Acceptance (met):* an overdue task escalates exactly once (a second sweep is a no-op); a
+     delegated task moves to the delegate, who can then act and the original assignee cannot; the
+     history records every transition and escalation. All covered by the Testcontainers IT.
 
 Each slice ships its cookbook entry here and keeps the example gallery green; the worked example is a
 purchase-request approval application built only with YAML, 2-way SQL, and templates.

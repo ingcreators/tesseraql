@@ -47,7 +47,7 @@ public final class JdbcWorkflowTaskStore implements WorkflowTaskStore {
     public void openTask(Connection cx, Task task) {
         try (PreparedStatement ps = cx.prepareStatement("insert into tql_workflow_task "
                 + "(task_id, doc_type, doc_id, state, assignee, candidate_group, status, "
-                + "created_at, tenant_id) values (?, ?, ?, ?, ?, ?, 'OPEN', ?, ?)")) {
+                + "created_at, due_at, tenant_id) values (?, ?, ?, ?, ?, ?, 'OPEN', ?, ?, ?)")) {
             ps.setString(1, UUID.randomUUID().toString());
             ps.setString(2, task.docType());
             ps.setString(3, task.docId());
@@ -55,11 +55,58 @@ public final class JdbcWorkflowTaskStore implements WorkflowTaskStore {
             ps.setString(5, task.assignee());
             ps.setString(6, task.candidateGroup());
             ps.setTimestamp(7, Timestamp.from(Instant.now()));
-            ps.setString(8, task.tenantId());
+            ps.setTimestamp(8, task.dueAt() == null ? null : Timestamp.from(task.dueAt()));
+            ps.setString(9, task.tenantId());
             ps.executeUpdate();
         } catch (SQLException ex) {
             throw error("Failed to open workflow task", ex);
         }
+    }
+
+    @Override
+    public void reassignOpenTasks(Connection cx, String docType, String docId, String newAssignee) {
+        try (PreparedStatement ps = cx.prepareStatement("update tql_workflow_task "
+                + "set assignee = ? where doc_type = ? and doc_id = ? and status = 'OPEN'")) {
+            ps.setString(1, newAssignee);
+            ps.setString(2, docType);
+            ps.setString(3, docId);
+            ps.executeUpdate();
+        } catch (SQLException ex) {
+            throw error("Failed to reassign workflow tasks", ex);
+        }
+    }
+
+    @Override
+    public void escalate(Connection cx, String taskId, String newAssignee) {
+        // Clearing due_at makes the cluster-safe sweeper act on a breached task exactly once.
+        try (PreparedStatement ps = cx.prepareStatement("update tql_workflow_task "
+                + "set assignee = ?, due_at = null where task_id = ? and status = 'OPEN'")) {
+            ps.setString(1, newAssignee);
+            ps.setString(2, taskId);
+            ps.executeUpdate();
+        } catch (SQLException ex) {
+            throw error("Failed to escalate workflow task", ex);
+        }
+    }
+
+    @Override
+    public List<Overdue> overdue(Connection cx, Instant asOf, int limit) {
+        List<Overdue> overdue = new ArrayList<>();
+        try (PreparedStatement ps = cx.prepareStatement("select task_id, doc_type, doc_id, state, "
+                + "assignee from tql_workflow_task "
+                + "where status = 'OPEN' and due_at is not null and due_at < ? order by due_at")) {
+            ps.setTimestamp(1, Timestamp.from(asOf));
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next() && overdue.size() < limit) {
+                    overdue.add(new Overdue(rs.getString("task_id"), rs.getString("doc_type"),
+                            rs.getString("doc_id"), rs.getString("state"),
+                            rs.getString("assignee")));
+                }
+            }
+        } catch (SQLException ex) {
+            throw error("Failed to read overdue workflow tasks", ex);
+        }
+        return overdue;
     }
 
     @Override

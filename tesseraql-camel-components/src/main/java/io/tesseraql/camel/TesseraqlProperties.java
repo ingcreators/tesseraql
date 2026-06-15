@@ -36,6 +36,8 @@ public final class TesseraqlProperties {
     public static final String WORKFLOW_STORE_BEAN = "tesseraqlWorkflowStore";
     /** The approval-workflow task inbox store, bound when a workflow assigns tasks (Phase 28). */
     public static final String WORKFLOW_TASK_STORE_BEAN = "tesseraqlWorkflowTaskStore";
+    /** The approval-workflow deadline sweeper, bound when a workflow declares deadlines (Phase 28). */
+    public static final String WORKFLOW_SWEEPER_BEAN = "tesseraqlWorkflowSweeper";
 
     /** Registry bean names bound by the runtime for security components. */
     public static final String POLICY_ENGINE_BEAN = "tesseraqlPolicyEngine";

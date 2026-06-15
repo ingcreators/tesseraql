@@ -1,11 +1,14 @@
 package io.tesseraql.core.workflow;
 
 import java.sql.Connection;
+import java.time.Instant;
 import java.util.Collection;
+import java.util.List;
 
 /**
- * The task inbox behind the approval-workflow state machine (roadmap Phase 28, slice 2): the open
- * and completed tasks a transition produces, and the authority check confining who may act.
+ * The task inbox behind the approval-workflow state machine (roadmap Phase 28, slices 2–3): the open
+ * and completed tasks a transition produces, the authority check confining who may act, and the
+ * deadlines the sweeper escalates.
  *
  * <p>Assignee resolution is the dual of a data scope: a transition's {@code assign} contract maps a
  * document to the principals (or candidate groups) who receive the resulting task — the same
@@ -39,6 +42,24 @@ public interface WorkflowTaskStore {
             Collection<String> groups);
 
     /**
+     * Reassigns the document's open tasks to a new direct assignee, keeping their deadlines (roadmap
+     * Phase 28 slice 3). Delegation uses this so the delegate sees the task in their inbox.
+     */
+    void reassignOpenTasks(Connection cx, String docType, String docId, String newAssignee);
+
+    /**
+     * Escalates an overdue task to a new assignee and clears its deadline, so the cluster-safe
+     * sweeper acts on it exactly once (roadmap Phase 28 slice 3).
+     */
+    void escalate(Connection cx, String taskId, String newAssignee);
+
+    /**
+     * The open tasks whose deadline has passed as of {@code asOf} (up to {@code limit}), the
+     * sweeper's work-list (roadmap Phase 28 slice 3).
+     */
+    List<Overdue> overdue(Connection cx, Instant asOf, int limit);
+
+    /**
      * One open task: the document, the state it is open in, and who can act — a direct
      * {@code assignee}, a {@code candidateGroup}, or both (at least one is non-null).
      *
@@ -47,9 +68,22 @@ public interface WorkflowTaskStore {
      * @param state          the state the task is open in
      * @param assignee       the direct assignee principal subject, or {@code null}
      * @param candidateGroup the candidate group whose members may claim it, or {@code null}
+     * @param dueAt          when the task breaches its deadline, or {@code null} for no deadline
      * @param tenantId       the owning tenant, or {@code null} when tenancy is not used
      */
     record Task(String docType, String docId, String state, String assignee, String candidateGroup,
-            String tenantId) {
+            Instant dueAt, String tenantId) {
+    }
+
+    /**
+     * An overdue open task the sweeper must escalate.
+     *
+     * @param taskId   the task id
+     * @param docType  the workflow {@code document.type}
+     * @param docId    the business document key
+     * @param state    the state the task is open in
+     * @param assignee the current assignee, or {@code null}
+     */
+    record Overdue(String taskId, String docType, String docId, String state, String assignee) {
     }
 }

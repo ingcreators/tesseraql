@@ -288,11 +288,24 @@ public final class TesseraqlRuntime implements AutoCloseable {
         // Managed approval-workflow task inbox (roadmap Phase 28 slice 2): provisioned and bound when
         // any transition assigns a task, independent of where the workflow keeps its state, so one
         // inbox spans managed-state and app-state workflows alike.
+        WorkflowSweeper workflowSweeper = null;
         if (workflowsAssignTasks(manifest)) {
             io.tesseraql.operations.workflow.JdbcWorkflowTaskStore taskStore = new io.tesseraql.operations.workflow.JdbcWorkflowTaskStore(
                     dataSource);
             taskStore.ensureSchema();
             context.getRegistry().bind(TesseraqlProperties.WORKFLOW_TASK_STORE_BEAN, taskStore);
+            // Deadline escalation (roadmap Phase 28 slice 3): a sweeper reassigns overdue tasks per
+            // each state's onBreach.reassign resolver, recording history through the managed store.
+            List<WorkflowSweeper.Rule> rules = buildSweeperRules(manifest,
+                    datasourceDialect(manifest.config()));
+            if (!rules.isEmpty()) {
+                io.tesseraql.core.workflow.WorkflowStore historyStore = context.getRegistry()
+                        .lookupByNameAndType(TesseraqlProperties.WORKFLOW_STORE_BEAN,
+                                io.tesseraql.core.workflow.WorkflowStore.class);
+                workflowSweeper = new WorkflowSweeper(rules, taskStore, historyStore, dataSource);
+                context.getRegistry().bind(TesseraqlProperties.WORKFLOW_SWEEPER_BEAN,
+                        workflowSweeper);
+            }
         }
         io.tesseraql.yaml.messaging.MessagingChannels messagingChannels = io.tesseraql.yaml.messaging.MessagingChannels
                 .load(manifest.config());
@@ -513,6 +526,14 @@ public final class TesseraqlRuntime implements AutoCloseable {
                     id -> claimKeys.put(id, jobOwners.getOrDefault(id, appName) + ":" + id));
             context.addRoutes(new SchedulingRouteBuilder(
                     jobRunner, jobRepository, List.copyOf(jobs.values()), claimKeys));
+            // Approval-workflow deadline sweeper (roadmap Phase 28 slice 3): a cluster-safe timer
+            // escalates overdue tasks, so exactly one node sweeps per interval.
+            if (workflowSweeper != null) {
+                context.addRoutes(new WorkflowSweepRoutes(workflowSweeper, jobRepository,
+                        io.tesseraql.yaml.workflow.WorkflowSettings
+                                .sweepIntervalMillis(manifest.config()),
+                        appName));
+            }
             // Directory-polling consumers for poll-triggered file-import jobs (roadmap Phase 26):
             // local/SFTP/FTPS sources feed the file-import pipeline, under a deny-by-default host
             // allow-list. The Camel file/ftp endpoint stays an implementation detail.
@@ -712,6 +733,36 @@ public final class TesseraqlRuntime implements AutoCloseable {
             }
         }
         return false;
+    }
+
+    /** The sweeper's escalation rules: each state deadline's onBreach.reassign resolver, parsed. */
+    private static List<WorkflowSweeper.Rule> buildSweeperRules(
+            io.tesseraql.yaml.manifest.AppManifest manifest, String dialect) {
+        List<WorkflowSweeper.Rule> rules = new java.util.ArrayList<>();
+        for (io.tesseraql.yaml.manifest.WorkflowFile workflow : manifest.workflows()) {
+            String docType = workflow.definition().document() == null
+                    ? null
+                    : workflow.definition().document().type();
+            for (io.tesseraql.yaml.model.DeadlineSpec deadline : workflow.definition()
+                    .deadlines()) {
+                if (deadline.onBreach() == null || deadline.onBreach().reassign() == null
+                        || deadline.onBreach().reassign().isBlank()) {
+                    continue;
+                }
+                java.nio.file.Path file = io.tesseraql.core.dialect.DialectSqlResolver.resolve(
+                        workflow.source().getParent().resolve(deadline.onBreach().reassign())
+                                .normalize(),
+                        dialect);
+                try {
+                    rules.add(new WorkflowSweeper.Rule(docType, deadline.state(),
+                            io.tesseraql.core.sql.Sql2WayParser
+                                    .parse(java.nio.file.Files.readString(file))));
+                } catch (java.io.IOException ex) {
+                    throw new java.io.UncheckedIOException(ex);
+                }
+            }
+        }
+        return rules;
     }
 
     /** The configured dialect for the main datasource, or inferred from its JDBC URL (design ch. 42). */

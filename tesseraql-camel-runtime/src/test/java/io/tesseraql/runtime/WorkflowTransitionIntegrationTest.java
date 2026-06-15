@@ -3,6 +3,7 @@ package io.tesseraql.runtime;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.tesseraql.camel.TesseraqlProperties;
 import java.io.IOException;
 import java.net.ServerSocket;
 import java.net.URI;
@@ -32,11 +33,10 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
 /**
- * Acceptance test for the approval-workflow core and task inbox (roadmap Phase 28 slices 1–2): a
- * managed state machine drives a business document through its transitions; a transition resolves
- * assignees and opens a task, and a document with open tasks may only be transitioned by someone who
- * holds one. State advance, history, and the inbox change commit in one transaction; an undeclared
- * transition is a 409, a falsy guard a 422, an unassigned caller a 403.
+ * Acceptance test for the approval workflow (roadmap Phase 28 slices 1–3): a managed state machine
+ * drives a document through transitions; a transition resolves assignees and opens a deadline-bearing
+ * task; a document with open tasks may only be transitioned by someone who holds one; the cluster-safe
+ * sweeper escalates an overdue task exactly once; and the assignee may delegate to another principal.
  */
 @Testcontainers
 class WorkflowTransitionIntegrationTest {
@@ -84,11 +84,9 @@ class WorkflowTransitionIntegrationTest {
     void submitOpensATaskForTheResolvedAssignee() throws Exception {
         assertThat(post("/purchase-requests/PR-4/submit", "requester-1").statusCode())
                 .isEqualTo(200);
-        // The submit transition's assign contract resolved the approver and opened a task.
         assertThat(taskCount("PR-4", "OPEN")).isEqualTo(1);
         assertThat(openTaskAssignee("PR-4")).isEqualTo("approver-1");
 
-        // Acting completes the prior task; approve assigns no further task.
         assertThat(post("/purchase-requests/PR-4/approve", "approver-1").statusCode())
                 .isEqualTo(200);
         assertThat(taskCount("PR-4", "OPEN")).isZero();
@@ -99,7 +97,6 @@ class WorkflowTransitionIntegrationTest {
     void nonAssigneeIsForbidden() throws Exception {
         assertThat(post("/purchase-requests/PR-5/submit", "requester-1").statusCode())
                 .isEqualTo(200);
-        // 'intruder' holds no task for PR-5, so the approve is forbidden.
         assertThat(post("/purchase-requests/PR-5/approve", "intruder").statusCode()).isEqualTo(403);
         assertThat(instanceState("purchase_request", "PR-5")).isEqualTo("submitted");
         assertThat(taskCount("PR-5", "OPEN")).isEqualTo(1);
@@ -107,10 +104,8 @@ class WorkflowTransitionIntegrationTest {
 
     @Test
     void falsyGuardIsUnprocessable() throws Exception {
-        // PR-2 has amount 0, so the submit guard `document.amount > 0` rejects it.
         assertThat(post("/purchase-requests/PR-2/submit", "requester-1").statusCode())
                 .isEqualTo(422);
-        // The rejected transition rolls back entirely: no instance row, no task, no business write.
         assertThat(instanceState("purchase_request", "PR-2")).isNull();
         assertThat(taskCount("PR-2", "OPEN")).isZero();
         assertThat(column("purchase_requests", "last_action", "PR-2")).isNull();
@@ -118,7 +113,6 @@ class WorkflowTransitionIntegrationTest {
 
     @Test
     void illegalTransitionFromWrongStateIsConflict() throws Exception {
-        // PR-3 is in draft; approve requires submitted.
         assertThat(post("/purchase-requests/PR-3/approve", "approver-1").statusCode())
                 .isEqualTo(409);
         assertThat(historyCount("PR-3")).isZero();
@@ -126,11 +120,59 @@ class WorkflowTransitionIntegrationTest {
 
     @Test
     void appModeTransitionAdvancesTheBusinessColumn() throws Exception {
-        // The expense workflow assigns no tasks, so its transitions are gated only by route policy.
         assertThat(post("/expenses/EX-1/submit", "requester-1").statusCode()).isEqualTo(200);
         assertThat(column("expenses", "status", "EX-1")).isEqualTo("submitted");
         assertThat(post("/expenses/EX-1/approve", "approver-1").statusCode()).isEqualTo(200);
         assertThat(column("expenses", "status", "EX-1")).isEqualTo("approved");
+    }
+
+    @Test
+    void delegationReassignsToTheDelegateWhoCanThenAct() throws Exception {
+        assertThat(post("/purchase-requests/PR-6/submit", "requester-1").statusCode())
+                .isEqualTo(200);
+        assertThat(openTaskAssignee("PR-6")).isEqualTo("approver-1");
+
+        // The current assignee delegates the task; the delegate now holds it.
+        assertThat(post("/purchase-requests/PR-6/delegate/delegate-1", "approver-1").statusCode())
+                .isEqualTo(200);
+        assertThat(openTaskAssignee("PR-6")).isEqualTo("delegate-1");
+
+        // The original assignee can no longer act; the delegate can.
+        assertThat(post("/purchase-requests/PR-6/approve", "approver-1").statusCode())
+                .isEqualTo(403);
+        assertThat(post("/purchase-requests/PR-6/approve", "delegate-1").statusCode())
+                .isEqualTo(200);
+    }
+
+    @Test
+    void onlyTheAssigneeMayDelegate() throws Exception {
+        assertThat(post("/purchase-requests/PR-7/submit", "requester-1").statusCode())
+                .isEqualTo(200);
+        assertThat(post("/purchase-requests/PR-7/delegate/elsewhere", "intruder").statusCode())
+                .isEqualTo(403);
+        assertThat(openTaskAssignee("PR-7")).isEqualTo("approver-1");
+    }
+
+    @Test
+    void deadlineIsSetAndTheSweeperEscalatesOverdueTaskExactlyOnce() throws Exception {
+        assertThat(post("/escalating-requests/ER-1/submit", "requester-1").statusCode())
+                .isEqualTo(200);
+        // The 'submitted' state has a deadline, so the opened task carries a due_at.
+        assertThat(queryString("select due_at from tql_workflow_task "
+                + "where doc_id = ? and status = 'OPEN'", "ER-1")).isNotNull();
+
+        // The cluster-safe sweeper escalates the overdue task to the onBreach.reassign resolver.
+        WorkflowSweeper sweeper = runtime.camelContext().getRegistry().lookupByNameAndType(
+                TesseraqlProperties.WORKFLOW_SWEEPER_BEAN, WorkflowSweeper.class);
+        assertThat(sweeper.sweep()).isEqualTo(1);
+        assertThat(openTaskAssignee("ER-1")).isEqualTo("dept-head-1");
+        assertThat(queryString("select due_at from tql_workflow_task "
+                + "where doc_id = ? and status = 'OPEN'", "ER-1")).isNull();
+        assertThat(escalateHistoryCount("ER-1")).isEqualTo(1);
+
+        // Exactly once: the cleared deadline means a second sweep escalates nothing.
+        assertThat(sweeper.sweep()).isZero();
+        assertThat(escalateHistoryCount("ER-1")).isEqualTo(1);
     }
 
     private static HttpResponse<String> post(String path, String sub) throws Exception {
@@ -153,6 +195,11 @@ class WorkflowTransitionIntegrationTest {
     private static int historyCount(String docId) throws Exception {
         return Integer.parseInt(queryString(
                 "select count(*) from tql_workflow_history where doc_id = ?", docId));
+    }
+
+    private static int escalateHistoryCount(String docId) throws Exception {
+        return Integer.parseInt(queryString("select count(*) from tql_workflow_history "
+                + "where doc_id = ? and transition = 'escalate'", docId));
     }
 
     private static int taskCount(String docId, String status) throws Exception {
@@ -200,13 +247,18 @@ class WorkflowTransitionIntegrationTest {
                     + "last_action varchar(32), acted_by varchar(64))");
             statement.execute("insert into purchase_requests (id, title, amount) values "
                     + "('PR-1','Laptop',1000), ('PR-2','Pen',0), ('PR-3','Desk',500), "
-                    + "('PR-4','Chair',700), ('PR-5','Lamp',300)");
+                    + "('PR-4','Chair',700), ('PR-5','Lamp',300), ('PR-6','Phone',900), "
+                    + "('PR-7','Mouse',150)");
             // App-mode: state lives in the status column, initialized to the initial state.
             statement.execute("create table expenses (id varchar(64) primary key, "
                     + "amount numeric(12,2) not null, status varchar(32) not null, "
                     + "note varchar(64))");
             statement.execute(
                     "insert into expenses (id, amount, status) values ('EX-1',200,'draft')");
+            // A workflow whose 'submitted' state carries a deadline, for the sweeper test.
+            statement.execute("create table escalating_requests (id varchar(64) primary key, "
+                    + "last_action varchar(32))");
+            statement.execute("insert into escalating_requests (id) values ('ER-1')");
         }
     }
 
@@ -220,6 +272,8 @@ class WorkflowTransitionIntegrationTest {
                 tesseraql:
                   workflow:
                     mode: managed
+                    sweep:
+                      interval: 1h
                   datasources:
                     main:
                       jdbcUrl: %s
@@ -288,6 +342,39 @@ class WorkflowTransitionIntegrationTest {
                 "update expenses set note = /* audit.user */ 'x' where id = /* key */ 'x'\n");
         Files.writeString(workflowDir.resolve("ex_approve.sql"),
                 "update expenses set note = /* audit.user */ 'x' where id = /* key */ 'x'\n");
+
+        Files.writeString(workflowDir.resolve("escalating_request.yml"), """
+                version: tesseraql/v1
+                id: escalating_request
+                kind: workflow
+                document: { type: escalating_request, table: escalating_requests, key: id }
+                http: { basePath: /escalating-requests }
+                security: { auth: bearer }
+                initial: draft
+                states:
+                  - { id: draft, type: initial }
+                  - { id: submitted }
+                  - { id: approved, type: terminal }
+                transitions:
+                  - id: submit
+                    from: draft
+                    to: submitted
+                    command: e_submit.sql
+                    assign: { file: e_approver.sql }
+                  - { id: approve, from: submitted, to: approved, command: e_approve.sql }
+                deadlines:
+                  - state: submitted
+                    within: 0s
+                    onBreach: { reassign: dept_head.sql }
+                """);
+        Files.writeString(workflowDir.resolve("e_submit.sql"),
+                "update escalating_requests set last_action = 'submit' where id = /* key */ 'x'\n");
+        Files.writeString(workflowDir.resolve("e_approve.sql"),
+                "update escalating_requests set last_action = 'approve' where id = /* key */ 'x'\n");
+        Files.writeString(workflowDir.resolve("e_approver.sql"),
+                "select 'approver-1' as assignee\n");
+        Files.writeString(workflowDir.resolve("dept_head.sql"),
+                "select 'dept-head-1' as assignee\n");
         return home;
     }
 

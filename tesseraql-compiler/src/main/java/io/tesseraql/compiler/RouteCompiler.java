@@ -308,9 +308,59 @@ public final class RouteCompiler {
                     guard, appStore, compileAssign(workflowFile, transition),
                     transition.assign() == null
                             ? java.util.Map.of()
-                            : transition.assign().params());
+                            : transition.assign().params(),
+                    deadlineMillis(def, transition.to()));
             buildTransactionalCommand(builder, routeFile, null, workflow);
         }
+        buildWorkflowDelegate(builder, def, basePath, onlyRouteIds);
+    }
+
+    /**
+     * Builds the built-in delegation endpoint for a workflow that uses tasks (roadmap Phase 28
+     * slice 3): {@code POST {basePath}/{key}/delegate/{to}} reassigns the caller's open task to the
+     * delegate, who then sees it in their inbox. Only the current assignee may delegate.
+     */
+    private void buildWorkflowDelegate(RouteBuilder builder,
+            io.tesseraql.yaml.model.WorkflowDefinition def, String basePath,
+            java.util.Set<String> onlyRouteIds) {
+        boolean usesTasks = def.transitions().stream()
+                .anyMatch(t -> t.assign() != null && t.assign().file() != null);
+        if (!usesTasks) {
+            return;
+        }
+        String routeId = def.id() + ".delegate";
+        if (onlyRouteIds != null && !onlyRouteIds.contains(routeId)) {
+            return;
+        }
+        String direct = "direct:" + routeId;
+        String urlPath = basePath + "/{key}/delegate/{to}";
+        if (mountRest) {
+            restEndpoint(builder, "POST", urlPath).to(direct);
+        }
+        RouteDefinition definition = new RouteDefinition("tesseraql/v1", routeId, "route",
+                "command-json", java.util.Map.of(), null, def.security(), null, null, null, null,
+                java.util.Map.of(), java.util.Map.of(), java.util.Map.of(), java.util.Map.of(),
+                null,
+                null, null, null, null, null, workflowResponse());
+        ProcessorDefinition<?> route = builder.from(direct).routeId(routeId);
+        applySecurity(route, def.security());
+        applyTenancy(route);
+        route.process(new RequestBinder(definition, pathParams(urlPath)))
+                .process(new io.tesseraql.compiler.binding.WorkflowDelegateProcessor(def.id(),
+                        def.document().type(), DEFAULT_DATASOURCE))
+                .process(responseRenderer(definition));
+    }
+
+    /** The {@code within} deadline (ms) declared for a state, or {@code null} when it has none. */
+    private static Long deadlineMillis(io.tesseraql.yaml.model.WorkflowDefinition def,
+            String state) {
+        for (io.tesseraql.yaml.model.DeadlineSpec deadline : def.deadlines()) {
+            if (state != null && state.equals(deadline.state()) && deadline.within() != null
+                    && !deadline.within().isBlank()) {
+                return io.tesseraql.core.util.Durations.toMillis(deadline.within());
+            }
+        }
+        return null;
     }
 
     /**

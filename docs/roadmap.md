@@ -307,6 +307,16 @@ foundation delivered in Phase 29 (the two are duals over one org graph — see P
 [docs/data-scoping.md](data-scoping.md)); that foundation lands in Phase 29 and is consumed
 here unchanged, rather than introducing a second org model.
 
+Three slices, all delivered: (1) **workflow core** — the `kind: workflow` document, the transition
+engine (state check → guard → advance → command → history in one transaction, reusing the Phase 18
+processor), the `WorkflowStore` managed/app duality, the `TQL-WORKFLOW-31xx` lint, and the `workflow`
+coverage kind; (2) **assignee resolution + task inbox** — the `assign` contract opens deadline-bearing
+tasks in the managed `tql_workflow_task` inbox, with framework-enforced authority (a document with
+open tasks may only be transitioned by a holder, else `403`); (3) **deadlines, escalation, delegation**
+— a cluster-safe sweeper reassigns overdue tasks to their `onBreach.reassign` resolver exactly once,
+and a built-in `delegate` endpoint reassigns a task to a chosen delegate. **Phase 28 is complete**
+(the `onBreach.escalate` auto-transition and Phase 20 reminder notifications remain a refinement).
+
 ### Phase 29 — organizational data scoping
 
 Row-level/org-unit predicates derived from principal attributes (roles, groups, claims) as
