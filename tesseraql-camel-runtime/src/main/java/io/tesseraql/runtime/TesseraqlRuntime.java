@@ -741,33 +741,74 @@ public final class TesseraqlRuntime implements AutoCloseable {
     private static List<WorkflowSweeper.Rule> buildSweeperRules(
             io.tesseraql.yaml.manifest.AppManifest manifest, String dialect) {
         List<WorkflowSweeper.Rule> rules = new java.util.ArrayList<>();
+        boolean defaultManaged = io.tesseraql.yaml.workflow.WorkflowSettings.from(manifest.config())
+                .managed();
         for (io.tesseraql.yaml.manifest.WorkflowFile workflow : manifest.workflows()) {
-            String docType = workflow.definition().document() == null
-                    ? null
-                    : workflow.definition().document().type();
+            io.tesseraql.yaml.model.WorkflowDefinition def = workflow.definition();
+            if (def.document() == null) {
+                continue;
+            }
+            String docType = def.document().type();
             io.tesseraql.yaml.notify.NotifyEvents.CompiledNotify escalateNotify = escalateReminder(
-                    workflow.definition());
-            for (io.tesseraql.yaml.model.DeadlineSpec deadline : workflow.definition()
-                    .deadlines()) {
-                if (deadline.onBreach() == null || deadline.onBreach().reassign() == null
-                        || deadline.onBreach().reassign().isBlank()) {
+                    def);
+            String mode = def.mode() == null || def.mode().isBlank() ? null : def.mode();
+            boolean managed = mode == null ? defaultManaged : "managed".equalsIgnoreCase(mode);
+            java.nio.file.Path dir = workflow.source().getParent();
+            for (io.tesseraql.yaml.model.DeadlineSpec deadline : def.deadlines()) {
+                io.tesseraql.yaml.model.DeadlineSpec.OnBreachSpec onBreach = deadline.onBreach();
+                if (onBreach == null) {
                     continue;
                 }
-                java.nio.file.Path file = io.tesseraql.core.dialect.DialectSqlResolver.resolve(
-                        workflow.source().getParent().resolve(deadline.onBreach().reassign())
-                                .normalize(),
-                        dialect);
-                try {
-                    rules.add(new WorkflowSweeper.Rule(docType, deadline.state(),
-                            io.tesseraql.core.sql.Sql2WayParser
-                                    .parse(java.nio.file.Files.readString(file)),
-                            escalateNotify));
-                } catch (java.io.IOException ex) {
-                    throw new java.io.UncheckedIOException(ex);
+                // escalate (auto-transition) takes precedence over reassign when both are declared.
+                if (onBreach.escalate() != null && !onBreach.escalate().isBlank()) {
+                    WorkflowSweeper.Escalate escalate = escalateTransition(def, onBreach.escalate(),
+                            managed, dir, dialect);
+                    if (escalate != null) {
+                        rules.add(
+                                new WorkflowSweeper.Rule(docType, deadline.state(), null, escalate,
+                                        escalateNotify));
+                    }
+                } else if (onBreach.reassign() != null && !onBreach.reassign().isBlank()) {
+                    java.nio.file.Path file = io.tesseraql.core.dialect.DialectSqlResolver.resolve(
+                            dir.resolve(onBreach.reassign()).normalize(), dialect);
+                    try {
+                        rules.add(new WorkflowSweeper.Rule(docType, deadline.state(),
+                                io.tesseraql.core.sql.Sql2WayParser
+                                        .parse(java.nio.file.Files.readString(file)),
+                                null, escalateNotify));
+                    } catch (java.io.IOException ex) {
+                        throw new java.io.UncheckedIOException(ex);
+                    }
                 }
             }
         }
         return rules;
+    }
+
+    /** Resolves the named {@code onBreach.escalate} transition into a sweeper escalate rule. */
+    private static WorkflowSweeper.Escalate escalateTransition(
+            io.tesseraql.yaml.model.WorkflowDefinition def, String transitionId, boolean managed,
+            java.nio.file.Path dir, String dialect) {
+        for (io.tesseraql.yaml.model.TransitionSpec transition : def.transitions()) {
+            if (!transitionId.equals(transition.id())) {
+                continue;
+            }
+            List<io.tesseraql.core.sql.SqlNode> commandNodes = null;
+            if (transition.command() != null) {
+                java.nio.file.Path file = io.tesseraql.core.dialect.DialectSqlResolver.resolve(
+                        dir.resolve(transition.command()).normalize(), dialect);
+                try {
+                    commandNodes = io.tesseraql.core.sql.Sql2WayParser
+                            .parse(java.nio.file.Files.readString(file));
+                } catch (java.io.IOException ex) {
+                    throw new java.io.UncheckedIOException(ex);
+                }
+            }
+            return new WorkflowSweeper.Escalate(transition.id(), transition.to(), commandNodes,
+                    managed, def.document().table(), def.document().stateColumn(),
+                    def.document().key());
+        }
+        return null;
     }
 
     /** The compiled escalation reminder (Phase 20 channels), or {@code null} when undeclared. */

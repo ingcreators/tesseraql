@@ -824,10 +824,12 @@ public final class AppLinter {
         }
 
         Set<String> transitionIds = new LinkedHashSet<>();
+        Map<String, String> transitionFrom = new LinkedHashMap<>();
         Map<String, List<String>> outgoing = new LinkedHashMap<>();
         for (TransitionSpec t : def.transitions()) {
             if (t.id() != null) {
                 transitionIds.add(t.id());
+                transitionFrom.put(t.id(), t.from());
             }
             String where = "workflow '" + id + "' transition '" + t.id() + "'";
             if (t.from() == null || !states.contains(t.from())) {
@@ -884,10 +886,21 @@ public final class AppLinter {
             }
             DeadlineSpec.OnBreachSpec onBreach = deadline.onBreach();
             if (onBreach != null) {
-                if (onBreach.escalate() != null && !transitionIds.contains(onBreach.escalate())) {
-                    findings.add(new LintFinding("TQL-WORKFLOW-3104", "error", source,
-                            where + " escalate '" + onBreach.escalate()
-                                    + "' is not a declared transition"));
+                if (onBreach.escalate() != null && !onBreach.escalate().isBlank()) {
+                    if (!transitionIds.contains(onBreach.escalate())) {
+                        findings.add(new LintFinding("TQL-WORKFLOW-3104", "error", source,
+                                where + " escalate '" + onBreach.escalate()
+                                        + "' is not a declared transition"));
+                    } else if (!java.util.Objects.equals(transitionFrom.get(onBreach.escalate()),
+                            deadline.state())) {
+                        // The sweeper auto-fires it from the deadline's state, so it could never
+                        // advance from a different from-state.
+                        findings.add(new LintFinding("TQL-WORKFLOW-3107", "error", source,
+                                where + " escalate '" + onBreach.escalate()
+                                        + "' starts from '"
+                                        + transitionFrom.get(onBreach.escalate())
+                                        + "', not the deadline's state"));
+                    }
                 }
                 if (onBreach.reassign() != null
                         && !Files.isRegularFile(dir.resolve(onBreach.reassign()))) {

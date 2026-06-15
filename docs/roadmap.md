@@ -313,10 +313,10 @@ processor), the `WorkflowStore` managed/app duality, the `TQL-WORKFLOW-31xx` lin
 coverage kind; (2) **assignee resolution + task inbox** — the `assign` contract opens deadline-bearing
 tasks in the managed `tql_workflow_task` inbox, with framework-enforced authority (a document with
 open tasks may only be transitioned by a holder, else `403`); (3) **deadlines, escalation, delegation**
-— a cluster-safe sweeper reassigns overdue tasks to their `onBreach.reassign` resolver exactly once, a
-built-in `delegate` endpoint reassigns a task to a chosen delegate, and a workflow `notify:` block
-enqueues assignment/escalation reminders on the Phase 20 channels. **Phase 28 is complete** (the
-`onBreach.escalate` auto-transition remains a refinement).
+— a cluster-safe sweeper applies each breach's `onBreach` exactly once (`reassign` to a fallback
+resolver, or `escalate` to auto-fire the named transition as the system), a built-in `delegate`
+endpoint reassigns a task to a chosen delegate, and a workflow `notify:` block enqueues
+assignment/escalation reminders on the Phase 20 channels. **Phase 28 is complete.**
 
 ### Phase 29 — organizational data scoping
 

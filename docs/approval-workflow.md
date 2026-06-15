@@ -3,10 +3,10 @@
 > **Status: delivered (roadmap Phase 28, Horizon 4 — all three slices ship).** The workflow core
 > (slice 1), assignee resolution + task inbox (slice 2), and deadlines + escalation + delegation
 > (slice 3) are implemented. It resolves roadmap decision point 2 in favour of a native SQL-contract
-> state machine (see [Decision](#decision-native-sql-contract-state-machine)). One refinement remains
-> design: `onBreach.escalate` (auto-firing a transition on breach) — the phase ships the reassign-based
-> escalation (`onBreach.reassign`) the cluster-safe sweeper applies exactly once, plus `notify:`
-> reminders on assignment and escalation over the Phase 20 channels.
+> state machine (see [Decision](#decision-native-sql-contract-state-machine)). On a deadline breach the
+> cluster-safe sweeper either reassigns the overdue task (`onBreach.reassign`) or auto-fires a
+> transition as the system (`onBreach.escalate`), exactly once; assignment and escalation each send a
+> `notify:` reminder over the Phase 20 channels.
 
 An approval workflow drives a **business document** — a purchase request, an expense claim, a leave
 application — through a sequence of states by way of human decisions: submit, approve, reject, return
@@ -262,16 +262,26 @@ server-side.
 A workflow declares deadlines per state; the opened task carries a `due_at` set from the `to` state's
 `within` (e.g. `within: 48h`). A managed **sweeper** — a fixed-delay timer route claimed cluster-safe
 through `tql_job_claim` (`JobRepository.tryClaimFiring`, the same machinery scheduled jobs use, at the
-`tesseraql.workflow.sweep.interval`, default 60s) — calls `WorkflowTaskStore.overdue(...)` and, for
-each breach, **reassigns** the overdue task to the fallback resolver named by `onBreach.reassign` (a
-2-way SQL `SELECT` returning the new assignee), clearing the task's `due_at` so it escalates **exactly
-once** even across nodes, and recording an `escalate` history row (actor `system`):
+`tesseraql.workflow.sweep.interval`, default 60s) — calls `WorkflowTaskStore.overdue(...)` and applies
+each breached state's `onBreach`, **exactly once** even across nodes:
+
+- **`reassign`** — reassigns the overdue task to the fallback resolver named by the SQL contract (a
+  2-way SQL `SELECT` returning the new assignee), clearing the task's `due_at` and recording an
+  `escalate` history row (actor `system`); or
+- **`escalate`** — auto-fires the named transition **as the system**: it advances the document from
+  the deadline's state, runs the transition's command (with `/* key */` and `/* audit.* */` binds, so
+  `audit.user` is `system`), completes the open tasks (so it cannot re-fire), and records a history
+  row under the transition id. The lint (`TQL-WORKFLOW-3107`) checks the named transition starts from
+  the deadline's state. `escalate` takes precedence when both are declared.
 
 ```yaml
 deadlines:
   - state: submitted
     within: 48h
-    onBreach: { reassign: dept_head.sql }   # the sweeper reassigns an overdue task to this resolver
+    onBreach: { reassign: dept_head.sql }   # reassign an overdue task to this resolver…
+  - state: review
+    within: 72h
+    onBreach: { escalate: auto_approve }    # …or auto-fire this transition as the system
 ```
 
 **Delegation** is a built-in operation, not a transition (it changes no state): the current assignee
@@ -291,9 +301,6 @@ notify:
   assigned:  { channel: task-mail, payload: { to: assignee, doc: document.id } }
   escalated: { channel: task-mail, payload: { to: assignee, doc: docId } }
 ```
-
-> **Design refinement, not yet shipped:** `onBreach.escalate` — auto-firing a declared transition on
-> breach (recording the workflow itself as actor), as opposed to the reassign-based escalation above.
 
 ## Audit trail
 
@@ -370,16 +377,17 @@ Phase 28 ships in slices, each a reviewable PR with CI green, mirroring how Phas
      task completes; a non-assignee's transition is denied (403); all testable end to end.
 3. **Deadlines, escalation, and delegation** (delivered) — per-state deadlines set the opened task's
    `due_at`; the cluster-safe sweeper (`tql_job_claim` claim, `tesseraql.workflow.sweep.interval`)
-   reassigns each overdue task to its `onBreach.reassign` resolver, clearing `due_at` so it escalates
-   exactly once and recording an `escalate` history row; delegation is a built-in
-   `POST {basePath}/{key}/delegate/{to}` that reassigns the open task to a chosen delegate; and a
-   workflow `notify:` block enqueues `assigned`/`escalated` reminder notifications on the Phase 20
-   outbox channels, in the same transaction as the task change. The `onBreach.escalate` auto-transition
-   remains a design refinement.
-   - *Acceptance (met):* an overdue task escalates exactly once (a second sweep is a no-op); a
-     delegated task moves to the delegate, who can then act and the original assignee cannot;
-     assignment and escalation each enqueue a `NOTIFICATION` outbox event; the history records every
-     transition and escalation. All covered by the Testcontainers IT.
+   applies each breach's `onBreach` exactly once — `reassign` (a fallback resolver, clearing `due_at`)
+   or `escalate` (auto-firing the named transition as the system: advance, command, complete tasks,
+   history) — recording a history row; delegation is a built-in `POST {basePath}/{key}/delegate/{to}`
+   that reassigns the open task to a chosen delegate; and a workflow `notify:` block enqueues
+   `assigned`/`escalated` reminder notifications on the Phase 20 outbox channels, in the same
+   transaction as the task change.
+   - *Acceptance (met):* an overdue task escalates exactly once (a second sweep is a no-op) by reassign
+     or by auto-firing the transition as `system`; a delegated task moves to the delegate, who can then
+     act and the original assignee cannot; assignment and escalation each enqueue a `NOTIFICATION`
+     outbox event; the history records every transition and escalation. All covered by the
+     Testcontainers IT.
 
 Each slice ships its cookbook entry here and keeps the example gallery green; the worked example is a
 purchase-request approval application built only with YAML, 2-way SQL, and templates.
