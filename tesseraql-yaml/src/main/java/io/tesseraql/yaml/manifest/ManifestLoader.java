@@ -384,9 +384,15 @@ public final class ManifestLoader {
 
     private ManifestIndex buildIndex(Path home) {
         Map<String, String> checksums = new TreeMap<>();
+        // The index tracks source files only: skip the runtime scratch dir and the reserved
+        // .tesseraql dir a packaged app carries build-generated artifacts in (e.g. docs/spec.json),
+        // which are derived from the source and would otherwise make the index self-referential.
+        Path work = home.resolve("work");
+        Path generated = home.resolve(".tesseraql");
         try (Stream<Path> files = Files.walk(home)) {
             files.filter(Files::isRegularFile)
-                    .filter(p -> !p.normalize().startsWith(home.resolve("work")))
+                    .filter(p -> !p.normalize().startsWith(work))
+                    .filter(p -> !p.normalize().startsWith(generated))
                     .forEach(file -> checksums.put(relativeKey(home, file), sha256(file)));
         } catch (IOException ex) {
             throw new UncheckedIOException(ex);

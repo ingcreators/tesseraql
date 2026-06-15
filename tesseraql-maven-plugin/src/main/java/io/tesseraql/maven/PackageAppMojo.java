@@ -19,6 +19,10 @@ public class PackageAppMojo extends AbstractMojo {
     @Parameter(property = "tesseraql.appHome", required = true)
     private File appHome;
 
+    /** The build's generated-artifact directory; its {@code docs/} are merged into the package. */
+    @Parameter(property = "tesseraql.generatedDir", defaultValue = "${project.build.directory}/tesseraql-generated")
+    private File generatedDir;
+
     /** The output archive path. */
     @Parameter(property = "tesseraql.output", defaultValue = "${project.build.directory}/${project.artifactId}-${project.version}.tqlapp")
     private File output;
@@ -26,7 +30,8 @@ public class PackageAppMojo extends AbstractMojo {
     @Override
     public void execute() throws MojoExecutionException {
         try {
-            new AppPackager().pack(appHome.toPath(), output.toPath());
+            new AppPackager().pack(appHome.toPath(),
+                    new File(generatedDir, "docs").toPath(), output.toPath());
             // The sibling checksum lets installs verify package integrity (design ch. 49, 50).
             String sha256 = io.tesseraql.core.util.Hashing.sha256(output.toPath());
             java.nio.file.Files.writeString(

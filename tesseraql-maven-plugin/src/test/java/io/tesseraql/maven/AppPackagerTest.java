@@ -36,6 +36,41 @@ class AppPackagerTest {
         assertThat(Files.readAllBytes(out)).isEqualTo(Files.readAllBytes(out2));
     }
 
+    @Test
+    void mergesGeneratedDocsUnderTheReservedPrefix(@TempDir Path dir) throws Exception {
+        Path appHome = dir.resolve("app");
+        Files.createDirectories(appHome.resolve("config"));
+        Files.writeString(appHome.resolve("config/tesseraql.yml"),
+                "tesseraql:\n  app:\n    name: t\n");
+        Path generatedDocs = dir.resolve("target/tesseraql-generated/docs");
+        Files.createDirectories(generatedDocs);
+        Files.writeString(generatedDocs.resolve("spec.json"), "{\"routes\":[]}\n");
+
+        Path out = dir.resolve("app.tqlapp");
+        new AppPackager().pack(appHome, generatedDocs, out);
+
+        assertThat(entries(out)).contains("config/tesseraql.yml", ".tesseraql/docs/spec.json");
+
+        // Deterministic with the merged docs too.
+        Path out2 = dir.resolve("app2.tqlapp");
+        new AppPackager().pack(appHome, generatedDocs, out2);
+        assertThat(Files.readAllBytes(out)).isEqualTo(Files.readAllBytes(out2));
+    }
+
+    @Test
+    void packsWithoutGeneratedDocsWhenTheDirectoryIsAbsent(@TempDir Path dir) throws Exception {
+        Path appHome = dir.resolve("app");
+        Files.createDirectories(appHome.resolve("config"));
+        Files.writeString(appHome.resolve("config/tesseraql.yml"),
+                "tesseraql:\n  app:\n    name: t\n");
+
+        Path out = dir.resolve("app.tqlapp");
+        new AppPackager().pack(appHome, dir.resolve("does-not-exist"), out);
+
+        assertThat(entries(out)).contains("config/tesseraql.yml")
+                .noneMatch(name -> name.startsWith(".tesseraql/"));
+    }
+
     private static List<String> entries(Path zip) throws Exception {
         List<String> names = new ArrayList<>();
         try (ZipInputStream in = new ZipInputStream(Files.newInputStream(zip))) {
