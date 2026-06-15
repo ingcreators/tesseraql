@@ -83,6 +83,7 @@ public final class AppLinter {
         lintWorkflows(appHome, manifest, findings);
         lintWorkflowConfig(manifest.config(), findings);
         lintAttachments(appHome, manifest, findings);
+        lintObjectStorageEgress(appHome, manifest, findings);
         return findings;
     }
 
@@ -701,6 +702,44 @@ public final class AppLinter {
     private void lintAttachments(Path appHome, AppManifest manifest, List<LintFinding> findings) {
         for (io.tesseraql.yaml.manifest.AttachmentFile attachment : manifest.attachments()) {
             lintAttachmentDefinition(appHome, attachment, findings);
+        }
+    }
+
+    /**
+     * Object-storage egress (roadmap Phase 30 slice 2): when {@code provider: s3}, every attachment's
+     * resolved bucket must be in {@code tesseraql.object-storage.allowedBuckets} (deny-by-default,
+     * mirroring the HTTP/poll egress allow-lists). The {@code file} provider needs no allow-list.
+     */
+    private void lintObjectStorageEgress(Path appHome, AppManifest manifest,
+            List<LintFinding> findings) {
+        io.tesseraql.yaml.config.AppConfig config = manifest.config();
+        String provider = config.getString("tesseraql.object-storage.provider").orElse("file");
+        if (!"s3".equalsIgnoreCase(provider)) {
+            return;
+        }
+        Set<String> allowed = new HashSet<>();
+        if (config
+                .navigate("tesseraql.object-storage.allowedBuckets") instanceof List<?> declared) {
+            declared.forEach(value -> allowed.add(String.valueOf(value)));
+        }
+        for (io.tesseraql.yaml.manifest.AttachmentFile attachment : manifest.attachments()) {
+            io.tesseraql.yaml.model.AttachmentDefinition def = attachment.definition();
+            String source = relative(appHome, attachment.source());
+            String logical = def.bucket();
+            if (logical == null || logical.isBlank()) {
+                findings.add(new LintFinding("TQL-SEC-4110", "error", source, "attachment '"
+                        + def.id()
+                        + "' must declare a bucket when tesseraql.object-storage.provider"
+                        + " is s3"));
+                continue;
+            }
+            String real = config.getString(
+                    "tesseraql.object-storage.buckets." + logical + ".bucket").orElse(logical);
+            if (!allowed.contains(real)) {
+                findings.add(new LintFinding("TQL-SEC-4110", "error", source, "attachment '"
+                        + def.id() + "' targets bucket '" + real + "' which is not in "
+                        + "tesseraql.object-storage.allowedBuckets (deny by default)"));
+            }
         }
     }
 

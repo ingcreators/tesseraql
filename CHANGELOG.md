@@ -26,6 +26,20 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Runtime and recipes
 
+- Attachments and object storage — S3 and S3-compatible storage (roadmap Phase 30 slice 2, see
+  [docs/attachments.md](docs/attachments.md)): a new opt-in `tesseraql-s3` leaf module ships an
+  `S3BlobStore` on AWS SDK for Java v2 (Apache-2.0, confined to the module), contributed by a
+  `BlobStoreProvider` discovered via `ServiceLoader` (the PdfEngine idiom) and selected by
+  `tesseraql.object-storage.provider: s3` — so an app moves blobs from local disk to S3 by config
+  alone, no DSL change. One module covers AWS S3 and every compatible store (Cloudflare R2, Ceph,
+  Backblaze B2) via `endpoint`/`region`/`pathStyle`/`checksumMode` (`when-required` restores
+  compatibility with stores that reject the SDK's default request checksums). Egress is
+  deny-by-default: a bucket outside `tesseraql.object-storage.allowedBuckets` is refused at runtime
+  and flagged by lint `TQL-SEC-4110`; credentials resolve lazily through the SecretResolvers
+  (`${secret.*}`), never logged. Uploads buffer off-heap to a temp file (SHA-256 computed while
+  writing) then stream to S3 in one `putObject`; `presignGet` issues a short-lived URL. Verified
+  against Adobe S3Mock over Testcontainers (MinIO is not used — its server is AGPLv3; roadmap
+  decision point 6). The scan-hook and retention remain slice 3.
 - Attachments and object storage — attachment core (roadmap Phase 30 slice 1, see
   [docs/attachments.md](docs/attachments.md)): a `kind: attachment` document under `attachments/`
   binds uploaded files to an owning business record and synthesizes three HTTP routes — an off-heap
