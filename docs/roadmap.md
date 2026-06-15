@@ -351,9 +351,38 @@ directive naming an undeclared scope.
 
 ### Phase 30 — attachments and object storage
 
-An S3-compatible `TempStore`/blob implementation behind the existing SPI; a record-attachment
-pattern (metadata table + the file-transfer machinery); a scan-hook SPI; retention wired to
-the ch. 44 backup/retention machinery.
+Business records carry files (an invoice PDF, a scanned form, a product image) stored as durable
+objects outside the database and addressed from SQL. The full design is in
+[docs/attachments.md](attachments.md); in summary:
+
+- A durable **`BlobStore`** SPI (`tesseraql-core`, `io.tesseraql.core.blob`), a sibling of the
+  ephemeral `TempStore` rather than a replacement for it — attachments are durable and
+  retention-governed where spool is create-read-delete, so conflating the two would push spool
+  traffic into object storage. The streaming primitives (off-heap write, checksum-as-you-stream) are
+  reused; the store is not. `FileBlobStore` is the dependency-free local default.
+- A **record-attachment recipe** — a `kind: attachment` document under `attachments/` synthesizes an
+  off-heap upload `POST` and a download `GET`, with metadata in the managed/app duality
+  (`AttachmentStore` SPI, managed `tql_attachment` or app-owned tables). The SQL-first payoff:
+  download authorization is the metadata `SELECT` under the route's `policy:` and the Phase 29
+  `/*%scope ... */` directive — no second access-control path. The non-transactional blob write is
+  reconciled by orphan GC, the same "commit the record, reconcile the side effect" discipline as the
+  Phase 26 `http-call` and Phase 27 outbox.
+- An opt-in **`tesseraql-s3` leaf module** — `S3BlobStore` on AWS SDK for Java v2 (Apache-2.0,
+  confined to the module like `tesseraql-pdf`'s engine), self-installing via `RuntimeExtension` when
+  `provider: s3`. One module covers AWS and every S3-compatible store (R2, Ceph, B2) via
+  `endpoint`/`region`/`pathStyle`/`checksumMode`; switching `provider` is the whole change. Egress is
+  deny-by-default (`tesseraql.object-storage.allowedBuckets`), credentials ride the SecretResolver.
+- A **scan-hook SPI** (`AttachmentScanner`, ServiceLoader, no-op default) gating downloads on a clean
+  scan, and **retention** wired to the ch. 44 `RetentionSweeper` (orphan GC plus an optional age
+  policy) — driven by the sweep rather than provider lifecycle rules, which vary across compatible
+  stores.
+
+Three slices, all planned: (1) **attachment core** — the `BlobStore`/`FileBlobStore` SPI, the
+`kind: attachment` recipe and metadata duality, the `TQL-YAML-12xx` lint, and the `attachment`
+coverage kind, on local storage alone; (2) **`tesseraql-s3`** — the S3/S3-compatible implementation
+with deny-by-default egress and Adobe S3Mock compatibility ITs; (3) **scanning and retention**,
+completing the phase. Machine-checkable throughout: lint (`TQL-YAML-12xx`, `TQL-SEC-411x`, next free
+in each family) and an `attachment` coverage kind.
 
 ### Phase 31 — search
 
@@ -449,3 +478,11 @@ None block Phase 18; flagged for the maintainer as their horizons approach.
    application-declared MCP endpoints from YAML (the Phase 24 "next step"). Deeper
    Studio-copilot features only if the MCP loop proves valuable.
 5. **Spring 7 / Boot 4 timing**: proposed alongside Horizon 5, before the 1.0 freeze.
+6. **Object-store client and test fixture** (Phase 30): the S3 client is AWS SDK for Java v2
+   (Apache-2.0), confined to the opt-in `tesseraql-s3` leaf module — one module covers AWS and all
+   S3-compatible stores; a JDK-only SigV4 alternative (in the spirit of the JDK-only OIDC/mTLS) stays
+   available behind the `BlobStore` SPI. MinIO is **not** adopted, even as a test fixture: the MinIO
+   server is AGPLv3 and its community edition has entered maintenance mode (admin UI removed in
+   2025), so — though a separate-process test container would not propagate AGPL — the
+   compatibility ITs use Adobe S3Mock (Apache-2.0), keeping the supply chain permissive. See
+   [docs/attachments.md](attachments.md).
