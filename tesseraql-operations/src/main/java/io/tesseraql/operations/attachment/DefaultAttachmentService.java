@@ -9,6 +9,9 @@ import io.tesseraql.core.blob.BlobWriter;
 import io.tesseraql.core.error.TqlDomain;
 import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
+import io.tesseraql.core.scan.AttachmentScanner;
+import io.tesseraql.core.scan.NoopAttachmentScanner;
+import io.tesseraql.core.scan.ScanVerdict;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.UncheckedIOException;
@@ -18,10 +21,11 @@ import java.util.Optional;
 
 /**
  * Default {@link AttachmentService}: streams uploads off-heap into a {@link BlobStore} (computing
- * size and SHA-256 as it copies), enforces the size limit, then records metadata through an
- * {@link AttachmentStore}; downloads load the metadata (owner-scoped) and stream the blob back. The
- * blob write is not transactional — an upload that fails after the blob is written leaves an orphan
- * the retention sweep reclaims (roadmap Phase 30 slice 3).
+ * size and SHA-256 as it copies), enforces the size limit, scans the stored object, then records
+ * metadata through an {@link AttachmentStore}; downloads load the metadata (owner-scoped), refuse a
+ * non-clean object, and stream the blob back. The blob write is not transactional — an upload that
+ * fails after the blob is written leaves an orphan the retention sweep reclaims (roadmap Phase 30
+ * slice 3).
  */
 public final class DefaultAttachmentService implements AttachmentService {
 
@@ -29,15 +33,31 @@ public final class DefaultAttachmentService implements AttachmentService {
     private static final TqlErrorCode EMPTY_UPLOAD = new TqlErrorCode(TqlDomain.LD, 2841);
     /** TQL-LD-2843: the upload exceeded the declared size limit. */
     private static final TqlErrorCode TOO_LARGE = new TqlErrorCode(TqlDomain.LD, 2843);
+    /** TQL-LD-2847: the scanner could not reach a verdict (fail-closed). */
+    private static final TqlErrorCode SCAN_FAILED = new TqlErrorCode(TqlDomain.LD, 2847);
+    /** TQL-LD-2848: a download of an object that did not pass scanning. */
+    private static final TqlErrorCode INFECTED_DOWNLOAD = new TqlErrorCode(TqlDomain.LD, 2848);
 
     private static final int BUFFER = 64 * 1024;
+    private static final String CLEAN = "clean";
+    private static final String INFECTED = "infected";
 
     private final BlobStore blobStore;
     private final AttachmentStore store;
+    private final AttachmentScanner scanner;
+    private final boolean deleteInfected;
 
+    /** Slice-1 constructor: the no-op scanner, quarantine policy. */
     public DefaultAttachmentService(BlobStore blobStore, AttachmentStore store) {
+        this(blobStore, store, new NoopAttachmentScanner(), "quarantine");
+    }
+
+    public DefaultAttachmentService(BlobStore blobStore, AttachmentStore store,
+            AttachmentScanner scanner, String onInfected) {
         this.blobStore = blobStore;
         this.store = store;
+        this.scanner = scanner;
+        this.deleteInfected = "delete".equalsIgnoreCase(onInfected);
     }
 
     @Override
@@ -47,16 +67,40 @@ public final class DefaultAttachmentService implements AttachmentService {
             safeDelete(ref);
             throw new TqlException(EMPTY_UPLOAD, "attachment upload carried no content");
         }
+        String scanStatus = scan(ref);
         try {
             return store.insert(new AttachmentStore.NewAttachment(request.entity(),
                     request.entityId(), request.filename(), request.contentType(), ref.byteSize(),
-                    ref.checksum(), ref.key(), request.createdBy()));
+                    ref.checksum(), ref.key(), scanStatus, request.createdBy()));
         } catch (RuntimeException ex) {
             // The metadata write failed: best-effort reclaim the orphan blob now (the retention
             // sweep is the durable backstop) and surface the failure.
             safeDelete(ref);
             throw ex;
         }
+    }
+
+    /**
+     * Scans the stored object and returns the {@code scan_status} to record. An infected object is
+     * quarantined (kept) or deleted per the policy, but is always recorded {@code infected} so the
+     * download gate refuses it; a scanner error fails the upload closed.
+     */
+    private String scan(BlobRef ref) {
+        ScanVerdict verdict = scanner.scan(ref, () -> blobStore.openInput(ref));
+        return switch (verdict.status()) {
+            case CLEAN -> CLEAN;
+            case INFECTED -> {
+                if (deleteInfected) {
+                    safeDelete(ref);
+                }
+                yield INFECTED;
+            }
+            case ERROR -> {
+                safeDelete(ref);
+                throw new TqlException(SCAN_FAILED,
+                        "attachment scan could not complete: " + verdict.detail());
+            }
+        };
     }
 
     private BlobRef spool(StoreRequest request, InputStream content) {
@@ -104,6 +148,11 @@ public final class DefaultAttachmentService implements AttachmentService {
         if (!a.entity().equals(entity) || !a.entityId().equals(entityId)) {
             // Owned by a different record: do not leak its existence across records.
             return Optional.empty();
+        }
+        if (!CLEAN.equalsIgnoreCase(a.scanStatus())) {
+            // Never serve an object that did not pass scanning (infected or quarantined).
+            throw new TqlException(INFECTED_DOWNLOAD,
+                    "attachment " + a.id() + " did not pass malware scanning");
         }
         BlobRef ref = new BlobRef(a.storageKey(), a.contentType(), a.byteSize(), a.checksum(),
                 a.createdAt());

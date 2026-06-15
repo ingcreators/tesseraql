@@ -336,9 +336,16 @@ public final class TesseraqlRuntime implements AutoCloseable {
                     dataSource);
             attachmentStore.ensureSchema();
             context.getRegistry().bind(TesseraqlProperties.ATTACHMENT_STORE_BEAN, attachmentStore);
+            // Malware scanning (roadmap Phase 30 slice 3): the installed AttachmentScanner (the
+            // no-op default unless a scanner module is on the classpath) runs on upload; an infected
+            // object is quarantined or deleted per tesseraql.attachments.scan.onInfected and is never
+            // served (the download gate refuses a non-clean object).
+            String onInfected = io.tesseraql.yaml.attachment.AttachmentSettings
+                    .from(manifest.config()).onInfected();
             context.getRegistry().bind(TesseraqlProperties.ATTACHMENT_SERVICE_BEAN,
                     new io.tesseraql.operations.attachment.DefaultAttachmentService(blobStore,
-                            attachmentStore));
+                            attachmentStore, io.tesseraql.core.scan.AttachmentScanners.discover(),
+                            onInfected));
         }
         JobExecutor jobExecutor = new JobExecutor(jobRepository, tempStore, slowSqlLog, tracer)
                 .notificationOutbox(outboxStore)
@@ -681,18 +688,31 @@ public final class TesseraqlRuntime implements AutoCloseable {
                             return Map.of("applied", path);
                         });
             }
-            // Retention (design ch. 44): enabled by configuring the sweep interval.
+            // Retention (design ch. 44): enabled by configuring the sweep interval. When
+            // tesseraql.retention.attachments is set and the managed attachment store is bound, the
+            // sweep also reclaims aged attachment rows and their blobs (roadmap Phase 30 slice 3).
             var retentionSweep = manifest.config().getString("tesseraql.retention.sweep");
             if (retentionSweep.isPresent()) {
+                io.tesseraql.core.attachment.AttachmentStore attachmentStore = context.getRegistry()
+                        .lookupByNameAndType(TesseraqlProperties.ATTACHMENT_STORE_BEAN,
+                                io.tesseraql.core.attachment.AttachmentStore.class);
+                io.tesseraql.core.blob.BlobStore blobStore = context.getRegistry()
+                        .lookupByNameAndType(TesseraqlProperties.BLOB_STORE_BEAN,
+                                io.tesseraql.core.blob.BlobStore.class);
+                java.time.Duration attachmentRetention = manifest.config()
+                        .getString("tesseraql.retention.attachments")
+                        .map(io.tesseraql.core.util.Durations::parse).orElse(null);
                 context.addRoutes(new RetentionRouteBuilder(
-                        new io.tesseraql.operations.retention.RetentionSweeper(dataSource),
+                        new io.tesseraql.operations.retention.RetentionSweeper(dataSource,
+                                attachmentStore, blobStore),
                         io.tesseraql.core.util.Durations.toMillis(retentionSweep.get()),
                         io.tesseraql.core.util.Durations.parse(
                                 manifest.config().getString("tesseraql.retention.outbox")
                                         .orElse("30d")),
                         io.tesseraql.core.util.Durations.parse(
                                 manifest.config().getString("tesseraql.retention.jobs")
-                                        .orElse("90d"))));
+                                        .orElse("90d")),
+                        attachmentRetention));
             }
             var outboxDelay = manifest.config().getString("tesseraql.outbox.dispatch.fixedDelay");
             if (outboxDelay.isPresent()) {

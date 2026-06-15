@@ -244,6 +244,8 @@ public final class ErrorResponseRenderer implements Processor {
                 case 2842 -> 415; // attachment content type not allowed
                 case 2843 -> 413; // attachment exceeds the declared size limit
                 case 2844 -> 404; // unknown attachment
+                case 2847 -> 503; // attachment scan could not complete (fail-closed, Phase 30 s3)
+                case 2848 -> 409; // download of an object that did not pass scanning
                 default -> 500;
             };
             case IAM -> code.number() == 4030 ? 403 : 500;

@@ -51,7 +51,9 @@ public final class JdbcAttachmentStore implements AttachmentStore {
     public Attachment insert(NewAttachment a) {
         String id = UUID.randomUUID().toString();
         Instant createdAt = Instant.now();
-        String scanStatus = "clean";
+        String scanStatus = a.scanStatus() == null || a.scanStatus().isBlank()
+                ? "clean"
+                : a.scanStatus();
         try (Connection cx = dataSource.getConnection();
                 PreparedStatement ps = cx.prepareStatement("insert into tql_attachment (" + COLUMNS
                         + ") values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")) {
@@ -106,6 +108,30 @@ public final class JdbcAttachmentStore implements AttachmentStore {
             throw error("Failed to list attachments", ex);
         }
         return result;
+    }
+
+    @Override
+    public List<String> deleteOlderThan(Instant cutoff) {
+        List<String> storageKeys = new ArrayList<>();
+        try (Connection cx = dataSource.getConnection()) {
+            try (PreparedStatement select = cx.prepareStatement(
+                    "select storage_key from tql_attachment where created_at < ?")) {
+                select.setTimestamp(1, Timestamp.from(cutoff));
+                try (ResultSet rs = select.executeQuery()) {
+                    while (rs.next()) {
+                        storageKeys.add(rs.getString("storage_key"));
+                    }
+                }
+            }
+            try (PreparedStatement delete = cx.prepareStatement(
+                    "delete from tql_attachment where created_at < ?")) {
+                delete.setTimestamp(1, Timestamp.from(cutoff));
+                delete.executeUpdate();
+            }
+        } catch (SQLException ex) {
+            throw error("Failed to delete aged attachments", ex);
+        }
+        return storageKeys;
     }
 
     private static Attachment map(ResultSet rs) throws SQLException {

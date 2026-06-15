@@ -1,10 +1,11 @@
 # Attachments and object storage
 
-> **Status: slices 1–2 delivered (roadmap Phase 30); slice 3 planned.** Delivered: attachment core
-> on a durable `BlobStore` with a local default (slice 1); the opt-in `tesseraql-s3` leaf module for
-> S3 and S3-compatible stores (slice 2). Planned: the scan-hook SPI and retention wiring that
-> complete the phase (slice 3). The app-mode 2-way SQL metadata and the `attachment` coverage kind
-> are slice-1 follow-ups.
+> **Status: Phase 30 complete (roadmap) — slices 1–3 delivered.** Delivered: attachment core on a
+> durable `BlobStore` with a local default (slice 1); the opt-in `tesseraql-s3` leaf module for S3
+> and S3-compatible stores (slice 2); the scan-hook SPI (synchronous scan, download gated on clean)
+> and age-based retention (slice 3). Remaining refinements (not blocking the phase): app-mode 2-way
+> SQL metadata, the `attachment` coverage kind, and orphan-GC (needs a `BlobStore` listing
+> capability). This completes the attachments leg of **Milestone M9**.
 
 Attachments let a business record carry files — an invoice PDF, a scanned form, a product image —
 stored as durable objects outside the database and addressed from SQL. The phase adds three things:
@@ -216,37 +217,40 @@ Object storage is **egress**, so it is deny-by-default like outbound HTTP and po
 
 ### Scanning
 
-A **scan-hook SPI**, `AttachmentScanner` (`tesseraql-core`, ServiceLoader-discovered), is the seam
-for ClamAV or a cloud malware-scan service. The default is a no-op that marks uploads `clean`.
+A **scan-hook SPI**, `AttachmentScanner` (`tesseraql-core` `io.tesseraql.core.scan`,
+ServiceLoader-discovered via `AttachmentScanners.discover()`), is the seam for ClamAV or a cloud
+malware-scan service. The default is a no-op that reports `clean` without reading the bytes, so an
+app enables real scanning by adding a scanner module — no config flag.
 
 ```java
 package io.tesseraql.core.scan;
 
 public interface AttachmentScanner {
     String id();
-    ScanResult scan(BlobRef ref, InputStream content);   // CLEAN | INFECTED(reason) | ERROR
+    ScanVerdict scan(BlobRef ref, ContentSource content);   // CLEAN | INFECTED | ERROR
 }
 ```
 
-When scanning is enabled, an upload's metadata is written `scan_status = pending`; an async sweep
-(riding the existing transfer/operations path) scans and flips it to `clean` or `infected`. A
-document with `scan: require-clean` refuses to serve anything not `clean` (slice 3 default behavior),
-and an `infected` blob is quarantined (`tesseraql.attachments.scan.onInfected: quarantine | delete`).
+Scanning is **synchronous on upload**: the scanner runs on the stored object (the content is supplied
+lazily, so the no-op default never opens the blob), and the verdict is recorded as `scan_status`. A
+`CLEAN` object is served normally; an `INFECTED` object is recorded `infected` and **never served**
+(the download gate refuses any non-clean object with `409`), and is kept or removed per
+`tesseraql.attachments.scan.onInfected: quarantine | delete` (default `quarantine`); a scanner
+`ERROR` fails the upload closed (`503`). (An asynchronous `pending → scanned` model is a possible
+later refinement; synchronous keeps the gate simple and needs no scan sweeper.)
 
 ### Retention
 
 Attachment retention wires into the ch. 44 `RetentionSweeper` (the cluster-safe timer that already
 purges the outbox and job history), gated by `tesseraql.retention.attachments`:
 
-- **Orphan GC** (always on when retention runs) — a blob whose `storage_key` matches no metadata row
-  is reclaimed, closing the non-transactional upload window above. Reconciliation lists store keys
-  against the metadata `storage_key` set; cluster-safe and idempotent like the existing sweep.
-- **Age policy** (optional) — blobs (and their metadata) past the configured window are deleted,
-  tied to the record lifecycle.
-
-Retention is driven by the sweeper rather than provider lifecycle rules **on purpose**: server-side
-lifecycle support varies across S3-compatible stores, so the portable, observable path is the
-in-app sweep. Provider lifecycle stays an optional optimization, never the mechanism.
+- **Age policy** (delivered) — attachment metadata past the configured window is deleted and each
+  blob reclaimed (best-effort, so a concurrent node or an already-removed blob is harmless). Driven
+  by the sweep rather than provider lifecycle rules **on purpose**: server-side lifecycle support
+  varies across S3-compatible stores, so the portable, observable path is the in-app sweep.
+- **Orphan GC** (deferred) — reclaiming a blob whose `storage_key` matches no metadata row needs a
+  store-listing capability the minimal `BlobStore` SPI does not yet expose; the upload path's
+  best-effort delete-on-failure already covers the common case. A later refinement.
 
 ## Lint and coverage
 
@@ -263,11 +267,14 @@ than crowding the `TQL-YAML` loader-error number space); object-storage egress i
 | `TQL-ATTACH-3404` | error | the `basePath` does not contain the record key as a path parameter | slice 1 |
 | `TQL-ATTACH-3405` | error | `limits.maxBytes` is missing or unparseable | slice 1 |
 | `TQL-SEC-4110` | error | with `provider: s3`, an attachment's resolved bucket is not in `tesseraql.object-storage.allowedBuckets` (deny-by-default) | slice 2 |
-| `TQL-SEC-411x` | error | `scan: require-clean` with no scanner installed | slice 3 |
 
-The runtime fails closed: a `404` when an attachment is unknown or owned by a different record (an
-attachment is never leaked across records), a `413` past the size limit, a `415` for a disallowed
-content type — all mapped from the `TQL-LD-284x` codes the upload/download processors raise.
+Scanning (slice 3) adds no lint — it is config + a ServiceLoader scanner, with no new YAML surface —
+and is enforced at runtime instead (the codes below).
+
+The runtime fails closed, all mapped from the `TQL-LD-284x` codes the processors/service raise: a
+`404` when an attachment is unknown or owned by a different record (never leaked across records), a
+`413` past the size limit, a `415` for a disallowed content type, a `409` for a download of an object
+that did not pass scanning, and a `503` when the scanner cannot reach a verdict (fail-closed).
 
 An **`attachment`** coverage kind (one item per `kind: attachment` document, gated with
 `coverage.thresholds.attachment`) is the slice-1 follow-up: it needs a declarative test target that
@@ -327,9 +334,12 @@ Phase 30 ships in slices, each a reviewable PR with CI green:
    deny-by-default `allowedBuckets` egress and SecretResolver credentials; the
    `endpoint`/`region`/`pathStyle`/`checksumMode` compatibility settings; the `TQL-SEC-4110` lint;
    and Adobe S3Mock compatibility ITs. Switching `provider: s3` is the whole change.
-3. **Scanning and retention** — the `AttachmentScanner` scan-hook SPI with the no-op default and the
-   `require-clean` download gate, and the `RetentionSweeper` attachments pass (orphan GC plus the
-   optional age policy). Completes the phase.
+3. **Scanning and retention** (delivered) — the `AttachmentScanner` scan-hook SPI with the no-op
+   default, synchronous scan-on-upload, the download gate that refuses any non-clean object, and the
+   `tesseraql.attachments.scan.onInfected` (quarantine/delete) policy; plus the `RetentionSweeper`
+   attachments pass (age-based deletion of metadata and blobs, gated by
+   `tesseraql.retention.attachments`). Completes the phase. Orphan GC is a later refinement (it needs
+   a `BlobStore` listing capability).
 
 This completes the attachments leg of **Milestone M9** (an approval-workflow application with
 org-scoped data and attachments).
