@@ -739,7 +739,7 @@ public final class AppLinter {
             }
             Matcher matcher = SCOPE_DIRECTIVE.matcher(readQuietly(sqlFile));
             while (matcher.find()) {
-                String content = matcher.group(1).trim();
+                String content = stripAsBoolean(matcher.group(1).trim());
                 String name = content;
                 String alias = null;
                 int on = content.indexOf(" on ");
@@ -782,6 +782,13 @@ public final class AppLinter {
 
     private static String relative(Path appHome, Path source) {
         return appHome.relativize(source).toString().replace('\\', '/');
+    }
+
+    /** Drops the {@code as boolean} suffix so the scope name/alias parse the same as a predicate. */
+    static String stripAsBoolean(String content) {
+        return content.endsWith(" as boolean")
+                ? content.substring(0, content.length() - " as boolean".length()).trim()
+                : content;
     }
 
     /**

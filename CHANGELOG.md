@@ -18,6 +18,14 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Runtime and recipes
 
+- Organizational data scoping — row-level masking (roadmap Phase 29 slice 3, completing the phase,
+  see [docs/data-scoping.md](docs/data-scoping.md)): a field is masked in the rows outside the
+  caller's scope. The query selects the scope predicate as a per-row flag with the new
+  `/*%scope <name> on <alias> as boolean */ (1=1)` directive — rendered as a portable
+  `case when … then 1 else 0 end` — and a response `fields` policy keys off it with
+  `unmaskWhen: <flag column>`, masking the field when the flag is falsy and stripping the flag column
+  from the response. No per-row predicate evaluation in Java. Column-level role masking
+  (`FieldPolicy.policy`) is unchanged.
 - Organizational data scoping — shared org-unit foundation (roadmap Phase 29 slice 2, see
   [docs/data-scoping.md](docs/data-scoping.md)): a managed org-unit hierarchy that subtree scopes
   (and, later, Phase 28 approval-workflow assignee resolution) build on — one org graph, the IAM

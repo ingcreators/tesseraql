@@ -96,9 +96,14 @@ public record ResponseSpec(JsonResponse json, HtmlResponse html, StreamResponse 
      * @param policy         authorization policy the principal must satisfy to see the field
      * @param mask           masking strategy ({@code email}, {@code last4}, {@code fixed})
      * @param classification data classification driving a default masking action
+     * @param unmaskWhen     a row flag column (e.g. one a {@code /*%scope … as boolean *}{@code /}
+     *                       directive selects): the field is masked unless that column is truthy in
+     *                       the row, giving row-level (in-scope) masking (roadmap Phase 29 slice 3).
+     *                       The flag column is removed from the response.
      */
     @JsonIgnoreProperties(ignoreUnknown = true)
-    public record FieldPolicy(Boolean visible, String policy, String mask, String classification) {
+    public record FieldPolicy(Boolean visible, String policy, String mask, String classification,
+            String unmaskWhen) {
     }
 
     /**

@@ -98,7 +98,15 @@ public final class SqlRenderer {
             scope.put(binding.getKey(), binding.getValue());
         }
         try {
+            // `as boolean` makes the scope a SELECT-list flag (1/0), portable across dialects that
+            // lack a boolean type (SQL Server); otherwise it is a WHERE predicate rendered as-is.
+            if (node.asBoolean()) {
+                mapToSource("case when ", node.sourceLine());
+            }
             renderNodes(resolved.nodes());
+            if (node.asBoolean()) {
+                mapToSource(" then 1 else 0 end", node.sourceLine());
+            }
         } finally {
             saved.forEach(scope::put);
             added.forEach(scope::remove);
