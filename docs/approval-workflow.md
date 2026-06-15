@@ -323,9 +323,9 @@ Phase 28 ships in slices, each a reviewable PR with CI green, mirroring how Phas
 
 1. **Workflow core** — the `kind: workflow` document (parser, manifest loading, `WorkflowDefinition`
    model), the `WorkflowStore` SPI and `JdbcWorkflowStore` with managed DDL (four dialects), the
-   `tesseraql.workflow.mode` toggle, the transition recipe (state check → guard → Phase 18
-   transactional command → history → state advance), the `TQL-WORKFLOW-31xx` lint, and the
-   `workflow` coverage kind. No UI, no scheduler.
+   `tesseraql.workflow.mode` toggle, the transition recipe (state check → guard → state advance →
+   Phase 18 transactional command → history, in one transaction), the `TQL-WORKFLOW-31xx` lint, and
+   the `workflow` coverage kind. No UI, no scheduler. Detailed design below.
    - *Acceptance:* a draft→submitted→approved/rejected machine drives a business document through its
      transitions; an undeclared transition is rejected with a `409`, a falsy guard with a `422`; the
      workflow is testable via the `workflow` coverage kind, and lint flags a transition naming an
@@ -343,6 +343,169 @@ Phase 28 ships in slices, each a reviewable PR with CI green, mirroring how Phas
 
 Each slice ships its cookbook entry here and keeps the example gallery green; the worked example is a
 purchase-request approval application built only with YAML, 2-way SQL, and templates.
+
+### Slice 1 detailed design
+
+This is the implementation-level design for the first slice — the engine, no UI and no scheduler.
+Two design points are settled here:
+
+- **The transaction engine is extended, not duplicated.** A transition reuses the Phase 18
+  `TransactionalCommandProcessor` rather than a parallel processor, so there is one transaction
+  engine, the state advance and history write ride the command's own JDBC `Connection` (the
+  connection-threaded idiom `OutboxStore.insert(Connection, …)` already uses), and the guard runs
+  *inside* the transaction with no time-of-check/time-of-use gap. The cost is that this touches the
+  route-compiler/command path — so it is reviewed, never auto-accepted.
+- **Slice 1 ships both modes.** `managed` is complete (`tql_workflow_*` tables behind
+  `JdbcWorkflowStore`); `app` is a thin `ColumnWorkflowStore` that keeps state in the business
+  table's `stateColumn` and adds no tables (history is an optional app contract). The default `app`
+  mode therefore works with zero managed schema.
+
+#### Transitions are compiler-synthesized routes
+
+Authors do not write a route per transition. The `workflow/` document declares the states and
+transitions, and the compiler **synthesizes** one transactional-command route per transition — the
+way `consume/` documents synthesize `queue-consume` routes. Each transition compiles to a
+`direct:workflow.<id>.<transitionId>` route and a `POST {http.basePath}/{key}/{transitionId}`
+endpoint, carrying the transition's (or the workflow's) `security`.
+
+The synthesized route runs the existing command machinery with one added input — a `WorkflowBinding`
+(store, document type/table/key, `stateColumn`, `from`/`to`, the parsed guard `Expr`, the transition
+id). When present, the processor does, in a single transaction:
+
+```text
+open connection / begin tx
+  ├─ store.ensureInstance(cx, docType, docId, initial, tenant)   # managed only; app no-op
+  ├─ document ← SELECT * FROM <table> WHERE <key> = ?            # bound into context as `document`
+  ├─ current  ← store.currentState(cx, …)                        # managed: instance row / app: document.<stateColumn>
+  ├─ if current != from        → TQL-WORKFLOW-3201 (409)         # legality, in-tx, no TOCTOU
+  ├─ if !guard.evalBoolean(ctx) → TQL-WORKFLOW-3202 (422)        # guard over document.* / principal.*
+  ├─ validate: rules (existing Phase 19 step)
+  ├─ store.advanceState(cx, docType, docId, from, to)            # conditional UPDATE; 0 rows → 409
+  ├─ author command step(s)                                      # existing step loop: scoped write + audit + expect
+  ├─ store.appendHistory(cx, …)                                  # append-only, same tx
+  └─ commit
+```
+
+The only change to request binding is that the transition adds a `document` key (the loaded row)
+to the execution context the guard and the command SQL already read (`principal`, `body`, `path`,
+`tenant`).
+
+#### Workflow document schema and model
+
+```yaml
+# workflow/purchase_request.yml
+version: tesseraql/v1
+id: purchase_request
+kind: workflow
+mode: managed                 # omitted ⇒ tesseraql.workflow.mode (default app)
+document:
+  type: purchase_request      # managed: tql_workflow_instance.doc_type
+  table: purchase_requests    # required in BOTH modes (the guard loads the document row)
+  key: id
+  stateColumn: wf_state       # app mode only (managed keeps state in the instance row)
+http: { basePath: /purchase-requests }
+security: { auth: browser, policy: pr-actor }   # default for every transition; per-transition override allowed
+initial: draft
+states:
+  - { id: draft,     type: initial }
+  - { id: submitted }
+  - { id: approved,  type: terminal }
+  - { id: rejected,  type: terminal }
+transitions:
+  - { id: submit,  from: draft,     to: submitted, guard: "document.amount > 0",        command: submit.sql,
+      assign: { file: assignees/manager.sql, params: { requester: document.created_by } } }
+  - { id: approve, from: submitted, to: approved,  guard: "principal.role == 'approver'", command: approve.sql }
+  - { id: reject,  from: submitted, to: rejected,                                          command: reject.sql }
+deadlines:
+  - { state: submitted, within: 48h, onBreach: { escalate: approve } }
+```
+
+`assign:` and `deadlines:` are **parsed and linted** in Slice 1 (file-existence checks) but consumed
+in Slices 2 and 3 — the YAML shape is fixed from Slice 1 so later slices add no breaking changes. The
+model records mirror `ScopeDefinition`'s `@JsonIgnoreProperties` + compact-constructor `copyOf`
+normalization (`WorkflowDefinition`, `DocumentSpec`, `StateSpec`, `TransitionSpec`, `AssignSpec`,
+`DeadlineSpec`, `OnBreachSpec`), with a `WorkflowFile(Path, WorkflowDefinition)` manifest record. A
+`parseWorkflow`/`validateWorkflow` pair (the `requireField`/`EXPECTED_VERSION`/`error` idiom),
+`ManifestLoader.loadWorkflows` (walk `workflow/`, `.yml`, `requireInside`, sorted), and an
+`AppManifest.workflows()` field complete the plumbing.
+
+#### The Slice 1 `WorkflowStore`
+
+Slice 1 implements the instance-and-history subset of the SPI sketched above (task methods arrive in
+Slice 2/3), every write threaded on the caller's `Connection`:
+
+```java
+public interface WorkflowStore {
+    String currentState(Connection cx, String docType, String docId);                       // null if none
+    void   ensureInstance(Connection cx, String docType, String docId, String initial, String tenantId);
+    int    advanceState(Connection cx, String docType, String docId, String from, String to); // rows affected
+    void   appendHistory(Connection cx, WorkflowHistory entry);                              // append-only
+}
+```
+
+- **`managed`** — `JdbcWorkflowStore` (modelled on `JdbcOrgUnitStore`); `advanceState` is
+  `UPDATE tql_workflow_instance SET current_state = ?, updated_at = ? WHERE doc_type = ? AND doc_id = ? AND current_state = ?`
+  (0 rows ⇒ the caller raises `409`), and `ensureSchema()` calls
+  `SqlScripts.applyForVendor(ds, JdbcWorkflowStore.class, "/tesseraql/db/migration/workflow/V1__workflow.sql")`.
+- **`app`** — `ColumnWorkflowStore`: `currentState` reads `document.<stateColumn>`, `advanceState` is
+  `UPDATE <table> SET <stateColumn> = ? WHERE <key> = ? AND <stateColumn> = ?`, and
+  `ensureInstance`/`appendHistory` are no-ops (history is an optional app contract). No managed
+  schema.
+
+The managed DDL ships `tql_workflow_instance` and `tql_workflow_history` only (the task table is
+Slice 2), in four dialects under `db/migration/workflow{,-oracle,-sqlserver}/`. To stay portable it
+uses inline `unique (doc_type, doc_id)` rather than a separate `CREATE INDEX` (MySQL does not accept
+`CREATE INDEX IF NOT EXISTS`); the Oracle variant uses plain `CREATE` + ORA-00955 tolerance and the
+SQL Server variant guards with `if object_id(...) is null`, exactly as the org-unit DDL does.
+
+The runtime binds the store just after the org-unit block in `TesseraqlRuntime`, only when the app
+declares workflows: `managed` mode constructs `JdbcWorkflowStore` and calls `ensureSchema()`, `app`
+mode binds `ColumnWorkflowStore`; the bean name is `TesseraqlProperties.WORKFLOW_STORE_BEAN`, and
+`WorkflowSettings.from(config)` reads `tesseraql.workflow.mode` (default `app`) just like
+`OrgUnitSettings`.
+
+#### Lint, runtime errors, and coverage
+
+`AppLinter.lintWorkflows` (a sibling of `lintScopes`) emits the `TQL-WORKFLOW-31xx` family:
+
+| Code | Severity | Meaning |
+| --- | --- | --- |
+| `TQL-WORKFLOW-3101` | error | a transition's `from`/`to` (or the workflow's `initial`) names a state not in `states` |
+| `TQL-WORKFLOW-3102` | error | no `initial`, more than one `initial`, or a state unreachable from `initial` |
+| `TQL-WORKFLOW-3103` | error | a `guard` is not a valid whitelist expression, or references a path outside `document.*`/`task.*`/`principal.*` |
+| `TQL-WORKFLOW-3104` | error | a `command`/`assign.file`/`onBreach` file is missing under `workflow/` |
+| `TQL-WORKFLOW-3105` | warning | a non-terminal state has no outgoing transition, or a terminal state has one |
+| `TQL-WORKFLOW-3106` | error | mode mismatch: `app` needs `document.{table,key,stateColumn}`, `managed` needs `document.{type,table,key}` |
+| `TQL-WORKFLOW-3110` | error | `tesseraql.workflow.mode` is not `managed` or `app` |
+
+The runtime fails closed under a new `TqlDomain.WORKFLOW`, so its codes match the lint family rather
+than borrowing `TQL-SQL-*`: an illegal transition for the current state is `TQL-WORKFLOW-3201`
+(`409`), a falsy guard `TQL-WORKFLOW-3202` (`422`). The `workflow` coverage kind
+(`ManifestCoverage.workflow`, registered in `AppTestRunner.coverageKinds` right after `dataScope`,
+and added to `CoverageThresholdResolver.KINDS`) declares one item per transition and covers it when a
+suite exercises the synthesized transition route — the same `testedSqlPaths` basis as `route` and
+`data-scope`.
+
+#### Touch list and tests
+
+| Module | New | Changed |
+| --- | --- | --- |
+| `tesseraql-core` | `workflow/WorkflowStore`, `TqlDomain.WORKFLOW` | — |
+| `tesseraql-yaml` | `model/Workflow*`, `manifest/WorkflowFile`, `workflow/WorkflowSettings` | `SimpleYamlParser`, `ManifestLoader`, `AppManifest`, `AppLinter` |
+| `tesseraql-camel-components` | — | `TesseraqlProperties` (bean constant) |
+| `tesseraql-compiler` | `binding/WorkflowBinding` | `RouteCompiler` (synthesis), `TransactionalCommandProcessor` (optional binding), `RequestBinder` (`document` key) |
+| `tesseraql-operations` | `workflow/JdbcWorkflowStore`, `db/migration/workflow{,-oracle,-sqlserver}/V1__workflow.sql` | — |
+| `tesseraql-camel-runtime` | `ColumnWorkflowStore` | `TesseraqlRuntime` (binding) |
+| `tesseraql-test-core`, `tesseraql-report` | — | `ManifestCoverage`, `AppTestRunner`, `CoverageThresholdResolver` |
+| `examples/` | `purchase-request-app` | — |
+
+`JdbcWorkflowStore` is covered by Testcontainers ITs across the four dialects (in
+`tesseraql-camel-runtime`, where the SAML-replay store IT lives — a leaf module gets no H2),
+asserting that `advanceState` affects zero rows on a stale/illegal transition and that history is
+append-only. The worked example carries a declarative suite driving draft→submitted→approved and
+asserting `409` on an undeclared transition, `422` on a falsy guard, and `409` on a concurrent
+transition (the `advanceState` zero-row race), with the `workflow` coverage kind reporting every
+transition exercised.
 
 ## Module placement
 
