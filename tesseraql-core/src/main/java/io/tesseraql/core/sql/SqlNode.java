@@ -36,9 +36,14 @@ public sealed interface SqlNode {
         }
 
         /**
-         * One branch of a conditional. {@code condition} is {@code null} for the {@code else} branch.
+         * One branch of a conditional. {@code condition} is {@code null} for the {@code else}
+         * branch; {@code conditionSource} is the raw directive expression text (also {@code null}
+         * for {@code else}), retained — symmetrically with {@link For#listExpressionSource()} — so
+         * tools such as coverage and the documentation portal can show the original condition
+         * without reconstructing it from the parsed {@link Expr}.
          */
-        public record Branch(Expr condition, int sourceLine, List<SqlNode> body) {
+        public record Branch(Expr condition, String conditionSource, int sourceLine,
+                List<SqlNode> body) {
             public Branch {
                 body = List.copyOf(body);
             }
