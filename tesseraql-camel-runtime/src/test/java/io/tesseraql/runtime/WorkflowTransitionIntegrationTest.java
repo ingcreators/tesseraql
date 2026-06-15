@@ -179,6 +179,27 @@ class WorkflowTransitionIntegrationTest {
     }
 
     @Test
+    void onBreachEscalateAutoFiresTheTransitionAsSystem() throws Exception {
+        assertThat(post("/auto-requests/AU-1/submit", "requester-1").statusCode()).isEqualTo(200);
+        assertThat(instanceState("auto_request", "AU-1")).isEqualTo("submitted");
+        assertThat(taskCount("AU-1", "OPEN")).isEqualTo(1);
+
+        // The deadline breach auto-fires the approve transition as the system: the state advances,
+        // the command runs (audit.user = system), the task completes, and history records it.
+        WorkflowSweeper sweeper = runtime.camelContext().getRegistry().lookupByNameAndType(
+                TesseraqlProperties.WORKFLOW_SWEEPER_BEAN, WorkflowSweeper.class);
+        assertThat(sweeper.sweep()).isEqualTo(1);
+        assertThat(instanceState("auto_request", "AU-1")).isEqualTo("approved");
+        assertThat(column("auto_requests", "last_action", "AU-1")).isEqualTo("approve");
+        assertThat(column("auto_requests", "acted_by", "AU-1")).isEqualTo("system");
+        assertThat(taskCount("AU-1", "OPEN")).isZero();
+        assertThat(systemHistoryCount("AU-1", "approve")).isEqualTo(1);
+
+        // Exactly once: the task is completed, so a second sweep escalates nothing.
+        assertThat(sweeper.sweep()).isZero();
+    }
+
+    @Test
     void assignmentEnqueuesAReminderNotification() throws Exception {
         assertThat(post("/purchase-requests/PR-8/submit", "requester-1").statusCode())
                 .isEqualTo(200);
@@ -223,6 +244,11 @@ class WorkflowTransitionIntegrationTest {
     private static int escalateHistoryCount(String docId) throws Exception {
         return Integer.parseInt(queryString("select count(*) from tql_workflow_history "
                 + "where doc_id = ? and transition = 'escalate'", docId));
+    }
+
+    private static int systemHistoryCount(String docId, String transition) throws Exception {
+        return Integer.parseInt(queryString("select count(*) from tql_workflow_history "
+                + "where doc_id = ? and transition = ? and actor = 'system'", docId, transition));
     }
 
     private static int taskCount(String docId, String status) throws Exception {
@@ -278,10 +304,14 @@ class WorkflowTransitionIntegrationTest {
                     + "note varchar(64))");
             statement.execute(
                     "insert into expenses (id, amount, status) values ('EX-1',200,'draft')");
-            // A workflow whose 'submitted' state carries a deadline, for the sweeper test.
+            // A workflow whose 'submitted' state carries a deadline, for the reassign sweeper test.
             statement.execute("create table escalating_requests (id varchar(64) primary key, "
                     + "last_action varchar(32))");
             statement.execute("insert into escalating_requests (id) values ('ER-1')");
+            // A workflow whose 'submitted' deadline auto-fires the approve transition (onBreach.escalate).
+            statement.execute("create table auto_requests (id varchar(64) primary key, "
+                    + "last_action varchar(32), acted_by varchar(64))");
+            statement.execute("insert into auto_requests (id) values ('AU-1')");
         }
     }
 
@@ -410,6 +440,34 @@ class WorkflowTransitionIntegrationTest {
                 "select 'approver-1' as assignee\n");
         Files.writeString(workflowDir.resolve("dept_head.sql"),
                 "select 'dept-head-1' as assignee\n");
+
+        Files.writeString(workflowDir.resolve("auto_request.yml"),
+                """
+                        version: tesseraql/v1
+                        id: auto_request
+                        kind: workflow
+                        document: { type: auto_request, table: auto_requests, key: id }
+                        http: { basePath: /auto-requests }
+                        security: { auth: bearer }
+                        initial: draft
+                        states:
+                          - { id: draft, type: initial }
+                          - { id: submitted }
+                          - { id: approved, type: terminal }
+                        transitions:
+                          - { id: submit, from: draft, to: submitted, command: a_submit.sql, assign: { file: a_approver.sql } }
+                          - { id: approve, from: submitted, to: approved, command: a_approve.sql }
+                        deadlines:
+                          - state: submitted
+                            within: 0s
+                            onBreach: { escalate: approve }
+                        """);
+        Files.writeString(workflowDir.resolve("a_submit.sql"),
+                "update auto_requests set last_action = 'submit' where id = /* key */ 'x'\n");
+        Files.writeString(workflowDir.resolve("a_approve.sql"), "update auto_requests set "
+                + "last_action = 'approve', acted_by = /* audit.user */ 'x' where id = /* key */ 'x'\n");
+        Files.writeString(workflowDir.resolve("a_approver.sql"),
+                "select 'approver-1' as assignee\n");
         return home;
     }
 

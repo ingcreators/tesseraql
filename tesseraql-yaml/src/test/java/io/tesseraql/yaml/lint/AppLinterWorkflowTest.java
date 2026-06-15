@@ -48,6 +48,14 @@ class AppLinterWorkflowTest {
     }
 
     @Test
+    void escalateTransitionFromWrongStateIsAnError(@TempDir Path dir) throws Exception {
+        // submit starts from draft, not the deadline's 'submitted' state, so it can never advance.
+        writeWorkflow(dir, WELL_FORMED + "deadlines:\n"
+                + "  - { state: submitted, within: 1h, onBreach: { escalate: submit } }\n");
+        assertThat(codes(new AppLinter().lint(dir))).contains("TQL-WORKFLOW-3107");
+    }
+
+    @Test
     void wellFormedWorkflowProducesNoWorkflowFindings(@TempDir Path dir) throws Exception {
         writeWorkflow(dir, WELL_FORMED);
         assertThat(codes(new AppLinter().lint(dir))).isEmpty();

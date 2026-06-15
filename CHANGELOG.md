@@ -18,6 +18,14 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Runtime and recipes
 
+- Approval workflow — `onBreach.escalate` auto-transition (roadmap Phase 28, see
+  [docs/approval-workflow.md](docs/approval-workflow.md)): on a deadline breach the cluster-safe
+  sweeper can now auto-fire a named transition **as the system** instead of reassigning — it advances
+  the document from the deadline's state, runs the transition's command (with `/* key */` and
+  `/* audit.* */` binds, so `audit.user` is `system`), completes the open tasks (so it cannot
+  re-fire), and records a history row under the transition id. Works in both managed and app state
+  modes; `escalate` takes precedence over `reassign` when both are declared; lint `TQL-WORKFLOW-3107`
+  checks the named transition starts from the deadline's state. This completes the phase.
 - Approval workflow — reminder notifications (roadmap Phase 28, Phase 20 channels, see
   [docs/approval-workflow.md](docs/approval-workflow.md)): a workflow declares a `notify:` block whose
   `assigned` reminder fires when a transition opens a task and whose `escalated` reminder fires when
