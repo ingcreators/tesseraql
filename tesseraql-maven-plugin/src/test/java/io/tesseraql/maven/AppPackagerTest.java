@@ -58,6 +58,29 @@ class AppPackagerTest {
     }
 
     @Test
+    void excludesSourceTreeReservedNamespaceSoOverlaysNeverLeakIntoTheArchive(@TempDir Path dir)
+            throws Exception {
+        Path appHome = dir.resolve("app");
+        Files.createDirectories(appHome.resolve("config"));
+        Files.createDirectories(appHome.resolve(".tesseraql/docs"));
+        Files.writeString(appHome.resolve("config/tesseraql.yml"),
+                "tesseraql:\n  app:\n    name: t\n");
+        // A run-dependent overlay left in the source-tree reserved namespace (e.g. the v2 report).
+        Files.writeString(appHome.resolve(".tesseraql/docs/report.json"), "{\"runId\":\"x\"}\n");
+
+        Path generatedDocs = dir.resolve("target/tesseraql-generated/docs");
+        Files.createDirectories(generatedDocs);
+        Files.writeString(generatedDocs.resolve("spec.json"), "{\"routes\":[]}\n");
+
+        Path out = dir.resolve("app.tqlapp");
+        new AppPackager().pack(appHome, generatedDocs, out);
+
+        // The generated spec is merged in; the source-tree overlay is not packed.
+        assertThat(entries(out)).contains("config/tesseraql.yml", ".tesseraql/docs/spec.json")
+                .doesNotContain(".tesseraql/docs/report.json");
+    }
+
+    @Test
     void packsWithoutGeneratedDocsWhenTheDirectoryIsAbsent(@TempDir Path dir) throws Exception {
         Path appHome = dir.resolve("app");
         Files.createDirectories(appHome.resolve("config"));
