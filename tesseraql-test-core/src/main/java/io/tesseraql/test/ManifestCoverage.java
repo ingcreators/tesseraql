@@ -93,15 +93,14 @@ public final class ManifestCoverage {
      */
     public static ItemCoverage queueConsume(AppManifest manifest, List<TestSuite> suites) {
         ItemCoverage coverage = new ItemCoverage("queue-consume");
-        Set<Path> testedPaths = testedSqlPaths(manifest.appHome(), suites);
-        Set<String> testedContracts = testedContracts(suites);
+        CrossReferenceIndex index = CrossReferenceIndex.of(manifest, suites);
         for (RouteFile consumer : manifest.consumers()) {
             RouteDefinition definition = consumer.definition();
             if (definition.id() == null) {
                 continue;
             }
             coverage.declare(definition.id());
-            if (exercised(consumer, testedPaths, testedContracts)) {
+            if (index.exercises(consumer)) {
                 coverage.cover(definition.id());
             }
         }
@@ -129,12 +128,11 @@ public final class ManifestCoverage {
         if (declared.isEmpty()) {
             return coverage;
         }
-        Set<Path> testedPaths = testedSqlPaths(manifest.appHome(), suites);
-        Set<String> testedContracts = testedContracts(suites);
+        CrossReferenceIndex index = CrossReferenceIndex.of(manifest, suites);
         List<RouteFile> all = new ArrayList<>(manifest.routes());
         all.addAll(manifest.consumers());
         for (RouteFile route : all) {
-            if (!exercised(route, testedPaths, testedContracts)) {
+            if (!index.exercises(route)) {
                 continue;
             }
             for (String name : referencedScopes(route)) {
@@ -157,7 +155,7 @@ public final class ManifestCoverage {
         if (manifest.workflows().isEmpty()) {
             return coverage;
         }
-        Set<Path> testedPaths = testedSqlPaths(manifest.appHome(), suites);
+        Set<Path> testedPaths = CrossReferenceIndex.of(manifest, suites).testedSqlPaths();
         for (WorkflowFile workflow : manifest.workflows()) {
             Path dir = workflow.source().getParent();
             String workflowId = workflow.definition().id();
@@ -180,7 +178,7 @@ public final class ManifestCoverage {
     private static Set<String> referencedScopes(RouteFile route) {
         Set<String> names = new LinkedHashSet<>();
         Path dir = route.source().getParent();
-        for (SqlBinding binding : bindings(route.definition())) {
+        for (SqlBinding binding : CrossReferenceIndex.bindings(route.definition())) {
             if (binding.file() == null) {
                 continue;
             }
@@ -218,15 +216,14 @@ public final class ManifestCoverage {
      */
     public static ItemCoverage mcp(AppManifest manifest, List<TestSuite> suites) {
         ItemCoverage coverage = new ItemCoverage("mcp");
-        Set<Path> testedPaths = testedSqlPaths(manifest.appHome(), suites);
-        Set<String> testedContracts = testedContracts(suites);
+        CrossReferenceIndex index = CrossReferenceIndex.of(manifest, suites);
         for (io.tesseraql.yaml.manifest.ToolFile tool : manifest.tools()) {
             RouteDefinition definition = tool.definition();
             if (definition.id() == null) {
                 continue;
             }
             coverage.declare(definition.id());
-            if (exercised(tool.source().getParent(), definition, testedPaths, testedContracts)) {
+            if (index.exercises(tool.source().getParent(), definition)) {
                 coverage.cover(definition.id());
             }
         }
@@ -241,16 +238,14 @@ public final class ManifestCoverage {
      */
     public static ItemCoverage resources(AppManifest manifest, List<TestSuite> suites) {
         ItemCoverage coverage = new ItemCoverage("mcp-resource");
-        Set<Path> testedPaths = testedSqlPaths(manifest.appHome(), suites);
-        Set<String> testedContracts = testedContracts(suites);
+        CrossReferenceIndex index = CrossReferenceIndex.of(manifest, suites);
         for (io.tesseraql.yaml.manifest.ResourceFile resource : manifest.resources()) {
             RouteDefinition definition = resource.definition();
             if (definition.id() == null) {
                 continue;
             }
             coverage.declare(definition.id());
-            if (exercised(resource.source().getParent(), definition, testedPaths,
-                    testedContracts)) {
+            if (index.exercises(resource.source().getParent(), definition)) {
                 coverage.cover(definition.id());
             }
         }
@@ -266,15 +261,14 @@ public final class ManifestCoverage {
      */
     public static ItemCoverage uiResources(AppManifest manifest, List<TestSuite> suites) {
         ItemCoverage coverage = new ItemCoverage("mcp-ui");
-        Set<Path> testedPaths = testedSqlPaths(manifest.appHome(), suites);
-        Set<String> testedContracts = testedContracts(suites);
+        CrossReferenceIndex index = CrossReferenceIndex.of(manifest, suites);
         for (io.tesseraql.yaml.manifest.UiResourceFile ui : manifest.uiResources()) {
             RouteDefinition definition = ui.definition();
             if (definition.id() == null) {
                 continue;
             }
             coverage.declare(definition.id());
-            if (exercised(ui.source().getParent(), definition, testedPaths, testedContracts)) {
+            if (index.exercises(ui.source().getParent(), definition)) {
                 coverage.cover(definition.id());
             }
         }
@@ -364,7 +358,7 @@ public final class ManifestCoverage {
      */
     public static ItemCoverage filePoll(AppManifest manifest, List<TestSuite> suites) {
         ItemCoverage coverage = new ItemCoverage("file-poll");
-        Set<Path> testedPaths = testedSqlPaths(manifest.appHome(), suites);
+        Set<Path> testedPaths = CrossReferenceIndex.of(manifest, suites).testedSqlPaths();
         for (io.tesseraql.yaml.manifest.JobFile job : manifest.jobs()) {
             io.tesseraql.yaml.model.JobDefinition definition = job.definition();
             if (definition.id() == null || definition.trigger() == null
@@ -471,8 +465,8 @@ public final class ManifestCoverage {
             if (flag(config, "tesseraql.saml.link.provision")) {
                 coverage.declare(IdentityContracts.CREATE_USER);
             }
-            testedContracts(suites).stream().filter(coverage.declared()::contains)
-                    .forEach(coverage::cover);
+            CrossReferenceIndex.of(manifest, suites).testedContracts().stream()
+                    .filter(coverage.declared()::contains).forEach(coverage::cover);
         }
         return coverage;
     }
@@ -494,8 +488,8 @@ public final class ManifestCoverage {
             if (flag(config, "tesseraql.oidc.link.provision")) {
                 coverage.declare(IdentityContracts.CREATE_USER);
             }
-            testedContracts(suites).stream().filter(coverage.declared()::contains)
-                    .forEach(coverage::cover);
+            CrossReferenceIndex.of(manifest, suites).testedContracts().stream()
+                    .filter(coverage.declared()::contains).forEach(coverage::cover);
         }
         return coverage;
     }
@@ -511,7 +505,7 @@ public final class ManifestCoverage {
         if (!flag(config, "tesseraql.scim.enabled")) {
             return coverage;
         }
-        Set<Path> tested = testedSqlPaths(manifest.appHome(), suites);
+        Set<Path> tested = CrossReferenceIndex.of(manifest, suites).testedSqlPaths();
         declareScimOps(coverage, manifest, "users", SCIM_USER_OPS, tested);
         if (flag(config, "tesseraql.scim.groups.enabled")) {
             declareScimOps(coverage, manifest, "groups", SCIM_GROUP_OPS, tested);
@@ -535,96 +529,18 @@ public final class ManifestCoverage {
     private static ItemCoverage routeKind(String kind, AppManifest manifest, List<TestSuite> suites,
             Predicate<RouteDefinition> declared) {
         ItemCoverage coverage = new ItemCoverage(kind);
-        Set<Path> testedPaths = testedSqlPaths(manifest.appHome(), suites);
-        Set<String> testedContracts = testedContracts(suites);
+        CrossReferenceIndex index = CrossReferenceIndex.of(manifest, suites);
         for (RouteFile route : manifest.routes()) {
             RouteDefinition definition = route.definition();
             if (definition.id() == null || !declared.test(definition)) {
                 continue;
             }
             coverage.declare(definition.id());
-            if (exercised(route, testedPaths, testedContracts)) {
+            if (index.exercises(route)) {
                 coverage.cover(definition.id());
             }
         }
         return coverage;
-    }
-
-    /**
-     * Whether any of the route's SQL artifacts was exercised by a test case. SQL file bindings are
-     * route-file relative (like the compiler resolves them), test case files are app-home relative.
-     */
-    private static boolean exercised(RouteFile route, Set<Path> testedPaths,
-            Set<String> testedContracts) {
-        return exercised(route.source().getParent(), route.definition(), testedPaths,
-                testedContracts);
-    }
-
-    private static boolean exercised(Path routeDir, RouteDefinition definition,
-            Set<Path> testedPaths, Set<String> testedContracts) {
-        for (SqlBinding binding : bindings(definition)) {
-            if (binding.file() != null
-                    && testedPaths.contains(routeDir.resolve(binding.file()).normalize())) {
-                return true;
-            }
-            if (binding.contract() != null
-                    && testedContracts.contains(stripIdentityPrefix(binding.contract()))) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private static List<SqlBinding> bindings(RouteDefinition definition) {
-        List<SqlBinding> bindings = new ArrayList<>();
-        if (definition.sql() != null) {
-            bindings.add(definition.sql());
-        }
-        bindings.addAll(definition.steps().values());
-        bindings.addAll(definition.queries().values());
-        if (definition.fileImport() != null && definition.fileImport().sql() != null) {
-            bindings.add(definition.fileImport().sql());
-        }
-        if (definition.fileExport() != null) {
-            if (definition.fileExport().sql() != null) {
-                bindings.add(definition.fileExport().sql());
-            }
-            if (definition.fileExport().after() != null
-                    && definition.fileExport().after().sql() != null) {
-                bindings.add(definition.fileExport().after().sql());
-            }
-        }
-        return bindings;
-    }
-
-    private static Set<Path> testedSqlPaths(Path appHome, List<TestSuite> suites) {
-        Set<Path> paths = new LinkedHashSet<>();
-        for (TestSuite suite : suites) {
-            for (TestCase test : suite.tests()) {
-                if (test.sql() != null && test.sql().file() != null) {
-                    paths.add(appHome.resolve(test.sql().file()).normalize());
-                }
-            }
-        }
-        return paths;
-    }
-
-    private static Set<String> testedContracts(List<TestSuite> suites) {
-        Set<String> contracts = new LinkedHashSet<>();
-        for (TestSuite suite : suites) {
-            for (TestCase test : suite.tests()) {
-                if (test.contract() != null && !test.contract().isBlank()) {
-                    contracts.add(stripIdentityPrefix(test.contract()));
-                }
-            }
-        }
-        return contracts;
-    }
-
-    private static String stripIdentityPrefix(String contract) {
-        return contract.startsWith("identity.")
-                ? contract.substring("identity.".length())
-                : contract;
     }
 
     private static boolean flag(AppConfig config, String key) {
