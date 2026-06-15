@@ -65,8 +65,10 @@ class AppPackagerTest {
         Files.createDirectories(appHome.resolve(".tesseraql/docs"));
         Files.writeString(appHome.resolve("config/tesseraql.yml"),
                 "tesseraql:\n  app:\n    name: t\n");
-        // A run-dependent overlay left in the source-tree reserved namespace (e.g. the v2 report).
+        // Run-dependent overlays left in the source-tree reserved namespace (v2 report, v3 schema).
         Files.writeString(appHome.resolve(".tesseraql/docs/report.json"), "{\"runId\":\"x\"}\n");
+        Files.writeString(appHome.resolve(".tesseraql/docs/schema.json"),
+                "{\"schemaVersion\":1}\n");
 
         Path generatedDocs = dir.resolve("target/tesseraql-generated/docs");
         Files.createDirectories(generatedDocs);
@@ -75,9 +77,9 @@ class AppPackagerTest {
         Path out = dir.resolve("app.tqlapp");
         new AppPackager().pack(appHome, generatedDocs, out);
 
-        // The generated spec is merged in; the source-tree overlay is not packed.
+        // The generated spec is merged in; the source-tree overlays are not packed.
         assertThat(entries(out)).contains("config/tesseraql.yml", ".tesseraql/docs/spec.json")
-                .doesNotContain(".tesseraql/docs/report.json");
+                .doesNotContain(".tesseraql/docs/report.json", ".tesseraql/docs/schema.json");
     }
 
     @Test
