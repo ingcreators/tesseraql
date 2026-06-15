@@ -309,10 +309,20 @@ public final class RouteCompiler {
                     transition.assign() == null
                             ? java.util.Map.of()
                             : transition.assign().params(),
-                    deadlineMillis(def, transition.to()));
+                    deadlineMillis(def, transition.to()), assignNotify(def));
             buildTransactionalCommand(builder, routeFile, null, workflow);
         }
         buildWorkflowDelegate(builder, def, basePath, onlyRouteIds);
+    }
+
+    /** The compiled task-assignment reminder (Phase 20 channels), or {@code null} when undeclared. */
+    private static io.tesseraql.yaml.notify.NotifyEvents.CompiledNotify assignNotify(
+            io.tesseraql.yaml.model.WorkflowDefinition def) {
+        if (def.reminders() == null || def.reminders().assigned() == null) {
+            return null;
+        }
+        return io.tesseraql.yaml.notify.NotifyEvents.compile(def.id(), "assigned",
+                def.reminders().assigned());
     }
 
     /**

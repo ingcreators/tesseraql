@@ -4,8 +4,9 @@
 > (slice 1), assignee resolution + task inbox (slice 2), and deadlines + escalation + delegation
 > (slice 3) are implemented. It resolves roadmap decision point 2 in favour of a native SQL-contract
 > state machine (see [Decision](#decision-native-sql-contract-state-machine)). One refinement remains
-> design: `onBreach.escalate` (auto-firing a transition on breach) — slice 3 ships the reassign-based
-> escalation (`onBreach.reassign`), which the cluster-safe sweeper applies exactly once.
+> design: `onBreach.escalate` (auto-firing a transition on breach) — the phase ships the reassign-based
+> escalation (`onBreach.reassign`) the cluster-safe sweeper applies exactly once, plus `notify:`
+> reminders on assignment and escalation over the Phase 20 channels.
 
 An approval workflow drives a **business document** — a purchase request, an expense claim, a leave
 application — through a sequence of states by way of human decisions: submit, approve, reject, return
@@ -278,10 +279,21 @@ reassigns the document's open task to another principal at `POST {basePath}/{key
 then sees it in their inbox (the task store reassigns the open tasks to `{to}`). Only a caller who
 holds the task may delegate, else `TQL-WORKFLOW-3203` (403).
 
-> **Design refinement, not yet shipped:** `onBreach.escalate` (auto-firing a declared transition on
-> breach, recording the workflow itself as actor) and Phase 20 reminder notifications on
-> assignment/escalation. Slice 3 ships the reassign-based escalation above and the built-in
-> delegation.
+**Reminder notifications** ride the Phase 20 channels: a workflow declares a `notify:` block whose
+`assigned` reminder fires when a transition opens a task and whose `escalated` reminder fires when the
+sweeper reassigns one. Each is a `NotifySpec` (channel, optional `when` guard, `payload`) enqueued as
+a `NOTIFICATION` outbox event **in the same transaction** as the task change — so a rolled-back
+transition never notifies and a committed one notifies at-least-once, with the same retries and
+dead-letters as a route's `notify:`. The resolved `assignee` is in the payload scope:
+
+```yaml
+notify:
+  assigned:  { channel: task-mail, payload: { to: assignee, doc: document.id } }
+  escalated: { channel: task-mail, payload: { to: assignee, doc: docId } }
+```
+
+> **Design refinement, not yet shipped:** `onBreach.escalate` — auto-firing a declared transition on
+> breach (recording the workflow itself as actor), as opposed to the reassign-based escalation above.
 
 ## Audit trail
 
@@ -360,11 +372,14 @@ Phase 28 ships in slices, each a reviewable PR with CI green, mirroring how Phas
    `due_at`; the cluster-safe sweeper (`tql_job_claim` claim, `tesseraql.workflow.sweep.interval`)
    reassigns each overdue task to its `onBreach.reassign` resolver, clearing `due_at` so it escalates
    exactly once and recording an `escalate` history row; delegation is a built-in
-   `POST {basePath}/{key}/delegate/{to}` that reassigns the open task to a chosen delegate. The
-   `onBreach.escalate` auto-transition and Phase 20 reminder notifications remain a design refinement.
+   `POST {basePath}/{key}/delegate/{to}` that reassigns the open task to a chosen delegate; and a
+   workflow `notify:` block enqueues `assigned`/`escalated` reminder notifications on the Phase 20
+   outbox channels, in the same transaction as the task change. The `onBreach.escalate` auto-transition
+   remains a design refinement.
    - *Acceptance (met):* an overdue task escalates exactly once (a second sweep is a no-op); a
-     delegated task moves to the delegate, who can then act and the original assignee cannot; the
-     history records every transition and escalation. All covered by the Testcontainers IT.
+     delegated task moves to the delegate, who can then act and the original assignee cannot;
+     assignment and escalation each enqueue a `NOTIFICATION` outbox event; the history records every
+     transition and escalation. All covered by the Testcontainers IT.
 
 Each slice ships its cookbook entry here and keeps the example gallery green; the worked example is a
 purchase-request approval application built only with YAML, 2-way SQL, and templates.

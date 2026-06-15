@@ -18,6 +18,13 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Runtime and recipes
 
+- Approval workflow — reminder notifications (roadmap Phase 28, Phase 20 channels, see
+  [docs/approval-workflow.md](docs/approval-workflow.md)): a workflow declares a `notify:` block whose
+  `assigned` reminder fires when a transition opens a task and whose `escalated` reminder fires when
+  the sweeper reassigns an overdue one. Each is a `NotifySpec` (channel, optional `when` guard,
+  `payload` with the resolved `assignee` in scope) enqueued as a `NOTIFICATION` outbox event in the
+  same transaction as the task change — so a rolled-back transition never notifies and a committed one
+  notifies at-least-once, with the same delivery, retries, and dead-lettering as a route's `notify:`.
 - Approval workflow — deadlines, escalation, and delegation (roadmap Phase 28 slice 3, completing the
   phase, see [docs/approval-workflow.md](docs/approval-workflow.md)): a state's `deadlines` set the
   opened task's `due_at`; a cluster-safe sweeper (a timer claimed through `tql_job_claim` at
