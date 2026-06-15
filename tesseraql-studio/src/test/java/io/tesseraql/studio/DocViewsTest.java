@@ -116,6 +116,25 @@ class DocViewsTest {
     }
 
     @Test
+    void routeBuildsPerLineSqlCoverageForHighlighting() {
+        RouteSpec.SqlStatement sql = new RouteSpec.SqlStatement("sql", "q.sql", null, null, "query",
+                "line1\nline2\nline3", List.of(), List.of());
+        RouteSpec route = new RouteSpec("r", "GET", "/p", "query-json", "route", List.of(), null,
+                List.of(), List.of(), null, List.of(sql));
+        ReportOverlay.RouteReport report = new ReportOverlay.RouteReport(true, List.of(),
+                List.of(new ReportOverlay.SqlFileCoverage("web/q.sql", 0.5, 1.0, 0, 0, List.of(1),
+                        List.of(1, 2))),
+                Map.of());
+
+        Map<String, Object> model = DocViews.route(new RouteEntry(route, List.of()), report);
+
+        List<Map<String, Object>> lines = asRows(asRows(model.get("sql")).get(0).get("lines"));
+        assertThat(lines).extracting(line -> line.get("state"))
+                .containsExactly("covered", "missed", "plain");
+        assertThat(lines.get(0)).containsEntry("number", 1).containsEntry("text", "line1");
+    }
+
+    @Test
     void coverageModelSummarisesKindsGateAndFailingCases() {
         ReportOverlay.RouteReport search = new ReportOverlay.RouteReport(true,
                 List.of(new ReportOverlay.CaseResult("ok", true, "OK"),

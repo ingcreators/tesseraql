@@ -8,9 +8,11 @@ import io.tesseraql.yaml.docs.RouteSpecModel;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Template-ready views over the {@link DocService} (documentation portal v1): pure mappings from the
@@ -288,6 +290,9 @@ public final class DocViews {
                 row.put("linePct", pct(coverage.lineRatio()));
                 row.put("branchPct",
                         coverage.branchCount() == 0 ? null : pct(coverage.branchRatio()));
+                if (statement.statement() != null) {
+                    row.put("lines", coverageLines(statement.statement(), coverage));
+                }
             }
             rows.add(row);
         }
@@ -410,6 +415,32 @@ public final class DocViews {
             outcomes += file.branchOutcomes();
         }
         return branches == 0 ? null : (int) Math.round(100.0 * outcomes / (2.0 * branches));
+    }
+
+    /**
+     * Projects a SQL statement to its source lines tagged by coverage state for line-level
+     * highlighting: {@code covered} (emitted at least once), {@code missed} (coverable but never
+     * emitted), or {@code plain} (not coverable). The statement text is the full SQL file, so its
+     * 1-based line numbers line up with the coverage line sets.
+     */
+    private static List<Map<String, Object>> coverageLines(String statement,
+            ReportOverlay.SqlFileCoverage coverage) {
+        Set<Integer> covered = new HashSet<>(coverage.coveredLines());
+        Set<Integer> coverable = new HashSet<>(coverage.coverableLines());
+        String[] split = statement.split("\n", -1);
+        List<Map<String, Object>> lines = new ArrayList<>();
+        for (int i = 0; i < split.length; i++) {
+            int number = i + 1;
+            String state = covered.contains(number)
+                    ? "covered"
+                    : coverable.contains(number) ? "missed" : "plain";
+            Map<String, Object> line = new LinkedHashMap<>();
+            line.put("number", number);
+            line.put("text", split[i]);
+            line.put("state", state);
+            lines.add(line);
+        }
+        return lines;
     }
 
     private static int pct(double ratio) {

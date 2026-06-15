@@ -242,6 +242,9 @@ class StudioIntegrationTest {
         // The route page shows the run status card and the bound SQL's line/branch coverage.
         assertThat(response.body()).contains("Last test run").contains("covered")
                 .contains("lines").contains("branches");
+        // Slice 4: the bound SQL renders line-by-line with per-line coverage classes.
+        assertThat(response.body()).contains("source--coverage")
+                .contains("cov-line--covered").contains("cov-line__no");
     }
 
     @Test

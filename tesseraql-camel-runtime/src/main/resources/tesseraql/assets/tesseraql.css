@@ -5,3 +5,12 @@ h2{font-size:15px;margin:0 0 12px}
 .source{font-family:monospace;font-size:13px;white-space:pre-wrap;word-break:break-word}
 pre.source{background:var(--hc-color-surface);border:1px solid var(--hc-color-border);border-radius:6px;padding:14px;overflow:auto}
 textarea.source{width:100%;resize:vertical}
+
+/* Documentation portal v2: per-line SQL coverage highlighting (app-specific gutter, not hc). */
+.source--coverage{font-family:monospace;font-size:13px;background:var(--hc-color-surface);border:1px solid var(--hc-color-border);border-radius:6px;padding:8px 0;overflow:auto}
+.cov-line{display:flex;gap:12px;padding:0 12px}
+.cov-line__no{color:var(--hc-color-text-muted,#8b949e);text-align:right;min-width:2.5em;user-select:none}
+.cov-line__src{white-space:pre}
+.cov-line--covered{background:rgba(63,185,80,.18)}
+.cov-line--missed{background:rgba(248,81,73,.18)}
+.cov-swatch{display:inline-block;width:10px;height:10px;border-radius:2px;vertical-align:middle}
