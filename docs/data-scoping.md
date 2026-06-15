@@ -1,6 +1,6 @@
 # Organizational data scoping
 
-> **Status: slice 1 (scope core) delivered; slices 2-3 planned (roadmap Phase 29).** The scope
+> **Status: slices 1-2 delivered; slice 3 (masking integration) planned (roadmap Phase 29).** The scope
 > document, the `/*%scope ... */` directive, additive role-conditional match arms, the lint, and the
 > `data-scope` coverage kind are implemented. The shared org-unit foundation and masking integration
 > are designed below but not yet built; those sections are written in design voice.
@@ -138,16 +138,48 @@ syntax error in a plain tool — the 2-way "runs in a SQL tool" property enforce
 Writes will be scoped the same way: a `/*%scope ... */` in the `WHERE` of an `UPDATE`/`DELETE` (a
 later slice) confines the write to authorized rows.
 
-## Org-unit hierarchy — a shared foundation (slice 2, planned)
+## Org-unit hierarchy — a shared foundation (slice 2, delivered)
 
 "My department and everything under it" needs an org-unit graph. Consistent with IAM's
-managed/SQL-contract realm duality (`IdentityContracts`/`RealmConfig`), the org-unit model is
-either **managed tables** (`tql_org_unit` plus a closure table) or **app-owned SQL contracts** —
-one model, declared once. A subtree scope is then just a fragment that joins the closure (above).
+managed/SQL-contract realm duality (`IdentityContracts`/`RealmConfig`), the org-unit model has two
+modes, selected by `tesseraql.orgunit.mode`:
+
+- **`managed`** — the runtime provisions and maintains two managed tables: `tql_org_unit` (units and
+  their `parent_id` links) and `tql_org_closure` (the transitive closure — every ancestor/descendant
+  pair, depth 0 being the unit itself). The `OrgUnitStore` (`tesseraql-core` SPI,
+  `JdbcOrgUnitStore` impl) maintains the closure: `upsert`/`delete` units, then `rebuildClosure()`
+  recomputes the closure from the parent graph (in Java, so it is dialect-agnostic — no recursive
+  CTE). A subtree scope is then a plain, portable SELECT against the closure:
+
+  ```sql
+  -- scope/orders_subtree.sql
+  $.owner_unit in (select descendant_id from tql_org_closure
+                   where ancestor_id in /* my_units */ ('U1'))
+  ```
+
+  ```yaml
+  # scope/orders_subtree.yml — everyone is subtree-scoped; an org-admin bypasses
+  id: orders_subtree
+  kind: scope
+  match:
+    - when: { role: org-admin }
+      apply: all
+    - file: orders_subtree.sql           # unconditional arm: applies to every principal
+      params:
+        my_units: principal.claim.org_unit
+  ```
+
+  The principal's home unit(s) ride a claim (`principal.claim.org_unit`); the closure turns them into
+  the full subtree. A principal with no unit claim resolves to an empty `in (…)` and sees nothing.
+
+- **`app`** (default) — the application owns its own organization tables; a subtree scope is written
+  against them with the scope-core directive, exactly as above but joining the app's own closure or a
+  recursive view. Nothing managed is provisioned, so an existing app gains no tables until it opts in.
 
 This org-unit model is deliberately factored as a **shared foundation, not a scoping-private
 table**, because the next roadmap phase needs the same graph (see below). It is delivered in
-Phase 29 and consumed unchanged by Phase 28.
+Phase 29 and consumed unchanged by Phase 28 — `OrgUnitStore.descendants(...)` is the Java seam both
+sides reuse.
 
 ### Relationship to Phase 28 (approval workflow)
 
@@ -198,6 +230,7 @@ Lint catches a misdeclared or unreferenceable scope before it ships (delivered i
 | `TQL-SCOPE-3011` | error | a `/*%scope name */` directive names a scope not declared under `scope/` |
 | `TQL-SCOPE-3012` | error | a scope definition is malformed: an arm declares neither/both of `apply` and `file`, an unknown `apply` value, a missing fragment file, or a `when` setting more than one of role/permission/claim (or a `claim` with no `equals`) |
 | `TQL-SCOPE-3013` | error | a directive's `on <alias>` is not a valid SQL identifier |
+| `TQL-SCOPE-3020` | error | `tesseraql.orgunit.mode` is set to something other than `managed` or `app` |
 
 The runtime fails closed: a directive rendered without a scope resolver configured is `TQL-SQL-2106`,
 and a directive naming an undeclared scope is `TQL-SQL-2107` — a scope can never silently no-op.
@@ -220,6 +253,7 @@ Phase 29 ships in slices, each a reviewable PR with CI green:
    renderer in `tesseraql-core`, dependency-free, expanded at execution through the `ScopeResolver`
    SPI), additive `match` arms, the `TQL-SCOPE-30xx` lint, and the `data-scope` coverage kind.
    Attribute-based scoping with no hierarchy; ships value alone.
-2. **Shared org-unit foundation** (planned) — managed/SQL-contract org-unit model (the duality
-   above) and subtree scopes, designed for Phase 28 to consume unchanged.
+2. **Shared org-unit foundation** (delivered) — the `managed`/`app` org-unit model (the duality
+   above): managed `tql_org_unit`/`tql_org_closure` with an `OrgUnitStore` that maintains the
+   closure, and subtree scopes that join it. Designed for Phase 28 to consume unchanged.
 3. **Masking integration** (planned) — row-level `unmaskWhen` keyed off a scope flag column.

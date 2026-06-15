@@ -266,6 +266,15 @@ public final class TesseraqlRuntime implements AutoCloseable {
                 dataSource);
         eventChannelStore.ensureSchema();
         context.getRegistry().bind(TesseraqlProperties.EVENT_CHANNEL_STORE_BEAN, eventChannelStore);
+        // Managed org-unit hierarchy for data scoping (roadmap Phase 29 slice 2): provisioned and
+        // bound only in `managed` mode, so an app that owns its own org tables (the `app` default)
+        // gets no managed schema. A subtree scope joins tql_org_closure; this store maintains it.
+        if (io.tesseraql.yaml.org.OrgUnitSettings.from(manifest.config()).managed()) {
+            io.tesseraql.operations.org.JdbcOrgUnitStore orgUnitStore = new io.tesseraql.operations.org.JdbcOrgUnitStore(
+                    dataSource);
+            orgUnitStore.ensureSchema();
+            context.getRegistry().bind(TesseraqlProperties.ORG_UNIT_STORE_BEAN, orgUnitStore);
+        }
         io.tesseraql.yaml.messaging.MessagingChannels messagingChannels = io.tesseraql.yaml.messaging.MessagingChannels
                 .load(manifest.config());
         // Managed document-number sequences for command steps (roadmap Phase 18).

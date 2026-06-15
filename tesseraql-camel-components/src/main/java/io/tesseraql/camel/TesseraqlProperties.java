@@ -30,6 +30,8 @@ public final class TesseraqlProperties {
     public static final String TENANT_DATASOURCE_RESOLVER_BEAN = "tesseraqlTenantDataSources";
     /** The data-scope resolver expanding {@code /*%scope%/} directives (roadmap Phase 29). */
     public static final String SCOPE_RESOLVER_BEAN = "tesseraqlScopeResolver";
+    /** The managed org-unit hierarchy store, bound in {@code managed} mode (roadmap Phase 29). */
+    public static final String ORG_UNIT_STORE_BEAN = "tesseraqlOrgUnitStore";
 
     /** Registry bean names bound by the runtime for security components. */
     public static final String POLICY_ENGINE_BEAN = "tesseraqlPolicyEngine";

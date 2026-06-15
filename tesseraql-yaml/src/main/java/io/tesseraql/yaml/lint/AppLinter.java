@@ -69,7 +69,17 @@ public final class AppLinter {
         lintI18n(appHome, manifest, findings);
         lintSecurityConfig(appHome, manifest, findings);
         lintScopes(appHome, manifest, findings);
+        lintOrgUnitConfig(manifest.config(), findings);
         return findings;
+    }
+
+    /** Validates org-unit configuration (roadmap Phase 29 slice 2): a known {@code mode}. */
+    private void lintOrgUnitConfig(AppConfig config, List<LintFinding> findings) {
+        String mode = config.getString("tesseraql.orgunit.mode").orElse(null);
+        if (mode != null && !"managed".equalsIgnoreCase(mode) && !"app".equalsIgnoreCase(mode)) {
+            findings.add(new LintFinding("TQL-SCOPE-3020", "error", "config",
+                    "tesseraql.orgunit.mode must be 'managed' or 'app', not '" + mode + "'"));
+        }
     }
 
     /**
