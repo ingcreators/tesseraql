@@ -191,6 +191,24 @@ class ManifestLoaderTest {
     }
 
     @Test
+    void checksumIndexExcludesTheReservedGeneratedArtifactsDir(
+            @org.junit.jupiter.api.io.TempDir Path dir) throws Exception {
+        java.nio.file.Files.createDirectories(dir.resolve("config"));
+        java.nio.file.Files.writeString(dir.resolve("config/tesseraql.yml"),
+                "tesseraql:\n  app:\n    name: t\n");
+        // A packaged app carries build-generated artifacts under .tesseraql/; they are derived from
+        // the source, so the source checksum index must not track them.
+        java.nio.file.Files.createDirectories(dir.resolve(".tesseraql/docs"));
+        java.nio.file.Files.writeString(dir.resolve(".tesseraql/docs/spec.json"), "{}\n");
+
+        AppManifest manifest = new ManifestLoader().load(dir);
+
+        assertThat(manifest.index().fileChecksums())
+                .containsKey("config/tesseraql.yml")
+                .doesNotContainKey(".tesseraql/docs/spec.json");
+    }
+
+    @Test
     void listsNoMigrationsWhenTheAppHasNoDbDirectory(
             @org.junit.jupiter.api.io.TempDir Path dir) throws Exception {
         java.nio.file.Files.createDirectories(dir.resolve("config"));
