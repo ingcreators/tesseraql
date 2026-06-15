@@ -1,16 +1,18 @@
 # Application Documentation Portal
 
-> Status: **v1 & v2 shipped** (2026-06-15); **v3 (schema introspection) planned**. The design brief
-> below records the agreed architecture.
+> Status: **v1, v2 & v3 shipped** (2026-06-15). The design brief below records the agreed
+> architecture.
 > The *v1 (spec layer)* slice is implemented and merged (PR #60–#67). The *v2 (report overlay)*
 > slice is implemented and merged across five sub-slices (report model + `report`/`history.json`
 > sidecar, DocService overlay + badges, coverage dashboard + search filters, per-line SQL coverage
 > highlighting, and run-trend sparklines); its plan is the
 > [Implementation plan — v2 (report overlay)](#implementation-plan--v2-report-overlay) section at
-> the end of this document. The *v3 (schema introspection)* slice is planned but not yet built; its
-> plan is the [Implementation plan — v3 (schema introspection)](#implementation-plan--v3-schema-introspection)
-> section. The forward-looking sections above (*Table definitions*, the *v3 — schema* slice) record
-> the agreed scope it implements.
+> the end of this document. The *v3 (schema introspection)* slice is implemented and merged across
+> two sub-slices (catalog introspection + `schema.json` sidecar, PR #75; schema overlay + table
+> reference pages + search, PR #76); its plan is the
+> [Implementation plan — v3 (schema introspection)](#implementation-plan--v3-schema-introspection)
+> section. The *Table definitions* content area it implements is described above; the route↔table
+> dependency graph and a DB-free DDL parser remain deferred to v3.1.
 
 ## Motivation
 
@@ -104,7 +106,7 @@ Most raw material already exists as deterministic artifacts; the portal is large
 | Page / route specs | spec | `RouteFile.definition` + `HtmxContractGenerator` | render per-page/route from the manifest |
 | Test specs (YAML/SQL) | spec | `TestSuite` model + `TestSuiteLoader` | present declared cases under the route they exercise |
 | Test results + coverage | report | `TestReport` → `tesseraql-result.json`; `SqlCoverage` → `coverage/sql-coverage.json` | **ingest** existing artifacts; do not re-run |
-| Table definitions | — | **the only real gap** (see below) | manifest listing (spec) + introspection (report) |
+| Table definitions | spec + report | migration listing (v1) + catalog introspection → `schema.json` (v3) | **shipped**; SQL→table dependency graph deferred to v3.1 |
 
 References:
 
