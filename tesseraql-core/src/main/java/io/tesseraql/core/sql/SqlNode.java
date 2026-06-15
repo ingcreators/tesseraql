@@ -58,4 +58,14 @@ public sealed interface SqlNode {
             body = List.copyOf(body);
         }
     }
+
+    /**
+     * A row-level scope injection site: {@code /*%scope name on alias *}{@code / (1=1)} (roadmap
+     * Phase 29 — organizational data scoping). The parenthesized dummy keeps the template runnable
+     * in a plain SQL tool; at render time a {@link ScopeResolver} replaces it with a predicate
+     * derived from the request principal, parameterized. {@code alias} (from {@code on <alias>})
+     * qualifies the scoped column for a multi-table query; it is {@code null} for a single table.
+     */
+    record Scope(String name, String alias, int sourceLine) implements SqlNode {
+    }
 }

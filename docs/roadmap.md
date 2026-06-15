@@ -301,10 +301,39 @@ A SQL-contract state machine, consistent with IAM's managed/SQL realm duality: m
 delegation, escalation, and deadlines via the scheduler; a full audit trail; a `workflow`
 coverage kind.
 
+Assignee resolution, the task inbox, and scoped transitions all build on the org-unit
+foundation delivered in Phase 29 (the two are duals over one org graph — see Phase 29 and
+[docs/data-scoping.md](data-scoping.md)); that foundation lands in Phase 29 and is consumed
+here unchanged, rather than introducing a second org model.
+
 ### Phase 29 — organizational data scoping
 
-Org-unit/row-level predicates derived from principal attributes as declared SQL fragments,
-with a scope lint (like the tenant-predicate lint) and masking integration.
+Row-level/org-unit predicates derived from principal attributes (roles, groups, claims) as
+named, reusable **declared SQL fragments**, the row-level complement to multi-tenancy. The full
+design is in [docs/data-scoping.md](data-scoping.md); in summary:
+
+- A `kind: scope` document under `scope/` declares an ordered list of **match arms** — each a
+  `Policy`-style role/permission/claim condition paired with an effect (`all`, `none`, or a 2-way
+  SQL predicate fragment). Multiple matching arms compose **additively (OR)**; no match is
+  deny-by-default (`1=0`).
+- The predicate is injected at an author-chosen `/*%scope name on alias */ (1=1)` site (a new 2-way
+  SQL directive, sibling to `/*%if … */`), parameterized, never by rewriting `WHERE`/`FROM`. A
+  fragment is alias-parameterized (`$` sentinel + `on <alias>`); a scope that needs a join is a
+  correlated `EXISTS`, never a top-level join. Writes are scoped through the `UPDATE`/`DELETE`
+  `WHERE` (a later slice).
+- A scope lint family (`TQL-SCOPE-30xx`, like the tenant-predicate `TQL-TENANT-3001`) and a
+  `data-scope` coverage kind (one item per scope) keep it machine-checkable.
+- Masking integration: column-level role masking already works via `FieldPolicy.policy`; this adds
+  row-level masking keyed off a scope flag column (`unmaskWhen`).
+
+Three slices: (1) **scope core** (attribute-based, no hierarchy) — *delivered*; (2) the **shared
+org-unit foundation** (managed `tql_org_unit`/closure or app-owned SQL contracts, the IAM
+managed/SQL realm duality) that Phase 28 also consumes; (3) masking integration.
+
+Acceptance (slice 1, met): the same query, run by principals with different roles/claims, returns
+each caller's rows only (a bypass role sees all, an unscoped caller sees none, roles compose
+additively); the scope is testable via the `data-scope` coverage kind; and the lint flags a
+directive naming an undeclared scope.
 
 ### Phase 30 — attachments and object storage
 

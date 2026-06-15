@@ -18,6 +18,21 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Runtime and recipes
 
+- Organizational data scoping — scope core (roadmap Phase 29 slice 1, see
+  [docs/data-scoping.md](docs/data-scoping.md)): named, reusable row-level predicates derived from
+  the request principal, the row-level complement to multi-tenancy. A `kind: scope` document under
+  `scope/` declares an ordered list of **match arms** — each a `Policy`-style role/permission/claim
+  `when` paired with an effect (`apply: all`, `apply: none`, or a 2-way SQL predicate `file`).
+  Multiple matching arms compose **additively (OR)**; matching none is deny-by-default (`1=0`). A
+  query opts in with a new 2-way SQL directive, `/*%scope <name> on <alias> */ (1=1)` (sibling to
+  `/*%if … */`, in `tesseraql-core`), whose parenthesized dummy keeps the template runnable in a SQL
+  tool; at execution a `ScopeResolver` replaces it with the principal-derived predicate,
+  parameterized — never by rewriting `WHERE`/`FROM`. Fragments are alias-parameterized with a `$`
+  sentinel (`$.region`) the call site qualifies via `on <alias>`, and a scope needing a join is a
+  correlated `EXISTS`. The resolver is bound only when an app declares scopes; a directive rendered
+  without one fails closed (`TQL-SQL-2106`). Lint (`TQL-SCOPE-3011..3013`) and a `data-scope`
+  coverage kind keep it machine-checkable. The shared org-unit foundation and masking integration
+  are later slices.
 - Messaging and events — Postgres-native event channel (roadmap Phase 27, see
   [docs/messaging.md](docs/messaging.md)): a broker-free publish/subscribe transport built on a
   durable table plus PostgreSQL `LISTEN`/`NOTIFY` — no Kafka, no JMS. A command's `publish:` block

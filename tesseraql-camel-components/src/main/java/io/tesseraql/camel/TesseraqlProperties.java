@@ -28,6 +28,8 @@ public final class TesseraqlProperties {
     /** The {@code FileWriteSpec} (columns, formats, resolved locale/zone) for {@code query-export}. */
     public static final String EXPORT_SPEC = "TesseraqlExportSpec";
     public static final String TENANT_DATASOURCE_RESOLVER_BEAN = "tesseraqlTenantDataSources";
+    /** The data-scope resolver expanding {@code /*%scope%/} directives (roadmap Phase 29). */
+    public static final String SCOPE_RESOLVER_BEAN = "tesseraqlScopeResolver";
 
     /** Registry bean names bound by the runtime for security components. */
     public static final String POLICY_ENGINE_BEAN = "tesseraqlPolicyEngine";

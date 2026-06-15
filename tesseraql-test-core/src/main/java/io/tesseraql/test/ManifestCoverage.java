@@ -6,14 +6,18 @@ import io.tesseraql.test.TestSuite.TestCase;
 import io.tesseraql.yaml.config.AppConfig;
 import io.tesseraql.yaml.manifest.AppManifest;
 import io.tesseraql.yaml.manifest.RouteFile;
+import io.tesseraql.yaml.manifest.ScopeFile;
 import io.tesseraql.yaml.model.RouteDefinition;
 import io.tesseraql.yaml.model.SqlBinding;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.function.Predicate;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * Derives manifest-based coverage kinds from the app manifest and the declarative test suites
@@ -100,6 +104,74 @@ public final class ManifestCoverage {
             }
         }
         return coverage;
+    }
+
+    private static final Pattern SCOPE_DIRECTIVE = Pattern
+            .compile("/\\*%\\s*scope\\s+([^*]+?)\\s*\\*/");
+
+    /**
+     * Data-scope coverage (roadmap Phase 29): every scope declared under {@code scope/} is declared,
+     * and a scope counts as covered when a suite exercises a route (or consumer) whose SQL applies it
+     * through a {@code /*%scope name%/} directive - the same SQL-file basis as route coverage. An app
+     * with no scopes declares nothing and so reports a 1.0 ratio.
+     */
+    public static ItemCoverage dataScope(AppManifest manifest, List<TestSuite> suites) {
+        ItemCoverage coverage = new ItemCoverage("data-scope");
+        Set<String> declared = new LinkedHashSet<>();
+        for (ScopeFile scope : manifest.scopes()) {
+            if (scope.definition().id() != null) {
+                declared.add(scope.definition().id());
+                coverage.declare(scope.definition().id());
+            }
+        }
+        if (declared.isEmpty()) {
+            return coverage;
+        }
+        Set<Path> testedPaths = testedSqlPaths(manifest.appHome(), suites);
+        Set<String> testedContracts = testedContracts(suites);
+        List<RouteFile> all = new ArrayList<>(manifest.routes());
+        all.addAll(manifest.consumers());
+        for (RouteFile route : all) {
+            if (!exercised(route, testedPaths, testedContracts)) {
+                continue;
+            }
+            for (String name : referencedScopes(route)) {
+                if (declared.contains(name)) {
+                    coverage.cover(name);
+                }
+            }
+        }
+        return coverage;
+    }
+
+    /** The scope ids a route applies, scanned from {@code /*%scope%/} directives in its SQL files. */
+    private static Set<String> referencedScopes(RouteFile route) {
+        Set<String> names = new LinkedHashSet<>();
+        Path dir = route.source().getParent();
+        for (SqlBinding binding : bindings(route.definition())) {
+            if (binding.file() == null) {
+                continue;
+            }
+            Path file = dir.resolve(binding.file());
+            if (!Files.isRegularFile(file)) {
+                continue;
+            }
+            Matcher matcher = SCOPE_DIRECTIVE.matcher(readQuietly(file));
+            while (matcher.find()) {
+                String content = matcher.group(1).trim();
+                int on = content.indexOf(" on ");
+                names.add(on >= 0 ? content.substring(0, on).trim() : content);
+            }
+        }
+        return names;
+    }
+
+    private static String readQuietly(Path file) {
+        try {
+            return Files.readString(file);
+        } catch (java.io.IOException ex) {
+            return "";
+        }
     }
 
     /**

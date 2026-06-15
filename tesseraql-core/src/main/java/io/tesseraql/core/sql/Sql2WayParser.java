@@ -64,6 +64,7 @@ public final class Sql2WayParser {
                     switch (directive.keyword()) {
                         case "if" -> nodes.add(parseIf(directive));
                         case "for" -> nodes.add(parseFor(directive));
+                        case "scope" -> nodes.add(parseScope(directive));
                         case "elseif", "else", "end" -> {
                             pendingTerminator = directive;
                             return nodes;
@@ -148,6 +149,32 @@ public final class Sql2WayParser {
         pendingTerminator = null;
         return new SqlNode.For(itemVar, listExpr, ExpressionParser.parse(listExpr), separator,
                 first.sourceLine(), body);
+    }
+
+    private SqlNode parseScope(Directive directive) {
+        String argument = directive.argument("scope").trim();
+        String name = argument;
+        String alias = null;
+        int on = argument.indexOf(" on ");
+        if (on >= 0) {
+            name = argument.substring(0, on).trim();
+            alias = argument.substring(on + " on ".length()).trim();
+        }
+        if (name.isEmpty()) {
+            throw error("scope directive needs a scope name");
+        }
+        if (alias != null && !alias.matches("[A-Za-z_][A-Za-z0-9_]*")) {
+            throw error("scope 'on' alias '" + alias + "' must be a SQL identifier");
+        }
+        // A scope directive replaces a parenthesized dummy predicate so the template stays runnable
+        // in a plain SQL tool (where it reads as `(1=1)`); the resolved scope predicate takes its
+        // place at render time. Requiring the parentheses keeps the boundary unambiguous.
+        if (skipWhitespacePeek() != '(') {
+            throw error("a scope directive must be followed by a parenthesized dummy predicate, "
+                    + "e.g. /*%scope " + name + " */ (1=1)");
+        }
+        skipParenGroup();
+        return new SqlNode.Scope(name, alias, directive.sourceLine());
     }
 
     private Directive requireTerminator(String block) {

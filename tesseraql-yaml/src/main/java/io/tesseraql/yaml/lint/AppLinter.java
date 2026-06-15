@@ -4,12 +4,22 @@ import io.tesseraql.yaml.config.AppConfig;
 import io.tesseraql.yaml.manifest.AppManifest;
 import io.tesseraql.yaml.manifest.ManifestLoader;
 import io.tesseraql.yaml.manifest.RouteFile;
+import io.tesseraql.yaml.manifest.ScopeFile;
+import io.tesseraql.yaml.model.MatchArm;
 import io.tesseraql.yaml.model.RouteDefinition;
+import io.tesseraql.yaml.model.ScopeDefinition;
+import io.tesseraql.yaml.model.SqlBinding;
+import io.tesseraql.yaml.model.WhenCondition;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * Statically lints an app home, independent of Maven, so it is unit-testable (design ch. 18, 20).
@@ -58,6 +68,7 @@ public final class AppLinter {
         lintToolUiLinks(appHome, manifest, findings);
         lintI18n(appHome, manifest, findings);
         lintSecurityConfig(appHome, manifest, findings);
+        lintScopes(appHome, manifest, findings);
         return findings;
     }
 
@@ -628,6 +639,139 @@ public final class AppLinter {
         findings.add(new LintFinding("TQL-TENANT-3001", "warning", source,
                 "Shared-schema route '" + definition.id()
                         + "' has no tenant predicate; bind tenant.id or filter by a tenant column"));
+    }
+
+    private static final Pattern SCOPE_DIRECTIVE = Pattern
+            .compile("/\\*%\\s*scope\\s+([^*]+?)\\s*\\*/");
+    private static final Pattern SQL_IDENTIFIER = Pattern.compile("[A-Za-z_][A-Za-z0-9_]*");
+
+    /**
+     * Lints organizational data scoping (roadmap Phase 29): every {@code scope/} definition is
+     * well-formed, and every {@code /*%scope%/} directive in a query names a declared scope with a
+     * valid {@code on <alias>}.
+     */
+    private void lintScopes(Path appHome, AppManifest manifest, List<LintFinding> findings) {
+        Set<String> declared = new HashSet<>();
+        for (ScopeFile scope : manifest.scopes()) {
+            lintScopeDefinition(appHome, scope, findings);
+            if (scope.definition().id() != null) {
+                declared.add(scope.definition().id());
+            }
+        }
+        for (RouteFile route : manifest.routes()) {
+            lintScopeDirectives(appHome, route, declared, findings);
+        }
+        for (RouteFile consumer : manifest.consumers()) {
+            lintScopeDirectives(appHome, consumer, declared, findings);
+        }
+    }
+
+    /** Checks a scope definition: each arm declares exactly one effect, a valid when, a real file. */
+    private void lintScopeDefinition(Path appHome, ScopeFile scope, List<LintFinding> findings) {
+        String source = relative(appHome, scope.source());
+        ScopeDefinition definition = scope.definition();
+        if (!"scope".equals(definition.kind())) {
+            findings.add(new LintFinding("TQL-SCOPE-3012", "error", source,
+                    "scope '" + definition.id() + "' must declare kind: scope"));
+        }
+        if (definition.match().isEmpty()) {
+            findings.add(new LintFinding("TQL-SCOPE-3012", "error", source,
+                    "scope '" + definition.id() + "' declares no match arms"));
+        }
+        Path scopeDir = scope.source().getParent();
+        int index = 0;
+        for (MatchArm arm : definition.match()) {
+            String where = "scope '" + definition.id() + "' arm " + index;
+            boolean hasApply = arm.apply() != null && !arm.apply().isBlank();
+            boolean hasFile = arm.file() != null && !arm.file().isBlank();
+            if (hasApply == hasFile) {
+                findings.add(new LintFinding("TQL-SCOPE-3012", "error", source,
+                        where + " must declare exactly one of apply (all|none) or file"));
+            }
+            if (hasApply && !arm.isAll() && !arm.isNone()) {
+                findings.add(new LintFinding("TQL-SCOPE-3012", "error", source,
+                        where + " apply must be 'all' or 'none', not '" + arm.apply() + "'"));
+            }
+            if (hasFile && !Files.isRegularFile(scopeDir.resolve(arm.file()))) {
+                findings.add(new LintFinding("TQL-SCOPE-3012", "error", source,
+                        where + " references missing fragment '" + arm.file() + "'"));
+            }
+            lintWhen(arm.when(), where, source, findings);
+            index++;
+        }
+    }
+
+    private void lintWhen(WhenCondition when, String where, String source,
+            List<LintFinding> findings) {
+        if (when == null) {
+            return;
+        }
+        int set = (when.role() != null ? 1 : 0) + (when.permission() != null ? 1 : 0)
+                + (when.claim() != null ? 1 : 0);
+        if (set > 1) {
+            findings.add(new LintFinding("TQL-SCOPE-3012", "error", source,
+                    where + " when must set only one of role/permission/claim"));
+        }
+        if (when.claim() != null && when.value() == null) {
+            findings.add(new LintFinding("TQL-SCOPE-3012", "error", source,
+                    where + " when claim needs an 'equals' value"));
+        }
+    }
+
+    /** Checks each {@code /*%scope%/} directive in a route's SQL names a declared scope. */
+    private void lintScopeDirectives(Path appHome, RouteFile route, Set<String> declared,
+            List<LintFinding> findings) {
+        String source = relative(appHome, route.source());
+        String id = route.definition().id();
+        for (Path sqlFile : routeSqlFiles(route)) {
+            if (!Files.isRegularFile(sqlFile)) {
+                continue;
+            }
+            Matcher matcher = SCOPE_DIRECTIVE.matcher(readQuietly(sqlFile));
+            while (matcher.find()) {
+                String content = matcher.group(1).trim();
+                String name = content;
+                String alias = null;
+                int on = content.indexOf(" on ");
+                if (on >= 0) {
+                    name = content.substring(0, on).trim();
+                    alias = content.substring(on + " on ".length()).trim();
+                }
+                if (!declared.contains(name)) {
+                    findings.add(new LintFinding("TQL-SCOPE-3011", "error", source,
+                            "route '" + id + "' references scope '" + name
+                                    + "' not declared under scope/"));
+                }
+                if (alias != null && !SQL_IDENTIFIER.matcher(alias).matches()) {
+                    findings.add(new LintFinding("TQL-SCOPE-3013", "error", source,
+                            "route '" + id + "' scope 'on' alias '" + alias
+                                    + "' is not a SQL identifier"));
+                }
+            }
+        }
+    }
+
+    /** The non-contract SQL files a route references (its {@code sql}, {@code steps}, {@code queries}). */
+    private static List<Path> routeSqlFiles(RouteFile route) {
+        RouteDefinition definition = route.definition();
+        Path dir = route.source().getParent();
+        Map<String, SqlBinding> bindings = new LinkedHashMap<>();
+        if (definition.sql() != null) {
+            bindings.put("sql", definition.sql());
+        }
+        bindings.putAll(definition.steps());
+        bindings.putAll(definition.queries());
+        List<Path> files = new ArrayList<>();
+        for (SqlBinding binding : bindings.values()) {
+            if (binding != null && !binding.isContract() && binding.file() != null) {
+                files.add(dir.resolve(binding.file()));
+            }
+        }
+        return files;
+    }
+
+    private static String relative(Path appHome, Path source) {
+        return appHome.relativize(source).toString().replace('\\', '/');
     }
 
     /**

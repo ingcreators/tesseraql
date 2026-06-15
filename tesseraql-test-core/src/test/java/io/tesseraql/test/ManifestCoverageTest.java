@@ -28,7 +28,7 @@ class ManifestCoverageTest {
     private static AppManifest manifest(Map<String, Object> config, RouteFile... routes) {
         return new AppManifest(APP_HOME, new AppConfig(config, name -> null),
                 List.of(routes), List.of(), List.of(), List.of(), List.of(), List.of(),
-                ManifestIndex.of(Map.of(), "test"));
+                List.of(), ManifestIndex.of(Map.of(), "test"));
     }
 
     private static io.tesseraql.yaml.manifest.ResourceFile resource(String relativeYmlPath,
@@ -41,7 +41,7 @@ class ManifestCoverageTest {
             io.tesseraql.yaml.manifest.ResourceFile... resources) {
         return new AppManifest(APP_HOME, new AppConfig(Map.of(), name -> null),
                 List.of(), List.of(), List.of(), List.of(resources), List.of(), List.of(),
-                ManifestIndex.of(Map.of(), "test"));
+                List.of(), ManifestIndex.of(Map.of(), "test"));
     }
 
     private static io.tesseraql.yaml.manifest.UiResourceFile uiResource(String relativeYmlPath,
@@ -55,7 +55,7 @@ class ManifestCoverageTest {
             io.tesseraql.yaml.manifest.UiResourceFile... uiResources) {
         return new AppManifest(APP_HOME, new AppConfig(Map.of(), name -> null),
                 List.of(), List.of(), List.of(), List.of(), List.of(uiResources), List.of(),
-                ManifestIndex.of(Map.of(), "test"));
+                List.of(), ManifestIndex.of(Map.of(), "test"));
     }
 
     private static TestSuite sqlSuite(String... sqlFiles) {
@@ -383,7 +383,7 @@ class ManifestCoverageTest {
         AppManifest manifest = new AppManifest(APP_HOME, new AppConfig(Map.of(), name -> null),
                 List.of(route("web/members/post.yml", NOTIFYING_ROUTE)),
                 List.of(notifyingJob()), List.of(), List.of(), List.of(), List.of(),
-                ManifestIndex.of(Map.of(), "test"));
+                List.of(), ManifestIndex.of(Map.of(), "test"));
 
         ItemCoverage all = ManifestCoverage.notification(manifest,
                 List.of(notifySuite("members.register", null, null)));
@@ -430,7 +430,7 @@ class ManifestCoverageTest {
     void httpCallCoverageDeclaresHttpStepsOnlyAndTracksThePlannedOnes() {
         AppManifest manifest = new AppManifest(APP_HOME, new AppConfig(Map.of(), name -> null),
                 List.of(), List.of(httpCallJob()), List.of(), List.of(), List.of(), List.of(),
-                ManifestIndex.of(Map.of(), "test"));
+                List.of(), ManifestIndex.of(Map.of(), "test"));
 
         ItemCoverage all = ManifestCoverage.httpCall(manifest,
                 List.of(httpCallSuite("orders.sync", null)));
@@ -462,7 +462,7 @@ class ManifestCoverageTest {
     void filePollCoverageDeclaresPollJobsAndCoversThoseWhoseImportSqlRuns() {
         AppManifest manifest = new AppManifest(APP_HOME, new AppConfig(Map.of(), name -> null),
                 List.of(), List.of(pollImportJob()), List.of(), List.of(), List.of(), List.of(),
-                ManifestIndex.of(Map.of(), "test"));
+                List.of(), ManifestIndex.of(Map.of(), "test"));
 
         ItemCoverage covered = ManifestCoverage.filePoll(manifest,
                 List.of(sqlSuite("batch/intake/upsert.sql")));
@@ -494,7 +494,7 @@ class ManifestCoverageTest {
                 """);
         AppManifest manifest = new AppManifest(APP_HOME, new AppConfig(Map.of(), name -> null),
                 List.of(), List.of(), List.of(), List.of(), List.of(), List.of(consumer),
-                ManifestIndex.of(Map.of(), "test"));
+                List.of(), ManifestIndex.of(Map.of(), "test"));
 
         ItemCoverage covered = ManifestCoverage.queueConsume(manifest,
                 List.of(sqlSuite("consume/orders/project-order.sql")));
@@ -503,6 +503,46 @@ class ManifestCoverageTest {
         assertThat(covered.kind()).isEqualTo("queue-consume");
         assertThat(covered.declared()).containsExactly("orders.project");
         assertThat(covered.covered()).containsExactly("orders.project");
+        assertThat(uncovered.covered()).isEmpty();
+        assertThat(uncovered.ratio()).isZero();
+    }
+
+    @Test
+    void dataScopeCoverageCoversAScopeWhenAReferencingRouteIsExercised(
+            @org.junit.jupiter.api.io.TempDir Path home) throws Exception {
+        java.nio.file.Files.createDirectories(home.resolve("scope"));
+        java.nio.file.Files.writeString(home.resolve("scope/by_region.sql"),
+                "$.region in /* regions */ ('R1')\n");
+        java.nio.file.Files.writeString(home.resolve("scope/orders_scope.yml"), """
+                version: tesseraql/v1
+                id: orders_scope
+                kind: scope
+                match:
+                  - when: { role: region-manager }
+                    file: by_region.sql
+                    params:
+                      regions: principal.claim.regions
+                """);
+        java.nio.file.Files.createDirectories(home.resolve("web/orders"));
+        java.nio.file.Files.writeString(home.resolve("web/orders/list.sql"),
+                "select * from orders o where /*%scope orders_scope on o */ (1=1)\n");
+        java.nio.file.Files.writeString(home.resolve("web/orders/get.yml"), """
+                version: tesseraql/v1
+                id: orders.list
+                kind: route
+                recipe: query-json
+                sql:
+                  file: list.sql
+                """);
+        AppManifest manifest = new io.tesseraql.yaml.manifest.ManifestLoader().load(home);
+
+        ItemCoverage covered = ManifestCoverage.dataScope(manifest,
+                List.of(sqlSuite("web/orders/list.sql")));
+        ItemCoverage uncovered = ManifestCoverage.dataScope(manifest, List.of());
+
+        assertThat(covered.kind()).isEqualTo("data-scope");
+        assertThat(covered.declared()).containsExactly("orders_scope");
+        assertThat(covered.covered()).containsExactly("orders_scope");
         assertThat(uncovered.covered()).isEmpty();
         assertThat(uncovered.ratio()).isZero();
     }
