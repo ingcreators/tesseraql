@@ -327,8 +327,9 @@ design is in [docs/data-scoping.md](data-scoping.md); in summary:
   row-level masking keyed off a scope flag column (`unmaskWhen`).
 
 Three slices: (1) **scope core** (attribute-based, no hierarchy) — *delivered*; (2) the **shared
-org-unit foundation** (managed `tql_org_unit`/closure or app-owned SQL contracts, the IAM
-managed/SQL realm duality) that Phase 28 also consumes; (3) masking integration.
+org-unit foundation** (`managed` `tql_org_unit`/`tql_org_closure` maintained by an `OrgUnitStore`,
+or `app`-owned tables, the IAM managed/SQL realm duality) that Phase 28 also consumes — *delivered*;
+(3) masking integration.
 
 Acceptance (slice 1, met): the same query, run by principals with different roles/claims, returns
 each caller's rows only (a bypass role sees all, an unscoped caller sees none, roles compose

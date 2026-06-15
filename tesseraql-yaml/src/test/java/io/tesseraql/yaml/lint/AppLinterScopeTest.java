@@ -68,6 +68,18 @@ class AppLinterScopeTest {
     }
 
     @Test
+    void invalidOrgUnitModeIsAnError(@TempDir Path dir) throws Exception {
+        Files.createDirectories(dir.resolve("config"));
+        Files.writeString(dir.resolve("config/tesseraql.yml"), """
+                tesseraql:
+                  orgunit:
+                    mode: bogus
+                """);
+        assertThat(new AppLinter().lint(dir).stream().map(LintFinding::code).toList())
+                .contains("TQL-SCOPE-3020");
+    }
+
+    @Test
     void malformedArmIsAnError(@TempDir Path dir) throws Exception {
         Files.createDirectories(dir.resolve("scope"));
         // An arm declaring neither apply nor file is malformed.

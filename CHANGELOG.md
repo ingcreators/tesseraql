@@ -18,6 +18,18 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Runtime and recipes
 
+- Organizational data scoping — shared org-unit foundation (roadmap Phase 29 slice 2, see
+  [docs/data-scoping.md](docs/data-scoping.md)): a managed org-unit hierarchy that subtree scopes
+  (and, later, Phase 28 approval-workflow assignee resolution) build on — one org graph, the IAM
+  managed/SQL realm duality. `tesseraql.orgunit.mode: managed` provisions `tql_org_unit` (units +
+  `parent_id`) and `tql_org_closure` (the transitive closure, depth 0 = the unit itself); the
+  `OrgUnitStore` SPI (`tesseraql-core`) and `JdbcOrgUnitStore` impl maintain it — `upsert`/`delete`
+  units then `rebuildClosure()` recomputes the closure from the parent graph in Java, so it is
+  dialect-agnostic (no recursive CTE) and a subtree scope stays a plain, portable
+  `owner_unit in (select descendant_id from tql_org_closure where ancestor_id in /* my_units */ (…))`.
+  `mode: app` (the default) provisions nothing — the app owns its org tables and writes the fragment
+  against them. `OrgUnitStore.descendants(...)` is the Java seam Phase 28 reuses. Lint
+  (`TQL-SCOPE-3020`) validates the mode.
 - Organizational data scoping — scope core (roadmap Phase 29 slice 1, see
   [docs/data-scoping.md](docs/data-scoping.md)): named, reusable row-level predicates derived from
   the request principal, the row-level complement to multi-tenancy. A `kind: scope` document under
