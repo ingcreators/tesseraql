@@ -28,7 +28,7 @@ class ManifestCoverageTest {
     private static AppManifest manifest(Map<String, Object> config, RouteFile... routes) {
         return new AppManifest(APP_HOME, new AppConfig(config, name -> null),
                 List.of(routes), List.of(), List.of(), List.of(), List.of(), List.of(),
-                List.of(), List.of(), ManifestIndex.of(Map.of(), "test"));
+                List.of(), List.of(), List.of(), ManifestIndex.of(Map.of(), "test"));
     }
 
     private static io.tesseraql.yaml.manifest.ResourceFile resource(String relativeYmlPath,
@@ -41,7 +41,7 @@ class ManifestCoverageTest {
             io.tesseraql.yaml.manifest.ResourceFile... resources) {
         return new AppManifest(APP_HOME, new AppConfig(Map.of(), name -> null),
                 List.of(), List.of(), List.of(), List.of(resources), List.of(), List.of(),
-                List.of(), List.of(), ManifestIndex.of(Map.of(), "test"));
+                List.of(), List.of(), List.of(), ManifestIndex.of(Map.of(), "test"));
     }
 
     private static io.tesseraql.yaml.manifest.UiResourceFile uiResource(String relativeYmlPath,
@@ -55,7 +55,7 @@ class ManifestCoverageTest {
             io.tesseraql.yaml.manifest.UiResourceFile... uiResources) {
         return new AppManifest(APP_HOME, new AppConfig(Map.of(), name -> null),
                 List.of(), List.of(), List.of(), List.of(), List.of(uiResources), List.of(),
-                List.of(), List.of(), ManifestIndex.of(Map.of(), "test"));
+                List.of(), List.of(), List.of(), ManifestIndex.of(Map.of(), "test"));
     }
 
     private static TestSuite sqlSuite(String... sqlFiles) {
@@ -383,7 +383,7 @@ class ManifestCoverageTest {
         AppManifest manifest = new AppManifest(APP_HOME, new AppConfig(Map.of(), name -> null),
                 List.of(route("web/members/post.yml", NOTIFYING_ROUTE)),
                 List.of(notifyingJob()), List.of(), List.of(), List.of(), List.of(),
-                List.of(), List.of(), ManifestIndex.of(Map.of(), "test"));
+                List.of(), List.of(), List.of(), ManifestIndex.of(Map.of(), "test"));
 
         ItemCoverage all = ManifestCoverage.notification(manifest,
                 List.of(notifySuite("members.register", null, null)));
@@ -430,7 +430,7 @@ class ManifestCoverageTest {
     void httpCallCoverageDeclaresHttpStepsOnlyAndTracksThePlannedOnes() {
         AppManifest manifest = new AppManifest(APP_HOME, new AppConfig(Map.of(), name -> null),
                 List.of(), List.of(httpCallJob()), List.of(), List.of(), List.of(), List.of(),
-                List.of(), List.of(), ManifestIndex.of(Map.of(), "test"));
+                List.of(), List.of(), List.of(), ManifestIndex.of(Map.of(), "test"));
 
         ItemCoverage all = ManifestCoverage.httpCall(manifest,
                 List.of(httpCallSuite("orders.sync", null)));
@@ -462,7 +462,7 @@ class ManifestCoverageTest {
     void filePollCoverageDeclaresPollJobsAndCoversThoseWhoseImportSqlRuns() {
         AppManifest manifest = new AppManifest(APP_HOME, new AppConfig(Map.of(), name -> null),
                 List.of(), List.of(pollImportJob()), List.of(), List.of(), List.of(), List.of(),
-                List.of(), List.of(), ManifestIndex.of(Map.of(), "test"));
+                List.of(), List.of(), List.of(), ManifestIndex.of(Map.of(), "test"));
 
         ItemCoverage covered = ManifestCoverage.filePoll(manifest,
                 List.of(sqlSuite("batch/intake/upsert.sql")));
@@ -494,7 +494,7 @@ class ManifestCoverageTest {
                 """);
         AppManifest manifest = new AppManifest(APP_HOME, new AppConfig(Map.of(), name -> null),
                 List.of(), List.of(), List.of(), List.of(), List.of(), List.of(consumer),
-                List.of(), List.of(), ManifestIndex.of(Map.of(), "test"));
+                List.of(), List.of(), List.of(), ManifestIndex.of(Map.of(), "test"));
 
         ItemCoverage covered = ManifestCoverage.queueConsume(manifest,
                 List.of(sqlSuite("consume/orders/project-order.sql")));

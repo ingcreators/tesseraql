@@ -52,6 +52,12 @@ public final class TesseraqlProperties {
     public static final String DOCUMENT_SEQUENCES_BEAN = "tesseraqlDocumentSequences";
     /** The asynchronous file import/export service (design ch. 28). */
     public static final String FILE_TRANSFER_BEAN = "tesseraqlFileTransfers";
+    /** The durable object store backing attachments (file default, roadmap Phase 30). */
+    public static final String BLOB_STORE_BEAN = "tesseraqlBlobStore";
+    /** The managed attachment-metadata store, bound in {@code managed} mode (roadmap Phase 30). */
+    public static final String ATTACHMENT_STORE_BEAN = "tesseraqlAttachmentStore";
+    /** The attachment upload/download service (roadmap Phase 30). */
+    public static final String ATTACHMENT_SERVICE_BEAN = "tesseraqlAttachmentService";
     /** The inbound-webhook replay store (roadmap Phase 26). */
     public static final String WEBHOOK_REPLAY_STORE_BEAN = "tesseraqlWebhookReplayStore";
     /** The messaging channel event-log store backing the pg-notify transport (roadmap Phase 27). */

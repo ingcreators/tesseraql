@@ -323,6 +323,22 @@ public final class TesseraqlRuntime implements AutoCloseable {
                 tempStore, dataSource, io.tesseraql.core.files.FileCodecs.discover());
         fileTransfers.ensureSchema();
         context.getRegistry().bind(TesseraqlProperties.FILE_TRANSFER_BEAN, fileTransfers);
+        // Managed attachments (roadmap Phase 30 slice 1): provisioned and bound when the app declares
+        // attachment documents in `managed` mode (the default). The durable file blob store and the
+        // metadata table back the synthesized upload/list/download routes; an app with no attachments
+        // gets neither table nor blob directory.
+        if (attachmentsNeedManagedStore(manifest)) {
+            io.tesseraql.core.blob.FileBlobStore blobStore = new io.tesseraql.core.blob.FileBlobStore(
+                    appHome.resolve("work/blob/tesseraql"));
+            context.getRegistry().bind(TesseraqlProperties.BLOB_STORE_BEAN, blobStore);
+            io.tesseraql.operations.attachment.JdbcAttachmentStore attachmentStore = new io.tesseraql.operations.attachment.JdbcAttachmentStore(
+                    dataSource);
+            attachmentStore.ensureSchema();
+            context.getRegistry().bind(TesseraqlProperties.ATTACHMENT_STORE_BEAN, attachmentStore);
+            context.getRegistry().bind(TesseraqlProperties.ATTACHMENT_SERVICE_BEAN,
+                    new io.tesseraql.operations.attachment.DefaultAttachmentService(blobStore,
+                            attachmentStore));
+        }
         JobExecutor jobExecutor = new JobExecutor(jobRepository, tempStore, slowSqlLog, tracer)
                 .notificationOutbox(outboxStore)
                 // Outbound REST for http-call pipeline steps (roadmap Phase 26): deny-by-default
@@ -722,6 +738,14 @@ public final class TesseraqlRuntime implements AutoCloseable {
             }
         }
         return false;
+    }
+
+    /** Whether the app declares attachment documents in {@code managed} mode (roadmap Phase 30). */
+    private static boolean attachmentsNeedManagedStore(
+            io.tesseraql.yaml.manifest.AppManifest manifest) {
+        return !manifest.attachments().isEmpty()
+                && io.tesseraql.yaml.attachment.AttachmentSettings.from(manifest.config())
+                        .managed();
     }
 
     /** Whether any declared workflow has a transition that assigns a task (roadmap Phase 28 slice 2). */

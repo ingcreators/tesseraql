@@ -248,23 +248,30 @@ in-app sweep. Provider lifecycle stays an optional optimization, never the mecha
 
 ## Lint and coverage
 
-Machine-checkable like every other recipe (extension principle 4). Proposed codes (next free in
-each family; `TQL-SEC-4100` is reserved by Phase 29 for write-scope bypass, so object-storage egress
-takes `TQL-SEC-411x`):
+Machine-checkable like every other recipe (extension principle 4). The attachment document gets its
+own lint family (`TQL-ATTACH-34xx`, mirroring the `TQL-WORKFLOW`/`TQL-SCOPE` per-kind families rather
+than crowding the `TQL-YAML` loader-error number space); object-storage egress in slice 2 takes
+`TQL-SEC-411x` (`TQL-SEC-4100` is reserved by Phase 29 for write-scope bypass):
 
-| Code | Severity | Meaning |
-| --- | --- | --- |
-| `TQL-YAML-12xx` | error | a `kind: attachment` document is malformed: missing `bucket`/`record`, missing `limits`, an app-mode document without `insert:`/`select:` |
-| `TQL-YAML-12xx` | error | an attachment `bucket` is not configured under `tesseraql.object-storage.buckets` |
-| `TQL-SEC-411x` | error | an attachment's resolved bucket is not in `tesseraql.object-storage.allowedBuckets` (deny-by-default) |
-| `TQL-SEC-411x` | error | `provider: s3` without resolvable credentials, or `scan: require-clean` with no scanner installed and no explicit opt-out |
+| Code | Severity | Meaning | Status |
+| --- | --- | --- | --- |
+| `TQL-ATTACH-3401` | error | a `kind: attachment` document does not declare `kind: attachment` | slice 1 |
+| `TQL-ATTACH-3402` | error | a `kind: attachment` document is missing `basePath` | slice 1 |
+| `TQL-ATTACH-3403` | error | a `kind: attachment` document is missing `record.entity`/`record.key` | slice 1 |
+| `TQL-ATTACH-3404` | error | the `basePath` does not contain the record key as a path parameter | slice 1 |
+| `TQL-ATTACH-3405` | error | `limits.maxBytes` is missing or unparseable | slice 1 |
+| `TQL-SEC-411x` | error | an attachment's resolved bucket is not in `tesseraql.object-storage.allowedBuckets` (deny-by-default) | slice 2 |
+| `TQL-SEC-411x` | error | `provider: s3` without resolvable credentials, or `scan: require-clean` with no scanner installed | slice 2/3 |
 
-The runtime fails closed: an attachment route compiled without a `BlobStore` bound, or a `bucket`
-outside the allow-list, is a build error — an attachment can never silently no-op.
+The runtime fails closed: a `404` when an attachment is unknown or owned by a different record (an
+attachment is never leaked across records), a `413` past the size limit, a `415` for a disallowed
+content type — all mapped from the `TQL-LD-284x` codes the upload/download processors raise.
 
-A new **`attachment`** coverage kind declares one item per `kind: attachment` document; it counts as
-covered when a declarative suite exercises its upload or download route. Gate it with
-`coverage.thresholds.attachment`. An app with no attachments reports a 1.0 ratio.
+An **`attachment`** coverage kind (one item per `kind: attachment` document, gated with
+`coverage.thresholds.attachment`) is the slice-1 follow-up: it needs a declarative test target that
+exercises the upload/download round-trip, which pulls the attachment runtime into the test harness —
+a focused change kept out of the core slice. The `TQL-ATTACH-34xx` lint already makes the attachment
+surface machine-checkable in the meantime.
 
 ## Module layout
 
@@ -307,9 +314,12 @@ stores).
 Phase 30 ships in slices, each a reviewable PR with CI green:
 
 1. **Attachment core** — the `BlobStore`/`BlobWriter`/`BlobRef` SPI and `FileBlobStore` default
-   (`tesseraql-core`), the `AttachmentStore` managed/app duality, the `kind: attachment` document and
-   its synthesized off-heap upload/download routes, the `TQL-YAML-12xx` lint, and the `attachment`
-   coverage kind. No S3, no new module — ships value on local storage alone.
+   (`tesseraql-core`), the `AttachmentStore` and `AttachmentService` SPIs with the managed
+   `tql_attachment` store (`tesseraql-operations`), the `kind: attachment` document and its
+   synthesized off-heap upload/list/download routes (`tesseraql-compiler`/runtime), and the
+   `TQL-ATTACH-34xx` lint. No S3, no new module — ships value on local storage alone. **Delivered**
+   for managed mode; app-mode 2-way SQL metadata and the `attachment` coverage kind are the
+   immediate slice-1 follow-up.
 2. **`tesseraql-s3` leaf module** — `S3BlobStore` on AWS SDK v2 with the `RuntimeExtension`
    self-install, the deny-by-default `allowedBuckets` egress and SecretResolver credentials, the
    `endpoint`/`region`/`pathStyle`/`checksumMode` compatibility settings, the `TQL-SEC-411x` lint,
