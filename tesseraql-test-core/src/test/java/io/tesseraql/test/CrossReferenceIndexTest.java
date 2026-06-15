@@ -119,6 +119,27 @@ class CrossReferenceIndexTest {
     }
 
     @Test
+    void casesForCollectsCasesLinkedBySqlContractValidateRouteAndNotifyRoute() {
+        RouteFile route = route("web/api/users/get.yml", SEARCH_ROUTE);
+        TestSuite suite = new TestSuite(List.of(
+                new TestCase("by sql", new SqlTarget("web/api/users/search.sql"), null, Map.of(),
+                        null, null, null, null),
+                new TestCase("by validate", null, null, Map.of(), null,
+                        new TestSuite.ValidateTarget("users.search", null), null, null),
+                new TestCase("by notify", null, null, Map.of(), null, null,
+                        new TestSuite.NotifyTarget("users.search", null, null), null),
+                new TestCase("unrelated route", null, null, Map.of(), null,
+                        new TestSuite.ValidateTarget("other.route", null), null, null),
+                new TestCase("unrelated sql", new SqlTarget("web/other/x.sql"), null, Map.of(),
+                        null, null, null, null)));
+        CrossReferenceIndex index = CrossReferenceIndex.of(manifest(), List.of(suite));
+
+        // SQL/contract bindings and id-based validate/notify targets all link; others do not.
+        assertThat(index.casesFor(route)).extracting(TestCase::name)
+                .containsExactly("by sql", "by validate", "by notify");
+    }
+
+    @Test
     void bindingsGathersTheMainSqlAndEveryNamedQuery() {
         RouteDefinition definition = PARSER.parseRoute("""
                 version: tesseraql/v1

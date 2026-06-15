@@ -29,18 +29,23 @@ import java.util.Set;
  */
 public final class CrossReferenceIndex {
 
+    private final Path appHome;
+    private final List<TestSuite> suites;
     private final Set<Path> testedSqlPaths;
     private final Set<String> testedContracts;
 
-    private CrossReferenceIndex(Set<Path> testedSqlPaths, Set<String> testedContracts) {
+    private CrossReferenceIndex(Path appHome, List<TestSuite> suites, Set<Path> testedSqlPaths,
+            Set<String> testedContracts) {
+        this.appHome = appHome;
+        this.suites = suites;
         this.testedSqlPaths = testedSqlPaths;
         this.testedContracts = testedContracts;
     }
 
     /** Builds the index over an application's manifest home and its declarative test suites. */
     public static CrossReferenceIndex of(AppManifest manifest, List<TestSuite> suites) {
-        return new CrossReferenceIndex(testedSqlPaths(manifest.appHome(), suites),
-                testedContracts(suites));
+        return new CrossReferenceIndex(manifest.appHome(), List.copyOf(suites),
+                testedSqlPaths(manifest.appHome(), suites), testedContracts(suites));
     }
 
     /** The app-home-relative SQL file paths a {@code sql:} test case targets. */
@@ -78,6 +83,62 @@ public final class CrossReferenceIndex {
             }
         }
         return false;
+    }
+
+    /**
+     * The declarative test cases that cover the route: those exercising one of its SQL artifacts
+     * (by SQL file or Identity SQL Contract) and those targeting it by id through a
+     * {@code validate.route} or {@code notify.route} case. The portal attaches these to each route's
+     * reference page; order follows suite then in-suite declaration order.
+     */
+    public List<TestCase> casesFor(RouteFile route) {
+        return casesFor(route.definition().id(), route.source().getParent(), route.definition());
+    }
+
+    /**
+     * The test cases covering the given route, addressed by id, directory, and definition.
+     *
+     * @param routeId    the route id matched by {@code validate.route}/{@code notify.route} cases
+     * @param routeDir   the directory of the YAML file declaring the route
+     * @param definition the route definition whose SQL bindings are matched
+     */
+    public List<TestCase> casesFor(String routeId, Path routeDir, RouteDefinition definition) {
+        Set<Path> boundPaths = new LinkedHashSet<>();
+        Set<String> boundContracts = new LinkedHashSet<>();
+        for (SqlBinding binding : bindings(definition)) {
+            if (binding.file() != null) {
+                boundPaths.add(routeDir.resolve(binding.file()).normalize());
+            }
+            if (binding.contract() != null) {
+                boundContracts.add(stripIdentityPrefix(binding.contract()));
+            }
+        }
+        List<TestCase> cases = new ArrayList<>();
+        for (TestSuite suite : suites) {
+            for (TestCase test : suite.tests()) {
+                if (links(test, routeId, boundPaths, boundContracts)) {
+                    cases.add(test);
+                }
+            }
+        }
+        return cases;
+    }
+
+    private boolean links(TestCase test, String routeId, Set<Path> boundPaths,
+            Set<String> boundContracts) {
+        if (test.sql() != null && test.sql().file() != null
+                && boundPaths.contains(appHome.resolve(test.sql().file()).normalize())) {
+            return true;
+        }
+        if (test.contract() != null && !test.contract().isBlank()
+                && boundContracts.contains(stripIdentityPrefix(test.contract()))) {
+            return true;
+        }
+        if (routeId == null) {
+            return false;
+        }
+        return (test.validate() != null && routeId.equals(test.validate().route()))
+                || (test.notifications() != null && routeId.equals(test.notifications().route()));
     }
 
     /**
