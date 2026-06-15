@@ -255,10 +255,11 @@ public final class ErrorResponseRenderer implements Processor {
                 default -> 404;
             };
             // Approval workflow (roadmap Phase 28): an illegal/concurrent transition is a conflict,
-            // a falsy guard an unprocessable entity.
+            // a falsy guard an unprocessable entity, an unassigned caller a forbidden.
             case WORKFLOW -> switch (code.number()) {
                 case 3201 -> 409;
                 case 3202 -> 422;
+                case 3203 -> 403;
                 default -> 500;
             };
             default -> 500;

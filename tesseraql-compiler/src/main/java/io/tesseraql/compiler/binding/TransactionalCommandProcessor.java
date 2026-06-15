@@ -16,6 +16,7 @@ import io.tesseraql.core.sql.SqlNode;
 import io.tesseraql.core.sql.SqlRenderer;
 import io.tesseraql.core.validation.ValidationRules;
 import io.tesseraql.core.workflow.WorkflowStore;
+import io.tesseraql.core.workflow.WorkflowTaskStore;
 import io.tesseraql.security.Principal;
 import io.tesseraql.yaml.model.ErrorsSpec;
 import io.tesseraql.yaml.model.OutboxSpec;
@@ -101,6 +102,8 @@ public final class TransactionalCommandProcessor implements Processor {
     /** TQL-WORKFLOW-3210: a managed transition needs the runtime's WorkflowStore bean. */
     private static final TqlErrorCode NO_WORKFLOW_STORE = new TqlErrorCode(TqlDomain.WORKFLOW,
             3210);
+    /** TQL-WORKFLOW-3203: the caller holds no actionable task for the document (HTTP 403). */
+    private static final TqlErrorCode NOT_ASSIGNED = new TqlErrorCode(TqlDomain.WORKFLOW, 3203);
 
     /** The reserved bind namespace for the canonical audit binds. */
     private static final String AUDIT = "audit";
@@ -366,13 +369,15 @@ public final class TransactionalCommandProcessor implements Processor {
                         context.put(step.contextKey(), result);
                     }
                 }
-                // Append the immutable history row in the same transaction (roadmap Phase 28), so
-                // the audit record commits or rolls back with the state change.
+                // Append the immutable history row, complete the prior tasks, and open the new
+                // state's tasks — all in the same transaction (roadmap Phase 28), so the audit
+                // record and the inbox change commit or roll back with the state change.
                 if (wf != null) {
                     wf.store().appendHistory(connection, new WorkflowStore.History(null,
                             workflow.docType(), wf.docId(), workflow.transitionId(),
                             wf.fromState(), workflow.to(), (String) audit.get("user"),
                             ((java.sql.Timestamp) audit.get("now")).toInstant(), null));
+                    applyTasks(connection, wf, context, (String) audit.get("user"));
                 }
                 if (outboxEvents != null) {
                     String eventId = store.insert(connection, outboxEvents.build(context));
@@ -426,26 +431,29 @@ public final class TransactionalCommandProcessor implements Processor {
         return audit;
     }
 
-    /** The store and resolved document identity for an in-flight workflow transition. */
-    private record WorkflowExec(WorkflowStore store, String docId, String fromState) {
+    /** The stores and resolved document/principal identity for an in-flight workflow transition. */
+    private record WorkflowExec(WorkflowStore store, WorkflowTaskStore taskStore, String docId,
+            String fromState, String tenant) {
     }
 
     /**
-     * Prepares a workflow transition inside the transaction: resolves the store, ensures the managed
+     * Prepares a workflow transition inside the transaction: resolves the stores, ensures the managed
      * instance exists, loads the document for the guard, verifies the current state allows this
-     * transition, and evaluates the guard. Returns the store and the document's current state.
+     * transition, evaluates the guard, and checks task authority (a document with open tasks may only
+     * be transitioned by someone who holds one). Returns the stores and the document's current state.
      */
     private WorkflowExec beginWorkflow(Exchange exchange, Connection connection,
             Map<String, Object> context) throws SQLException {
         WorkflowStore store = workflow.managed()
                 ? lookupWorkflowStore(exchange)
                 : workflow.appStore();
+        WorkflowTaskStore taskStore = lookupTaskStore(exchange);
         EvaluationContext evaluation = new EvaluationContext(context);
         Object keyValue = evaluation.resolve(Arrays.asList(workflow.keyExpr().split("\\.")));
         String docId = keyValue == null ? null : String.valueOf(keyValue);
         Object tenant = context.get("tenant");
-        store.ensureInstance(connection, workflow.docType(), docId, workflow.initial(),
-                tenant == null ? null : String.valueOf(tenant));
+        String tenantId = tenant == null ? null : String.valueOf(tenant);
+        store.ensureInstance(connection, workflow.docType(), docId, workflow.initial(), tenantId);
         context.put("document", loadDocument(connection, docId));
         String current = store.currentState(connection, workflow.docType(), docId);
         String from = current != null ? current : workflow.initial();
@@ -459,7 +467,23 @@ public final class TransactionalCommandProcessor implements Processor {
                             + workflow.transitionId() + "' guard rejected the request")
                     .build();
         }
-        return new WorkflowExec(store, docId, from);
+        // Task authority (roadmap Phase 28 slice 2): a document with open tasks may only be
+        // transitioned by someone who holds one (the direct assignee or a candidate group). A
+        // document with no open tasks (an initial or unassigned state) is gated only by route policy.
+        if (taskStore != null) {
+            Principal principal = context.get("principal") instanceof Principal p ? p : null;
+            String subject = principal == null ? null : principal.subject();
+            List<String> groups = principal == null ? List.of() : principal.groups();
+            if (taskStore.hasOpenTasks(connection, workflow.docType(), docId)
+                    && !taskStore.canAct(connection, workflow.docType(), docId, subject, groups)) {
+                throw TqlException.builder(NOT_ASSIGNED)
+                        .message("Workflow '" + workflow.workflowId() + "': transition '"
+                                + workflow.transitionId()
+                                + "' requires an assigned task the caller does not hold")
+                        .build();
+            }
+        }
+        return new WorkflowExec(store, taskStore, docId, from, tenantId);
     }
 
     /** Loads the document row by key, lower-casing column labels so the guard reads `document.col`. */
@@ -491,6 +515,46 @@ public final class TransactionalCommandProcessor implements Processor {
                     + "' is managed but no workflow store is configured");
         }
         return store;
+    }
+
+    /** The task inbox store, bound when any workflow assigns tasks, or {@code null} otherwise. */
+    private static WorkflowTaskStore lookupTaskStore(Exchange exchange) {
+        return exchange.getContext().getRegistry().lookupByNameAndType(
+                TesseraqlProperties.WORKFLOW_TASK_STORE_BEAN, WorkflowTaskStore.class);
+    }
+
+    /**
+     * Completes the document's open tasks (the ones the caller acted on) and opens the resulting
+     * state's tasks from the transition's {@code assign} contract (roadmap Phase 28 slice 2). Runs
+     * inside the transaction, after the command, so the inbox change commits with the transition.
+     */
+    @SuppressWarnings("unchecked")
+    private void applyTasks(Connection connection, WorkflowExec wf, Map<String, Object> context,
+            String actor) throws SQLException {
+        if (wf.taskStore() == null) {
+            return;
+        }
+        wf.taskStore().completeOpenTasks(connection, workflow.docType(), wf.docId(), actor);
+        if (workflow.assignNodes() == null) {
+            return;
+        }
+        EvaluationContext evaluation = new EvaluationContext(context);
+        Map<String, Object> params = new LinkedHashMap<>();
+        workflow.assignParams().forEach((bindName, sourceExpr) -> params.put(bindName,
+                evaluation.resolve(Arrays.asList(sourceExpr.split("\\.")))));
+        BoundSql bound = SqlRenderer.render(workflow.assignNodes(), params);
+        Map<String, Object> result = executeQuery(connection, bound);
+        for (Map<String, Object> row : (List<Map<String, Object>>) result.get("rows")) {
+            String assignee = row.get("assignee") == null
+                    ? null
+                    : String.valueOf(row.get("assignee"));
+            Object group = row.get("candidate_group");
+            String candidateGroup = group == null ? null : String.valueOf(group);
+            if (assignee != null || candidateGroup != null) {
+                wf.taskStore().openTask(connection, new WorkflowTaskStore.Task(workflow.docType(),
+                        wf.docId(), workflow.to(), assignee, candidateGroup, wf.tenant()));
+            }
+        }
     }
 
     private TqlException illegalTransition(String actualState, String reason) {

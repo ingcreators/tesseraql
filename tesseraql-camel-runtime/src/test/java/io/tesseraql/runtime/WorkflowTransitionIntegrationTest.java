@@ -32,10 +32,11 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
 /**
- * Acceptance test for the approval-workflow core (roadmap Phase 28 slice 1): a managed state machine
- * drives a business document through its transitions, and the app-mode duality keeps state in the
- * business table's column. A transition advances the state and appends history in one transaction;
- * an undeclared transition is a 409, a falsy guard a 422.
+ * Acceptance test for the approval-workflow core and task inbox (roadmap Phase 28 slices 1–2): a
+ * managed state machine drives a business document through its transitions; a transition resolves
+ * assignees and opens a task, and a document with open tasks may only be transitioned by someone who
+ * holds one. State advance, history, and the inbox change commit in one transaction; an undeclared
+ * transition is a 409, a falsy guard a 422, an unassigned caller a 403.
  */
 @Testcontainers
 class WorkflowTransitionIntegrationTest {
@@ -68,8 +69,10 @@ class WorkflowTransitionIntegrationTest {
 
     @Test
     void managedTransitionAdvancesStateAndRecordsHistory() throws Exception {
-        assertThat(post("/purchase-requests/PR-1/submit").statusCode()).isEqualTo(200);
-        assertThat(post("/purchase-requests/PR-1/approve").statusCode()).isEqualTo(200);
+        assertThat(post("/purchase-requests/PR-1/submit", "approver-1").statusCode())
+                .isEqualTo(200);
+        assertThat(post("/purchase-requests/PR-1/approve", "approver-1").statusCode())
+                .isEqualTo(200);
 
         assertThat(instanceState("purchase_request", "PR-1")).isEqualTo("approved");
         assertThat(column("purchase_requests", "last_action", "PR-1")).isEqualTo("approve");
@@ -78,34 +81,62 @@ class WorkflowTransitionIntegrationTest {
     }
 
     @Test
+    void submitOpensATaskForTheResolvedAssignee() throws Exception {
+        assertThat(post("/purchase-requests/PR-4/submit", "requester-1").statusCode())
+                .isEqualTo(200);
+        // The submit transition's assign contract resolved the approver and opened a task.
+        assertThat(taskCount("PR-4", "OPEN")).isEqualTo(1);
+        assertThat(openTaskAssignee("PR-4")).isEqualTo("approver-1");
+
+        // Acting completes the prior task; approve assigns no further task.
+        assertThat(post("/purchase-requests/PR-4/approve", "approver-1").statusCode())
+                .isEqualTo(200);
+        assertThat(taskCount("PR-4", "OPEN")).isZero();
+        assertThat(taskCount("PR-4", "DONE")).isEqualTo(1);
+    }
+
+    @Test
+    void nonAssigneeIsForbidden() throws Exception {
+        assertThat(post("/purchase-requests/PR-5/submit", "requester-1").statusCode())
+                .isEqualTo(200);
+        // 'intruder' holds no task for PR-5, so the approve is forbidden.
+        assertThat(post("/purchase-requests/PR-5/approve", "intruder").statusCode()).isEqualTo(403);
+        assertThat(instanceState("purchase_request", "PR-5")).isEqualTo("submitted");
+        assertThat(taskCount("PR-5", "OPEN")).isEqualTo(1);
+    }
+
+    @Test
     void falsyGuardIsUnprocessable() throws Exception {
         // PR-2 has amount 0, so the submit guard `document.amount > 0` rejects it.
-        assertThat(post("/purchase-requests/PR-2/submit").statusCode()).isEqualTo(422);
-        // The rejected transition rolls back entirely: no instance row, no business write — the
-        // document stays effectively at its initial state with nothing persisted.
+        assertThat(post("/purchase-requests/PR-2/submit", "requester-1").statusCode())
+                .isEqualTo(422);
+        // The rejected transition rolls back entirely: no instance row, no task, no business write.
         assertThat(instanceState("purchase_request", "PR-2")).isNull();
+        assertThat(taskCount("PR-2", "OPEN")).isZero();
         assertThat(column("purchase_requests", "last_action", "PR-2")).isNull();
     }
 
     @Test
     void illegalTransitionFromWrongStateIsConflict() throws Exception {
         // PR-3 is in draft; approve requires submitted.
-        assertThat(post("/purchase-requests/PR-3/approve").statusCode()).isEqualTo(409);
+        assertThat(post("/purchase-requests/PR-3/approve", "approver-1").statusCode())
+                .isEqualTo(409);
         assertThat(historyCount("PR-3")).isZero();
     }
 
     @Test
     void appModeTransitionAdvancesTheBusinessColumn() throws Exception {
-        assertThat(post("/expenses/EX-1/submit").statusCode()).isEqualTo(200);
+        // The expense workflow assigns no tasks, so its transitions are gated only by route policy.
+        assertThat(post("/expenses/EX-1/submit", "requester-1").statusCode()).isEqualTo(200);
         assertThat(column("expenses", "status", "EX-1")).isEqualTo("submitted");
-        assertThat(post("/expenses/EX-1/approve").statusCode()).isEqualTo(200);
+        assertThat(post("/expenses/EX-1/approve", "approver-1").statusCode()).isEqualTo(200);
         assertThat(column("expenses", "status", "EX-1")).isEqualTo("approved");
     }
 
-    private static HttpResponse<String> post(String path) throws Exception {
+    private static HttpResponse<String> post(String path, String sub) throws Exception {
         return HttpClient.newHttpClient().send(
                 HttpRequest.newBuilder(URI.create("http://localhost:" + runtime.port() + path))
-                        .header("Authorization", "Bearer " + token("approver-1"))
+                        .header("Authorization", "Bearer " + token(sub))
                         .POST(HttpRequest.BodyPublishers.noBody()).build(),
                 HttpResponse.BodyHandlers.ofString());
     }
@@ -122,6 +153,17 @@ class WorkflowTransitionIntegrationTest {
     private static int historyCount(String docId) throws Exception {
         return Integer.parseInt(queryString(
                 "select count(*) from tql_workflow_history where doc_id = ?", docId));
+    }
+
+    private static int taskCount(String docId, String status) throws Exception {
+        return Integer.parseInt(queryString(
+                "select count(*) from tql_workflow_task where doc_id = ? and status = ?",
+                docId, status));
+    }
+
+    private static String openTaskAssignee(String docId) throws Exception {
+        return queryString("select assignee from tql_workflow_task "
+                + "where doc_id = ? and status = 'OPEN'", docId);
     }
 
     private static String queryString(String sql, String... args) throws Exception {
@@ -157,7 +199,8 @@ class WorkflowTransitionIntegrationTest {
                     + "title varchar(200), amount numeric(12,2) not null, "
                     + "last_action varchar(32), acted_by varchar(64))");
             statement.execute("insert into purchase_requests (id, title, amount) values "
-                    + "('PR-1','Laptop',1000), ('PR-2','Pen',0), ('PR-3','Desk',500)");
+                    + "('PR-1','Laptop',1000), ('PR-2','Pen',0), ('PR-3','Desk',500), "
+                    + "('PR-4','Chair',700), ('PR-5','Lamp',300)");
             // App-mode: state lives in the status column, initialized to the initial state.
             statement.execute("create table expenses (id varchar(64) primary key, "
                     + "amount numeric(12,2) not null, status varchar(32) not null, "
@@ -191,31 +234,37 @@ class WorkflowTransitionIntegrationTest {
 
         Path workflowDir = home.resolve("workflow");
         Files.createDirectories(workflowDir);
-        Files.writeString(workflowDir.resolve("purchase_request.yml"),
-                """
-                        version: tesseraql/v1
-                        id: purchase_request
-                        kind: workflow
-                        document: { type: purchase_request, table: purchase_requests, key: id }
-                        http: { basePath: /purchase-requests }
-                        security: { auth: bearer }
-                        initial: draft
-                        states:
-                          - { id: draft, type: initial }
-                          - { id: submitted }
-                          - { id: approved, type: terminal }
-                          - { id: rejected, type: terminal }
-                        transitions:
-                          - { id: submit, from: draft, to: submitted, guard: "document.amount > 0", command: submit.sql }
-                          - { id: approve, from: submitted, to: approved, command: approve.sql }
-                          - { id: reject, from: submitted, to: rejected, command: reject.sql }
-                        """);
+        Files.writeString(workflowDir.resolve("purchase_request.yml"), """
+                version: tesseraql/v1
+                id: purchase_request
+                kind: workflow
+                document: { type: purchase_request, table: purchase_requests, key: id }
+                http: { basePath: /purchase-requests }
+                security: { auth: bearer }
+                initial: draft
+                states:
+                  - { id: draft, type: initial }
+                  - { id: submitted }
+                  - { id: approved, type: terminal }
+                  - { id: rejected, type: terminal }
+                transitions:
+                  - id: submit
+                    from: draft
+                    to: submitted
+                    guard: "document.amount > 0"
+                    command: submit.sql
+                    assign: { file: approver.sql }
+                  - { id: approve, from: submitted, to: approved, command: approve.sql }
+                  - { id: reject, from: submitted, to: rejected, command: reject.sql }
+                """);
         Files.writeString(workflowDir.resolve("submit.sql"), "update purchase_requests set "
                 + "last_action = 'submit', acted_by = /* audit.user */ 'x' where id = /* key */ 'x'\n");
         Files.writeString(workflowDir.resolve("approve.sql"), "update purchase_requests set "
                 + "last_action = 'approve', acted_by = /* audit.user */ 'x' where id = /* key */ 'x'\n");
         Files.writeString(workflowDir.resolve("reject.sql"), "update purchase_requests set "
                 + "last_action = 'reject', acted_by = /* audit.user */ 'x' where id = /* key */ 'x'\n");
+        Files.writeString(workflowDir.resolve("approver.sql"),
+                "select 'approver-1' as assignee\n");
 
         Files.writeString(workflowDir.resolve("expense.yml"),
                 """
