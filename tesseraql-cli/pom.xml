@@ -135,6 +135,38 @@
   </dependencies>
 
   <build>
+    <pluginManagement>
+      <plugins>
+        <!-- IDE-only (m2e / VS Code Maven): skip copy-dependencies in the workspace incremental
+             build. It copies the 'provided' reactor codec modules (tesseraql-pdf/-excel), which the
+             IDE resolves as target/classes directories rather than jars, tripping MDEP-187. The
+             command-line and CI builds run the execution normally. -->
+        <plugin>
+          <groupId>org.eclipse.m2e</groupId>
+          <artifactId>lifecycle-mapping</artifactId>
+          <version>1.0.0</version>
+          <configuration>
+            <lifecycleMappingMetadata>
+              <pluginExecutions>
+                <pluginExecution>
+                  <pluginExecutionFilter>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-dependency-plugin</artifactId>
+                    <versionRange>[0,)</versionRange>
+                    <goals>
+                      <goal>copy-dependencies</goal>
+                    </goals>
+                  </pluginExecutionFilter>
+                  <action>
+                    <ignore/>
+                  </action>
+                </pluginExecution>
+              </pluginExecutions>
+            </lifecycleMappingMetadata>
+          </configuration>
+        </plugin>
+      </plugins>
+    </pluginManagement>
     <plugins>
       <!-- Assemble the opt-in format codec modules (and their dependency closure) into
            target/modules. Bound to package; the 'provided' scope filter keeps the base CLI runtime
