@@ -27,6 +27,13 @@ tesseraql:
         type: managed
         datasource: main
 
+  studio:
+    # Studio is a privileged developer surface at /_tesseraql/studio. Enabled for local
+    # development; in production set TESSERAQL_STUDIO_ENABLED=false (or, to keep it
+    # visible but inert, TESSERAQL_STUDIO_READONLY=true).
+    enabled: ${TESSERAQL_STUDIO_ENABLED:true}
+    readOnly: ${TESSERAQL_STUDIO_READONLY:false}
+
   camel:
     components:
       allowed:
