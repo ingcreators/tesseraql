@@ -50,13 +50,17 @@ jobs:
         shell: bash
         run: |
           VERSION=$(./mvnw -q help:evaluate -Dexpression=project.version -DforceStdout)
+          APPVER=${VERSION%-SNAPSHOT}
+          # jpackage (macOS) rejects a zero major version; pre-1.0 dev builds use a 1.0.0 bundle
+          # placeholder. The authoritative version stays in the jar manifest (tesseraql --version).
+          case "$APPVER" in 0.*) APPVER=1.0.0 ;; esac
           mkdir -p build/jpackage-input
           cp tesseraql-cli/target/tesseraql-cli-*-all.jar build/jpackage-input/tesseraql.jar
           jpackage --type app-image --name tesseraql \
             --input build/jpackage-input --main-jar tesseraql.jar \
             --main-class io.tesseraql.cli.TesseraqlCli \
             --add-modules java.se,jdk.crypto.ec,jdk.crypto.cryptoki,jdk.localedata,jdk.unsupported,jdk.management,jdk.naming.dns,jdk.zipfs,jdk.httpserver,jdk.net,jdk.security.auth \
-            --app-version "${VERSION%-SNAPSHOT}" \
+            --app-version "$APPVER" \
             --dest build/jpackage
 
       - name: Smoke-test the native launcher
