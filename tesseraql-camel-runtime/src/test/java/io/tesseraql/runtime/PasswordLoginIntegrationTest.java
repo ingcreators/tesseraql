@@ -158,11 +158,8 @@ class PasswordLoginIntegrationTest {
         try (Connection connection = DriverManager.getConnection(
                 POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword());
                 Statement statement = connection.createStatement()) {
-            // App table used by the htmx fragment route.
-            statement.execute("create table users (id serial primary key, name varchar(200), "
-                    + "status varchar(32) not null, created_at timestamp default now())");
-            statement.execute("insert into users (name, status) values ('sato','ACTIVE')");
-            // Standard IAM schema + a managed user with a PBKDF2 password.
+            // The app `users` table used by the htmx fragment route is created and demo-seeded by
+            // the example's db/migration at mount. Standard IAM schema + a managed user follows.
             for (String ddl : DefaultIdentityPack.schema("postgres").split(";")) {
                 if (!ddl.isBlank()) {
                     statement.execute(ddl);

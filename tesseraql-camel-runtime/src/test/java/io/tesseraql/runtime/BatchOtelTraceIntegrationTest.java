@@ -49,7 +49,6 @@ class BatchOtelTraceIntegrationTest {
 
     @BeforeAll
     static void start() throws Exception {
-        seedDatabase();
         sdk = OpenTelemetrySdk.builder()
                 .setTracerProvider(SdkTracerProvider.builder()
                         .addSpanProcessor(SimpleSpanProcessor.create(EXPORTER)).build())
@@ -59,6 +58,7 @@ class BatchOtelTraceIntegrationTest {
 
         appHome = prepareAppHome();
         runtime = TesseraqlRuntime.start(appHome, freePort(), tracer, NoopMeter.INSTANCE);
+        seedDatabase();
     }
 
     @AfterAll
@@ -97,8 +97,7 @@ class BatchOtelTraceIntegrationTest {
         try (Connection connection = DriverManager.getConnection(
                 POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword());
                 Statement statement = connection.createStatement()) {
-            statement.execute("create table users (id serial primary key, name varchar(200), "
-                    + "status varchar(32) not null, created_at timestamp default now())");
+            statement.execute("truncate table users restart identity");
             statement.execute("insert into users (name, status) values ('pending-user','PENDING')");
         }
     }

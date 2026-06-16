@@ -76,10 +76,10 @@ class OidcLoginIntegrationTest {
         mockOp.createContext("/token", exchange -> respond(exchange, 200, tokenResponse()));
         mockOp.start();
 
-        seedDatabase();
         int runtimePort = freePort();
         appHome = prepareAppHome(opPort, runtimePort);
         runtime = TesseraqlRuntime.start(appHome, runtimePort);
+        seedDatabase();
     }
 
     @AfterAll
@@ -221,7 +221,7 @@ class OidcLoginIntegrationTest {
         try (Connection connection = DriverManager.getConnection(
                 POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword());
                 Statement statement = connection.createStatement()) {
-            statement.execute("create table users (id serial primary key, name varchar(200))");
+            statement.execute("truncate table users restart identity");
         }
     }
 

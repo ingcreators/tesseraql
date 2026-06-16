@@ -54,10 +54,10 @@ class MountedAppMcpIntegrationTest {
 
     @BeforeAll
     static void startRuntime() throws Exception {
-        seedDatabase();
         mountedHome = prepareMountedApp();
         appHome = prepareAppHome(mountedHome);
         runtime = TesseraqlRuntime.start(appHome, freePort());
+        seedDatabase();
         session = initialize();
     }
 
@@ -344,13 +344,7 @@ class MountedAppMcpIntegrationTest {
         try (Connection connection = DriverManager.getConnection(
                 POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword());
                 Statement statement = connection.createStatement()) {
-            statement.execute("""
-                    create table users (
-                      id serial primary key,
-                      name varchar(200) not null,
-                      status varchar(32) not null,
-                      created_at timestamp not null default now()
-                    )""");
+            statement.execute("truncate table users restart identity");
             statement.execute("""
                     insert into users (name, status) values
                       ('sato', 'ACTIVE'),

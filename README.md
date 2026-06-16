@@ -40,9 +40,11 @@ with everything preinstalled.
 ./mvnw -B -ntp verify
 ```
 
-Run the example application (expects PostgreSQL at
-`jdbc:postgresql://localhost:5432/user_admin`, see
-`examples/user-admin-app/config/application.yml`):
+Run the example application. It needs only an empty PostgreSQL at
+`jdbc:postgresql://localhost:5432/user_admin` (see `examples/user-admin-app/config/application.yml`);
+the app owns its schema, so `serve` applies its `db/migration` on start — creating the `users`
+table and a little demo data. (The Dev Container ships this database as the `db` service; set
+`DB_USER`/`DB_PASSWORD` to point at your own.)
 
 ```bash
 ./mvnw -ntp -DskipTests -pl tesseraql-cli -am package
@@ -50,7 +52,18 @@ Run the example application (expects PostgreSQL at
   -DincludeScope=runtime -DoutputDirectory=target/dependency
 java -cp 'tesseraql-cli/target/*:tesseraql-cli/target/dependency/*' \
   io.tesseraql.cli.TesseraqlCli serve --app examples/user-admin-app
-# GET http://localhost:8080/api/users?q=sato
+```
+
+`GET /api/users` is a `bearer`-authenticated route, so mint a dev JWT (HS256, the
+`tesseraql.security.jwt` dev secret, a `USER_READ` role) and call it:
+
+```bash
+JWT_SECRET="dev-only-secret-change-me-in-production"
+b64url(){ openssl base64 -e -A | tr '+/' '-_' | tr -d '='; }
+h=$(printf '%s' '{"alg":"HS256","typ":"JWT"}' | b64url)
+p=$(printf '%s' '{"sub":"dev","roles":["USER_READ"]}' | b64url)
+s=$(printf '%s' "$h.$p" | openssl dgst -binary -sha256 -hmac "$JWT_SECRET" | b64url)
+curl -s -H "Authorization: Bearer $h.$p.$s" "http://localhost:8080/api/users?q=sato"
 ```
 
 Or build a container image with the app baked in:

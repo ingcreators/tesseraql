@@ -47,9 +47,9 @@ class MtlsIntegrationTest {
 
     @BeforeAll
     static void start() throws Exception {
-        seedDatabase();
         appHome = prepareAppHome();
         runtime = TesseraqlRuntime.start(appHome, freePort());
+        seedDatabase();
     }
 
     @AfterAll
@@ -117,8 +117,7 @@ class MtlsIntegrationTest {
         try (Connection connection = DriverManager.getConnection(
                 POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword());
                 Statement statement = connection.createStatement()) {
-            statement.execute("create table users (id serial primary key, name varchar(200), "
-                    + "status varchar(32), created_at timestamp default now())");
+            statement.execute("truncate table users restart identity");
             statement.execute("insert into users (name, status) values ('a','ACTIVE')");
         }
     }

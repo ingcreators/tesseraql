@@ -3,7 +3,7 @@ server:
 
 db:
   main:
-    url: jdbc:postgresql://localhost:5432/user_admin
+    url: jdbc:postgresql://${DB_HOST:localhost}:5432/user_admin
     username: ${DB_USER:user_admin}
     password: ${DB_PASSWORD:user_admin}
     maximumPoolSize: 10

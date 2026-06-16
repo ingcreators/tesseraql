@@ -175,8 +175,8 @@ class IamAdminIntegrationTest {
         try (Connection connection = DriverManager.getConnection(
                 POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword());
                 Statement statement = connection.createStatement()) {
-            statement.execute("create table users (id serial primary key, name varchar(200), "
-                    + "status varchar(32) not null, created_at timestamp default now())");
+            // The app `users` table is created by the example's db/migration at mount; this test
+            // exercises the identity (tql_*) tables only.
             for (String ddl : DefaultIdentityPack.schema("postgres").split(";")) {
                 if (!ddl.isBlank()) {
                     statement.execute(ddl);
