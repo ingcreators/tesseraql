@@ -1,10 +1,10 @@
 # Application developer distribution and onboarding plan
 
-Status: partially implemented. **Suggested sequencing steps 2–3 have landed** — the shared
-`tesseraql-apptasks` library and full CLI command parity; the remaining steps (publish job,
-embedded resolver, proxy work, jpackage, scaffold build files, README rewrite) are still plan.
-This document elaborates the **Distribution** gap row in [roadmap.md](roadmap.md) ("GitHub
-Releases only; no Maven Central, no Gradle plugin, no docs site") into a concrete workstream.
+Status: implemented (all suggested-sequencing steps below are done) except the deferred
+later-horizon items called out inline — Maven Central + signing (GitHub Packages ships now) and a
+Gradle plugin. This document elaborates the **Distribution** gap row in [roadmap.md](roadmap.md)
+("GitHub Releases only; no Maven Central, no Gradle plugin, no docs site") into a concrete
+workstream.
 
 ## Goal
 
@@ -293,7 +293,7 @@ today.
 2. ✅ **Done** — Extract the shared app-tasks library (`AppPackager`, `AppMigrator`,
    `IdentityBootstrap`) into `tesseraql-apptasks`.
 3. ✅ **Done** — Add the CLI subcommands (work item 2).
-4. Embedded resolver + `tesseraql.modules` + `modules.lock` + `tesseraql modules add`.
+4. ✅ **Done** — Embedded resolver + `tesseraql.modules` + `modules.lock` + `tesseraql modules add`.
 5. ✅ **Done** — Proxy cross-cutting: the resolver reads `~/.m2/settings.xml`
    (`<proxies>`/`<mirrors>`); the CLI bridges `HTTP_PROXY`/`HTTPS_PROXY`/`NO_PROXY` to JVM proxy
    properties; the `HttpClient` proxy omission is fixed (`ProxySelector.getDefault()`); mirror
@@ -305,5 +305,5 @@ today.
    with a bundled JVM) built per OS (Linux/macOS/Windows) by `.github/workflows/jpackage.yml`,
    smoke-tested on each, and uploaded as artifacts on release/dispatch. jpackage (not native-image)
    keeps the dynamic classpath the runtime needs.
-7. Scaffold updates (wrapper pom + `mvnw`, `compose.yaml`, Studio profile defaults).
-8. Docs / README rewrite.
+7. ✅ **Done** — Scaffold updates (wrapper pom + `mvnw`, `compose.yaml`, Studio profile defaults).
+8. ✅ **Done** — Docs / README rewrite (CLI-first quick start + `getting-started.md`).
