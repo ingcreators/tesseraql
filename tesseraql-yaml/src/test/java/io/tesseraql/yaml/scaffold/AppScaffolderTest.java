@@ -33,7 +33,29 @@ class AppScaffolderTest {
                 "web/api/items/get.yml",
                 "web/api/items/search.sql",
                 "tests/smoke-test.yml",
-                ".gitignore");
+                ".gitignore",
+                "pom.xml",
+                "mvnw",
+                "mvnw.cmd",
+                ".mvn/wrapper/maven-wrapper.properties",
+                "compose.yaml",
+                "README.md");
+    }
+
+    @Test
+    void skeletonEmitsTheMavenWrapperAndStudioConfig() {
+        List<ScaffoldedFile> files = scaffolder.scaffold("demo-app");
+
+        // The script-only Maven Wrapper makes the Maven path need only a JDK.
+        assertThat(content(files, "mvnw")).startsWith("#!");
+        assertThat(content(files, ".mvn/wrapper/maven-wrapper.properties"))
+                .contains("distributionUrl=");
+        // The wrapper POM imports the BOM and binds the plugin.
+        assertThat(content(files, "pom.xml"))
+                .contains("tesseraql-bom").contains("tesseraql-maven-plugin");
+        // Studio is configured (on for local; env-gated for production).
+        assertThat(content(files, "config/tesseraql.yml"))
+                .contains("studio:").contains("TESSERAQL_STUDIO_ENABLED");
     }
 
     @Test
