@@ -46,6 +46,13 @@
       <artifactId>tesseraql-coverage-core</artifactId>
       <version>${project.version}</version>
     </dependency>
+    <!-- Shared app-lifecycle tasks behind the package/migrate/identity-schema subcommands, the same
+         engine the Maven plugin's mojos use. Brings flyway transitively. -->
+    <dependency>
+      <groupId>io.tesseraql</groupId>
+      <artifactId>tesseraql-apptasks</artifactId>
+      <version>${project.version}</version>
+    </dependency>
     <dependency>
       <groupId>io.tesseraql</groupId>
       <artifactId>tesseraql-operations</artifactId>
