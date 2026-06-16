@@ -293,8 +293,11 @@ today.
 4. Embedded resolver + `tesseraql.modules` + `modules.lock` + `tesseraql modules add`.
 5. Proxy cross-cutting: `settings.xml`/props/env bridge, mirror override, fix the `HttpClient`
    proxy omission, CA truststore docs.
-6. CLI distribution. ✅ **Fat jar + launchers done** (`-Pdist`: a shaded executable jar with
+6. ✅ **Done** — CLI distribution. Fat jar + launchers (`-Pdist`: a shaded executable jar with
    `bin/tesseraql`(`.cmd`) launchers and the opt-in codec cache, zipped/tarred, attached to the
-   GitHub release; a CI `dist` job smoke-tests it). jpackage/jlink native images still pending.
+   GitHub release; a CI `dist` job smoke-tests it) **and** jpackage app images (a platform launcher
+   with a bundled JVM) built per OS (Linux/macOS/Windows) by `.github/workflows/jpackage.yml`,
+   smoke-tested on each, and uploaded as artifacts on release/dispatch. jpackage (not native-image)
+   keeps the dynamic classpath the runtime needs.
 7. Scaffold updates (wrapper pom + `mvnw`, `compose.yaml`, Studio profile defaults).
 8. Docs / README rewrite.

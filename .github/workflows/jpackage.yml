@@ -1,0 +1,78 @@
+name: jpackage
+
+# Builds the CLI as a jpackage app image (a platform launcher with a bundled JVM) on each OS.
+# jpackage keeps the dynamic classpath the runtime needs (ServiceLoader codecs/drivers, the
+# --modules child classloader, signed plugins/) — unlike a closed-world native image. Runs on CLI
+# changes (validation) and on release tags / manual dispatch (artifacts).
+
+on:
+  pull_request:
+    paths:
+      - 'tesseraql-cli/**'
+      - '.github/workflows/jpackage.yml'
+      - 'pom.xml'
+  workflow_dispatch:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: read
+
+jobs:
+  jpackage:
+    name: Native image on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-latest
+          - macos-latest
+          - windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+
+      - name: Set up Java
+        uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654 # v5
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+
+      - name: Build the fat jar
+        run: ./mvnw -B -ntp -pl tesseraql-cli -am -Pdist -DskipTests package
+
+      - name: Build the app image
+        shell: bash
+        run: |
+          VERSION=$(./mvnw -q help:evaluate -Dexpression=project.version -DforceStdout)
+          mkdir -p build/jpackage-input
+          cp tesseraql-cli/target/tesseraql-cli-*-all.jar build/jpackage-input/tesseraql.jar
+          jpackage --type app-image --name tesseraql \
+            --input build/jpackage-input --main-jar tesseraql.jar \
+            --main-class io.tesseraql.cli.TesseraqlCli \
+            --add-modules java.se,jdk.crypto.ec,jdk.crypto.cryptoki,jdk.localedata,jdk.unsupported,jdk.management,jdk.naming.dns,jdk.zipfs,jdk.httpserver,jdk.net,jdk.security.auth \
+            --app-version "${VERSION%-SNAPSHOT}" \
+            --dest build/jpackage
+
+      - name: Smoke-test the native launcher
+        shell: bash
+        run: |
+          case "$RUNNER_OS" in
+            Linux) LAUNCHER=build/jpackage/tesseraql/bin/tesseraql ;;
+            macOS) LAUNCHER=build/jpackage/tesseraql.app/Contents/MacOS/tesseraql ;;
+            Windows) LAUNCHER=build/jpackage/tesseraql/tesseraql.exe ;;
+          esac
+          "$LAUNCHER" routes --app examples/scaffold-demo-app
+
+      - name: Upload the app image
+        if: github.event_name != 'pull_request'
+        uses: actions/upload-artifact@v4
+        with:
+          name: tesseraql-${{ matrix.os }}
+          path: build/jpackage
+          if-no-files-found: error
