@@ -12,9 +12,9 @@ import javax.sql.DataSource;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.postgresql.ds.PGSimpleDataSource;
-import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
+import org.testcontainers.postgresql.PostgreSQLContainer;
 
 /**
  * Integration test for the schema layer (documentation portal v3): introspects a real PostgreSQL
@@ -25,7 +25,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 class SchemaGeneratorIntegrationTest {
 
     @Container
-    static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>("postgres:16-alpine");
+    static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("postgres:16-alpine");
 
     static DataSource dataSource;
 

@@ -26,9 +26,9 @@ import java.util.stream.Stream;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
-import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
+import org.testcontainers.postgresql.PostgreSQLContainer;
 
 /**
  * Integration test for SP-initiated SSO and single logout (design ch. 10.14): the login route
@@ -39,7 +39,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 class SamlSsoLogoutIntegrationTest {
 
     @Container
-    static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>("postgres:16-alpine");
+    static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("postgres:16-alpine");
 
     private static final String AUDIENCE = "https://sp.example.com/saml";
     private static final String RECIPIENT = "https://sp.example.com/_tesseraql/saml/acs";

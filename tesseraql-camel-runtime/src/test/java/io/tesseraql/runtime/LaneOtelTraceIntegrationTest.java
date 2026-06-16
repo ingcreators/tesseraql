@@ -28,9 +28,9 @@ import java.util.stream.Stream;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
-import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
+import org.testcontainers.postgresql.PostgreSQLContainer;
 
 /**
  * End-to-end test that the OpenTelemetry trace tree survives a virtual-thread lane handoff
@@ -41,7 +41,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 class LaneOtelTraceIntegrationTest {
 
     @Container
-    static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>("postgres:16-alpine");
+    static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("postgres:16-alpine");
 
     static final InMemorySpanExporter EXPORTER = InMemorySpanExporter.create();
 

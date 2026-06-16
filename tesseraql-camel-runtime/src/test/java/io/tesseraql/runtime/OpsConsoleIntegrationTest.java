@@ -24,9 +24,9 @@ import javax.crypto.spec.SecretKeySpec;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
-import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
+import org.testcontainers.postgresql.PostgreSQLContainer;
 
 /**
  * Integration test for the bundled operations console app (design ch. 26.11, 32, 47): the
@@ -37,7 +37,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 class OpsConsoleIntegrationTest {
 
     @Container
-    static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>("postgres:16-alpine");
+    static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("postgres:16-alpine");
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
 

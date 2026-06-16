@@ -27,9 +27,9 @@ import javax.crypto.spec.SecretKeySpec;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
-import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
+import org.testcontainers.postgresql.PostgreSQLContainer;
 
 /**
  * Integration test for the scheduled outbox dispatcher (design ch. 39.2.2): with
@@ -40,7 +40,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 class OutboxScheduledDispatchTest {
 
     @Container
-    static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>("postgres:16-alpine");
+    static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("postgres:16-alpine");
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
 

@@ -28,9 +28,9 @@ import javax.crypto.spec.SecretKeySpec;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
-import org.testcontainers.containers.MySQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
+import org.testcontainers.mysql.MySQLContainer;
 
 /**
  * Portability test (design ch. 42): the same example app runs on MySQL by swapping the JDBC driver,
@@ -40,7 +40,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 class MySqlPortabilityIntegrationTest {
 
     @Container
-    static final MySQLContainer<?> MYSQL = new MySQLContainer<>("mysql:8.0");
+    static final MySQLContainer MYSQL = new MySQLContainer("mysql:8.0");
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
 

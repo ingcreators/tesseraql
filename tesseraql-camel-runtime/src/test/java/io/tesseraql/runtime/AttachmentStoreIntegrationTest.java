@@ -10,9 +10,9 @@ import javax.sql.DataSource;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.postgresql.ds.PGSimpleDataSource;
-import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
+import org.testcontainers.postgresql.PostgreSQLContainer;
 
 /**
  * Phase 30 slice 1: the managed {@code tql_attachment} store inserts a metadata row, finds it by id,
@@ -22,7 +22,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 class AttachmentStoreIntegrationTest {
 
     @Container
-    static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>("postgres:16-alpine");
+    static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("postgres:16-alpine");
 
     static JdbcAttachmentStore store;
 

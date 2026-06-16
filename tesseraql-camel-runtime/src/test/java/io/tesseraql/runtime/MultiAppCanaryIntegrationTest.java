@@ -28,9 +28,9 @@ import java.util.zip.ZipOutputStream;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
-import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
+import org.testcontainers.postgresql.PostgreSQLContainer;
 
 /**
  * Integration test for canary traffic splitting (design ch. 31). A staged canary candidate is
@@ -41,7 +41,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 class MultiAppCanaryIntegrationTest {
 
     @Container
-    static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>("postgres:16-alpine");
+    static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("postgres:16-alpine");
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
 

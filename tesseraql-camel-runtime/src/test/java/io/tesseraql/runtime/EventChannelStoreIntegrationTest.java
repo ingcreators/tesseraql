@@ -8,9 +8,9 @@ import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.postgresql.ds.PGSimpleDataSource;
-import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
+import org.testcontainers.postgresql.PostgreSQLContainer;
 
 /**
  * Phase 27 store-level: the pg-notify durable event log claims with SKIP LOCKED (a claimed message
@@ -22,7 +22,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 class EventChannelStoreIntegrationTest {
 
     @Container
-    static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>("postgres:16-alpine");
+    static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("postgres:16-alpine");
 
     private static final String CHANNEL = "events";
     private static final String TOPIC = "orders.created";

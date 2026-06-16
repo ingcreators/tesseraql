@@ -27,9 +27,9 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.postgresql.ds.PGSimpleDataSource;
-import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
+import org.testcontainers.postgresql.PostgreSQLContainer;
 
 /**
  * Dogfoods the Phase 23 generators against the example gallery: the committed
@@ -46,7 +46,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 class ScaffoldDogfoodIntegrationTest {
 
     @Container
-    static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>("postgres:16-alpine");
+    static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("postgres:16-alpine");
 
     static final Path EXAMPLE = Path.of("..", "examples", "scaffold-demo-app")
             .toAbsolutePath().normalize();

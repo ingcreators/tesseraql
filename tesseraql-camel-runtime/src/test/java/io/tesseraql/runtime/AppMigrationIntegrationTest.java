@@ -19,9 +19,9 @@ import java.util.Comparator;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
-import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
+import org.testcontainers.postgresql.PostgreSQLContainer;
 
 /**
  * Integration test for app-mounted Flyway migrations (design ch. 31, 32): db/migration applies at
@@ -32,7 +32,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 class AppMigrationIntegrationTest {
 
     @Container
-    static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>("postgres:16-alpine");
+    static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("postgres:16-alpine");
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
 

@@ -30,9 +30,9 @@ import javax.crypto.spec.SecretKeySpec;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
-import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
+import org.testcontainers.postgresql.PostgreSQLContainer;
 
 /**
  * Acceptance test for the shared org-unit foundation (roadmap Phase 29 slice 2): a managed
@@ -46,7 +46,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 class OrgUnitScopingIntegrationTest {
 
     @Container
-    static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>("postgres:16-alpine");
+    static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("postgres:16-alpine");
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
     private static final String JWT_SECRET = "dev-only-secret-change-me-in-production";

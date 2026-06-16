@@ -20,9 +20,9 @@ import org.apache.pdfbox.text.PDFTextStripper;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
-import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
+import org.testcontainers.postgresql.PostgreSQLContainer;
 
 /**
  * The Phase 21 acceptance flow, end to end: with tesseraql-pdf on the classpath, a
@@ -34,7 +34,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 class PdfExportIntegrationTest {
 
     @Container
-    static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>("postgres:16-alpine");
+    static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("postgres:16-alpine");
 
     private static final HttpClient HTTP = HttpClient.newHttpClient();
     private static final String FONT = "TesseraQLSampleGothic-Regular.ttf";

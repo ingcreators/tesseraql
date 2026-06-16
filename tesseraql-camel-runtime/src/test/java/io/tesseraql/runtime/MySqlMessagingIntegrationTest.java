@@ -23,9 +23,9 @@ import java.util.stream.Stream;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
-import org.testcontainers.containers.MySQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
+import org.testcontainers.mysql.MySQLContainer;
 
 /**
  * Phase 27 portability: the messaging channel works on MySQL via the {@code db-poll} transport — the
@@ -37,7 +37,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 class MySqlMessagingIntegrationTest {
 
     @Container
-    static final MySQLContainer<?> MYSQL = new MySQLContainer<>("mysql:8.0");
+    static final MySQLContainer MYSQL = new MySQLContainer("mysql:8.0");
 
     static TesseraqlRuntime runtime;
     static Path appHome;

@@ -18,9 +18,9 @@ import java.util.concurrent.Future;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.postgresql.ds.PGSimpleDataSource;
-import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
+import org.testcontainers.postgresql.PostgreSQLContainer;
 
 /**
  * Integration test for multi-node outbox claiming (design ch. 39.3): concurrent dispatchers never
@@ -30,7 +30,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 class OutboxClaimIntegrationTest {
 
     @Container
-    static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>("postgres:16-alpine");
+    static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("postgres:16-alpine");
 
     JdbcOutboxStore store;
 

@@ -38,9 +38,9 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
-import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
+import org.testcontainers.postgresql.PostgreSQLContainer;
 
 /**
  * The Phase 20 acceptance flow against the example app: a command's {@code notify:} block
@@ -53,7 +53,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 class NotificationIntegrationTest {
 
     @Container
-    static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>("postgres:16-alpine");
+    static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("postgres:16-alpine");
 
     @RegisterExtension
     static final GreenMailExtension MAIL = new GreenMailExtension(ServerSetupTest.SMTP);

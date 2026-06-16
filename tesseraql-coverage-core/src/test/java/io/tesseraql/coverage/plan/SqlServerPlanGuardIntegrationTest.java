@@ -9,9 +9,9 @@ import java.util.List;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
-import org.testcontainers.containers.MSSQLServerContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
+import org.testcontainers.mssqlserver.MSSQLServerContainer;
 
 /**
  * Live Query Plan Guard test on SQL Server (design ch. 42, 46): real {@code SHOWPLAN_XML}
@@ -25,7 +25,7 @@ class SqlServerPlanGuardIntegrationTest {
 
     @Container
     @SuppressWarnings("resource") // lifecycle is managed by the @Container extension
-    static final MSSQLServerContainer<?> SQLSERVER = new MSSQLServerContainer<>(
+    static final MSSQLServerContainer SQLSERVER = new MSSQLServerContainer(
             "mcr.microsoft.com/mssql/server:2022-latest")
             .acceptLicense();
 
