@@ -21,6 +21,13 @@ Thumbs.db
 /.spool/
 /.tesseraql/
 
+# Runtime-generated files inside example app homes (system apps unpacked into work/ on serve,
+# the report overlay, the spool) - never committed.
+examples/*/work/
+examples/*/.tesseraql/
+examples/*/.spool/
+examples/*/reports/
+
 # Local env / secrets
 .env
 .env.*

@@ -46,12 +46,17 @@ the app owns its schema, so `serve` applies its `db/migration` on start — crea
 table and a little demo data. (The Dev Container ships this database as the `db` service; set
 `DB_USER`/`DB_PASSWORD` to point at your own.)
 
+The example app's print route exports PDF. `csv` is built into the runtime, but `pdf` and `excel`
+are opt-in codec modules (so apps that never print don't drag in PDFBox/POI). `package` assembles
+them under `tesseraql-cli/target/modules`; point `serve --modules` at that directory to load them.
+
 ```bash
 ./mvnw -ntp -DskipTests -pl tesseraql-cli -am package
 ./mvnw -ntp -DskipTests -pl tesseraql-cli dependency:copy-dependencies \
   -DincludeScope=runtime -DoutputDirectory=target/dependency
 java -cp 'tesseraql-cli/target/*:tesseraql-cli/target/dependency/*' \
-  io.tesseraql.cli.TesseraqlCli serve --app examples/user-admin-app
+  io.tesseraql.cli.TesseraqlCli serve --app examples/user-admin-app \
+  --modules tesseraql-cli/target/modules
 ```
 
 `GET /api/users` is a `bearer`-authenticated route, so mint a dev JWT (HS256, the
