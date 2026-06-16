@@ -35,8 +35,9 @@ TesseraQL itself.
    ./mvnw -B -ntp clean verify
    ```
 
-3. Tag and push. The tag triggers `.github/workflows/release.yml`, which re-verifies the tag
-   and publishes a GitHub release with generated notes:
+3. Tag and push. The tag triggers `.github/workflows/release.yml`, which re-verifies the tag,
+   **deploys the artifacts to GitHub Packages**, and publishes a GitHub release with generated
+   notes:
 
    ```bash
    git tag -a v0.1.0 -m "TesseraQL 0.1.0"
@@ -57,8 +58,19 @@ Semantic versioning. Until 1.0.0, minor releases may change APIs and YAML contra
 changes are called out in `CHANGELOG.md`. The Java policy (21 baseline / 25 compatibility)
 holds for all 1.x releases.
 
+## Publishing to GitHub Packages
+
+The release workflow runs `./mvnw -DskipTests deploy` against the `github`
+`distributionManagement` repository (`https://maven.pkg.github.com/ingcreators/tesseraql`),
+authenticated with the workflow `GITHUB_TOKEN` (no extra secrets). Every reactor module — the
+BOM, the Maven plugin, the runtime, Studio, and the opt-in `tesseraql-pdf`/`-excel`/`-s3`
+codecs — is published, so an application resolves the framework from GitHub Packages by
+declaring the BOM. Consumers add the repository to their `~/.m2/settings.xml` (GitHub Packages
+requires authentication even for reads). The BOM version-manages the opt-in JDBC drivers
+(`ojdbc11`, `mssql-jdbc`, `mysql-connector-j`) so a consumer specifies bare coordinates.
+
 ## Publishing to Maven Central (later)
 
 Central publication needs `<developers>` metadata, javadoc/source jars, and PGP signing on
 top of this procedure; it is intentionally out of scope for 0.1.0, which releases as a git
-tag plus GitHub release.
+tag, a GitHub release, and GitHub Packages artifacts.

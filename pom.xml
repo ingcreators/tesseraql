@@ -33,6 +33,22 @@
     <tag>HEAD</tag>
   </scm>
 
+  <!-- Publish to GitHub Packages first (internal audience); Maven Central is a later step
+       (docs/release.md, docs/app-developer-distribution.md). The 'github' id is mapped to
+       credentials by the release workflow's settings.xml. -->
+  <distributionManagement>
+    <repository>
+      <id>github</id>
+      <name>GitHub Packages</name>
+      <url>https://maven.pkg.github.com/ingcreators/tesseraql</url>
+    </repository>
+    <snapshotRepository>
+      <id>github</id>
+      <name>GitHub Packages</name>
+      <url>https://maven.pkg.github.com/ingcreators/tesseraql</url>
+    </snapshotRepository>
+  </distributionManagement>
+
   <modules>
     <module>tesseraql-bom</module>
     <module>tesseraql-core</module>

@@ -283,8 +283,10 @@ today.
 
 ## Suggested sequencing
 
-1. Publish (BOM + plugin + runtime + studio + codecs) to GitHub Packages; add
-   `distributionManagement` and the CI publish job.
+1. ✅ **Done** — Publish (BOM + plugin + runtime + studio + codecs) to GitHub Packages:
+   `distributionManagement` (the `github` repo) plus a `deploy` step in the release workflow; the
+   BOM version-manages the opt-in drivers (`ojdbc11`, `mssql-jdbc`, `mysql-connector-j`). Maven
+   Central + signing stay a later step.
 2. ✅ **Done** — Extract the shared app-tasks library (`AppPackager`, `AppMigrator`,
    `IdentityBootstrap`) into `tesseraql-apptasks`.
 3. ✅ **Done** — Add the CLI subcommands (work item 2).

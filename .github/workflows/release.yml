@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: write
+  packages: write
 
 jobs:
   release:
@@ -23,6 +24,11 @@ jobs:
           distribution: temurin
           java-version: '21'
           cache: maven
+          # Writes a settings.xml mapping the 'github' server (parent distributionManagement) to
+          # the workflow token, so `mvn deploy` can upload to GitHub Packages.
+          server-id: github
+          server-username: MAVEN_USERNAME
+          server-password: MAVEN_PASSWORD
 
       - name: Verify
         run: ./mvnw -B -ntp clean verify
@@ -35,6 +41,12 @@ jobs:
             echo "pom version $VERSION does not match tag $TAG" >&2
             exit 1
           fi
+
+      - name: Publish to GitHub Packages
+        env:
+          MAVEN_USERNAME: ${{ github.actor }}
+          MAVEN_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
+        run: ./mvnw -B -ntp -DskipTests deploy
 
       - name: Publish GitHub release
         env:
