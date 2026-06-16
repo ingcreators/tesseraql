@@ -36,10 +36,16 @@ class ManifestLoaderTest {
     void resolvesDatasourceConfig() {
         AppManifest manifest = new ManifestLoader().load(exampleApp());
 
-        assertThat(manifest.config().requireString("tesseraql.datasources.main.jdbcUrl"))
-                .isEqualTo("jdbc:postgresql://localhost:5432/user_admin");
+        // The example app chains config placeholders: tesseraql.datasources.main.jdbcUrl ->
+        // ${db.main.url} -> jdbc:postgresql://${DB_HOST:localhost}:5432/user_admin. The host comes
+        // from DB_HOST (the Dev Container sets it to 'db'; CI leaves it unset -> localhost), so the
+        // assertions are host-independent - and check that the placeholders were actually resolved
+        // (no ${...} left) so this stays deterministic across both environments.
+        String jdbcUrl = manifest.config().requireString("tesseraql.datasources.main.jdbcUrl");
+        assertThat(jdbcUrl).startsWith("jdbc:postgresql://").endsWith(":5432/user_admin")
+                .doesNotContain("${");
         assertThat(manifest.config().requireString("tesseraql.datasources.main.username"))
-                .isEqualTo("user_admin"); // default applied when DB_USER unset
+                .isEqualTo(System.getenv().getOrDefault("DB_USER", "user_admin"));
     }
 
     @Test
