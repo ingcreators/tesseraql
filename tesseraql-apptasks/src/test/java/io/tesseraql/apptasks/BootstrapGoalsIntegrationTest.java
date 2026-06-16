@@ -97,6 +97,76 @@ class BootstrapGoalsIntegrationTest {
     }
 
     @Test
+    void infoReportsPendingBeforeApplyAndSuccessAfter() throws Exception {
+        Path migrations = appHome.resolve("db/migration");
+        Files.createDirectories(migrations);
+        Files.writeString(migrations.resolve("V1__widgets.sql"),
+                "create table widgets (id serial primary key);");
+        DataSource dataSource = dataSource();
+
+        AppMigrator.InfoResult before = AppMigrator.info(appHome, "Info-App", "main", dataSource)
+                .orElseThrow();
+        assertThat(before.historyTable()).isEqualTo("tql_schema_history_info_app");
+        assertThat(before.migrations()).anySatisfy(migration -> {
+            assertThat(migration.version()).isEqualTo("1");
+            assertThat(migration.installedOn()).isNull();
+        });
+
+        AppMigrator.migrate(appHome, "Info-App", "main", dataSource).orElseThrow();
+
+        AppMigrator.InfoResult after = AppMigrator.info(appHome, "Info-App", "main", dataSource)
+                .orElseThrow();
+        assertThat(after.migrations()).anySatisfy(migration -> {
+            assertThat(migration.version()).isEqualTo("1");
+            assertThat(migration.state()).isEqualTo("Success");
+            assertThat(migration.installedOn()).isNotNull();
+        });
+    }
+
+    @Test
+    void validateSucceedsForAppliedMigrations() throws Exception {
+        Path migrations = appHome.resolve("db/migration");
+        Files.createDirectories(migrations);
+        Files.writeString(migrations.resolve("V1__gauges.sql"),
+                "create table gauges (id serial primary key);");
+        DataSource dataSource = dataSource();
+        AppMigrator.migrate(appHome, "Validate-App", "main", dataSource).orElseThrow();
+
+        AppMigrator.ValidateResult result = AppMigrator
+                .validate(appHome, "Validate-App", "main", dataSource).orElseThrow();
+
+        assertThat(result.valid()).isTrue();
+        assertThat(result.problems()).isEmpty();
+        assertThat(result.historyTable()).isEqualTo("tql_schema_history_validate_app");
+    }
+
+    @Test
+    void repairIsHarmlessOnAHealthyHistory() throws Exception {
+        Path migrations = appHome.resolve("db/migration");
+        Files.createDirectories(migrations);
+        Files.writeString(migrations.resolve("V1__sprockets.sql"),
+                "create table sprockets (id serial primary key);");
+        DataSource dataSource = dataSource();
+        AppMigrator.migrate(appHome, "Repair-App", "main", dataSource).orElseThrow();
+
+        AppMigrator.RepairSummary summary = AppMigrator
+                .repair(appHome, "Repair-App", "main", dataSource).orElseThrow();
+
+        assertThat(summary.removed()).isZero();
+        assertThat(summary.deleted()).isZero();
+        assertThat(summary.aligned()).isZero();
+    }
+
+    @Test
+    void infoValidateRepairAreNoOpsWithoutAMigrationDirectory() {
+        DataSource dataSource = dataSource();
+        Path nowhere = appHome.resolve("nowhere");
+        assertThat(AppMigrator.info(nowhere, "x", "main", dataSource)).isEmpty();
+        assertThat(AppMigrator.validate(nowhere, "x", "main", dataSource)).isEmpty();
+        assertThat(AppMigrator.repair(nowhere, "x", "main", dataSource)).isEmpty();
+    }
+
+    @Test
     void identitySchemaAppliesIdempotentlyAndSeedsAVerifiableAdmin() throws Exception {
         DataSource dataSource = dataSource();
         IdentityBootstrap bootstrap = new IdentityBootstrap(dataSource);
