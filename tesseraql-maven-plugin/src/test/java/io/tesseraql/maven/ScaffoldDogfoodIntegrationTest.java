@@ -95,8 +95,16 @@ class ScaffoldDogfoodIntegrationTest {
         assertThat(committed.keySet())
                 .as("gallery file set (regenerate with -Dtesseraql.scaffold.regenerate=true)")
                 .containsExactlyInAnyOrderElementsOf(generated.keySet());
-        generated.forEach((path, content) -> assertThat(committed.get(path))
-                .as(path).isEqualTo(content));
+        // The scaffolded wrapper POM pins the building framework version (TesseraqlVersion), which
+        // differs between a SNAPSHOT dev build and a release build; normalize it so the gallery
+        // comparison stays version-independent (no churn at release time).
+        generated.forEach((path, content) -> assertThat(normalizeVersion(committed.get(path)))
+                .as(path).isEqualTo(normalizeVersion(content)));
+    }
+
+    private static String normalizeVersion(String content) {
+        return content.replaceAll("<tesseraql\\.version>[^<]+</tesseraql\\.version>",
+                "<tesseraql.version>VERSION</tesseraql.version>");
     }
 
     @Test
