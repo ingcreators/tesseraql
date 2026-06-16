@@ -104,7 +104,7 @@
     <opentelemetry.version>1.45.0</opentelemetry.version>
     <spring.version>6.2.1</spring.version>
     <spring.boot.version>3.4.1</spring.boot.version>
-    <htmx.version>2.0.4</htmx.version>
+    <htmx.version>2.0.10</htmx.version>
     <thymeleaf.version>3.1.5.RELEASE</thymeleaf.version>
     <commonmark.version>0.24.0</commonmark.version>
     <hypermedia-components.version>0.1.2</hypermedia-components.version>
