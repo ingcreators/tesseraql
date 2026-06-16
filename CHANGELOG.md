@@ -16,6 +16,17 @@ All notable changes to TesseraQL are documented here. The format follows
   `tesseraql.modules` (pinned via `zonky.postgres.binaries.version`), so the fat jar is not bloated.
   See [docs/getting-started.md](docs/getting-started.md).
 
+### Changed
+
+- Upgraded Testcontainers 1.20.4 → 2.0.5 (docker-java 3.4.0 → 3.7.1). docker-java 3.4.0 could not
+  validate Docker Engine 29's raised API floor (`MinAPIVersion` 1.40), so every Testcontainers IT
+  failed with "Could not find a valid Docker environment" on hosts running Docker 29 (e.g. the dev
+  container); docker-java 3.7.1 negotiates correctly. The 2.0 module artifacts gained a
+  `testcontainers-` prefix and the JDBC container classes moved to per-database packages and dropped
+  their self-type generics, so the test deps and imports were migrated accordingly
+  (`org.testcontainers.containers.PostgreSQLContainer<>` → `org.testcontainers.postgresql.PostgreSQLContainer`,
+  and likewise for MySQL/SQL Server). Test-only change.
+
 ## 0.2.0 - 2026-06-16
 
 ### Distribution and onboarding

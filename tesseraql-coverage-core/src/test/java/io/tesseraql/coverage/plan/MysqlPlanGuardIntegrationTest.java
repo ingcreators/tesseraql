@@ -8,9 +8,9 @@ import java.sql.Statement;
 import java.util.List;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
-import org.testcontainers.containers.MySQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
+import org.testcontainers.mysql.MySQLContainer;
 
 /**
  * Integration test for the Query Plan Guard on MySQL (design ch. 42, 46): real MySQL
@@ -20,7 +20,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 class MysqlPlanGuardIntegrationTest {
 
     @Container
-    static final MySQLContainer<?> MYSQL = new MySQLContainer<>("mysql:8.0");
+    static final MySQLContainer MYSQL = new MySQLContainer("mysql:8.0");
 
     private static final MysqlPlanInspector INSPECTOR = new MysqlPlanInspector();
 

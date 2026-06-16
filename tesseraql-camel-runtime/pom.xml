@@ -192,12 +192,12 @@
     <!-- Gated Oracle/SQL Server portability ITs (-Dtesseraql.dialect.its=true). -->
     <dependency>
       <groupId>org.testcontainers</groupId>
-      <artifactId>oracle-free</artifactId>
+      <artifactId>testcontainers-oracle-free</artifactId>
       <scope>test</scope>
     </dependency>
     <dependency>
       <groupId>org.testcontainers</groupId>
-      <artifactId>mssqlserver</artifactId>
+      <artifactId>testcontainers-mssqlserver</artifactId>
       <scope>test</scope>
     </dependency>
     <dependency>
@@ -225,12 +225,12 @@
     </dependency>
     <dependency>
       <groupId>org.testcontainers</groupId>
-      <artifactId>postgresql</artifactId>
+      <artifactId>testcontainers-postgresql</artifactId>
       <scope>test</scope>
     </dependency>
     <dependency>
       <groupId>org.testcontainers</groupId>
-      <artifactId>mysql</artifactId>
+      <artifactId>testcontainers-mysql</artifactId>
       <scope>test</scope>
     </dependency>
     <dependency>
@@ -240,7 +240,7 @@
     </dependency>
     <dependency>
       <groupId>org.testcontainers</groupId>
-      <artifactId>junit-jupiter</artifactId>
+      <artifactId>testcontainers-junit-jupiter</artifactId>
       <scope>test</scope>
     </dependency>
     <!-- An in-process SFTP server (Apache MINA sshd) for the poll-trigger integration test

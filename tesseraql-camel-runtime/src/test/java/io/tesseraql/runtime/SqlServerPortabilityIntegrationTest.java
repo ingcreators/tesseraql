@@ -20,9 +20,9 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
-import org.testcontainers.containers.MSSQLServerContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
+import org.testcontainers.mssqlserver.MSSQLServerContainer;
 
 /**
  * Live runtime portability test on SQL Server (design ch. 42): booting exercises the
@@ -37,7 +37,7 @@ class SqlServerPortabilityIntegrationTest {
 
     @Container
     @SuppressWarnings("resource") // lifecycle is managed by the @Container extension
-    static final MSSQLServerContainer<?> SQLSERVER = new MSSQLServerContainer<>(
+    static final MSSQLServerContainer SQLSERVER = new MSSQLServerContainer(
             "mcr.microsoft.com/mssql/server:2022-latest")
             .acceptLicense();
 

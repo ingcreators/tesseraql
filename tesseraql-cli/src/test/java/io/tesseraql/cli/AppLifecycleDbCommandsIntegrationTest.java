@@ -6,9 +6,9 @@ import java.nio.file.Path;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
+import org.testcontainers.postgresql.PostgreSQLContainer;
 import picocli.CommandLine;
 
 /**
@@ -20,7 +20,7 @@ import picocli.CommandLine;
 class AppLifecycleDbCommandsIntegrationTest {
 
     @Container
-    static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>("postgres:16-alpine");
+    static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("postgres:16-alpine");
 
     @Test
     void migrateTestCoverageSchemaAndIdentityOverPostgres(@TempDir Path dir) {

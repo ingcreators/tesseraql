@@ -12,9 +12,9 @@ import java.sql.Statement;
 import java.time.Duration;
 import org.junit.jupiter.api.Test;
 import org.postgresql.ds.PGSimpleDataSource;
-import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
+import org.testcontainers.postgresql.PostgreSQLContainer;
 
 /**
  * Integration test for the retention sweep (design ch. 44): delivered outbox events and finished
@@ -24,7 +24,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 class RetentionSweepIntegrationTest {
 
     @Container
-    static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>("postgres:16-alpine");
+    static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("postgres:16-alpine");
 
     @Test
     void sweepsExpiredRowsAndKeepsLiveOnes() throws Exception {
