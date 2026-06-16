@@ -51,6 +51,21 @@
       <artifactId>tesseraql-operations</artifactId>
       <version>${project.version}</version>
     </dependency>
+    <!-- File-format codecs (FileCodec SPI): the CLI is the batteries-included runner, so it bundles
+         every first-party export format - csv (operations), pdf, and excel - so `tesseraql serve`
+         can start any app, including the bundled example app whose print route exports pdf. The
+         opt-in boundary (docs/printable-documents.md) is about these jars not leaking into app
+         libraries via core/runtime; bundling them in the CLI distribution does not breach it. -->
+    <dependency>
+      <groupId>io.tesseraql</groupId>
+      <artifactId>tesseraql-pdf</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>io.tesseraql</groupId>
+      <artifactId>tesseraql-excel</artifactId>
+      <version>${project.version}</version>
+    </dependency>
     <dependency>
       <groupId>io.tesseraql</groupId>
       <artifactId>tesseraql-security</artifactId>
