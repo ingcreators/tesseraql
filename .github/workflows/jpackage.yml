@@ -75,7 +75,7 @@ jobs:
 
       - name: Upload the app image
         if: github.event_name != 'pull_request'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: tesseraql-${{ matrix.os }}
           path: build/jpackage
