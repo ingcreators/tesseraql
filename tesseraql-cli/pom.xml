@@ -57,6 +57,25 @@
       <version>${project.version}</version>
     </dependency>
 
+    <!-- Opt-in file-format codec modules (FileCodec SPI). Declared 'provided' so they stay OUT of
+         the CLI's base runtime classpath (dependency:copy-dependencies with includeScope=runtime),
+         preserving the opt-in boundary of docs/printable-documents.md. The build instead assembles
+         their dependency closure into target/modules, which the serve command loads from its
+         modules directory onto a child classloader so ServiceLoader discovers the pdf/excel codecs
+         only when asked. -->
+    <dependency>
+      <groupId>io.tesseraql</groupId>
+      <artifactId>tesseraql-pdf</artifactId>
+      <version>${project.version}</version>
+      <scope>provided</scope>
+    </dependency>
+    <dependency>
+      <groupId>io.tesseraql</groupId>
+      <artifactId>tesseraql-excel</artifactId>
+      <version>${project.version}</version>
+      <scope>provided</scope>
+    </dependency>
+
     <dependency>
       <groupId>info.picocli</groupId>
       <artifactId>picocli</artifactId>
@@ -78,5 +97,33 @@
       <scope>test</scope>
     </dependency>
   </dependencies>
+
+  <build>
+    <plugins>
+      <!-- Assemble the opt-in format codec modules (and their dependency closure) into
+           target/modules. Bound to package; the 'provided' scope filter keeps the base CLI runtime
+           classpath (target/dependency, includeScope=runtime) free of them - they are loaded only
+           when the serve command is pointed at this directory. -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-dependency-plugin</artifactId>
+        <version>3.8.1</version>
+        <executions>
+          <execution>
+            <id>assemble-format-modules</id>
+            <phase>package</phase>
+            <goals>
+              <goal>copy-dependencies</goal>
+            </goals>
+            <configuration>
+              <includeScope>provided</includeScope>
+              <excludeScope>compile</excludeScope>
+              <outputDirectory>${project.build.directory}/modules</outputDirectory>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+    </plugins>
+  </build>
 
 </project>

@@ -5,6 +5,7 @@ import io.tesseraql.runtime.TesseraqlRuntime;
 import io.tesseraql.yaml.manifest.AppManifest;
 import io.tesseraql.yaml.manifest.ManifestLoader;
 import io.tesseraql.yaml.manifest.RouteFile;
+import java.io.File;
 import java.nio.file.Path;
 import java.util.concurrent.Callable;
 import picocli.CommandLine;
@@ -43,8 +44,16 @@ public final class TesseraqlCli implements Runnable {
         @Option(names = {"--port"}, description = "Override the configured HTTP port.")
         Integer port;
 
+        @Option(names = {"--modules"}, description = "Directory of optional plugin module jars "
+                + "(e.g. the pdf/excel file-format codecs) to load onto the runtime classpath.")
+        File modules;
+
         @Override
         public Integer call() throws InterruptedException {
+            // Load any opt-in plugin modules (file-format codecs, ...) so route compilation and the
+            // runtime discover them via the FileCodec ServiceLoader (which uses this classloader).
+            Thread.currentThread().setContextClassLoader(CliModules.classLoader(modules,
+                    Thread.currentThread().getContextClassLoader()));
             TesseraqlRuntime runtime = port != null
                     ? TesseraqlRuntime.start(app, port)
                     : TesseraqlRuntime.start(app);
