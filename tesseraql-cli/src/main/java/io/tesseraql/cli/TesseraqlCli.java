@@ -2,6 +2,7 @@ package io.tesseraql.cli;
 
 import io.tesseraql.cli.mcp.McpCommand;
 import io.tesseraql.cli.modules.ModulesInstaller;
+import io.tesseraql.core.TesseraqlVersion;
 import io.tesseraql.runtime.TesseraqlRuntime;
 import io.tesseraql.yaml.config.AppConfig;
 import io.tesseraql.yaml.manifest.AppManifest;
@@ -19,7 +20,7 @@ import picocli.CommandLine.Option;
 /**
  * TesseraQL command-line interface (design ch. 17). The short command alias is {@code tql}.
  */
-@Command(name = "tesseraql", mixinStandardHelpOptions = true, version = "TesseraQL 0.2.0-SNAPSHOT", description = "SQL-first hypermedia and integration framework.", subcommands = {
+@Command(name = "tesseraql", mixinStandardHelpOptions = true, versionProvider = TesseraqlCli.VersionProvider.class, description = "SQL-first hypermedia and integration framework.", subcommands = {
         TesseraqlCli.ServeCommand.class,
         TesseraqlCli.RoutesCommand.class,
         NewCommand.class,
@@ -42,6 +43,14 @@ public final class TesseraqlCli implements Runnable {
     @Override
     public void run() {
         CommandLine.usage(this, System.out);
+    }
+
+    /** Reports the framework version from the single source ({@link TesseraqlVersion}). */
+    static final class VersionProvider implements CommandLine.IVersionProvider {
+        @Override
+        public String[] getVersion() {
+            return new String[]{"TesseraQL " + TesseraqlVersion.current()};
+        }
     }
 
     public static void main(String[] args) {

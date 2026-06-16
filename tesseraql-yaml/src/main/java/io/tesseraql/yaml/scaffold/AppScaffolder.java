@@ -1,5 +1,6 @@
 package io.tesseraql.yaml.scaffold;
 
+import io.tesseraql.core.TesseraqlVersion;
 import io.tesseraql.core.error.TqlDomain;
 import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
@@ -53,8 +54,9 @@ public final class AppScaffolder {
                 // Maven/CI surface: a thin wrapper POM plus the Maven Wrapper, so the Maven path
                 // needs only a JDK. The interactive CLI loop needs none of this (app-layout.md).
                 new ScaffoldedFile("pom.xml",
-                        WRAPPER_POM_XML.replace("__APP_NAME__", appName).replace("__APP_DB__",
-                                dbName)),
+                        WRAPPER_POM_XML.replace("__APP_NAME__", appName)
+                                .replace("__APP_DB__", dbName)
+                                .replace("__TQL_VERSION__", TesseraqlVersion.current())),
                 new ScaffoldedFile("mvnw", resource("mvnw")),
                 new ScaffoldedFile("mvnw.cmd", resource("mvnw.cmd")),
                 new ScaffoldedFile(".mvn/wrapper/maven-wrapper.properties",
@@ -409,7 +411,7 @@ public final class AppScaffolder {
               <properties>
                 <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
                 <!-- The TesseraQL version you build against (matches the CLI you installed). -->
-                <tesseraql.version>0.2.0-SNAPSHOT</tesseraql.version>
+                <tesseraql.version>__TQL_VERSION__</tesseraql.version>
               </properties>
 
               <dependencyManagement>
