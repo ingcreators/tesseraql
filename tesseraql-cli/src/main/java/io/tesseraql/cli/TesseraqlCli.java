@@ -20,6 +20,16 @@ import picocli.CommandLine.Option;
         TesseraqlCli.RoutesCommand.class,
         NewCommand.class,
         ScaffoldCommand.class,
+        LintCommand.class,
+        TestCommand.class,
+        CoverageCommand.class,
+        GenerateCommand.class,
+        SchemaCommand.class,
+        GovernanceCommand.class,
+        MigrateCommand.class,
+        IdentitySchemaCommand.class,
+        PackageCommand.class,
+        VerifyCommand.class,
         McpCommand.class
 })
 public final class TesseraqlCli implements Runnable {

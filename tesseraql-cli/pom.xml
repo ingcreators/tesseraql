@@ -46,6 +46,13 @@
       <artifactId>tesseraql-coverage-core</artifactId>
       <version>${project.version}</version>
     </dependency>
+    <!-- Shared app-lifecycle tasks behind the package/migrate/identity-schema subcommands, the same
+         engine the Maven plugin's mojos use. Brings flyway transitively. -->
+    <dependency>
+      <groupId>io.tesseraql</groupId>
+      <artifactId>tesseraql-apptasks</artifactId>
+      <version>${project.version}</version>
+    </dependency>
     <dependency>
       <groupId>io.tesseraql</groupId>
       <artifactId>tesseraql-operations</artifactId>
@@ -94,6 +101,22 @@
     <dependency>
       <groupId>com.h2database</groupId>
       <artifactId>h2</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <!-- The database-backed subcommand ITs run against PostgreSQL via Testcontainers. -->
+    <dependency>
+      <groupId>org.testcontainers</groupId>
+      <artifactId>postgresql</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.testcontainers</groupId>
+      <artifactId>junit-jupiter</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.postgresql</groupId>
+      <artifactId>postgresql</artifactId>
       <scope>test</scope>
     </dependency>
   </dependencies>

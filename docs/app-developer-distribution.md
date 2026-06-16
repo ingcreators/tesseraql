@@ -1,8 +1,10 @@
 # Application developer distribution and onboarding plan
 
-Status: plan (not yet implemented). This document elaborates the **Distribution** gap row in
-[roadmap.md](roadmap.md) ("GitHub Releases only; no Maven Central, no Gradle plugin, no docs
-site") into a concrete workstream.
+Status: partially implemented. **Suggested sequencing steps 2–3 have landed** — the shared
+`tesseraql-apptasks` library and full CLI command parity; the remaining steps (publish job,
+embedded resolver, proxy work, jpackage, scaffold build files, README rewrite) are still plan.
+This document elaborates the **Distribution** gap row in [roadmap.md](roadmap.md) ("GitHub
+Releases only; no Maven Central, no Gradle plugin, no docs site") into a concrete workstream.
 
 ## Goal
 
@@ -80,27 +82,39 @@ through the same engine).
 | lint | `tesseraql lint` | `yaml.lint.AppLinter` |
 | test | `tesseraql test` | `report.AppTestRunner` |
 | coverage | `tesseraql coverage` | `report.AppTestRunner` + `coverage.CoverageGate` |
-| reports | `tesseraql test --report <fmt>` (+ `report`) | `report.docs.ReportGenerator` / `ReportHistory` |
+| reports | `tesseraql test --report` | `report.docs.ReportGenerator` / `ReportHistory` (JSON overlay; a `<fmt>` selector is reserved, the engine is JSON-only today) |
 | generate (OpenAPI/htmx/docs) | `tesseraql generate` | `yaml.openapi.*`, `report.docs.AppDocGenerator` |
 | schema (schema.json sidecar) | `tesseraql schema` | `report.docs.SchemaGenerator` + `yaml.scaffold.CatalogSchema` |
 | governance check | `tesseraql governance` | `yaml.governance.GovernanceGate` |
-| migrate (apply/info/validate) | `tesseraql migrate` | needs `AppMigrator` extraction |
-| identity-schema | `tesseraql identity-schema` | needs `IdentityBootstrap` extraction |
-| package-app | `tesseraql package` | needs `AppPackager` extraction |
+| migrate (apply/info/validate/repair) | `tesseraql migrate [op]` | `apptasks.AppMigrator` (extracted) |
+| identity-schema | `tesseraql identity-schema` | `apptasks.IdentityBootstrap` (extracted) |
+| package-app | `tesseraql package` | `apptasks.AppPackager` (extracted) |
 | verify evidence (consumer) | `tesseraql verify` | `yaml.release.ReleaseEvidenceVerifier` |
+
+All of the above subcommands are implemented (Suggested sequencing step 3). Each is a thin picocli
+adapter calling the same engine class as the matching mojo / `mcp` dev-tool, with a shared
+`CliDatasource` mixin centralizing `--jdbc-url/--username/--password` and the
+`tesseraql.datasources.main.*` config fallback. CLI defaults are dev-friendly (generated artifacts
+and the `.tqlapp` under `work/`); the engines are identical so behavior matches the goals.
 
 **Kept Maven/CI-only: `release-evidence`.** It signs Ed25519 evidence, emits the SBOM, and
 assumes a deterministic release build — a producer/pipeline operation that does not belong in a
 dev CLI. Its consumer-side counterpart (`verify`) *is* exposed (read-only, no keys).
 
-**Structural change — shared app-tasks library.** Three helpers currently live inside
-`tesseraql-maven-plugin` and must move to a shared module (`tesseraql-operations` or a new
-`tesseraql-apptasks`) so the mojo and the CLI are both thin adapters over one implementation,
+**Structural change — shared app-tasks library (done, step 2).** Three helpers used to live inside
+`tesseraql-maven-plugin` and now live in the new leaf module **`tesseraql-apptasks`** (package
+`io.tesseraql.apptasks`), so the mojo and the CLI are both thin adapters over one implementation,
 with no duplicated wiring or drift:
 
 - `AppPackager` (package-app)
 - `AppMigrator` (migrate)
 - `IdentityBootstrap` (identity-schema)
+
+`tesseraql-apptasks` depends only on `tesseraql-core`/`-identity`/`-security` + Flyway (no
+Camel/Spring/CLI/Maven), and is version-managed by the BOM. `AppMigrator` gained `info`,
+`validate` and `repair` alongside `migrate` (each over a shared Flyway `configure(...)` helper);
+the `migrate` mojo gained a `tesseraql.migrate.operation` parameter so the Maven and CLI surfaces
+expose the same four operations.
 
 `migrate` is worth exposing despite `serve` auto-migrating on start: it covers non-serving
 apply for CI, a single pre-roll apply step in production (so replicas do not race), and
@@ -263,14 +277,17 @@ today.
   cases.
 - Maven Central timing and signing setup.
 - `tesseraql.modules` key name and `modules.lock` format.
-- Whether `identity-schema` folds into `migrate` or stays a separate command.
+- ~~Whether `identity-schema` folds into `migrate` or stays a separate command.~~ **Resolved:
+  stays a separate command** (`tesseraql identity-schema`) — admin seeding and the file/env-only
+  password handling are distinct concerns from schema migration, and it maps 1:1 to the mojo.
 
 ## Suggested sequencing
 
 1. Publish (BOM + plugin + runtime + studio + codecs) to GitHub Packages; add
    `distributionManagement` and the CI publish job.
-2. Extract the shared app-tasks library (`AppPackager`, `AppMigrator`, `IdentityBootstrap`).
-3. Add the CLI subcommands (work item 2).
+2. ✅ **Done** — Extract the shared app-tasks library (`AppPackager`, `AppMigrator`,
+   `IdentityBootstrap`) into `tesseraql-apptasks`.
+3. ✅ **Done** — Add the CLI subcommands (work item 2).
 4. Embedded resolver + `tesseraql.modules` + `modules.lock` + `tesseraql modules add`.
 5. Proxy cross-cutting: `settings.xml`/props/env bridge, mirror override, fix the `HttpClient`
    proxy omission, CA truststore docs.

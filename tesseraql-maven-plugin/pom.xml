@@ -47,21 +47,13 @@
       <artifactId>tesseraql-identity</artifactId>
       <version>${project.version}</version>
     </dependency>
+    <!-- Shared app-lifecycle tasks (package-app, migrate, identity-schema). The mojos are thin
+         adapters over this library, which the CLI reuses too; it brings flyway and
+         tesseraql-security transitively. -->
     <dependency>
       <groupId>io.tesseraql</groupId>
-      <artifactId>tesseraql-security</artifactId>
+      <artifactId>tesseraql-apptasks</artifactId>
       <version>${project.version}</version>
-    </dependency>
-
-    <!-- The migrate goal applies app db/migration scripts (design ch. 18, 31). -->
-    <dependency>
-      <groupId>org.flywaydb</groupId>
-      <artifactId>flyway-core</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>org.flywaydb</groupId>
-      <artifactId>flyway-database-postgresql</artifactId>
-      <scope>runtime</scope>
     </dependency>
 
     <dependency>
