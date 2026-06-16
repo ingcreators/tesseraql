@@ -4,7 +4,31 @@ All notable changes to TesseraQL are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [Semantic Versioning](https://semver.org/).
 
-## Unreleased
+## 0.2.0 - 2026-06-16
+
+### Distribution and onboarding
+
+Building an application on TesseraQL no longer requires cloning the framework monorepo
+(see [docs/app-developer-distribution.md](docs/app-developer-distribution.md) and
+[docs/getting-started.md](docs/getting-started.md)):
+
+- Shared `tesseraql-apptasks` library (`AppPackager`/`AppMigrator`/`IdentityBootstrap`) so the
+  Maven plugin and the CLI are thin adapters over one engine.
+- CLI command parity with the Maven goals: `lint`, `test` (`--report`), `coverage`, `generate`,
+  `schema`, `governance`, `migrate` (apply/info/validate/repair), `identity-schema`, `package`,
+  `verify`, plus `modules` (the opt-in driver/codec resolver).
+- Embedded module resolver: `tesseraql.modules` plus a committed `modules.lock` (declarative,
+  reproducible), resolved via an embedded Maven resolver that honors `~/.m2/settings.xml`.
+- Artifacts published to GitHub Packages on release; the BOM version-manages the opt-in JDBC
+  drivers (`ojdbc11`, `mssql-jdbc`, `mysql-connector-j`).
+- Installable CLI distribution: a self-contained fat jar with `bin/tesseraql`(`.cmd`) launchers
+  (`-Pdist`) and per-OS jpackage app images (Linux x64, Windows x64, macOS arm64).
+- Scaffold (`tesseraql new`) emits a wrapper POM + the Maven Wrapper, `compose.yaml`, Studio
+  config, and a README.
+- Proxy / restricted-network support: outbound `HttpClient`s honor the JVM proxy; the CLI bridges
+  `HTTP_PROXY`/`HTTPS_PROXY`/`NO_PROXY`; internal mirrors and TLS-intercepting proxies are
+  documented in [docs/proxy.md](docs/proxy.md).
+- The framework version is single-sourced (`io.tesseraql.core.TesseraqlVersion`).
 
 ### Core
 
