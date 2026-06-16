@@ -210,21 +210,24 @@ first run:
 ## Proxy and restricted-network support (cross-cutting)
 
 Corporate environments route outbound HTTP(S) through a proxy (often authenticated, often
-TLS-intercepting) and/or replace direct Maven Central access with an internal mirror. This must
-be designed in; it does not work today.
+TLS-intercepting) and/or replace direct Maven Central access with an internal mirror. The
+operational guide is [proxy.md](proxy.md); this section records the design and what is implemented.
 
-### Current state (findings)
+### Current state (implemented)
 
-- **No proxy handling exists anywhere** (no `http.proxy*`, no `useSystemProxies`, no
-  `settings.xml` integration).
-- **Existing bug, independent of this plan:** the runtime outbound clients in
-  `tesseraql-oidc/OidcHttp`, `tesseraql-operations/http/HttpCallClient`, and
-  `tesseraql-camel-runtime/WebhookNotifier` build `java.net.http.HttpClient` via
-  `HttpClient.newBuilder()...build()` **without `.proxy(...)`** — so they ignore even JVM
-  proxy system properties. They cannot reach the network behind a proxy at all.
-- S3 (AWS SDK `UrlConnectionHttpClient`) does honor `https.proxyHost` system properties.
-- `mvnw` fetches Maven from `repo.maven.apache.org` directly (see
-  `.mvn/wrapper/maven-wrapper.properties`).
+- The embedded resolver reads `~/.m2/settings.xml` (`<proxies>`/`<mirrors>`/`<servers>`).
+- The CLI bridges `HTTP_PROXY`/`HTTPS_PROXY`/`NO_PROXY` to the JVM proxy system properties at
+  startup (never overwriting an explicit property) — see `ProxyEnvironment`.
+- The previously proxy-blind runtime clients in `tesseraql-oidc/OidcHttp`,
+  `tesseraql-operations/http/HttpCallClient`, and `tesseraql-camel-runtime/WebhookNotifier` now
+  build `HttpClient` with `.proxy(ProxySelector.getDefault())`, so they honor the JVM proxy
+  configuration (and the env bridge).
+- S3 (AWS SDK `UrlConnectionHttpClient`) honors `https.proxyHost` system properties.
+- The Maven Wrapper download honors `MVNW_REPOURL` for an internal mirror.
+
+Still open: a single first-class proxy configuration object honored uniformly (with proxy
+authentication via an `Authenticator` on every runtime client) is a later refinement; today proxy
+auth flows through `settings.xml` (resolution) and the `*.proxyUser`/`Password` properties.
 
 ### Build / resolution-time outbound
 
@@ -291,8 +294,11 @@ today.
    `IdentityBootstrap`) into `tesseraql-apptasks`.
 3. ✅ **Done** — Add the CLI subcommands (work item 2).
 4. Embedded resolver + `tesseraql.modules` + `modules.lock` + `tesseraql modules add`.
-5. Proxy cross-cutting: `settings.xml`/props/env bridge, mirror override, fix the `HttpClient`
-   proxy omission, CA truststore docs.
+5. ✅ **Done** — Proxy cross-cutting: the resolver reads `~/.m2/settings.xml`
+   (`<proxies>`/`<mirrors>`); the CLI bridges `HTTP_PROXY`/`HTTPS_PROXY`/`NO_PROXY` to JVM proxy
+   properties; the `HttpClient` proxy omission is fixed (`ProxySelector.getDefault()`); mirror
+   override via `settings.xml`/`MVNW_REPOURL`; CA-truststore guidance in
+   [proxy.md](proxy.md).
 6. ✅ **Done** — CLI distribution. Fat jar + launchers (`-Pdist`: a shaded executable jar with
    `bin/tesseraql`(`.cmd`) launchers and the opt-in codec cache, zipped/tarred, attached to the
    GitHub release; a CI `dist` job smoke-tests it) **and** jpackage app images (a platform launcher
