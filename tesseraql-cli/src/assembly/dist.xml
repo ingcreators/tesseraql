@@ -1,0 +1,35 @@
+<assembly xmlns="http://maven.apache.org/ASSEMBLY/2.2.0"
+          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+          xsi:schemaLocation="http://maven.apache.org/ASSEMBLY/2.2.0 https://maven.apache.org/xsd/assembly-2.2.0.xsd">
+  <!-- The installable TesseraQL CLI distribution: bin/ launchers, lib/ fat jar, modules/ codecs. -->
+  <id>dist</id>
+  <formats>
+    <format>zip</format>
+    <format>tar.gz</format>
+  </formats>
+  <includeBaseDirectory>true</includeBaseDirectory>
+  <baseDirectory>tesseraql-${project.version}</baseDirectory>
+
+  <files>
+    <!-- The fat jar under a stable name the launchers reference. -->
+    <file>
+      <source>${project.build.directory}/${project.build.finalName}-all.jar</source>
+      <outputDirectory>lib</outputDirectory>
+      <destName>tesseraql.jar</destName>
+    </file>
+  </files>
+
+  <fileSets>
+    <!-- Launcher scripts; the shell launcher is executable. -->
+    <fileSet>
+      <directory>${project.basedir}/src/main/dist/bin</directory>
+      <outputDirectory>bin</outputDirectory>
+      <fileMode>0755</fileMode>
+    </fileSet>
+    <!-- The opt-in pdf/excel codec closure, for offline `serve` with the modules directory. -->
+    <fileSet>
+      <directory>${project.build.directory}/modules</directory>
+      <outputDirectory>modules</outputDirectory>
+    </fileSet>
+  </fileSets>
+</assembly>

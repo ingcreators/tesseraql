@@ -1,0 +1,6 @@
+#!/bin/sh
+# TesseraQL CLI launcher (fat jar). Requires a JDK 21+ on PATH.
+# Pass extra JVM options via TESSERAQL_JAVA_OPTS (e.g. proxy or truststore settings).
+set -e
+DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+exec java ${TESSERAQL_JAVA_OPTS:-} -jar "$DIR/../lib/tesseraql.jar" "$@"
