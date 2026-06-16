@@ -1,4 +1,4 @@
-package io.tesseraql.maven;
+package io.tesseraql.apptasks;
 
 import io.tesseraql.core.util.DatabaseVendors;
 import java.nio.file.Files;
@@ -18,20 +18,20 @@ import org.flywaydb.core.Flyway;
  * scripts over the common ones. Running the goal before a deploy and mounting the app afterwards
  * converge on the same history.
  */
-final class AppMigrator {
+public final class AppMigrator {
 
     private AppMigrator() {
     }
 
     /** The outcome: how many migrations applied, and into which history table. */
-    record Result(int applied, String historyTable) {
+    public record Result(int applied, String historyTable) {
     }
 
     /**
      * Applies the migration set of {@code datasource} ({@code main} = {@code db/migration},
      * otherwise {@code db/<datasource>/migration}); empty when the directory does not exist.
      */
-    static Optional<Result> migrate(Path appHome, String appName, String datasource,
+    public static Optional<Result> migrate(Path appHome, String appName, String datasource,
             DataSource dataSource) {
         boolean main = "main".equals(datasource);
         Path migrations = main
@@ -62,7 +62,7 @@ final class AppMigrator {
     }
 
     /** Must stay aligned with the runtime's {@code AppMigrations.historyTable}. */
-    static String historyTable(String appName) {
+    public static String historyTable(String appName) {
         return "tql_schema_history_" + sanitize(appName);
     }
 

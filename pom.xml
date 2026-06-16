@@ -51,6 +51,7 @@
     <module>tesseraql-operations</module>
     <module>tesseraql-observability</module>
     <module>tesseraql-report</module>
+    <module>tesseraql-apptasks</module>
     <module>tesseraql-studio</module>
     <module>tesseraql-ops-ui</module>
     <module>tesseraql-excel</module>

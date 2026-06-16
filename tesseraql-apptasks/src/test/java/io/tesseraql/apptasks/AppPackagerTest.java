@@ -1,4 +1,4 @@
-package io.tesseraql.maven;
+package io.tesseraql.apptasks;
 
 import static org.assertj.core.api.Assertions.assertThat;
 

@@ -1,4 +1,4 @@
-package io.tesseraql.maven;
+package io.tesseraql.apptasks;
 
 import io.tesseraql.identity.DefaultIdentityPack;
 import io.tesseraql.identity.IdentityContracts;
@@ -20,21 +20,21 @@ import javax.sql.DataSource;
  * runtime's {@code PasswordVerifier} conventions match - so the goal can run on every deploy.
  * Passwords are hashed with PBKDF2 and never stored or logged in clear text.
  */
-final class IdentityBootstrap {
+public final class IdentityBootstrap {
 
     private final DataSource dataSource;
     private final IdentityService identity;
     private final RealmConfig realm;
     private final Pbkdf2PasswordEncoder encoder = new Pbkdf2PasswordEncoder();
 
-    IdentityBootstrap(DataSource dataSource) {
+    public IdentityBootstrap(DataSource dataSource) {
         this.dataSource = dataSource;
         this.identity = new IdentityService(name -> dataSource);
         this.realm = RealmConfig.managed("bootstrap", "main");
     }
 
     /** Applies the standard {@code tql_*} schema for the dialect. */
-    void applySchema(String dialect) throws SQLException {
+    public void applySchema(String dialect) throws SQLException {
         try (Connection connection = dataSource.getConnection();
                 Statement statement = connection.createStatement()) {
             statement.execute(DefaultIdentityPack.schema(dialect));
@@ -46,7 +46,7 @@ final class IdentityBootstrap {
      * permission codes to those roles - so e.g. {@code ops.app.*} flows into the principal's
      * permissions through the standard role-permission join.
      */
-    void seedAdmin(String loginId, String password, List<String> roleCodes,
+    public void seedAdmin(String loginId, String password, List<String> roleCodes,
             List<String> permissionCodes) {
         identity.executeUpdate(realm, IdentityContracts.SEED_ADMIN_USER, Map.of(
                 "userId", loginId,

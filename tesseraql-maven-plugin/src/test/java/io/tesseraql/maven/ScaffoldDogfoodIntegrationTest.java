@@ -2,6 +2,7 @@ package io.tesseraql.maven;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import io.tesseraql.apptasks.AppMigrator;
 import io.tesseraql.identity.RealmConfig;
 import io.tesseraql.report.AppTestRunner;
 import io.tesseraql.yaml.lint.AppLinter;

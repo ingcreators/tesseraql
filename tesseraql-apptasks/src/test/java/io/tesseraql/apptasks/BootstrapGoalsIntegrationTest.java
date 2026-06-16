@@ -1,4 +1,4 @@
-package io.tesseraql.maven;
+package io.tesseraql.apptasks;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -18,7 +18,7 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
 /**
- * Integration tests for the migrate and identity-schema goal logic (design ch. 18) against
+ * Integration tests for the migrate and identity-schema task logic (design ch. 18) against
  * PostgreSQL.
  */
 @Testcontainers

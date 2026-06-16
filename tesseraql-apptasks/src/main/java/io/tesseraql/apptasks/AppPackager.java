@@ -1,4 +1,4 @@
-package io.tesseraql.maven;
+package io.tesseraql.apptasks;
 
 import java.io.IOException;
 import java.io.OutputStream;
