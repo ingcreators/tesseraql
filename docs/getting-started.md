@@ -39,6 +39,22 @@ tesseraql serve --app .              # auto-applies db/migration; Studio at /_te
 tesseraql scaffold crud --app . --table items
 ```
 
+### Try it without a database
+
+To run with no external database at all, add `--embedded-db`. The CLI starts an embedded
+PostgreSQL and points the app's `main` datasource at it:
+
+```sh
+tesseraql serve --app . --embedded-db            # ephemeral: a fresh DB, wiped on exit
+tesseraql serve --app . --embedded-db ./pgdata   # persistent: data survives restarts
+```
+
+It is a real `postgres`, so everything behaves exactly as it would against a server you run
+yourself — only the URL differs. The platform binary is downloaded on first use and cached (so the
+first run needs network); pass a directory to graduate the same data to a standalone server later
+by setting `tesseraql.datasources.main.jdbcUrl`. Embedded mode is single-process — for multiple app
+nodes, point them at a shared external PostgreSQL.
+
 The interactive dev loop is all CLI-native:
 
 ```sh

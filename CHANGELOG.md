@@ -6,6 +6,16 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ## Unreleased
 
+### Added
+
+- `tesseraql serve --embedded-db [<data-dir>]` runs a tqlapp with no external database: the CLI
+  starts an embedded PostgreSQL and points the runtime's `main` datasource at it. With no directory
+  the data is ephemeral; with one it persists across restarts (a single-server option). Because it
+  is a real `postgres`, the framework migrations and `ensureSchema` bootstrap run unchanged — no
+  new dialect. The platform binary is resolved on demand through the same embedded resolver as
+  `tesseraql.modules` (pinned via `zonky.postgres.binaries.version`), so the fat jar is not bloated.
+  See [docs/getting-started.md](docs/getting-started.md).
+
 ## 0.2.0 - 2026-06-16
 
 ### Distribution and onboarding
