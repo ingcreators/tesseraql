@@ -116,6 +116,7 @@ TesseraQL 1.x uses Java 21 as the baseline and tests Java 25 compatibility in CI
 - [docs/deployment.md](docs/deployment.md) - container deployment (Kamal 2 + Cloudflare Tunnel)
 - [docs/release.md](docs/release.md) - release procedure
 - [docs/development-environment.md](docs/development-environment.md) - Dev Container details
+- [docs/app-developer-distribution.md](docs/app-developer-distribution.md) - plan: building apps without cloning the monorepo (CLI/Maven parity, distribution, opt-in modules, proxy support)
 - [docs/roadmap.md](docs/roadmap.md) - post-0.1 roadmap toward an LOB application platform
 
 ## License

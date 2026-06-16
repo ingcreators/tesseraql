@@ -1,0 +1,279 @@
+# Application developer distribution and onboarding plan
+
+Status: plan (not yet implemented). This document elaborates the **Distribution** gap row in
+[roadmap.md](roadmap.md) ("GitHub Releases only; no Maven Central, no Gradle plugin, no docs
+site") into a concrete workstream.
+
+## Goal
+
+A developer who *builds an application on* TesseraQL should never need to clone the framework
+monorepo. They work in their own repository — a directory of 2-way SQL, YAML routes, and
+templates per [app-layout.md](app-layout.md) — and obtain the framework as installed tooling
+and resolved Maven artifacts. Cloning the monorepo stays a *framework-developer* activity.
+
+The design already supports this (the CLI scaffolds and serves external app homes, the BOM
+exists, the Maven plugin operates on an external app home, Studio is a bundled app). The
+missing layer is **distribution**: nothing is published to a Maven repository, the CLI has no
+packaged distribution, and the scaffold emits no build files. Everything below closes that
+layer.
+
+## Non-goals
+
+- Gradle plugin (tracked separately in the roadmap; later horizon).
+- Changing the app-layout contract or the runtime.
+- Replacing the Maven plugin. It stays as the CI / lifecycle-integration surface.
+
+## Target workflow (end state)
+
+```text
+install the tesseraql CLI            # one of the distribution channels below
+tesseraql new myapp                  # scaffold into the developer's own repo
+cd myapp                             # point config at a PostgreSQL (Docker optional)
+tesseraql serve --app .              # auto-applies db/migration; Studio at /_tesseraql/studio
+tesseraql scaffold crud --table ...  # iterate
+tesseraql lint | test | coverage     # verify, all CLI-native
+tesseraql package                    # build a .tqlapp
+# deploy per deployment.md (container, plain JVM, or .tqlapp)
+```
+
+Prerequisites the developer installs once:
+
+| Item | Required? | Notes |
+| --- | --- | --- |
+| JDK 21+ | Yes (JVM channels) | Not needed on host if the CLI ships as a native/jpackage image or container. |
+| TesseraQL CLI | Yes | The only TesseraQL-specific tool. Studio and the pdf/excel codecs ride inside it. |
+| A reachable PostgreSQL | Yes | Docker is a convenience, not a requirement — a natively installed PostgreSQL works; point `DB_HOST`/`DB_USER`/`DB_PASSWORD` (or `config/application.yml`) at it. |
+| Docker | Optional | Convenience DB, Testcontainers (framework dev only), container image builds. |
+| Maven | No | The CLI loop needs none. The CI/Maven path bootstraps via the bundled `mvnw` (JDK only). |
+| Node/npm | No | UI is Hypermedia Components served from a WebJar; no JS build. |
+
+## Two surfaces, one engine
+
+| Surface | Role | How it is obtained |
+| --- | --- | --- |
+| **CLI** (`tesseraql ...`) | Interactive dev loop | Installed (distribution channel below). |
+| **Maven plugin** (`tesseraql:...`) | CI / lifecycle integration | Resolved from a Maven repo by a thin wrapper `pom.xml`; no separate install (uses `mvnw`). |
+
+Both call the same engine library classes, so behavior is identical. A developer picks the
+surface by context; neither is more capable than the other once command parity (below) lands.
+
+## Work item 1 — Publish artifacts to a Maven repository
+
+- Add `distributionManagement` and a publish job. **GitHub Packages first** (covers the
+  internal audience immediately), **Maven Central later** (fills the `release.md` "Publishing
+  to Maven Central (later)" section, with signing).
+- Published set: `tesseraql-bom`, `tesseraql-maven-plugin`, the runtime
+  (`tesseraql-camel-runtime`, `-spring-runtime`), `tesseraql-studio`, and every module an app
+  resolves, **including the opt-in `tesseraql-pdf` / `tesseraql-excel` / `tesseraql-s3`**.
+- The BOM version-manages the opt-in codecs/connectors **and** the opt-in JDBC drivers
+  (`ojdbc11`, `mssql-jdbc`, `mysql-connector-j`) so a consumer specifies only coordinates.
+
+## Work item 2 — CLI command parity
+
+Every Maven goal whose engine is a reusable library is exposed as a CLI subcommand. Today the
+CLI has only `new`, `scaffold`, `serve`, `routes`, `mcp`; the build/verify/package goals are
+Maven-only as terminal commands (though `tesseraql mcp` already drives `lint`/`test`/`coverage`
+through the same engine).
+
+| Capability | New CLI command | Engine (already CLI-reachable unless noted) |
+| --- | --- | --- |
+| lint | `tesseraql lint` | `yaml.lint.AppLinter` |
+| test | `tesseraql test` | `report.AppTestRunner` |
+| coverage | `tesseraql coverage` | `report.AppTestRunner` + `coverage.CoverageGate` |
+| reports | `tesseraql test --report <fmt>` (+ `report`) | `report.docs.ReportGenerator` / `ReportHistory` |
+| generate (OpenAPI/htmx/docs) | `tesseraql generate` | `yaml.openapi.*`, `report.docs.AppDocGenerator` |
+| schema (schema.json sidecar) | `tesseraql schema` | `report.docs.SchemaGenerator` + `yaml.scaffold.CatalogSchema` |
+| governance check | `tesseraql governance` | `yaml.governance.GovernanceGate` |
+| migrate (apply/info/validate) | `tesseraql migrate` | needs `AppMigrator` extraction |
+| identity-schema | `tesseraql identity-schema` | needs `IdentityBootstrap` extraction |
+| package-app | `tesseraql package` | needs `AppPackager` extraction |
+| verify evidence (consumer) | `tesseraql verify` | `yaml.release.ReleaseEvidenceVerifier` |
+
+**Kept Maven/CI-only: `release-evidence`.** It signs Ed25519 evidence, emits the SBOM, and
+assumes a deterministic release build — a producer/pipeline operation that does not belong in a
+dev CLI. Its consumer-side counterpart (`verify`) *is* exposed (read-only, no keys).
+
+**Structural change — shared app-tasks library.** Three helpers currently live inside
+`tesseraql-maven-plugin` and must move to a shared module (`tesseraql-operations` or a new
+`tesseraql-apptasks`) so the mojo and the CLI are both thin adapters over one implementation,
+with no duplicated wiring or drift:
+
+- `AppPackager` (package-app)
+- `AppMigrator` (migrate)
+- `IdentityBootstrap` (identity-schema)
+
+`migrate` is worth exposing despite `serve` auto-migrating on start: it covers non-serving
+apply for CI, a single pre-roll apply step in production (so replicas do not race), and
+`info`/`validate`/`repair`.
+
+## Work item 3 — CLI distribution channel
+
+Ship the CLI as a **jpackage / jlink image (a JVM inside a platform launcher)**, not a GraalVM
+native-image. Rationale: TesseraQL's value model is runtime-pluggable codecs, drivers, and
+connectors discovered via `ServiceLoader` over a dynamic classpath (`--modules` child
+classloader; signed `plugins/`). A true AOT native image is closed-world and cannot load
+external jars at runtime, which breaks `--modules`, the SPI discovery, and `plugins/`, and
+forces every driver/codec to be compiled in at build time (heavy reflection for
+PDFBox/POI/AWS/Oracle, losing the opt-in design). jpackage keeps dynamic loading and still
+removes the separate-JDK install.
+
+Audience is "both internal and public", so phase it:
+
+- **Now (internal):** publish to GitHub Packages; distribute the CLI as a container image / Dev
+  Container feature (host needs only Docker) and/or a jpackage image.
+- **Later (public):** Maven Central + a polished installer (brew/scoop) built from the same
+  jpackage/jlink image.
+
+Studio and the pdf/excel codecs are **bundled inside** the runtime/CLI; they add no separate
+distribution channel. In a Docker-less environment the container channel is unavailable, so use
+the jpackage image (or a fat jar + launcher).
+
+## Work item 4 — Opt-in modules (drivers, codecs, connectors)
+
+Drivers and the pdf/excel/s3 modules all use the same model: a `ServiceLoader` SPI discovered
+on the classpath (`java.sql.Driver`, `FileCodec`, `BlobStoreProvider`). Base = PostgreSQL
+driver + CSV codec; everything else is opt-in, injected one of two ways:
+
+- **Maven / wrapper-pom:** declare the dependency (BOM-managed version); it lands on the
+  classpath and the SPI finds it. No `--modules` needed.
+- **Standalone CLI:** an embedded Maven artifact resolver (`maven-resolver`/Aether or coursier
+  — no Maven install) resolves coordinates into a module cache that the existing `--modules`
+  child classloader consumes.
+
+The CLI module set is **declarative and reproducible**:
+
+```yaml
+# tesseraql.yml — source of truth, reviewed and committed
+tesseraql:
+  modules:
+    - com.oracle.database.jdbc:ojdbc11   # version from the BOM
+    - io.tesseraql:tesseraql-pdf
+```
+
+- `modules.lock` pins exact resolved versions + checksums (reproducible, offline, supply-chain).
+  Committed.
+- `tesseraql modules add <coord>` is an ergonomic helper that **edits `tesseraql.yml` and
+  refreshes the lock** (like `cargo add`), not a separate imperative cache mutation.
+- `serve` resolves the declared set on start; the resolver verifies repository checksums.
+- This stays distinct from signed third-party `plugins/` (Ed25519, isolated classloader).
+
+### JDBC driver licensing policy
+
+Bundling a driver into a distributed image is redistribution, so the policy differs per driver
+(not legal advice; confirm license text on each version bump):
+
+| Driver | License | Policy |
+| --- | --- | --- |
+| PostgreSQL | BSD-2-Clause | Bundled in the base. |
+| SQL Server (`mssql-jdbc`) | MIT | Safe to bundle if needed. |
+| MySQL (`mysql-connector-j`) | GPLv2 + Universal FOSS Exception | **Opt-in, user-supplied.** A downstream proprietary app may fall outside the FOSS Exception. MariaDB Connector/J (LGPL-2.1) is an alternative worth offering. |
+| Oracle (`ojdbc11`) | Oracle Free Use Terms (OFUTC) | **Opt-in, user-supplied.** Proprietary terms; cannot be relicensed under Apache-2.0. |
+
+Letting the CLI resolver *fetch* MySQL/Oracle at the user's explicit request keeps the framework
+out of the redistribution path — the user pulls from the vendor repo under the vendor's terms.
+
+## Work item 5 — Scaffold updates (`tesseraql new`)
+
+The skeleton currently emits app files only. Add, for the CI/Maven path and a frictionless
+first run:
+
+- A thin wrapper `pom.xml` (imports the BOM, binds the `tesseraql-maven-plugin`) **and** the
+  Maven Wrapper (`mvnw`, `mvnw.cmd`, `.mvn/wrapper/`) so the Maven surface needs only a JDK.
+- A `compose.yaml` for a local PostgreSQL (Docker optional; native PostgreSQL documented).
+- `tesseraql.studio.enabled` profile defaults in `tesseraql.yml` (`local` on; production off or
+  `readOnly`, since Studio is a privileged `/_tesseraql/` surface).
+- A generated `README` describing both the CLI-only and Maven paths.
+
+## Work item 6 — Docs and quickstart
+
+- Rewrite the README quick start from "build the monorepo, `java -cp ...`" to "install the CLI,
+  `tesseraql new`".
+- Add a "getting started without cloning" guide.
+- Link this plan from the README documentation index.
+
+---
+
+## Proxy and restricted-network support (cross-cutting)
+
+Corporate environments route outbound HTTP(S) through a proxy (often authenticated, often
+TLS-intercepting) and/or replace direct Maven Central access with an internal mirror. This must
+be designed in; it does not work today.
+
+### Current state (findings)
+
+- **No proxy handling exists anywhere** (no `http.proxy*`, no `useSystemProxies`, no
+  `settings.xml` integration).
+- **Existing bug, independent of this plan:** the runtime outbound clients in
+  `tesseraql-oidc/OidcHttp`, `tesseraql-operations/http/HttpCallClient`, and
+  `tesseraql-camel-runtime/WebhookNotifier` build `java.net.http.HttpClient` via
+  `HttpClient.newBuilder()...build()` **without `.proxy(...)`** — so they ignore even JVM
+  proxy system properties. They cannot reach the network behind a proxy at all.
+- S3 (AWS SDK `UrlConnectionHttpClient`) does honor `https.proxyHost` system properties.
+- `mvnw` fetches Maven from `repo.maven.apache.org` directly (see
+  `.mvn/wrapper/maven-wrapper.properties`).
+
+### Build / resolution-time outbound
+
+`mvnw`, the embedded CLI resolver, and the published-artifact fetch must all be proxy-aware:
+
+- **Reuse `~/.m2/settings.xml`** (`<proxies>`, `<mirrors>`, `<servers>` credentials) — the
+  least-friction path; enterprises already have it, and the embedded resolver can read it or
+  feed its `ProxySelector` from it.
+- Also honor JVM system properties and **bridge `HTTP_PROXY` / `HTTPS_PROXY` / `NO_PROXY`
+  env vars** (the container/CI standard the JVM does not read by default). Document precedence:
+  explicit flag > `settings.xml` > JVM props > env.
+- Allow a **repository / mirror URL override** (internal Nexus/Artifactory) via `settings.xml`
+  `<mirrors>` or `tesseraql.yml`/flag. This is often the real enterprise answer and also covers
+  air-gapped sites.
+- Point `mvnw`'s `distributionUrl` / `MVNW_REPOURL` at the internal mirror.
+
+### Runtime outbound
+
+- Introduce a **single proxy configuration** (host/port/nonProxyHosts/credentials) honored by
+  **all** outbound clients, and **fix the `.proxy(...)` omission** in `OidcHttp`,
+  `HttpCallClient`, and `WebhookNotifier` (pass a `ProxySelector`); wire S3's
+  `ProxyConfiguration` consistently.
+- **Resolve modules at build/CI time and bake `modules.lock` + the cache into the image**, so a
+  production `serve` performs no module-resolution outbound and the proxy concern collapses to
+  build time.
+
+### TLS-intercepting proxy
+
+A proxy that intercepts TLS presents a corporate root CA; the JVM must trust it (add to
+`cacerts`, or `-Djavax.net.ssl.trustStore`). Independent of proxy-host config; document it for
+all outbound paths.
+
+### Air-gapped / offline
+
+`modules.lock` + a pre-seeded cache (or internal mirror) makes resolution reproducible offline
+after the first fetch.
+
+### Near-term standalone ticket
+
+Fix the `HttpClient` proxy omission (`OidcHttp` / `HttpCallClient` / `WebhookNotifier`)
+independently of the rest of this plan — it is a correctness bug for any proxied deployment
+today.
+
+---
+
+## Open decisions
+
+- Final CLI distribution channel mix (jpackage vs container vs fat jar) — recommended: jpackage
+  image as the base, container/Dev Container feature for Docker-centric and Docker-less-host
+  cases.
+- Maven Central timing and signing setup.
+- `tesseraql.modules` key name and `modules.lock` format.
+- Whether `identity-schema` folds into `migrate` or stays a separate command.
+
+## Suggested sequencing
+
+1. Publish (BOM + plugin + runtime + studio + codecs) to GitHub Packages; add
+   `distributionManagement` and the CI publish job.
+2. Extract the shared app-tasks library (`AppPackager`, `AppMigrator`, `IdentityBootstrap`).
+3. Add the CLI subcommands (work item 2).
+4. Embedded resolver + `tesseraql.modules` + `modules.lock` + `tesseraql modules add`.
+5. Proxy cross-cutting: `settings.xml`/props/env bridge, mirror override, fix the `HttpClient`
+   proxy omission, CA truststore docs.
+6. CLI distribution via jpackage (Studio + codecs bundled).
+7. Scaffold updates (wrapper pom + `mvnw`, `compose.yaml`, Studio profile defaults).
+8. Docs / README rewrite.
