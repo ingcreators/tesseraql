@@ -1,12 +1,16 @@
 package io.tesseraql.cli;
 
 import io.tesseraql.cli.mcp.McpCommand;
+import io.tesseraql.cli.modules.ModulesInstaller;
 import io.tesseraql.runtime.TesseraqlRuntime;
+import io.tesseraql.yaml.config.AppConfig;
 import io.tesseraql.yaml.manifest.AppManifest;
 import io.tesseraql.yaml.manifest.ManifestLoader;
 import io.tesseraql.yaml.manifest.RouteFile;
 import java.io.File;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.Callable;
 import picocli.CommandLine;
 import picocli.CommandLine.Command;
@@ -30,6 +34,7 @@ import picocli.CommandLine.Option;
         IdentitySchemaCommand.class,
         PackageCommand.class,
         VerifyCommand.class,
+        ModulesCommand.class,
         McpCommand.class
 })
 public final class TesseraqlCli implements Runnable {
@@ -60,9 +65,21 @@ public final class TesseraqlCli implements Runnable {
 
         @Override
         public Integer call() throws InterruptedException {
-            // Load any opt-in plugin modules (file-format codecs, ...) so route compilation and the
-            // runtime discover them via the FileCodec ServiceLoader (which uses this classloader).
-            Thread.currentThread().setContextClassLoader(CliModules.classLoader(modules,
+            // Load any opt-in plugin modules (file-format codecs, drivers, ...) so route compilation
+            // and the runtime discover them via the ServiceLoader SPIs (which use this classloader).
+            // The declared tesseraql.modules set is resolved into work/modules (lock-verified) and
+            // composes with an explicit --modules directory.
+            List<File> moduleDirs = new ArrayList<>();
+            AppConfig config = new ManifestLoader().load(app).config();
+            new ModulesInstaller().install(app, config, false).ifPresent(result -> {
+                moduleDirs.add(result.cacheDir().toFile());
+                System.out.println("Resolved " + result.artifacts().size()
+                        + " tesseraql.modules artifact(s).");
+            });
+            if (modules != null) {
+                moduleDirs.add(modules);
+            }
+            Thread.currentThread().setContextClassLoader(CliModules.classLoaderOver(moduleDirs,
                     Thread.currentThread().getContextClassLoader()));
             TesseraqlRuntime runtime = port != null
                     ? TesseraqlRuntime.start(app, port)

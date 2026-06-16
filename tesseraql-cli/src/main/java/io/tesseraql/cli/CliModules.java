@@ -30,6 +30,19 @@ final class CliModules {
         return jars.length == 0 ? parent : new URLClassLoader(jars, parent);
     }
 
+    /**
+     * A classloader over the jars in every directory of {@code modulesDirs} (the resolved
+     * {@code tesseraql.modules} cache and an explicit {@code --modules} directory compose), or
+     * {@code parent} unchanged when none hold jars.
+     */
+    static ClassLoader classLoaderOver(List<File> modulesDirs, ClassLoader parent) {
+        List<URL> urls = new ArrayList<>();
+        for (File dir : modulesDirs) {
+            urls.addAll(Arrays.asList(jars(dir)));
+        }
+        return urls.isEmpty() ? parent : new URLClassLoader(urls.toArray(new URL[0]), parent);
+    }
+
     /** The {@code *.jar} files in {@code modulesDir} as URLs, sorted for a stable classpath order. */
     static URL[] jars(File modulesDir) {
         if (modulesDir == null || !modulesDir.isDirectory()) {

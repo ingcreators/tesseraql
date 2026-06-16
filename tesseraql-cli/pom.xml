@@ -88,6 +88,19 @@
       <artifactId>picocli</artifactId>
     </dependency>
 
+    <!-- Embedded Maven artifact resolver for the opt-in tesseraql.modules set: resolves
+         coordinates (versions from the BOM) into the module cache the plugin classloader loads,
+         reusing ~/.m2/settings.xml so corporate proxies/mirrors apply. No Maven install needed. -->
+    <dependency>
+      <groupId>org.jboss.shrinkwrap.resolver</groupId>
+      <artifactId>shrinkwrap-resolver-api-maven</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.jboss.shrinkwrap.resolver</groupId>
+      <artifactId>shrinkwrap-resolver-impl-maven</artifactId>
+      <scope>runtime</scope>
+    </dependency>
+
     <dependency>
       <groupId>org.junit.jupiter</groupId>
       <artifactId>junit-jupiter</artifactId>
