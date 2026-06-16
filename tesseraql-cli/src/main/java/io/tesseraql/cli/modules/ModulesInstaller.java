@@ -23,7 +23,8 @@ public final class ModulesInstaller {
      * same literal the CLI reports); resolution of unversioned coordinates needs the BOM reachable
      * (published, or in the local repository when built from the monorepo).
      */
-    public static final String BOM_COORDINATE = "io.tesseraql:tesseraql-bom:0.2.0-SNAPSHOT";
+    public static final String BOM_COORDINATE = "io.tesseraql:tesseraql-bom:"
+            + io.tesseraql.core.TesseraqlVersion.current();
 
     private final boolean offline;
 

@@ -55,7 +55,7 @@ import java.util.Map;
  */
 public final class McpDevTools {
 
-    private static final String VERSION = "0.2.0-SNAPSHOT";
+    private static final String VERSION = io.tesseraql.core.TesseraqlVersion.current();
     private static final TqlErrorCode BAD_ARGS = new TqlErrorCode(TqlDomain.MCP, 4002);
     private static final TqlErrorCode NO_DATASOURCE = new TqlErrorCode(TqlDomain.MCP, 5001);
 

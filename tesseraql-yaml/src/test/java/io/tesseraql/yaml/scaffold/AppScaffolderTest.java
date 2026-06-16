@@ -52,7 +52,9 @@ class AppScaffolderTest {
                 .contains("distributionUrl=");
         // The wrapper POM imports the BOM and binds the plugin.
         assertThat(content(files, "pom.xml"))
-                .contains("tesseraql-bom").contains("tesseraql-maven-plugin");
+                .contains("tesseraql-bom").contains("tesseraql-maven-plugin")
+                // The wrapper POM pins the resolved framework version, not the literal placeholder.
+                .contains("<tesseraql.version>").doesNotContain("__TQL_VERSION__");
         // Studio is configured (on for local; env-gated for production).
         assertThat(content(files, "config/tesseraql.yml"))
                 .contains("studio:").contains("TESSERAQL_STUDIO_ENABLED");

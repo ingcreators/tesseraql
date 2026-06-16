@@ -29,6 +29,11 @@ TesseraQL itself.
    git commit -am "release: 0.1.0"
    ```
 
+   Every version-bearing surface — the CLI `--version`, the embedded resolver's BOM coordinate,
+   and the scaffolded wrapper POM — derives from the reactor version via
+   `io.tesseraql.core.TesseraqlVersion` (a build-filtered resource), so `versions:set` updates
+   them too; there are no version literals to edit by hand.
+
 2. Full verification on the release commit:
 
    ```bash
