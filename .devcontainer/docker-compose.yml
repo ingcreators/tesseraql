@@ -20,3 +20,32 @@ services:
     environment:
       TESSERAQL_PROFILE: dev
       TESTCONTAINERS_HOST_OVERRIDE: host.docker.internal
+
+    # PostgreSQL for the example app (examples/user-admin-app). devcontainer.json sets
+    # DB_HOST=db so the README serve commands run unchanged inside the container.
+    depends_on:
+      db:
+        condition: service_healthy
+
+  # Local-only PostgreSQL for running the example app. Credentials match the defaults in
+  # examples/user-admin-app/config/application.yml (user_admin/user_admin). The example owns its
+  # schema via db/migration, so `serve` self-bootstraps the tables and demo data on first start —
+  # this service only needs to provide an empty database. Throwaway Testcontainers databases (the
+  # IT suite) are unaffected by this service.
+  db:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: user_admin
+      POSTGRES_USER: user_admin
+      POSTGRES_PASSWORD: user_admin
+    volumes:
+      - tesseraql-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U user_admin -d user_admin"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  tesseraql-pgdata:

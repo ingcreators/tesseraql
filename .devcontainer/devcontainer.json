@@ -19,7 +19,8 @@
   "remoteEnv": {
     "CODEX_HOME": "/home/vscode/.codex",
     "CLAUDE_CONFIG_DIR": "/home/vscode/.claude",
-    "TESSERAQL_PROFILE": "dev"
+    "TESSERAQL_PROFILE": "dev",
+    "DB_HOST": "db"
   },
   "containerEnv": {
     "JAVA_TOOL_OPTIONS": "-Dfile.encoding=UTF-8"

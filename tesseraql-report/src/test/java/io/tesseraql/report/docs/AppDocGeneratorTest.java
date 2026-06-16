@@ -60,8 +60,12 @@ class AppDocGeneratorTest {
         assertThat(search.route().sql()).singleElement()
                 .satisfies(statement -> assertThat(statement.binds())
                         .containsExactly("q", "limit", "offset"));
-        // user-admin-app ships no db/migration tree, so the listing is empty.
-        assertThat(MODEL.migrations()).isEmpty();
+        // user-admin-app owns its schema via db/migration/V1__create_users.sql.
+        assertThat(MODEL.migrations()).singleElement().satisfies(migration -> {
+            assertThat(migration.datasource()).isEqualTo("main");
+            assertThat(migration.version()).isEqualTo("1");
+            assertThat(migration.description()).isEqualTo("create_users");
+        });
     }
 
     @Test

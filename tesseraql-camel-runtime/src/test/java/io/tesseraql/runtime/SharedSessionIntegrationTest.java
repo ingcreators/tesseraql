@@ -43,11 +43,11 @@ class SharedSessionIntegrationTest {
 
     @BeforeAll
     static void start() throws Exception {
-        seedDatabase();
         homeA = prepareAppHome("node-a");
         homeB = prepareAppHome("node-b");
         nodeA = TesseraqlRuntime.start(homeA, freePort());
         nodeB = TesseraqlRuntime.start(homeB, freePort());
+        seedDatabase();
     }
 
     @AfterAll
@@ -116,8 +116,7 @@ class SharedSessionIntegrationTest {
         try (Connection connection = DriverManager.getConnection(
                 POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword());
                 Statement statement = connection.createStatement()) {
-            statement.execute("create table users (id serial primary key, name varchar(200), "
-                    + "status varchar(32) not null, created_at timestamp default now())");
+            statement.execute("truncate table users restart identity");
             statement.execute("insert into users (name, status) values ('sato','ACTIVE')");
             for (String ddl : io.tesseraql.identity.DefaultIdentityPack.schema("postgres")
                     .split(";")) {

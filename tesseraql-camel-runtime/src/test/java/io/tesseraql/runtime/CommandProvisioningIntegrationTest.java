@@ -60,13 +60,13 @@ class CommandProvisioningIntegrationTest {
 
     @BeforeAll
     static void start() throws Exception {
-        seedDatabase();
         provider = HttpServer.create(new InetSocketAddress(0), 0);
         provider.createContext("/scim/v2/Users", CommandProvisioningIntegrationTest::handle);
         provider.createContext("/scim/v2/Groups", CommandProvisioningIntegrationTest::handleGroup);
         provider.start();
         appHome = prepareAppHome(provider.getAddress().getPort());
         runtime = TesseraqlRuntime.start(appHome, freePort());
+        seedDatabase();
     }
 
     @AfterAll
@@ -196,11 +196,9 @@ class CommandProvisioningIntegrationTest {
         try (Connection connection = DriverManager.getConnection(
                 POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword());
                 Statement statement = connection.createStatement()) {
-            statement.execute("create table users (id serial primary key, name varchar(200), "
-                    + "status varchar(32) not null, created_at timestamp default now())");
+            statement.execute("truncate table users restart identity");
             statement.execute("insert into users (name, status) values ('kim','INACTIVE')");
-            statement.execute("create table app_groups (id serial primary key, "
-                    + "display_name varchar(200) not null)");
+            statement.execute("truncate table app_groups restart identity");
             statement.execute("insert into app_groups (display_name) values ('engineers')");
         }
     }
