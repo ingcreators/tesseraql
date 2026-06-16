@@ -33,6 +33,25 @@ file transfers, observability, and supply-chain tooling.
 
 ## Quick start
 
+### Build an application on TesseraQL
+
+You work in your own repository and obtain the framework as the installed `tesseraql` CLI plus
+resolved Maven artifacts — no need to clone this monorepo. Full guide:
+[docs/getting-started.md](docs/getting-started.md).
+
+```bash
+# install the CLI (a release dist archive / jpackage image, or build it: see getting-started.md)
+tesseraql new myapp                  # scaffold into your own repo
+cd myapp
+docker compose up -d                 # a local PostgreSQL (or point config at your own)
+tesseraql serve --app .              # auto-applies db/migration; Studio at /_tesseraql/studio
+tesseraql scaffold crud --app . --table items
+tesseraql lint | test | coverage     # verify, all CLI-native
+tesseraql package --app .            # build a .tqlapp
+```
+
+### Develop the framework
+
 Requirements: JDK 21+ and Docker (for Testcontainers). The repository ships a Dev Container
 with everything preinstalled.
 
@@ -40,23 +59,16 @@ with everything preinstalled.
 ./mvnw -B -ntp verify
 ```
 
-Run the example application. It needs only an empty PostgreSQL at
+Run the bundled example. It needs only an empty PostgreSQL at
 `jdbc:postgresql://localhost:5432/user_admin` (see `examples/user-admin-app/config/application.yml`);
-the app owns its schema, so `serve` applies its `db/migration` on start — creating the `users`
-table and a little demo data. (The Dev Container ships this database as the `db` service; set
-`DB_USER`/`DB_PASSWORD` to point at your own.)
-
-The example app's print route exports PDF. `csv` is built into the runtime, but `pdf` and `excel`
-are opt-in codec modules (so apps that never print don't drag in PDFBox/POI). `package` assembles
-them under `tesseraql-cli/target/modules`; point `serve --modules` at that directory to load them.
+the app owns its schema, so `serve` applies its `db/migration` on start. Build the CLI distribution
+and serve the example (the `-Pdist` archive bundles the opt-in pdf/excel codecs under `modules/`):
 
 ```bash
-./mvnw -ntp -DskipTests -pl tesseraql-cli -am package
-./mvnw -ntp -DskipTests -pl tesseraql-cli dependency:copy-dependencies \
-  -DincludeScope=runtime -DoutputDirectory=target/dependency
-java -cp 'tesseraql-cli/target/*:tesseraql-cli/target/dependency/*' \
-  io.tesseraql.cli.TesseraqlCli serve --app examples/user-admin-app \
-  --modules tesseraql-cli/target/modules
+./mvnw -B -ntp -DskipTests -pl tesseraql-cli -am -Pdist package
+( cd tesseraql-cli/target && unzip -q tesseraql-cli-*-dist.zip )
+tesseraql-cli/target/tesseraql-*/bin/tesseraql serve \
+  --app examples/user-admin-app --modules tesseraql-cli/target/tesseraql-*/modules
 ```
 
 `GET /api/users` is a `bearer`-authenticated route, so mint a dev JWT (HS256, the
@@ -100,7 +112,7 @@ organized.
 | `tesseraql-studio` / `tesseraql-ops-ui` | Bundled Studio and operations console apps |
 | `tesseraql-excel` | Optional Excel codec (fastexcel reads/writes, jxls report templates) |
 | `tesseraql-mcp` | Model Context Protocol server core: JSON-RPC dispatch, tool model, stdio and HTTP transports |
-| `tesseraql-cli` | `tesseraql serve` / `routes` / `new` / `scaffold crud` / `mcp` |
+| `tesseraql-cli` | `tesseraql serve` / `routes` / `new` / `scaffold` / `lint` / `test` / `coverage` / `generate` / `schema` / `governance` / `migrate` / `identity-schema` / `package` / `verify` / `modules` / `mcp` |
 | `tesseraql-maven-plugin` | `lint`, `test`, `coverage`, `generate`, `package-app`, `migrate`, `identity-schema`, `release-evidence`, `verify-evidence`, `governance` |
 | `tesseraql-bom` | Dependency BOM for applications |
 
@@ -111,12 +123,15 @@ TesseraQL 1.x uses Java 21 as the baseline and tests Java 25 compatibility in CI
 
 ## Documentation
 
+- [docs/getting-started.md](docs/getting-started.md) - build an app without cloning the monorepo
+  (install the CLI, `tesseraql new`)
 - [docs/app-layout.md](docs/app-layout.md) - application directory anatomy and URL mapping
 - [docs/build.md](docs/build.md) - build, test reports, coverage gates, dialect test suites
 - [docs/deployment.md](docs/deployment.md) - container deployment (Kamal 2 + Cloudflare Tunnel)
 - [docs/release.md](docs/release.md) - release procedure
 - [docs/development-environment.md](docs/development-environment.md) - Dev Container details
-- [docs/app-developer-distribution.md](docs/app-developer-distribution.md) - plan: building apps without cloning the monorepo (CLI/Maven parity, distribution, opt-in modules, proxy support)
+- [docs/app-developer-distribution.md](docs/app-developer-distribution.md) - building apps without cloning the monorepo (CLI/Maven parity, distribution, opt-in modules, proxy support)
+- [docs/proxy.md](docs/proxy.md) - corporate proxy, internal Maven mirror, and air-gapped networks
 - [docs/roadmap.md](docs/roadmap.md) - post-0.1 roadmap toward an LOB application platform
 
 ## License
