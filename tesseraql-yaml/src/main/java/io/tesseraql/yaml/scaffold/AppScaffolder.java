@@ -5,9 +5,12 @@ import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.attribute.PosixFilePermission;
 import java.util.List;
+import java.util.Set;
 import java.util.regex.Pattern;
 
 /**
@@ -46,7 +49,32 @@ public final class AppScaffolder {
                 new ScaffoldedFile("web/api/items/get.yml", SEARCH_ROUTE_YML),
                 new ScaffoldedFile("web/api/items/search.sql", SEARCH_SQL),
                 new ScaffoldedFile("tests/smoke-test.yml", SMOKE_TEST_YML),
-                new ScaffoldedFile(".gitignore", GITIGNORE));
+                new ScaffoldedFile(".gitignore", GITIGNORE),
+                // Maven/CI surface: a thin wrapper POM plus the Maven Wrapper, so the Maven path
+                // needs only a JDK. The interactive CLI loop needs none of this (app-layout.md).
+                new ScaffoldedFile("pom.xml",
+                        WRAPPER_POM_XML.replace("__APP_NAME__", appName).replace("__APP_DB__",
+                                dbName)),
+                new ScaffoldedFile("mvnw", resource("mvnw")),
+                new ScaffoldedFile("mvnw.cmd", resource("mvnw.cmd")),
+                new ScaffoldedFile(".mvn/wrapper/maven-wrapper.properties",
+                        resource("maven-wrapper.properties")),
+                // A local PostgreSQL for development (Docker optional, native PostgreSQL works too).
+                new ScaffoldedFile("compose.yaml", COMPOSE_YAML.replace("__APP_DB__", dbName)),
+                new ScaffoldedFile("README.md",
+                        README_MD.replace("__APP_NAME__", appName).replace("__APP_DB__", dbName)));
+    }
+
+    /** Reads a bundled scaffold resource (the Maven Wrapper scripts) verbatim. */
+    private static String resource(String name) {
+        try (var in = AppScaffolder.class.getResourceAsStream("/scaffold/" + name)) {
+            if (in == null) {
+                throw new IllegalStateException("Missing scaffold resource: /scaffold/" + name);
+            }
+            return new String(in.readAllBytes(), StandardCharsets.UTF_8);
+        } catch (IOException ex) {
+            throw new UncheckedIOException(ex);
+        }
     }
 
     /**
@@ -64,9 +92,26 @@ public final class AppScaffolder {
                 Path destination = target.resolve(file.path()).normalize();
                 Files.createDirectories(destination.getParent());
                 Files.writeString(destination, file.content());
+                // Shell scripts (the mvnw wrapper) must be runnable; the .cmd/.properties are not.
+                if (file.content().startsWith("#!")) {
+                    makeExecutable(destination);
+                }
             }
         } catch (IOException ex) {
             throw new UncheckedIOException(ex);
+        }
+    }
+
+    /** Adds the executable bit on POSIX filesystems; a no-op on non-POSIX ones (e.g. Windows). */
+    private static void makeExecutable(Path file) {
+        try {
+            Set<PosixFilePermission> perms = Files.getPosixFilePermissions(file);
+            perms.add(PosixFilePermission.OWNER_EXECUTE);
+            perms.add(PosixFilePermission.GROUP_EXECUTE);
+            perms.add(PosixFilePermission.OTHERS_EXECUTE);
+            Files.setPosixFilePermissions(file, perms);
+        } catch (UnsupportedOperationException | IOException ignored) {
+            // Non-POSIX filesystem: the wrapper still runs via `sh mvnw`.
         }
     }
 
@@ -119,6 +164,13 @@ public final class AppScaffolder {
                   local:
                     type: managed
                     datasource: main
+
+              studio:
+                # Studio is a privileged developer surface at /_tesseraql/studio. Enabled for local
+                # development; in production set TESSERAQL_STUDIO_ENABLED=false (or, to keep it
+                # visible but inert, TESSERAQL_STUDIO_READONLY=true).
+                enabled: ${TESSERAQL_STUDIO_ENABLED:true}
+                readOnly: ${TESSERAQL_STUDIO_READONLY:false}
 
               camel:
                 components:
@@ -334,5 +386,132 @@ public final class AppScaffolder {
     private static final String GITIGNORE = """
             # Runtime scratch (drafts, spools, mounted apps); never committed (design ch. 4).
             work/
+
+            # Maven build output (the Maven/CI path).
+            target/
+            """;
+
+    private static final String WRAPPER_POM_XML = """
+            <?xml version="1.0" encoding="UTF-8"?>
+            <!-- Thin wrapper POM (tesseraql new): imports the TesseraQL BOM and binds the Maven
+                 plugin so the CI / Maven surface needs only a JDK (via ./mvnw). The interactive CLI
+                 loop needs none of this; see README.md. -->
+            <project xmlns="http://maven.apache.org/POM/4.0.0"
+                     xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                     xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+              <modelVersion>4.0.0</modelVersion>
+
+              <groupId>com.example</groupId>
+              <artifactId>__APP_NAME__</artifactId>
+              <version>0.1.0-SNAPSHOT</version>
+              <packaging>pom</packaging>
+
+              <properties>
+                <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+                <!-- The TesseraQL version you build against (matches the CLI you installed). -->
+                <tesseraql.version>0.2.0-SNAPSHOT</tesseraql.version>
+              </properties>
+
+              <dependencyManagement>
+                <dependencies>
+                  <dependency>
+                    <groupId>io.tesseraql</groupId>
+                    <artifactId>tesseraql-bom</artifactId>
+                    <version>${tesseraql.version}</version>
+                    <type>pom</type>
+                    <scope>import</scope>
+                  </dependency>
+                </dependencies>
+              </dependencyManagement>
+
+              <build>
+                <plugins>
+                  <plugin>
+                    <groupId>io.tesseraql</groupId>
+                    <artifactId>tesseraql-maven-plugin</artifactId>
+                    <version>${tesseraql.version}</version>
+                    <!-- The app home is this directory; the plugin operates on it in place. -->
+                    <configuration>
+                      <appHome>${project.basedir}</appHome>
+                    </configuration>
+                    <executions>
+                      <!-- `./mvnw verify` lints and runs the governance gate (no database needed).
+                           Run the database goals explicitly, e.g.
+                           ./mvnw tesseraql:migrate tesseraql:test \\
+                               -Dtesseraql.jdbcUrl=jdbc:postgresql://localhost:5432/__APP_DB__ -->
+                      <execution>
+                        <id>tesseraql-verify</id>
+                        <phase>verify</phase>
+                        <goals>
+                          <goal>lint</goal>
+                          <goal>governance</goal>
+                        </goals>
+                      </execution>
+                    </executions>
+                  </plugin>
+                </plugins>
+              </build>
+            </project>
+            """;
+
+    private static final String COMPOSE_YAML = """
+            # Local PostgreSQL for development (tesseraql new). Docker is optional — a natively
+            # installed PostgreSQL works too; point DB_USER / DB_PASSWORD (or config/application.yml)
+            # at it. Start this one with: docker compose up -d
+            services:
+              db:
+                image: postgres:16-alpine
+                environment:
+                  POSTGRES_DB: __APP_DB__
+                  POSTGRES_USER: ${DB_USER:-__APP_DB__}
+                  POSTGRES_PASSWORD: ${DB_PASSWORD:-__APP_DB__}
+                ports:
+                  - "5432:5432"
+                volumes:
+                  - tesseraql-pgdata:/var/lib/postgresql/data
+
+            volumes:
+              tesseraql-pgdata:
+            """;
+
+    private static final String README_MD = """
+            # __APP_NAME__
+
+            A [TesseraQL](https://github.com/ingcreators/tesseraql) application — SQL-first
+            hypermedia and integration. You work in this directory (2-way SQL, YAML routes,
+            templates); the framework is installed tooling and resolved Maven artifacts, so you do
+            not clone the framework monorepo.
+
+            ## Prerequisites
+
+            - A reachable PostgreSQL (Docker optional). Bring up a local one with
+              `docker compose up -d`, or point `DB_USER` / `DB_PASSWORD` (or
+              `config/application.yml`) at an existing server.
+            - **CLI path:** the `tesseraql` CLI. **Maven path:** a JDK (the bundled `./mvnw` fetches
+              Maven itself).
+
+            ## CLI path (interactive dev loop)
+
+            ```sh
+            tesseraql serve --app .          # auto-applies db/migration; Studio at /_tesseraql/studio
+            tesseraql scaffold crud --app . --table items
+            tesseraql lint --app .
+            tesseraql test --app .
+            tesseraql package --app .        # build a .tqlapp under work/
+            ```
+
+            ## Maven path (CI / lifecycle)
+
+            ```sh
+            ./mvnw verify                    # lint + governance gate (no database)
+            ./mvnw tesseraql:migrate tesseraql:test \\
+                -Dtesseraql.jdbcUrl=jdbc:postgresql://localhost:5432/__APP_DB__
+            ```
+
+            ## Layout
+
+            See the [application layout](https://github.com/ingcreators/tesseraql/blob/main/docs/app-layout.md):
+            `config/`, `web/` (the directory tree mirrors the URL space), `db/migration/`,
+            `templates/`, `tests/`.
             """;
 }

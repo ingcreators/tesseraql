@@ -1,0 +1,17 @@
+# Local PostgreSQL for development (tesseraql new). Docker is optional — a natively
+# installed PostgreSQL works too; point DB_USER / DB_PASSWORD (or config/application.yml)
+# at it. Start this one with: docker compose up -d
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: scaffold_demo
+      POSTGRES_USER: ${DB_USER:-scaffold_demo}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-scaffold_demo}
+    ports:
+      - "5432:5432"
+    volumes:
+      - tesseraql-pgdata:/var/lib/postgresql/data
+
+volumes:
+  tesseraql-pgdata:
