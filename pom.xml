@@ -121,6 +121,12 @@
     <mssql-jdbc.version>13.4.0.jre11</mssql-jdbc.version>
     <greenmail.version>2.1.3</greenmail.version>
     <h2.version>2.3.232</h2.version>
+    <!-- Embedded PostgreSQL for the serve embedded-db option (run a tqlapp with no external DB).
+         The lib is a small pure-Java process supervisor; the platform-specific postgres binary is
+         NOT a dependency — it is resolved on demand via the CLI's ShrinkWrap resolver, pinned to
+         this version (surfaced to the CLI through a build-filtered resource). -->
+    <zonky.embedded.postgres.version>2.2.2</zonky.embedded.postgres.version>
+    <zonky.postgres.binaries.version>17.10.0</zonky.postgres.binaries.version>
     <spotless.version>3.6.0</spotless.version>
 
     <!-- Build plugin versions -->
@@ -236,6 +242,12 @@
         <groupId>com.mysql</groupId>
         <artifactId>mysql-connector-j</artifactId>
         <version>${mysql.version}</version>
+      </dependency>
+      <!-- Embedded PostgreSQL process supervisor (the binary is resolved on demand, not bundled). -->
+      <dependency>
+        <groupId>io.zonky.test</groupId>
+        <artifactId>embedded-postgres</artifactId>
+        <version>${zonky.embedded.postgres.version}</version>
       </dependency>
       <dependency>
         <groupId>info.picocli</groupId>

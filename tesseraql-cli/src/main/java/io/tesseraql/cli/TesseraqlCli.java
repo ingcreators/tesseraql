@@ -3,6 +3,7 @@ package io.tesseraql.cli;
 import io.tesseraql.cli.mcp.McpCommand;
 import io.tesseraql.cli.modules.ModulesInstaller;
 import io.tesseraql.core.TesseraqlVersion;
+import io.tesseraql.runtime.DataSources;
 import io.tesseraql.runtime.TesseraqlRuntime;
 import io.tesseraql.yaml.config.AppConfig;
 import io.tesseraql.yaml.manifest.AppManifest;
@@ -75,6 +76,12 @@ public final class TesseraqlCli implements Runnable {
                 + "(e.g. the pdf/excel file-format codecs) to load onto the runtime classpath.")
         File modules;
 
+        @Option(names = {
+                "--embedded-db"}, arity = "0..1", paramLabel = "<data-dir>", fallbackValue = "", description = "Run with an embedded PostgreSQL (no external "
+                        + "database). Pass a directory to persist data across restarts; omit it for "
+                        + "an ephemeral run.")
+        String embeddedDb;
+
         @Override
         public Integer call() throws InterruptedException {
             // Load any opt-in plugin modules (file-format codecs, drivers, ...) so route compilation
@@ -93,10 +100,31 @@ public final class TesseraqlCli implements Runnable {
             }
             Thread.currentThread().setContextClassLoader(CliModules.classLoaderOver(moduleDirs,
                     Thread.currentThread().getContextClassLoader()));
+
+            // Optionally start an embedded PostgreSQL and point the runtime's main datasource at it,
+            // so the app runs with no external database. An empty value (the option given without a
+            // directory) is an ephemeral run; a directory persists data across restarts.
+            DataSources.MainDatasourceOverride dbOverride = null;
+            EmbeddedPostgresSupport.Handle embedded = null;
+            if (embeddedDb != null) {
+                Path dataDir = embeddedDb.isEmpty() ? null : Path.of(embeddedDb);
+                embedded = EmbeddedPostgresSupport.start(dataDir, false);
+                dbOverride = embedded.override();
+                System.out.println("Embedded PostgreSQL started"
+                        + (dataDir == null ? " (ephemeral)." : " at " + dataDir + "."));
+            }
+
             TesseraqlRuntime runtime = port != null
-                    ? TesseraqlRuntime.start(app, port)
-                    : TesseraqlRuntime.start(app);
-            Runtime.getRuntime().addShutdownHook(new Thread(runtime::close));
+                    ? TesseraqlRuntime.start(app, port, dbOverride)
+                    : TesseraqlRuntime.start(app, dbOverride);
+            EmbeddedPostgresSupport.Handle embeddedToClose = embedded;
+            Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+                runtime.close();
+                // Stop the embedded postgres only after the runtime released its connections.
+                if (embeddedToClose != null) {
+                    embeddedToClose.close();
+                }
+            }));
             System.out.println(
                     "TesseraQL serving on port " + runtime.port() + ". Press Ctrl+C to stop.");
             Thread.currentThread().join();

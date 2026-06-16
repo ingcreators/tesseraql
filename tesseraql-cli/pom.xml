@@ -88,6 +88,13 @@
       <artifactId>picocli</artifactId>
     </dependency>
 
+    <!-- Embedded PostgreSQL process supervisor for the serve embedded-db option. The platform
+         binary is NOT bundled; it is resolved on demand via the ShrinkWrap resolver below. -->
+    <dependency>
+      <groupId>io.zonky.test</groupId>
+      <artifactId>embedded-postgres</artifactId>
+    </dependency>
+
     <!-- Embedded Maven artifact resolver for the opt-in tesseraql.modules set: resolves
          coordinates (versions from the BOM) into the module cache the plugin classloader loads,
          reusing ~/.m2/settings.xml so corporate proxies/mirrors apply. No Maven install needed. -->
@@ -132,9 +139,29 @@
       <artifactId>postgresql</artifactId>
       <scope>test</scope>
     </dependency>
+    <!-- The current CI/devcontainer platform's PostgreSQL binary, so the embedded-db IT resolves it
+         offline from the local repository. Resolution detects the running platform at runtime; on
+         other platforms the resolver falls back to the network. -->
+    <dependency>
+      <groupId>io.zonky.test.postgres</groupId>
+      <artifactId>embedded-postgres-binaries-linux-amd64</artifactId>
+      <version>${zonky.postgres.binaries.version}</version>
+      <scope>test</scope>
+    </dependency>
   </dependencies>
 
   <build>
+    <resources>
+      <resource>
+        <directory>src/main/resources</directory>
+      </resource>
+      <!-- embedded-postgres.properties is filled from ${zonky.postgres.binaries.version} so the
+           embedded-db binary version is single-sourced from the reactor. -->
+      <resource>
+        <directory>src/main/resources-filtered</directory>
+        <filtering>true</filtering>
+      </resource>
+    </resources>
     <pluginManagement>
       <plugins>
         <!-- IDE-only (m2e / VS Code Maven): skip copy-dependencies in the workspace incremental

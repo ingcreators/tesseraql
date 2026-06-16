@@ -102,38 +102,55 @@ public final class TesseraqlRuntime implements AutoCloseable {
 
     /** Starts the runtime against {@code appHome}, using the configured {@code server.port}. */
     public static TesseraqlRuntime start(Path appHome) {
+        return start(appHome, (DataSources.MainDatasourceOverride) null);
+    }
+
+    /**
+     * Starts the runtime against {@code appHome} on the configured port, pointing the {@code main}
+     * datasource at {@code override} when non-null (the {@code serve --embedded-db} path).
+     */
+    public static TesseraqlRuntime start(Path appHome,
+            DataSources.MainDatasourceOverride override) {
         AppManifest manifest = new ManifestLoader().load(appHome);
         int port = manifest.config().getString("server.port").map(Integer::parseInt).orElse(8080);
         return start(appHome, manifest, port, new io.tesseraql.core.telemetry.RingTracer(100),
-                io.tesseraql.core.telemetry.NoopMeter.INSTANCE);
+                io.tesseraql.core.telemetry.NoopMeter.INSTANCE, override);
     }
 
     /** Starts the runtime against {@code appHome} on an explicit port (used by tests). */
     public static TesseraqlRuntime start(Path appHome, int port) {
+        return start(appHome, port, (DataSources.MainDatasourceOverride) null);
+    }
+
+    /** Starts the runtime on an explicit port, with the {@code main} datasource override applied. */
+    public static TesseraqlRuntime start(Path appHome, int port,
+            DataSources.MainDatasourceOverride override) {
         return start(appHome, new ManifestLoader().load(appHome), port,
                 new io.tesseraql.core.telemetry.RingTracer(100),
-                io.tesseraql.core.telemetry.NoopMeter.INSTANCE);
+                io.tesseraql.core.telemetry.NoopMeter.INSTANCE, override);
     }
 
     /** Starts the runtime with an explicit tracer (used to wire observability). */
     public static TesseraqlRuntime start(Path appHome, int port,
             io.tesseraql.core.telemetry.Tracer tracer) {
         return start(appHome, new ManifestLoader().load(appHome), port, tracer,
-                io.tesseraql.core.telemetry.NoopMeter.INSTANCE);
+                io.tesseraql.core.telemetry.NoopMeter.INSTANCE, null);
     }
 
     /** Starts the runtime with an explicit tracer and meter (used to wire observability). */
     public static TesseraqlRuntime start(Path appHome, int port,
             io.tesseraql.core.telemetry.Tracer tracer, io.tesseraql.core.telemetry.Meter meter) {
-        return start(appHome, new ManifestLoader().load(appHome), port, tracer, meter);
+        return start(appHome, new ManifestLoader().load(appHome), port, tracer, meter, null);
     }
 
     private static TesseraqlRuntime start(Path appHome, AppManifest manifest, int port,
-            io.tesseraql.core.telemetry.Tracer tracer, io.tesseraql.core.telemetry.Meter meter) {
+            io.tesseraql.core.telemetry.Tracer tracer, io.tesseraql.core.telemetry.Meter meter,
+            DataSources.MainDatasourceOverride override) {
         DefaultCamelContext context = new DefaultCamelContext();
         // Every datasource declared under tesseraql.datasources gets a pool, registered by name
         // so routes, contracts and per-datasource migrations can address it (design ch. 5.2).
-        Map<String, HikariDataSource> dataSources = DataSources.createAll(manifest.config());
+        Map<String, HikariDataSource> dataSources = DataSources.createAll(manifest.config(),
+                override);
         HikariDataSource dataSource = dataSources.get("main");
         dataSources.forEach((name, pool) -> context.getRegistry().bind(name, pool));
 
