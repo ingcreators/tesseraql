@@ -42,11 +42,11 @@ jobs:
             exit 1
           fi
 
-      - name: Publish to GitHub Packages
+      - name: Publish to GitHub Packages and build the CLI distribution
         env:
           MAVEN_USERNAME: ${{ github.actor }}
           MAVEN_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
-        run: ./mvnw -B -ntp -DskipTests deploy
+        run: ./mvnw -B -ntp -DskipTests -Pdist deploy
 
       - name: Publish GitHub release
         env:
@@ -55,4 +55,6 @@ jobs:
           gh release create "$GITHUB_REF_NAME" \
             --title "TesseraQL ${GITHUB_REF_NAME#v}" \
             --generate-notes \
-            --verify-tag
+            --verify-tag \
+            tesseraql-cli/target/tesseraql-cli-*-dist.zip \
+            tesseraql-cli/target/tesseraql-cli-*-dist.tar.gz

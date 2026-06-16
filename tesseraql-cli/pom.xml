@@ -162,4 +162,79 @@
     </plugins>
   </build>
 
+  <profiles>
+    <!-- The installable CLI distribution (activate with -Pdist): a self-contained executable fat
+         jar plus launcher scripts, zipped/tarred. Kept out of normal builds so the everyday
+         compile/verify loop stays fast; the release workflow and the dist CI job activate it. -->
+    <profile>
+      <id>dist</id>
+      <build>
+        <plugins>
+          <!-- Self-contained executable fat jar (tesseraql-cli-<version>-all.jar): the base runtime
+               + embedded resolver, runnable as `java -jar` with no install. The opt-in pdf/excel
+               codecs are 'provided' (excluded) and load from the resolved module cache at runtime. -->
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-shade-plugin</artifactId>
+            <version>3.6.0</version>
+            <executions>
+              <execution>
+                <id>cli-fatjar</id>
+                <phase>package</phase>
+                <goals>
+                  <goal>shade</goal>
+                </goals>
+                <configuration>
+                  <shadedArtifactAttached>true</shadedArtifactAttached>
+                  <shadedClassifierName>all</shadedClassifierName>
+                  <createDependencyReducedPom>false</createDependencyReducedPom>
+                  <filters>
+                    <filter>
+                      <artifact>*:*</artifact>
+                      <excludes>
+                        <exclude>META-INF/*.SF</exclude>
+                        <exclude>META-INF/*.DSA</exclude>
+                        <exclude>META-INF/*.RSA</exclude>
+                        <exclude>module-info.class</exclude>
+                        <exclude>META-INF/versions/*/module-info.class</exclude>
+                      </excludes>
+                    </filter>
+                  </filters>
+                  <transformers>
+                    <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
+                      <mainClass>io.tesseraql.cli.TesseraqlCli</mainClass>
+                    </transformer>
+                    <transformer implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer"/>
+                  </transformers>
+                </configuration>
+              </execution>
+            </executions>
+          </plugin>
+          <!-- Zip/tar the fat jar, launcher scripts and the opt-in module cache into a portable
+               distribution archive (tesseraql-cli-<version>-dist.zip / .tar.gz). -->
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-assembly-plugin</artifactId>
+            <version>3.7.1</version>
+            <executions>
+              <execution>
+                <id>cli-dist</id>
+                <phase>package</phase>
+                <goals>
+                  <goal>single</goal>
+                </goals>
+                <configuration>
+                  <appendAssemblyId>true</appendAssemblyId>
+                  <descriptors>
+                    <descriptor>src/assembly/dist.xml</descriptor>
+                  </descriptors>
+                </configuration>
+              </execution>
+            </executions>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
+  </profiles>
+
 </project>
