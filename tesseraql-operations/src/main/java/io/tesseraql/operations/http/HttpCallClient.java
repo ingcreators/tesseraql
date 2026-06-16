@@ -12,6 +12,7 @@ import io.tesseraql.yaml.config.AppConfig;
 import io.tesseraql.yaml.http.HttpOutbound;
 import io.tesseraql.yaml.model.HttpCallSpec;
 import java.io.IOException;
+import java.net.ProxySelector;
 import java.net.URI;
 import java.net.URLEncoder;
 import java.net.http.HttpClient;
@@ -259,6 +260,8 @@ public final class HttpCallClient {
     private HttpClient client(Duration connectTimeout) {
         return clients.computeIfAbsent(connectTimeout.toMillis(), millis -> HttpClient.newBuilder()
                 .connectTimeout(connectTimeout)
+                // Honor the JVM proxy configuration; without it the JDK client ignores proxy props.
+                .proxy(ProxySelector.getDefault())
                 .followRedirects(HttpClient.Redirect.NEVER)
                 .build());
     }

@@ -8,6 +8,7 @@ import io.tesseraql.core.notify.HmacSignatures;
 import io.tesseraql.core.outbox.OutboxEvent;
 import io.tesseraql.yaml.notify.NotificationChannels;
 import io.tesseraql.yaml.notify.NotifyEvents;
+import java.net.ProxySelector;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -30,6 +31,8 @@ final class WebhookNotifier {
 
     private final HttpClient client = HttpClient.newBuilder()
             .connectTimeout(Duration.ofSeconds(10))
+            // Honor the JVM proxy configuration; without it the JDK client ignores proxy props.
+            .proxy(ProxySelector.getDefault())
             .followRedirects(HttpClient.Redirect.NEVER)
             .build();
     private final ObjectMapper mapper = new ObjectMapper();

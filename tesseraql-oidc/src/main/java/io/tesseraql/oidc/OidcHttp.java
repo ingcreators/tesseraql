@@ -1,5 +1,6 @@
 package io.tesseraql.oidc;
 
+import java.net.ProxySelector;
 import java.net.URI;
 import java.net.URLEncoder;
 import java.net.http.HttpClient;
@@ -26,7 +27,10 @@ public final class OidcHttp {
 
     public OidcHttp(Duration requestTimeout) {
         this.requestTimeout = requestTimeout;
+        // Honor the JVM proxy configuration (http(s).proxyHost / useSystemProxies); without an
+        // explicit ProxySelector the JDK client ignores it and cannot reach an OP behind a proxy.
         this.client = HttpClient.newBuilder().connectTimeout(requestTimeout)
+                .proxy(ProxySelector.getDefault())
                 .followRedirects(HttpClient.Redirect.NEVER).build();
     }
 
