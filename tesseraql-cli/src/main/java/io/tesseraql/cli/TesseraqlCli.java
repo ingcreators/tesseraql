@@ -21,8 +21,13 @@ import picocli.CommandLine.Option;
         NewCommand.class,
         ScaffoldCommand.class,
         LintCommand.class,
+        TestCommand.class,
+        CoverageCommand.class,
         GenerateCommand.class,
+        SchemaCommand.class,
         GovernanceCommand.class,
+        MigrateCommand.class,
+        IdentitySchemaCommand.class,
         PackageCommand.class,
         VerifyCommand.class,
         McpCommand.class
