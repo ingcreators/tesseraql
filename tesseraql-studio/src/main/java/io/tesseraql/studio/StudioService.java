@@ -162,6 +162,81 @@ public final class StudioService {
      * are invalid; expression errors that need real route data still count as parsed.
      */
     private PreviewResult previewTemplate(String relativePath, String content) {
+        try {
+            templateEngine(relativePath).process(content, new org.thymeleaf.context.Context());
+            return PreviewResult.valid("template",
+                    "template parses and renders with an empty model");
+        } catch (RuntimeException ex) {
+            if (isDataDependent(ex)) {
+                return PreviewResult.valid("template",
+                        "template parses; full render needs route data (" + rootMessage(ex) + ")");
+            }
+            return PreviewResult.invalid("template", rootMessage(ex));
+        }
+    }
+
+    /**
+     * Renders a draft (or current source) template against a sample-data model and returns the
+     * actual output (design ch. 16.6, Studio backlog A1) — the next step past {@link #preview},
+     * which only proves a data-dependent template parses. {@code sampleModel} is a YAML/JSON map of
+     * top-level template variables; when blank it falls back to the colocated {@code *.sample.yml}
+     * fixture, and failing that an empty model. Only template files ({@code .html}/{@code .tpl})
+     * render; the same three-resolver engine as {@link #preview} resolves {@code tql/*} fragments
+     * and sibling app templates, so the output matches a real page/fragment/file response.
+     */
+    public RenderResult render(String relativePath, String content, String sampleModel) {
+        if (!isTemplate(relativePath)) {
+            return RenderResult.invalid("text",
+                    "Rendered preview is only available for .html/.tpl templates");
+        }
+        String text = content != null ? content : source(relativePath);
+        String effectiveSample = sampleModel != null && !sampleModel.isBlank()
+                ? sampleModel
+                : sampleModel(relativePath);
+        Map<String, Object> model;
+        try {
+            model = parser.parseTree(effectiveSample);
+        } catch (RuntimeException ex) {
+            return RenderResult.invalid("sample", "Sample data: " + rootMessage(ex));
+        }
+        String kind = relativePath.endsWith(".html") ? "html" : "text";
+        try {
+            String output = templateEngine(relativePath)
+                    .process(text, new org.thymeleaf.context.Context(java.util.Locale.ENGLISH,
+                            model));
+            return RenderResult.ok(kind, output);
+        } catch (RuntimeException ex) {
+            return RenderResult.invalid(kind, rootMessage(ex));
+        }
+    }
+
+    /**
+     * The colocated sample-data fixture for a template — {@code <base>.sample.yml} next to the
+     * template (e.g. {@code web/users/.../table.html} → {@code .../table.sample.yml}), or null when
+     * the file is not a template or no fixture exists. The fixture is a YAML map of the template's
+     * top-level variables; it is ignored by the manifest loader (only HTTP-method {@code *.yml}
+     * files under {@code web/} are routes), so it can live beside the template it documents.
+     */
+    public String sampleModel(String relativePath) {
+        if (!isTemplate(relativePath)) {
+            return null;
+        }
+        int dot = relativePath.lastIndexOf('.');
+        String fixture = relativePath.substring(0, dot) + ".sample.yml";
+        return sourceIfExists(fixture);
+    }
+
+    private static boolean isTemplate(String relativePath) {
+        return relativePath.endsWith(".html") || relativePath.endsWith(".tpl");
+    }
+
+    /**
+     * Builds a Thymeleaf engine matching the production stack (design ch. 12) for previewing or
+     * rendering a draft string: framework {@code tql/*} fragments resolve from the classpath, sibling
+     * {@code *.html} app templates from the app home (so cross-references resolve), and the draft
+     * itself from the in-memory string — in HTML mode for {@code .html}, TEXT mode otherwise.
+     */
+    private org.thymeleaf.TemplateEngine templateEngine(String relativePath) {
         org.thymeleaf.TemplateEngine engine = new org.thymeleaf.TemplateEngine();
 
         org.thymeleaf.templateresolver.ClassLoaderTemplateResolver shared = new org.thymeleaf.templateresolver.ClassLoaderTemplateResolver(
@@ -187,18 +262,7 @@ public final class StudioService {
                 : org.thymeleaf.templatemode.TemplateMode.TEXT);
         draft.setOrder(3);
         engine.addTemplateResolver(draft);
-
-        try {
-            engine.process(content, new org.thymeleaf.context.Context());
-            return PreviewResult.valid("template",
-                    "template parses and renders with an empty model");
-        } catch (RuntimeException ex) {
-            if (isDataDependent(ex)) {
-                return PreviewResult.valid("template",
-                        "template parses; full render needs route data (" + rootMessage(ex) + ")");
-            }
-            return PreviewResult.invalid("template", rootMessage(ex));
-        }
+        return engine;
     }
 
     /**
@@ -328,6 +392,23 @@ public final class StudioService {
 
         static PreviewResult invalid(String kind, String error) {
             return new PreviewResult(false, kind, null, error);
+        }
+    }
+
+    /**
+     * The outcome of a rendered preview (Studio backlog A1): whether the template rendered against
+     * the sample model, the {@code kind} of output ({@code html}/{@code text}, or {@code sample}
+     * when the sample data itself was malformed), and either the rendered {@code output} or the
+     * {@code error} detail.
+     */
+    public record RenderResult(boolean ok, String kind, String output, String error) {
+
+        static RenderResult ok(String kind, String output) {
+            return new RenderResult(true, kind, output, null);
+        }
+
+        static RenderResult invalid(String kind, String error) {
+            return new RenderResult(false, kind, null, error);
         }
     }
 }

@@ -182,6 +182,78 @@ class StudioServiceTest {
     }
 
     @Test
+    void rendersTemplateAgainstSampleModel() {
+        StudioService studio = new StudioService(exampleManifest(), true);
+
+        StudioService.RenderResult result = studio.render(
+                "web/users/fragments/table/table.html", null,
+                "users:\n  - id: 1\n    name: Alice\n    status: active\n");
+
+        assertThat(result.ok()).isTrue();
+        assertThat(result.kind()).isEqualTo("html");
+        assertThat(result.output()).contains("Alice").contains("active")
+                .doesNotContain("No matching users");
+    }
+
+    @Test
+    void rendersTemplateWithEmptyModelShowsEmptyState() {
+        StudioService studio = new StudioService(exampleManifest(), true);
+
+        // Blank sample and no colocated fixture: an empty model renders the empty branch, where
+        // preview() could only report the template "parses".
+        StudioService.RenderResult result = studio.render(
+                "web/users/fragments/table/table.html", null, null);
+
+        assertThat(result.ok()).isTrue();
+        assertThat(result.output()).contains("No matching users");
+    }
+
+    @Test
+    void renderReportsMalformedSampleData() {
+        StudioService studio = new StudioService(exampleManifest(), true);
+
+        StudioService.RenderResult result = studio.render(
+                "web/users/fragments/table/table.html", null, "users: [unclosed");
+
+        assertThat(result.ok()).isFalse();
+        assertThat(result.kind()).isEqualTo("sample");
+        assertThat(result.error()).contains("Sample data");
+    }
+
+    @Test
+    void renderRejectsNonTemplateFiles() {
+        StudioService studio = new StudioService(exampleManifest(), true);
+
+        StudioService.RenderResult result = studio.render("web/api/users/search.sql", null, null);
+
+        assertThat(result.ok()).isFalse();
+        assertThat(result.error()).contains("only available for");
+    }
+
+    @Test
+    void sampleModelDiscoversColocatedFixtureAndRenderFallsBackToIt(@TempDir Path dir)
+            throws Exception {
+        Files.createDirectories(dir.resolve("config"));
+        Files.writeString(dir.resolve("config/tesseraql.yml"), "tesseraql:\n  app:\n    name: t\n");
+        Files.createDirectories(dir.resolve("web/page"));
+        Files.writeString(dir.resolve("web/page/card.html"),
+                "<p xmlns:th=\"http://www.thymeleaf.org\" th:text=\"${title}\">x</p>");
+        Files.writeString(dir.resolve("web/page/card.sample.yml"), "title: Hello fixture\n");
+
+        StudioService studio = new StudioService(new ManifestLoader().load(dir), true);
+
+        // The colocated *.sample.yml is discovered so the editor can prefill it.
+        assertThat(studio.sampleModel("web/page/card.html")).contains("Hello fixture");
+        // A non-template file has no fixture.
+        assertThat(studio.sampleModel("web/page/card.sql")).isNull();
+
+        // A blank sample model falls back to the colocated fixture at render time.
+        StudioService.RenderResult result = studio.render("web/page/card.html", null, "  ");
+        assertThat(result.ok()).isTrue();
+        assertThat(result.output()).contains("Hello fixture");
+    }
+
+    @Test
     void applyPromotesDraftToSourceThenReloadReflectsIt(@TempDir Path dir) throws Exception {
         Files.createDirectories(dir.resolve("config"));
         Files.writeString(dir.resolve("config/tesseraql.yml"), "tesseraql:\n  app:\n    name: t\n");

@@ -23,6 +23,14 @@ Studio editor + docs work (2026-06):
 - **Highlight the source view, diff panel & YAML/templates** (#110) — `YamlHighlighter`,
   `TemplateHighlighter`, and a `Highlighter` extension dispatcher; the read-only source
   view and the diff panel are highlighted by file type.
+- **Rendered preview against sample data (A1, slice 1)** — a template file (`.html`/`.tpl`)
+  renders against a sample model rather than only validating against an empty one, and the
+  editor shows the actual output two ways: the generated HTML/text, hc-code highlighted, and
+  (for HTML) a sandboxed `iframe` visual preview styled with the hc stylesheet. The sample
+  model is YAML/JSON typed in the editor, prefilled from a colocated `<name>.sample.yml`
+  fixture (blank falls back to the fixture). `StudioService.render`/`sampleModel`, the
+  `studio.render` provider, the `POST /_tesseraql/studio/render` JSON endpoint, and the
+  `/_tesseraql/studio/ui/render` editor fragment; the source page CSP gains `frame-src 'self'`.
 
 Upstream Hypermedia Components briefs filed and adopted: `hc-code` (read-only block,
 gutter, diff), editable `hc-code`, `hc-sparkline`, and read-only syntax highlighting
@@ -33,14 +41,16 @@ gutter, diff), editable `hc-code`, `hc-sparkline`, and read-only syntax highligh
 
 ### A. Tighten the edit → verify loop (highest value, extends what shipped)
 
-1. **Rendered preview against sample/real data** — `preview()` validates against an
-   *empty* model today (a data-dependent template only "parses"). Render the
-   route/template against a fixture or real bound params and show the actual output
-   (HTML page / JSON / PDF / email) in the editor. Reuses `preview()`, the Phase 21
-   PDF codec, and the Phase 20 notification template engine. **Recommended next** —
-   it sits directly on top of live validation + highlighting + diff and proves
-   "Studio as the center of the edit loop" (the gate for deeper copilot, decision
-   point 4).
+1. **Rendered preview against sample/real data** — *slice 1 shipped* (see Shipped): a
+   **template file** renders against a sample-data fixture and shows the actual HTML/text
+   output plus a sandboxed visual `iframe`. Remaining slices:
+   - **Route-context render** — render through a *route* `.yml`'s `response.html.model`
+     (resolve the model expressions against a fixture context of `params`/`sql.rows`/…),
+     so editing the route, not just the template, previews real output.
+   - **More output kinds** — JSON (`query-json`), PDF (the Phase 21 codec), and email (the
+     Phase 20 notification template engine) previews, beyond HTML/text.
+   - **Real bound params** — optionally execute the route's SQL against a dev datasource to
+     populate the fixture (overlaps A2; keep behind the same sandbox guard).
 2. **Run a route's declarative suite from Studio** — a "run tests now" action on the
    route doc with inline results, instead of edit → apply → restart → CI. Needs a
    sandboxed execution path (read-only/query, dev datasource, row/time caps). Ties to
@@ -89,5 +99,7 @@ gutter, diff), editable `hc-code`, `hc-sparkline`, and read-only syntax highligh
 
 ## Recommended next
 
-Start with **A1 (rendered preview against data)**, then **A2 (run-suite-from-Studio)**,
-then **B3 (scaffold-from-explorer)** toward M7. E waits on hc #264; G is gated.
+**A1 slice 1 (rendered template preview against sample data) is shipped.** Next: finish A1
+(route-context render → JSON/PDF/email kinds → real bound params), then **A2
+(run-suite-from-Studio)**, then **B3 (scaffold-from-explorer)** toward M7. E waits on hc #264;
+G is gated.

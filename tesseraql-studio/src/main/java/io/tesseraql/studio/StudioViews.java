@@ -3,6 +3,7 @@ package io.tesseraql.studio;
 import io.tesseraql.studio.StudioService.Explorer;
 import io.tesseraql.studio.StudioService.JobSummary;
 import io.tesseraql.studio.StudioService.PreviewResult;
+import io.tesseraql.studio.StudioService.RenderResult;
 import io.tesseraql.studio.StudioService.RouteSummary;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
@@ -60,9 +61,13 @@ public final class StudioViews {
      * The source page model: the file path, its content ({@code content} is a draft when one
      * exists, otherwise the source), edit mode, and — for the editor — whether an unsaved draft is
      * being shown plus the on-disk {@code sourceContent} so the draft can be compared against it.
+     *
+     * <p>For template files ({@code .html}/{@code .tpl}) it also carries {@code isTemplate} and
+     * {@code isHtmlTemplate} flags and the colocated {@code sampleModel} fixture (or empty), so the
+     * editor can offer the rendered-preview-against-data panel (Studio backlog A1).
      */
     public static Map<String, Object> source(String path, String content, boolean readOnly,
-            boolean hasDraft, String sourceContent) {
+            boolean hasDraft, String sourceContent, String sampleModel) {
         Map<String, Object> model = new LinkedHashMap<>();
         model.put("path", path);
         model.put("content", content);
@@ -72,6 +77,10 @@ public final class StudioViews {
         model.put("sourceContent", sourceContent);
         model.put("contentHtml", Highlighter.highlight(path, content));
         model.put("sourceContentHtml", Highlighter.highlight(path, sourceContent));
+        boolean isTemplate = path != null && (path.endsWith(".html") || path.endsWith(".tpl"));
+        model.put("isTemplate", isTemplate);
+        model.put("isHtmlTemplate", path != null && path.endsWith(".html"));
+        model.put("sampleModel", sampleModel == null ? "" : sampleModel);
         if (hasDraft) {
             model.put("diff", diffLines(path, sourceContent == null ? "" : sourceContent,
                     content == null ? "" : content));
@@ -95,6 +104,51 @@ public final class StudioViews {
         model.put("needsData", needsData);
         model.put("ok", result.valid() && !needsData);
         return model;
+    }
+
+    /**
+     * The rendered-preview fragment model for a {@link RenderResult} (Studio backlog A1): the raw
+     * outcome, the rendered {@code output} highlighted as {@code outputHtml} for the text surface,
+     * an {@code isHtml} flag, and — for an HTML render — {@code previewDoc}, the output wrapped into
+     * a standalone document linking the Hypermedia Components stylesheet so a sandboxed iframe shows
+     * the actual styled result.
+     */
+    public static Map<String, Object> render(RenderResult result) {
+        Map<String, Object> model = new LinkedHashMap<>();
+        model.put("ok", result.ok());
+        model.put("kind", result.kind());
+        model.put("error", result.error());
+        boolean isHtml = "html".equals(result.kind());
+        model.put("isHtml", isHtml);
+        String output = result.output() == null ? "" : result.output();
+        model.put("output", output);
+        model.put("outputHtml",
+                Highlighter.highlight(isHtml ? "output.html" : "output.txt", output));
+        if (result.ok() && isHtml) {
+            model.put("previewDoc", previewDoc(output));
+        }
+        return model;
+    }
+
+    /** The Hypermedia Components stylesheets the shell links, reused to style the iframe preview. */
+    private static final String PREVIEW_HEAD = "<meta charset=\"utf-8\">"
+            + "<link rel=\"stylesheet\""
+            + " href=\"/assets/vendor/hypermedia-components__core/dist/hc.min.css\">"
+            + "<link rel=\"stylesheet\" href=\"/assets/_tesseraql/tesseraql.css\">";
+
+    /**
+     * Wraps rendered HTML for a sandboxed iframe {@code srcdoc}: a full-page render (one that brings
+     * its own {@code <html>}, e.g. via the {@code tql/shell} layout) is shown verbatim, while a bare
+     * fragment is wrapped in a minimal document linking the hc stylesheet so it is styled like the
+     * real app. The dark theme matches the Studio shell.
+     */
+    private static String previewDoc(String html) {
+        String lower = html.stripLeading().toLowerCase(java.util.Locale.ROOT);
+        if (lower.startsWith("<!doctype") || lower.startsWith("<html")) {
+            return html;
+        }
+        return "<!DOCTYPE html><html lang=\"en\" data-theme=\"dark\"><head>" + PREVIEW_HEAD
+                + "</head><body>" + html + "</body></html>";
     }
 
     private static String sourceUrl(String source) {

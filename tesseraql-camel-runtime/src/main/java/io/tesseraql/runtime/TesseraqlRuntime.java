@@ -687,16 +687,17 @@ public final class TesseraqlRuntime implements AutoCloseable {
                                         .explorer(studio.explorer()))
                         .register("studio.source", params -> {
                             String path = String.valueOf(params.get("path"));
+                            String sample = studio.sampleModel(path);
                             String draft = studio.readDraft(path);
                             if (draft == null) {
                                 // No draft: show the source (404s when the file does not exist).
                                 String src = studio.source(path);
                                 return io.tesseraql.studio.StudioViews.source(path, src,
-                                        studio.isReadOnly(), false, src);
+                                        studio.isReadOnly(), false, src, sample);
                             }
                             // A draft is being edited; sourceIfExists is null for a new-file draft.
                             return io.tesseraql.studio.StudioViews.source(path, draft,
-                                    studio.isReadOnly(), true, studio.sourceIfExists(path));
+                                    studio.isReadOnly(), true, studio.sourceIfExists(path), sample);
                         })
                         .register("studio.save", params -> {
                             String path = String.valueOf(params.get("path"));
@@ -715,6 +716,14 @@ public final class TesseraqlRuntime implements AutoCloseable {
                             Object content = params.get("content");
                             return io.tesseraql.studio.StudioViews.preview(studio.preview(path,
                                     content == null ? null : String.valueOf(content)));
+                        })
+                        .register("studio.render", params -> {
+                            String path = String.valueOf(params.get("path"));
+                            Object content = params.get("content");
+                            Object sample = params.get("sampleModel");
+                            return io.tesseraql.studio.StudioViews.render(studio.render(path,
+                                    content == null ? null : String.valueOf(content),
+                                    sample == null ? null : String.valueOf(sample)));
                         })
                         .register("studio.discard", params -> {
                             String path = String.valueOf(params.get("path"));

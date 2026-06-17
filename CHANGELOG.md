@@ -8,6 +8,18 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- Studio editor: rendered preview against sample data (Studio backlog A1). A template file
+  (`.html`/`.tpl`) opened in the editor now renders against a sample model — not just the
+  empty-model "parses" check `preview()` gave — and shows the actual output two ways: the generated
+  HTML/text, hc-code syntax-highlighted, and (for HTML) a sandboxed `iframe` visual preview styled
+  with the Hypermedia Components stylesheet. The sample model is a YAML/JSON map of the template's
+  top-level variables, typed in the editor and prefilled from a colocated `<name>.sample.yml`
+  fixture when present (a blank model falls back to that fixture). Backed by `StudioService.render`
+  / `sampleModel`, the `studio.render` provider, the `POST /_tesseraql/studio/render` JSON endpoint,
+  and the `/_tesseraql/studio/ui/render` editor fragment; the source page CSP gains `frame-src
+  'self'` to admit the sandboxed preview frame. The `.sample.yml` fixture lives beside its template
+  and is ignored by the route loader (only HTTP-method `*.yml` files under `web/` are routes).
+  See [docs/studio-backlog.md](docs/studio-backlog.md).
 - `tesseraql serve --embedded-db [<data-dir>]` runs a tqlapp with no external database: the CLI
   starts an embedded PostgreSQL and points the runtime's `main` datasource at it. With no directory
   the data is ephemeral; with one it persists across restarts (a single-server option). Because it

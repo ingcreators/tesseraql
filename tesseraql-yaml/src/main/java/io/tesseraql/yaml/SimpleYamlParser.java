@@ -209,6 +209,25 @@ public final class SimpleYamlParser {
         }
     }
 
+    /**
+     * Parses an arbitrary YAML (or JSON, a YAML subset) document string into a tree — e.g. a Studio
+     * sample-data model entered in the editor. A blank document yields an empty map; a malformed one
+     * raises {@code TQL-YAML-1001} carrying the parser message, rather than an {@link IOException},
+     * so callers can surface it to the user.
+     */
+    public Map<String, Object> parseTree(String yaml) {
+        if (yaml == null || yaml.isBlank()) {
+            return Map.of();
+        }
+        try {
+            @SuppressWarnings("unchecked")
+            Map<String, Object> tree = mapper.readValue(yaml, Map.class);
+            return tree == null ? Map.of() : tree;
+        } catch (IOException ex) {
+            throw error("Failed to parse YAML: " + ex.getMessage(), "<string>");
+        }
+    }
+
     private RouteDefinition validate(RouteDefinition route, String source) {
         if (route == null) {
             throw error("Empty route document", source);

@@ -18,6 +18,8 @@ web/_tesseraql/studio/ui/source/get.yml
 web/_tesseraql/studio/ui/source/source.html
 web/_tesseraql/studio/ui/preview/post.yml
 web/_tesseraql/studio/ui/preview/preview.html
+web/_tesseraql/studio/ui/render/post.yml
+web/_tesseraql/studio/ui/render/render.html
 web/_tesseraql/studio/ui/save/post.yml
 web/_tesseraql/studio/ui/apply/post.yml
 web/_tesseraql/studio/ui/discard/post.yml

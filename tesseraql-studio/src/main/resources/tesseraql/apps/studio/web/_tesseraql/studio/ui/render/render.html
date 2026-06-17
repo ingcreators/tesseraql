@@ -1,0 +1,15 @@
+<div class="hc-stack" xmlns:th="http://www.thymeleaf.org" th:fragment="render">
+  <p class="hc-alert" data-variant="error" role="alert"
+     th:unless="${render.ok}" th:text="${render.error}"></p>
+  <th:block th:if="${render.ok}">
+    <details class="hc-stack" open>
+      <summary>Rendered output</summary>
+      <pre class="hc-code"><code th:utext="${render.outputHtml}"></code></pre>
+    </details>
+    <details class="hc-stack" th:if="${render.isHtml}" open>
+      <summary>Visual preview</summary>
+      <iframe class="tql-preview-frame" sandbox="" title="Rendered preview"
+              th:attr="srcdoc=${render.previewDoc}"></iframe>
+    </details>
+  </th:block>
+</div>

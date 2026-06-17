@@ -50,20 +50,75 @@ class StudioViewsTest {
     @Test
     void sourceBuildsModel() {
         Map<String, Object> model = StudioViews.source("a.sql", "select 1", false, false,
-                "select 1");
+                "select 1", null);
 
         assertThat(model).containsEntry("path", "a.sql")
                 .containsEntry("content", "select 1")
                 .containsEntry("editable", true)
                 .containsEntry("readOnly", false)
                 .containsEntry("hasDraft", false)
-                .containsEntry("sourceContent", "select 1");
+                .containsEntry("sourceContent", "select 1")
+                // A non-template file offers no rendered-preview panel and no sample fixture.
+                .containsEntry("isTemplate", false)
+                .containsEntry("isHtmlTemplate", false)
+                .containsEntry("sampleModel", "");
+    }
+
+    @Test
+    void sourceModelCarriesTemplateFlagsAndSampleFixture() {
+        Map<String, Object> model = StudioViews.source("web/users/fragments/table/table.html",
+                "<div th:text=\"${x}\"></div>", false, false,
+                "<div th:text=\"${x}\"></div>", "x: hello\n");
+
+        assertThat(model).containsEntry("isTemplate", true)
+                .containsEntry("isHtmlTemplate", true)
+                .containsEntry("sampleModel", "x: hello\n");
+
+        // A TEXT-mode .tpl template is a template, but not an HTML one (no visual iframe preview).
+        Map<String, Object> tpl = StudioViews.source("web/x/conf.yml.tpl", "[(${n})]", false, false,
+                "[(${n})]", null);
+        assertThat(tpl).containsEntry("isTemplate", true)
+                .containsEntry("isHtmlTemplate", false)
+                .containsEntry("sampleModel", "");
+    }
+
+    @Test
+    void renderBuildsModelWithHighlightedTextAndIframeDoc() {
+        // A bare fragment is wrapped into a standalone doc linking the hc stylesheet for the iframe.
+        Map<String, Object> ok = StudioViews.render(
+                StudioService.RenderResult.ok("html", "<p class=\"hc-alert\">Hi</p>"));
+        assertThat(ok).containsEntry("ok", true).containsEntry("isHtml", true)
+                .containsEntry("output", "<p class=\"hc-alert\">Hi</p>");
+        assertThat((String) ok.get("outputHtml")).contains("hc-code__tok");
+        assertThat((String) ok.get("previewDoc"))
+                .startsWith("<!DOCTYPE html>")
+                .contains("hypermedia-components__core/dist/hc.min.css")
+                .contains("<p class=\"hc-alert\">Hi</p>");
+
+        // A full-page render (its own <html>) is previewed verbatim, not double-wrapped.
+        Map<String, Object> page = StudioViews.render(
+                StudioService.RenderResult.ok("html",
+                        "<!DOCTYPE html><html><body>x</body></html>"));
+        assertThat((String) page.get("previewDoc"))
+                .isEqualTo("<!DOCTYPE html><html><body>x</body></html>");
+
+        // A TEXT render has no visual iframe (isHtml false, no previewDoc).
+        Map<String, Object> text = StudioViews.render(
+                StudioService.RenderResult.ok("text", "name: value"));
+        assertThat(text).containsEntry("isHtml", false);
+        assertThat(text.get("previewDoc")).isNull();
+
+        // A failed render surfaces the error and offers no output.
+        Map<String, Object> bad = StudioViews.render(
+                StudioService.RenderResult.invalid("html", "boom"));
+        assertThat(bad).containsEntry("ok", false).containsEntry("error", "boom");
+        assertThat(bad.get("previewDoc")).isNull();
     }
 
     @Test
     void sourceModelCarriesDraftStateForComparison() {
         Map<String, Object> model = StudioViews.source("a.sql", "select 2 -- draft", false, true,
-                "select 1 -- source");
+                "select 1 -- source", null);
 
         assertThat(model).containsEntry("content", "select 2 -- draft")
                 .containsEntry("hasDraft", true)
@@ -94,7 +149,8 @@ class StudioViewsTest {
     @Test
     void sourceModelBuildsDiffAgainstSavedSource() {
         // content is the draft (new), sourceContent the on-disk source (old).
-        Map<String, Object> model = StudioViews.source("a.sql", "a\nB\nc", false, true, "a\nb\nc");
+        Map<String, Object> model = StudioViews.source("a.sql", "a\nB\nc", false, true, "a\nb\nc",
+                null);
 
         @SuppressWarnings("unchecked")
         List<Map<String, Object>> diff = (List<Map<String, Object>>) model.get("diff");
@@ -114,7 +170,7 @@ class StudioViewsTest {
     @Test
     void sourceModelDiffsNewFileAsAllAdded() {
         // A draft of a not-yet-saved file (no source) diffs as every line added.
-        Map<String, Object> model = StudioViews.source("new.sql", "x\ny", false, true, null);
+        Map<String, Object> model = StudioViews.source("new.sql", "x\ny", false, true, null, null);
 
         @SuppressWarnings("unchecked")
         List<Map<String, Object>> diff = (List<Map<String, Object>>) model.get("diff");
@@ -131,13 +187,13 @@ class StudioViewsTest {
     void sourceModelHighlightsContentAndDiffByFileType() {
         // The read-only view carries highlighted contentHtml for the file's language.
         Map<String, Object> readOnly = StudioViews.source("web/api/users/search.sql", "select 1",
-                true, false, "select 1");
+                true, false, "select 1", null);
         assertThat((String) readOnly.get("contentHtml"))
                 .contains("<span class=\"hc-code__tok\" data-tok=\"keyword\">select</span>");
 
         // Each diff line carries highlighted html (here the changed SQL lines get a keyword span).
         Map<String, Object> edited = StudioViews.source("q.sql", "select 2", false, true,
-                "select 1");
+                "select 1", null);
         @SuppressWarnings("unchecked")
         List<Map<String, Object>> diff = (List<Map<String, Object>>) edited.get("diff");
         assertThat(diff).anySatisfy(line -> assertThat((String) line.get("html"))
