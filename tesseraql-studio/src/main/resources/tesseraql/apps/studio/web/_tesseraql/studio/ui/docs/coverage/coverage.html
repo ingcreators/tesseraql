@@ -37,26 +37,20 @@
       <div class="hc-cluster">
         <div class="hc-stack">
           <span class="hc-field__label">Pass rate</span>
-          <svg class="spark" viewBox="0 0 120 24" preserveAspectRatio="none"
-               xmlns="http://www.w3.org/2000/svg" role="img" aria-label="pass rate trend">
-            <polyline class="spark-line" th:attr="points=${cov.trend.passSpark}"></polyline>
-          </svg>
+          <span class="hc-sparkline" data-min="0" data-max="1"
+                th:attr="data-values=${cov.trend.passSpark}" aria-label="pass rate trend"></span>
           <span class="hc-badge" data-variant="info" th:text="|${cov.trend.passPct}%|"></span>
         </div>
         <div class="hc-stack">
           <span class="hc-field__label">SQL lines</span>
-          <svg class="spark" viewBox="0 0 120 24" preserveAspectRatio="none"
-               xmlns="http://www.w3.org/2000/svg" role="img" aria-label="SQL line coverage trend">
-            <polyline class="spark-line" th:attr="points=${cov.trend.lineSpark}"></polyline>
-          </svg>
+          <span class="hc-sparkline" data-min="0" data-max="1"
+                th:attr="data-values=${cov.trend.lineSpark}" aria-label="SQL line coverage trend"></span>
           <span class="hc-badge" data-variant="info" th:text="|${cov.trend.linePct}%|"></span>
         </div>
         <div class="hc-stack">
           <span class="hc-field__label">Branches</span>
-          <svg class="spark" viewBox="0 0 120 24" preserveAspectRatio="none"
-               xmlns="http://www.w3.org/2000/svg" role="img" aria-label="SQL branch coverage trend">
-            <polyline class="spark-line" th:attr="points=${cov.trend.branchSpark}"></polyline>
-          </svg>
+          <span class="hc-sparkline" data-min="0" data-max="1"
+                th:attr="data-values=${cov.trend.branchSpark}" aria-label="SQL branch coverage trend"></span>
           <span class="hc-badge" data-variant="info" th:text="|${cov.trend.branchPct}%|"></span>
         </div>
       </div>

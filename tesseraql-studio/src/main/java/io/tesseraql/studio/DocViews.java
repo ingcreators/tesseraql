@@ -558,14 +558,10 @@ public final class DocViews {
         return lines;
     }
 
-    /** Sparkline viewBox the dashboard renders the trend polylines into (no inline styles). */
-    private static final int SPARK_WIDTH = 120;
-    private static final int SPARK_HEIGHT = 24;
-
     /**
-     * The run-trend model from the bounded history: pass-rate, SQL line, and SQL branch sparklines
-     * (as SVG {@code polyline} point strings) plus their latest percentages. {@code null} when there
-     * are fewer than two runs (a single point is not a trend).
+     * The run-trend model from the bounded history: pass-rate, SQL line, and SQL branch sparkline
+     * series (comma-separated ratios for {@code hc-sparkline data-values}) plus their latest
+     * percentages. {@code null} when there are fewer than two runs (a single point is not a trend).
      */
     private static Map<String, Object> trend(List<DocService.HistoryPoint> history) {
         if (history == null || history.size() < 2) {
@@ -590,20 +586,23 @@ public final class DocViews {
         return model;
     }
 
-    /** An SVG {@code polyline} point string for a ratio series, scaled to the sparkline viewBox. */
+    /**
+     * A comma-separated raw-ratio series for an {@code hc-sparkline data-values} attribute. Each
+     * value is clamped to {@code [0, 1]} and trimmed to at most four decimals; the kit's
+     * {@code installSparkline} behavior draws the inline SVG, scaled to the pinned 0..1 domain.
+     */
     private static String spark(List<Double> values) {
-        int n = values.size();
-        StringBuilder points = new StringBuilder();
-        for (int i = 0; i < n; i++) {
-            double ratio = Math.max(0.0, Math.min(1.0, values.get(i)));
-            int x = n == 1 ? 0 : (int) Math.round((double) i / (n - 1) * SPARK_WIDTH);
-            int y = (int) Math.round(SPARK_HEIGHT - ratio * SPARK_HEIGHT);
-            if (i > 0) {
-                points.append(' ');
+        StringBuilder series = new StringBuilder();
+        for (double value : values) {
+            double ratio = Math.max(0.0, Math.min(1.0, value));
+            if (series.length() > 0) {
+                series.append(',');
             }
-            points.append(x).append(',').append(y);
+            series.append(java.math.BigDecimal.valueOf(ratio)
+                    .setScale(4, java.math.RoundingMode.HALF_UP)
+                    .stripTrailingZeros().toPlainString());
         }
-        return points.toString();
+        return series.toString();
     }
 
     private static int pct(double ratio) {

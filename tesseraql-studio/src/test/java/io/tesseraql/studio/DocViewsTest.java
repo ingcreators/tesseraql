@@ -185,8 +185,8 @@ class DocViewsTest {
         Map<String, Object> trend = asMap(model.get("trend"));
         assertThat(trend).containsEntry("runs", 2).containsEntry("passPct", 100)
                 .containsEntry("linePct", 100);
-        // Two runs -> two scaled points "x,y x,y": pass rate rises 50% -> 100% (y 12 -> 0).
-        assertThat((String) trend.get("passSpark")).isEqualTo("0,12 120,0");
+        // Two runs -> a raw ratio series for hc-sparkline data-values: 50% then 100%.
+        assertThat((String) trend.get("passSpark")).isEqualTo("0.5,1");
     }
 
     @Test
