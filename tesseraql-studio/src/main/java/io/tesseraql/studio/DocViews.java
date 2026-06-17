@@ -390,6 +390,9 @@ public final class DocViews {
             row.put("service", statement.service());
             row.put("mode", statement.mode());
             row.put("statement", statement.statement());
+            row.put("statementHtml", statement.statement() == null
+                    ? null
+                    : SqlHighlighter.highlight(statement.statement()));
             row.put("binds", statement.binds());
             List<Map<String, Object>> structure = new ArrayList<>();
             for (RouteSpec.Control control : statement.structure()) {
@@ -543,6 +546,7 @@ public final class DocViews {
         Set<Integer> covered = new HashSet<>(coverage.coveredLines());
         Set<Integer> coverable = new HashSet<>(coverage.coverableLines());
         String[] split = statement.split("\n", -1);
+        List<String> html = SqlHighlighter.highlightLines(statement);
         List<Map<String, Object>> lines = new ArrayList<>();
         for (int i = 0; i < split.length; i++) {
             int number = i + 1;
@@ -552,6 +556,7 @@ public final class DocViews {
             Map<String, Object> line = new LinkedHashMap<>();
             line.put("number", number);
             line.put("text", split[i]);
+            line.put("html", html.get(i));
             line.put("state", state);
             lines.add(line);
         }

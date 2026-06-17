@@ -122,9 +122,9 @@
           <li th:each="c : ${s.structure}" th:text="|${c.kind} ${c.expression}|"></li>
         </ul>
         <ol class="hc-code" data-gutter="line-numbers" th:if="${s.lines}">
-          <li class="hc-code__line" th:each="ln : ${s.lines}" th:attr="data-state=${ln.state == 'plain'} ? null : ${ln.state}" th:text="${ln.text}"></li>
+          <li class="hc-code__line" th:each="ln : ${s.lines}" th:attr="data-state=${ln.state == 'plain'} ? null : ${ln.state}" th:utext="${ln.html}"></li>
         </ol>
-        <pre class="hc-code" th:if="${s.statement != null and s.lines == null}" th:text="${s.statement}"></pre>
+        <pre class="hc-code" th:if="${s.statement != null and s.lines == null}"><code th:utext="${s.statementHtml}"></code></pre>
       </div>
     </section>
     <section class="hc-card" th:if="${doc.hasTests}">
