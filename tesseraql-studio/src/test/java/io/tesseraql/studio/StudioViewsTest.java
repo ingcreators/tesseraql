@@ -126,4 +126,21 @@ class StudioViewsTest {
         assertThat(diff.get(0)).containsEntry("newNo", 1).containsEntry("text", "x");
         assertThat(diff.get(1)).containsEntry("newNo", 2).containsEntry("text", "y");
     }
+
+    @Test
+    void sourceModelHighlightsContentAndDiffByFileType() {
+        // The read-only view carries highlighted contentHtml for the file's language.
+        Map<String, Object> readOnly = StudioViews.source("web/api/users/search.sql", "select 1",
+                true, false, "select 1");
+        assertThat((String) readOnly.get("contentHtml"))
+                .contains("<span class=\"hc-code__tok\" data-tok=\"keyword\">select</span>");
+
+        // Each diff line carries highlighted html (here the changed SQL lines get a keyword span).
+        Map<String, Object> edited = StudioViews.source("q.sql", "select 2", false, true,
+                "select 1");
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> diff = (List<Map<String, Object>>) edited.get("diff");
+        assertThat(diff).anySatisfy(line -> assertThat((String) line.get("html"))
+                .contains("data-tok=\"keyword\">select</span>"));
+    }
 }

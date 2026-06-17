@@ -141,26 +141,12 @@ public final class SqlHighlighter {
 
     private static void flush(StringBuilder out, StringBuilder plain) {
         if (plain.length() > 0) {
-            escape(out, plain.toString());
+            SyntaxSpans.escape(out, plain.toString());
             plain.setLength(0);
         }
     }
 
     private static void token(StringBuilder out, String tok, String text) {
-        out.append("<span class=\"hc-code__tok\" data-tok=\"").append(tok).append("\">");
-        escape(out, text);
-        out.append("</span>");
-    }
-
-    private static void escape(StringBuilder out, String text) {
-        for (int i = 0; i < text.length(); i++) {
-            char c = text.charAt(i);
-            switch (c) {
-                case '&' -> out.append("&amp;");
-                case '<' -> out.append("&lt;");
-                case '>' -> out.append("&gt;");
-                default -> out.append(c);
-            }
-        }
+        SyntaxSpans.span(out, tok, text);
     }
 }

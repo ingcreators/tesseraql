@@ -393,6 +393,8 @@ class StudioIntegrationTest {
                 .contains("Compare against saved source")
                 // the compare panel renders a real unified diff (draft differs from the source)
                 .contains("data-mode=\"diff\"")
+                // the diff lines are server-tokenized (the SQL draft has a SELECT keyword)
+                .contains("class=\"hc-code__tok\" data-tok=\"keyword\"")
                 .contains("Discard draft");
 
         // Discarding redirects back and the badge is gone (the source is restored in the editor).

@@ -13,7 +13,7 @@
   <p class="hc-alert" data-variant="success" role="status" th:if="${applied}">Draft applied and routes reloaded.</p>
   <th:block th:if="${src.readOnly}">
     <p class="hc-field__message">Read-only mode &mdash; edit drafts via the Studio API.</p>
-    <pre class="hc-code" th:text="${src.content}"></pre>
+    <pre class="hc-code"><code th:utext="${src.contentHtml}"></code></pre>
   </th:block>
   <th:block th:if="${src.editable}">
     <div class="hc-cluster" th:if="${src.hasDraft}">
@@ -37,9 +37,9 @@
       <ol class="hc-code" data-mode="diff" th:if="${src.diff}">
         <li class="hc-code__line" th:each="ln : ${src.diff}"
             th:attr="data-state=${ln.state},data-old=${ln.oldNo},data-new=${ln.newNo}"
-            th:text="${ln.text}"></li>
+            th:utext="${ln.html}"></li>
       </ol>
-      <pre class="hc-code" th:unless="${src.diff}" th:text="${src.sourceContent}"></pre>
+      <pre class="hc-code" th:unless="${src.diff}"><code th:utext="${src.sourceContentHtml}"></code></pre>
     </details>
     <form hx-post="/_tesseraql/studio/ui/apply" hx-target="#apply-result" hx-swap="innerHTML">
       <input type="hidden" name="path" th:value="${src.path}">
