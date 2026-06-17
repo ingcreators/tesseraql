@@ -38,6 +38,7 @@ final class StudioRouteBuilder extends RouteBuilder {
         rest().get("/_tesseraql/studio/source").to("direct:studio.source");
         rest().post("/_tesseraql/studio/drafts").to("direct:studio.draft");
         rest().post("/_tesseraql/studio/preview").to("direct:studio.preview");
+        rest().post("/_tesseraql/studio/render").to("direct:studio.render");
         rest().post("/_tesseraql/studio/apply").to("direct:studio.apply");
         rest().post("/_tesseraql/studio/reload").to("direct:studio.reload");
 
@@ -66,6 +67,15 @@ final class StudioRouteBuilder extends RouteBuilder {
                     return studio.preview(path, exchange.getMessage().getBody(String.class));
                 }));
 
+        // The render endpoint takes two text inputs (the draft content and the sample model), so it
+        // carries a JSON body {content, sampleModel} rather than the raw content the others use.
+        from("direct:studio.render").routeId("studio.render")
+                .to(AUTH).process(json(exchange -> {
+                    String path = requirePath(exchange);
+                    com.fasterxml.jackson.databind.JsonNode body = readBody(exchange);
+                    return studio.render(path, text(body, "content"), text(body, "sampleModel"));
+                }));
+
         from("direct:studio.apply").routeId("studio.apply")
                 .to(AUTH).process(json(exchange -> {
                     String path = requirePath(exchange);
@@ -88,6 +98,29 @@ final class StudioRouteBuilder extends RouteBuilder {
                     "Missing 'path' parameter");
         }
         return path;
+    }
+
+    /** Parses the request body as a JSON object, or null when the body is blank or not JSON. */
+    private com.fasterxml.jackson.databind.JsonNode readBody(Exchange exchange) {
+        String body = exchange.getMessage().getBody(String.class);
+        if (body == null || body.isBlank()) {
+            return null;
+        }
+        try {
+            com.fasterxml.jackson.databind.JsonNode node = mapper.readTree(body);
+            return node.isObject() ? node : null;
+        } catch (com.fasterxml.jackson.core.JsonProcessingException ex) {
+            return null;
+        }
+    }
+
+    /** A text field of a JSON object body, or null when absent. */
+    private static String text(com.fasterxml.jackson.databind.JsonNode body, String field) {
+        if (body == null) {
+            return null;
+        }
+        com.fasterxml.jackson.databind.JsonNode value = body.get(field);
+        return value == null || value.isNull() ? null : value.asText();
     }
 
     private Processor json(Function<Exchange, Object> handler) {

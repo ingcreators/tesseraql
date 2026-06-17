@@ -1,5 +1,5 @@
 version: tesseraql/v1
-id: tql.studio.source
+id: tql.studio.render
 kind: route
 recipe: query-html
 
@@ -7,10 +7,10 @@ input:
   path:
     type: string
     required: true
-  saved:
+  content:
     type: string
     required: false
-  applied:
+  sampleModel:
     type: string
     required: false
 
@@ -18,22 +18,19 @@ security:
   auth: bearer
 
 sql:
-  service: studio.source
+  service: studio.render
   params:
-    path: query.path
+    path: params.path
+    content: params.content
+    sampleModel: params.sampleModel
 
 response:
   html:
     status: 200
-    template: source.html
+    template: render.html
     model:
-      src: sql
-      saved: params.saved
-      applied: params.applied
+      render: sql
     headers:
-      # frame-src 'self' admits the sandboxed iframe that previews a template render (Studio
-      # backlog A1); its srcdoc inherits this policy, so the rendered output may load same-origin
-      # styles only. The empty sandbox runs no script, even though default-src would block it.
       Content-Security-Policy: "default-src 'self'; style-src 'self' 'unsafe-inline'; frame-src 'self'; frame-ancestors 'none'"
       X-Content-Type-Options: nosniff
       X-Frame-Options: DENY

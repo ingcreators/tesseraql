@@ -381,6 +381,95 @@ class StudioIntegrationTest {
     }
 
     @Test
+    void renderEndpointRendersTemplateAgainstSampleModel() throws Exception {
+        // The JSON API renders the on-disk template (no content override) against a sample model.
+        String body = MAPPER.writeValueAsString(Map.of(
+                "sampleModel", "users:\n  - id: 7\n    name: Renderbot\n    status: active\n"));
+        HttpResponse<String> response = post(
+                "/_tesseraql/studio/render?path=" + enc("web/users/fragments/table/table.html"),
+                body, true);
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        JsonNode render = MAPPER.readTree(response.body());
+        assertThat(render.get("ok").asBoolean()).isTrue();
+        assertThat(render.get("kind").asText()).isEqualTo("html");
+        assertThat(render.get("output").asText()).contains("Renderbot").contains("active")
+                .doesNotContain("No matching users");
+    }
+
+    @Test
+    void uiRenderReturnsRenderedFragmentWithIframePreview() throws Exception {
+        HttpResponse<String> response = postForm("/_tesseraql/studio/ui/render",
+                "path=" + enc("web/users/fragments/table/table.html")
+                        + "&sampleModel="
+                        + enc("users:\n  - id: 1\n    name: Alice\n    status: active\n"));
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        // A fragment (not a page) carrying the highlighted text output and the sandboxed iframe.
+        assertThat(response.body()).doesNotContain("<!DOCTYPE html>")
+                .contains("Rendered output").contains("Visual preview")
+                .contains("class=\"tql-preview-frame\"").contains("srcdoc=")
+                // the rendered HTML is server-tokenized for the text surface
+                .contains("hc-code__tok")
+                // the sample data flows into the render
+                .contains("Alice");
+    }
+
+    @Test
+    void renderEndpointRendersHtmlRouteAgainstExecutionContext() throws Exception {
+        String body = MAPPER.writeValueAsString(Map.of("sampleModel",
+                "sql:\n  rows:\n    - id: 1\n      name: Alice\n      status: active\n  rowCount: 1\n"));
+        HttpResponse<String> response = post(
+                "/_tesseraql/studio/render?path=" + enc("web/users/fragments/table/get.yml"),
+                body, true);
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        JsonNode render = MAPPER.readTree(response.body());
+        assertThat(render.get("ok").asBoolean()).isTrue();
+        assertThat(render.get("kind").asText()).isEqualTo("html");
+        assertThat(render.get("output").asText()).contains("Alice").contains("active");
+    }
+
+    @Test
+    void renderEndpointRendersJsonRouteBody() throws Exception {
+        String body = MAPPER.writeValueAsString(Map.of("sampleModel",
+                "sql:\n  rows:\n    - id: 7\n      name: Sato\n  rowCount: 1\n"
+                        + "params:\n  limit: 50\n  offset: 0\n"));
+        HttpResponse<String> response = post(
+                "/_tesseraql/studio/render?path=" + enc("web/api/users/get.yml"), body, true);
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        JsonNode render = MAPPER.readTree(response.body());
+        assertThat(render.get("ok").asBoolean()).isTrue();
+        assertThat(render.get("kind").asText()).isEqualTo("json");
+        assertThat(render.get("output").asText()).contains("Sato").contains("\"count\" : 1");
+    }
+
+    @Test
+    void uiSourceRouteOffersRenderedPreviewPanel() throws Exception {
+        HttpResponse<String> response = get("/_tesseraql/studio/ui/source?path="
+                + enc("web/users/fragments/table/get.yml"), true);
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(response.body()).contains("Rendered preview").contains("execution context")
+                .contains("hx-post=\"/_tesseraql/studio/ui/render\"");
+    }
+
+    @Test
+    void uiSourceTemplateOffersRenderedPreviewPanel() throws Exception {
+        HttpResponse<String> response = get("/_tesseraql/studio/ui/source?path="
+                + enc("web/users/fragments/table/table.html"), true);
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(response.body()).contains("Rendered preview").contains("Sample data")
+                // the panel wires htmx to the render endpoint
+                .contains("hx-post=\"/_tesseraql/studio/ui/render\"");
+        // The source page CSP admits the sandboxed preview iframe.
+        assertThat(response.headers().firstValue("content-security-policy"))
+                .hasValueSatisfying(value -> assertThat(value).contains("frame-src 'self'"));
+    }
+
+    @Test
     void uiSourceShowsDraftBadgeAndDiscardClearsIt() throws Exception {
         String path = "web/api/users/search.sql";
 

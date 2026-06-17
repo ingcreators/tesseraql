@@ -14,6 +14,14 @@
   <th:block th:if="${src.readOnly}">
     <p class="hc-field__message">Read-only mode &mdash; edit drafts via the Studio API.</p>
     <pre class="hc-code"><code th:utext="${src.contentHtml}"></code></pre>
+    <div class="hc-stack" th:if="${src.isRenderable}">
+      <h2>Rendered preview</h2>
+      <p class="hc-field__message">Rendered against the colocated <code>.sample.yml</code> fixture (or an empty model).</p>
+      <input type="hidden" id="src-path" name="path" th:value="${src.path}">
+      <div id="render-result" class="hc-stack" aria-live="polite"
+           hx-post="/_tesseraql/studio/ui/render" hx-trigger="load"
+           hx-include="#src-path" hx-target="this" hx-swap="innerHTML"></div>
+    </div>
   </th:block>
   <th:block th:if="${src.editable}">
     <div class="hc-cluster" th:if="${src.hasDraft}">
@@ -22,7 +30,7 @@
     <form method="post" action="/_tesseraql/studio/ui/save">
       <input type="hidden" id="src-path" name="path" th:value="${src.path}">
       <div class="hc-code" data-editable data-gutter="line-numbers">
-        <textarea name="content" class="hc-code__input" spellcheck="false" aria-label="Source editor"
+        <textarea id="source-editor" name="content" class="hc-code__input" spellcheck="false" aria-label="Source editor"
                   th:text="${src.content}"
                   hx-post="/_tesseraql/studio/ui/preview"
                   hx-trigger="keyup changed delay:300ms, change"
@@ -32,6 +40,21 @@
       <div id="preview-result" class="hc-stack" aria-live="polite"></div>
       <div class="hc-cluster"><button type="submit" class="hc-button" data-variant="primary">Save draft</button></div>
     </form>
+    <div class="hc-stack" th:if="${src.isRenderable}">
+      <h2>Rendered preview</h2>
+      <p class="hc-field__message" th:if="${src.isRoute}">Renders this route's response against the sample <em>execution context</em> below (e.g. <code>params</code>, <code>sql.rows</code>) &mdash; prefilled from the colocated <code>.sample.yml</code> fixture when present.</p>
+      <p class="hc-field__message" th:unless="${src.isRoute}">Renders the draft against the sample <em>template variables</em> below &mdash; prefilled from the colocated <code>.sample.yml</code> fixture when present, blank falls back to an empty model.</p>
+      <label class="hc-field__label" for="sample-editor">Sample data (YAML)</label>
+      <div class="hc-code" data-editable data-gutter="line-numbers">
+        <textarea id="sample-editor" name="sampleModel" class="hc-code__input" spellcheck="false"
+                  aria-label="Sample data" th:text="${src.sampleModel}"></textarea>
+      </div>
+      <div id="render-result" class="hc-stack" aria-live="polite"
+           hx-post="/_tesseraql/studio/ui/render"
+           hx-trigger="load, keyup changed delay:400ms from:#source-editor, keyup changed delay:400ms from:#sample-editor"
+           hx-include="#src-path, #source-editor, #sample-editor"
+           hx-target="this" hx-swap="innerHTML"></div>
+    </div>
     <details class="hc-stack" th:if="${src.hasDraft}">
       <summary>Compare against saved source</summary>
       <ol class="hc-code" data-mode="diff" th:if="${src.diff}">
