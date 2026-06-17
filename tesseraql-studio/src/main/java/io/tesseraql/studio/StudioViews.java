@@ -70,8 +70,10 @@ public final class StudioViews {
         model.put("editable", !readOnly);
         model.put("hasDraft", hasDraft);
         model.put("sourceContent", sourceContent);
+        model.put("contentHtml", Highlighter.highlight(path, content));
+        model.put("sourceContentHtml", Highlighter.highlight(path, sourceContent));
         if (hasDraft) {
-            model.put("diff", diffLines(sourceContent == null ? "" : sourceContent,
+            model.put("diff", diffLines(path, sourceContent == null ? "" : sourceContent,
                     content == null ? "" : content));
         }
         return model;
@@ -113,7 +115,8 @@ public final class StudioViews {
      * stay {@code context} (computed from an LCS). Returns {@code null} when either side exceeds
      * {@link #DIFF_MAX_LINES}, so the caller falls back to a plain source view.
      */
-    private static List<Map<String, Object>> diffLines(String oldText, String newText) {
+    private static List<Map<String, Object>> diffLines(String path, String oldText,
+            String newText) {
         String[] a = oldText.isEmpty() ? new String[0] : oldText.split("\n", -1);
         String[] b = newText.isEmpty() ? new String[0] : newText.split("\n", -1);
         if (a.length > DIFF_MAX_LINES || b.length > DIFF_MAX_LINES) {
@@ -134,33 +137,34 @@ public final class StudioViews {
         int j = 0;
         while (i < n && j < m) {
             if (a[i].equals(b[j])) {
-                lines.add(diffLine("context", i + 1, j + 1, a[i]));
+                lines.add(diffLine(path, "context", i + 1, j + 1, a[i]));
                 i++;
                 j++;
             } else if (lcs[i + 1][j] >= lcs[i][j + 1]) {
-                lines.add(diffLine("removed", i + 1, null, a[i]));
+                lines.add(diffLine(path, "removed", i + 1, null, a[i]));
                 i++;
             } else {
-                lines.add(diffLine("added", null, j + 1, b[j]));
+                lines.add(diffLine(path, "added", null, j + 1, b[j]));
                 j++;
             }
         }
         while (i < n) {
-            lines.add(diffLine("removed", i + 1, null, a[i++]));
+            lines.add(diffLine(path, "removed", i + 1, null, a[i++]));
         }
         while (j < m) {
-            lines.add(diffLine("added", null, j + 1, b[j++]));
+            lines.add(diffLine(path, "added", null, j + 1, b[j++]));
         }
         return lines;
     }
 
-    private static Map<String, Object> diffLine(String state, Integer oldNo, Integer newNo,
-            String text) {
+    private static Map<String, Object> diffLine(String path, String state, Integer oldNo,
+            Integer newNo, String text) {
         Map<String, Object> line = new LinkedHashMap<>();
         line.put("state", state);
         line.put("oldNo", oldNo);
         line.put("newNo", newNo);
         line.put("text", text);
+        line.put("html", Highlighter.highlight(path, text));
         return line;
     }
 }
