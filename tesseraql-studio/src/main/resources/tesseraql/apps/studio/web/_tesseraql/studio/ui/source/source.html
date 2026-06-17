@@ -34,7 +34,12 @@
     </form>
     <details class="hc-stack" th:if="${src.hasDraft}">
       <summary>Compare against saved source</summary>
-      <pre class="hc-code" th:text="${src.sourceContent}"></pre>
+      <ol class="hc-code" data-mode="diff" th:if="${src.diff}">
+        <li class="hc-code__line" th:each="ln : ${src.diff}"
+            th:attr="data-state=${ln.state},data-old=${ln.oldNo},data-new=${ln.newNo}"
+            th:text="${ln.text}"></li>
+      </ol>
+      <pre class="hc-code" th:unless="${src.diff}" th:text="${src.sourceContent}"></pre>
     </details>
     <form hx-post="/_tesseraql/studio/ui/apply" hx-target="#apply-result" hx-swap="innerHTML">
       <input type="hidden" name="path" th:value="${src.path}">

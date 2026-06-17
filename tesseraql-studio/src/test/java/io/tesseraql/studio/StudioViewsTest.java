@@ -90,4 +90,40 @@ class StudioViewsTest {
                 .containsEntry("needsData", true)
                 .containsEntry("ok", false);
     }
+
+    @Test
+    void sourceModelBuildsDiffAgainstSavedSource() {
+        // content is the draft (new), sourceContent the on-disk source (old).
+        Map<String, Object> model = StudioViews.source("a.sql", "a\nB\nc", false, true, "a\nb\nc");
+
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> diff = (List<Map<String, Object>>) model.get("diff");
+        assertThat(diff).hasSize(4);
+        assertThat(diff.get(0)).containsEntry("state", "context").containsEntry("oldNo", 1)
+                .containsEntry("newNo", 1).containsEntry("text", "a");
+        assertThat(diff.get(1)).containsEntry("state", "removed").containsEntry("oldNo", 2)
+                .containsEntry("text", "b");
+        assertThat(diff.get(1).get("newNo")).isNull();
+        assertThat(diff.get(2)).containsEntry("state", "added").containsEntry("newNo", 2)
+                .containsEntry("text", "B");
+        assertThat(diff.get(2).get("oldNo")).isNull();
+        assertThat(diff.get(3)).containsEntry("state", "context").containsEntry("oldNo", 3)
+                .containsEntry("newNo", 3).containsEntry("text", "c");
+    }
+
+    @Test
+    void sourceModelDiffsNewFileAsAllAdded() {
+        // A draft of a not-yet-saved file (no source) diffs as every line added.
+        Map<String, Object> model = StudioViews.source("new.sql", "x\ny", false, true, null);
+
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> diff = (List<Map<String, Object>>) model.get("diff");
+        assertThat(diff).hasSize(2);
+        assertThat(diff).allSatisfy(line -> {
+            assertThat(line).containsEntry("state", "added");
+            assertThat(line.get("oldNo")).isNull();
+        });
+        assertThat(diff.get(0)).containsEntry("newNo", 1).containsEntry("text", "x");
+        assertThat(diff.get(1)).containsEntry("newNo", 2).containsEntry("text", "y");
+    }
 }

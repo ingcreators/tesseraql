@@ -389,6 +389,8 @@ class StudioIntegrationTest {
         assertThat(get("/_tesseraql/studio/ui/source?path=" + enc(path), true).body())
                 .contains("unsaved draft")
                 .contains("Compare against saved source")
+                // the compare panel renders a real unified diff (draft differs from the source)
+                .contains("data-mode=\"diff\"")
                 .contains("Discard draft");
 
         // Discarding redirects back and the badge is gone (the source is restored in the editor).
