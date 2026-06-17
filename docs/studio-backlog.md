@@ -47,21 +47,25 @@ gutter, diff), editable `hc-code`, `hc-sparkline`, and read-only syntax highligh
 
 ### A. Tighten the edit → verify loop (highest value, extends what shipped)
 
-1. **Rendered preview against sample/real data** — *slices 1–2 shipped* (see Shipped): template
-   files and **web routes** (`query-html`/`page` → `response.html.model` + template; `query-json`
-   → `response.json.body`) render against a fixture and show HTML/text/JSON output plus a sandboxed
-   visual `iframe` for HTML. Remaining slices:
-   - **More output kinds** — PDF (the Phase 21 codec) and email (the Phase 20 notification template
-     engine) previews. PDF needs a `tesseraql-pdf` dependency and a binary-friendly surface (a
-     `data:` URL / download), so it is its own slice.
-   - **Real bound params** — optionally execute the route's SQL against a dev datasource to
-     populate the fixture instead of hand-authoring `sql.rows` (overlaps A2; keep behind the same
-     sandbox guard — read-only, row/time caps).
+1. **Rendered preview against sample/real data** — ✅ **done** (see Shipped): template files and
+   **web routes** (`query-html`/`page` → `response.html.model` + template; `query-json` →
+   `response.json.body`) render against a fixture and show HTML/text/JSON output plus a sandboxed
+   visual `iframe` for HTML — the "Studio as the center of the edit loop" gate (decision point 4) is
+   met. Optional follow-ups, not blockers (pick up opportunistically):
+   - **PDF preview** — needs a `tesseraql-pdf` dependency and a binary-friendly surface (a `data:`
+     URL / download); the HTML stage that feeds the PDF already previews.
    - **Output-field masking** — apply `response.json.fields` masking in the JSON preview (needs the
-     policy engine + a sample principal).
+     policy engine + a sample principal); today the preview shows the unmasked resolved body.
+
+   The "render against **real** bound params" end — executing the route's SQL against a dev
+   datasource to populate live rows instead of a hand-authored `sql.rows` fixture — folds into A2's
+   sandboxed execution path (below). (Email/notification `.html` templates already preview via the
+   template-file path: supply `payload`/`event` as the sample.)
 2. **Run a route's declarative suite from Studio** — a "run tests now" action on the
    route doc with inline results, instead of edit → apply → restart → CI. Needs a
-   sandboxed execution path (read-only/query, dev datasource, row/time caps). Ties to
+   sandboxed execution path (read-only/query, dev datasource, row/time caps). The same
+   sandbox powers the "real bound params" end of A1 — executing a route's SQL to populate
+   the rendered preview with live rows instead of a hand-authored fixture. Ties to
    milestone M7 ("schema → verified CRUD in ten minutes").
 
 ### B. Creation / scaffolding in the UI
@@ -107,7 +111,8 @@ gutter, diff), editable `hc-code`, `hc-sparkline`, and read-only syntax highligh
 
 ## Recommended next
 
-**A1 slices 1–2 (rendered preview of template files and web routes against sample data) are
-shipped.** Next: finish A1 (PDF/email kinds → real bound params), then **A2
-(run-suite-from-Studio)**, then **B3 (scaffold-from-explorer)** toward M7. E waits on hc #264;
-G is gated.
+**A1 (rendered preview against sample data) is done** — template files and web routes
+(`query-html`/`page` + `query-json`) render against a fixture. Next is **A2
+(run-suite-from-Studio)**, whose sandboxed execution also delivers the "real bound params" end of
+A1; then **B3 (scaffold-from-explorer)** toward M7. A1's PDF preview and JSON field-masking are
+optional follow-ups. E waits on hc #264; G is gated.
