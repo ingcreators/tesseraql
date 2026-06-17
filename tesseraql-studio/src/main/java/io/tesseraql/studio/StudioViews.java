@@ -78,8 +78,11 @@ public final class StudioViews {
         model.put("contentHtml", Highlighter.highlight(path, content));
         model.put("sourceContentHtml", Highlighter.highlight(path, sourceContent));
         boolean isTemplate = path != null && (path.endsWith(".html") || path.endsWith(".tpl"));
+        boolean isRoute = isRouteYaml(path);
         model.put("isTemplate", isTemplate);
         model.put("isHtmlTemplate", path != null && path.endsWith(".html"));
+        model.put("isRoute", isRoute);
+        model.put("isRenderable", isTemplate || isRoute);
         model.put("sampleModel", sampleModel == null ? "" : sampleModel);
         if (hasDraft) {
             model.put("diff", diffLines(path, sourceContent == null ? "" : sourceContent,
@@ -149,6 +152,19 @@ public final class StudioViews {
         }
         return "<!DOCTYPE html><html lang=\"en\" data-theme=\"dark\"><head>" + PREVIEW_HEAD
                 + "</head><body>" + html + "</body></html>";
+    }
+
+    private static final java.util.Set<String> HTTP_METHODS = java.util.Set.of("get", "post", "put",
+            "patch", "delete", "head", "options");
+
+    /** Whether the path is a web route document ({@code web/**}/{@code <method>.yml}) — renderable. */
+    private static boolean isRouteYaml(String path) {
+        if (path == null || !path.startsWith("web/") || !path.endsWith(".yml")) {
+            return false;
+        }
+        int slash = path.lastIndexOf('/');
+        String stem = path.substring(slash + 1, path.length() - ".yml".length());
+        return HTTP_METHODS.contains(stem);
     }
 
     private static String sourceUrl(String source) {

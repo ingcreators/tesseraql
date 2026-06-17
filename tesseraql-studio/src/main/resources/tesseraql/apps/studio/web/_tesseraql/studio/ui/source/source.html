@@ -14,7 +14,7 @@
   <th:block th:if="${src.readOnly}">
     <p class="hc-field__message">Read-only mode &mdash; edit drafts via the Studio API.</p>
     <pre class="hc-code"><code th:utext="${src.contentHtml}"></code></pre>
-    <div class="hc-stack" th:if="${src.isTemplate}">
+    <div class="hc-stack" th:if="${src.isRenderable}">
       <h2>Rendered preview</h2>
       <p class="hc-field__message">Rendered against the colocated <code>.sample.yml</code> fixture (or an empty model).</p>
       <input type="hidden" id="src-path" name="path" th:value="${src.path}">
@@ -40,9 +40,10 @@
       <div id="preview-result" class="hc-stack" aria-live="polite"></div>
       <div class="hc-cluster"><button type="submit" class="hc-button" data-variant="primary">Save draft</button></div>
     </form>
-    <div class="hc-stack" th:if="${src.isTemplate}">
+    <div class="hc-stack" th:if="${src.isRenderable}">
       <h2>Rendered preview</h2>
-      <p class="hc-field__message">Renders the draft against the sample data below &mdash; prefilled from the colocated <code>.sample.yml</code> fixture when present, blank falls back to an empty model.</p>
+      <p class="hc-field__message" th:if="${src.isRoute}">Renders this route's response against the sample <em>execution context</em> below (e.g. <code>params</code>, <code>sql.rows</code>) &mdash; prefilled from the colocated <code>.sample.yml</code> fixture when present.</p>
+      <p class="hc-field__message" th:unless="${src.isRoute}">Renders the draft against the sample <em>template variables</em> below &mdash; prefilled from the colocated <code>.sample.yml</code> fixture when present, blank falls back to an empty model.</p>
       <label class="hc-field__label" for="sample-editor">Sample data (YAML)</label>
       <div class="hc-code" data-editable data-gutter="line-numbers">
         <textarea id="sample-editor" name="sampleModel" class="hc-code__input" spellcheck="false"

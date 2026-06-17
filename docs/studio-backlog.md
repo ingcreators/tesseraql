@@ -23,13 +23,19 @@ Studio editor + docs work (2026-06):
 - **Highlight the source view, diff panel & YAML/templates** (#110) — `YamlHighlighter`,
   `TemplateHighlighter`, and a `Highlighter` extension dispatcher; the read-only source
   view and the diff panel are highlighted by file type.
-- **Rendered preview against sample data (A1, slice 1)** — a template file (`.html`/`.tpl`)
-  renders against a sample model rather than only validating against an empty one, and the
-  editor shows the actual output two ways: the generated HTML/text, hc-code highlighted, and
-  (for HTML) a sandboxed `iframe` visual preview styled with the hc stylesheet. The sample
-  model is YAML/JSON typed in the editor, prefilled from a colocated `<name>.sample.yml`
-  fixture (blank falls back to the fixture). `StudioService.render`/`sampleModel`, the
-  `studio.render` provider, the `POST /_tesseraql/studio/render` JSON endpoint, and the
+- **Rendered preview against sample data (A1, slices 1–2)** — a renderable file renders against
+  a sample model rather than only validating against an empty one, and the editor shows the
+  actual output two ways: the generated HTML/text/JSON, hc-code highlighted, and (for HTML) a
+  sandboxed `iframe` visual preview styled with the hc stylesheet. Two shapes render:
+  - a **template file** (`.html`/`.tpl`) against the sample as its template variables;
+  - a **web route** (`web/**/<method>.yml`) against the sample as the execution context (`params`,
+    `sql.rows`, …): `query-html`/`page` resolves `response.html.model` and renders the route's
+    template, `query-json` resolves `response.json.body` and pretty-prints it (output-field masking
+    `response.json.fields` is not applied in preview).
+
+  The sample is YAML/JSON typed in the editor, prefilled from a colocated `<name>.sample.yml`
+  fixture (blank falls back to it). `StudioService.render`/`sampleModel`, the `studio.render`
+  provider, the `POST /_tesseraql/studio/render` JSON endpoint, and the
   `/_tesseraql/studio/ui/render` editor fragment; the source page CSP gains `frame-src 'self'`.
 
 Upstream Hypermedia Components briefs filed and adopted: `hc-code` (read-only block,
@@ -41,16 +47,18 @@ gutter, diff), editable `hc-code`, `hc-sparkline`, and read-only syntax highligh
 
 ### A. Tighten the edit → verify loop (highest value, extends what shipped)
 
-1. **Rendered preview against sample/real data** — *slice 1 shipped* (see Shipped): a
-   **template file** renders against a sample-data fixture and shows the actual HTML/text
-   output plus a sandboxed visual `iframe`. Remaining slices:
-   - **Route-context render** — render through a *route* `.yml`'s `response.html.model`
-     (resolve the model expressions against a fixture context of `params`/`sql.rows`/…),
-     so editing the route, not just the template, previews real output.
-   - **More output kinds** — JSON (`query-json`), PDF (the Phase 21 codec), and email (the
-     Phase 20 notification template engine) previews, beyond HTML/text.
+1. **Rendered preview against sample/real data** — *slices 1–2 shipped* (see Shipped): template
+   files and **web routes** (`query-html`/`page` → `response.html.model` + template; `query-json`
+   → `response.json.body`) render against a fixture and show HTML/text/JSON output plus a sandboxed
+   visual `iframe` for HTML. Remaining slices:
+   - **More output kinds** — PDF (the Phase 21 codec) and email (the Phase 20 notification template
+     engine) previews. PDF needs a `tesseraql-pdf` dependency and a binary-friendly surface (a
+     `data:` URL / download), so it is its own slice.
    - **Real bound params** — optionally execute the route's SQL against a dev datasource to
-     populate the fixture (overlaps A2; keep behind the same sandbox guard).
+     populate the fixture instead of hand-authoring `sql.rows` (overlaps A2; keep behind the same
+     sandbox guard — read-only, row/time caps).
+   - **Output-field masking** — apply `response.json.fields` masking in the JSON preview (needs the
+     policy engine + a sample principal).
 2. **Run a route's declarative suite from Studio** — a "run tests now" action on the
    route doc with inline results, instead of edit → apply → restart → CI. Needs a
    sandboxed execution path (read-only/query, dev datasource, row/time caps). Ties to
@@ -99,7 +107,7 @@ gutter, diff), editable `hc-code`, `hc-sparkline`, and read-only syntax highligh
 
 ## Recommended next
 
-**A1 slice 1 (rendered template preview against sample data) is shipped.** Next: finish A1
-(route-context render → JSON/PDF/email kinds → real bound params), then **A2
+**A1 slices 1–2 (rendered preview of template files and web routes against sample data) are
+shipped.** Next: finish A1 (PDF/email kinds → real bound params), then **A2
 (run-suite-from-Studio)**, then **B3 (scaffold-from-explorer)** toward M7. E waits on hc #264;
 G is gated.

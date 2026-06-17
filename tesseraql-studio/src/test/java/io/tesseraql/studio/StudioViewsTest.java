@@ -83,6 +83,35 @@ class StudioViewsTest {
     }
 
     @Test
+    void sourceModelMarksWebRoutesRenderable() {
+        // A web route document renders against an execution-context fixture, not template vars.
+        Map<String, Object> route = StudioViews.source("web/api/users/get.yml", "id: x", false,
+                false, "id: x", "params: {}");
+        assertThat(route).containsEntry("isRoute", true).containsEntry("isRenderable", true)
+                .containsEntry("isTemplate", false).containsEntry("sampleModel", "params: {}");
+
+        // A colocated *.sample.yml fixture (a non-method yml under web/) is not itself renderable.
+        Map<String, Object> fixture = StudioViews.source("web/api/users/get.sample.yml", "x", true,
+                false, "x", null);
+        assertThat(fixture).containsEntry("isRoute", false).containsEntry("isRenderable", false);
+
+        // A config yml outside web/ is not renderable.
+        Map<String, Object> config = StudioViews.source("config/tesseraql.yml", "x", true, false,
+                "x", null);
+        assertThat(config).containsEntry("isRenderable", false);
+    }
+
+    @Test
+    void renderJsonKindHasNoVisualPreview() {
+        Map<String, Object> json = StudioViews.render(
+                StudioService.RenderResult.ok("json", "{\n  \"a\" : 1\n}"));
+
+        assertThat(json).containsEntry("ok", true).containsEntry("isHtml", false)
+                .containsEntry("kind", "json").containsEntry("output", "{\n  \"a\" : 1\n}");
+        assertThat(json.get("previewDoc")).isNull();
+    }
+
+    @Test
     void renderBuildsModelWithHighlightedTextAndIframeDoc() {
         // A bare fragment is wrapped into a standalone doc linking the hc stylesheet for the iframe.
         Map<String, Object> ok = StudioViews.render(

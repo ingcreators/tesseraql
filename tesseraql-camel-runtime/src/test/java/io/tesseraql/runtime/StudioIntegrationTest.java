@@ -416,6 +416,46 @@ class StudioIntegrationTest {
     }
 
     @Test
+    void renderEndpointRendersHtmlRouteAgainstExecutionContext() throws Exception {
+        String body = MAPPER.writeValueAsString(Map.of("sampleModel",
+                "sql:\n  rows:\n    - id: 1\n      name: Alice\n      status: active\n  rowCount: 1\n"));
+        HttpResponse<String> response = post(
+                "/_tesseraql/studio/render?path=" + enc("web/users/fragments/table/get.yml"),
+                body, true);
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        JsonNode render = MAPPER.readTree(response.body());
+        assertThat(render.get("ok").asBoolean()).isTrue();
+        assertThat(render.get("kind").asText()).isEqualTo("html");
+        assertThat(render.get("output").asText()).contains("Alice").contains("active");
+    }
+
+    @Test
+    void renderEndpointRendersJsonRouteBody() throws Exception {
+        String body = MAPPER.writeValueAsString(Map.of("sampleModel",
+                "sql:\n  rows:\n    - id: 7\n      name: Sato\n  rowCount: 1\n"
+                        + "params:\n  limit: 50\n  offset: 0\n"));
+        HttpResponse<String> response = post(
+                "/_tesseraql/studio/render?path=" + enc("web/api/users/get.yml"), body, true);
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        JsonNode render = MAPPER.readTree(response.body());
+        assertThat(render.get("ok").asBoolean()).isTrue();
+        assertThat(render.get("kind").asText()).isEqualTo("json");
+        assertThat(render.get("output").asText()).contains("Sato").contains("\"count\" : 1");
+    }
+
+    @Test
+    void uiSourceRouteOffersRenderedPreviewPanel() throws Exception {
+        HttpResponse<String> response = get("/_tesseraql/studio/ui/source?path="
+                + enc("web/users/fragments/table/get.yml"), true);
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(response.body()).contains("Rendered preview").contains("execution context")
+                .contains("hx-post=\"/_tesseraql/studio/ui/render\"");
+    }
+
+    @Test
     void uiSourceTemplateOffersRenderedPreviewPanel() throws Exception {
         HttpResponse<String> response = get("/_tesseraql/studio/ui/source?path="
                 + enc("web/users/fragments/table/table.html"), true);

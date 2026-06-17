@@ -231,6 +231,61 @@ class StudioServiceTest {
     }
 
     @Test
+    void rendersHtmlRouteAgainstExecutionContext() {
+        StudioService studio = new StudioService(exampleManifest(), true);
+
+        // The route maps response.html.model {users: sql.rows, count: sql.rowCount} → table.html.
+        StudioService.RenderResult result = studio.render(
+                "web/users/fragments/table/get.yml", null,
+                "sql:\n  rows:\n    - id: 1\n      name: Alice\n      status: active\n  rowCount: 1\n");
+
+        assertThat(result.ok()).isTrue();
+        assertThat(result.kind()).isEqualTo("html");
+        assertThat(result.output()).contains("Alice").contains("active")
+                .doesNotContain("No matching users");
+    }
+
+    @Test
+    void rendersJsonRouteBodyAgainstExecutionContext() {
+        StudioService studio = new StudioService(exampleManifest(), true);
+
+        StudioService.RenderResult result = studio.render("web/api/users/get.yml", null,
+                "sql:\n  rows:\n    - id: 7\n      name: Sato\n  rowCount: 1\n"
+                        + "params:\n  limit: 50\n  offset: 0\n");
+
+        assertThat(result.ok()).isTrue();
+        assertThat(result.kind()).isEqualTo("json");
+        // The body template {data: sql.rows, meta: {count: sql.rowCount, limit: params.limit, …}}
+        // resolves against the fixture context and pretty-prints.
+        assertThat(result.output()).contains("\"data\"").contains("Sato")
+                .contains("\"count\" : 1").contains("\"limit\" : 50");
+    }
+
+    @Test
+    void renderRejectsRouteWithoutHtmlOrJsonResponse(@TempDir Path dir) throws Exception {
+        Files.createDirectories(dir.resolve("config"));
+        Files.writeString(dir.resolve("config/tesseraql.yml"), "tesseraql:\n  app:\n    name: t\n");
+        Files.createDirectories(dir.resolve("web/go"));
+        Files.writeString(dir.resolve("web/go/post.yml"), """
+                version: tesseraql/v1
+                id: go.redirect
+                kind: route
+                recipe: command
+                sql:
+                  file: go.sql
+                response:
+                  redirect:
+                    location: /done
+                """);
+
+        StudioService studio = new StudioService(new ManifestLoader().load(dir), true);
+        StudioService.RenderResult result = studio.render("web/go/post.yml", null, null);
+
+        assertThat(result.ok()).isFalse();
+        assertThat(result.error()).contains("query-html/page and query-json");
+    }
+
+    @Test
     void sampleModelDiscoversColocatedFixtureAndRenderFallsBackToIt(@TempDir Path dir)
             throws Exception {
         Files.createDirectories(dir.resolve("config"));
