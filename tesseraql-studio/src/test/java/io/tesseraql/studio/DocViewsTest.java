@@ -133,7 +133,9 @@ class DocViewsTest {
         List<Map<String, Object>> lines = asRows(asRows(model.get("sql")).get(0).get("lines"));
         assertThat(lines).extracting(line -> line.get("state"))
                 .containsExactly("covered", "missed", "plain");
-        assertThat(lines.get(0)).containsEntry("number", 1).containsEntry("text", "line1");
+        // Each line also carries server-highlighted HTML (plain here — no SQL keywords).
+        assertThat(lines.get(0)).containsEntry("number", 1).containsEntry("text", "line1")
+                .containsEntry("html", "line1");
     }
 
     @Test

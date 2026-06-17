@@ -244,7 +244,9 @@ class StudioIntegrationTest {
                 .contains("lines").contains("branches");
         // Slice 4: the bound SQL renders line-by-line with per-line coverage classes.
         assertThat(response.body()).contains("hc-code")
-                .contains("data-gutter=\"line-numbers\"").contains("data-state=\"covered\"");
+                .contains("data-gutter=\"line-numbers\"").contains("data-state=\"covered\"")
+                // the SQL is server-tokenized into hc-code token spans (hc 0.1.4)
+                .contains("class=\"hc-code__tok\" data-tok=\"keyword\"");
     }
 
     @Test
