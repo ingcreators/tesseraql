@@ -1,0 +1,8 @@
+<div class="hc-stack" xmlns:th="http://www.thymeleaf.org" th:fragment="preview">
+  <p class="hc-alert" data-variant="success" role="status"
+     th:if="${preview.ok}" th:text="${preview.result}"></p>
+  <p class="hc-alert" data-variant="warning" role="status"
+     th:if="${preview.needsData}" th:text="${preview.result}"></p>
+  <p class="hc-alert" data-variant="error" role="alert"
+     th:unless="${preview.valid}" th:text="${preview.error}"></p>
+</div>

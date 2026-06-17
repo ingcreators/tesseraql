@@ -362,6 +362,47 @@ class StudioIntegrationTest {
     }
 
     @Test
+    void uiPreviewReturnsValidationFragment() throws Exception {
+        // A live edit validates without saving and comes back as an hc-alert fragment (not a page).
+        HttpResponse<String> valid = postForm("/_tesseraql/studio/ui/preview",
+                "path=" + enc("web/api/users/search.sql") + "&content=" + enc("select 1"));
+        assertThat(valid.statusCode()).isEqualTo(200);
+        assertThat(valid.body()).doesNotContain("<!DOCTYPE")
+                .contains("hc-alert").contains("data-variant=\"success\"");
+
+        // A broken route surfaces inline as an error alert, again without touching the source.
+        HttpResponse<String> invalid = postForm("/_tesseraql/studio/ui/preview",
+                "path=" + enc("web/api/users/get.yml")
+                        + "&content=" + enc("version: tesseraql/v1\nid: y\n"));
+        assertThat(invalid.statusCode()).isEqualTo(200);
+        assertThat(invalid.body()).contains("hc-alert").contains("data-variant=\"error\"");
+    }
+
+    @Test
+    void uiSourceShowsDraftBadgeAndDiscardClearsIt() throws Exception {
+        String path = "web/api/users/search.sql";
+
+        // Saving a draft makes the source page flag it and offer a comparison and a discard.
+        assertThat(postForm("/_tesseraql/studio/ui/save",
+                "path=" + enc(path) + "&content=" + enc("select 1 -- draft")).statusCode())
+                .isEqualTo(303);
+        assertThat(get("/_tesseraql/studio/ui/source?path=" + enc(path), true).body())
+                .contains("unsaved draft")
+                .contains("Compare against saved source")
+                .contains("Discard draft");
+
+        // Discarding redirects back and the badge is gone (the source is restored in the editor).
+        HttpResponse<String> discard = postForm("/_tesseraql/studio/ui/discard",
+                "path=" + enc(path));
+        assertThat(discard.statusCode()).isEqualTo(303);
+        assertThat(discard.headers().firstValue("location"))
+                .hasValueSatisfying(value -> assertThat(value)
+                        .startsWith("/_tesseraql/studio/ui/source?path="));
+        assertThat(get("/_tesseraql/studio/ui/source?path=" + enc(path), true).body())
+                .doesNotContain("unsaved draft");
+    }
+
+    @Test
     void wizardIndexAndFormRender() throws Exception {
         HttpResponse<String> index = get("/_tesseraql/studio/ui/wizard", true);
         assertThat(index.statusCode()).isEqualTo(200);

@@ -2,6 +2,7 @@ package io.tesseraql.studio;
 
 import io.tesseraql.studio.StudioService.Explorer;
 import io.tesseraql.studio.StudioService.JobSummary;
+import io.tesseraql.studio.StudioService.PreviewResult;
 import io.tesseraql.studio.StudioService.RouteSummary;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
@@ -55,13 +56,38 @@ public final class StudioViews {
         return model;
     }
 
-    /** The source page model: the file path, its content (a draft when one exists), edit mode. */
-    public static Map<String, Object> source(String path, String content, boolean readOnly) {
+    /**
+     * The source page model: the file path, its content ({@code content} is a draft when one
+     * exists, otherwise the source), edit mode, and — for the editor — whether an unsaved draft is
+     * being shown plus the on-disk {@code sourceContent} so the draft can be compared against it.
+     */
+    public static Map<String, Object> source(String path, String content, boolean readOnly,
+            boolean hasDraft, String sourceContent) {
         Map<String, Object> model = new LinkedHashMap<>();
         model.put("path", path);
         model.put("content", content);
         model.put("readOnly", readOnly);
         model.put("editable", !readOnly);
+        model.put("hasDraft", hasDraft);
+        model.put("sourceContent", sourceContent);
+        return model;
+    }
+
+    /**
+     * The live-validation fragment model for a {@link PreviewResult}: the raw outcome plus two
+     * derived flags so the template carries no string-matching logic — {@code ok} for a clean
+     * success and {@code needsData} for a template that parses but needs real route data to render.
+     */
+    public static Map<String, Object> preview(PreviewResult result) {
+        Map<String, Object> model = new LinkedHashMap<>();
+        model.put("valid", result.valid());
+        model.put("kind", result.kind());
+        model.put("result", result.result());
+        model.put("error", result.error());
+        boolean needsData = result.valid() && result.result() != null
+                && result.result().contains("needs route data");
+        model.put("needsData", needsData);
+        model.put("ok", result.valid() && !needsData);
         return model;
     }
 
