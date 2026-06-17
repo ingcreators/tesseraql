@@ -243,8 +243,8 @@ class StudioIntegrationTest {
         assertThat(response.body()).contains("Last test run").contains("covered")
                 .contains("lines").contains("branches");
         // Slice 4: the bound SQL renders line-by-line with per-line coverage classes.
-        assertThat(response.body()).contains("source--coverage")
-                .contains("cov-line--covered").contains("cov-line__no");
+        assertThat(response.body()).contains("hc-code")
+                .contains("data-gutter=\"line-numbers\"").contains("data-state=\"covered\"");
     }
 
     @Test
@@ -256,8 +256,8 @@ class StudioIntegrationTest {
                 .contains("Coverage summary").contains("2/2 passed")
                 .contains("gate passed").contains("Item coverage").contains("route");
         // Slice 5: the two-run history renders the trend sparklines.
-        assertThat(response.body()).contains("Trend").contains("spark-line")
-                .contains("polyline");
+        assertThat(response.body()).contains("Trend").contains("hc-sparkline")
+                .contains("data-values");
     }
 
     @Test

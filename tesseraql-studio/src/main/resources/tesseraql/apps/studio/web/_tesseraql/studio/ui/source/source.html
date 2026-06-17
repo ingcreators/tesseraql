@@ -13,7 +13,7 @@
   <p class="hc-alert" data-variant="success" role="status" th:if="${applied}">Draft applied and routes reloaded.</p>
   <th:block th:if="${src.readOnly}">
     <p class="hc-field__message">Read-only mode &mdash; edit drafts via the Studio API.</p>
-    <pre class="source" th:text="${src.content}"></pre>
+    <pre class="hc-code" th:text="${src.content}"></pre>
   </th:block>
   <th:block th:if="${src.editable}">
     <div class="hc-cluster" th:if="${src.hasDraft}">
@@ -21,18 +21,20 @@
     </div>
     <form method="post" action="/_tesseraql/studio/ui/save">
       <input type="hidden" id="src-path" name="path" th:value="${src.path}">
-      <textarea name="content" class="hc-input source" rows="24" spellcheck="false"
-                th:text="${src.content}"
-                hx-post="/_tesseraql/studio/ui/preview"
-                hx-trigger="keyup changed delay:300ms, change"
-                hx-include="#src-path"
-                hx-target="#preview-result" hx-swap="innerHTML"></textarea>
+      <div class="hc-code" data-editable data-gutter="line-numbers">
+        <textarea name="content" class="hc-code__input" spellcheck="false" aria-label="Source editor"
+                  th:text="${src.content}"
+                  hx-post="/_tesseraql/studio/ui/preview"
+                  hx-trigger="keyup changed delay:300ms, change"
+                  hx-include="#src-path"
+                  hx-target="#preview-result" hx-swap="innerHTML"></textarea>
+      </div>
       <div id="preview-result" class="hc-stack" aria-live="polite"></div>
       <div class="hc-cluster"><button type="submit" class="hc-button" data-variant="primary">Save draft</button></div>
     </form>
     <details class="hc-stack" th:if="${src.hasDraft}">
       <summary>Compare against saved source</summary>
-      <pre class="source" th:text="${src.sourceContent}"></pre>
+      <pre class="hc-code" th:text="${src.sourceContent}"></pre>
     </details>
     <form hx-post="/_tesseraql/studio/ui/apply" hx-target="#apply-result" hx-swap="innerHTML">
       <input type="hidden" name="path" th:value="${src.path}">
