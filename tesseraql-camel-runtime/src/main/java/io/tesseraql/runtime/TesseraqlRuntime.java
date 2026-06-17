@@ -688,9 +688,15 @@ public final class TesseraqlRuntime implements AutoCloseable {
                         .register("studio.source", params -> {
                             String path = String.valueOf(params.get("path"));
                             String draft = studio.readDraft(path);
-                            return io.tesseraql.studio.StudioViews.source(path,
-                                    draft != null ? draft : studio.source(path),
-                                    studio.isReadOnly());
+                            if (draft == null) {
+                                // No draft: show the source (404s when the file does not exist).
+                                String src = studio.source(path);
+                                return io.tesseraql.studio.StudioViews.source(path, src,
+                                        studio.isReadOnly(), false, src);
+                            }
+                            // A draft is being edited; sourceIfExists is null for a new-file draft.
+                            return io.tesseraql.studio.StudioViews.source(path, draft,
+                                    studio.isReadOnly(), true, studio.sourceIfExists(path));
                         })
                         .register("studio.save", params -> {
                             String path = String.valueOf(params.get("path"));
@@ -703,6 +709,17 @@ public final class TesseraqlRuntime implements AutoCloseable {
                             studio.applyDraft(path);
                             reloader.reload();
                             return Map.of("applied", path);
+                        })
+                        .register("studio.preview", params -> {
+                            String path = String.valueOf(params.get("path"));
+                            Object content = params.get("content");
+                            return io.tesseraql.studio.StudioViews.preview(studio.preview(path,
+                                    content == null ? null : String.valueOf(content)));
+                        })
+                        .register("studio.discard", params -> {
+                            String path = String.valueOf(params.get("path"));
+                            studio.deleteDraft(path);
+                            return Map.of("discarded", path);
                         });
                 // Providers backing the bundled documentation portal (documentation portal v1/v2/v3):
                 // they read the packaged spec.json, falling back to a live model from the manifest,

@@ -1,0 +1,21 @@
+version: tesseraql/v1
+id: tql.studio.discard
+kind: route
+recipe: command-json
+
+input:
+  path:
+    type: string
+    required: true
+
+security:
+  auth: bearer
+
+sql:
+  service: studio.discard
+  params:
+    path: params.path
+
+response:
+  redirect:
+    location: /_tesseraql/studio/ui/source?path={params.path}

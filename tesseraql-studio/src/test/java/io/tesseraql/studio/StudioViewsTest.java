@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import io.tesseraql.studio.StudioService.Explorer;
 import io.tesseraql.studio.StudioService.JobSummary;
+import io.tesseraql.studio.StudioService.PreviewResult;
 import io.tesseraql.studio.StudioService.RouteSummary;
 import java.util.List;
 import java.util.Map;
@@ -48,11 +49,45 @@ class StudioViewsTest {
 
     @Test
     void sourceBuildsModel() {
-        Map<String, Object> model = StudioViews.source("a.sql", "select 1", false);
+        Map<String, Object> model = StudioViews.source("a.sql", "select 1", false, false,
+                "select 1");
 
         assertThat(model).containsEntry("path", "a.sql")
                 .containsEntry("content", "select 1")
                 .containsEntry("editable", true)
-                .containsEntry("readOnly", false);
+                .containsEntry("readOnly", false)
+                .containsEntry("hasDraft", false)
+                .containsEntry("sourceContent", "select 1");
+    }
+
+    @Test
+    void sourceModelCarriesDraftStateForComparison() {
+        Map<String, Object> model = StudioViews.source("a.sql", "select 2 -- draft", false, true,
+                "select 1 -- source");
+
+        assertThat(model).containsEntry("content", "select 2 -- draft")
+                .containsEntry("hasDraft", true)
+                .containsEntry("sourceContent", "select 1 -- source");
+    }
+
+    @Test
+    void previewBuildsModel() {
+        assertThat(StudioViews.preview(PreviewResult.valid("sql", "select 1")))
+                .containsEntry("valid", true)
+                .containsEntry("ok", true)
+                .containsEntry("needsData", false)
+                .containsEntry("result", "select 1");
+
+        assertThat(StudioViews.preview(PreviewResult.invalid("route", "boom")))
+                .containsEntry("valid", false)
+                .containsEntry("ok", false)
+                .containsEntry("error", "boom");
+
+        // A template that parses but needs route data is a warning, not a clean success.
+        assertThat(StudioViews.preview(PreviewResult.valid("template",
+                "template parses; full render needs route data (npe)")))
+                .containsEntry("valid", true)
+                .containsEntry("needsData", true)
+                .containsEntry("ok", false);
     }
 }

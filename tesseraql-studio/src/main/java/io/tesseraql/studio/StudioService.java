@@ -65,9 +65,21 @@ public final class StudioService {
 
     /** Reads a source file (YAML/SQL/template) by its app-relative path. */
     public String source(String relativePath) {
+        String content = sourceIfExists(relativePath);
+        if (content == null) {
+            throw new TqlException(NOT_FOUND, "No such file: " + relativePath);
+        }
+        return content;
+    }
+
+    /**
+     * Reads a source file by its app-relative path, or {@code null} when no such file exists — the
+     * case of a draft for a not-yet-applied new file, where there is no source to compare against.
+     */
+    public String sourceIfExists(String relativePath) {
         Path file = resolve(relativePath);
         if (!Files.isRegularFile(file)) {
-            throw new TqlException(NOT_FOUND, "No such file: " + relativePath);
+            return null;
         }
         try {
             return Files.readString(file);
@@ -93,6 +105,25 @@ public final class StudioService {
             throw new UncheckedIOException(ex);
         }
         return draft;
+    }
+
+    /**
+     * Discards a saved draft of {@code relativePath} without touching the source of truth, so an
+     * edit can be abandoned and the editor falls back to the source. Rejected in read-only mode;
+     * idempotent (a no-op when no draft exists).
+     *
+     * @return whether a draft was actually removed
+     */
+    public boolean deleteDraft(String relativePath) {
+        if (readOnly) {
+            throw new TqlException(READ_ONLY, "Studio is read-only; drafts are disabled");
+        }
+        resolve(relativePath); // validate the target path before touching the draft
+        try {
+            return Files.deleteIfExists(draftPath(relativePath));
+        } catch (IOException ex) {
+            throw new UncheckedIOException(ex);
+        }
     }
 
     /**

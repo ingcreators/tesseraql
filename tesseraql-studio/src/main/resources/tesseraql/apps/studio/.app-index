@@ -16,8 +16,11 @@ web/_tesseraql/studio/ui/docs/schema/table/get.yml
 web/_tesseraql/studio/ui/docs/schema/table/table.html
 web/_tesseraql/studio/ui/source/get.yml
 web/_tesseraql/studio/ui/source/source.html
+web/_tesseraql/studio/ui/preview/post.yml
+web/_tesseraql/studio/ui/preview/preview.html
 web/_tesseraql/studio/ui/save/post.yml
 web/_tesseraql/studio/ui/apply/post.yml
+web/_tesseraql/studio/ui/discard/post.yml
 web/_tesseraql/studio/ui/wizard/get.yml
 web/_tesseraql/studio/ui/wizard/wizard-index.html
 web/_tesseraql/studio/ui/wizard/saml/get.yml

@@ -82,6 +82,53 @@ class StudioServiceTest {
     }
 
     @Test
+    void deleteDraftRemovesDraftAndIsIdempotent(@TempDir Path dir) throws Exception {
+        Files.createDirectories(dir.resolve("config"));
+        Files.writeString(dir.resolve("config/tesseraql.yml"), "tesseraql:\n  app:\n    name: t\n");
+        Files.createDirectories(dir.resolve("web/api/x"));
+        Files.writeString(dir.resolve("web/api/x/get.yml"), """
+                version: tesseraql/v1
+                id: x
+                kind: route
+                recipe: query-json
+                sql:
+                  file: x.sql
+                response:
+                  json:
+                    body:
+                      data: sql.rows
+                """);
+
+        StudioService studio = new StudioService(new ManifestLoader().load(dir), false);
+        studio.saveDraft("web/api/x/get.yml", "version: tesseraql/v1\nid: x-edited\n");
+        assertThat(studio.readDraft("web/api/x/get.yml")).isNotNull();
+
+        assertThat(studio.deleteDraft("web/api/x/get.yml")).isTrue();
+        assertThat(studio.readDraft("web/api/x/get.yml")).isNull();
+        // Discarding when no draft exists is a no-op success; the source is untouched throughout.
+        assertThat(studio.deleteDraft("web/api/x/get.yml")).isFalse();
+        assertThat(studio.source("web/api/x/get.yml")).contains("id: x\n");
+    }
+
+    @Test
+    void readOnlyModeRejectsDiscard() {
+        StudioService studio = new StudioService(exampleManifest(), true);
+
+        assertThatThrownBy(() -> studio.deleteDraft("web/api/users/get.yml"))
+                .isInstanceOf(TqlException.class)
+                .hasMessageContaining("read-only");
+    }
+
+    @Test
+    void deleteDraftRejectsTraversal() {
+        StudioService studio = new StudioService(exampleManifest(), false);
+
+        assertThatThrownBy(() -> studio.deleteDraft("../../etc/passwd"))
+                .isInstanceOf(TqlException.class)
+                .hasMessageContaining("escapes app home");
+    }
+
+    @Test
     void previewValidatesRoutesAndSql() {
         StudioService studio = new StudioService(exampleManifest(), true);
 
