@@ -321,6 +321,21 @@ and is being adopted (see E below).
       `studio_copilot` prompt, still with no embedded LLM. `PromptFile` + `AppManifest.prompts()`;
       `ManifestLoader` parses `kind: prompt`; `AppMcpServer` registers it and renders the template.
 
+### H. Migration authoring (net-new, category 4)
+
+11. **Create migrations from Studio** — *done* (first slice): a **New migration** page (linked from
+    the explorer when editable) creates a Flyway migration under `db/…/migration` — a **versioned**
+    one auto-numbered `V<n>` (plain sequential, no zero-padding; ordered numerically) or a
+    **repeatable** `R__<name>` (views/functions). Targets a chosen datasource + optional vendor
+    overlay, writes the DDL through the same gated/audited path as scaffolding (read-only switch +
+    per-role `editRoles` + audit trail), refuses to overwrite unless forced, and links the result to
+    the source editor. The new file needs a restart + migrate to apply; the UI notes Flyway rollback
+    is fix-forward (free edition has no undo). `StudioService.createMigration` / `nextMigrationVersion`;
+    `studio.migration.new` / `studio.migration.create`; `/_tesseraql/studio/ui/migration`.
+    - *Next slices:* a Postgres **sandbox dry-run** (auto-rollback) of the DDL before it lands;
+      form-driven DDL builders ("add column", "create index") off the schema portal; schema-diff
+      generation. Command `U` (undo) stays out (paid Flyway feature; not modeled).
+
 ## Recommended next
 
 **A1, A2, B3, C4, D5, D6, and E are all done** (see the per-section notes above): rendered preview

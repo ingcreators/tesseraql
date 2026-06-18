@@ -800,6 +800,47 @@ public final class TesseraqlRuntime implements AutoCloseable {
                                     recipe == null ? "query-json" : String.valueOf(recipe));
                             return Map.of("created", path);
                         })
+                        // New migration page (Studio backlog: migration authoring): the form shows the
+                        // next versioned number for the main datasource; the create writes a Flyway
+                        // migration under db/…/migration and the result links to the source editor.
+                        .register("studio.migration.new", params -> {
+                            boolean canEdit = studioAccess.canEdit(params.get("roles"));
+                            Map<String, Object> model = new java.util.LinkedHashMap<>();
+                            model.put("editable", canEdit);
+                            model.put("readOnly", !canEdit);
+                            model.put("nextVersion", studio.nextMigrationVersion("main", null));
+                            return model;
+                        })
+                        .register("studio.migration.create", params -> {
+                            studioAccess.requireEdit(params.get("roles"));
+                            String datasource = params.get("datasource") == null
+                                    ? "main"
+                                    : String.valueOf(params.get("datasource"));
+                            String vendor = params.get("vendor") == null
+                                    ? null
+                                    : String.valueOf(params.get("vendor"));
+                            boolean repeatable = "repeatable"
+                                    .equals(String.valueOf(params.get("kind")));
+                            String description = params.get("description") == null
+                                    ? null
+                                    : String.valueOf(params.get("description"));
+                            String ddl = params.get("ddl") == null
+                                    ? null
+                                    : String.valueOf(params.get("ddl"));
+                            io.tesseraql.studio.StudioService.MigrationResult result = studio
+                                    .createMigration(datasource, vendor, repeatable, description,
+                                            ddl, false, actorOf(params));
+                            Map<String, Object> model = new java.util.LinkedHashMap<>();
+                            model.put("created", true);
+                            model.put("path", result.path());
+                            model.put("filename", result.filename());
+                            model.put("version", result.version());
+                            model.put("repeatable", result.repeatable());
+                            model.put("editorUrl", "/_tesseraql/studio/ui/source?path="
+                                    + java.net.URLEncoder.encode(result.path(),
+                                            java.nio.charset.StandardCharsets.UTF_8));
+                            return model;
+                        })
                         .register("studio.apply", params -> {
                             studioAccess.requireEdit(params.get("roles"));
                             String path = String.valueOf(params.get("path"));

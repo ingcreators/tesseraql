@@ -1422,6 +1422,36 @@ class StudioIntegrationTest {
         assertThat(get("/_tesseraql/studio/ui/wizard", false).statusCode()).isEqualTo(401);
     }
 
+    @Test
+    void uiMigrationPageRendersTheCreateForm() throws Exception {
+        HttpResponse<String> response = get("/_tesseraql/studio/ui/migration", true);
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        // The editable caller sees the V/R create form (Studio backlog: migration authoring).
+        assertThat(response.body()).contains("New migration").contains("Versioned")
+                .contains("Repeatable").contains("name=\"description\"");
+    }
+
+    @Test
+    void uiMigrationCreatesAVersionedFileAndLinksToTheEditor() throws Exception {
+        String form = "kind=versioned&datasource=main&description=" + enc("studio it migration")
+                + "&ddl=" + enc("create table it_widgets (id bigint primary key);");
+        HttpResponse<String> response = postForm("/_tesseraql/studio/ui/migration", form);
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(response.body()).contains("Migration created").contains("db/migration/")
+                .contains("studio_it_migration.sql").contains("Open in editor");
+        // The migration was written under db/migration with the DDL, auto-numbered V<n> (numerically).
+        Path migration;
+        try (Stream<Path> files = Files.list(appHome.resolve("db/migration"))) {
+            migration = files
+                    .filter(p -> p.getFileName().toString().endsWith("studio_it_migration.sql"))
+                    .findFirst().orElseThrow();
+        }
+        assertThat(migration.getFileName().toString()).matches("V\\d+__studio_it_migration\\.sql");
+        assertThat(Files.readString(migration)).contains("create table it_widgets");
+    }
+
     private static HttpResponse<String> postForm(String path, String form) throws Exception {
         HttpRequest request = HttpRequest.newBuilder(
                 URI.create("http://localhost:" + runtime.port() + path))

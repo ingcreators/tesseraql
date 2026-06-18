@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{tql/shell :: page(|TesseraQL Studio · New migration|, ~{:: #page-header}, ~{:: #page-content})}">
+<th:block id="page-header">
+  <span class="hc-spacer"></span>
+  <div class="hc-cluster">
+    <a href="/_tesseraql/studio/ui">&larr; explorer</a>
+    <span class="hc-badge" data-variant="warning" th:if="${mig.readOnly}">read-only</span>
+  </div>
+</th:block>
+<div id="page-content" class="hc-stack">
+  <section class="hc-card" th:unless="${mig.editable}">
+    <div class="hc-empty">
+      <p class="hc-empty__title">You do not have permission to create migrations.</p>
+    </div>
+  </section>
+  <section class="hc-card" th:if="${mig.editable}">
+    <h2>New migration</h2>
+    <p class="hc-field__message">Creates a Flyway migration under <code>db/&hellip;/migration</code>.
+      A versioned migration is auto-numbered (next:
+      <strong th:text="|V${mig.nextVersion}|">V1</strong> for the main datasource); a repeatable one
+      is <code>R__&lt;name&gt;</code>. The new file needs a restart + migrate to be applied &mdash;
+      the running app only lists it. Flyway has no built-in undo on the free edition: roll back by
+      writing a follow-up migration (fix-forward).</p>
+    <form class="hc-stack" method="post" action="/_tesseraql/studio/ui/migration">
+      <div class="hc-field">
+        <label class="hc-field__label" for="mig-kind">Kind</label>
+        <select class="hc-select" id="mig-kind" name="kind">
+          <option value="versioned">Versioned (V &mdash; runs once, in order)</option>
+          <option value="repeatable">Repeatable (R &mdash; re-applied on change; views/functions)</option>
+        </select>
+      </div>
+      <div class="hc-field">
+        <label class="hc-field__label" for="mig-description">Description</label>
+        <input class="hc-input" id="mig-description" type="text" name="description" required
+               placeholder="add user index">
+      </div>
+      <div class="hc-cluster">
+        <div class="hc-field">
+          <label class="hc-field__label" for="mig-datasource">Datasource</label>
+          <input class="hc-input" id="mig-datasource" type="text" name="datasource" value="main">
+        </div>
+        <div class="hc-field">
+          <label class="hc-field__label" for="mig-vendor">Vendor overlay (optional)</label>
+          <input class="hc-input" id="mig-vendor" type="text" name="vendor" placeholder="postgres">
+        </div>
+      </div>
+      <div class="hc-field">
+        <label class="hc-field__label" for="mig-ddl">DDL</label>
+        <textarea class="hc-input" id="mig-ddl" name="ddl" rows="10"
+                  placeholder="create table widgets (id bigint primary key, name text not null);"></textarea>
+      </div>
+      <div class="hc-cluster">
+        <button type="submit" class="hc-button" data-variant="primary">Create migration</button>
+      </div>
+    </form>
+  </section>
+</div>
+</html>

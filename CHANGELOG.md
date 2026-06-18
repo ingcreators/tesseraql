@@ -8,6 +8,19 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- Studio: author Flyway migrations from the editor (Studio backlog: migration authoring). A new
+  **New migration** page (linked from the explorer when editable) creates a migration under
+  `db/…/migration` — a **versioned** one auto-numbered `V<n>` (plain sequential, no zero-padding; the
+  framework orders versions numerically so `V2` precedes `V10`) or a **repeatable** `R__<name>` for
+  views/functions. It targets a chosen datasource and optional vendor overlay, writes the DDL through
+  the same gated, audited write path as scaffolding (read-only master switch + per-role
+  `editRoles` + the audit trail), refuses to overwrite an existing file unless forced, and links the
+  result to the source editor. The new file needs a restart + migrate to be applied (the running app
+  only lists it); Flyway has no built-in undo on the free edition, so the UI notes that rollback is
+  fix-forward (write a follow-up migration). `StudioService.createMigration` / `nextMigrationVersion`;
+  `studio.migration.new` / `studio.migration.create` providers; the `/_tesseraql/studio/ui/migration`
+  page.
+
 - Studio: multi-binding live render preview (Studio backlog category 3). The route render panel's
   **Use live data** toggle now runs not only a route's main `sql` but **every named `query`** through
   the sandbox, injecting each result under its model name — so a `query-html`/`query-json` route whose
