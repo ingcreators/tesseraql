@@ -448,6 +448,40 @@ class StudioServiceTest {
     }
 
     @Test
+    void scaffoldApplyWritesSliceFlagsNewRoutesAndIsIdempotent(@TempDir Path dir) throws Exception {
+        Files.createDirectories(dir.resolve("config"));
+        Files.writeString(dir.resolve("config/tesseraql.yml"), "tesseraql:\n  app:\n    name: t\n");
+        StudioService studio = new StudioService(new ManifestLoader().load(dir), false);
+        TableSchema table = widgetsSchema();
+
+        // A fresh apply writes the slice to disk; every written route is new (none in the manifest).
+        StudioService.ScaffoldResult first = studio.scaffoldApply(table, false);
+        assertThat(first.blocked()).isFalse();
+        assertThat(first.written()).contains("web/widgets/get.yml");
+        assertThat(first.newRoutes()).contains("web/widgets/get.yml");
+        assertThat(Files.isRegularFile(dir.resolve("web/widgets/get.yml"))).isTrue();
+        // A generated SQL file is written but is not a route needing a restart.
+        assertThat(first.newRoutes()).noneMatch(path -> path.endsWith(".sql"));
+
+        // Re-applying is idempotent: nothing written, every file reported unchanged.
+        StudioService.ScaffoldResult second = studio.scaffoldApply(table, false);
+        assertThat(second.written()).isEmpty();
+        assertThat(second.unchanged()).contains("web/widgets/get.yml");
+        assertThat(second.newRoutes()).isEmpty();
+    }
+
+    @Test
+    void scaffoldApplyRejectedInReadOnlyMode(@TempDir Path dir) throws Exception {
+        Files.createDirectories(dir.resolve("config"));
+        Files.writeString(dir.resolve("config/tesseraql.yml"), "tesseraql:\n  app:\n    name: t\n");
+        StudioService readOnly = new StudioService(new ManifestLoader().load(dir), true);
+
+        assertThatThrownBy(() -> readOnly.scaffoldApply(widgetsSchema(), false))
+                .isInstanceOf(TqlException.class)
+                .hasMessageContaining("read-only");
+    }
+
+    @Test
     void scaffoldPreviewRejectsTableWithoutSingleColumnPrimaryKey() {
         StudioService studio = new StudioService(exampleManifest(), true);
         TableSchema noKey = new TableSchema("t",

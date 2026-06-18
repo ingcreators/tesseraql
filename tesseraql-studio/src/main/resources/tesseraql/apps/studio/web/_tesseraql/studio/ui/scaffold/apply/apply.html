@@ -1,0 +1,18 @@
+<div class="hc-stack" xmlns:th="http://www.thymeleaf.org" th:fragment="scaffoldApply">
+  <p class="hc-alert" data-variant="info" role="status"
+     th:unless="${scaffold.enabled}" th:text="${scaffold.note}"></p>
+  <th:block th:if="${scaffold.enabled}">
+    <p class="hc-alert" role="status"
+       th:attr="data-variant=${scaffold.blocked} ? 'warning' : 'success'"
+       th:text="|Wrote ${scaffold.writtenCount}, unchanged ${scaffold.unchangedCount}, skipped ${scaffold.skippedCount}.|"></p>
+    <p class="hc-alert" data-variant="warning" role="status" th:if="${scaffold.needsRestart}"
+       th:text="|${scaffold.newRouteCount} new route file(s) written &mdash; restart the app to serve them.|"></p>
+    <ul class="hc-stack" th:if="${scaffold.writtenCount > 0}">
+      <li th:each="f : ${scaffold.written}"><a th:href="${f.sourceUrl}" th:text="${f.path}"></a></li>
+    </ul>
+    <details class="hc-stack" th:if="${scaffold.hasSkipped}">
+      <summary th:text="|${scaffold.skippedCount} file(s) skipped — you edited or own them; re-run with force to overwrite.|"></summary>
+      <ul class="hc-stack"><li th:each="p : ${scaffold.skipped}"><code th:text="${p}"></code></li></ul>
+    </details>
+  </th:block>
+</div>

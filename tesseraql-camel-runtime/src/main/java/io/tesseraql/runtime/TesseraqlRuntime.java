@@ -778,6 +778,12 @@ public final class TesseraqlRuntime implements AutoCloseable {
                                 params -> io.tesseraql.studio.StudioViews.scaffoldPreview(
                                         studioScaffold.preview(
                                                 String.valueOf(params.get("table")))))
+                        .register("studio.scaffold.apply",
+                                params -> io.tesseraql.studio.StudioViews.scaffoldResult(
+                                        studioScaffold.apply(
+                                                String.valueOf(params.get("table")),
+                                                "true".equals(
+                                                        String.valueOf(params.get("force"))))))
                         .register("studio.discard", params -> {
                             String path = String.valueOf(params.get("path"));
                             studio.deleteDraft(path);
