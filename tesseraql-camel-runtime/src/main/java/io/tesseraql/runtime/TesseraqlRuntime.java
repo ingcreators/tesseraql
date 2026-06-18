@@ -891,6 +891,9 @@ public final class TesseraqlRuntime implements AutoCloseable {
                                 case "create-index" -> io.tesseraql.studio.MigrationDdl.createIndex(
                                         field.apply("table"), field.apply("columns"),
                                         "true".equals(field.apply("unique")), field.apply("name"));
+                                case "create-table" -> io.tesseraql.studio.MigrationDdl.createTable(
+                                        field.apply("table"), field.apply("columnLines"),
+                                        field.apply("primaryKey"));
                                 default -> throw new io.tesseraql.core.error.TqlException(
                                         new io.tesseraql.core.error.TqlErrorCode(
                                                 io.tesseraql.core.error.TqlDomain.STUDIO, 4224),

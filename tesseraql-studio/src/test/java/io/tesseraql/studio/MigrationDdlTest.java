@@ -26,6 +26,29 @@ class MigrationDdlTest {
     }
 
     @Test
+    void createTableWrapsTheColumnLinesAndAddsThePrimaryKey() {
+        assertThat(MigrationDdl.createTable("widgets", "id bigint\nname text not null", "id"))
+                .isEqualTo("""
+                        CREATE TABLE widgets (
+                          id bigint,
+                          name text not null,
+                          PRIMARY KEY (id)
+                        );
+                        """);
+        // No primary key, blank lines skipped, a composite key.
+        assertThat(MigrationDdl.createTable("link", "a bigint\n\nb bigint\n", "a, b"))
+                .isEqualTo("""
+                        CREATE TABLE link (
+                          a bigint,
+                          b bigint,
+                          PRIMARY KEY (a, b)
+                        );
+                        """);
+        assertThat(MigrationDdl.createTable("note", "body text", ""))
+                .isEqualTo("CREATE TABLE note (\n  body text\n);\n");
+    }
+
+    @Test
     void requiredFieldsAndSingleStatementAreEnforced() {
         assertThatThrownBy(() -> MigrationDdl.addColumn(" ", "c", "text", true, ""))
                 .isInstanceOf(TqlException.class).hasMessageContaining("table is required");

@@ -69,6 +69,37 @@ public final class MigrationDdl {
                 + String.join(", ", cols) + ");\n";
     }
 
+    /**
+     * {@code CREATE TABLE <table> (<column defs>[, PRIMARY KEY (<pk>)]);} — each non-blank line of
+     * {@code columnLines} is one column definition emitted verbatim ({@code name type [NOT NULL …]},
+     * so the author can include modifiers inline), and {@code primaryKey} is an optional
+     * comma-separated list of the key columns.
+     */
+    public static String createTable(String table, String columnLines, String primaryKey) {
+        String t = required(table, "table");
+        List<String> elements = new ArrayList<>();
+        for (String line : (columnLines == null ? "" : columnLines).split("\\R")) {
+            String def = line.strip();
+            if (!def.isEmpty()) {
+                elements.add(oneValue(def, "column"));
+            }
+        }
+        if (elements.isEmpty()) {
+            throw new TqlException(INVALID, "A table needs at least one column");
+        }
+        List<String> pk = new ArrayList<>();
+        for (String column : clean(primaryKey).split(",")) {
+            String trimmed = column.strip();
+            if (!trimmed.isEmpty()) {
+                pk.add(oneValue(trimmed, "primary key column"));
+            }
+        }
+        if (!pk.isEmpty()) {
+            elements.add("PRIMARY KEY (" + String.join(", ", pk) + ")");
+        }
+        return "CREATE TABLE " + t + " (\n  " + String.join(",\n  ", elements) + "\n);\n";
+    }
+
     private static String required(String value, String field) {
         String cleaned = clean(value);
         if (cleaned.isEmpty()) {

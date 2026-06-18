@@ -1519,6 +1519,17 @@ class StudioIntegrationTest {
     }
 
     @Test
+    void uiMigrationBuildGeneratesCreateTableDdl() throws Exception {
+        HttpResponse<String> response = postForm("/_tesseraql/studio/ui/migration/build",
+                "operation=create-table&table=widgets&primaryKey=id&columnLines="
+                        + enc("id bigint\nname text not null"));
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(response.body()).contains("CREATE TABLE widgets (").contains("id bigint,")
+                .contains("name text not null,").contains("PRIMARY KEY (id)");
+    }
+
+    @Test
     void uiMigrationBuilderTablesComeFromTheSchemaOverlay() throws Exception {
         HttpResponse<String> response = get("/_tesseraql/studio/ui/migration", true);
 

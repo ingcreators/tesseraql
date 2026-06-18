@@ -31,6 +31,12 @@ input:
   unique:
     type: string
     required: false
+  columnLines:
+    type: string
+    required: false
+  primaryKey:
+    type: string
+    required: false
 
 security:
   auth: bearer
@@ -47,6 +53,8 @@ sql:
     columns: params.columns
     name: params.name
     unique: params.unique
+    columnLines: params.columnLines
+    primaryKey: params.primaryKey
 
 response:
   html:

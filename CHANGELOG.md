@@ -8,6 +8,14 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- Studio: a create-table builder in the migration DDL builder (Studio backlog: migration authoring,
+  follow-on). The New migration page's DDL builder gains a **Create table** form: a table name, a
+  **columns** textarea (one column definition per line — `name type [modifiers]`, emitted verbatim so
+  you can write `not null`/`default …` inline), and an optional comma-separated **primary key**. It
+  generates `CREATE TABLE <t> (<defs>[, PRIMARY KEY (<pk>)]);` and drops it into the DDL field. The
+  one-definition-per-line textarea handles a variable column count in plain HTML (no per-row fields).
+  New `MigrationDdl.createTable`; a `create-table` case in the `studio.migration.build` provider.
+
 - Studio: the migration DDL builder's table and column inputs are populated from the schema portal
   (Studio backlog: migration authoring, follow-on). The builder's **Table** field is now a dropdown
   of the introspected tables (from the `schema.json` overlay), and the create-index **Columns** field
