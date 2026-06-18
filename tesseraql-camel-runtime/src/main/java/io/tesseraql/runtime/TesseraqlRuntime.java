@@ -841,6 +841,27 @@ public final class TesseraqlRuntime implements AutoCloseable {
                                             java.nio.charset.StandardCharsets.UTF_8));
                             return model;
                         })
+                        // Dry-run a migration's DDL against the sandbox (auto-rollback) before it
+                        // lands — gated like the test runner (opt-in enabled); Postgres only.
+                        .register("studio.migration.dryRun", params -> {
+                            String path = String.valueOf(params.get("path"));
+                            Object content = params.get("content");
+                            io.tesseraql.studio.StudioService.DryRunResult result;
+                            if (!studioTests.isEnabled()) {
+                                result = io.tesseraql.studio.StudioService.DryRunResult.declined(
+                                        "The Studio test runner is disabled (set "
+                                                + "tesseraql.studio.testRunner.enabled).");
+                            } else {
+                                result = studio.dryRunMigration(path,
+                                        content == null ? null : String.valueOf(content),
+                                        studioTests::dryRunDdl);
+                            }
+                            Map<String, Object> model = new java.util.LinkedHashMap<>();
+                            model.put("ran", result.ran());
+                            model.put("ok", result.ok());
+                            model.put("message", result.message());
+                            return model;
+                        })
                         .register("studio.apply", params -> {
                             studioAccess.requireEdit(params.get("roles"));
                             String path = String.valueOf(params.get("path"));

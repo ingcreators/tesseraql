@@ -332,9 +332,15 @@ and is being adopted (see E below).
     the source editor. The new file needs a restart + migrate to apply; the UI notes Flyway rollback
     is fix-forward (free edition has no undo). `StudioService.createMigration` / `nextMigrationVersion`;
     `studio.migration.new` / `studio.migration.create`; `/_tesseraql/studio/ui/migration`.
-    - *Next slices:* a Postgres **sandbox dry-run** (auto-rollback) of the DDL before it lands;
-      form-driven DDL builders ("add column", "create index") off the schema portal; schema-diff
-      generation. Command `U` (undo) stays out (paid Flyway feature; not modeled).
+    - **Sandbox dry-run** — *done* (slice 2): a migration file's source editor offers a **Dry-run**
+      action that runs the DDL (the live editor buffer) against the dev datasource in a sandboxed,
+      auto-rollback transaction — it applies then rolls back, surfacing "applies cleanly" or the DB
+      error before the next migrate. **Postgres only** (transactional DDL); other dialects auto-commit
+      DDL so it is declined. Gated like the test runner, reusing `SandboxDataSource`.
+      `StudioService.dryRunMigration`/`DdlDryRun`/`isMigrationPath`; `StudioTestService.dryRunDdl`;
+      `studio.migration.dryRun`; `/_tesseraql/studio/ui/dry-run`.
+    - *Next slices:* form-driven DDL builders ("add column", "create index") off the schema portal;
+      schema-diff generation. Command `U` (undo) stays out (paid Flyway feature; not modeled).
 
 ## Recommended next
 

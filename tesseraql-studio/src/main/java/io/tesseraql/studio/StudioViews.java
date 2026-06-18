@@ -217,6 +217,8 @@ public final class StudioViews {
         model.put("isRenderable", isTemplate || isRoute);
         // A route or a job carries declarative test cases the editor can run (Studio backlog A2).
         model.put("isTestable", isRoute || isJob);
+        // A migration file can be dry-run against the sandbox before it lands (migration authoring).
+        model.put("isMigration", StudioService.isMigrationPath(path));
         // The hc-code data-lang grammar for live-highlighting the editable field (Studio backlog E).
         model.put("lang", editorLang(path));
         model.put("sampleModel", sampleModel == null ? "" : sampleModel);

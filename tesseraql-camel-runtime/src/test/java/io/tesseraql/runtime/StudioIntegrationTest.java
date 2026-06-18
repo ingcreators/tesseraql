@@ -1452,6 +1452,41 @@ class StudioIntegrationTest {
         assertThat(Files.readString(migration)).contains("create table it_widgets");
     }
 
+    @Test
+    void uiSourceMigrationOffersDryRunWhenEnabled() throws Exception {
+        HttpResponse<String> response = get("/_tesseraql/studio/ui/source?path="
+                + enc("db/migration/V1__create_users.sql"), true);
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        // A migration file's editor offers the sandbox dry-run action (migration authoring slice 2).
+        assertThat(response.body()).contains("Dry-run").contains("/_tesseraql/studio/ui/dry-run");
+    }
+
+    @Test
+    void uiDryRunAppliesValidDdlInTheSandboxAndRollsItBack() throws Exception {
+        // The DDL is the posted (live editor) content, not the file; it runs and rolls back.
+        String form = "path=" + enc("db/migration/V1__create_users.sql") + "&content="
+                + enc("create table dryrun_probe (id int primary key);");
+        HttpResponse<String> response = postForm("/_tesseraql/studio/ui/dry-run", form);
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(response.body()).contains("Applies cleanly");
+        // It rolled back — re-running the same create succeeds again (the table never persisted).
+        assertThat(postForm("/_tesseraql/studio/ui/dry-run", form).body())
+                .contains("Applies cleanly");
+    }
+
+    @Test
+    void uiDryRunReportsBrokenDdlAsAnError() throws Exception {
+        String form = "path=" + enc("db/migration/V1__create_users.sql") + "&content="
+                + enc("create tabl dryrun_bad (id int);");
+        HttpResponse<String> response = postForm("/_tesseraql/studio/ui/dry-run", form);
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(response.body()).doesNotContain("Applies cleanly")
+                .contains("data-variant=\"error\"");
+    }
+
     private static HttpResponse<String> postForm(String path, String form) throws Exception {
         HttpRequest request = HttpRequest.newBuilder(
                 URI.create("http://localhost:" + runtime.port() + path))

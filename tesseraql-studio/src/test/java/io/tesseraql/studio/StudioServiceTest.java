@@ -555,6 +555,36 @@ class StudioServiceTest {
     }
 
     @Test
+    void isMigrationPathMatchesFlywayLocationsOnly() {
+        assertThat(StudioService.isMigrationPath("db/migration/V1__a.sql")).isTrue();
+        assertThat(StudioService.isMigrationPath("db/migration-postgres/V1__a.sql")).isTrue();
+        assertThat(StudioService.isMigrationPath("db/reporting/migration/R__v.sql")).isTrue();
+        assertThat(StudioService.isMigrationPath("db/migration/notes.txt")).isFalse();
+        assertThat(StudioService.isMigrationPath("web/api/users/search.sql")).isFalse();
+        assertThat(StudioService.isMigrationPath(null)).isFalse();
+    }
+
+    @Test
+    void dryRunMigrationForwardsTheContentForAMigrationPathAndDeclinesOthers(@TempDir Path dir)
+            throws Exception {
+        StudioService studio = migrationStudio(dir);
+        // The stub callback echoes the DDL it was handed, so we can see which content was used.
+        StudioService.DdlDryRun echo = ddl -> StudioService.DryRunResult.failed("got: " + ddl);
+
+        // A non-migration path is declined without invoking the callback.
+        StudioService.DryRunResult declined = studio.dryRunMigration("web/api/x/get.yml", "x",
+                echo);
+        assertThat(declined.ran()).isFalse();
+        assertThat(declined.message()).contains("migration files");
+
+        // For a migration path the supplied (live editor) content is forwarded to the runner.
+        StudioService.DryRunResult ran = studio.dryRunMigration("db/migration/V1__a.sql",
+                "create table t (id int);", echo);
+        assertThat(ran.ran()).isTrue();
+        assertThat(ran.message()).contains("create table t (id int);");
+    }
+
+    @Test
     void createMigrationIsRejectedInReadOnlyMode(@TempDir Path dir) throws Exception {
         Files.createDirectories(dir.resolve("config"));
         Files.writeString(dir.resolve("config/tesseraql.yml"), "tesseraql:\n  app:\n    name: t\n");

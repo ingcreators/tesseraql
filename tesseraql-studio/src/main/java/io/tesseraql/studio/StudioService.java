@@ -57,6 +57,8 @@ public final class StudioService {
     private static final TqlErrorCode CONFLICT = new TqlErrorCode(TqlDomain.STUDIO, 4090);
     private static final Pattern LEADING_DIGITS = Pattern.compile("^\\d+");
     private static final Pattern IDENTIFIER = Pattern.compile("[A-Za-z0-9_-]+");
+    private static final Pattern MIGRATION_PATH = Pattern
+            .compile("db/(?:[^/]+/)?migration(?:-[^/]+)?/[^/]+\\.sql");
 
     /** The HTTP-method stems that name a route document under {@code web/} (and its fixtures). */
     private static final Set<String> HTTP_METHODS = Set.of("get", "post", "put", "patch", "delete",
@@ -775,6 +777,61 @@ public final class StudioService {
      */
     public record MigrationResult(String path, String filename, String version,
             boolean repeatable) {
+    }
+
+    /** Whether {@code path} is a Flyway migration under a {@code db/…/migration[-vendor]} location. */
+    public static boolean isMigrationPath(String path) {
+        return path != null && MIGRATION_PATH.matcher(path).matches();
+    }
+
+    /**
+     * Dry-runs a migration's DDL against the dev datasource without persisting it (Studio backlog:
+     * migration authoring). Studio stays database-free — the runtime supplies the execution over the
+     * sandboxed (auto-rollback) datasource via a {@link DdlDryRun} callback.
+     */
+    @FunctionalInterface
+    public interface DdlDryRun {
+        /** Executes {@code ddl} in an auto-rollback sandbox and reports whether it applied cleanly. */
+        DryRunResult run(String ddl);
+    }
+
+    /**
+     * The outcome of a migration dry-run: whether it actually ran ({@code false} when declined — e.g.
+     * a non-Postgres dialect whose DDL can't be rolled back), whether the DDL applied cleanly, and a
+     * human-readable message.
+     */
+    public record DryRunResult(boolean ran, boolean ok, String message) {
+
+        /** The DDL applied cleanly in the sandbox and was rolled back. */
+        public static DryRunResult applied() {
+            return new DryRunResult(true, true,
+                    "Applies cleanly (rolled back — nothing persisted).");
+        }
+
+        /** The DDL ran but failed with {@code message}. */
+        public static DryRunResult failed(String message) {
+            return new DryRunResult(true, false, message);
+        }
+
+        /** The dry-run was declined (e.g. an unsupported dialect or no DDL), with the reason. */
+        public static DryRunResult declined(String message) {
+            return new DryRunResult(false, false, message);
+        }
+    }
+
+    /**
+     * Dry-runs the DDL of the migration at {@code relativePath} — the supplied {@code content} when
+     * present (the live editor buffer), otherwise the saved file — against the sandbox via
+     * {@code dryRun}, returning the outcome. Declines a non-migration path. It never persists, so it
+     * is safe regardless of the read-only switch; the caller gates it like the test runner.
+     */
+    public DryRunResult dryRunMigration(String relativePath, String content, DdlDryRun dryRun) {
+        if (!isMigrationPath(relativePath)) {
+            return DryRunResult
+                    .declined("Dry-run applies to migration files (db/…/migration/*.sql).");
+        }
+        String ddl = content != null ? content : sourceIfExists(relativePath);
+        return dryRun.run(ddl);
     }
 
     /** The starter route skeleton for a recipe: a parseable draft the author then completes. */
