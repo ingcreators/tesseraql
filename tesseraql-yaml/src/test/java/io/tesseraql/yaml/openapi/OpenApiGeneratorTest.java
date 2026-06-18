@@ -44,6 +44,26 @@ class OpenApiGeneratorTest {
     }
 
     @Test
+    void jsonResponseSchemaMirrorsTheBodyStructure() throws Exception {
+        com.fasterxml.jackson.databind.JsonNode schema = new com.fasterxml.jackson.databind.ObjectMapper()
+                .readTree(new OpenApiGenerator().toJson(exampleApp()))
+                .path("paths").path("/api/users").path("get").path("responses").path("200")
+                .path("content").path("application/json").path("schema");
+
+        // The response.json.body structure is mirrored with property names (not just {type:object}).
+        assertThat(schema.path("type").asText()).isEqualTo("object");
+        com.fasterxml.jackson.databind.JsonNode props = schema.path("properties");
+        // data: sql.rows -> an array of row objects
+        assertThat(props.path("data").path("type").asText()).isEqualTo("array");
+        assertThat(props.path("data").path("items").path("type").asText()).isEqualTo("object");
+        // meta: a nested object; count is a row count (integer); limit/offset take their input types.
+        com.fasterxml.jackson.databind.JsonNode meta = props.path("meta").path("properties");
+        assertThat(meta.path("count").path("type").asText()).isEqualTo("integer");
+        assertThat(meta.path("limit").path("type").asText()).isEqualTo("integer");
+        assertThat(meta.path("offset").path("type").asText()).isEqualTo("integer");
+    }
+
+    @Test
     @SuppressWarnings("unchecked")
     void transferRoutesDocumentUploadAcknowledgementAndSubpaths() {
         io.tesseraql.yaml.SimpleYamlParser parser = new io.tesseraql.yaml.SimpleYamlParser();

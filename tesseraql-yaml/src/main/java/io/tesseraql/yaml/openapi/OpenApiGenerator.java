@@ -117,9 +117,59 @@ public final class OpenApiGenerator {
             case "query-html", "page" -> responses.put("200", withContent("OK", "text/html",
                     Map.of("type", "string")));
             default -> responses.put("200", withContent("OK", "application/json",
-                    Map.of("type", "object")));
+                    responseSchema(definition)));
         }
         return responses;
+    }
+
+    /**
+     * The JSON response body schema, inferred from {@code response.json.body} (design ch. 6.3): the
+     * body template's object/array structure is mirrored with property names, and each leaf source
+     * expression is typed by a small set of conventions — {@code …rows} is a row array, a row count
+     * is an integer, and a {@code params.X} leaf takes the declared type of input {@code X}. Leaves
+     * that can't be classified stay an open schema. Falls back to a plain object when no body is
+     * declared. Deterministic: object properties keep sorted key order.
+     */
+    private static Map<String, Object> responseSchema(RouteDefinition definition) {
+        Object body = definition.response() == null || definition.response().json() == null
+                ? null
+                : definition.response().json().body();
+        return body == null ? Map.of("type", "object") : bodySchema(body, definition);
+    }
+
+    private static Map<String, Object> bodySchema(Object node, RouteDefinition definition) {
+        if (node instanceof Map<?, ?> map) {
+            Map<String, Object> properties = new TreeMap<>();
+            map.forEach((key, value) -> properties.put(String.valueOf(key),
+                    bodySchema(value, definition)));
+            return ordered("type", "object", "properties", properties);
+        }
+        if (node instanceof List<?> list) {
+            return ordered("type", "array", "items",
+                    list.isEmpty() ? new LinkedHashMap<>() : bodySchema(list.get(0), definition));
+        }
+        if (node instanceof String expression) {
+            return leafSchema(expression, definition);
+        }
+        return new LinkedHashMap<>();
+    }
+
+    /** Infers a leaf's schema from its source expression: row sets, counts, and typed params. */
+    private static Map<String, Object> leafSchema(String expression, RouteDefinition definition) {
+        String lower = expression.toLowerCase(java.util.Locale.ROOT);
+        if (lower.equals("sql.rows") || lower.endsWith(".rows")) {
+            return ordered("type", "array", "items", Map.of("type", "object"));
+        }
+        if (lower.endsWith("rowcount") || lower.endsWith(".count")) {
+            return Map.of("type", "integer");
+        }
+        if (expression.startsWith("params.")) {
+            InputField field = definition.input().get(expression.substring("params.".length()));
+            if (field != null) {
+                return Map.of("type", schemaType(field));
+            }
+        }
+        return new LinkedHashMap<>();
     }
 
     /** The status (and for exports, download) subpaths the compiler mounts per transfer route. */
