@@ -351,8 +351,13 @@ and is being adopted (see E below).
       add-column **Type** field offers a common-types datalist. Degrades to free-text when no schema
       overlay. `DocService.tableNames`/`columnNames`; `studio.migration.columns`;
       `/_tesseraql/studio/ui/migration/columns`.
-    - *Next slices:* a create-table builder; schema-diff generation. Command `U` (undo) stays out
-      (paid Flyway feature; not modeled).
+    - **Create-table builder** — *done* (follow-on): the DDL builder gains a **Create table** form —
+      a table name, a *columns* textarea (one `name type [modifiers]` per line, emitted verbatim), and
+      an optional comma-separated *primary key* — generating `CREATE TABLE … (…[, PRIMARY KEY (…)]);`.
+      The one-definition-per-line textarea handles a variable column count in plain HTML.
+      `MigrationDdl.createTable`; a `create-table` case in `studio.migration.build`.
+    - *Next slices:* schema-diff generation. Command `U` (undo) stays out (paid Flyway feature; not
+      modeled).
 
 ## Recommended next
 

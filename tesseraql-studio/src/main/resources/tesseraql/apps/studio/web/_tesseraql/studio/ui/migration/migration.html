@@ -96,6 +96,25 @@
       </form>
       <form class="hc-stack" hx-post="/_tesseraql/studio/ui/migration/build"
             hx-target="#mig-ddl" hx-swap="innerHTML">
+        <input type="hidden" name="operation" value="create-table">
+        <h3>Create table</h3>
+        <div class="hc-cluster">
+          <div class="hc-field"><label class="hc-field__label">Table</label>
+            <input class="hc-input" name="table" required placeholder="widgets"></div>
+          <div class="hc-field"><label class="hc-field__label">Primary key (optional, comma-separated)</label>
+            <input class="hc-input" name="primaryKey" placeholder="id"></div>
+        </div>
+        <div class="hc-field">
+          <label class="hc-field__label" for="mig-cols">Columns (one definition per line)</label>
+          <textarea class="hc-input" id="mig-cols" name="columnLines" rows="5"
+                    placeholder="id bigint generated always as identity&#10;name text not null&#10;created_at timestamptz not null default now()"></textarea>
+        </div>
+        <div class="hc-cluster">
+          <button type="submit" class="hc-button" data-variant="ghost">Generate &uarr;</button>
+        </div>
+      </form>
+      <form class="hc-stack" hx-post="/_tesseraql/studio/ui/migration/build"
+            hx-target="#mig-ddl" hx-swap="innerHTML">
         <input type="hidden" name="operation" value="create-index">
         <h3>Create index</h3>
         <div class="hc-cluster">
