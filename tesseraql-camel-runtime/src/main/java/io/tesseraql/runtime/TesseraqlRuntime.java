@@ -711,10 +711,14 @@ public final class TesseraqlRuntime implements AutoCloseable {
                 // Providers backing the bundled studio app (design ch. 16, 47).
                 serviceProviders
                         .register("studio.explorer", params -> {
+                            Object query = params.get("q");
+                            String q = query == null ? "" : String.valueOf(query);
                             Map<String, Object> model = io.tesseraql.studio.StudioViews
-                                    .explorer(studio.explorer());
+                                    .explorer(studio.explorer(q));
                             // Offer the scaffold action in the explorer chrome only when B3 is on.
                             model.put("scaffoldEnabled", scaffoldEnabled);
+                            // Echo the filter query (Studio backlog C4) so the input keeps its value.
+                            model.put("query", q);
                             return model;
                         })
                         .register("studio.source", params -> {

@@ -58,7 +58,79 @@ public final class StudioViews {
         }
         model.put("jobs", jobs);
         model.put("hasJobs", !jobs.isEmpty());
+        // The directory tree the explorer renders (Studio backlog C4), built from the entries' source
+        // paths; the flat routes/jobs lists above stay for the JSON model and tests.
+        model.put("tree", tree(explorer));
+        model.put("count", explorer.routes().size() + explorer.jobs().size());
+        model.put("query", "");
         return model;
+    }
+
+    /** The route/job source paths as a nested folder tree (Studio backlog C4). */
+    private static Map<String, Object> tree(Explorer explorer) {
+        TreeNode root = new TreeNode();
+        for (RouteSummary route : explorer.routes()) {
+            root.add(route.source().split("/"), 0, routeLeaf(route));
+        }
+        for (JobSummary job : explorer.jobs()) {
+            root.add(job.source().split("/"), 0, jobLeaf(job));
+        }
+        return root.toModel("");
+    }
+
+    private static Map<String, Object> routeLeaf(RouteSummary route) {
+        Map<String, Object> leaf = new LinkedHashMap<>();
+        leaf.put("label", route.id());
+        leaf.put("badge", route.method());
+        leaf.put("recipe", route.recipe());
+        leaf.put("path", route.path());
+        leaf.put("kind", "route");
+        leaf.put("sourceUrl", sourceUrl(route.source()));
+        return leaf;
+    }
+
+    private static Map<String, Object> jobLeaf(JobSummary job) {
+        Map<String, Object> leaf = new LinkedHashMap<>();
+        leaf.put("label", job.id());
+        leaf.put("badge", "job");
+        leaf.put("recipe", job.recipe());
+        leaf.put("path", "");
+        leaf.put("kind", "job");
+        leaf.put("sourceUrl", sourceUrl(job.source()));
+        return leaf;
+    }
+
+    /**
+     * A mutable folder node used to fold the flat source paths into a tree, then projected to a
+     * template-ready map ({@code name}, {@code folders}, {@code leaves}). Folders and leaves are
+     * sorted by name so the tree is deterministic.
+     */
+    private static final class TreeNode {
+
+        private final java.util.TreeMap<String, TreeNode> folders = new java.util.TreeMap<>();
+        private final List<Map<String, Object>> leaves = new ArrayList<>();
+
+        void add(String[] parts, int index, Map<String, Object> leaf) {
+            if (index == parts.length - 1) {
+                leaf.put("name", parts[index]);
+                leaves.add(leaf);
+                return;
+            }
+            folders.computeIfAbsent(parts[index], key -> new TreeNode())
+                    .add(parts, index + 1, leaf);
+        }
+
+        Map<String, Object> toModel(String name) {
+            List<Map<String, Object>> childFolders = new ArrayList<>();
+            folders.forEach((folderName, node) -> childFolders.add(node.toModel(folderName)));
+            leaves.sort(java.util.Comparator.comparing(leaf -> (String) leaf.get("name")));
+            Map<String, Object> model = new LinkedHashMap<>();
+            model.put("name", name);
+            model.put("folders", childFolders);
+            model.put("leaves", leaves);
+            model.put("empty", childFolders.isEmpty() && leaves.isEmpty());
+            return model;
+        }
     }
 
     /**

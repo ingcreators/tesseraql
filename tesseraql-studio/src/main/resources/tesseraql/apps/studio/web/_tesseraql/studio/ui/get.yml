@@ -3,11 +3,18 @@ id: tql.studio.explorer
 kind: route
 recipe: query-html
 
+input:
+  q:
+    type: string
+    required: false
+
 security:
   auth: bearer
 
 sql:
   service: studio.explorer
+  params:
+    q: params.q
 
 response:
   html:

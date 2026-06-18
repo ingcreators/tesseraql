@@ -70,16 +70,42 @@ public final class StudioService {
 
     /** A summary of every route and job in the app, for the explorer view. */
     public Explorer explorer() {
+        return explorer(null);
+    }
+
+    /**
+     * The explorer view narrowed to routes and jobs matching {@code query} (Studio backlog C4): a
+     * case-insensitive substring over each entry's id, source path, recipe, and (for a route) its
+     * HTTP method and URL path. A blank or null query matches everything. The directory tree the view
+     * renders is built from the matching entries' source paths, so filtering prunes the tree.
+     */
+    public Explorer explorer(String query) {
         String appName = manifest.config().getString("tesseraql.app.name").orElse("app");
+        String q = query == null ? "" : query.trim().toLowerCase(java.util.Locale.ROOT);
         List<RouteSummary> routes = manifest.routes().stream()
                 .map(this::routeSummary)
+                .filter(route -> q.isEmpty() || routeMatches(route, q))
                 .sorted(java.util.Comparator.comparing(RouteSummary::id))
                 .toList();
         List<JobSummary> jobs = manifest.jobs().stream()
                 .map(this::jobSummary)
+                .filter(job -> q.isEmpty() || jobMatches(job, q))
                 .sorted(java.util.Comparator.comparing(JobSummary::id))
                 .toList();
         return new Explorer(appName, readOnly, routes, jobs);
+    }
+
+    private static boolean routeMatches(RouteSummary route, String q) {
+        return contains(route.id(), q) || contains(route.method(), q) || contains(route.path(), q)
+                || contains(route.recipe(), q) || contains(route.source(), q);
+    }
+
+    private static boolean jobMatches(JobSummary job, String q) {
+        return contains(job.id(), q) || contains(job.recipe(), q) || contains(job.source(), q);
+    }
+
+    private static boolean contains(String value, String lowerQuery) {
+        return value != null && value.toLowerCase(java.util.Locale.ROOT).contains(lowerQuery);
     }
 
     /** Reads a source file (YAML/SQL/template) by its app-relative path. */

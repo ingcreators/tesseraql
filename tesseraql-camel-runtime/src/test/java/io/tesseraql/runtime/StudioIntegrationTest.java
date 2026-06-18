@@ -124,6 +124,39 @@ class StudioIntegrationTest {
     }
 
     @Test
+    void explorerFiltersRoutesByQuery() throws Exception {
+        int all = MAPPER.readTree(get("/_tesseraql/studio/explorer", true).body())
+                .get("routes").size();
+        JsonNode filtered = MAPPER.readTree(
+                get("/_tesseraql/studio/explorer?q=" + enc("search"), true).body());
+
+        JsonNode routes = filtered.get("routes");
+        assertThat(routes.size()).isLessThan(all).isPositive();
+        assertThat(routes).allSatisfy(route -> assertThat(
+                (route.get("id").asText() + route.get("source").asText()).toLowerCase())
+                .contains("search"));
+    }
+
+    @Test
+    void uiExplorerRendersDirectoryTreeAndFilter() throws Exception {
+        HttpResponse<String> response = get("/_tesseraql/studio/ui", true);
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        // A filter box and a nested directory tree (folders as <details>, ids as leaf links).
+        assertThat(response.body()).contains("id=\"explorer-filter\"")
+                .contains("id=\"explorer-tree\"").contains("<details").contains("users.search");
+    }
+
+    @Test
+    void uiExplorerFilterNarrowsTheRenderedTree() throws Exception {
+        // The htmx filter re-renders the page server-side for q; the input echoes the query.
+        HttpResponse<String> response = get("/_tesseraql/studio/ui?q=" + enc("search"), true);
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(response.body()).contains("users.search").contains("value=\"search\"");
+    }
+
+    @Test
     void sourceReturnsFileContents() throws Exception {
         HttpResponse<String> response = get(
                 "/_tesseraql/studio/source?path=" + enc("web/api/users/search.sql"), true);

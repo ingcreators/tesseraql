@@ -33,34 +33,43 @@
   </form>
 </section>
 <section class="hc-card">
-  <h2>Routes</h2>
-  <div class="hc-empty" th:unless="${studio.hasRoutes}"><p class="hc-empty__title">No routes defined.</p></div>
-  <table class="hc-table" th:if="${studio.hasRoutes}">
-    <thead><tr><th>Id</th><th>Method</th><th>Path</th><th>Recipe</th><th>Source</th></tr></thead>
-    <tbody>
-      <tr th:each="r : ${studio.routes}">
-        <td th:text="${r.id}"></td>
-        <td th:text="${r.method}"></td>
-        <td th:text="${r.path}"></td>
-        <td th:text="${r.recipe}"></td>
-        <td><a th:href="${r.sourceUrl}" th:text="${r.source}"></a></td>
-      </tr>
-    </tbody>
-  </table>
+  <h2>Routes &amp; jobs</h2>
+  <div class="hc-field">
+    <label class="hc-field__label" for="explorer-filter">Filter</label>
+    <input class="hc-input" id="explorer-filter" type="search" name="q" th:value="${studio.query}"
+           placeholder="Filter by id, path, recipe…" autocomplete="off"
+           hx-get="/_tesseraql/studio/ui" hx-trigger="keyup changed delay:250ms, search"
+           hx-target="#explorer-tree" hx-select="#explorer-tree" hx-swap="outerHTML">
+  </div>
+  <div id="explorer-tree" class="hc-stack" th:with="root=${studio.tree}">
+    <div class="hc-empty" th:if="${root.empty}">
+      <p class="hc-empty__title" th:text="${#strings.isEmpty(studio.query)} ? 'No routes or jobs defined.' : 'No routes or jobs match.'">No matches.</p>
+    </div>
+    <th:block th:each="folder : ${root.folders}">
+      <th:block th:replace="~{:: explorerNode(${folder})}"></th:block>
+    </th:block>
+    <th:block th:each="leaf : ${root.leaves}">
+      <th:block th:replace="~{:: explorerLeaf(${leaf})}"></th:block>
+    </th:block>
+  </div>
 </section>
-<section class="hc-card">
-  <h2>Jobs</h2>
-  <div class="hc-empty" th:unless="${studio.hasJobs}"><p class="hc-empty__title">No jobs defined.</p></div>
-  <table class="hc-table" th:if="${studio.hasJobs}">
-    <thead><tr><th>Id</th><th>Recipe</th><th>Source</th></tr></thead>
-    <tbody>
-      <tr th:each="j : ${studio.jobs}">
-        <td th:text="${j.id}"></td>
-        <td th:text="${j.recipe}"></td>
-        <td><a th:href="${j.sourceUrl}" th:text="${j.source}"></a></td>
-      </tr>
-    </tbody>
-  </table>
-</section>
+</div>
+<th:block th:fragment="explorerNode(folder)">
+  <details class="hc-disclosure" open>
+    <summary th:text="${folder.name}"></summary>
+    <div class="hc-stack tql-tree__children">
+      <th:block th:each="child : ${folder.folders}">
+        <th:block th:replace="~{:: explorerNode(${child})}"></th:block>
+      </th:block>
+      <th:block th:each="leaf : ${folder.leaves}">
+        <th:block th:replace="~{:: explorerLeaf(${leaf})}"></th:block>
+      </th:block>
+    </div>
+  </details>
+</th:block>
+<div class="hc-cluster" th:fragment="explorerLeaf(leaf)">
+  <span class="hc-badge" th:attr="data-variant=${leaf.kind == 'job'} ? 'info' : 'neutral'" th:text="${leaf.badge}"></span>
+  <a th:href="${leaf.sourceUrl}" th:text="${leaf.label}"></a>
+  <span class="hc-field__message" th:text="${leaf.recipe}"></span>
 </div>
 </html>
