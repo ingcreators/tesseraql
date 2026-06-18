@@ -8,6 +8,19 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- Docs portal: opt-in signed shareable links (Studio backlog F8, slice 3, completing F8). A route's
+  documentation is bearer-only by default; when the operator configures a signing secret
+  (`tesseraql.docs.share.secret`, with an optional `tesseraql.docs.share.ttl` lifetime, default 7
+  days), an authenticated user gets a **Share** card on a route page with a signed, expiring link that
+  opens that one route's **read-only contract** — method/path/recipe, inputs, security summary,
+  validations, notifications, response shape — **without signing in**. The link carries an
+  HMAC-SHA256 signature over the route id and expiry, so it cannot be retargeted or extended; the
+  public `auth: public` share route verifies the signature (constant-time) and the expiry before
+  rendering, and shows an "invalid or has expired" notice otherwise — nothing leaks. The public view
+  deliberately omits the bound SQL, tests, and coverage (implementation internals), and the signing
+  secret is dedicated (not the JWT key) so docs sharing and request authentication rotate
+  independently. Sharing stays off until the secret is set. New runtime `ShareLinks`;
+  `DocViews.share`; the `docs.share` provider and the `/_tesseraql/docs/share/route` route.
 - Docs portal: printable route catalog (Studio backlog F8, slice 2). The Export page gains a
   **Printable route catalog** view that renders the app's routes (id, method, path, recipe, covering
   tests) to a PDF table through the **canonical PDF codec** — the same `FileCodecs.discover()` path

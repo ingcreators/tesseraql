@@ -852,6 +852,8 @@ public final class TesseraqlRuntime implements AutoCloseable {
                 // and overlay the optional run report.json (test results + coverage) and schema.json
                 // (introspected table definitions) when present.
                 io.tesseraql.studio.DocService doc = new io.tesseraql.studio.DocService(manifest);
+                // Opt-in signed share links (F8, slice 3): off unless a signing secret is set.
+                ShareLinks shareLinks = ShareLinks.from(manifest.config());
                 serviceProviders
                         .register("docs.index", params -> io.tesseraql.studio.DocViews
                                 .index(doc.appName(), doc.spec(), doc.report()))
@@ -862,8 +864,13 @@ public final class TesseraqlRuntime implements AutoCloseable {
                                 return Map.of("notFound", true, "id", id);
                             }
                             io.tesseraql.studio.ReportOverlay overlay = doc.report();
-                            return io.tesseraql.studio.DocViews.route(entry,
+                            Map<String, Object> model = io.tesseraql.studio.DocViews.route(entry,
                                     overlay == null ? null : overlay.routeReport(id));
+                            // Offer a signed, expiring share link when sharing is configured.
+                            if (shareLinks.enabled()) {
+                                model.put("shareUrl", shareLinks.mintRoute(id));
+                            }
+                            return model;
                         })
                         .register("docs.search", params -> {
                             Object query = params.get("q");
@@ -903,6 +910,28 @@ public final class TesseraqlRuntime implements AutoCloseable {
                                             : "data:application/pdf;base64,"
                                                     + java.util.Base64.getEncoder()
                                                             .encodeToString(pdf));
+                        })
+                        // Public share view (F8, slice 3): the unauthenticated route this provider
+                        // backs verifies the signed, expiring token before rendering a reduced
+                        // read-only contract (no SQL / tests / coverage). An invalid, tampered, or
+                        // expired token — or sharing disabled — renders the invalid-link notice, so
+                        // nothing leaks. The route overlay is deliberately not consulted here.
+                        .register("docs.share", params -> {
+                            String id = params.get("id") == null
+                                    ? null
+                                    : String.valueOf(params.get("id"));
+                            String exp = params.get("exp") == null
+                                    ? null
+                                    : String.valueOf(params.get("exp"));
+                            String sig = params.get("sig") == null
+                                    ? null
+                                    : String.valueOf(params.get("sig"));
+                            io.tesseraql.studio.DocService.RouteEntry entry = shareLinks
+                                    .verifyRoute(id, exp, sig) ? doc.route(id) : null;
+                            if (entry == null) {
+                                return Map.of("shared", true, "shareInvalid", true);
+                            }
+                            return io.tesseraql.studio.DocViews.share(entry);
                         });
             }
             // Retention (design ch. 44): enabled by configuring the sweep interval. When

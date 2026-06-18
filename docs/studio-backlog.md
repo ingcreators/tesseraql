@@ -241,8 +241,16 @@ and is being adopted (see E below).
      absent. `DocService.routeCatalog`; `DocViews.routesPdf`; `docs.routesPdf` provider; the
      `/ui/docs/export/pdf` route. (Rich per-page PDF — arbitrary doc-page HTML→PDF — would need
      exposing the raw PDF engine past the row-oriented codec; a later extension.)
-   - **Per-route shareable links** — *open* (slice 3): docs are in-app/bearer-only today; a shareable
-     link needs a scoped, expiring token path.
+   - **Per-route shareable links** — *done* (slice 3, completing F8): docs are bearer-only by
+     default; when the operator sets a signing secret (`tesseraql.docs.share.secret`, optional
+     `tesseraql.docs.share.ttl`, default 7d), a route page offers a **Share** card with a signed,
+     expiring link that opens that one route's **read-only contract** (method/path/recipe, inputs,
+     security summary, validations, notifications, response) **without signing in**. The token is an
+     HMAC-SHA256 over the route id + expiry (can't be retargeted or extended); the public
+     `auth: public` share route verifies it (constant-time) and the expiry, else shows an
+     invalid/expired notice. The public view omits SQL/tests/coverage; the secret is dedicated (not
+     the JWT key). Off until the secret is set. Runtime `ShareLinks`; `DocViews.share`; `docs.share`
+     provider; `/_tesseraql/docs/share/route` route.
 9. **Coverage trend depth** — relax the "last 20 runs" cap for longer-term trends.
 
 ### G. Studio copilot — **gated (roadmap decision point 4)**

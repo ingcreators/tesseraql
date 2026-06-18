@@ -317,6 +317,21 @@ class DocViewsTest {
     }
 
     @Test
+    void shareModelExposesTheContractButNotTheImplementation() {
+        Map<String, Object> model = DocViews.share(searchRoute());
+
+        // The public shared view marks itself shared/valid and carries the route contract...
+        assertThat(model).containsEntry("shared", true).containsEntry("shareInvalid", false)
+                .containsEntry("id", "users.search").containsEntry("method", "GET")
+                .containsEntry("path", "/api/users").containsEntry("hasInputs", true);
+        assertThat(asMap(model.get("security"))).containsEntry("auth", "bearer");
+        // ...but never the bound SQL or the test cross-references (implementation internals).
+        assertThat(model).doesNotContainKey("sql").doesNotContainKey("hasSql")
+                .doesNotContainKey("tests").doesNotContainKey("hasTests")
+                .doesNotContainKey("hasReport");
+    }
+
+    @Test
     void routesPdfModelCarriesTheDataUrlWhenAvailableAndDegradesOtherwise() {
         Map<String, Object> available = DocViews.routesPdf("demo",
                 "data:application/pdf;base64,AAAA");

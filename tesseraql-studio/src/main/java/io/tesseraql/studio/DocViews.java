@@ -95,6 +95,35 @@ public final class DocViews {
         return model;
     }
 
+    /**
+     * The public shared-link view model (documentation portal F8, slice 3): a deliberately reduced,
+     * read-only projection of a route's <em>contract</em> — its surface (method/path/recipe),
+     * inputs, security summary, validations, notifications, and response shape. It omits the bound
+     * SQL, the test cross-references, and any run/coverage overlay, so an unauthenticated viewer of
+     * a signed link sees the interface but not the implementation internals. {@code shared} marks the
+     * page as the public view (no portal chrome).
+     */
+    public static Map<String, Object> share(RouteEntry entry) {
+        RouteSpec route = entry.route();
+        Map<String, Object> model = new LinkedHashMap<>();
+        model.put("shared", true);
+        model.put("shareInvalid", false);
+        model.put("id", route.id());
+        model.put("method", route.method());
+        model.put("path", route.path());
+        model.put("recipe", route.recipe());
+        model.put("kind", route.kind());
+        model.put("security", security(route.security()));
+        model.put("inputs", inputs(route.inputs()));
+        model.put("hasInputs", !route.inputs().isEmpty());
+        model.put("validations", validations(route.validations()));
+        model.put("hasValidations", !route.validations().isEmpty());
+        model.put("notifications", notifications(route.notifications()));
+        model.put("hasNotifications", !route.notifications().isEmpty());
+        model.put("response", response(route.response()));
+        return model;
+    }
+
     /** Number of uncovered item ids listed per kind before collapsing to a "+N more" hint. */
     private static final int UNCOVERED_LIMIT = 10;
 
