@@ -342,4 +342,18 @@ class DocServiceTest {
                 .readTree(service.htmxContractJson());
         assertThat(doc.isObject()).isTrue();
     }
+
+    @Test
+    void routeCatalogProjectsOneFlatRowPerRouteForThePrintableExport() {
+        DocService service = new DocService(exampleManifest());
+
+        List<java.util.Map<String, Object>> rows = service.routeCatalog();
+        assertThat(rows).isNotEmpty();
+        // Each row is a flat projection keyed for the PDF columns; the search route is present.
+        assertThat(rows).anySatisfy(row -> {
+            assertThat(row).containsEntry("id", "users.search").containsEntry("method", "GET")
+                    .containsEntry("path", "/api/users").containsEntry("recipe", "query-json");
+            assertThat(row).containsKey("tests");
+        });
+    }
 }

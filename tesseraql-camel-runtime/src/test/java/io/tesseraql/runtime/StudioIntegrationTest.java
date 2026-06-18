@@ -607,6 +607,34 @@ class StudioIntegrationTest {
     }
 
     @Test
+    void uiDocsExportPageLinksToThePrintableCatalog() throws Exception {
+        HttpResponse<String> response = get("/_tesseraql/studio/ui/docs/export", true);
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(response.body()).contains("Printable route catalog")
+                .contains("/_tesseraql/studio/ui/docs/export/pdf");
+    }
+
+    @Test
+    void uiDocsExportPdfRendersTheRouteCatalogAsADownloadablePdf() throws Exception {
+        HttpResponse<String> response = get("/_tesseraql/studio/ui/docs/export/pdf", true);
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        // tesseraql-pdf is on the test classpath, so the catalog renders to a real PDF data URL
+        // shown in a preview frame with a download link, and the CSP allows the data: frame.
+        assertThat(response.headers().firstValue("content-security-policy").orElse(""))
+                .contains("frame-src 'self' data:");
+        assertThat(response.body()).contains("Printable route catalog")
+                .contains("src=\"data:application/pdf;base64,")
+                .contains("download=\"routes.pdf\"");
+    }
+
+    @Test
+    void uiDocsExportPdfRequiresAuthentication() throws Exception {
+        assertThat(get("/_tesseraql/studio/ui/docs/export/pdf", false).statusCode()).isEqualTo(401);
+    }
+
+    @Test
     void uiSaveAndApplyDraftViaForm() throws Exception {
         String path = "web/api/formtest/get.yml";
         String content = """

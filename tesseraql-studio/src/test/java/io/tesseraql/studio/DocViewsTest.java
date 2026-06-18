@@ -316,6 +316,18 @@ class DocViewsTest {
                         .containsEntry("url", "/_tesseraql/studio/ui/docs/export/htmx"));
     }
 
+    @Test
+    void routesPdfModelCarriesTheDataUrlWhenAvailableAndDegradesOtherwise() {
+        Map<String, Object> available = DocViews.routesPdf("demo",
+                "data:application/pdf;base64,AAAA");
+        assertThat(available).containsEntry("appName", "demo").containsEntry("hasPdf", true)
+                .containsEntry("pdfUrl", "data:application/pdf;base64,AAAA");
+
+        // No codec on the classpath: no URL, the page degrades to a note.
+        Map<String, Object> absent = DocViews.routesPdf("demo", null);
+        assertThat(absent).containsEntry("hasPdf", false).doesNotContainKey("pdfUrl");
+    }
+
     @SuppressWarnings("unchecked")
     private static List<Map<String, Object>> asRows(Object value) {
         return (List<Map<String, Object>>) value;
