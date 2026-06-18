@@ -87,6 +87,41 @@ class McpDevToolsAcceptanceTest {
         tools.forEach(tool -> names.add(tool.get("name").asText()));
         assertThat(names).contains("manifest_summary", "lint")
                 .doesNotContain("scaffold_crud", "draft_save", "draft_apply");
+        // The copilot prompt drives the write loop, so it is hidden in read-only mode too.
+        assertThat(request(server, "initialize", mapper.createObjectNode())
+                .get("result").get("capabilities").has("prompts")).isFalse();
+        assertThat(request(server, "prompts/list", null).get("result").get("prompts")).isEmpty();
+    }
+
+    @Test
+    void studioCopilotPromptGuidesTheDescribeToApplyLoop(@TempDir Path dir) throws Exception {
+        Path app = dir.resolve("copilot");
+        AppScaffolder scaffolder = new AppScaffolder();
+        scaffolder.writeNew(app, scaffolder.scaffold("copilot"));
+        McpServer server = new McpDevTools(app, false).toServer();
+
+        // The prompt is advertised (Studio backlog G: the describe -> draft -> preview -> apply loop).
+        JsonNode prompts = request(server, "prompts/list", null).get("result").get("prompts");
+        java.util.List<String> names = new java.util.ArrayList<>();
+        prompts.forEach(prompt -> names.add(prompt.get("name").asText()));
+        assertThat(names).contains("studio_copilot");
+
+        // Getting it renders guidance that names the loop's tools and folds in the request.
+        ObjectNode params = mapper.createObjectNode();
+        params.put("name", "studio_copilot");
+        ObjectNode arguments = params.putObject("arguments");
+        arguments.put("task", "a JSON endpoint that lists active users");
+        arguments.put("table", "users");
+        JsonNode result = request(server, "prompts/get", params).get("result");
+        String text = result.get("messages").get(0).get("content").get("text").asText();
+        assertThat(text).contains("a JSON endpoint that lists active users").contains("users")
+                .contains("scaffold_crud").contains("draft_preview").contains("draft_apply");
+
+        // A missing required argument is rejected, not rendered.
+        ObjectNode bad = mapper.createObjectNode();
+        bad.put("name", "studio_copilot");
+        bad.set("arguments", mapper.createObjectNode());
+        assertThat(request(server, "prompts/get", bad).has("error")).isTrue();
     }
 
     private void migrate(Path app, String jdbcUrl) throws Exception {

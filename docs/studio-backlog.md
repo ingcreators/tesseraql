@@ -257,11 +257,18 @@ and is being adopted (see E below).
    panel shows its depth (run count + retained date span) instead of the hard-coded "last 20 runs"
    note. `ReportHistory.append` treats a non-positive cap as unbounded; `DocViews.trend` adds the span.
 
-### G. Studio copilot — **gated (roadmap decision point 4)**
+### G. Studio copilot
 
-10. An MCP-driven "describe → draft → preview → apply" assist. Decision point 4 gates
-    deeper Studio-copilot features on the MCP loop proving its worth; the Phase 24 MCP
-    write tools (draft/apply through Studio) already exist.
+10. An MCP-driven "describe → draft → preview → apply" assist — *done* (first slice): the protocol
+    core gains **MCP prompts** (the third primitive: `prompts/list` / `prompts/get`, `McpPrompt` /
+    `McpPromptResult`), and the dev-tool MCP server offers a `studio_copilot` prompt (write mode
+    only) that turns a plain-language `task` (+ optional `table`) into guidance steering the
+    connecting agent's model through the existing tools (orient → draft → preview → lint/test →
+    apply). The "describe" entry point needs **no in-app model**: TesseraQL ships the workflow, the
+    agent's own model reasons, and every step stays a separately-gated tool call — the
+    architecturally-correct reading of decision point 4 (the MCP loop, not an embedded LLM, is the AI
+    surface). Phase 24's draft/preview/apply tools already existed; this completes the loop. Deeper,
+    in-product copilot UX (e.g. a Studio-embedded chat) would still be a separate, larger bet.
 
 ## Recommended next
 
@@ -272,6 +279,8 @@ detection + overview; the audit trail + per-role edit permission; and editor liv
 (built-in grammars + a `tql-sql` 2-way grammar, hc 0.1.5 / #264). **F8 (docs export/share) is done** —
 API-spec export (OpenAPI + htmx contract), a printable route-catalog PDF, and opt-in signed shareable
 links. **F9 (coverage-trend depth) is done** — the run-history ring can keep the full history and the
-trend shows its run-count and date span. The only remaining backlog item is **G (Studio copilot)**,
-which stays **gated** on roadmap decision point 4 (the MCP loop proving its worth). With nothing
-ungated left, new Studio DX ideas should be filed here as they arise.
+trend shows its run-count and date span. **G (Studio copilot) — first slice done**: MCP prompts plus
+the `studio_copilot` describe→draft→preview→apply prompt, the architecturally-correct reading of
+decision point 4 (the MCP loop, not an in-app LLM, is the AI surface). Every A–G backlog item now has
+shipped at least its core slice. Anything further is net-new: file new Studio DX ideas here as they
+arise (e.g. a Studio-embedded copilot UX, multi-binding live render, confirm-diff-before-every-apply).

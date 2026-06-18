@@ -19,14 +19,14 @@ import java.util.Set;
  * instance can be shared across stdio and across concurrent HTTP sessions.
  *
  * <p>Supported methods: {@code initialize}, {@code ping}, {@code tools/list}, {@code tools/call},
- * {@code resources/list}, {@code resources/read}, {@code resources/templates/list}, and the
- * {@code notifications/initialized} notification. Tool failures become {@code isError} results (the
- * MCP contract), not protocol errors, so an agent can read the message and retry; a resource read
- * failure is a JSON-RPC error (the MCP contract for {@code resources/read}), which likewise leaves
- * the connection up.
+ * {@code resources/list}, {@code resources/read}, {@code resources/templates/list},
+ * {@code prompts/list}, {@code prompts/get}, and the {@code notifications/initialized} notification.
+ * Tool failures become {@code isError} results (the MCP contract), not protocol errors, so an agent
+ * can read the message and retry; a resource read failure is a JSON-RPC error (the MCP contract for
+ * {@code resources/read}), which likewise leaves the connection up.
  *
- * <p>Prompts are not implemented yet; unknown methods return JSON-RPC {@code method not found}. The
- * dispatch is a method-keyed switch, so that surface slots in without reshaping this class.
+ * <p>Each of tools, resources, and prompts is advertised in {@code initialize} only when the server
+ * actually registers some. Unknown methods return JSON-RPC {@code method not found}.
  */
 public final class McpServer {
 
@@ -48,6 +48,7 @@ public final class McpServer {
     private final String instructions;
     private final Map<String, McpTool> tools;
     private final Map<String, McpResource> resources;
+    private final Map<String, McpPrompt> prompts;
     private final Map<String, JsonNode> extensions;
 
     private McpServer(Builder builder) {
@@ -58,6 +59,7 @@ public final class McpServer {
         // randomizes iteration order).
         this.tools = Collections.unmodifiableMap(new LinkedHashMap<>(builder.tools));
         this.resources = Collections.unmodifiableMap(new LinkedHashMap<>(builder.resources));
+        this.prompts = Collections.unmodifiableMap(new LinkedHashMap<>(builder.prompts));
         this.extensions = Collections.unmodifiableMap(new LinkedHashMap<>(builder.extensions));
     }
 
@@ -111,6 +113,10 @@ public final class McpServer {
                         .set("resourceTemplates", mapper.createArrayNode())));
             case "resources/read" :
                 return Optional.of(resourcesRead(id, params, context));
+            case "prompts/list" :
+                return Optional.of(result(id, promptsList()));
+            case "prompts/get" :
+                return Optional.of(promptsGet(id, params));
             default :
                 return Optional.of(error(id, METHOD_NOT_FOUND, "Unknown method: " + method));
         }
@@ -130,6 +136,10 @@ public final class McpServer {
         // (the dev tool) does not claim a surface it has nothing to offer on.
         if (!resources.isEmpty()) {
             capabilities.putObject("resources").put("subscribe", false).put("listChanged", false);
+        }
+        // Likewise advertise prompts only when the server offers some.
+        if (!prompts.isEmpty()) {
+            capabilities.putObject("prompts").put("listChanged", false);
         }
         // Negotiated extensions (SEP-1724), keyed by their reserved identifier - for example the
         // MCP Apps UI extension "io.modelcontextprotocol/ui" when the app serves ui:// resources.
@@ -264,6 +274,79 @@ public final class McpServer {
         return result(id, result);
     }
 
+    private ObjectNode promptsList() {
+        ObjectNode result = mapper.createObjectNode();
+        ArrayNode array = result.putArray("prompts");
+        for (McpPrompt prompt : prompts.values()) {
+            ObjectNode node = array.addObject();
+            node.put("name", prompt.name());
+            if (prompt.title() != null) {
+                node.put("title", prompt.title());
+            }
+            if (prompt.description() != null) {
+                node.put("description", prompt.description());
+            }
+            ArrayNode args = node.putArray("arguments");
+            for (McpPrompt.Argument argument : prompt.arguments()) {
+                ObjectNode arg = args.addObject();
+                arg.put("name", argument.name());
+                if (argument.description() != null) {
+                    arg.put("description", argument.description());
+                }
+                arg.put("required", argument.required());
+            }
+        }
+        return result;
+    }
+
+    private JsonNode promptsGet(JsonNode id, JsonNode params) {
+        if (params == null || !params.hasNonNull("name")) {
+            return error(id, INVALID_PARAMS, "prompts/get requires a prompt name");
+        }
+        String promptName = params.get("name").asText();
+        McpPrompt prompt = prompts.get(promptName);
+        if (prompt == null) {
+            return error(id, INVALID_PARAMS, "Unknown prompt: " + promptName);
+        }
+        Map<String, String> arguments = new LinkedHashMap<>();
+        JsonNode supplied = params.get("arguments");
+        if (supplied != null && supplied.isObject()) {
+            for (Map.Entry<String, JsonNode> entry : supplied.properties()) {
+                if (entry.getValue() != null && !entry.getValue().isNull()) {
+                    arguments.put(entry.getKey(), entry.getValue().asText());
+                }
+            }
+        }
+        for (McpPrompt.Argument argument : prompt.arguments()) {
+            if (argument.required() && !arguments.containsKey(argument.name())) {
+                return error(id, INVALID_PARAMS,
+                        "prompts/get is missing required argument: " + argument.name());
+            }
+        }
+        McpPromptResult outcome;
+        try {
+            outcome = prompt.handler().handle(arguments);
+        } catch (TqlException ex) {
+            return error(id, INTERNAL_ERROR, ex.code() + ": " + ex.getMessage());
+        } catch (Exception ex) {
+            return error(id, INTERNAL_ERROR,
+                    ex.getMessage() != null ? ex.getMessage() : ex.toString());
+        }
+        ObjectNode result = mapper.createObjectNode();
+        if (outcome.description() != null) {
+            result.put("description", outcome.description());
+        }
+        ArrayNode messages = result.putArray("messages");
+        for (McpPromptResult.Message message : outcome.messages()) {
+            ObjectNode node = messages.addObject();
+            node.put("role", message.role());
+            ObjectNode content = node.putObject("content");
+            content.put("type", "text");
+            content.put("text", message.text() == null ? "" : message.text());
+        }
+        return result(id, result);
+    }
+
     private String pretty(JsonNode node) {
         try {
             return mapper.writerWithDefaultPrettyPrinter().writeValueAsString(node);
@@ -301,6 +384,7 @@ public final class McpServer {
         private String instructions;
         private final Map<String, McpTool> tools = new LinkedHashMap<>();
         private final Map<String, McpResource> resources = new LinkedHashMap<>();
+        private final Map<String, McpPrompt> prompts = new LinkedHashMap<>();
         private final Map<String, JsonNode> extensions = new LinkedHashMap<>();
 
         private Builder(String name, String version) {
@@ -347,6 +431,19 @@ public final class McpServer {
         public Builder resources(List<McpResource> resources) {
             List<McpResource> ordered = new ArrayList<>(resources);
             ordered.forEach(this::resource);
+            return this;
+        }
+
+        public Builder prompt(McpPrompt prompt) {
+            if (prompts.putIfAbsent(prompt.name(), prompt) != null) {
+                throw new IllegalArgumentException("Duplicate prompt name: " + prompt.name());
+            }
+            return this;
+        }
+
+        public Builder prompts(List<McpPrompt> prompts) {
+            List<McpPrompt> ordered = new ArrayList<>(prompts);
+            ordered.forEach(this::prompt);
             return this;
         }
 

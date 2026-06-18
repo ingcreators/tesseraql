@@ -8,6 +8,18 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- Studio copilot: the MCP "describe → draft → preview → apply" loop (Studio backlog G). The
+  protocol core (`tesseraql-mcp`) gains the third MCP primitive — **prompts** (`prompts/list` /
+  `prompts/get`, advertised in `initialize` only when registered) via a new `McpPrompt` /
+  `McpPromptResult` model — and the dev-tool MCP server (`tesseraql mcp`) offers a `studio_copilot`
+  prompt (write mode only) that turns a plain-language `task` (and optional `table`) into guidance
+  steering the connecting agent's model through the existing tools: orient (`manifest_summary` /
+  `source_read`), draft (`scaffold_crud` / `draft_save`), verify (`draft_preview` / `lint` /
+  `test`), then `draft_apply`. This is "describe" without an embedded model — TesseraQL ships the
+  workflow, the agent's own model does the reasoning, and each step stays a separately-gated tool
+  call, so the copilot adds no LLM dependency, API key, or new privilege (honoring the roadmap's
+  decision point 4: the MCP loop, not an in-app model, is the AI surface).
+
 - Docs portal: longer-term coverage trends (Studio backlog F9). The run-history ring that feeds the
   coverage dashboard's trend sparklines is no longer fixed at 20 runs — a non-positive
   `tesseraql.historyLimit` (Maven `report` goal) / `--history-limit` (`tesseraql test --report`) now
