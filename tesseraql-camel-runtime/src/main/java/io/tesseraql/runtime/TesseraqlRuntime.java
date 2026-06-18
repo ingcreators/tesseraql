@@ -724,8 +724,14 @@ public final class TesseraqlRuntime implements AutoCloseable {
                 io.tesseraql.studio.StudioService.FieldMask studioMask = (fields, body,
                         ctx) -> new io.tesseraql.compiler.binding.FieldPolicyApplier(fields,
                                 studioPolicyEngine, samplePrincipal(ctx)).apply(body);
+                // PDF preview for query-export pdf routes (Studio backlog A1 follow-up): the runtime
+                // renders through the canonical PDF codec when the optional tesseraql-pdf module is on
+                // the classpath, returning null (a graceful "module absent" message) otherwise — so
+                // Studio stays free of the heavy openhtmltopdf/pdfbox stack.
+                io.tesseraql.studio.StudioService.PdfRender studioPdf = (export, routeDir,
+                        rows) -> renderExportPdf(export, routeDir, appHome, rows);
                 context.addRoutes(new StudioRouteBuilder(studio, reloader, studioTests,
-                        studioScaffold, studioAccess, studioMask));
+                        studioScaffold, studioAccess, studioMask, studioPdf));
                 // Providers backing the bundled studio app (design ch. 16, 47).
                 serviceProviders
                         .register("studio.explorer", params -> {
@@ -812,7 +818,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
                             return io.tesseraql.studio.StudioViews.render(studio.render(path,
                                     content == null ? null : String.valueOf(content),
                                     sample == null ? null : String.valueOf(sample), rows,
-                                    studioMask));
+                                    studioMask, studioPdf));
                         })
                         .register("studio.runTests",
                                 params -> studioTests
@@ -1086,6 +1092,32 @@ public final class TesseraqlRuntime implements AutoCloseable {
         return new io.tesseraql.security.Principal(str.apply("subject"), str.apply("loginId"),
                 str.apply("displayName"), str.apply("tenantId"), list.apply("groups"),
                 list.apply("roles"), list.apply("permissions"), claims);
+    }
+
+    /**
+     * Renders a {@code query-export} {@code format: pdf} route's PDF for the Studio preview (backlog
+     * A1 follow-up) through the canonical PDF codec, or {@code null} when no {@code pdf} codec is on
+     * the classpath (the optional {@code tesseraql-pdf} module is absent).
+     */
+    private static byte[] renderExportPdf(io.tesseraql.yaml.model.ExportSpec export,
+            Path routeDir, Path appHome, List<Map<String, Object>> rows) {
+        io.tesseraql.core.files.FileCodec codec;
+        try {
+            codec = io.tesseraql.core.files.FileCodecs.discover().require("pdf");
+        } catch (io.tesseraql.core.error.TqlException ex) {
+            return null;
+        }
+        Path template = export.template() == null || export.template().isBlank()
+                ? null
+                : routeDir.resolve(export.template());
+        io.tesseraql.core.files.FileWriteSpec spec = export.toWriteSpec(template, appHome);
+        java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+        try {
+            codec.write(out, spec, rows.iterator());
+        } catch (Exception ex) {
+            throw new IllegalStateException("PDF render failed: " + ex.getMessage(), ex);
+        }
+        return out.toByteArray();
     }
 
     /** The configured dialect for the main datasource, or inferred from its JDBC URL (design ch. 42). */

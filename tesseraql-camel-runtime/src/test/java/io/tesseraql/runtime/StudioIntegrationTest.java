@@ -690,6 +690,22 @@ class StudioIntegrationTest {
     }
 
     @Test
+    void renderEndpointRendersExportRouteToPdf() throws Exception {
+        // The print route (query-export, format: pdf) renders a real PDF preview through the
+        // canonical codec — tesseraql-pdf is on the test classpath (Studio backlog A1 follow-up).
+        String body = MAPPER.writeValueAsString(Map.of("sampleModel",
+                "sql:\n  rows:\n    - name: Sato\n      status: ACTIVE\n"));
+        HttpResponse<String> response = post(
+                "/_tesseraql/studio/render?path=" + enc("web/api/users/print/get.yml"), body, true);
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        JsonNode render = MAPPER.readTree(response.body());
+        assertThat(render.get("ok").asBoolean()).isTrue();
+        assertThat(render.get("kind").asText()).isEqualTo("pdf");
+        assertThat(render.get("output").asText()).startsWith("data:application/pdf;base64,");
+    }
+
+    @Test
     void uiSourceRouteOffersRenderedPreviewPanel() throws Exception {
         HttpResponse<String> response = get("/_tesseraql/studio/ui/source?path="
                 + enc("web/users/fragments/table/get.yml"), true);

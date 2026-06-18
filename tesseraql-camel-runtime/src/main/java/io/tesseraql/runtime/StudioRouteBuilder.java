@@ -30,16 +30,19 @@ final class StudioRouteBuilder extends RouteBuilder {
     private final StudioScaffoldService studioScaffold;
     private final StudioAccess studioAccess;
     private final StudioService.FieldMask studioMask;
+    private final StudioService.PdfRender studioPdf;
 
     StudioRouteBuilder(StudioService studio, RouteReloader reloader,
             StudioTestService studioTests, StudioScaffoldService studioScaffold,
-            StudioAccess studioAccess, StudioService.FieldMask studioMask) {
+            StudioAccess studioAccess, StudioService.FieldMask studioMask,
+            StudioService.PdfRender studioPdf) {
         this.studio = studio;
         this.reloader = reloader;
         this.studioTests = studioTests;
         this.studioScaffold = studioScaffold;
         this.studioAccess = studioAccess;
         this.studioMask = studioMask;
+        this.studioPdf = studioPdf;
     }
 
     @Override
@@ -102,7 +105,7 @@ final class StudioRouteBuilder extends RouteBuilder {
                     boolean live = "true".equals(text(body, "live")) && studioTests.isEnabled();
                     StudioService.RowSource rows = live ? studioTests::liveRows : null;
                     return studio.render(path, text(body, "content"), text(body, "sampleModel"),
-                            rows, studioMask);
+                            rows, studioMask, studioPdf);
                 }));
 
         // Runs the route's read-only sql test cases against the dev datasource (backlog A2);

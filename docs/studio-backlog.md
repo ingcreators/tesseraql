@@ -115,13 +115,20 @@ gutter, diff), editable `hc-code`, `hc-sparkline`, and read-only syntax highligh
    `response.json.body`) render against a fixture and show HTML/text/JSON output plus a sandboxed
    visual `iframe` for HTML — the "Studio as the center of the edit loop" gate (decision point 4) is
    met. Optional follow-ups, not blockers (pick up opportunistically):
-   - **PDF preview** — needs a `tesseraql-pdf` dependency and a binary-friendly surface (a `data:`
-     URL / download); the HTML stage that feeds the PDF already previews.
+   - **PDF preview** — *done*: a `query-export` `format: pdf` route renders an actual PDF in the
+     preview panel — its print template is converted to PDF from the sample's `sql.rows` and shown in
+     an `<iframe>` (`data:` URL) with a download link. Reuses the canonical PDF codec; Studio stays
+     free of the heavy optional `tesseraql-pdf` stack via a `StudioService.PdfRender` callback the
+     runtime fills (degrades to a clear message when the module is absent). Source/render CSP gains
+     `data:` in `frame-src`.
    - **Output-field masking** — *done*: the JSON preview applies a `query-json` route's
      `response.json.fields` masking (hide/redact per policy/classification/mask), reusing the canonical
      `FieldPolicyApplier` evaluated for the sample principal the developer puts under `principal` in the
      render sample. Studio stays free of the security/compiler stack — the runtime supplies the mask via
      a `StudioService.FieldMask` callback (the A1 live-rows `RowSource` pattern).
+
+   With output-field masking and PDF preview both shipped, A1 is fully complete (template files, web
+   routes, live data, JSON field-masking, and PDF export preview).
 
    The "render against **real** bound params" end — executing the route's SQL through the A2
    sandbox to populate live rows instead of a hand-authored `sql.rows` fixture — is **done** (the
@@ -231,9 +238,9 @@ its CRUD slice, and create the files (edit detection + force), or create a singl
 with a restart notice for new routes. **C4 (explorer tree + filter) is done** — the explorer is a
 filterable directory tree. **D5 (draft robustness) is done**: concurrent-edit
 conflict detection and the draft overview shipped. **D6 (granular read-only + audit) is done**: the
-audit trail and per-role edit permission both shipped. **A1's JSON output-field masking follow-up is
-done** (the preview applies `response.json.fields`). With A1 (incl. masking), A2, B3, C4, D5, and D6
-complete, the remaining backlog is A1's optional **PDF preview**, the docs-portal **F8/F9** items
-(OpenAPI/printable export, coverage-trend depth), E (editor live highlighting, blocked on hc #264),
-and G (Studio copilot, gated). Recommended next: **F8 docs export** or **A1 PDF preview**. E waits on
-hc #264; G is gated.
+audit trail and per-role edit permission both shipped. **A1 is now fully complete** — both follow-ups
+(JSON output-field masking and PDF export preview) shipped. With A1, A2, B3, C4, D5, and D6 all done,
+the remaining backlog is the docs-portal **F8/F9** items (OpenAPI/printable export, coverage-trend
+depth), E (editor live highlighting, blocked on hc #264), and G (Studio copilot, gated). Recommended
+next: **F8 docs export** (OpenAPI/JSON export, printable docs reusing the PDF codec, per-route
+shareable links). E waits on hc #264; G is gated.

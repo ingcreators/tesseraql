@@ -256,11 +256,18 @@ public final class StudioViews {
         model.put("kind", result.kind());
         model.put("error", result.error());
         boolean isHtml = "html".equals(result.kind());
+        boolean isPdf = "pdf".equals(result.kind());
         model.put("isHtml", isHtml);
+        model.put("isPdf", isPdf);
         String output = result.output() == null ? "" : result.output();
         model.put("output", output);
-        model.put("outputHtml",
-                Highlighter.highlight(isHtml ? "output.html" : "output.txt", output));
+        // A PDF render's output is a data: URL shown in an iframe, not highlighted text.
+        if (result.ok() && isPdf) {
+            model.put("pdfUrl", output);
+        } else {
+            model.put("outputHtml",
+                    Highlighter.highlight(isHtml ? "output.html" : "output.txt", output));
+        }
         if (result.ok() && isHtml) {
             model.put("previewDoc", previewDoc(output));
         }
