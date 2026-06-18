@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{tql/shell :: page(|TesseraQL Docs · Export · ${docs.appName}|, ~{:: #page-header}, ~{:: #page-content})}">
+<th:block id="page-header">
+  <span class="hc-spacer"></span>
+  <div class="hc-cluster">
+    <a class="hc-button" data-variant="ghost" data-size="sm" href="/_tesseraql/studio/ui/docs/">&larr; docs</a>
+  </div>
+</th:block>
+<div id="page-content" class="hc-stack">
+<section class="hc-card">
+  <h2>Export API specs</h2>
+  <p class="hc-field__label">Generated live from the route manifest &mdash; byte-identical to the
+    <code>generate</code> build artifacts. The download endpoints are bearer-gated, so the URLs can
+    be shared with API tooling that carries the same token.</p>
+  <table class="hc-table">
+    <thead><tr><th>Artifact</th><th>File</th><th>Description</th><th></th></tr></thead>
+    <tbody>
+      <tr th:each="a : ${docs.artifacts}">
+        <td th:text="${a.label}"></td>
+        <td><code th:text="${a.filename}"></code></td>
+        <td th:text="${a.description}"></td>
+        <td>
+          <a class="hc-button" data-variant="primary" data-size="sm"
+             th:href="${a.url}" th:attr="download=${a.filename}" th:text="|Download|"></a>
+        </td>
+      </tr>
+    </tbody>
+  </table>
+</section>
+</div>
+</html>

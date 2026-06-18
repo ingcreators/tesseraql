@@ -8,6 +8,14 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- Docs portal: export the API specs (Studio backlog F8, slice 1). The documentation portal gains an
+  **Export** page (linked from the docs chrome) that serves the app's **OpenAPI 3** document and its
+  **htmx interaction contract** as downloadable JSON, generated live from the route manifest by the
+  same canonical generators the `generate` build goal uses — so the portal downloads are byte-identical
+  to the build's `openapi.json` / `htmx-contract.json` artifacts (no reimplementation). The download
+  endpoints (`/_tesseraql/studio/ui/docs/export/openapi`, `/.../export/htmx`) stream the spec with a
+  `Content-Disposition` attachment via the standard `response.file` recipe and stay bearer-gated like
+  the rest of the portal, so the URLs can be shared with API tooling that carries the same token.
 - Studio editor: richer syntax tokens and a 2-way SQL live grammar (Studio backlog E, completing it;
   hc 0.1.5 / #264). The server-side read-only highlighters now emit hc 0.1.5's new semantic tokens —
   YAML mapping keys as `property`, HTML element names as `tag`, plain attributes as `attribute`

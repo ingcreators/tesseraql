@@ -1,0 +1,18 @@
+version: tesseraql/v1
+id: tql.studio.docs.export.openapi
+kind: route
+recipe: query-html
+
+security:
+  auth: bearer
+
+sql:
+  service: docs.openapi
+
+response:
+  file:
+    template: openapi.json.tpl
+    contentType: "application/json; charset=utf-8"
+    filename: openapi.json
+    model:
+      openapi: sql

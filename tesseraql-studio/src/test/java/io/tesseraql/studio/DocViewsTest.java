@@ -300,6 +300,22 @@ class DocViewsTest {
                 .satisfies(index -> assertThat(index).containsEntry("columns", "email"));
     }
 
+    @Test
+    void exportModelListsTheDownloadableSpecArtifacts() {
+        Map<String, Object> model = DocViews.export("demo");
+
+        assertThat(model).containsEntry("appName", "demo");
+        assertThat(asRows(model.get("artifacts"))).hasSize(2);
+        assertThat(asRows(model.get("artifacts"))).anySatisfy(row -> {
+            assertThat(row).containsEntry("filename", "openapi.json")
+                    .containsEntry("url", "/_tesseraql/studio/ui/docs/export/openapi");
+            assertThat((String) row.get("description")).isNotBlank();
+        });
+        assertThat(asRows(model.get("artifacts")))
+                .anySatisfy(row -> assertThat(row).containsEntry("filename", "htmx-contract.json")
+                        .containsEntry("url", "/_tesseraql/studio/ui/docs/export/htmx"));
+    }
+
     @SuppressWarnings("unchecked")
     private static List<Map<String, Object>> asRows(Object value) {
         return (List<Map<String, Object>>) value;

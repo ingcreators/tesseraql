@@ -883,7 +883,15 @@ public final class TesseraqlRuntime implements AutoCloseable {
                                 return Map.of("notFound", true, "name", name, "datasource", ds);
                             }
                             return io.tesseraql.studio.DocViews.table(ds, table);
-                        });
+                        })
+                        // Export/share (documentation portal F8): the OpenAPI document and the htmx
+                        // contract, generated live from the manifest by the canonical generators and
+                        // streamed as downloadable JSON (the download routes' response.file emits the
+                        // provider's raw JSON string verbatim).
+                        .register("docs.export", params -> io.tesseraql.studio.DocViews
+                                .export(doc.appName()))
+                        .register("docs.openapi", params -> doc.openApiJson())
+                        .register("docs.htmx", params -> doc.htmxContractJson());
             }
             // Retention (design ch. 44): enabled by configuring the sweep interval. When
             // tesseraql.retention.attachments is set and the managed attachment store is bound, the

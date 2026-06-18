@@ -262,6 +262,39 @@ public final class DocViews {
                 + "&name=" + URLEncoder.encode(name == null ? "" : name, StandardCharsets.UTF_8);
     }
 
+    /**
+     * The export page model (documentation portal F8): the app name and the downloadable spec
+     * artifacts the portal serves live from the manifest — the OpenAPI 3 document and the htmx
+     * interaction contract. Each artifact carries a label, a short description, its download
+     * filename, and the bearer-gated endpoint URL (so it can be copied and shared with API tooling).
+     */
+    public static Map<String, Object> export(String appName) {
+        Map<String, Object> model = new LinkedHashMap<>();
+        model.put("appName", appName);
+        List<Map<String, Object>> artifacts = new ArrayList<>();
+        artifacts.add(artifact("OpenAPI 3", "openapi.json",
+                "/_tesseraql/studio/ui/docs/export/openapi",
+                "The REST contract for every route: paths, parameters, request and response bodies, "
+                        + "and security schemes. Feed it to Swagger UI, Postman, or a client "
+                        + "generator."));
+        artifacts.add(artifact("htmx contract", "htmx-contract.json",
+                "/_tesseraql/studio/ui/docs/export/htmx",
+                "The htmx interaction contract: each fragment route's trigger, target, and swap, for "
+                        + "documenting the hypermedia surface."));
+        model.put("artifacts", artifacts);
+        return model;
+    }
+
+    private static Map<String, Object> artifact(String label, String filename, String url,
+            String description) {
+        Map<String, Object> row = new LinkedHashMap<>();
+        row.put("label", label);
+        row.put("filename", filename);
+        row.put("url", url);
+        row.put("description", description);
+        return row;
+    }
+
     /** The Markdown doc-body model: the doc path and its pre-rendered, CSP-safe HTML. */
     public static Map<String, Object> doc(String path, String html) {
         Map<String, Object> model = new LinkedHashMap<>();
