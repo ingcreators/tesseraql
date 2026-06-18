@@ -1025,6 +1025,21 @@ class StudioIntegrationTest {
     }
 
     @Test
+    void renderEndpointWithLiveDataRunsNamedQueriesToo() throws Exception {
+        // A multi-binding route: live=true must run the main `sql` AND the named `query` `active`
+        // through the sandbox, injecting both under their model keys (backlog category 3).
+        String body = MAPPER.writeValueAsString(Map.of("sampleModel", "{}", "live", "true"));
+        HttpResponse<String> response = post(
+                "/_tesseraql/studio/render?path=" + enc("web/api/multi/get.yml"), body, true);
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        JsonNode render = MAPPER.readTree(response.body());
+        assertThat(render.get("ok").asBoolean()).isTrue();
+        // Both bindings ran live: the main query's row and the named query's row are in the JSON.
+        assertThat(render.get("output").asText()).contains("main-live").contains("query-live");
+    }
+
+    @Test
     void runTestsRunsJobHttpCallCase() throws Exception {
         // The directory-sync job is covered by one http-call case (pure: it plans the outbound step
         // and applies the egress allow-list without a network call).
@@ -1657,6 +1672,36 @@ class StudioIntegrationTest {
                 """);
         Files.writeString(target.resolve("web/api/deps/deps.sql"),
                 "select c.id, c.email from customers c order by c.id\n");
+        // A multi-binding query-json route: a main `sql` plus a named `query`, both referenced by the
+        // JSON body, so the live render preview must run BOTH against the sandbox (backlog category 3).
+        Files.createDirectories(target.resolve("web/api/multi"));
+        Files.writeString(target.resolve("web/api/multi/get.yml"), """
+                version: tesseraql/v1
+                id: multi.report
+                kind: route
+                recipe: query-json
+
+                security:
+                  auth: bearer
+                  policy: users.read
+
+                sql:
+                  file: main.sql
+
+                queries:
+                  active:
+                    file: active.sql
+
+                response:
+                  json:
+                    status: 200
+                    body:
+                      main: sql.rows
+                      active: active.rows
+                """);
+        Files.writeString(target.resolve("web/api/multi/main.sql"), "select 'main-live' as tag\n");
+        Files.writeString(target.resolve("web/api/multi/active.sql"),
+                "select 'query-live' as tag\n");
         return target;
     }
 

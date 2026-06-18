@@ -256,28 +256,53 @@ final class StudioTestService {
     }
 
     /**
-     * Executes a route's main {@code sql} query against the sandbox and returns its rows as the
-     * {@code sql} result for the rendered preview (Studio backlog A1 "real bound params"): a
-     * {@link StudioService.RowSource}. The bind params resolve from the render context (the sample's
-     * {@code params}/{@code query}); the same {@link SandboxDataSource} guards apply (read-only,
-     * timeout, row cap, rollback). Returns null — keeping the hand-authored sample — when the route
-     * has no runnable read query (a service/contract/sequence binding, a non-{@code query} mode, or
-     * no SQL file).
+     * Executes a route's read queries against the sandbox and returns their results keyed by model
+     * name for the rendered preview (Studio backlog A1 "real bound params"; multi-binding): the main
+     * {@code sql} under {@code sql}, plus every named {@code query} under its own name — matching how
+     * the runtime keys each result. A {@link StudioService.RowSource}. Each query's binds resolve
+     * from the render context, which accretes earlier results in authored order (so a later query may
+     * read an earlier one); the same {@link SandboxDataSource} guards apply (timeout, row cap,
+     * rollback). Returns null — keeping the hand-authored sample — when no binding is a runnable read
+     * query (a service/contract/sequence binding, a non-{@code query} mode, or no SQL file). Command
+     * {@code steps} (writes) are not previewed live.
      */
     Map<String, Object> liveRows(RouteDefinition route, Path routeDir,
             Map<String, Object> context) {
-        SqlBinding sql = route.sql();
-        if (sql == null || sql.file() == null || sql.isService() || sql.isContract()
-                || sql.isSequence() || !sql.effectiveMode().startsWith("query")) {
+        Map<String, Object> results = new LinkedHashMap<>();
+        // A working context the named queries resolve their binds against, accreting earlier results
+        // in authored order — mirroring how the runtime publishes each result under its own key.
+        Map<String, Object> working = new LinkedHashMap<>(context);
+        runInto(results, working, "sql", route.sql(), routeDir);
+        for (Map.Entry<String, SqlBinding> query : route.queries().entrySet()) {
+            runInto(results, working, query.getKey(), query.getValue(), routeDir);
+        }
+        return results.isEmpty() ? null : results;
+    }
+
+    /** Runs one read binding and, on success, records its {@code {rows,rowCount}} under {@code key}. */
+    private void runInto(Map<String, Object> results, Map<String, Object> working, String key,
+            SqlBinding binding, Path routeDir) {
+        Map<String, Object> result = runQuery(binding, routeDir, working);
+        if (result != null) {
+            results.put(key, result);
+            working.put(key, result);
+        }
+    }
+
+    /** Runs one read query through the sandbox, or null when the binding is not a runnable read. */
+    private Map<String, Object> runQuery(SqlBinding binding, Path routeDir,
+            Map<String, Object> context) {
+        if (binding == null || binding.file() == null || binding.isService() || binding.isContract()
+                || binding.isSequence() || !binding.effectiveMode().startsWith("query")) {
             return null;
         }
-        Path sqlFile = routeDir.resolve(sql.file()).normalize();
+        Path sqlFile = routeDir.resolve(binding.file()).normalize();
         if (!sqlFile.startsWith(appHome)) {
-            throw new IllegalArgumentException("SQL file escapes app home: " + sql.file());
+            throw new IllegalArgumentException("SQL file escapes app home: " + binding.file());
         }
         EvaluationContext evaluation = new EvaluationContext(context);
         Map<String, Object> bindParams = new LinkedHashMap<>();
-        sql.params().forEach((name, expr) -> bindParams.put(name,
+        binding.params().forEach((name, expr) -> bindParams.put(name,
                 evaluation.resolve(Arrays.asList(expr.split("\\.")))));
         BoundSql bound = SqlRenderer.render(Sql2WayParser.parse(read(sqlFile)), bindParams);
         DataSource sandbox = sandbox("main");

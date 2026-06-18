@@ -139,8 +139,14 @@ and is being adopted (see E below).
    `validate`, `contract` (through a sandboxed identity service), `notify`, and `http-call` — against
    the dev datasource, sandboxed (auto-rollback) and opt-in.
    - **Live rows into the rendered preview** — *done* (see Shipped): the route render panel's **Use
-     live data** toggle runs the route's main `sql` through the sandbox for real rows. Multi-binding
-     routes still inject only the main `sql`; `steps`/`queries` live execution is a later extension.
+     live data** toggle runs the route's main `sql` through the sandbox for real rows.
+     - **Multi-binding live render** — *done* (net-new, category 3): **Use live data** now also runs
+       every named `query` (not only the main `sql`) through the sandbox, injecting each under its
+       model name, in authored order against an accreting context — so a route whose template/body
+       references `<query>.rows` previews over real data. `StudioService.RowSource` returns the
+       results keyed by model name; `StudioTestService.liveRows` runs the main query + each named
+       query. Command `steps` (writes) remain a later extension. (Run tests already covered every
+       binding via `CrossReferenceIndex.bindings`.)
 
    Ties to milestone M7 ("schema → verified CRUD in ten minutes").
 

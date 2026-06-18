@@ -8,6 +8,15 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- Studio: multi-binding live render preview (Studio backlog category 3). The route render panel's
+  **Use live data** toggle now runs not only a route's main `sql` but **every named `query`** through
+  the sandbox, injecting each result under its model name — so a `query-html`/`query-json` route whose
+  template/body references `<query>.rows` previews over real data, not just `sql.rows`. The queries run
+  in authored order against an accreting context (a later query may read an earlier one's result),
+  matching the runtime. `StudioService.RowSource` now returns the results keyed by model name;
+  `StudioTestService.liveRows` runs the main query plus each named query. (Command `steps` — writes —
+  are still not previewed live.) The declarative **Run tests** action already covered every binding.
+
 - Coverage regression gate (Studio backlog category 3). Beyond the existing **absolute** coverage
   gate, the build can now fail when SQL coverage **drops against the previous run** — the guard that
   catches a change quietly lowering coverage while every absolute threshold still passes. The
