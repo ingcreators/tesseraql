@@ -288,6 +288,13 @@ and is being adopted (see E below).
    --report`) keeps the full history, so the trend spans far more than the former cap. The trend
    panel shows its depth (run count + retained date span) instead of the hard-coded "last 20 runs"
    note. `ReportHistory.append` treats a non-positive cap as unbounded; `DocViews.trend` adds the span.
+   - **Coverage regression gate** — *done* (net-new, category 3): beyond the absolute coverage gate,
+     the build can fail when SQL coverage drops against the **previous run**. The `report` goal
+     compares this run's aggregate line/branch coverage to the most recent `history.json` entry and,
+     with `tesseraql.failOnCoverageRegression` (tolerance `tesseraql.coverageRegressionTolerance`,
+     points), fails the build on a regression; `tesseraql test --report --fail-on-regression` exits
+     `2`. A regression is always logged. New pure `CoverageRegression` (coverage-core) + the
+     `ReportRegression` adapter (report). Needs `history.json` to persist across runs for a baseline.
 
 ### G. Studio copilot
 
