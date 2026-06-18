@@ -51,6 +51,31 @@ class StudioIntegrationTest {
         appHome = prepareAppHome();
         runtime = TesseraqlRuntime.start(appHome, freePort());
         seedIdentitySchema();
+        seedScaffoldTable();
+    }
+
+    /**
+     * A clean table the scaffold generator (backlog B3) introspects and generates a CRUD slice from.
+     * It carries the conventions the generator recognises — a single auto-generated primary key, an
+     * optimistic-locking {@code version} column, the canonical audit columns, and a single-column
+     * unique index — and does not collide with the example app's own {@code web/users/**} routes.
+     */
+    private static void seedScaffoldTable() throws Exception {
+        try (java.sql.Connection connection = java.sql.DriverManager.getConnection(
+                POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword());
+                java.sql.Statement statement = connection.createStatement()) {
+            statement.execute("create table widgets ("
+                    + "id bigserial primary key,"
+                    + "name varchar(100) not null,"
+                    + "quantity integer not null,"
+                    + "active boolean not null default true,"
+                    + "version bigint not null default 0,"
+                    + "created_by varchar(64) not null,"
+                    + "created_at timestamp not null,"
+                    + "updated_by varchar(64) not null,"
+                    + "updated_at timestamp not null)");
+            statement.execute("create unique index uq_widgets_name on widgets (name)");
+        }
     }
 
     /**
@@ -598,6 +623,63 @@ class StudioIntegrationTest {
     }
 
     @Test
+    void scaffoldTablesListsIntrospectedTables() throws Exception {
+        HttpResponse<String> response = get("/_tesseraql/studio/scaffold/tables", true);
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        JsonNode model = MAPPER.readTree(response.body());
+        assertThat(model.get("enabled").asBoolean()).isTrue();
+        assertThat(model.get("tables")).anySatisfy(table -> {
+            assertThat(table.get("name").asText()).isEqualTo("widgets");
+            assertThat(table.get("type").asText()).isEqualTo("TABLE");
+            assertThat(table.get("scaffoldable").asBoolean()).isTrue();
+            assertThat(table.get("primaryKey").asText()).isEqualTo("id");
+        });
+    }
+
+    @Test
+    void scaffoldTablesRequiresAuthentication() throws Exception {
+        assertThat(get("/_tesseraql/studio/scaffold/tables", false).statusCode()).isEqualTo(401);
+    }
+
+    @Test
+    void scaffoldPreviewGeneratesCrudFilesForTable() throws Exception {
+        HttpResponse<String> response = post(
+                "/_tesseraql/studio/scaffold/preview?table=widgets", "", true);
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        JsonNode model = MAPPER.readTree(response.body());
+        assertThat(model.get("enabled").asBoolean()).isTrue();
+        assertThat(model.get("table").asText()).isEqualTo("widgets");
+        // A fresh table generates a full CRUD slice with no on-disk conflicts.
+        assertThat(model.get("conflictCount").asInt()).isZero();
+        assertThat(model.get("writeCount").asInt()).isEqualTo(model.get("total").asInt());
+        assertThat(model.get("total").asInt()).isGreaterThan(1);
+        assertThat(model.get("files")).anySatisfy(file -> {
+            assertThat(file.get("path").asText()).isEqualTo("web/widgets/get.yml");
+            assertThat(file.get("status").asText()).isEqualTo("new");
+            assertThat(file.get("contentHtml").asText()).isNotBlank();
+        });
+    }
+
+    @Test
+    void uiScaffoldPageListsTables() throws Exception {
+        HttpResponse<String> response = get("/_tesseraql/studio/ui/scaffold", true);
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(response.body()).contains("Scaffold CRUD from a table").contains("widgets")
+                .contains("hx-post=\"/_tesseraql/studio/ui/scaffold/preview\"");
+    }
+
+    @Test
+    void uiExplorerOffersScaffoldLinkWhenEnabled() throws Exception {
+        HttpResponse<String> response = get("/_tesseraql/studio/ui", true);
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(response.body()).contains("/_tesseraql/studio/ui/scaffold");
+    }
+
+    @Test
     void sandboxDataSourceRollsBackWritesAndCapsRows() throws Exception {
         try (com.zaxxer.hikari.HikariDataSource raw = rawDataSource()) {
             // A probe table created via a normal (auto-commit) connection persists.
@@ -873,6 +955,8 @@ class StudioIntegrationTest {
                     enabled: true
                     readOnly: false
                     testRunner:
+                      enabled: true
+                    scaffold:
                       enabled: true
                 """.formatted(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(),
                 POSTGRES.getPassword()));

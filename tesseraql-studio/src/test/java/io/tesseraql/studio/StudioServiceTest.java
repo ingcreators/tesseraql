@@ -8,6 +8,8 @@ import io.tesseraql.studio.StudioService.Explorer;
 import io.tesseraql.studio.StudioService.PreviewResult;
 import io.tesseraql.yaml.manifest.AppManifest;
 import io.tesseraql.yaml.manifest.ManifestLoader;
+import io.tesseraql.yaml.scaffold.ScaffoldChecksum;
+import io.tesseraql.yaml.scaffold.TableSchema;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -406,5 +408,71 @@ class StudioServiceTest {
         assertThatThrownBy(() -> readOnly.applyDraft("web/api/x/get.yml"))
                 .isInstanceOf(TqlException.class)
                 .hasMessageContaining("read-only");
+    }
+
+    @Test
+    void scaffoldPreviewGeneratesCrudSliceWithPerFileStatus(@TempDir Path dir) throws Exception {
+        Files.createDirectories(dir.resolve("config"));
+        Files.writeString(dir.resolve("config/tesseraql.yml"), "tesseraql:\n  app:\n    name: t\n");
+        StudioService studio = new StudioService(new ManifestLoader().load(dir), false);
+        TableSchema table = widgetsSchema();
+
+        // A fresh app home: every generated file is new and the apply would write them all.
+        StudioService.ScaffoldPreview first = studio.scaffoldPreview(table);
+        assertThat(first.table()).isEqualTo("widgets");
+        assertThat(first.files()).isNotEmpty()
+                .allSatisfy(file -> assertThat(file.status()).isEqualTo("new"));
+        assertThat(first.writeCount()).isEqualTo(first.total());
+        assertThat(first.conflictCount()).isZero();
+        assertThat(first.files()).anyMatch(file -> file.path().equals("web/widgets/get.yml"));
+
+        StudioService.ScaffoldFile sample = first.files().get(0);
+        Path target = dir.resolve(sample.path());
+        Files.createDirectories(target.getParent());
+
+        // A byte-identical (stamped) file on disk reads back as unchanged.
+        Files.writeString(target, ScaffoldChecksum.stamp(sample.path(), sample.content()));
+        assertThat(statusOf(studio.scaffoldPreview(table), sample.path())).isEqualTo("unchanged");
+
+        // A pristine but differently-generated file (a valid marker over older content) regenerates.
+        Files.writeString(target,
+                ScaffoldChecksum.stamp(sample.path(), sample.content() + "\n# older\n"));
+        assertThat(statusOf(studio.scaffoldPreview(table), sample.path())).isEqualTo("regenerate");
+
+        // A user-edited (marker-less) file is a conflict the apply would skip.
+        Files.writeString(target, "hand-written, no scaffold marker\n");
+        StudioService.ScaffoldPreview edited = studio.scaffoldPreview(table);
+        assertThat(statusOf(edited, sample.path())).isEqualTo("conflict");
+        assertThat(edited.conflictCount()).isEqualTo(1);
+        assertThat(edited.writeCount()).isEqualTo(edited.total() - 1);
+    }
+
+    @Test
+    void scaffoldPreviewRejectsTableWithoutSingleColumnPrimaryKey() {
+        StudioService studio = new StudioService(exampleManifest(), true);
+        TableSchema noKey = new TableSchema("t",
+                List.of(new TableSchema.Column("a", java.sql.Types.VARCHAR, "varchar", 10, 0,
+                        false, false, false)),
+                List.of(), Map.of());
+
+        assertThatThrownBy(() -> studio.scaffoldPreview(noKey))
+                .isInstanceOf(TqlException.class)
+                .hasMessageContaining("primary key");
+    }
+
+    private static String statusOf(StudioService.ScaffoldPreview preview, String path) {
+        return preview.files().stream()
+                .filter(file -> file.path().equals(path))
+                .findFirst().orElseThrow().status();
+    }
+
+    private static TableSchema widgetsSchema() {
+        return new TableSchema("widgets",
+                List.of(
+                        new TableSchema.Column("id", java.sql.Types.BIGINT, "bigint", 19, 0,
+                                false, true, false),
+                        new TableSchema.Column("name", java.sql.Types.VARCHAR, "varchar", 100, 0,
+                                false, false, false)),
+                List.of("id"), Map.of());
     }
 }

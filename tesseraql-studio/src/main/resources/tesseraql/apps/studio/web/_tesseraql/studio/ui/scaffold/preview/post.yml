@@ -1,0 +1,29 @@
+version: tesseraql/v1
+id: tql.studio.scaffold.preview
+kind: route
+recipe: query-html
+
+input:
+  table:
+    type: string
+    required: true
+
+security:
+  auth: bearer
+
+sql:
+  service: studio.scaffold.preview
+  params:
+    table: params.table
+
+response:
+  html:
+    status: 200
+    template: preview.html
+    model:
+      scaffold: sql
+    headers:
+      Content-Security-Policy: "default-src 'self'; style-src 'self' 'unsafe-inline'; frame-ancestors 'none'"
+      X-Content-Type-Options: nosniff
+      X-Frame-Options: DENY
+      Referrer-Policy: no-referrer
