@@ -7,6 +7,9 @@ input:
   path:
     type: string
     required: true
+  force:
+    type: string
+    required: false
 
 security:
   auth: bearer
@@ -15,6 +18,7 @@ sql:
   service: studio.apply
   params:
     path: params.path
+    force: params.force
 
 response:
   redirect:

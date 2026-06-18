@@ -81,6 +81,11 @@ Studio editor + docs work (2026-06):
   id/path/recipe/method/source) that prunes the tree, re-rendered server-side via htmx (`hx-get` +
   `hx-select`, no bespoke JS). Database-free `StudioService.explorer(query)`; the tree (a recursive
   `StudioViews` fold + a self-referencing Thymeleaf fragment); `GET /explorer?q=…` carries the query.
+- **Concurrent-edit conflict detection (D5, slice 1)** — saving a draft records the source it is
+  based on (a sidecar beside the draft); applying detects a source that changed underneath the draft
+  and refuses to overwrite it (no last-apply-wins) unless forced — the editor shows a conflict warning
+  and a review-gated overwrite checkbox, and `POST /apply` answers `409` without `force`. Database-free
+  `StudioService.draftConflicts` + `applyDraft(path, force)`; `STUDIO-4090 → 409` in the error map.
 
 Upstream Hypermedia Components briefs filed and adopted: `hc-code` (read-only block,
 gutter, diff), editable `hc-code`, `hc-sparkline`, and read-only syntax highlighting
@@ -154,9 +159,15 @@ gutter, diff), editable `hc-code`, `hc-sparkline`, and read-only syntax highligh
 
 ### D. Editing safety / operations
 
-5. **Draft robustness** — discard exists (#106), but there is no concurrent-edit
-   conflict detection (last-apply-wins), no draft overview, and apply is not gated
-   behind the diff. Consider a confirm-diff-before-apply step.
+5. **Draft robustness** — discard exists (#106).
+   - **Concurrent-edit conflict detection** — *done*: a draft records the source it is based on, and
+     apply refuses to overwrite a source that changed underneath it (no last-apply-wins) — the editor
+     shows a conflict warning + a review-gated overwrite confirmation, and the apply endpoint answers
+     `409` unless `force` is set. `StudioService.draftConflicts` / `applyDraft(path, force)`.
+   - **Draft overview** — *next slice*: a list of all pending drafts (with their conflict status),
+     linked from the explorer, so edits in flight are visible in one place.
+   - **Confirm-diff-before-apply** — partially met (the conflict case forces a review); a general
+     "review the diff before every apply" gate is still open.
 6. **Granular read-only + audit** — read-only is all-or-nothing; add per-role edit
    permission and an audit trail of who applied what when (production hardening).
 
@@ -188,6 +199,7 @@ routes and jobs, sandboxed with auto-rollback. **B3 (scaffold-from-explorer) is 
 preview (slice 1), apply (slice 2), and new blank route (slice 3) all shipped — pick a table, preview
 its CRUD slice, and create the files (edit detection + force), or create a single starter route, each
 with a restart notice for new routes. **C4 (explorer tree + filter) is done** — the explorer is a
-filterable directory tree. Recommended next: **D5 (draft robustness — confirm-diff-before-apply,
-concurrent-edit detection)**, or A1's optional PDF preview / JSON field-masking. E waits on hc #264;
-G is gated.
+filterable directory tree. **D5 is underway**: concurrent-edit conflict detection (slice 1) shipped;
+next is the **draft overview** slice (a list of pending drafts with conflict status). After that:
+**D6 (granular read-only + audit)**, or A1's optional PDF preview / JSON field-masking. E waits on hc
+#264; G is gated.
