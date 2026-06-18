@@ -488,15 +488,35 @@ class StudioIntegrationTest {
     }
 
     @Test
-    void runTestsReportsNoSqlCasesForUncoveredRoute() throws Exception {
-        // users.table binds search-table.sql, which no declarative sql case targets.
+    void runTestsReportsNoCasesForUncoveredRoute() throws Exception {
+        // users.table binds search-table.sql, which no declarative case targets.
         HttpResponse<String> response = post("/_tesseraql/studio/runTests?path="
                 + enc("web/users/fragments/table/get.yml"), "", true);
 
         assertThat(response.statusCode()).isEqualTo(200);
         JsonNode result = MAPPER.readTree(response.body());
         assertThat(result.get("ran").asBoolean()).isFalse();
-        assertThat(result.get("note").asText()).contains("No read-only SQL test cases");
+        assertThat(result.get("note").asText()).contains("No runnable test cases");
+    }
+
+    @Test
+    void runTestsRunsValidateAndNotifyCasesForRoute() throws Exception {
+        // apiProvision is covered by two validate cases and two notify cases (no sql cases): all
+        // read-only, so the sandbox runs them against the seeded users table.
+        HttpResponse<String> response = post("/_tesseraql/studio/runTests?path="
+                + enc("web/api/users/provision/post.yml"), "", true);
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        JsonNode result = MAPPER.readTree(response.body());
+        assertThat(result.get("ran").asBoolean()).isTrue();
+        assertThat(result.get("total").asInt()).isEqualTo(4);
+        assertThat(result.get("cases"))
+                .anySatisfy(testCase -> assertThat(testCase.get("name").asText())
+                        .contains("violates the userExists rule"));
+        assertThat(result.get("cases"))
+                .anySatisfy(testCase -> assertThat(testCase.get("name").asText())
+                        .contains("notifies the confirmation mail"));
+        assertThat(result.get("allPassed").asBoolean()).isTrue();
     }
 
     @Test

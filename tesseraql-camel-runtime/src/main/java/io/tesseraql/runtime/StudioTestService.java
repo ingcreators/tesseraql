@@ -39,8 +39,10 @@ import javax.sql.DataSource;
  * <p>Gated and sandboxed (decided with the maintainer): enabled only when Studio is writable and
  * {@code tesseraql.studio.testRunner.enabled} is set; every case runs through a
  * {@link SandboxDataSource} (read-only connection, statement timeout, row cap, rollback on close),
- * so a query can neither run away nor persist a write. Only read-only {@code sql} cases run this
- * slice — {@code validate}/{@code notify}/{@code http-call} and write paths are out of scope.
+ * so a query can neither run away nor persist a write. The read-only case kinds that cover a route
+ * run — {@code sql} queries, {@code validate} rules (their SQL runs read-only against the sandbox),
+ * and {@code notify} evaluations (pure, no DB). Contract cases (they execute through the runtime's
+ * identity datasource, not the sandbox) and write/command paths are out of scope.
  */
 final class StudioTestService {
 
@@ -81,25 +83,31 @@ final class StudioTestService {
         if (route == null) {
             return notRun(relativePath, "No route is declared at " + relativePath + ".");
         }
-        List<TestCase> sqlCases = CrossReferenceIndex.of(manifest, loadSuites()).casesFor(route)
+        List<TestCase> runnable = CrossReferenceIndex.of(manifest, loadSuites()).casesFor(route)
                 .stream()
-                .filter(StudioTestService::isSqlCase)
+                .filter(StudioTestService::isRunnable)
                 .toList();
-        if (sqlCases.isEmpty()) {
-            return notRun(relativePath,
-                    "No read-only SQL test cases cover this route.");
+        if (runnable.isEmpty()) {
+            return notRun(relativePath, "No runnable test cases cover this route.");
         }
         DataSource sandbox = new SandboxDataSource(dataSource, queryTimeoutSeconds, maxRows);
-        TestReport report = new TestRunner(sandbox, appHome).run(new TestSuite(sqlCases));
+        TestReport report = new TestRunner(sandbox, appHome).run(new TestSuite(runnable));
         return result(relativePath, report);
     }
 
-    /** A read-only query case: a {@code sql:} target with no validate/notify/http/messages/contract. */
-    private static boolean isSqlCase(TestCase test) {
-        return test.sql() != null && test.sql().file() != null
-                && test.validate() == null && test.notifications() == null
-                && test.httpCall() == null && test.messages() == null
-                && (test.contract() == null || test.contract().isBlank());
+    /**
+     * A read-only declarative case the sandbox can run for a route: a {@code sql} query, a
+     * {@code validate} rule (its SQL runs read-only against the sandbox), or a {@code notify}
+     * evaluation (pure, no DB). Contract cases are excluded — they run through the runtime's identity
+     * datasource, not the sandbox — and {@code http-call}/{@code messages} cases never target a route.
+     */
+    private static boolean isRunnable(TestCase test) {
+        if (test.contract() != null && !test.contract().isBlank()) {
+            return false;
+        }
+        return (test.sql() != null && test.sql().file() != null)
+                || test.validate() != null
+                || test.notifications() != null;
     }
 
     private List<TestSuite> loadSuites() {
