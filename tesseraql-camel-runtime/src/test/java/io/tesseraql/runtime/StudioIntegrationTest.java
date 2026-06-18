@@ -537,6 +537,35 @@ class StudioIntegrationTest {
     }
 
     @Test
+    void runTestsRunsJobHttpCallCase() throws Exception {
+        // The directory-sync job is covered by one http-call case (pure: it plans the outbound step
+        // and applies the egress allow-list without a network call).
+        HttpResponse<String> response = post("/_tesseraql/studio/runTests?path="
+                + enc("batch/directory-sync/job.yml"), "", true);
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        JsonNode result = MAPPER.readTree(response.body());
+        assertThat(result.get("ran").asBoolean()).isTrue();
+        assertThat(result.get("cases")).anySatisfy(testCase -> {
+            assertThat(testCase.get("name").asText()).contains("allow-listed directory API");
+            assertThat(testCase.get("passed").asBoolean()).isTrue();
+        });
+        assertThat(result.get("allPassed").asBoolean()).isTrue();
+    }
+
+    @Test
+    void uiSourceJobOffersRunTestsWhenEnabled() throws Exception {
+        HttpResponse<String> response = get("/_tesseraql/studio/ui/source?path="
+                + enc("batch/directory-sync/job.yml"), true);
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(response.body()).contains("Run tests")
+                .contains("hx-post=\"/_tesseraql/studio/ui/run-tests\"")
+                // a job offers tests but not the (route/template-only) rendered-preview panel
+                .doesNotContain("Use live data");
+    }
+
+    @Test
     void uiSourceRouteOffersRunTestsAndLiveDataWhenEnabled() throws Exception {
         HttpResponse<String> response = get("/_tesseraql/studio/ui/source?path="
                 + enc("web/api/users/get.yml"), true);

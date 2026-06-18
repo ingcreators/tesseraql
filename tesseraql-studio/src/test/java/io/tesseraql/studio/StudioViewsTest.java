@@ -88,7 +88,14 @@ class StudioViewsTest {
         Map<String, Object> route = StudioViews.source("web/api/users/get.yml", "id: x", false,
                 false, "id: x", "params: {}");
         assertThat(route).containsEntry("isRoute", true).containsEntry("isRenderable", true)
+                .containsEntry("isTestable", true)
                 .containsEntry("isTemplate", false).containsEntry("sampleModel", "params: {}");
+
+        // A batch job is testable (declarative cases) but not renderable.
+        Map<String, Object> job = StudioViews.source("batch/directory-sync/job.yml", "id: j", false,
+                false, "id: j", null);
+        assertThat(job).containsEntry("isJob", true).containsEntry("isTestable", true)
+                .containsEntry("isRoute", false).containsEntry("isRenderable", false);
 
         // A colocated *.sample.yml fixture (a non-method yml under web/) is not itself renderable.
         Map<String, Object> fixture = StudioViews.source("web/api/users/get.sample.yml", "x", true,
