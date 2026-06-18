@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.tesseraql.identity.DefaultIdentityPack;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.net.ServerSocket;
@@ -49,6 +50,26 @@ class StudioIntegrationTest {
     static void start() throws Exception {
         appHome = prepareAppHome();
         runtime = TesseraqlRuntime.start(appHome, freePort());
+        seedIdentitySchema();
+    }
+
+    /**
+     * The framework IAM schema is not provisioned by this app's startup (it authenticates via bearer
+     * JWT, never touching the identity store), so the contract test seeds it: the standard tql_*
+     * tables plus one managed user for the {@code identity.list-users} contract to return.
+     */
+    private static void seedIdentitySchema() throws Exception {
+        try (java.sql.Connection connection = java.sql.DriverManager.getConnection(
+                POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword());
+                java.sql.Statement statement = connection.createStatement()) {
+            for (String ddl : DefaultIdentityPack.schema("postgres").split(";")) {
+                if (!ddl.isBlank()) {
+                    statement.execute(ddl);
+                }
+            }
+            statement.execute("insert into tql_users (user_id, login_id, display_name, status) "
+                    + "values ('u1', 'admin', 'Administrator', 'ACTIVE')");
+        }
     }
 
     @AfterAll
@@ -661,6 +682,23 @@ class StudioIntegrationTest {
     }
 
     @Test
+    void runTestsRunsContractCaseThroughSandboxedIdentity() throws Exception {
+        // The admin list route binds the identity.list-users contract; the injected contract case
+        // runs through the sandboxed identity service against the framework identity store.
+        HttpResponse<String> response = post("/_tesseraql/studio/runTests?path="
+                + enc("web/admin/users/get.yml"), "", true);
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        JsonNode result = MAPPER.readTree(response.body());
+        assertThat(result.get("ran").asBoolean()).isTrue();
+        assertThat(result.get("allPassed").asBoolean()).isTrue();
+        assertThat(result.get("cases")).anySatisfy(testCase -> {
+            assertThat(testCase.get("name").asText()).contains("list-users contract");
+            assertThat(testCase.get("passed").asBoolean()).isTrue();
+        });
+    }
+
+    @Test
     void uiSourceShowsDraftBadgeAndDiscardClearsIt() throws Exception {
         String path = "web/api/users/search.sql";
 
@@ -943,6 +981,13 @@ class StudioIntegrationTest {
                       rows:
                         - name: sato
                           status: PROBED
+                """);
+        // A contract test case targeting an identity contract the admin route binds, to exercise
+        // contract cases through the sandboxed identity service (no expect: it passes if it runs).
+        Files.writeString(target.resolve("tests/studio-contract-test.yml"), """
+                tests:
+                  - name: the list-users contract runs under the sandbox
+                    contract: identity.list-users
                 """);
         return target;
     }

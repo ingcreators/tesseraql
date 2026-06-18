@@ -9,12 +9,12 @@ All notable changes to TesseraQL are documented here. The format follows
 ### Added
 
 - Studio editor: run a route's or job's declarative tests from the editor (Studio backlog A2). A
-  route or job source page gains a **Run tests** action that runs the declarative test cases
-  covering it — `sql` queries **and writes** (an `INSERT … RETURNING` runs and is rolled back) and
-  `validate` rules (their SQL runs against the sandbox) plus the pure, no-DB `notify` and
-  `http-call` evaluations — against the dev datasource and shows inline pass/fail with the failure
-  message — no edit → apply → restart → CI loop. Contract cases (they run through the runtime's
-  identity datasource, not the sandbox) are out of scope. Gated and sandboxed: enabled only when
+  route or job source page gains a **Run tests** action that runs every declarative test case kind
+  covering it — `sql` queries **and writes** (an `INSERT … RETURNING` runs and is rolled back),
+  `validate` rules (their SQL runs against the sandbox), `contract` cases (through a sandboxed
+  identity service built over the same datasources), and the pure, no-DB `notify` and `http-call`
+  evaluations — against the dev datasource and shows inline pass/fail with the failure message — no
+  edit → apply → restart → CI loop. Gated and sandboxed: enabled only when
   Studio is writable and `tesseraql.studio.testRunner.enabled` is set; every case runs through a
   `SandboxDataSource` — an auto-rollback transaction (commits suppressed, rolled back on close) with
   a statement timeout (`tesseraql.studio.testRunner.queryTimeoutSeconds`, default 5) and a row cap
