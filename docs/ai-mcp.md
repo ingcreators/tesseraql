@@ -106,13 +106,29 @@ For hand edits between regenerations, the agent uses `draft_save` → `draft_pre
 `draft_apply`: a draft only lands once it compiles, so a broken edit never reaches the source
 of truth.
 
+## The Studio copilot prompt
+
+The dev-tool server offers one MCP **prompt**, `studio_copilot` (in write mode only) — the
+guided "describe → draft → preview → apply" loop a client surfaces as a slash command. Given a
+plain-language `task` (and an optional backing `table`), `prompts/get` returns guidance that
+steers the connecting agent's model through the tools above: orient with `manifest_summary` /
+`source_read`, draft with `scaffold_crud` or `draft_save`, verify with `draft_preview` / `lint`
+/ `test`, and only then `draft_apply`.
+
+This is "describe" without an in-app model: TesseraQL ships the workflow, the agent's own model
+does the natural-language reasoning, and every step is a separately-gated tool call — so the
+copilot adds no LLM dependency, no API key, and no new privilege. It honors the roadmap's bet
+that the MCP loop, not an embedded model, is the AI surface.
+
 ## A reusable protocol core
 
 The protocol machinery lives in `tesseraql-mcp`, deliberately free of any dev-tool coupling:
-`McpServer` (JSON-RPC dispatch), the `McpTool` model (a name, a JSON-Schema input, and a
-handler returning text or structured content), and the transports (`StdioTransport`, and a
-server-agnostic `McpHttpHandler` with a JDK-server binding). The dev-tool server is one
-consumer; the application MCP endpoints below are the second — the runtime drives the same
+`McpServer` (JSON-RPC dispatch over `tools`, `resources`, and `prompts`), the `McpTool` model (a
+name, a JSON-Schema input, and a handler returning text or structured content), the `McpPrompt`
+model (a name, declared arguments, and a handler rendering messages), and the transports
+(`StdioTransport`, and a server-agnostic `McpHttpHandler` with a JDK-server binding). Each
+surface is advertised in `initialize` only when the server registers some. The dev-tool server
+is one consumer; the application MCP endpoints below are the second — the runtime drives the same
 `McpHttpHandler` from a Camel route.
 
 ## Application MCP endpoints

@@ -11,6 +11,8 @@ import io.tesseraql.coverage.ItemCoverage;
 import io.tesseraql.coverage.SqlCoverageReport;
 import io.tesseraql.identity.RealmConfig;
 import io.tesseraql.mcp.McpCallContext;
+import io.tesseraql.mcp.McpPrompt;
+import io.tesseraql.mcp.McpPromptResult;
 import io.tesseraql.mcp.McpSchema;
 import io.tesseraql.mcp.McpServer;
 import io.tesseraql.mcp.McpTool;
@@ -64,7 +66,8 @@ public final class McpDevTools {
             until both pass. Edit files through draft_save -> draft_preview -> draft_apply (a draft \
             only applies if it compiles). All paths are app-home-relative and confined to the app. \
             schema_introspect, test, and ops_status use the app's configured datasource unless you \
-            pass jdbcUrl/username/password.""";
+            pass jdbcUrl/username/password. To build from a plain-language request, start with the \
+            studio_copilot prompt, which walks the describe -> draft -> preview -> apply loop.""";
 
     private final Path appHome;
     private final boolean readOnly;
@@ -74,13 +77,17 @@ public final class McpDevTools {
         this.readOnly = readOnly;
     }
 
-    /** Builds the MCP server with the read tools, plus the gated write tools when writable. */
+    /**
+     * Builds the MCP server with the read tools, plus the gated write tools and the Studio-copilot
+     * prompt when writable (the prompt drives the write loop, so it is offered only in write mode).
+     */
     public McpServer toServer() {
         McpServer.Builder builder = McpServer.builder("tesseraql-dev", VERSION)
                 .instructions(INSTRUCTIONS)
                 .tools(readTools());
         if (!readOnly) {
             builder.tools(writeTools());
+            builder.prompts(prompts());
         }
         return builder.build();
     }
@@ -92,6 +99,10 @@ public final class McpDevTools {
 
     List<McpTool> writeTools() {
         return List.of(scaffoldCrud(), draftSave(), draftPreview(), draftApply());
+    }
+
+    List<McpPrompt> prompts() {
+        return List.of(studioCopilot());
     }
 
     // ----- read tools -------------------------------------------------------
@@ -322,6 +333,69 @@ public final class McpDevTools {
                     return McpToolResult.json(obj("applied", path));
                 })
                 .build();
+    }
+
+    // ----- prompts (the Studio copilot loop) --------------------------------
+
+    /**
+     * The Studio-copilot prompt (Studio backlog G): a guided "describe -&gt; draft -&gt; preview
+     * -&gt; apply" workflow. It is the missing <em>describe</em> entry point - the connecting agent's
+     * model does the natural-language reasoning, and this prompt steers it through the existing dev
+     * tools so a plain-language request becomes a verified route or job. No model runs inside
+     * TesseraQL; the prompt only returns guidance text.
+     */
+    private McpPrompt studioCopilot() {
+        return McpPrompt.builder("studio_copilot")
+                .title("Studio copilot: describe -> draft -> preview -> apply")
+                .description(
+                        "Turn a plain-language request into a verified TesseraQL route or job, "
+                                + "using the dev tools (scaffold/draft/preview/lint/test/apply).")
+                .argument("task", "What to build, in plain language (e.g. 'a JSON endpoint that "
+                        + "lists active users').", true)
+                .argument("table",
+                        "The backing table, when the request is table-backed (optional).",
+                        false)
+                .handler(args -> McpPromptResult.user(
+                        "Studio copilot: describe -> draft -> preview -> apply.",
+                        copilotGuidance(args.get("task"), args.get("table"))))
+                .build();
+    }
+
+    /** Renders the copilot guidance for a request, naming the exact tools to drive each step. */
+    private static String copilotGuidance(String task, String table) {
+        StringBuilder text = new StringBuilder();
+        text.append("Help the developer build a TesseraQL route or job for this request:\n\n  ")
+                .append(task == null || task.isBlank()
+                        ? "(no task given - ask the developer)"
+                        : task)
+                .append("\n\n");
+        if (table != null && !table.isBlank()) {
+            text.append("Backing table: ").append(table).append("\n\n");
+        }
+        text.append(
+                """
+                        TesseraQL apps are file-based: routes are Simple YAML at \
+                        web/<path>/<method>.yml with colocated .sql/templates; MCP tools (kind: tool) \
+                        live under mcp/. Drive this loop with the dev tools - do not edit files directly, \
+                        and keep every path inside the app home (no ../):
+
+                        1. Orient. Call manifest_summary to see the app's routes/jobs and conventions, then \
+                        source_read one similar existing route to copy its shape (recipe, security, \
+                        response).
+                        2. Draft. For a table-backed CRUD slice, call scaffold_crud with the table - it \
+                        writes a complete, idempotent slice; prefer it over hand-writing. Otherwise write \
+                        the route YAML (and its .sql) with draft_save, matching the conventions you saw.
+                        3. Preview. Call draft_preview on each drafted path and fix the YAML/SQL until it \
+                        reports valid: true - a draft only applies if it compiles.
+                        4. Verify. Run lint, then test; fix findings and failing cases (re-draft and \
+                        re-preview as needed) until both are clean.
+                        5. Apply. Only once preview is valid and lint/test pass, call draft_apply for each \
+                        path. Tell the developer that a brand-new route needs a server restart to be served \
+                        (the hot reloader only swaps existing routes).
+
+                        Finish by reporting what you built, which tools you ran, and anything the developer \
+                        must still do (restart, add a policy, write a migration).""");
+        return text.toString();
     }
 
     // ----- helpers ----------------------------------------------------------

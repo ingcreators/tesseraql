@@ -47,6 +47,13 @@ class McpServerTest {
                             throw new TqlException(new TqlErrorCode(TqlDomain.MCP, 4001), "denied");
                         })
                         .build())
+                .prompt(McpPrompt.builder("greet")
+                        .title("Greeting")
+                        .description("Builds a greeting")
+                        .argument("who", "whom to greet", true)
+                        .handler(args -> McpPromptResult.user("a greeting",
+                                "Say hello to " + args.get("who")))
+                        .build())
                 .build();
     }
 
@@ -139,17 +146,19 @@ class McpServerTest {
 
     @Test
     void anUnknownMethodIsMethodNotFound() {
-        JsonNode error = call("{\"jsonrpc\":\"2.0\",\"id\":8,\"method\":\"prompts/list\"}")
+        JsonNode error = call("{\"jsonrpc\":\"2.0\",\"id\":8,\"method\":\"completion/complete\"}")
                 .get("error");
         assertThat(error.get("code").asInt()).isEqualTo(-32601);
     }
 
     @Test
-    void initializeAdvertisesResourcesOnlyWhenSomeAreRegistered() {
-        JsonNode withResources = call("{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\"}")
+    void initializeAdvertisesResourcesAndPromptsOnlyWhenSomeAreRegistered() {
+        JsonNode withSurfaces = call("{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\"}")
                 .get("result").get("capabilities");
-        assertThat(withResources.has("resources")).isTrue();
-        assertThat(withResources.get("resources").get("subscribe").asBoolean()).isFalse();
+        assertThat(withSurfaces.has("resources")).isTrue();
+        assertThat(withSurfaces.get("resources").get("subscribe").asBoolean()).isFalse();
+        assertThat(withSurfaces.has("prompts")).isTrue();
+        assertThat(withSurfaces.get("prompts").get("listChanged").asBoolean()).isFalse();
 
         McpServer toolsOnly = McpServer.builder("t", "1")
                 .tool(McpTool.builder("noop").handler((a, c) -> McpToolResult.text("")).build())
@@ -158,6 +167,47 @@ class McpServerTest {
                 .handle(read("{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\"}"))
                 .orElseThrow().get("result").get("capabilities");
         assertThat(caps.has("resources")).isFalse();
+        assertThat(caps.has("prompts")).isFalse();
+    }
+
+    @Test
+    void promptsListReturnsEveryRegisteredPromptWithItsArguments() {
+        JsonNode prompts = call("{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"prompts/list\"}")
+                .get("result").get("prompts");
+        assertThat(prompts).hasSize(1);
+        JsonNode greet = prompts.get(0);
+        assertThat(greet.get("name").asText()).isEqualTo("greet");
+        assertThat(greet.get("title").asText()).isEqualTo("Greeting");
+        JsonNode arg = greet.get("arguments").get(0);
+        assertThat(arg.get("name").asText()).isEqualTo("who");
+        assertThat(arg.get("required").asBoolean()).isTrue();
+    }
+
+    @Test
+    void promptsGetRendersTheMessagesFromTheArguments() {
+        JsonNode result = call("{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"prompts/get\","
+                + "\"params\":{\"name\":\"greet\",\"arguments\":{\"who\":\"Sato\"}}}")
+                .get("result");
+        assertThat(result.get("description").asText()).isEqualTo("a greeting");
+        JsonNode message = result.get("messages").get(0);
+        assertThat(message.get("role").asText()).isEqualTo("user");
+        assertThat(message.get("content").get("type").asText()).isEqualTo("text");
+        assertThat(message.get("content").get("text").asText()).isEqualTo("Say hello to Sato");
+    }
+
+    @Test
+    void promptsGetMissingARequiredArgumentIsInvalidParams() {
+        JsonNode error = call("{\"jsonrpc\":\"2.0\",\"id\":4,\"method\":\"prompts/get\","
+                + "\"params\":{\"name\":\"greet\",\"arguments\":{}}}").get("error");
+        assertThat(error.get("code").asInt()).isEqualTo(-32602);
+        assertThat(error.get("message").asText()).contains("who");
+    }
+
+    @Test
+    void anUnknownPromptIsInvalidParams() {
+        JsonNode error = call("{\"jsonrpc\":\"2.0\",\"id\":5,\"method\":\"prompts/get\","
+                + "\"params\":{\"name\":\"nope\"}}").get("error");
+        assertThat(error.get("code").asInt()).isEqualTo(-32602);
     }
 
     @Test
