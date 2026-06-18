@@ -68,9 +68,9 @@
       </ol>
       <pre class="hc-code" th:unless="${src.diff}"><code th:utext="${src.sourceContentHtml}"></code></pre>
     </details>
-    <div class="hc-stack" th:if="${src.isRoute and src.testRunnerEnabled}">
+    <div class="hc-stack" th:if="${src.isTestable and src.testRunnerEnabled}">
       <h2>Tests</h2>
-      <p class="hc-field__message">Runs this route's read-only declarative test cases (<code>sql</code>, <code>validate</code>, <code>notify</code>) against the dev datasource, sandboxed (read-only, timeout, row cap).</p>
+      <p class="hc-field__message">Runs the read-only declarative test cases covering this <span th:text="${src.isJob} ? 'job' : 'route'">route</span> (<code>sql</code>, <code>validate</code>, <code>notify</code>, <code>http-call</code>) against the dev datasource, sandboxed (read-only, timeout, row cap).</p>
       <form hx-post="/_tesseraql/studio/ui/run-tests" hx-target="#run-tests-result" hx-swap="innerHTML">
         <input type="hidden" name="path" th:value="${src.path}">
         <div class="hc-cluster"><button type="submit" class="hc-button" data-variant="primary">Run tests</button></div>

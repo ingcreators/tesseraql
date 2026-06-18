@@ -79,10 +79,14 @@ public final class StudioViews {
         model.put("sourceContentHtml", Highlighter.highlight(path, sourceContent));
         boolean isTemplate = path != null && (path.endsWith(".html") || path.endsWith(".tpl"));
         boolean isRoute = isRouteYaml(path);
+        boolean isJob = path != null && path.startsWith("batch/") && path.endsWith(".yml");
         model.put("isTemplate", isTemplate);
         model.put("isHtmlTemplate", path != null && path.endsWith(".html"));
         model.put("isRoute", isRoute);
+        model.put("isJob", isJob);
         model.put("isRenderable", isTemplate || isRoute);
+        // A route or a job carries declarative test cases the editor can run (Studio backlog A2).
+        model.put("isTestable", isRoute || isJob);
         model.put("sampleModel", sampleModel == null ? "" : sampleModel);
         if (hasDraft) {
             model.put("diff", diffLines(path, sourceContent == null ? "" : sourceContent,

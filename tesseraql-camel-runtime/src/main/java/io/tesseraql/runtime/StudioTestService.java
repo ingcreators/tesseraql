@@ -11,8 +11,10 @@ import io.tesseraql.test.TestSuite;
 import io.tesseraql.test.TestSuite.TestCase;
 import io.tesseraql.test.TestSuiteLoader;
 import io.tesseraql.yaml.manifest.AppManifest;
+import io.tesseraql.yaml.manifest.JobFile;
 import io.tesseraql.yaml.manifest.ManifestLoader;
 import io.tesseraql.yaml.manifest.RouteFile;
+import io.tesseraql.yaml.model.PipelineStep;
 import io.tesseraql.yaml.model.RouteDefinition;
 import io.tesseraql.yaml.model.SqlBinding;
 import java.io.IOException;
@@ -27,22 +29,25 @@ import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Stream;
 import javax.sql.DataSource;
 
 /**
- * Runs a route's declarative {@code sql} test cases from Studio against the dev datasource and
- * returns an inline result model (Studio backlog A2 — "run tests now" in the editor).
+ * Runs a route's or job's declarative test cases from Studio against the dev datasource and returns
+ * an inline result model (Studio backlog A2 — "run tests now" in the editor).
  *
  * <p>Gated and sandboxed (decided with the maintainer): enabled only when Studio is writable and
  * {@code tesseraql.studio.testRunner.enabled} is set; every case runs through a
  * {@link SandboxDataSource} (read-only connection, statement timeout, row cap, rollback on close),
- * so a query can neither run away nor persist a write. The read-only case kinds that cover a route
- * run — {@code sql} queries, {@code validate} rules (their SQL runs read-only against the sandbox),
- * and {@code notify} evaluations (pure, no DB). Contract cases (they execute through the runtime's
- * identity datasource, not the sandbox) and write/command paths are out of scope.
+ * so a query can neither run away nor persist a write. The read-only case kinds run — {@code sql}
+ * queries, {@code validate} rules (their SQL runs read-only against the sandbox), and the pure (no
+ * DB) {@code notify} and {@code http-call} evaluations (the latter plans a job's outbound step
+ * without a network call). Contract cases (they execute through the runtime's identity datasource,
+ * not the sandbox) and write/command paths are out of scope.
  */
 final class StudioTestService {
 
@@ -76,19 +81,30 @@ final class StudioTestService {
                     + "(set tesseraql.studio.testRunner.enabled and make Studio writable).");
         }
         AppManifest manifest = new ManifestLoader().load(appHome);
+        List<TestSuite> suites = loadSuites();
+        List<TestCase> covering;
         RouteFile route = manifest.routes().stream()
                 .filter(file -> relativePath.equals(relative(file.source())))
                 .findFirst()
                 .orElse(null);
-        if (route == null) {
-            return notRun(relativePath, "No route is declared at " + relativePath + ".");
+        if (route != null) {
+            covering = CrossReferenceIndex.of(manifest, suites).casesFor(route);
+        } else {
+            JobFile job = manifest.jobs().stream()
+                    .filter(file -> relativePath.equals(relative(file.source())))
+                    .findFirst()
+                    .orElse(null);
+            if (job == null) {
+                return notRun(relativePath,
+                        "No route or job is declared at " + relativePath + ".");
+            }
+            covering = casesForJob(job, suites);
         }
-        List<TestCase> runnable = CrossReferenceIndex.of(manifest, loadSuites()).casesFor(route)
-                .stream()
+        List<TestCase> runnable = covering.stream()
                 .filter(StudioTestService::isRunnable)
                 .toList();
         if (runnable.isEmpty()) {
-            return notRun(relativePath, "No runnable test cases cover this route.");
+            return notRun(relativePath, "No runnable test cases cover this file.");
         }
         DataSource sandbox = new SandboxDataSource(dataSource, queryTimeoutSeconds, maxRows);
         TestReport report = new TestRunner(sandbox, appHome).run(new TestSuite(runnable));
@@ -96,10 +112,52 @@ final class StudioTestService {
     }
 
     /**
-     * A read-only declarative case the sandbox can run for a route: a {@code sql} query, a
-     * {@code validate} rule (its SQL runs read-only against the sandbox), or a {@code notify}
-     * evaluation (pure, no DB). Contract cases are excluded — they run through the runtime's identity
-     * datasource, not the sandbox — and {@code http-call}/{@code messages} cases never target a route.
+     * The test cases covering a job: {@code notify}/{@code http-call} cases targeting it by id, and
+     * {@code sql} cases exercising one of its (main or step) SQL files. Mirrors
+     * {@link CrossReferenceIndex#casesFor} for routes, which the index does not provide for jobs.
+     */
+    private List<TestCase> casesForJob(JobFile job, List<TestSuite> suites) {
+        String jobId = job.definition().id();
+        Path jobDir = job.source().getParent();
+        Set<Path> sqlFiles = new LinkedHashSet<>();
+        addSqlFile(sqlFiles, jobDir, job.definition().sql());
+        for (PipelineStep step : job.definition().effectiveSteps()) {
+            addSqlFile(sqlFiles, jobDir, step.sql());
+        }
+        List<TestCase> cases = new ArrayList<>();
+        for (TestSuite suite : suites) {
+            for (TestCase test : suite.tests()) {
+                if (linksJob(test, jobId, sqlFiles)) {
+                    cases.add(test);
+                }
+            }
+        }
+        return cases;
+    }
+
+    private void addSqlFile(Set<Path> into, Path jobDir, SqlBinding binding) {
+        if (binding != null && binding.file() != null) {
+            into.add(jobDir.resolve(binding.file()).normalize());
+        }
+    }
+
+    private boolean linksJob(TestCase test, String jobId, Set<Path> sqlFiles) {
+        if (test.notifications() != null && jobId.equals(test.notifications().job())) {
+            return true;
+        }
+        if (test.httpCall() != null && jobId.equals(test.httpCall().job())) {
+            return true;
+        }
+        return test.sql() != null && test.sql().file() != null
+                && sqlFiles.contains(appHome.resolve(test.sql().file()).normalize());
+    }
+
+    /**
+     * A read-only declarative case the sandbox can run: a {@code sql} query, a {@code validate} rule
+     * (its SQL runs read-only against the sandbox), a {@code notify} evaluation, or an
+     * {@code http-call} plan (the last two are pure, no DB). Contract cases are excluded — they run
+     * through the runtime's identity datasource, not the sandbox — and {@code messages} cases carry
+     * no DB/route/job binding.
      */
     private static boolean isRunnable(TestCase test) {
         if (test.contract() != null && !test.contract().isBlank()) {
@@ -107,7 +165,8 @@ final class StudioTestService {
         }
         return (test.sql() != null && test.sql().file() != null)
                 || test.validate() != null
-                || test.notifications() != null;
+                || test.notifications() != null
+                || test.httpCall() != null;
     }
 
     private List<TestSuite> loadSuites() {
