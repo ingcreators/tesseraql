@@ -413,7 +413,8 @@ public final class StudioViews {
             return "";
         }
         if (path.endsWith(".sql")) {
-            return "sql";
+            // The consumer-registered 2-way SQL grammar (tesseraql.js) — directives become `meta`.
+            return "tql-sql";
         }
         if (path.endsWith(".json")) {
             return "json";

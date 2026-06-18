@@ -98,7 +98,8 @@ public final class TemplateHighlighter {
         }
         flush(out, plain); // the '<' or '</'
         if (pos > nameStart) {
-            SyntaxSpans.span(out, "keyword", line.substring(nameStart, pos));
+            // The element name is a `tag` token (hc 0.1.5 / #264).
+            SyntaxSpans.span(out, "tag", line.substring(nameStart, pos));
         }
         while (pos < len && line.charAt(pos) != '>') {
             char c = line.charAt(pos);
@@ -122,11 +123,13 @@ public final class TemplateHighlighter {
                     end++;
                 }
                 String attr = line.substring(pos, end);
+                flush(out, plain);
                 if (attr.indexOf(':') >= 0 || attr.startsWith("hx-") || attr.startsWith("data-")) {
-                    flush(out, plain);
+                    // Thymeleaf/htmx/data directives are `meta` (like 2-way SQL directives).
                     SyntaxSpans.span(out, "meta", attr);
                 } else {
-                    plain.append(attr);
+                    // A plain HTML attribute name is an `attribute` token (hc 0.1.5 / #264).
+                    SyntaxSpans.span(out, "attribute", attr);
                 }
                 pos = end;
                 continue;

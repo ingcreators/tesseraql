@@ -11,9 +11,9 @@ class HighlighterTest {
         assertThat(Highlighter.highlight("web/api/users/search.sql", "SELECT 1"))
                 .contains("data-tok=\"keyword\">SELECT</span>");
         assertThat(Highlighter.highlight("config/tesseraql.yml", "name: 'x'"))
-                .contains("data-tok=\"keyword\">name</span>");
+                .contains("data-tok=\"property\">name</span>");
         assertThat(Highlighter.highlight("web/users/index.html", "<p>hi</p>"))
-                .contains("data-tok=\"keyword\">p</span>");
+                .contains("data-tok=\"tag\">p</span>");
     }
 
     @Test

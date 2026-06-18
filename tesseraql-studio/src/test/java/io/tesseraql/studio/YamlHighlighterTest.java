@@ -12,10 +12,10 @@ class YamlHighlighterTest {
     void highlightsMappingKeysStringsNumbersAndComments() {
         String html = YamlHighlighter.highlight("name: 'sato'  # a person\nage: 42");
 
-        assertThat(html).contains("<span class=\"hc-code__tok\" data-tok=\"keyword\">name</span>:")
+        assertThat(html).contains("<span class=\"hc-code__tok\" data-tok=\"property\">name</span>:")
                 .contains("<span class=\"hc-code__tok\" data-tok=\"string\">'sato'</span>")
                 .contains("<span class=\"hc-code__tok\" data-tok=\"comment\"># a person</span>")
-                .contains("<span class=\"hc-code__tok\" data-tok=\"keyword\">age</span>")
+                .contains("<span class=\"hc-code__tok\" data-tok=\"property\">age</span>")
                 .contains("<span class=\"hc-code__tok\" data-tok=\"number\">42</span>");
     }
 
@@ -33,7 +33,7 @@ class YamlHighlighterTest {
     void keepsListMarkersAndIndentPlainAndEscapesHtml() {
         String html = YamlHighlighter.highlight("  - id: '<x>'");
         assertThat(html).startsWith("  - ") // indent + list marker stay plain
-                .contains("data-tok=\"keyword\">id</span>")
+                .contains("data-tok=\"property\">id</span>")
                 .contains("data-tok=\"string\">'&lt;x&gt;'</span>");
     }
 
