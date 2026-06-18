@@ -17,6 +17,7 @@ import io.tesseraql.yaml.model.ResponseSpec;
 import io.tesseraql.yaml.model.RouteDefinition;
 import io.tesseraql.yaml.scaffold.CrudScaffolder;
 import io.tesseraql.yaml.scaffold.ScaffoldChecksum;
+import io.tesseraql.yaml.scaffold.ScaffoldWriter;
 import io.tesseraql.yaml.scaffold.ScaffoldedFile;
 import io.tesseraql.yaml.scaffold.TableSchema;
 import java.io.IOException;
@@ -439,6 +440,35 @@ public final class StudioService {
         return new ScaffoldPreview(table.name(), files, files.size(), writes, conflicts);
     }
 
+    /**
+     * Writes a table's scaffolded CRUD slice into the app home (Studio backlog B3, roadmap Phase 23),
+     * honoring the scaffold's edit-detection contract: a pristine generated file is regenerated in
+     * place, but a file the user edited or owns is left alone and reported as skipped unless
+     * {@code force} overrides it. Rejected in read-only mode.
+     *
+     * <p>Generation is the same pure {@link CrudScaffolder} the preview and the CLI use, so the
+     * written files are byte-identical across all three. Newly written route documents
+     * ({@code web/**}/{@code <method>.yml} the manifest did not already declare) are reported
+     * separately: the hot reloader only swaps existing routes, so serving a new route needs a restart
+     * (design ch. 16.8).
+     */
+    public ScaffoldResult scaffoldApply(TableSchema table, boolean force) {
+        if (readOnly) {
+            throw new TqlException(READ_ONLY, "Studio is read-only; scaffolding is disabled");
+        }
+        List<ScaffoldedFile> files = new CrudScaffolder().scaffold(table);
+        Set<String> existingRoutes = manifest.routes().stream()
+                .map(route -> relative(route.source()))
+                .collect(java.util.stream.Collectors.toSet());
+        ScaffoldWriter.Report report = new ScaffoldWriter().apply(appHome, files, force);
+        List<String> newRoutes = report.written().stream()
+                .filter(StudioService::isRouteYaml)
+                .filter(path -> !existingRoutes.contains(path))
+                .toList();
+        return new ScaffoldResult(table.name(), report.written(), report.unchanged(),
+                report.skipped(), newRoutes, report.blocked());
+    }
+
     /** The disposition an apply would give a generated file, by reading its on-disk counterpart. */
     private String scaffoldStatus(ScaffoldedFile file) {
         Path target = resolve(file.path());
@@ -645,6 +675,22 @@ public final class StudioService {
      * {@code regenerate}/{@code conflict}).
      */
     public record ScaffoldFile(String path, String content, String status) {
+    }
+
+    /**
+     * The outcome of a scaffold apply (Studio backlog B3): the files written, left unchanged, and
+     * skipped (edited/owned), the subset of written files that are newly added routes needing a
+     * restart to be served, and whether any file was held back ({@code blocked}).
+     */
+    public record ScaffoldResult(String table, List<String> written, List<String> unchanged,
+            List<String> skipped, List<String> newRoutes, boolean blocked) {
+
+        public ScaffoldResult {
+            written = List.copyOf(written);
+            unchanged = List.copyOf(unchanged);
+            skipped = List.copyOf(skipped);
+            newRoutes = List.copyOf(newRoutes);
+        }
     }
 
     /** The outcome of a preview/validation: whether it compiled, and the result or error detail. */

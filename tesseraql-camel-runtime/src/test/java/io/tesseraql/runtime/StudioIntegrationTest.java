@@ -55,26 +55,31 @@ class StudioIntegrationTest {
     }
 
     /**
-     * A clean table the scaffold generator (backlog B3) introspects and generates a CRUD slice from.
-     * It carries the conventions the generator recognises — a single auto-generated primary key, an
+     * Clean tables the scaffold generator (backlog B3) introspects and generates a CRUD slice from.
+     * They carry the conventions the generator recognises — a single auto-generated primary key, an
      * optimistic-locking {@code version} column, the canonical audit columns, and a single-column
-     * unique index — and does not collide with the example app's own {@code web/users/**} routes.
+     * unique index — and do not collide with the example app's own {@code web/users/**} routes.
+     * {@code widgets} backs the read-only list/preview tests (never written), {@code gadgets} backs
+     * the apply tests (written, so it must not be the table any preview test asserts is pristine).
      */
     private static void seedScaffoldTable() throws Exception {
         try (java.sql.Connection connection = java.sql.DriverManager.getConnection(
                 POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword());
                 java.sql.Statement statement = connection.createStatement()) {
-            statement.execute("create table widgets ("
-                    + "id bigserial primary key,"
-                    + "name varchar(100) not null,"
-                    + "quantity integer not null,"
-                    + "active boolean not null default true,"
-                    + "version bigint not null default 0,"
-                    + "created_by varchar(64) not null,"
-                    + "created_at timestamp not null,"
-                    + "updated_by varchar(64) not null,"
-                    + "updated_at timestamp not null)");
-            statement.execute("create unique index uq_widgets_name on widgets (name)");
+            for (String table : new String[]{"widgets", "gadgets"}) {
+                statement.execute("create table " + table + " ("
+                        + "id bigserial primary key,"
+                        + "name varchar(100) not null,"
+                        + "quantity integer not null,"
+                        + "active boolean not null default true,"
+                        + "version bigint not null default 0,"
+                        + "created_by varchar(64) not null,"
+                        + "created_at timestamp not null,"
+                        + "updated_by varchar(64) not null,"
+                        + "updated_at timestamp not null)");
+                statement.execute("create unique index uq_" + table + "_name on " + table
+                        + " (name)");
+            }
         }
     }
 
@@ -677,6 +682,62 @@ class StudioIntegrationTest {
 
         assertThat(response.statusCode()).isEqualTo(200);
         assertThat(response.body()).contains("/_tesseraql/studio/ui/scaffold");
+    }
+
+    @Test
+    void scaffoldApplyRequiresAuthentication() throws Exception {
+        assertThat(post("/_tesseraql/studio/scaffold/apply?table=gadgets", "", false).statusCode())
+                .isEqualTo(401);
+    }
+
+    @Test
+    void scaffoldApplyWritesFilesIdempotentlyAndHonorsEditDetection() throws Exception {
+        // 1. A fresh apply writes the full CRUD slice to disk; new route files need a restart.
+        JsonNode first = applyGadgets(false);
+        assertThat(first.get("blocked").asBoolean()).isFalse();
+        assertThat(first.get("written")).anySatisfy(
+                file -> assertThat(file.get("path").asText()).isEqualTo("web/gadgets/get.yml"));
+        assertThat(first.get("needsRestart").asBoolean()).isTrue();
+        assertThat(first.get("newRouteCount").asInt()).isGreaterThan(0);
+        assertThat(Files.isRegularFile(appHome.resolve("web/gadgets/get.yml"))).isTrue();
+
+        // 2. Re-applying is idempotent: nothing written, every file reported unchanged.
+        JsonNode second = applyGadgets(false);
+        assertThat(second.get("writtenCount").asInt()).isZero();
+        assertThat(second.get("unchangedCount").asInt()).isGreaterThan(0);
+        assertThat(second.get("blocked").asBoolean()).isFalse();
+
+        // 3. A hand-edit (marker removed) is a conflict the apply skips, leaving the file untouched.
+        Path edited = appHome.resolve("web/gadgets/get.yml");
+        Files.writeString(edited, "hand-written, no scaffold marker\n");
+        JsonNode third = applyGadgets(false);
+        assertThat(third.get("blocked").asBoolean()).isTrue();
+        assertThat(third.get("skipped"))
+                .anySatisfy(path -> assertThat(path.asText()).isEqualTo("web/gadgets/get.yml"));
+        assertThat(Files.readString(edited)).isEqualTo("hand-written, no scaffold marker\n");
+
+        // 4. force overwrites the edited file with freshly generated, checksum-stamped content.
+        JsonNode forced = applyGadgets(true);
+        assertThat(forced.get("written")).anySatisfy(
+                file -> assertThat(file.get("path").asText()).isEqualTo("web/gadgets/get.yml"));
+        assertThat(Files.readString(edited)).contains("tesseraql-scaffold-checksum");
+    }
+
+    @Test
+    void uiScaffoldPreviewOffersApplyForm() throws Exception {
+        HttpResponse<String> response = postForm("/_tesseraql/studio/ui/scaffold/preview",
+                "table=widgets");
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(response.body()).contains("Create these files")
+                .contains("hx-post=\"/_tesseraql/studio/ui/scaffold/apply\"");
+    }
+
+    private static JsonNode applyGadgets(boolean force) throws Exception {
+        HttpResponse<String> response = post(
+                "/_tesseraql/studio/scaffold/apply?table=gadgets&force=" + force, "", true);
+        assertThat(response.statusCode()).isEqualTo(200);
+        return MAPPER.readTree(response.body());
     }
 
     @Test

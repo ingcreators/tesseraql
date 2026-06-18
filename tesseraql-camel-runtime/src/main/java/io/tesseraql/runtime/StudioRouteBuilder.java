@@ -47,6 +47,7 @@ final class StudioRouteBuilder extends RouteBuilder {
         rest().post("/_tesseraql/studio/runTests").to("direct:studio.runTests");
         rest().get("/_tesseraql/studio/scaffold/tables").to("direct:studio.scaffold.tables");
         rest().post("/_tesseraql/studio/scaffold/preview").to("direct:studio.scaffold.preview");
+        rest().post("/_tesseraql/studio/scaffold/apply").to("direct:studio.scaffold.apply");
         rest().post("/_tesseraql/studio/apply").to("direct:studio.apply");
         rest().post("/_tesseraql/studio/reload").to("direct:studio.reload");
 
@@ -103,6 +104,12 @@ final class StudioRouteBuilder extends RouteBuilder {
                 .to(AUTH).process(json(exchange -> io.tesseraql.studio.StudioViews.scaffoldPreview(
                         studioScaffold.preview(requireTable(exchange)))));
 
+        // Writes a table's CRUD slice into the app home (backlog B3), honoring edit detection unless
+        // force=true; new route files need a restart, surfaced in the result.
+        from("direct:studio.scaffold.apply").routeId("studio.scaffold.apply")
+                .to(AUTH).process(json(exchange -> io.tesseraql.studio.StudioViews.scaffoldResult(
+                        studioScaffold.apply(requireTable(exchange), flag(exchange, "force")))));
+
         from("direct:studio.apply").routeId("studio.apply")
                 .to(AUTH).process(json(exchange -> {
                     String path = requirePath(exchange);
@@ -122,6 +129,11 @@ final class StudioRouteBuilder extends RouteBuilder {
 
     private static String requireTable(Exchange exchange) {
         return require(exchange, "table");
+    }
+
+    /** An optional boolean query flag: true only when the header is exactly {@code "true"}. */
+    private static boolean flag(Exchange exchange, String name) {
+        return "true".equals(exchange.getMessage().getHeader(name, String.class));
     }
 
     private static String require(Exchange exchange, String name) {

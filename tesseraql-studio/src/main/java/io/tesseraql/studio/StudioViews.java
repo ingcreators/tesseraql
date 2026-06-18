@@ -7,6 +7,7 @@ import io.tesseraql.studio.StudioService.RenderResult;
 import io.tesseraql.studio.StudioService.RouteSummary;
 import io.tesseraql.studio.StudioService.ScaffoldFile;
 import io.tesseraql.studio.StudioService.ScaffoldPreview;
+import io.tesseraql.studio.StudioService.ScaffoldResult;
 import io.tesseraql.yaml.scaffold.CatalogSchema;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
@@ -204,6 +205,44 @@ public final class StudioViews {
             files.add(row);
         }
         model.put("files", files);
+        return model;
+    }
+
+    /**
+     * The scaffold-apply fragment model (Studio backlog B3): the files written (each linked to the
+     * source editor), left unchanged, and skipped as conflicts, with their counts and the
+     * {@code blocked} flag, plus the {@code needsRestart} notice when new route files were written
+     * (the hot reloader only swaps existing routes). A {@code null} result — scaffolding disabled —
+     * yields an {@code enabled: false} model with a note.
+     */
+    public static Map<String, Object> scaffoldResult(ScaffoldResult result) {
+        Map<String, Object> model = new LinkedHashMap<>();
+        if (result == null) {
+            model.put("enabled", false);
+            model.put("note", SCAFFOLD_DISABLED);
+            model.put("written", List.of());
+            model.put("skipped", List.of());
+            return model;
+        }
+        model.put("enabled", true);
+        model.put("table", result.table());
+        List<Map<String, Object>> written = new ArrayList<>();
+        for (String path : result.written()) {
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("path", path);
+            row.put("sourceUrl", sourceUrl(path));
+            written.add(row);
+        }
+        model.put("written", written);
+        model.put("writtenCount", result.written().size());
+        model.put("unchanged", result.unchanged());
+        model.put("unchangedCount", result.unchanged().size());
+        model.put("skipped", result.skipped());
+        model.put("skippedCount", result.skipped().size());
+        model.put("blocked", result.blocked());
+        model.put("hasSkipped", !result.skipped().isEmpty());
+        model.put("newRouteCount", result.newRoutes().size());
+        model.put("needsRestart", !result.newRoutes().isEmpty());
         return model;
     }
 

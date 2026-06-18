@@ -8,22 +8,25 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
-- Studio editor: scaffold a table's CRUD slice from the explorer (Studio backlog B3, slice 1 —
-  preview). A new **scaffold** page lists the dev datasource's tables (introspected live with the
-  same `CatalogIntrospector` the documentation portal's schema view uses) and previews the full CRUD
-  slice the generator would produce for a chosen table — list, detail, and edit pages, 2-way SQL, and
-  a declarative test suite — reusing the very `TableIntrospector` + `CrudScaffolder` the CLI
-  `scaffold crud` command does, so the generated files are byte-identical to the command line. Each
-  previewed file is shown syntax-highlighted with the disposition an apply would give it
-  (`new`/`unchanged`/`regenerate`/`conflict`), so conflicts with files you have edited are visible
-  before anything is written (this slice previews only; writing the files is the next slice). Gated:
-  available only when Studio is writable and `tesseraql.studio.scaffold.enabled` is set. Studio stays
+- Studio editor: scaffold a table's CRUD slice from the explorer (Studio backlog B3). A new
+  **scaffold** page lists the dev datasource's tables (introspected live with the same
+  `CatalogIntrospector` the documentation portal's schema view uses); choosing a table **previews**
+  the full CRUD slice the generator would produce — list, detail, and edit pages, 2-way SQL, and a
+  declarative test suite — reusing the very `TableIntrospector` + `CrudScaffolder` the CLI `scaffold
+  crud` command does, so the generated files are byte-identical to the command line. Each previewed
+  file is shown syntax-highlighted with the disposition an apply would give it
+  (`new`/`unchanged`/`regenerate`/`conflict`). **Create these files** then writes the slice into the
+  app home through the scaffold's edit-detection contract (a pristine generated file is regenerated, a
+  file you edited or own is skipped and reported unless you force it), and reports which newly written
+  routes need a restart to be served (the hot reloader only swaps existing routes). Gated: available
+  only when Studio is writable and `tesseraql.studio.scaffold.enabled` is set. Studio stays
   database-free — a new runtime `StudioScaffoldService` owns the introspection and hands the
-  `TableSchema` to the database-free `StudioService.scaffoldPreview`. Backed by the
-  `studio.scaffold.tables`/`studio.scaffold.preview` providers, the `GET
-  /_tesseraql/studio/scaffold/tables` and `POST /_tesseraql/studio/scaffold/preview` JSON endpoints,
-  and the `/_tesseraql/studio/ui/scaffold` page. Ties to milestone M7 ("schema → verified CRUD in ten
-  minutes"). See [docs/studio-backlog.md](docs/studio-backlog.md).
+  `TableSchema` to the database-free `StudioService.scaffoldPreview`/`scaffoldApply`. Backed by the
+  `studio.scaffold.tables`/`studio.scaffold.preview`/`studio.scaffold.apply` providers, the `GET
+  /_tesseraql/studio/scaffold/tables` + `POST /_tesseraql/studio/scaffold/preview` + `POST
+  /_tesseraql/studio/scaffold/apply` JSON endpoints, and the `/_tesseraql/studio/ui/scaffold` page.
+  Ties to milestone M7 ("schema → verified CRUD in ten minutes"). See
+  [docs/studio-backlog.md](docs/studio-backlog.md).
 - Studio editor: run a route's or job's declarative tests from the editor (Studio backlog A2). A
   route or job source page gains a **Run tests** action that runs every declarative test case kind
   covering it — `sql` queries **and writes** (an `INSERT … RETURNING` runs and is rolled back),

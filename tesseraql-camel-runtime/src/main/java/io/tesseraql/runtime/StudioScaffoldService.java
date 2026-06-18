@@ -73,6 +73,19 @@ final class StudioScaffoldService {
         return studio.scaffoldPreview(introspect(table));
     }
 
+    /**
+     * Writes one table's scaffolded CRUD slice into the app home (honoring edit detection, or
+     * overwriting when {@code force}), or {@code null} when scaffolding is disabled. The database-free
+     * {@link StudioService#scaffoldApply} does the writing; this service only supplies the introspected
+     * {@link TableSchema}.
+     */
+    StudioService.ScaffoldResult apply(String table, boolean force) {
+        if (!enabled) {
+            return null;
+        }
+        return studio.scaffoldApply(introspect(table), force);
+    }
+
     private TableSchema introspect(String table) {
         try (Connection connection = datasources.apply(datasource).getConnection()) {
             return new TableIntrospector().introspect(connection, table);
