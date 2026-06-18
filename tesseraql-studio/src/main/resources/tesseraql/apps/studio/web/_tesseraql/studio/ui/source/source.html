@@ -49,10 +49,14 @@
         <textarea id="sample-editor" name="sampleModel" class="hc-code__input" spellcheck="false"
                   aria-label="Sample data" th:text="${src.sampleModel}"></textarea>
       </div>
+      <label class="hc-field" th:if="${src.isRoute and src.testRunnerEnabled}">
+        <input type="checkbox" id="render-live" name="live" value="true">
+        Use live data &mdash; run the route's SQL against the dev datasource (sandboxed)
+      </label>
       <div id="render-result" class="hc-stack" aria-live="polite"
            hx-post="/_tesseraql/studio/ui/render"
-           hx-trigger="load, keyup changed delay:400ms from:#source-editor, keyup changed delay:400ms from:#sample-editor"
-           hx-include="#src-path, #source-editor, #sample-editor"
+           hx-trigger="load, keyup changed delay:400ms from:#source-editor, keyup changed delay:400ms from:#sample-editor, change from:#render-live"
+           hx-include="#src-path, #source-editor, #sample-editor, #render-live"
            hx-target="this" hx-swap="innerHTML"></div>
     </div>
     <details class="hc-stack" th:if="${src.hasDraft}">

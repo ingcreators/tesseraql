@@ -72,12 +72,16 @@ final class StudioRouteBuilder extends RouteBuilder {
                 }));
 
         // The render endpoint takes two text inputs (the draft content and the sample model), so it
-        // carries a JSON body {content, sampleModel} rather than the raw content the others use.
+        // carries a JSON body {content, sampleModel, live} rather than the raw content the others
+        // use. live:true runs the route's query through the A2 sandbox for real rows.
         from("direct:studio.render").routeId("studio.render")
                 .to(AUTH).process(json(exchange -> {
                     String path = requirePath(exchange);
                     com.fasterxml.jackson.databind.JsonNode body = readBody(exchange);
-                    return studio.render(path, text(body, "content"), text(body, "sampleModel"));
+                    boolean live = "true".equals(text(body, "live")) && studioTests.isEnabled();
+                    StudioService.RowSource rows = live ? studioTests::liveRows : null;
+                    return studio.render(path, text(body, "content"), text(body, "sampleModel"),
+                            rows);
                 }));
 
         // Runs the route's read-only sql test cases against the dev datasource (backlog A2);

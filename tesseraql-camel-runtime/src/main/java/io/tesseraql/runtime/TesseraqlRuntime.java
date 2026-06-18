@@ -741,9 +741,14 @@ public final class TesseraqlRuntime implements AutoCloseable {
                             String path = String.valueOf(params.get("path"));
                             Object content = params.get("content");
                             Object sample = params.get("sampleModel");
+                            // Live data: run the route's query through the A2 sandbox for real rows,
+                            // gated like the test runner (writable Studio + opt-in enabled).
+                            boolean live = "true".equals(String.valueOf(params.get("live")));
+                            io.tesseraql.studio.StudioService.RowSource rows = live
+                                    && studioTests.isEnabled() ? studioTests::liveRows : null;
                             return io.tesseraql.studio.StudioViews.render(studio.render(path,
                                     content == null ? null : String.valueOf(content),
-                                    sample == null ? null : String.valueOf(sample)));
+                                    sample == null ? null : String.valueOf(sample), rows));
                         })
                         .register("studio.runTests",
                                 params -> studioTests

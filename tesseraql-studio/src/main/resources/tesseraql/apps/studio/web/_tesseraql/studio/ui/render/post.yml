@@ -13,6 +13,9 @@ input:
   sampleModel:
     type: string
     required: false
+  live:
+    type: string
+    required: false
 
 security:
   auth: bearer
@@ -23,6 +26,7 @@ sql:
     path: params.path
     content: params.content
     sampleModel: params.sampleModel
+    live: params.live
 
 response:
   html:

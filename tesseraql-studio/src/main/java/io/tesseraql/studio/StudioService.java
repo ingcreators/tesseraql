@@ -210,14 +210,42 @@ public final class StudioService {
      * applied in preview.
      */
     public RenderResult render(String relativePath, String content, String sampleModel) {
+        return render(relativePath, content, sampleModel, null);
+    }
+
+    /**
+     * As {@link #render(String, String, String)}, but for a web route a non-null {@code liveRows}
+     * supplies the {@code sql} rows by executing the route's query against the dev datasource (the
+     * Studio backlog A1 "real bound params" end, powered by the A2 sandbox) instead of taking them
+     * from the hand-authored sample. Studio itself stays database-free: the caller (the runtime)
+     * provides the sandboxed row source.
+     */
+    public RenderResult render(String relativePath, String content, String sampleModel,
+            RowSource liveRows) {
         if (isTemplate(relativePath)) {
             return renderTemplateFile(relativePath, content, sampleModel);
         }
         if (isRouteYaml(relativePath)) {
-            return renderRoute(relativePath, content, sampleModel);
+            return renderRoute(relativePath, content, sampleModel, liveRows);
         }
         return RenderResult.invalid("text",
                 "Rendered preview is only available for templates and web routes");
+    }
+
+    /**
+     * Supplies live {@code sql} rows for a route render by executing its query against the dev
+     * datasource (Studio backlog A1/A2). Implemented by the runtime over the sandboxed datasource so
+     * Studio stays database-free.
+     */
+    @FunctionalInterface
+    public interface RowSource {
+        /**
+         * The live {@code sql} result ({@code rows}/{@code rowCount}) for the route's main query,
+         * its bind params resolved from {@code context}; null to keep the hand-authored sample's
+         * {@code sql}. May throw to report a query failure.
+         */
+        Map<String, Object> rowsFor(RouteDefinition route, Path routeDir,
+                Map<String, Object> context);
     }
 
     private RenderResult renderTemplateFile(String relativePath, String content,
@@ -232,7 +260,8 @@ public final class StudioService {
         return renderTemplateContent(relativePath, text, model);
     }
 
-    private RenderResult renderRoute(String relativePath, String content, String sampleModel) {
+    private RenderResult renderRoute(String relativePath, String content, String sampleModel,
+            RowSource liveRows) {
         String text = content != null ? content : source(relativePath);
         RouteDefinition definition;
         try {
@@ -242,9 +271,21 @@ public final class StudioService {
         }
         Map<String, Object> context;
         try {
-            context = parseSample(relativePath, sampleModel);
+            // A mutable copy: live rows are injected as the `sql` key before model resolution.
+            context = new LinkedHashMap<>(parseSample(relativePath, sampleModel));
         } catch (RuntimeException ex) {
             return RenderResult.invalid("sample", "Sample data: " + rootMessage(ex));
+        }
+        if (liveRows != null) {
+            try {
+                Map<String, Object> sql = liveRows.rowsFor(definition,
+                        resolve(relativePath).getParent(), context);
+                if (sql != null) {
+                    context.put("sql", sql);
+                }
+            } catch (RuntimeException ex) {
+                return RenderResult.invalid("route", "Live data: " + rootMessage(ex));
+            }
         }
         EvaluationContext evaluation = new EvaluationContext(context);
         ResponseSpec response = definition.response();

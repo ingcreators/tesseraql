@@ -46,6 +46,14 @@ Studio editor + docs work (2026-06):
   paths are out of scope. New `StudioTestService` reusing the declarative `TestRunner` +
   `CrossReferenceIndex`, the `studio.runTests` provider, the `POST /_tesseraql/studio/runTests` JSON
   endpoint, and the `/_tesseraql/studio/ui/run-tests` editor fragment.
+- **Live data in the rendered preview (A1 "real bound params" × A2 sandbox)** — the route render
+  panel gains a **Use live data** toggle (when the test runner is enabled): instead of a
+  hand-authored `sql.rows` fixture, it runs the route's main `sql` query through the same
+  `SandboxDataSource` (bind params resolved from the sample's `params`/`query`) and injects the real
+  `rows`/`rowCount`, so editing a route previews the actual page/JSON over live dev data.
+  `StudioService.RowSource` (a DB-free callback the runtime fills with `StudioTestService.liveRows`);
+  `live` flows through the `studio.render` provider, `POST /_tesseraql/studio/render`, and the
+  `/_tesseraql/studio/ui/render` fragment.
 
 Upstream Hypermedia Components briefs filed and adopted: `hc-code` (read-only block,
 gutter, diff), editable `hc-code`, `hc-sparkline`, and read-only syntax highlighting
@@ -66,19 +74,19 @@ gutter, diff), editable `hc-code`, `hc-sparkline`, and read-only syntax highligh
    - **Output-field masking** — apply `response.json.fields` masking in the JSON preview (needs the
      policy engine + a sample principal); today the preview shows the unmasked resolved body.
 
-   The "render against **real** bound params" end — executing the route's SQL against a dev
-   datasource to populate live rows instead of a hand-authored `sql.rows` fixture — folds into A2's
-   sandboxed execution path (below). (Email/notification `.html` templates already preview via the
-   template-file path: supply `payload`/`event` as the sample.)
+   The "render against **real** bound params" end — executing the route's SQL through the A2
+   sandbox to populate live rows instead of a hand-authored `sql.rows` fixture — is **done** (the
+   render panel's **Use live data** toggle; see Shipped). (Email/notification `.html` templates
+   already preview via the template-file path: supply `payload`/`event` as the sample.)
 2. **Run a route's declarative suite from Studio** — *slice 1 shipped* (see Shipped): a **Run
    tests** action runs the route's read-only `sql` cases against the dev datasource, sandboxed and
    opt-in. Remaining slices:
    - **More case kinds** — `validate`/`notify`/`http-call` cases (no DB writes, so safe to add) and
      then write/command cases (need a real rollback-per-case sandbox, since multi-statement cases
      fail under the current per-connection rollback).
-   - **Live rows into the rendered preview** — the "real bound params" end of A1: execute a route's
-     SQL through the same sandbox to populate the preview with live rows instead of a hand-authored
-     `sql.rows` fixture.
+   - **Live rows into the rendered preview** — *done* (see Shipped): the route render panel's **Use
+     live data** toggle runs the route's main `sql` through the sandbox for real rows. Multi-binding
+     routes still inject only the main `sql`; `steps`/`queries` live execution is a later extension.
 
    Ties to milestone M7 ("schema → verified CRUD in ten minutes").
 

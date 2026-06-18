@@ -11,6 +11,8 @@ import io.tesseraql.yaml.manifest.ManifestLoader;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -259,6 +261,35 @@ class StudioServiceTest {
         // resolves against the fixture context and pretty-prints.
         assertThat(result.output()).contains("\"data\"").contains("Sato")
                 .contains("\"count\" : 1").contains("\"limit\" : 50");
+    }
+
+    @Test
+    void rendersHtmlRouteWithLiveRowSource() {
+        StudioService studio = new StudioService(exampleManifest(), true);
+        // A stub row source stands in for the runtime's sandboxed query: the sample carries no sql.
+        StudioService.RowSource live = (route, dir, context) -> Map.of(
+                "rows", List.of(Map.of("id", 9, "name", "Live row", "status", "ACTIVE")),
+                "rowCount", 1);
+
+        StudioService.RenderResult result = studio.render(
+                "web/users/fragments/table/get.yml", null, "params: {}", live);
+
+        assertThat(result.ok()).isTrue();
+        assertThat(result.output()).contains("Live row").contains("ACTIVE");
+    }
+
+    @Test
+    void renderSurfacesLiveDataFailure() {
+        StudioService studio = new StudioService(exampleManifest(), true);
+        StudioService.RowSource boom = (route, dir, context) -> {
+            throw new IllegalStateException("connection refused");
+        };
+
+        StudioService.RenderResult result = studio.render(
+                "web/users/fragments/table/get.yml", null, "params: {}", boom);
+
+        assertThat(result.ok()).isFalse();
+        assertThat(result.error()).contains("Live data").contains("connection refused");
     }
 
     @Test
