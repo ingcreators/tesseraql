@@ -10,6 +10,9 @@ input:
   force:
     type: string
     required: false
+  confirm:
+    type: string
+    required: false
 
 security:
   auth: bearer
@@ -19,6 +22,7 @@ sql:
   params:
     path: params.path
     force: params.force
+    confirm: params.confirm
     actor: principal.loginId
     roles: principal.roles
 

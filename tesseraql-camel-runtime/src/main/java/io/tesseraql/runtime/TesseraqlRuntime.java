@@ -714,7 +714,12 @@ public final class TesseraqlRuntime implements AutoCloseable {
                                 .map(String::trim).filter(role -> !role.isEmpty())
                                 .collect(java.util.stream.Collectors.toSet()))
                         .orElse(java.util.Set.of());
-                StudioAccess studioAccess = new StudioAccess(!readOnly, editRoles);
+                // Confirm-diff-before-every-apply (Studio backlog D5 follow-up): an opt-in gate that
+                // makes the editor acknowledge the diff before each apply, not only on a conflict.
+                boolean confirmApply = manifest.config()
+                        .getString("tesseraql.studio.confirmApply")
+                        .map(Boolean::parseBoolean).orElse(false);
+                StudioAccess studioAccess = new StudioAccess(!readOnly, editRoles, confirmApply);
                 // Output-field masking in the JSON render preview (Studio backlog A1 follow-up): the
                 // runtime supplies the mask over the canonical FieldPolicyApplier (so Studio stays
                 // free of the security/compiler stack), evaluated for the sample principal the
@@ -769,6 +774,8 @@ public final class TesseraqlRuntime implements AutoCloseable {
                             model.put("testRunnerEnabled", testRunnerEnabled);
                             // Warn when applying would overwrite a concurrently changed source (D5).
                             model.put("conflict", draft != null && studio.draftConflicts(path));
+                            // Require an explicit diff acknowledgment before apply when configured.
+                            model.put("confirmApply", studioAccess.confirmApply());
                             // The edit surface follows the caller's edit permission (backlog D6).
                             boolean canEdit = studioAccess.canEdit(params.get("roles"));
                             model.put("editable", canEdit);
@@ -795,6 +802,10 @@ public final class TesseraqlRuntime implements AutoCloseable {
                             String path = String.valueOf(params.get("path"));
                             // force=true overwrites a concurrently changed source (backlog D5).
                             boolean force = "true".equals(String.valueOf(params.get("force")));
+                            boolean confirm = "true".equals(String.valueOf(params.get("confirm")));
+                            // When confirm-before-apply is on, require an explicit acknowledgment
+                            // (the conflict force checkbox counts as one).
+                            studioAccess.requireConfirm(confirm || force);
                             // The caller is recorded to the audit trail (backlog D6).
                             studio.applyDraft(path, force, actorOf(params));
                             reloader.reload();

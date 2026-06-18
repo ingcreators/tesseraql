@@ -8,6 +8,14 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- Studio editor: confirm-the-diff-before-every-apply (Studio backlog D5 follow-up). A new opt-in
+  `tesseraql.studio.confirmApply` flag makes the editor acknowledge the compare-panel diff before
+  **every** draft apply, not only when there's a concurrent-edit conflict. When on, the source page
+  shows a `required` "I reviewed the diff" checkbox next to Apply, and the UI apply route rejects an
+  unacknowledged apply (`STUDIO-4223 → 422`); a conflict's existing force checkbox counts as the
+  acknowledgment. The gate is UI-only — the programmatic JSON and MCP apply paths are unaffected
+  (they have no human diff to review). Runtime `StudioAccess.requireConfirm` / `confirmApply()`.
+
 - Studio copilot: the MCP "describe → draft → preview → apply" loop (Studio backlog G). The
   protocol core (`tesseraql-mcp`) gains the third MCP primitive — **prompts** (`prompts/list` /
   `prompts/get`, advertised in `initialize` only when registered) via a new `McpPrompt` /

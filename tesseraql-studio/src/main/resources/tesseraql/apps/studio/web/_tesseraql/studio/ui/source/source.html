@@ -78,11 +78,16 @@
       <div id="run-tests-result" class="hc-stack" aria-live="polite"></div>
     </div>
     <p class="hc-alert" data-variant="warning" role="alert" th:if="${src.conflict}">The saved source changed since this draft was started &mdash; applying overwrites those changes. Review the compare panel above first.</p>
+    <p class="hc-alert" data-variant="info" role="note" th:if="${src.confirmApply and not src.conflict and src.hasDraft}">Confirm-before-apply is on: review the compare panel above, then confirm.</p>
     <form hx-post="/_tesseraql/studio/ui/apply" hx-target="#apply-result" hx-swap="innerHTML">
       <input type="hidden" name="path" th:value="${src.path}">
       <label class="hc-field" th:if="${src.conflict}">
         <input type="checkbox" name="force" value="true" required>
         I reviewed the changes &mdash; overwrite the updated source
+      </label>
+      <label class="hc-field" th:if="${src.confirmApply and not src.conflict}">
+        <input type="checkbox" name="confirm" value="true" required>
+        I reviewed the diff above &mdash; apply this draft
       </label>
       <div class="hc-cluster"><button type="submit" class="hc-button" data-variant="primary">Apply draft &amp; reload</button></div>
     </form>

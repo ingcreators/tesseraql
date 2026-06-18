@@ -233,7 +233,7 @@ public final class ErrorResponseRenderer implements Processor {
                 case 4030, 4031 -> 403; // read-only / caller lacks a Studio edit role (backlog D6)
                 case 4040 -> 404;
                 case 4090 -> 409; // a draft applied over a concurrently changed source (backlog D5)
-                case 4221 -> 422;
+                case 4221, 4223 -> 422; // invalid draft / apply not confirmed (confirm-before-apply)
                 default -> 500;
             };
             case IDEM -> code.number() == 4090 ? 409 : 500;

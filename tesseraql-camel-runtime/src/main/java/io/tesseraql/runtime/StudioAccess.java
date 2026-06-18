@@ -20,13 +20,38 @@ import java.util.Set;
 final class StudioAccess {
 
     private static final TqlErrorCode FORBIDDEN = new TqlErrorCode(TqlDomain.STUDIO, 4031);
+    private static final TqlErrorCode CONFIRM_REQUIRED = new TqlErrorCode(TqlDomain.STUDIO, 4223);
 
     private final boolean writable;
     private final Set<String> editRoles;
+    private final boolean confirmApply;
 
-    StudioAccess(boolean writable, Set<String> editRoles) {
+    StudioAccess(boolean writable, Set<String> editRoles, boolean confirmApply) {
         this.writable = writable;
         this.editRoles = Set.copyOf(editRoles);
+        this.confirmApply = confirmApply;
+    }
+
+    /**
+     * Whether a draft apply must be acknowledged in the editor first
+     * ({@code tesseraql.studio.confirmApply}): a general review-the-diff-before-every-apply gate that
+     * extends the conflict-only review (Studio backlog D5). UI-only — the programmatic JSON and MCP
+     * apply paths are not gated, as they have no human diff to review.
+     */
+    boolean confirmApply() {
+        return confirmApply;
+    }
+
+    /**
+     * Rejects a UI apply that was not acknowledged when {@link #confirmApply()} is on: the editor
+     * must review the diff and confirm (or, on a conflict, force) before promoting a draft. A no-op
+     * when the gate is off. (422)
+     */
+    void requireConfirm(boolean acknowledged) {
+        if (confirmApply && !acknowledged) {
+            throw new TqlException(CONFIRM_REQUIRED,
+                    "Review the diff in the compare panel and confirm before applying.");
+        }
     }
 
     /** Whether {@code roles} (the caller's roles, as bound from {@code principal.roles}) may edit. */

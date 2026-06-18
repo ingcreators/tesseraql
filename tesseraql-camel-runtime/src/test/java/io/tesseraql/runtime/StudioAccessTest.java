@@ -13,7 +13,7 @@ class StudioAccessTest {
 
     @Test
     void readOnlyStudioNeverEdits() {
-        StudioAccess access = new StudioAccess(false, Set.of("ADMIN"));
+        StudioAccess access = new StudioAccess(false, Set.of("ADMIN"), false);
 
         assertThat(access.canEdit(List.of("ADMIN"))).isFalse();
         assertThatThrownBy(() -> access.requireEdit(List.of("ADMIN")))
@@ -22,7 +22,7 @@ class StudioAccessTest {
 
     @Test
     void writableWithoutEditRolesAllowsAnyAuthenticatedCaller() {
-        StudioAccess access = new StudioAccess(true, Set.of());
+        StudioAccess access = new StudioAccess(true, Set.of(), false);
 
         assertThat(access.canEdit(List.of())).isTrue();
         assertThat(access.canEdit(List.of("anything"))).isTrue();
@@ -32,7 +32,7 @@ class StudioAccessTest {
 
     @Test
     void editRolesGateByRole() {
-        StudioAccess access = new StudioAccess(true, Set.of("STUDIO_EDITOR", "ADMIN"));
+        StudioAccess access = new StudioAccess(true, Set.of("STUDIO_EDITOR", "ADMIN"), false);
 
         assertThat(access.canEdit(List.of("ADMIN"))).isTrue();
         assertThat(access.canEdit(List.of("USER", "STUDIO_EDITOR"))).isTrue();
@@ -42,5 +42,23 @@ class StudioAccessTest {
         assertThat(access.canEdit("ADMIN")).isFalse();
         assertThatThrownBy(() -> access.requireEdit(List.of("VIEWER")))
                 .isInstanceOf(TqlException.class).hasMessageContaining("roles");
+    }
+
+    @Test
+    void confirmApplyOffNeverGatesAnApply() {
+        StudioAccess access = new StudioAccess(true, Set.of(), false);
+
+        assertThat(access.confirmApply()).isFalse();
+        access.requireConfirm(false); // no gate -> no throw even without acknowledgment
+    }
+
+    @Test
+    void confirmApplyOnRequiresAnAcknowledgment() {
+        StudioAccess access = new StudioAccess(true, Set.of(), true);
+
+        assertThat(access.confirmApply()).isTrue();
+        access.requireConfirm(true); // acknowledged (confirm or force) -> ok
+        assertThatThrownBy(() -> access.requireConfirm(false))
+                .isInstanceOf(TqlException.class).hasMessageContaining("confirm");
     }
 }
