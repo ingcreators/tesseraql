@@ -54,6 +54,49 @@
         <button type="submit" class="hc-button" data-variant="primary">Create migration</button>
       </div>
     </form>
+    <details class="hc-disclosure">
+      <summary>DDL builder (optional)</summary>
+      <p class="hc-field__message">Generate standard DDL for a common operation and drop it into the
+        DDL field above to review and refine. Identifiers are not validated &mdash; check the result.</p>
+      <form class="hc-stack" hx-post="/_tesseraql/studio/ui/migration/build"
+            hx-target="#mig-ddl" hx-swap="innerHTML">
+        <input type="hidden" name="operation" value="add-column">
+        <h3>Add column</h3>
+        <div class="hc-cluster">
+          <div class="hc-field"><label class="hc-field__label">Table</label>
+            <input class="hc-input" name="table" required placeholder="users"></div>
+          <div class="hc-field"><label class="hc-field__label">Column</label>
+            <input class="hc-input" name="column" required placeholder="nickname"></div>
+          <div class="hc-field"><label class="hc-field__label">Type</label>
+            <input class="hc-input" name="type" required placeholder="text"></div>
+        </div>
+        <div class="hc-cluster">
+          <div class="hc-field"><label class="hc-field__label">Default (optional)</label>
+            <input class="hc-input" name="default" placeholder="0"></div>
+          <label class="hc-field"><input type="checkbox" name="notNull" value="true"> Not null</label>
+        </div>
+        <div class="hc-cluster">
+          <button type="submit" class="hc-button" data-variant="ghost">Generate &uarr;</button>
+        </div>
+      </form>
+      <form class="hc-stack" hx-post="/_tesseraql/studio/ui/migration/build"
+            hx-target="#mig-ddl" hx-swap="innerHTML">
+        <input type="hidden" name="operation" value="create-index">
+        <h3>Create index</h3>
+        <div class="hc-cluster">
+          <div class="hc-field"><label class="hc-field__label">Table</label>
+            <input class="hc-input" name="table" required placeholder="users"></div>
+          <div class="hc-field"><label class="hc-field__label">Columns (comma-separated)</label>
+            <input class="hc-input" name="columns" required placeholder="name, status"></div>
+          <div class="hc-field"><label class="hc-field__label">Name (optional)</label>
+            <input class="hc-input" name="name" placeholder="users_name_status_idx"></div>
+          <label class="hc-field"><input type="checkbox" name="unique" value="true"> Unique</label>
+        </div>
+        <div class="hc-cluster">
+          <button type="submit" class="hc-button" data-variant="ghost">Generate &uarr;</button>
+        </div>
+      </form>
+    </details>
   </section>
 </div>
 </html>
