@@ -9,16 +9,17 @@ All notable changes to TesseraQL are documented here. The format follows
 ### Added
 
 - Studio editor: run a route's or job's declarative tests from the editor (Studio backlog A2). A
-  route or job source page gains a **Run tests** action that runs the read-only declarative test
-  cases covering it — `sql` queries and `validate` rules (their SQL runs read-only against the
-  sandbox) plus the pure, no-DB `notify` and `http-call` evaluations — against the dev datasource
-  and shows inline pass/fail with the failure message — no edit → apply → restart → CI loop. Contract
-  cases (they run through the runtime's identity datasource, not the sandbox) and write/command paths
-  are out of scope. Gated and sandboxed: enabled only when Studio is writable and
-  `tesseraql.studio.testRunner.enabled` is set; every case runs through a read-only connection with
+  route or job source page gains a **Run tests** action that runs the declarative test cases
+  covering it — `sql` queries **and writes** (an `INSERT … RETURNING` runs and is rolled back) and
+  `validate` rules (their SQL runs against the sandbox) plus the pure, no-DB `notify` and
+  `http-call` evaluations — against the dev datasource and shows inline pass/fail with the failure
+  message — no edit → apply → restart → CI loop. Contract cases (they run through the runtime's
+  identity datasource, not the sandbox) are out of scope. Gated and sandboxed: enabled only when
+  Studio is writable and `tesseraql.studio.testRunner.enabled` is set; every case runs through a
+  `SandboxDataSource` — an auto-rollback transaction (commits suppressed, rolled back on close) with
   a statement timeout (`tesseraql.studio.testRunner.queryTimeoutSeconds`, default 5) and a row cap
-  (`tesseraql.studio.testRunner.maxRows`, default 1000), rolled back on close, so a query can
-  neither run away nor persist a write. Backed by a new
+  (`tesseraql.studio.testRunner.maxRows`, default 1000) — so a case can neither run away nor persist
+  a write. Backed by a new
   `StudioTestService` + `SandboxDataSource` reusing the declarative `TestRunner`, the
   `studio.runTests` provider, the `POST /_tesseraql/studio/runTests` JSON endpoint, and the
   `/_tesseraql/studio/ui/run-tests` editor fragment. See

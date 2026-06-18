@@ -10,15 +10,19 @@ import java.util.logging.Logger;
 import javax.sql.DataSource;
 
 /**
- * A read-only, capped {@link DataSource} wrapper used to sandbox the Studio test runner (backlog
- * A2): the editor may run a route's declarative {@code sql} test cases against the dev datasource,
- * so every handed-out connection is forced read-only with manual commit, every statement gets a
- * query timeout and a max-row cap, and the connection rolls back (never commits) when closed. Even
- * if a case's SQL tries to write, the read-only transaction rejects it and nothing persists.
+ * An auto-rollback, capped {@link DataSource} wrapper used to sandbox the Studio test runner
+ * (backlog A2): the editor may run a route's or job's declarative test cases against the dev
+ * datasource, so every handed-out connection runs in a manual-commit transaction that is rolled
+ * back when closed, with commits suppressed — a write case (e.g. an {@code INSERT … RETURNING})
+ * executes and its rows are returned, but nothing persists. Every statement also gets a query
+ * timeout and a max-row cap, so a query can neither run away nor flood memory.
  *
  * <p>The wrapper is intentionally thin: the test runner only acquires a connection, prepares a
  * statement, and reads a result set, so the connection proxy special-cases statement creation,
- * commit/read-only locking, and close; everything else delegates to the pooled connection.
+ * commit/auto-commit/read-only locking, and close; everything else delegates to the pooled
+ * connection. (The no-persistence guarantee rests on rollback-on-close plus commit suppression; an
+ * explicit {@code COMMIT} statement inside a case's SQL would defeat it, but 2-way SQL files carry
+ * single statements, never transaction control.)
  */
 final class SandboxDataSource implements DataSource {
 
@@ -45,7 +49,6 @@ final class SandboxDataSource implements DataSource {
     private Connection sandbox(Connection real) throws SQLException {
         try {
             real.setAutoCommit(false);
-            real.setReadOnly(true);
         } catch (SQLException ex) {
             real.close();
             throw ex;
@@ -59,7 +62,8 @@ final class SandboxDataSource implements DataSource {
                                 applyCaps((Statement) statement);
                                 return statement;
                             }
-                            // Keep the sandbox locked on: writes never commit, never go read-write.
+                            // Lock the sandbox transaction: ignore commit (suppressed so writes
+                            // never persist) and any attempt to flip auto-commit or read-only.
                             case "commit", "setReadOnly", "setAutoCommit" -> {
                                 return null;
                             }

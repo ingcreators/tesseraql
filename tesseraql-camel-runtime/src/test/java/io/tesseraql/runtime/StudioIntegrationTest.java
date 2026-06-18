@@ -1,7 +1,6 @@
 package io.tesseraql.runtime;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -578,10 +577,27 @@ class StudioIntegrationTest {
     }
 
     @Test
-    void sandboxDataSourceIsReadOnlyAndCapsRows() throws Exception {
+    void sandboxDataSourceRollsBackWritesAndCapsRows() throws Exception {
         try (com.zaxxer.hikari.HikariDataSource raw = rawDataSource()) {
+            // A probe table created via a normal (auto-commit) connection persists.
+            try (java.sql.Connection setup = raw.getConnection();
+                    java.sql.Statement ddl = setup.createStatement()) {
+                ddl.execute("drop table if exists sandbox_probe");
+                ddl.execute("create table sandbox_probe (id int)");
+            }
             javax.sql.DataSource sandbox = new SandboxDataSource(raw, 5, 2);
             try (java.sql.Connection conn = sandbox.getConnection()) {
+                // A write executes inside the sandbox transaction and is visible within it...
+                try (java.sql.PreparedStatement write = conn.prepareStatement(
+                        "insert into sandbox_probe values (1)")) {
+                    assertThat(write.executeUpdate()).isEqualTo(1);
+                }
+                try (java.sql.PreparedStatement read = conn.prepareStatement(
+                        "select count(*) from sandbox_probe");
+                        java.sql.ResultSet rs = read.executeQuery()) {
+                    rs.next();
+                    assertThat(rs.getInt(1)).isEqualTo(1);
+                }
                 // Row cap: a 100-row query yields at most maxRows (2).
                 try (java.sql.PreparedStatement query = conn.prepareStatement(
                         "select g from generate_series(1, 100) g");
@@ -592,21 +608,18 @@ class StudioIntegrationTest {
                     }
                     assertThat(count).isEqualTo(2);
                 }
-                // Read-only: a write is rejected by the transaction.
-                assertThatThrownBy(() -> {
-                    try (java.sql.PreparedStatement write = conn.prepareStatement(
-                            "create table sandbox_probe (id int)")) {
-                        write.executeUpdate();
-                    }
-                }).isInstanceOf(java.sql.SQLException.class);
             }
-            // The probe table never persisted (read-only + rollback on close).
+            // ...but on close it rolled back: the probe table is empty again.
             try (java.sql.Connection check = raw.getConnection();
-                    java.sql.PreparedStatement probe = check.prepareStatement(
-                            "select to_regclass('public.sandbox_probe')");
-                    java.sql.ResultSet rs = probe.executeQuery()) {
+                    java.sql.PreparedStatement count = check.prepareStatement(
+                            "select count(*) from sandbox_probe");
+                    java.sql.ResultSet rs = count.executeQuery()) {
                 rs.next();
-                assertThat(rs.getObject(1)).isNull();
+                assertThat(rs.getInt(1)).isZero();
+            }
+            try (java.sql.Connection cleanup = raw.getConnection();
+                    java.sql.Statement ddl = cleanup.createStatement()) {
+                ddl.execute("drop table sandbox_probe");
             }
         }
     }
@@ -618,6 +631,33 @@ class StudioIntegrationTest {
         config.setPassword(POSTGRES.getPassword());
         config.setMaximumPoolSize(2);
         return new com.zaxxer.hikari.HikariDataSource(config);
+    }
+
+    @Test
+    void runTestsRunsWriteCaseAndRollsItBack() throws Exception {
+        // The probe route binds a write SQL (update … returning); its sql test case runs through the
+        // writable sandbox, sees the returned row, and is rolled back so nothing persists.
+        HttpResponse<String> response = post("/_tesseraql/studio/runTests?path="
+                + enc("web/api/probe/post.yml"), "", true);
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        JsonNode result = MAPPER.readTree(response.body());
+        assertThat(result.get("ran").asBoolean()).isTrue();
+        assertThat(result.get("allPassed").asBoolean()).isTrue();
+        assertThat(result.get("cases")).anySatisfy(testCase -> {
+            assertThat(testCase.get("name").asText()).contains("probe update returns the affected");
+            assertThat(testCase.get("passed").asBoolean()).isTrue();
+        });
+
+        // The write rolled back: sato is still ACTIVE, never persisted as PROBED.
+        try (com.zaxxer.hikari.HikariDataSource raw = rawDataSource();
+                java.sql.Connection check = raw.getConnection();
+                java.sql.PreparedStatement status = check.prepareStatement(
+                        "select status from users where name = 'sato'");
+                java.sql.ResultSet rs = status.executeQuery()) {
+            rs.next();
+            assertThat(rs.getString(1)).isEqualTo("ACTIVE");
+        }
     }
 
     @Test
@@ -857,6 +897,52 @@ class StudioIntegrationTest {
                                          "refColumns": ["id"] } ],
                       "uniqueIndexes": [] }
                   ] } } }
+                """);
+        // A write route plus a sql test case targeting its write SQL, to exercise the writable
+        // sandbox (A2 write/command): the case runs an `update … returning` and is rolled back.
+        Files.createDirectories(target.resolve("web/api/probe"));
+        Files.writeString(target.resolve("web/api/probe/post.yml"), """
+                version: tesseraql/v1
+                id: probe.update
+                kind: route
+                recipe: command-json
+
+                input:
+                  name:
+                    type: string
+                    required: true
+
+                security:
+                  auth: bearer
+                  policy: users.write
+
+                sql:
+                  file: probe.sql
+                  mode: update
+                  params:
+                    name: body.name
+
+                response:
+                  json:
+                    status: 200
+                    body:
+                      affected: sql.affectedRows
+                """);
+        Files.writeString(target.resolve("web/api/probe/probe.sql"),
+                "update users set status = 'PROBED' where name = /* name */ 'sato'\n"
+                        + "returning id, name, status;\n");
+        Files.writeString(target.resolve("tests/studio-write-test.yml"), """
+                tests:
+                  - name: the probe update returns the affected row
+                    sql:
+                      file: web/api/probe/probe.sql
+                    params:
+                      name: sato
+                    expect:
+                      rowCount: 1
+                      rows:
+                        - name: sato
+                          status: PROBED
                 """);
         return target;
     }

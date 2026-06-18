@@ -42,12 +42,13 @@ import javax.sql.DataSource;
  *
  * <p>Gated and sandboxed (decided with the maintainer): enabled only when Studio is writable and
  * {@code tesseraql.studio.testRunner.enabled} is set; every case runs through a
- * {@link SandboxDataSource} (read-only connection, statement timeout, row cap, rollback on close),
- * so a query can neither run away nor persist a write. The read-only case kinds run — {@code sql}
- * queries, {@code validate} rules (their SQL runs read-only against the sandbox), and the pure (no
- * DB) {@code notify} and {@code http-call} evaluations (the latter plans a job's outbound step
- * without a network call). Contract cases (they execute through the runtime's identity datasource,
- * not the sandbox) and write/command paths are out of scope.
+ * {@link SandboxDataSource} — an auto-rollback transaction (commits suppressed, rolled back on
+ * close) with a statement timeout and a row cap — so a case can neither run away nor persist a
+ * write. The declarative case kinds run: {@code sql} queries and {@code validate} rules (their SQL
+ * runs against the sandbox), {@code notify} and {@code http-call} evaluations (pure, no DB; the
+ * latter plans a job's outbound step without a network call), and {@code sql} write cases (an
+ * {@code INSERT … RETURNING} executes and its rows are checked, then rolled back). Contract cases
+ * are out of scope — they execute through the runtime's identity datasource, not the sandbox.
  */
 final class StudioTestService {
 
@@ -153,11 +154,11 @@ final class StudioTestService {
     }
 
     /**
-     * A read-only declarative case the sandbox can run: a {@code sql} query, a {@code validate} rule
-     * (its SQL runs read-only against the sandbox), a {@code notify} evaluation, or an
-     * {@code http-call} plan (the last two are pure, no DB). Contract cases are excluded — they run
-     * through the runtime's identity datasource, not the sandbox — and {@code messages} cases carry
-     * no DB/route/job binding.
+     * A declarative case the sandbox can run: a {@code sql} query or write (its SQL runs against the
+     * sandbox — a write executes and is rolled back), a {@code validate} rule, a {@code notify}
+     * evaluation, or an {@code http-call} plan (the last two are pure, no DB). Contract cases are
+     * excluded — they run through the runtime's identity datasource, not the sandbox — and
+     * {@code messages} cases carry no DB/route/job binding.
      */
     private static boolean isRunnable(TestCase test) {
         if (test.contract() != null && !test.contract().isBlank()) {
