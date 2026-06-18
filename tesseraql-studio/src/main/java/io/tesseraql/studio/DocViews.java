@@ -1,5 +1,6 @@
 package io.tesseraql.studio;
 
+import io.tesseraql.core.sql.SqlTableReferences;
 import io.tesseraql.studio.DocService.DocSpec;
 import io.tesseraql.studio.DocService.RouteEntry;
 import io.tesseraql.studio.DocService.TestRef;
@@ -13,8 +14,10 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeSet;
 
 /**
  * Template-ready views over the {@link DocService} (documentation portal v1): pure mappings from the
@@ -64,12 +67,20 @@ public final class DocViews {
         return model;
     }
 
+    /** The full per-route reference model without data-dependency links (no schema overlay). */
+    public static Map<String, Object> route(RouteEntry entry, ReportOverlay.RouteReport report) {
+        return route(entry, report, Map.of());
+    }
+
     /**
      * The full per-route reference model. When {@code report} is non-null (a run overlay is present
      * for this route) it merges the run facts: a status badge row (covered, pass/fail, line/branch
-     * coverage), each test's pass/fail, and each SQL statement's coverage.
+     * coverage), each test's pass/fail, and each SQL statement's coverage. {@code tableLinks} maps a
+     * lowercased table name to its schema table page, so the route's inferred data dependencies (the
+     * tables its SQL reads and writes) cross-link to the schema portal when introspected.
      */
-    public static Map<String, Object> route(RouteEntry entry, ReportOverlay.RouteReport report) {
+    public static Map<String, Object> route(RouteEntry entry, ReportOverlay.RouteReport report,
+            Map<String, String> tableLinks) {
         RouteSpec route = entry.route();
         Map<String, ReportOverlay.CaseResult> resultsByName = resultsByName(report);
         Map<String, ReportOverlay.SqlFileCoverage> coverageByName = coverageByName(report);
@@ -89,6 +100,13 @@ public final class DocViews {
         model.put("response", response(route.response()));
         model.put("sql", statements(route.sql(), coverageByName));
         model.put("hasSql", !route.sql().isEmpty());
+        List<Map<String, Object>> reads = tableDependencies(route.sql(),
+                SqlTableReferences.Access.READ, tableLinks);
+        List<Map<String, Object>> writes = tableDependencies(route.sql(),
+                SqlTableReferences.Access.WRITE, tableLinks);
+        model.put("reads", reads);
+        model.put("writes", writes);
+        model.put("hasDataDeps", !reads.isEmpty() || !writes.isEmpty());
         model.put("tests", tests(entry.tests(), resultsByName));
         model.put("hasTests", !entry.tests().isEmpty());
         applyRouteSummary(model, report);
@@ -519,6 +537,36 @@ public final class DocViews {
                     row.put("lines", coverageLines(statement.statement(), coverage));
                 }
             }
+            rows.add(row);
+        }
+        return rows;
+    }
+
+    /**
+     * The distinct tables the route's SQL touches under one access, each with a cross-link to its
+     * schema table page when introspected (else a plain name). Inferred lexically from every bound
+     * statement's 2-way SQL by {@link SqlTableReferences} — a best-effort dependency view, not an
+     * execution fact — and ordered case-insensitively for a stable display.
+     */
+    private static List<Map<String, Object>> tableDependencies(List<RouteSpec.SqlStatement> sql,
+            SqlTableReferences.Access access, Map<String, String> tableLinks) {
+        Set<String> names = new TreeSet<>(String.CASE_INSENSITIVE_ORDER);
+        for (RouteSpec.SqlStatement statement : sql) {
+            if (statement.statement() == null) {
+                continue;
+            }
+            for (SqlTableReferences.TableRef ref : SqlTableReferences
+                    .extract(statement.statement())) {
+                if (ref.access() == access) {
+                    names.add(ref.table());
+                }
+            }
+        }
+        List<Map<String, Object>> rows = new ArrayList<>();
+        for (String name : names) {
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("name", name);
+            row.put("url", tableLinks.get(name.toLowerCase(Locale.ROOT)));
             rows.add(row);
         }
         return rows;

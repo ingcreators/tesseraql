@@ -450,6 +450,20 @@ class StudioIntegrationTest {
         // The live-fallback model renders the request surface, security, and bound SQL.
         assertThat(response.body()).contains("users.search").contains("/api/users")
                 .contains("query-json").contains("Inputs").contains("search.sql");
+        // The inferred data dependencies (SQL->table graph): users.search reads the `users` table.
+        assertThat(response.body()).contains("Data dependencies").contains(">users<");
+    }
+
+    @Test
+    void uiDocsRouteCrossLinksDataDependenciesToSchemaTables() throws Exception {
+        HttpResponse<String> response = get(
+                "/_tesseraql/studio/ui/docs/route?id=" + enc("deps.customers"), true);
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        // `deps.customers` reads `customers`, which the schema.json overlay introspects, so the
+        // data-dependency badge links to that table's page (the cross-link is resolved live).
+        assertThat(response.body()).contains("Data dependencies")
+                .contains("/_tesseraql/studio/ui/docs/schema/table?ds=main&amp;name=customers");
     }
 
     @Test
@@ -1584,6 +1598,32 @@ class StudioIntegrationTest {
                   - name: the list-users contract runs under the sandbox
                     contract: identity.list-users
                 """);
+        // A route whose SQL reads `customers` — a table the schema.json overlay above introspects —
+        // so the docs route page's inferred data dependency cross-links to that table page (the
+        // SQL->table dependency graph). It is never executed (only its spec text is read).
+        Files.createDirectories(target.resolve("web/api/deps"));
+        Files.writeString(target.resolve("web/api/deps/get.yml"), """
+                version: tesseraql/v1
+                id: deps.customers
+                kind: route
+                recipe: query-json
+
+                security:
+                  auth: bearer
+                  policy: users.read
+
+                sql:
+                  file: deps.sql
+                  mode: query
+
+                response:
+                  json:
+                    status: 200
+                    body:
+                      rows: sql.rows
+                """);
+        Files.writeString(target.resolve("web/api/deps/deps.sql"),
+                "select c.id, c.email from customers c order by c.id\n");
         return target;
     }
 

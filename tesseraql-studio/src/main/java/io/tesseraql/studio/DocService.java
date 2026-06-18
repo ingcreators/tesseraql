@@ -187,6 +187,28 @@ public final class DocService {
                 .findFirst().orElse(null);
     }
 
+    /**
+     * A lowercased table name &rarr; its schema table-page URL, across every datasource in the schema
+     * overlay (empty when {@code schema.json} is absent). The route reference uses it to cross-link a
+     * route's inferred data dependencies to the tables they touch (Studio backlog: the SQL&rarr;table
+     * dependency graph); a dependency whose table is not introspected stays plain text. A name in two
+     * datasources keeps the first (insertion-ordered) page.
+     */
+    public Map<String, String> tableLinks() {
+        SchemaOverlay overlay = schema();
+        if (overlay == null) {
+            return Map.of();
+        }
+        Map<String, String> links = new java.util.LinkedHashMap<>();
+        for (Map.Entry<String, CatalogSchema> ds : overlay.datasources().entrySet()) {
+            for (CatalogSchema.Table table : ds.getValue().tables()) {
+                links.putIfAbsent(table.name().toLowerCase(Locale.ROOT),
+                        tableUrl(ds.getKey(), table.name()));
+            }
+        }
+        return links;
+    }
+
     /** The doc entry for one route id, or {@code null} when no such route exists. */
     public RouteEntry route(String id) {
         for (RouteEntry entry : spec().routes()) {

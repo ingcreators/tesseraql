@@ -71,6 +71,35 @@ class DocViewsTest {
                 .satisfies(row -> assertThat(row).containsEntry("kind", "sql"));
     }
 
+    @Test
+    void routeProjectsDataDependenciesAndLinksIntrospectedTables() {
+        RouteSpec.SqlStatement read = new RouteSpec.SqlStatement("sql", "list.sql", null, null,
+                "query", "select * from customers c join orders o on o.customer_id = c.id",
+                List.of(), List.of());
+        RouteSpec.SqlStatement write = new RouteSpec.SqlStatement("step:insert", "ins.sql", null,
+                null, "update", "insert into orders (customer_id) values (/* p.id */ 1)", List.of(),
+                List.of());
+        RouteSpec route = new RouteSpec("orders.create", "POST", "/api/orders", "command-json",
+                "route", List.of(), null, List.of(), List.of(), null, List.of(read, write));
+        // Only `customers` is introspected into the schema portal, so only it gets a cross-link.
+        Map<String, String> links = Map.of("customers",
+                "/_tesseraql/studio/ui/docs/schema/table?ds=main&name=customers");
+
+        Map<String, Object> model = DocViews.route(new RouteEntry(route, List.of()), null, links);
+
+        assertThat(model).containsEntry("hasDataDeps", true);
+        // Reads: customers (the join, introspected -> linked) and orders (the join, not -> plain).
+        assertThat(asRows(model.get("reads"))).extracting(row -> row.get("name"))
+                .containsExactly("customers", "orders");
+        assertThat(asRows(model.get("reads")).get(0).get("url"))
+                .asString().contains("schema/table?ds=main&name=customers");
+        assertThat(asRows(model.get("reads")).get(1).get("url")).isNull();
+        // Writes: only the INSERT target (orders), not introspected, so no cross-link.
+        assertThat(asRows(model.get("writes"))).singleElement()
+                .satisfies(row -> assertThat(row).containsEntry("name", "orders")
+                        .containsEntry("url", null));
+    }
+
     private static ReportOverlay overlayForSearch() {
         ReportOverlay.RouteReport report = new ReportOverlay.RouteReport(true,
                 List.of(new ReportOverlay.CaseResult("finds sato", true, "OK")),

@@ -8,6 +8,16 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- Docs portal: SQL&rarr;table dependency graph on the route page (Studio backlog, v3.1 deferred
+  slice). A route's reference now shows the **tables its SQL reads from and writes to**, inferred
+  from the bound 2-way SQL by a new dependency-free extractor (`SqlTableReferences` in
+  `tesseraql-core`) — `FROM`/`JOIN`/`USING` are reads, `INSERT INTO`/`UPDATE`/`DELETE FROM`/
+  `MERGE INTO` are writes — skipping comments, directives, string literals, CTE names, and
+  derived-table subqueries. A read/write table that the `schema` goal introspected into the schema
+  portal cross-links to its table page; an un-introspected one stays plain text. It is a best-effort
+  navigation aid, not an execution fact, and is computed live from the spec (no `spec.json` change).
+  `DocService.tableLinks`; `DocViews.route` gains the data-dependency projection.
+
 - MCP: application-declared prompts (`kind: prompt`). An app can now declare its own MCP **prompt**
   under `mcp/` — the application-side counterpart of the dev-tool `studio_copilot` prompt — as a
   parameterized message template the runtime serves at `/_tesseraql/mcp` alongside its tools,
