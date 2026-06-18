@@ -6,6 +6,7 @@ import io.tesseraql.studio.DocService.RouteEntry;
 import io.tesseraql.studio.DocService.TestRef;
 import io.tesseraql.yaml.docs.RouteSpec;
 import io.tesseraql.yaml.docs.RouteSpecModel;
+import io.tesseraql.yaml.openapi.OpenApiDiff;
 import io.tesseraql.yaml.scaffold.CatalogSchema;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
@@ -370,6 +371,16 @@ public final class DocViews {
      * filename, and the bearer-gated endpoint URL (so it can be copied and shared with API tooling).
      */
     public static Map<String, Object> export(String appName) {
+        return export(appName, null);
+    }
+
+    /**
+     * The export page model (documentation portal F8) with the API changelog (Studio backlog: API
+     * spec diff). When {@code changelog} is non-null (an OpenAPI baseline sidecar is present) it adds
+     * the operations added, removed, or changed since that baseline — each non-removed entry linking
+     * to its route page — so the page shows both the current spec and what changed since a release.
+     */
+    public static Map<String, Object> export(String appName, OpenApiDiff.ApiChangelog changelog) {
         Map<String, Object> model = new LinkedHashMap<>();
         model.put("appName", appName);
         List<Map<String, Object>> artifacts = new ArrayList<>();
@@ -383,7 +394,37 @@ public final class DocViews {
                 "The htmx interaction contract: each fragment route's trigger, target, and swap, for "
                         + "documenting the hypermedia surface."));
         model.put("artifacts", artifacts);
+        applyApiChangelog(model, changelog);
         return model;
+    }
+
+    /** Adds the API-changelog facts (baseline presence, counts, per-operation rows) to the model. */
+    private static void applyApiChangelog(Map<String, Object> model,
+            OpenApiDiff.ApiChangelog changelog) {
+        model.put("hasBaseline", changelog != null);
+        model.put("baselinePath", DocService.OPENAPI_BASELINE_PATH);
+        if (changelog == null) {
+            return;
+        }
+        model.put("hasChanges", !changelog.isEmpty());
+        model.put("addedCount", changelog.count(OpenApiDiff.ApiChangelog.Kind.ADDED));
+        model.put("removedCount", changelog.count(OpenApiDiff.ApiChangelog.Kind.REMOVED));
+        model.put("changedCount", changelog.count(OpenApiDiff.ApiChangelog.Kind.CHANGED));
+        List<Map<String, Object>> rows = new ArrayList<>();
+        for (OpenApiDiff.ApiChangelog.Entry entry : changelog.entries()) {
+            Map<String, Object> row = new LinkedHashMap<>();
+            String kind = entry.kind().name().toLowerCase(Locale.ROOT);
+            row.put("kind", kind);
+            row.put("method", entry.method());
+            row.put("path", entry.path());
+            row.put("operationId", entry.operationId());
+            // A removed operation has no route page to link to; added/changed link to theirs.
+            row.put("url", entry.kind() == OpenApiDiff.ApiChangelog.Kind.REMOVED
+                    || entry.operationId() == null ? null : routeUrl(entry.operationId()));
+            row.put("details", entry.details());
+            rows.add(row);
+        }
+        model.put("changes", rows);
     }
 
     /**

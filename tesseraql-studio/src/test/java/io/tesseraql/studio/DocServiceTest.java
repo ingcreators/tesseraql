@@ -53,6 +53,35 @@ class DocServiceTest {
     }
 
     @Test
+    void apiChangelogDiffsTheCurrentSpecAgainstTheBaselineSidecar(@TempDir Path dir)
+            throws Exception {
+        Files.createDirectories(dir.resolve("config"));
+        Files.writeString(dir.resolve("config/tesseraql.yml"),
+                "tesseraql:\n  app:\n    name: demo\n");
+        DocService noBaseline = new DocService(new ManifestLoader().load(dir));
+        assertThat(noBaseline.hasApiBaseline()).isFalse();
+        assertThat(noBaseline.apiChangelog()).isNull();
+
+        // A baseline naming an operation the (route-less) current spec no longer has -> removed.
+        Files.createDirectories(dir.resolve(".tesseraql/docs"));
+        Files.writeString(dir.resolve(".tesseraql/docs/openapi.baseline.json"), """
+                { "openapi": "3.0.3", "info": { "title": "demo", "version": "1.0.0" },
+                  "paths": { "/legacy": { "get": { "operationId": "legacy.get",
+                      "responses": { "200": { "description": "OK" } } } } } }
+                """);
+        DocService service = new DocService(new ManifestLoader().load(dir));
+
+        assertThat(service.hasApiBaseline()).isTrue();
+        var changelog = service.apiChangelog();
+        assertThat(changelog).isNotNull();
+        assertThat(changelog.entries()).singleElement().satisfies(entry -> {
+            assertThat(entry.kind())
+                    .isEqualTo(io.tesseraql.yaml.openapi.OpenApiDiff.ApiChangelog.Kind.REMOVED);
+            assertThat(entry.path()).isEqualTo("/legacy");
+        });
+    }
+
+    @Test
     void readsThePackagedSpecWithTestCrossReferences(@TempDir Path dir) throws Exception {
         Files.createDirectories(dir.resolve("config"));
         Files.writeString(dir.resolve("config/tesseraql.yml"),

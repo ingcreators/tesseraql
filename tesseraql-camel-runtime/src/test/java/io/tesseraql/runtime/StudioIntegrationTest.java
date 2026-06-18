@@ -602,6 +602,18 @@ class StudioIntegrationTest {
     }
 
     @Test
+    void uiDocsExportPageShowsTheApiChangelogAgainstTheBaseline() throws Exception {
+        HttpResponse<String> response = get("/_tesseraql/studio/ui/docs/export", true);
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        // The baseline sidecar drives the API spec diff: the legacy op is removed, current routes
+        // (which the baseline lacks) are added — each added op links to its route page.
+        assertThat(response.body()).contains("API changes").contains("removed")
+                .contains("/api/legacy/widgets").contains("added")
+                .contains("/_tesseraql/studio/ui/docs/route?id=users.search");
+    }
+
+    @Test
     void uiDocsExportOpenApiStreamsTheSpecAsADownload() throws Exception {
         HttpResponse<String> response = get("/_tesseraql/studio/ui/docs/export/openapi", true);
 
@@ -1556,6 +1568,15 @@ class StudioIntegrationTest {
                                          "refColumns": ["id"] } ],
                       "uniqueIndexes": [] }
                   ] } } }
+                """);
+        // An OpenAPI baseline sidecar so the export page renders the API changelog (spec diff): it
+        // names a legacy operation the current app no longer has (-> removed) while the current
+        // routes the baseline lacks show as added.
+        Files.writeString(target.resolve(".tesseraql/docs/openapi.baseline.json"), """
+                { "openapi": "3.0.3", "info": { "title": "user-admin", "version": "1.0.0" },
+                  "paths": { "/api/legacy/widgets": { "get": {
+                      "operationId": "legacy.widgets",
+                      "responses": { "200": { "description": "OK" } } } } } }
                 """);
         // A write route plus a sql test case targeting its write SQL, to exercise the writable
         // sandbox (A2 write/command): the case runs an `update … returning` and is rolled back.

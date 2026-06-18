@@ -274,6 +274,14 @@ and is being adopted (see E below).
      v3.1 note also mentioned stays deferred — `schema.json` already gives table structure from live
      introspection, so the dependency graph (SQL side) is the valuable half. *Possible follow-on:* a
      single dependency-overview page (the full route&times;table matrix).
+   - **API spec diff / changelog** — *done*: the Export page shows **what changed** in the API since a
+     captured baseline. When an OpenAPI baseline sidecar is present
+     (`.tesseraql/docs/openapi.baseline.json` — the operator copies a released `openapi.json` there),
+     a new canonical `OpenApiDiff` engine (`tesseraql-yaml`) diffs the current generated OpenAPI
+     against it by method+path and the page lists the operations added/removed/changed (with the
+     per-operation parameter/body/response/security differences); added/changed entries link to their
+     route page. Off until a baseline is captured; a corrupt baseline degrades to a note.
+     `DocService.apiChangelog`; `DocViews.export` changelog projection.
 
 9. **Coverage trend depth** — *done*: the run-history ring is no longer fixed at 20 runs — a
    non-positive `tesseraql.historyLimit` (`report` goal) / `--history-limit` (`tesseraql test

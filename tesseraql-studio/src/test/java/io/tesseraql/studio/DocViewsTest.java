@@ -371,6 +371,46 @@ class DocViewsTest {
     }
 
     @Test
+    void exportRendersTheApiChangelogWhenABaselineIsPresent() {
+        io.tesseraql.yaml.openapi.OpenApiDiff.ApiChangelog changelog = new io.tesseraql.yaml.openapi.OpenApiDiff.ApiChangelog(
+                List.of(
+                        new io.tesseraql.yaml.openapi.OpenApiDiff.ApiChangelog.Entry(
+                                io.tesseraql.yaml.openapi.OpenApiDiff.ApiChangelog.Kind.ADDED,
+                                "POST",
+                                "/api/orders", "orders.create", List.of()),
+                        new io.tesseraql.yaml.openapi.OpenApiDiff.ApiChangelog.Entry(
+                                io.tesseraql.yaml.openapi.OpenApiDiff.ApiChangelog.Kind.CHANGED,
+                                "GET",
+                                "/api/users", "users.search", List.of("+ query parameter sort")),
+                        new io.tesseraql.yaml.openapi.OpenApiDiff.ApiChangelog.Entry(
+                                io.tesseraql.yaml.openapi.OpenApiDiff.ApiChangelog.Kind.REMOVED,
+                                "DELETE", "/api/legacy", "legacy.delete", List.of())));
+
+        Map<String, Object> model = DocViews.export("demo", changelog);
+
+        assertThat(model).containsEntry("hasBaseline", true).containsEntry("hasChanges", true)
+                .containsEntry("addedCount", 1L).containsEntry("changedCount", 1L)
+                .containsEntry("removedCount", 1L);
+        List<Map<String, Object>> changes = asRows(model.get("changes"));
+        assertThat(changes).hasSize(3);
+        // Added/changed entries link to their route page; a removed operation does not.
+        assertThat(changes.get(0)).containsEntry("kind", "added").containsEntry("method", "POST");
+        assertThat((String) changes.get(0).get("url")).contains("docs/route?id=orders.create");
+        assertThat(changes.get(1)).containsEntry("kind", "changed");
+        assertThat(asStrings(changes.get(1).get("details")))
+                .containsExactly("+ query parameter sort");
+        assertThat(changes.get(2)).containsEntry("kind", "removed").containsEntry("url", null);
+    }
+
+    @Test
+    void exportWithoutABaselineMarksItAbsentAndOffersThePath() {
+        Map<String, Object> model = DocViews.export("demo");
+
+        assertThat(model).containsEntry("hasBaseline", false).doesNotContainKey("changes");
+        assertThat((String) model.get("baselinePath")).endsWith("openapi.baseline.json");
+    }
+
+    @Test
     void shareModelExposesTheContractButNotTheImplementation() {
         Map<String, Object> model = DocViews.share(searchRoute());
 
