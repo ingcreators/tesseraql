@@ -8,6 +8,13 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- OpenAPI: structured JSON response schemas. The generated OpenAPI document (the `generate` goal /
+  the docs portal export) now describes a JSON route's response **shape** instead of an opaque
+  `{type: object}`: `OpenApiGenerator` mirrors the `response.json.body` template's object/array
+  structure with property names, and types each leaf source expression by convention — `…rows` is a
+  row array, a row count is an integer, and a `params.X` leaf takes the declared type of input `X`.
+  Unclassifiable leaves stay an open schema, and the output remains deterministic (sorted property
+  keys), so client generators and Swagger UI get a real response model.
 - Docs portal: signed share links for schema tables and the coverage dashboard (Studio backlog F8
   slice 3, extended). The opt-in `tesseraql.docs.share.secret` sharing that route pages had now also
   covers a **schema table** page and the **coverage** dashboard: an authenticated user gets a Share
