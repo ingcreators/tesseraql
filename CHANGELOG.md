@@ -8,6 +8,14 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- Docs portal: longer-term coverage trends (Studio backlog F9). The run-history ring that feeds the
+  coverage dashboard's trend sparklines is no longer fixed at 20 runs — a non-positive
+  `tesseraql.historyLimit` (Maven `report` goal) / `--history-limit` (`tesseraql test --report`) now
+  keeps the **full history**, so the trend can span far more than the former cap. The trend panel
+  shows its depth (the run count and the retained date span) instead of a hard-coded "last 20 runs"
+  note. `ReportHistory.append` treats a non-positive cap as unbounded; `DocViews.trend` adds the
+  date span.
+
 - Docs portal: opt-in signed shareable links (Studio backlog F8, slice 3, completing F8). A route's
   documentation is bearer-only by default; when the operator configures a signing secret
   (`tesseraql.docs.share.secret`, with an optional `tesseraql.docs.share.ttl` lifetime, default 7

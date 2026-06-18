@@ -51,7 +51,7 @@ final class TestCommand implements Callable<Integer> {
     String runId;
 
     @Option(names = {
-            "--history-limit"}, description = "Runs retained in history.json (default: 20).")
+            "--history-limit"}, description = "Runs retained in history.json; 0 keeps all (default: 20).")
     int historyLimit = 20;
 
     @Option(names = {"--sql-line-threshold"}, description = "Min SQL line coverage % recorded.")
@@ -96,8 +96,9 @@ final class TestCommand implements Callable<Integer> {
         Path docsDir = app.resolve(".tesseraql").resolve("docs");
         Files.createDirectories(docsDir);
         Files.writeString(docsDir.resolve("report.json"), generator.toJson(doc));
+        // A non-positive limit keeps the full history (longer-term trends, backlog F9).
         ReportHistory.append(docsDir.resolve("history.json"), ReportHistory.Entry.from(doc),
-                Math.max(1, historyLimit));
+                historyLimit);
         System.out.println("Wrote " + docsDir.resolve("report.json"));
     }
 }

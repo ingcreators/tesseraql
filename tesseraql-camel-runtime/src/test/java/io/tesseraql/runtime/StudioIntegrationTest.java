@@ -499,6 +499,9 @@ class StudioIntegrationTest {
         // Slice 5: the two-run history renders the trend sparklines.
         assertThat(response.body()).contains("Trend").contains("hc-sparkline")
                 .contains("data-values");
+        // F9: the trend shows its depth — the run count and the retained date span.
+        assertThat(response.body()).contains("over 2 runs")
+                .contains("2026-06-14").contains("2026-06-15");
     }
 
     @Test

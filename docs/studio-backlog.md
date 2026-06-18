@@ -251,7 +251,11 @@ and is being adopted (see E below).
      invalid/expired notice. The public view omits SQL/tests/coverage; the secret is dedicated (not
      the JWT key). Off until the secret is set. Runtime `ShareLinks`; `DocViews.share`; `docs.share`
      provider; `/_tesseraql/docs/share/route` route.
-9. **Coverage trend depth** — relax the "last 20 runs" cap for longer-term trends.
+9. **Coverage trend depth** — *done*: the run-history ring is no longer fixed at 20 runs — a
+   non-positive `tesseraql.historyLimit` (`report` goal) / `--history-limit` (`tesseraql test
+   --report`) keeps the full history, so the trend spans far more than the former cap. The trend
+   panel shows its depth (run count + retained date span) instead of the hard-coded "last 20 runs"
+   note. `ReportHistory.append` treats a non-positive cap as unbounded; `DocViews.trend` adds the span.
 
 ### G. Studio copilot — **gated (roadmap decision point 4)**
 
@@ -261,20 +265,13 @@ and is being adopted (see E below).
 
 ## Recommended next
 
-**A1 (rendered preview, incl. live data) is done**, and **A2 is fully done** — Run tests covers
-every declarative case kind (`sql` read/write, `validate`, `contract`, `notify`, `http-call`) for
-routes and jobs, sandboxed with auto-rollback. **B3 (scaffold-from-explorer) is fully done**:
-preview (slice 1), apply (slice 2), and new blank route (slice 3) all shipped — pick a table, preview
-its CRUD slice, and create the files (edit detection + force), or create a single starter route, each
-with a restart notice for new routes. **C4 (explorer tree + filter) is done** — the explorer is a
-filterable directory tree. **D5 (draft robustness) is done**: concurrent-edit
-conflict detection and the draft overview shipped. **D6 (granular read-only + audit) is done**: the
-audit trail and per-role edit permission both shipped. **A1 is now fully complete** — both follow-ups
-(JSON output-field masking and PDF export preview) shipped. With A1, A2, B3, C4, D5, and D6 all done,
-the remaining backlog is the docs-portal **F8/F9** items (OpenAPI/printable export, coverage-trend
-depth), E (editor live highlighting, blocked on hc #264), and G (Studio copilot, gated). Recommended
-next: **F8 docs export** (OpenAPI/JSON export, printable docs reusing the PDF codec, per-route
-shareable links). **E is done** (hc 0.1.5 shipped #264): live highlighting of the
-editable field (built-in grammars + a `tql-sql` 2-way grammar) and the richer read-only tokens both
-shipped. With A1, A2, B3, C4, D5, D6, and E complete, the remaining backlog is the docs-portal F8/F9
-items and G (Studio copilot, gated). G is gated.
+**A1, A2, B3, C4, D5, D6, and E are all done** (see the per-section notes above): rendered preview
+incl. live data + JSON masking + PDF; Run tests for every declarative case kind on routes and jobs;
+scaffold-from-explorer (preview/apply/new route); the filterable explorer tree; draft conflict
+detection + overview; the audit trail + per-role edit permission; and editor live highlighting
+(built-in grammars + a `tql-sql` 2-way grammar, hc 0.1.5 / #264). **F8 (docs export/share) is done** —
+API-spec export (OpenAPI + htmx contract), a printable route-catalog PDF, and opt-in signed shareable
+links. **F9 (coverage-trend depth) is done** — the run-history ring can keep the full history and the
+trend shows its run-count and date span. The only remaining backlog item is **G (Studio copilot)**,
+which stays **gated** on roadmap decision point 4 (the MCP loop proving its worth). With nothing
+ungated left, new Studio DX ideas should be filed here as they arise.

@@ -44,6 +44,21 @@ class ReportHistoryTest {
     }
 
     @Test
+    void keepsTheFullHistoryWhenTheCapIsNonPositive(@TempDir Path dir) {
+        Path file = dir.resolve("history.json");
+
+        // A non-positive cap retains every run (longer-term trends, backlog F9).
+        for (int i = 1; i <= 25; i++) {
+            ReportHistory.append(file, entry("r" + i), 0);
+        }
+        assertThat(ReportHistory.read(file)).hasSize(25);
+
+        ReportHistory.append(file, entry("r26"), -1);
+        assertThat(ReportHistory.read(file)).hasSize(26)
+                .last().extracting(Entry::runId).isEqualTo("r26");
+    }
+
+    @Test
     void recoversFromACorruptHistoryByStartingFresh(@TempDir Path dir) throws Exception {
         Path file = dir.resolve("history.json");
         Files.writeString(file, "{ not json");

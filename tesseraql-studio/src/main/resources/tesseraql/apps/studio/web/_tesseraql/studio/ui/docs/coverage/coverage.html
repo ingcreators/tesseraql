@@ -33,7 +33,7 @@
       </ul>
     </section>
     <section class="hc-card" th:if="${cov.trend}">
-      <h2>Trend <span class="hc-field__label" th:text="|last ${cov.trend.runs} runs|"></span></h2>
+      <h2>Trend <span class="hc-field__label" th:text="|over ${cov.trend.runs} runs|"></span></h2>
       <div class="hc-cluster">
         <div class="hc-stack">
           <span class="hc-field__label">Pass rate</span>
@@ -54,7 +54,8 @@
           <span class="hc-badge" data-variant="info" th:text="|${cov.trend.branchPct}%|"></span>
         </div>
       </div>
-      <span class="hc-field__label">Trend keeps the last 20 runs.</span>
+      <span class="hc-field__label" th:if="${cov.trend.from}"
+            th:text="|${cov.trend.from} → ${cov.trend.to}. Set tesseraql.historyLimit (0 keeps all) to tune retention.|"></span>
     </section>
     <section class="hc-card">
       <h2>Item coverage</h2>

@@ -179,8 +179,8 @@ class DocViewsTest {
     @Test
     void coverageModelBuildsSparklineTrendFromHistory() {
         List<DocService.HistoryPoint> history = List.of(
-                new DocService.HistoryPoint("r1", "t1", 2, 1, 1, 0.5, 0.5, false),
-                new DocService.HistoryPoint("r2", "t2", 2, 2, 0, 1.0, 1.0, true));
+                new DocService.HistoryPoint("r1", "2026-01-05T09:00:00Z", 2, 1, 1, 0.5, 0.5, false),
+                new DocService.HistoryPoint("r2", "2026-06-18T09:00:00Z", 2, 2, 0, 1.0, 1.0, true));
 
         Map<String, Object> model = DocViews.coverage("demo", passingOverlay(), history);
 
@@ -189,6 +189,8 @@ class DocViewsTest {
                 .containsEntry("linePct", 100);
         // Two runs -> a raw ratio series for hc-sparkline data-values: 50% then 100%.
         assertThat((String) trend.get("passSpark")).isEqualTo("0.5,1");
+        // The retained span (oldest -> newest run date) conveys the trend depth (backlog F9).
+        assertThat(trend).containsEntry("from", "2026-01-05").containsEntry("to", "2026-06-18");
     }
 
     @Test
