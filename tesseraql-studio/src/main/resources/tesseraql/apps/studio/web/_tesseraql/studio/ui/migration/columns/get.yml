@@ -1,0 +1,29 @@
+version: tesseraql/v1
+id: tql.studio.migration.columns
+kind: route
+recipe: query-html
+
+input:
+  table:
+    type: string
+    required: false
+
+security:
+  auth: bearer
+
+sql:
+  service: studio.migration.columns
+  params:
+    table: params.table
+
+response:
+  html:
+    status: 200
+    template: columns.html
+    model:
+      cols: sql
+    headers:
+      Content-Security-Policy: "default-src 'self'; style-src 'self' 'unsafe-inline'; frame-ancestors 'none'"
+      X-Content-Type-Options: nosniff
+      X-Frame-Options: DENY
+      Referrer-Policy: no-referrer

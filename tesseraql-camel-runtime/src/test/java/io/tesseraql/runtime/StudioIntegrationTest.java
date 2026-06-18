@@ -1518,6 +1518,27 @@ class StudioIntegrationTest {
                 .contains("CREATE UNIQUE INDEX users_name_status_idx ON users (name, status);");
     }
 
+    @Test
+    void uiMigrationBuilderTablesComeFromTheSchemaOverlay() throws Exception {
+        HttpResponse<String> response = get("/_tesseraql/studio/ui/migration", true);
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        // The DDL builder's table input is a dropdown populated from the introspected schema overlay
+        // (the IT's schema.json holds customers + orders).
+        assertThat(response.body()).contains("<select").contains(">customers<")
+                .contains(">orders<");
+    }
+
+    @Test
+    void uiMigrationColumnsCascadeReturnsTheTablesColumns() throws Exception {
+        HttpResponse<String> response = get(
+                "/_tesseraql/studio/ui/migration/columns?table=" + enc("customers"), true);
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        // The cascade returns the chosen table's columns as datalist options (customers: id, email).
+        assertThat(response.body()).contains("value=\"id\"").contains("value=\"email\"");
+    }
+
     private static HttpResponse<String> postForm(String path, String form) throws Exception {
         HttpRequest request = HttpRequest.newBuilder(
                 URI.create("http://localhost:" + runtime.port() + path))
