@@ -691,7 +691,10 @@ public final class TesseraqlRuntime implements AutoCloseable {
                 int testMaxRows = manifest.config()
                         .getString("tesseraql.studio.testRunner.maxRows")
                         .map(Integer::parseInt).orElse(1000);
-                StudioTestService studioTests = new StudioTestService(dataSource, appHome,
+                StudioTestService studioTests = new StudioTestService(
+                        name -> context.getRegistry().lookupByNameAndType(name,
+                                javax.sql.DataSource.class),
+                        appHome, realm, datasourceDialect(manifest.config()),
                         testRunnerEnabled, testTimeout, testMaxRows);
                 context.addRoutes(new StudioRouteBuilder(studio, reloader, studioTests));
                 // Providers backing the bundled studio app (design ch. 16, 47).

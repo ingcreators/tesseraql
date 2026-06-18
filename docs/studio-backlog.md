@@ -45,8 +45,9 @@ Studio editor + docs work (2026-06):
   call). Gated and sandboxed: enabled only when Studio is writable and
   `tesseraql.studio.testRunner.enabled` is set; each case runs through a `SandboxDataSource` — an
   auto-rollback transaction (commits suppressed, rolled back on close) with a statement timeout and a
-  row cap — so a case can neither run away nor persist a write. Contract cases (they run through the
-  runtime's identity datasource, not the sandbox) are out of scope. New
+  row cap — so a case can neither run away nor persist a write. Contract cases run too, through a
+  sandboxed identity service built over the same datasources, so their identity SELECTs are capped
+  and rolled back like every other case. New
   `StudioTestService` reusing the declarative `TestRunner` +
   `CrossReferenceIndex`, the `studio.runTests` provider, the `POST /_tesseraql/studio/runTests` JSON
   endpoint, and the `/_tesseraql/studio/ui/run-tests` editor fragment.
@@ -82,12 +83,10 @@ gutter, diff), editable `hc-code`, `hc-sparkline`, and read-only syntax highligh
    sandbox to populate live rows instead of a hand-authored `sql.rows` fixture — is **done** (the
    render panel's **Use live data** toggle; see Shipped). (Email/notification `.html` templates
    already preview via the template-file path: supply `payload`/`event` as the sample.)
-2. **Run a route's or job's declarative suite from Studio** — *shipped* (see Shipped): a **Run
-   tests** action runs the `sql` (read **and write**), `validate`, `notify`, and `http-call` cases
-   covering a route or job against the dev datasource, sandboxed (auto-rollback) and opt-in.
-   Remaining slice:
-   - **Contract cases** — need a sandboxed identity datasource (they currently would run against the
-     runtime's real identity pool, so they are excluded for now).
+2. **Run a route's or job's declarative suite from Studio** — *done* (see Shipped): a **Run tests**
+   action runs every declarative case kind covering a route or job — `sql` (read **and write**),
+   `validate`, `contract` (through a sandboxed identity service), `notify`, and `http-call` — against
+   the dev datasource, sandboxed (auto-rollback) and opt-in.
    - **Live rows into the rendered preview** — *done* (see Shipped): the route render panel's **Use
      live data** toggle runs the route's main `sql` through the sandbox for real rows. Multi-binding
      routes still inject only the main `sql`; `steps`/`queries` live execution is a later extension.
@@ -137,9 +136,8 @@ gutter, diff), editable `hc-code`, `hc-sparkline`, and read-only syntax highligh
 
 ## Recommended next
 
-**A1 (rendered preview, incl. live data) is done**, and **A2 (run a route's or job's
-`sql`-read/`sql`-write/`validate`/`notify`/`http-call` tests from the editor, sandboxed with
-auto-rollback) is done**. The one remaining A2 case kind — contract (needs a sandboxed identity
-datasource) — is a deeper, optional follow-up. Recommended next: **B3 (scaffold-from-explorer)**
+**A1 (rendered preview, incl. live data) is done**, and **A2 is fully done** — Run tests covers
+every declarative case kind (`sql` read/write, `validate`, `contract`, `notify`, `http-call`) for
+routes and jobs, sandboxed with auto-rollback. Recommended next: **B3 (scaffold-from-explorer)**
 toward M7. A1's PDF preview and JSON field-masking are optional follow-ups. E waits on hc #264; G is
 gated.

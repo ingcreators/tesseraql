@@ -4,6 +4,8 @@ import io.tesseraql.core.expr.EvaluationContext;
 import io.tesseraql.core.sql.BoundSql;
 import io.tesseraql.core.sql.Sql2WayParser;
 import io.tesseraql.core.sql.SqlRenderer;
+import io.tesseraql.identity.IdentityService;
+import io.tesseraql.identity.RealmConfig;
 import io.tesseraql.test.CrossReferenceIndex;
 import io.tesseraql.test.TestReport;
 import io.tesseraql.test.TestRunner;
@@ -33,6 +35,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Function;
 import java.util.stream.Stream;
 import javax.sql.DataSource;
 
@@ -44,24 +47,28 @@ import javax.sql.DataSource;
  * {@code tesseraql.studio.testRunner.enabled} is set; every case runs through a
  * {@link SandboxDataSource} — an auto-rollback transaction (commits suppressed, rolled back on
  * close) with a statement timeout and a row cap — so a case can neither run away nor persist a
- * write. The declarative case kinds run: {@code sql} queries and {@code validate} rules (their SQL
- * runs against the sandbox), {@code notify} and {@code http-call} evaluations (pure, no DB; the
- * latter plans a job's outbound step without a network call), and {@code sql} write cases (an
- * {@code INSERT … RETURNING} executes and its rows are checked, then rolled back). Contract cases
- * are out of scope — they execute through the runtime's identity datasource, not the sandbox.
+ * write. Every declarative case kind runs: {@code sql} reads and writes (an {@code INSERT …
+ * RETURNING} executes and its rows are checked, then rolled back), {@code validate} rules (their
+ * SQL runs against the sandbox), {@code contract} cases (run through a sandboxed identity service
+ * over the same datasources), and the pure (no DB) {@code notify} and {@code http-call} evaluations
+ * (the latter plans a job's outbound step without a network call).
  */
 final class StudioTestService {
 
-    private final DataSource dataSource;
+    private final Function<String, DataSource> datasources;
     private final Path appHome;
+    private final RealmConfig realm;
+    private final String dialect;
     private final boolean enabled;
     private final int queryTimeoutSeconds;
     private final int maxRows;
 
-    StudioTestService(DataSource dataSource, Path appHome, boolean enabled,
-            int queryTimeoutSeconds, int maxRows) {
-        this.dataSource = dataSource;
+    StudioTestService(Function<String, DataSource> datasources, Path appHome, RealmConfig realm,
+            String dialect, boolean enabled, int queryTimeoutSeconds, int maxRows) {
+        this.datasources = datasources;
         this.appHome = appHome.toAbsolutePath().normalize();
+        this.realm = realm;
+        this.dialect = dialect;
         this.enabled = enabled;
         this.queryTimeoutSeconds = queryTimeoutSeconds;
         this.maxRows = maxRows;
@@ -71,10 +78,15 @@ final class StudioTestService {
         return enabled;
     }
 
+    /** A sandboxed view of a named datasource: read/write but auto-rollback, capped, timed out. */
+    private SandboxDataSource sandbox(String name) {
+        return new SandboxDataSource(datasources.apply(name), queryTimeoutSeconds, maxRows);
+    }
+
     /**
-     * Runs the read-only {@code sql} test cases covering the route at {@code relativePath} and
-     * returns a template-ready result model. A disabled runner, an unknown route, or a route with no
-     * SQL cases each comes back as a {@code ran: false} model carrying an explanatory note.
+     * Runs the declarative test cases covering the route or job at {@code relativePath} and returns a
+     * template-ready result model. A disabled runner, an unknown path, or one with no covering cases
+     * each comes back as a {@code ran: false} model carrying an explanatory note.
      */
     Map<String, Object> runForPath(String relativePath) {
         if (!enabled) {
@@ -107,28 +119,33 @@ final class StudioTestService {
         if (runnable.isEmpty()) {
             return notRun(relativePath, "No runnable test cases cover this file.");
         }
-        DataSource sandbox = new SandboxDataSource(dataSource, queryTimeoutSeconds, maxRows);
-        TestReport report = new TestRunner(sandbox, appHome).run(new TestSuite(runnable));
+        // A sandboxed identity service (over the same sandboxed datasources) runs contract cases,
+        // so their identity SELECTs are capped/timed-out like every other case.
+        IdentityService identity = new IdentityService(this::sandbox, dialect);
+        TestReport report = new TestRunner(sandbox("main"), appHome, identity, realm)
+                .run(new TestSuite(runnable));
         return result(relativePath, report);
     }
 
     /**
      * The test cases covering a job: {@code notify}/{@code http-call} cases targeting it by id, and
-     * {@code sql} cases exercising one of its (main or step) SQL files. Mirrors
-     * {@link CrossReferenceIndex#casesFor} for routes, which the index does not provide for jobs.
+     * {@code sql}/{@code contract} cases exercising one of its (main or step) SQL files or Identity
+     * SQL Contracts. Mirrors {@link CrossReferenceIndex#casesFor} for routes, which the index does
+     * not provide for jobs.
      */
     private List<TestCase> casesForJob(JobFile job, List<TestSuite> suites) {
         String jobId = job.definition().id();
         Path jobDir = job.source().getParent();
         Set<Path> sqlFiles = new LinkedHashSet<>();
-        addSqlFile(sqlFiles, jobDir, job.definition().sql());
+        Set<String> contracts = new LinkedHashSet<>();
+        bindings(job.definition().sql(), jobDir, sqlFiles, contracts);
         for (PipelineStep step : job.definition().effectiveSteps()) {
-            addSqlFile(sqlFiles, jobDir, step.sql());
+            bindings(step.sql(), jobDir, sqlFiles, contracts);
         }
         List<TestCase> cases = new ArrayList<>();
         for (TestSuite suite : suites) {
             for (TestCase test : suite.tests()) {
-                if (linksJob(test, jobId, sqlFiles)) {
+                if (linksJob(test, jobId, sqlFiles, contracts)) {
                     cases.add(test);
                 }
             }
@@ -136,17 +153,29 @@ final class StudioTestService {
         return cases;
     }
 
-    private void addSqlFile(Set<Path> into, Path jobDir, SqlBinding binding) {
-        if (binding != null && binding.file() != null) {
-            into.add(jobDir.resolve(binding.file()).normalize());
+    private void bindings(SqlBinding binding, Path jobDir, Set<Path> sqlFiles,
+            Set<String> contracts) {
+        if (binding == null) {
+            return;
+        }
+        if (binding.file() != null) {
+            sqlFiles.add(jobDir.resolve(binding.file()).normalize());
+        }
+        if (binding.contract() != null) {
+            contracts.add(CrossReferenceIndex.stripIdentityPrefix(binding.contract()));
         }
     }
 
-    private boolean linksJob(TestCase test, String jobId, Set<Path> sqlFiles) {
+    private boolean linksJob(TestCase test, String jobId, Set<Path> sqlFiles,
+            Set<String> contracts) {
         if (test.notifications() != null && jobId.equals(test.notifications().job())) {
             return true;
         }
         if (test.httpCall() != null && jobId.equals(test.httpCall().job())) {
+            return true;
+        }
+        if (test.contract() != null && !test.contract().isBlank()
+                && contracts.contains(CrossReferenceIndex.stripIdentityPrefix(test.contract()))) {
             return true;
         }
         return test.sql() != null && test.sql().file() != null
@@ -155,16 +184,13 @@ final class StudioTestService {
 
     /**
      * A declarative case the sandbox can run: a {@code sql} query or write (its SQL runs against the
-     * sandbox — a write executes and is rolled back), a {@code validate} rule, a {@code notify}
-     * evaluation, or an {@code http-call} plan (the last two are pure, no DB). Contract cases are
-     * excluded — they run through the runtime's identity datasource, not the sandbox — and
-     * {@code messages} cases carry no DB/route/job binding.
+     * sandbox — a write executes and is rolled back), a {@code validate} rule, a {@code contract}
+     * (run through the sandboxed identity service), or a {@code notify}/{@code http-call} evaluation
+     * (the last two are pure, no DB). {@code messages} cases carry no DB/route/job binding.
      */
     private static boolean isRunnable(TestCase test) {
-        if (test.contract() != null && !test.contract().isBlank()) {
-            return false;
-        }
         return (test.sql() != null && test.sql().file() != null)
+                || (test.contract() != null && !test.contract().isBlank())
                 || test.validate() != null
                 || test.notifications() != null
                 || test.httpCall() != null;
@@ -254,7 +280,7 @@ final class StudioTestService {
         sql.params().forEach((name, expr) -> bindParams.put(name,
                 evaluation.resolve(Arrays.asList(expr.split("\\.")))));
         BoundSql bound = SqlRenderer.render(Sql2WayParser.parse(read(sqlFile)), bindParams);
-        DataSource sandbox = new SandboxDataSource(dataSource, queryTimeoutSeconds, maxRows);
+        DataSource sandbox = sandbox("main");
         try (Connection connection = sandbox.getConnection();
                 PreparedStatement statement = connection.prepareStatement(bound.sql())) {
             for (int i = 0; i < bound.parameters().size(); i++) {
