@@ -285,6 +285,22 @@ public final class DocViews {
         return model;
     }
 
+    /**
+     * The printable route-catalog model (documentation portal F8): the app name and, when the
+     * optional PDF codec is on the classpath, the rendered catalog as a {@code data:} URL for an
+     * inline preview and a download link. {@code hasPdf} is false when the {@code tesseraql-pdf}
+     * module is absent, so the page degrades to a clear note instead of a broken frame.
+     */
+    public static Map<String, Object> routesPdf(String appName, String pdfDataUrl) {
+        Map<String, Object> model = new LinkedHashMap<>();
+        model.put("appName", appName);
+        model.put("hasPdf", pdfDataUrl != null);
+        if (pdfDataUrl != null) {
+            model.put("pdfUrl", pdfDataUrl);
+        }
+        return model;
+    }
+
     private static Map<String, Object> artifact(String label, String filename, String url,
             String description) {
         Map<String, Object> row = new LinkedHashMap<>();

@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{tql/shell :: page(|TesseraQL Docs · Printable catalog · ${docs.appName}|, ~{:: #page-header}, ~{:: #page-content})}">
+<th:block id="page-header">
+  <span class="hc-spacer"></span>
+  <div class="hc-cluster">
+    <a class="hc-button" data-variant="ghost" data-size="sm" href="/_tesseraql/studio/ui/docs/export">&larr; export</a>
+  </div>
+</th:block>
+<div id="page-content" class="hc-stack">
+<section class="hc-card">
+  <h2>Printable route catalog</h2>
+  <p class="hc-field__label">The app's routes laid out as a PDF table, rendered server-side by the
+    documents codec. Hand it to a reviewer, or print it.</p>
+  <div class="hc-stack" th:if="${docs.hasPdf}">
+    <iframe class="tql-preview-frame" title="Route catalog PDF" th:attr="src=${docs.pdfUrl}"></iframe>
+    <div class="hc-cluster">
+      <a class="hc-button" data-variant="primary" data-size="sm"
+         th:attr="href=${docs.pdfUrl}" download="routes.pdf">Download routes.pdf</a>
+    </div>
+  </div>
+  <div class="hc-empty" th:unless="${docs.hasPdf}">
+    <p class="hc-empty__title">PDF export is not available.</p>
+    <p class="hc-empty__body">The optional <code>tesseraql-pdf</code> module is not on the
+      classpath. Start the server with it enabled (<code>serve --modules pdf</code>) to render the
+      printable catalog.</p>
+  </div>
+</section>
+</div>
+</html>

@@ -397,6 +397,28 @@ public final class DocService {
         return new HtmxContractGenerator().toJson(manifest);
     }
 
+    /**
+     * The route catalog as flat rows for a printable export (documentation portal F8): one row per
+     * route with its id, HTTP method, path, recipe, and covering-test count. The runtime renders
+     * these rows to a PDF table through the canonical PDF codec; keeping the projection here (and the
+     * rendering in the runtime) leaves Studio free of the optional {@code tesseraql-pdf} stack, like
+     * the editor's PDF preview. Insertion-ordered so the PDF columns line up with the keys.
+     */
+    public List<Map<String, Object>> routeCatalog() {
+        List<Map<String, Object>> rows = new ArrayList<>();
+        for (RouteEntry entry : spec().routes()) {
+            RouteSpec route = entry.route();
+            Map<String, Object> row = new java.util.LinkedHashMap<>();
+            row.put("id", route.id());
+            row.put("method", route.method());
+            row.put("path", route.path());
+            row.put("recipe", route.recipe());
+            row.put("tests", entry.tests().size());
+            rows.add(row);
+        }
+        return rows;
+    }
+
     /** Reads a hand-written Markdown doc under the app home and renders it to CSP-safe HTML. */
     public String markdown(String relativePath) {
         Path file = resolve(relativePath);

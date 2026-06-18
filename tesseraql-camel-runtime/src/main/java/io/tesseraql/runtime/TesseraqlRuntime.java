@@ -891,7 +891,19 @@ public final class TesseraqlRuntime implements AutoCloseable {
                         .register("docs.export", params -> io.tesseraql.studio.DocViews
                                 .export(doc.appName()))
                         .register("docs.openapi", params -> doc.openApiJson())
-                        .register("docs.htmx", params -> doc.htmxContractJson());
+                        .register("docs.htmx", params -> doc.htmxContractJson())
+                        // Printable route catalog (F8, slice 2): render the route rows to a PDF
+                        // table through the canonical PDF codec, shown as a data: URL (degrades to a
+                        // note when the optional tesseraql-pdf module is absent, like the editor).
+                        .register("docs.routesPdf", params -> {
+                            byte[] pdf = renderRoutesPdf(doc.routeCatalog(), appHome);
+                            return io.tesseraql.studio.DocViews.routesPdf(doc.appName(),
+                                    pdf == null
+                                            ? null
+                                            : "data:application/pdf;base64,"
+                                                    + java.util.Base64.getEncoder()
+                                                            .encodeToString(pdf));
+                        });
             }
             // Retention (design ch. 44): enabled by configuring the sweep interval. When
             // tesseraql.retention.attachments is set and the managed attachment store is bound, the
@@ -1124,6 +1136,36 @@ public final class TesseraqlRuntime implements AutoCloseable {
             codec.write(out, spec, rows.iterator());
         } catch (Exception ex) {
             throw new IllegalStateException("PDF render failed: " + ex.getMessage(), ex);
+        }
+        return out.toByteArray();
+    }
+
+    /**
+     * Renders the documentation portal's route catalog (one row per route) to a PDF table through
+     * the canonical PDF codec's built-in grid (no template), reusing the same {@code FileCodecs}
+     * discovery the export routes use. Returns {@code null} when the optional {@code tesseraql-pdf}
+     * module is absent so the portal degrades to a clear note rather than failing (F8, slice 2).
+     */
+    private static byte[] renderRoutesPdf(List<Map<String, Object>> rows, Path appHome) {
+        io.tesseraql.core.files.FileCodec codec;
+        try {
+            codec = io.tesseraql.core.files.FileCodecs.discover().require("pdf");
+        } catch (io.tesseraql.core.error.TqlException ex) {
+            return null;
+        }
+        List<io.tesseraql.core.files.ColumnMapping> columns = List.of(
+                new io.tesseraql.core.files.ColumnMapping("id", "Id", null),
+                new io.tesseraql.core.files.ColumnMapping("method", "Method", null),
+                new io.tesseraql.core.files.ColumnMapping("path", "Path", null),
+                new io.tesseraql.core.files.ColumnMapping("recipe", "Recipe", null),
+                new io.tesseraql.core.files.ColumnMapping("tests", "Tests", null));
+        io.tesseraql.core.files.FileWriteSpec spec = new io.tesseraql.core.files.FileWriteSpec(
+                columns, null, null, null, appHome, null, null);
+        java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+        try {
+            codec.write(out, spec, rows.iterator());
+        } catch (Exception ex) {
+            throw new IllegalStateException("Routes PDF render failed: " + ex.getMessage(), ex);
         }
         return out.toByteArray();
     }

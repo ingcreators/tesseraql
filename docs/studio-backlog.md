@@ -233,8 +233,14 @@ and is being adopted (see E below).
      `Content-Disposition` attachment via the standard `response.file` recipe, bearer-gated like the rest
      of the portal. `DocService.openApiJson`/`htmxContractJson`; `DocViews.export`; `docs.export`/
      `docs.openapi`/`docs.htmx` providers; `/ui/docs/export` (+ `/openapi`, `/htmx`) routes.
-   - **Printable docs (PDF)** — *open* (slice 2): render the route/index/schema doc pages to PDF,
-     reusing the PDF codec.
+   - **Printable docs (PDF)** — *done* (slice 2): the Export page renders the app's route catalog
+     (id, method, path, recipe, covering tests) to a PDF table through the canonical PDF codec (the
+     `FileCodecs.discover()` path the export routes use, via its built-in grid — no template), shown
+     in a preview frame with a `routes.pdf` download link. Studio stays free of the optional
+     `tesseraql-pdf` stack: the runtime renders the PDF, degrading to a clear note when the module is
+     absent. `DocService.routeCatalog`; `DocViews.routesPdf`; `docs.routesPdf` provider; the
+     `/ui/docs/export/pdf` route. (Rich per-page PDF — arbitrary doc-page HTML→PDF — would need
+     exposing the raw PDF engine past the row-oriented codec; a later extension.)
    - **Per-route shareable links** — *open* (slice 3): docs are in-app/bearer-only today; a shareable
      link needs a scoped, expiring token path.
 9. **Coverage trend depth** — relax the "last 20 runs" cap for longer-term trends.

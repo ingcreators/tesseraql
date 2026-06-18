@@ -8,6 +8,14 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- Docs portal: printable route catalog (Studio backlog F8, slice 2). The Export page gains a
+  **Printable route catalog** view that renders the app's routes (id, method, path, recipe, covering
+  tests) to a PDF table through the **canonical PDF codec** — the same `FileCodecs.discover()` path
+  the export routes use, via its built-in grid (no template) — shown inline in a preview frame with a
+  `routes.pdf` download link. Studio stays free of the optional `tesseraql-pdf` stack: the runtime
+  renders the PDF and the page degrades to a clear note when the module is absent (the editor's PDF
+  preview pattern). `DocService.routeCatalog`; `DocViews.routesPdf`; the `docs.routesPdf` provider and
+  the `/ui/docs/export/pdf` route (CSP allows the `data:` preview frame).
 - Docs portal: export the API specs (Studio backlog F8, slice 1). The documentation portal gains an
   **Export** page (linked from the docs chrome) that serves the app's **OpenAPI 3** document and its
   **htmx interaction contract** as downloadable JSON, generated live from the route manifest by the
