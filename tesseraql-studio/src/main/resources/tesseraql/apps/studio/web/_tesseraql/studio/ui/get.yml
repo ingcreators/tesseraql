@@ -15,6 +15,7 @@ sql:
   service: studio.explorer
   params:
     q: params.q
+    roles: principal.roles
 
 response:
   html:

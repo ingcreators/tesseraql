@@ -19,6 +19,7 @@ sql:
   params:
     path: params.path
     content: params.content
+    roles: principal.roles
 
 response:
   redirect:

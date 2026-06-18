@@ -7,6 +7,7 @@ import io.tesseraql.core.error.TqlException;
 import io.tesseraql.security.Principal;
 import io.tesseraql.studio.StudioService;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
 import org.apache.camel.Exchange;
@@ -27,13 +28,16 @@ final class StudioRouteBuilder extends RouteBuilder {
     private final RouteReloader reloader;
     private final StudioTestService studioTests;
     private final StudioScaffoldService studioScaffold;
+    private final StudioAccess studioAccess;
 
     StudioRouteBuilder(StudioService studio, RouteReloader reloader,
-            StudioTestService studioTests, StudioScaffoldService studioScaffold) {
+            StudioTestService studioTests, StudioScaffoldService studioScaffold,
+            StudioAccess studioAccess) {
         this.studio = studio;
         this.reloader = reloader;
         this.studioTests = studioTests;
         this.studioScaffold = studioScaffold;
+        this.studioAccess = studioAccess;
     }
 
     @Override
@@ -71,6 +75,7 @@ final class StudioRouteBuilder extends RouteBuilder {
 
         from("direct:studio.draft").routeId("studio.draft")
                 .to(AUTH).process(json(exchange -> {
+                    studioAccess.requireEdit(roles(exchange));
                     String path = requirePath(exchange);
                     String content = exchange.getMessage().getBody(String.class);
                     studio.saveDraft(path, content == null ? "" : content);
@@ -116,9 +121,11 @@ final class StudioRouteBuilder extends RouteBuilder {
         // Writes a table's CRUD slice into the app home (backlog B3), honoring edit detection unless
         // force=true; new route files need a restart, surfaced in the result.
         from("direct:studio.scaffold.apply").routeId("studio.scaffold.apply")
-                .to(AUTH).process(json(exchange -> io.tesseraql.studio.StudioViews.scaffoldResult(
-                        studioScaffold.apply(requireTable(exchange), flag(exchange, "force"),
-                                actor(exchange)))));
+                .to(AUTH).process(json(exchange -> {
+                    studioAccess.requireEdit(roles(exchange));
+                    return io.tesseraql.studio.StudioViews.scaffoldResult(studioScaffold.apply(
+                            requireTable(exchange), flag(exchange, "force"), actor(exchange)));
+                }));
 
         // The audit trail (backlog D6): who applied or scaffolded what, when (newest first).
         from("direct:studio.audit").routeId("studio.audit")
@@ -126,6 +133,7 @@ final class StudioRouteBuilder extends RouteBuilder {
 
         from("direct:studio.apply").routeId("studio.apply")
                 .to(AUTH).process(json(exchange -> {
+                    studioAccess.requireEdit(roles(exchange));
                     String path = requirePath(exchange);
                     // force=true overwrites a source that changed under the draft (backlog D5); the
                     // caller is recorded to the audit trail (backlog D6).
@@ -159,6 +167,12 @@ final class StudioRouteBuilder extends RouteBuilder {
             return null;
         }
         return principal.loginId() != null ? principal.loginId() : principal.subject();
+    }
+
+    /** The authenticated caller's roles, for the edit-permission gate (backlog D6). */
+    private static List<String> roles(Exchange exchange) {
+        Principal principal = exchange.getProperty(TesseraqlProperties.PRINCIPAL, Principal.class);
+        return principal == null ? List.of() : principal.roles();
     }
 
     private static String require(Exchange exchange, String name) {

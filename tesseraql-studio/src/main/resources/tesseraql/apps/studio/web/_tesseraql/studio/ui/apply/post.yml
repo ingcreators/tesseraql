@@ -20,6 +20,7 @@ sql:
     path: params.path
     force: params.force
     actor: principal.loginId
+    roles: principal.roles
 
 response:
   redirect:
