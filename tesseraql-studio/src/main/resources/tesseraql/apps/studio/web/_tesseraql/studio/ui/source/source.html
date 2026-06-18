@@ -64,6 +64,15 @@
       </ol>
       <pre class="hc-code" th:unless="${src.diff}"><code th:utext="${src.sourceContentHtml}"></code></pre>
     </details>
+    <div class="hc-stack" th:if="${src.isRoute and src.testRunnerEnabled}">
+      <h2>Tests</h2>
+      <p class="hc-field__message">Runs this route's read-only SQL test cases against the dev datasource, sandboxed (read-only, timeout, row cap).</p>
+      <form hx-post="/_tesseraql/studio/ui/run-tests" hx-target="#run-tests-result" hx-swap="innerHTML">
+        <input type="hidden" name="path" th:value="${src.path}">
+        <div class="hc-cluster"><button type="submit" class="hc-button" data-variant="primary">Run tests</button></div>
+      </form>
+      <div id="run-tests-result" class="hc-stack" aria-live="polite"></div>
+    </div>
     <form hx-post="/_tesseraql/studio/ui/apply" hx-target="#apply-result" hx-swap="innerHTML">
       <input type="hidden" name="path" th:value="${src.path}">
       <div class="hc-cluster"><button type="submit" class="hc-button" data-variant="primary">Apply draft &amp; reload</button></div>

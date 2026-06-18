@@ -8,6 +8,20 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- Studio editor: run a route's declarative SQL tests from the editor (Studio backlog A2). A route
+  source page gains a **Run tests** action that runs the route's read-only `sql` declarative test
+  cases against the dev datasource and shows inline pass/fail with the failure message — no edit →
+  apply → restart → CI loop. Gated and sandboxed: enabled only when Studio is writable and
+  `tesseraql.studio.testRunner.enabled` is set; every case runs through a read-only connection with
+  a statement timeout (`tesseraql.studio.testRunner.queryTimeoutSeconds`, default 5) and a row cap
+  (`tesseraql.studio.testRunner.maxRows`, default 1000), rolled back on close, so a query can
+  neither run away nor persist a write. Only read-only `sql` query cases run this slice;
+  `validate`/`notify`/`http-call` and write paths are out of scope. Backed by a new
+  `StudioTestService` + `SandboxDataSource` reusing the declarative `TestRunner`, the
+  `studio.runTests` provider, the `POST /_tesseraql/studio/runTests` JSON endpoint, and the
+  `/_tesseraql/studio/ui/run-tests` editor fragment. See
+  [docs/studio-backlog.md](docs/studio-backlog.md).
+
 - Studio editor: rendered preview against sample data (Studio backlog A1). A renderable file
   opened in the editor now renders against a sample model — not just the empty-model "parses" check
   `preview()` gave — and shows the actual output two ways: the generated HTML/text/JSON, hc-code

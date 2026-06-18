@@ -1,0 +1,17 @@
+<div class="hc-stack" xmlns:th="http://www.thymeleaf.org" th:fragment="runTests">
+  <p class="hc-alert" data-variant="info" role="status"
+     th:unless="${tests.ran}" th:text="${tests.note}"></p>
+  <th:block th:if="${tests.ran}">
+    <p class="hc-alert" role="status"
+       th:attr="data-variant=${tests.allPassed} ? 'success' : 'error'"
+       th:text="|${tests.passed}/${tests.total} passed|"></p>
+    <ul class="hc-stack">
+      <li class="hc-cluster" th:each="c : ${tests.cases}">
+        <span class="hc-badge" th:attr="data-variant=${c.passed} ? 'success' : 'error'"
+              th:text="${c.passed} ? 'pass' : 'fail'"></span>
+        <span th:text="${c.name}"></span>
+        <span class="hc-field__message" th:unless="${c.passed}" th:text="${c.message}"></span>
+      </li>
+    </ul>
+  </th:block>
+</div>

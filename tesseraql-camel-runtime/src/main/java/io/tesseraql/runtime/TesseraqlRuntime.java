@@ -679,7 +679,21 @@ public final class TesseraqlRuntime implements AutoCloseable {
                 io.tesseraql.studio.StudioService studio = new io.tesseraql.studio.StudioService(
                         manifest, readOnly);
                 RouteReloader reloader = new RouteReloader(context, appHome, manifest, studio);
-                context.addRoutes(new StudioRouteBuilder(studio, reloader));
+                // The Studio test runner (backlog A2): run a route's read-only sql cases against the
+                // dev datasource. Gated on writable Studio + an explicit opt-in, sandboxed per run
+                // (read-only connection, statement timeout, row cap, rollback on close).
+                boolean testRunnerEnabled = !readOnly
+                        && manifest.config().getString("tesseraql.studio.testRunner.enabled")
+                                .map(Boolean::parseBoolean).orElse(false);
+                int testTimeout = manifest.config()
+                        .getString("tesseraql.studio.testRunner.queryTimeoutSeconds")
+                        .map(Integer::parseInt).orElse(5);
+                int testMaxRows = manifest.config()
+                        .getString("tesseraql.studio.testRunner.maxRows")
+                        .map(Integer::parseInt).orElse(1000);
+                StudioTestService studioTests = new StudioTestService(dataSource, appHome,
+                        testRunnerEnabled, testTimeout, testMaxRows);
+                context.addRoutes(new StudioRouteBuilder(studio, reloader, studioTests));
                 // Providers backing the bundled studio app (design ch. 16, 47).
                 serviceProviders
                         .register("studio.explorer",
@@ -689,15 +703,21 @@ public final class TesseraqlRuntime implements AutoCloseable {
                             String path = String.valueOf(params.get("path"));
                             String sample = studio.sampleModel(path);
                             String draft = studio.readDraft(path);
+                            Map<String, Object> model;
                             if (draft == null) {
                                 // No draft: show the source (404s when the file does not exist).
                                 String src = studio.source(path);
-                                return io.tesseraql.studio.StudioViews.source(path, src,
+                                model = io.tesseraql.studio.StudioViews.source(path, src,
                                         studio.isReadOnly(), false, src, sample);
+                            } else {
+                                // A draft is edited; sourceIfExists is null for a new-file draft.
+                                model = io.tesseraql.studio.StudioViews.source(path, draft,
+                                        studio.isReadOnly(), true, studio.sourceIfExists(path),
+                                        sample);
                             }
-                            // A draft is being edited; sourceIfExists is null for a new-file draft.
-                            return io.tesseraql.studio.StudioViews.source(path, draft,
-                                    studio.isReadOnly(), true, studio.sourceIfExists(path), sample);
+                            // Offer the "run tests" action on a route page only when A2 is enabled.
+                            model.put("testRunnerEnabled", testRunnerEnabled);
+                            return model;
                         })
                         .register("studio.save", params -> {
                             String path = String.valueOf(params.get("path"));
@@ -725,6 +745,9 @@ public final class TesseraqlRuntime implements AutoCloseable {
                                     content == null ? null : String.valueOf(content),
                                     sample == null ? null : String.valueOf(sample)));
                         })
+                        .register("studio.runTests",
+                                params -> studioTests
+                                        .runForPath(String.valueOf(params.get("path"))))
                         .register("studio.discard", params -> {
                             String path = String.valueOf(params.get("path"));
                             studio.deleteDraft(path);

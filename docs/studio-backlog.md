@@ -37,6 +37,15 @@ Studio editor + docs work (2026-06):
   fixture (blank falls back to it). `StudioService.render`/`sampleModel`, the `studio.render`
   provider, the `POST /_tesseraql/studio/render` JSON endpoint, and the
   `/_tesseraql/studio/ui/render` editor fragment; the source page CSP gains `frame-src 'self'`.
+- **Run a route's declarative SQL tests from Studio (A2, slice 1)** — a route source page gains a
+  **Run tests** action that runs the route's read-only `sql` declarative test cases against the dev
+  datasource with inline pass/fail. Gated and sandboxed: enabled only when Studio is writable and
+  `tesseraql.studio.testRunner.enabled` is set; each case runs through a `SandboxDataSource`
+  (read-only connection, statement timeout, row cap, rollback on close), so a query can neither run
+  away nor persist a write. Only read-only `sql` cases run; `validate`/`notify`/`http-call`/write
+  paths are out of scope. New `StudioTestService` reusing the declarative `TestRunner` +
+  `CrossReferenceIndex`, the `studio.runTests` provider, the `POST /_tesseraql/studio/runTests` JSON
+  endpoint, and the `/_tesseraql/studio/ui/run-tests` editor fragment.
 
 Upstream Hypermedia Components briefs filed and adopted: `hc-code` (read-only block,
 gutter, diff), editable `hc-code`, `hc-sparkline`, and read-only syntax highlighting
@@ -61,12 +70,17 @@ gutter, diff), editable `hc-code`, `hc-sparkline`, and read-only syntax highligh
    datasource to populate live rows instead of a hand-authored `sql.rows` fixture — folds into A2's
    sandboxed execution path (below). (Email/notification `.html` templates already preview via the
    template-file path: supply `payload`/`event` as the sample.)
-2. **Run a route's declarative suite from Studio** — a "run tests now" action on the
-   route doc with inline results, instead of edit → apply → restart → CI. Needs a
-   sandboxed execution path (read-only/query, dev datasource, row/time caps). The same
-   sandbox powers the "real bound params" end of A1 — executing a route's SQL to populate
-   the rendered preview with live rows instead of a hand-authored fixture. Ties to
-   milestone M7 ("schema → verified CRUD in ten minutes").
+2. **Run a route's declarative suite from Studio** — *slice 1 shipped* (see Shipped): a **Run
+   tests** action runs the route's read-only `sql` cases against the dev datasource, sandboxed and
+   opt-in. Remaining slices:
+   - **More case kinds** — `validate`/`notify`/`http-call` cases (no DB writes, so safe to add) and
+     then write/command cases (need a real rollback-per-case sandbox, since multi-statement cases
+     fail under the current per-connection rollback).
+   - **Live rows into the rendered preview** — the "real bound params" end of A1: execute a route's
+     SQL through the same sandbox to populate the preview with live rows instead of a hand-authored
+     `sql.rows` fixture.
+
+   Ties to milestone M7 ("schema → verified CRUD in ten minutes").
 
 ### B. Creation / scaffolding in the UI
 
@@ -111,8 +125,7 @@ gutter, diff), editable `hc-code`, `hc-sparkline`, and read-only syntax highligh
 
 ## Recommended next
 
-**A1 (rendered preview against sample data) is done** — template files and web routes
-(`query-html`/`page` + `query-json`) render against a fixture. Next is **A2
-(run-suite-from-Studio)**, whose sandboxed execution also delivers the "real bound params" end of
-A1; then **B3 (scaffold-from-explorer)** toward M7. A1's PDF preview and JSON field-masking are
-optional follow-ups. E waits on hc #264; G is gated.
+**A1 (rendered preview) is done**, and **A2 slice 1 (run a route's read-only SQL tests from the
+editor, sandboxed) is done**. Next: finish A2 (more case kinds → live rows into the preview), then
+**B3 (scaffold-from-explorer)** toward M7. A1's PDF preview and JSON field-masking are optional
+follow-ups. E waits on hc #264; G is gated.

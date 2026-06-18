@@ -1,0 +1,29 @@
+version: tesseraql/v1
+id: tql.studio.runTests
+kind: route
+recipe: query-html
+
+input:
+  path:
+    type: string
+    required: true
+
+security:
+  auth: bearer
+
+sql:
+  service: studio.runTests
+  params:
+    path: params.path
+
+response:
+  html:
+    status: 200
+    template: run-tests.html
+    model:
+      tests: sql
+    headers:
+      Content-Security-Policy: "default-src 'self'; style-src 'self' 'unsafe-inline'; frame-ancestors 'none'"
+      X-Content-Type-Options: nosniff
+      X-Frame-Options: DENY
+      Referrer-Policy: no-referrer

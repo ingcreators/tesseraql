@@ -23,10 +23,13 @@ final class StudioRouteBuilder extends RouteBuilder {
     private final ObjectMapper mapper = new ObjectMapper();
     private final StudioService studio;
     private final RouteReloader reloader;
+    private final StudioTestService studioTests;
 
-    StudioRouteBuilder(StudioService studio, RouteReloader reloader) {
+    StudioRouteBuilder(StudioService studio, RouteReloader reloader,
+            StudioTestService studioTests) {
         this.studio = studio;
         this.reloader = reloader;
+        this.studioTests = studioTests;
     }
 
     @Override
@@ -39,6 +42,7 @@ final class StudioRouteBuilder extends RouteBuilder {
         rest().post("/_tesseraql/studio/drafts").to("direct:studio.draft");
         rest().post("/_tesseraql/studio/preview").to("direct:studio.preview");
         rest().post("/_tesseraql/studio/render").to("direct:studio.render");
+        rest().post("/_tesseraql/studio/runTests").to("direct:studio.runTests");
         rest().post("/_tesseraql/studio/apply").to("direct:studio.apply");
         rest().post("/_tesseraql/studio/reload").to("direct:studio.reload");
 
@@ -75,6 +79,11 @@ final class StudioRouteBuilder extends RouteBuilder {
                     com.fasterxml.jackson.databind.JsonNode body = readBody(exchange);
                     return studio.render(path, text(body, "content"), text(body, "sampleModel"));
                 }));
+
+        // Runs the route's read-only sql test cases against the dev datasource (backlog A2);
+        // returns ran:false with a note when disabled, unknown, or lacking SQL cases.
+        from("direct:studio.runTests").routeId("studio.runTests")
+                .to(AUTH).process(json(exchange -> studioTests.runForPath(requirePath(exchange))));
 
         from("direct:studio.apply").routeId("studio.apply")
                 .to(AUTH).process(json(exchange -> {
