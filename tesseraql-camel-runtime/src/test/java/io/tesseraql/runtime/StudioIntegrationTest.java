@@ -289,6 +289,37 @@ class StudioIntegrationTest {
     }
 
     @Test
+    void applyRecordsTheAuditTrailWithTheCaller() throws Exception {
+        String path = "web/api/aud/q.sql";
+        Files.createDirectories(appHome.resolve("web/api/aud"));
+        Files.writeString(appHome.resolve(path), "select 1\n");
+        assertThat(post("/_tesseraql/studio/drafts?path=" + enc(path), "select 2\n", true)
+                .statusCode()).isEqualTo(200);
+        assertThat(post("/_tesseraql/studio/apply?path=" + enc(path), "", true).statusCode())
+                .isEqualTo(200);
+
+        // The audit trail records the apply with the authenticated caller as the actor.
+        assertThat(MAPPER.readTree(get("/_tesseraql/studio/audit", true).body()))
+                .anySatisfy(entry -> {
+                    assertThat(entry.get("action").asText()).isEqualTo("apply");
+                    assertThat(entry.get("target").asText()).isEqualTo(path);
+                    assertThat(entry.get("actor").asText()).isEqualTo("studio-user");
+                    assertThat(entry.get("at").asText()).isNotBlank();
+                });
+
+        // The audit page renders the entry; the explorer links to it.
+        assertThat(get("/_tesseraql/studio/ui/audit", true).body()).contains("Audit trail")
+                .contains(path);
+        assertThat(get("/_tesseraql/studio/ui", true).body())
+                .contains("/_tesseraql/studio/ui/audit");
+    }
+
+    @Test
+    void auditTrailRequiresAuthentication() throws Exception {
+        assertThat(get("/_tesseraql/studio/audit", false).statusCode()).isEqualTo(401);
+    }
+
+    @Test
     void explorerRequiresAuthentication() throws Exception {
         assertThat(get("/_tesseraql/studio/explorer", false).statusCode()).isEqualTo(401);
     }
@@ -1123,8 +1154,9 @@ class StudioIntegrationTest {
         Base64.Encoder encoder = Base64.getUrlEncoder().withoutPadding();
         String header = encoder
                 .encodeToString("{\"alg\":\"HS256\"}".getBytes(StandardCharsets.UTF_8));
-        String payload = encoder.encodeToString(
-                MAPPER.writeValueAsBytes(Map.of("sub", "studio-user", "roles", List.of("ADMIN"))));
+        String payload = encoder.encodeToString(MAPPER.writeValueAsBytes(Map.of(
+                "sub", "studio-user", "preferred_username", "studio-user",
+                "roles", List.of("ADMIN"))));
         Mac mac = Mac.getInstance("HmacSHA256");
         mac.init(new SecretKeySpec(
                 "dev-only-secret-change-me-in-production".getBytes(StandardCharsets.UTF_8),

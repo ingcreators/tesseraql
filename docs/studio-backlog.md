@@ -89,6 +89,12 @@ Studio editor + docs work (2026-06):
 - **Draft overview (D5, slice 2)** — a **drafts** page (linked from the explorer when writable) lists
   every pending draft under `work/studio/drafts` with a link to its editor, a new/edit kind, and a
   conflict badge. Database-free `StudioService.drafts()`; `studio.drafts` provider; `GET /drafts`.
+- **Audit trail (D6, slice 1)** — every source-writing action (apply a draft, apply a scaffold) is
+  stamped to an append-only `work/studio/audit/audit.jsonl` with who (`principal.loginId`) / what /
+  target / when, recorded at the single write point in `StudioService` so no caller path bypasses it.
+  An **audit** page (linked from the explorer when writable) lists it newest-first; applied paths link
+  to their editor. `applyDraft(…, actor)` / `scaffoldApply(…, actor)` + `auditEntries(limit)`;
+  `studio.audit` provider; `GET /audit`.
 
 Upstream Hypermedia Components briefs filed and adopted: `hc-code` (read-only block,
 gutter, diff), editable `hc-code`, `hc-sparkline`, and read-only syntax highlighting
@@ -173,8 +179,15 @@ gutter, diff), editable `hc-code`, `hc-sparkline`, and read-only syntax highligh
      `studio.drafts` provider and `GET /drafts` endpoint.
    - **Confirm-diff-before-apply** — partially met (the conflict case forces a review); a general
      "review the diff before every apply" gate is still open.
-6. **Granular read-only + audit** — read-only is all-or-nothing; add per-role edit
-   permission and an audit trail of who applied what when (production hardening).
+6. **Granular read-only + audit** — read-only is all-or-nothing.
+   - **Audit trail** — *done*: every source-writing action (apply a draft, apply a scaffold) is
+     stamped to an append-only `work/studio/audit/audit.jsonl` log with who/what/target/when, recorded
+     at the single point each write happens so no caller path bypasses it. An **audit** page (linked
+     from the explorer when writable) lists it newest-first. `StudioService.applyDraft(path, force,
+     actor)` / `scaffoldApply(table, force, actor)` + `auditEntries(limit)`; `GET /audit`.
+   - **Per-role edit permission** — *next slice*: refine the all-or-nothing `readOnly` with a
+     `tesseraql.studio.editRoles` allow-list, so only callers with an edit role may mutate when Studio
+     is writable.
 
 ### E. Editor live highlighting — **blocked on hc #264**
 
@@ -205,7 +218,7 @@ preview (slice 1), apply (slice 2), and new blank route (slice 3) all shipped �
 its CRUD slice, and create the files (edit detection + force), or create a single starter route, each
 with a restart notice for new routes. **C4 (explorer tree + filter) is done** — the explorer is a
 filterable directory tree. **D5 (draft robustness) is done**: concurrent-edit
-conflict detection (slice 1) and the draft overview (slice 2) shipped; a general
-confirm-diff-before-every-apply gate remains optional. Recommended next: **D6 (granular read-only +
-audit — per-role edit permission + an audit trail)**, or A1's optional PDF preview / JSON
-field-masking. E waits on hc #264; G is gated.
+conflict detection and the draft overview shipped. **D6 is underway**: the audit trail (slice 1)
+shipped — who applied what when; next is the **per-role edit permission** slice
+(`tesseraql.studio.editRoles`). After that: A1's optional PDF preview / JSON field-masking, or the
+docs-portal F8/F9 items. E waits on hc #264; G is gated.

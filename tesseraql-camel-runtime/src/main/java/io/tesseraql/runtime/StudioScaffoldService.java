@@ -79,11 +79,11 @@ final class StudioScaffoldService {
      * {@link StudioService#scaffoldApply} does the writing; this service only supplies the introspected
      * {@link TableSchema}.
      */
-    StudioService.ScaffoldResult apply(String table, boolean force) {
+    StudioService.ScaffoldResult apply(String table, boolean force, String actor) {
         if (!enabled) {
             return null;
         }
-        return studio.scaffoldApply(introspect(table), force);
+        return studio.scaffoldApply(introspect(table), force, actor);
     }
 
     private TableSchema introspect(String table) {

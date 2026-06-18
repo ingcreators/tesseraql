@@ -25,6 +25,8 @@ import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
@@ -507,6 +509,14 @@ public final class StudioService {
      * (design ch. 16.8).
      */
     public ScaffoldResult scaffoldApply(TableSchema table, boolean force) {
+        return scaffoldApply(table, force, null);
+    }
+
+    /**
+     * As {@link #scaffoldApply(TableSchema, boolean)}, but {@code actor} (the caller) is recorded to
+     * the audit trail once files are written (Studio backlog D6).
+     */
+    public ScaffoldResult scaffoldApply(TableSchema table, boolean force, String actor) {
         if (readOnly) {
             throw new TqlException(READ_ONLY, "Studio is read-only; scaffolding is disabled");
         }
@@ -519,6 +529,9 @@ public final class StudioService {
                 .filter(StudioService::isRouteYaml)
                 .filter(path -> !existingRoutes.contains(path))
                 .toList();
+        if (!report.written().isEmpty()) {
+            recordAudit(actor, "scaffold", table.name());
+        }
         return new ScaffoldResult(table.name(), report.written(), report.unchanged(),
                 report.skipped(), newRoutes, report.blocked());
     }
@@ -714,15 +727,21 @@ public final class StudioService {
      * Rejected in read-only mode; the draft is removed once applied.
      */
     public Path applyDraft(String relativePath) {
-        return applyDraft(relativePath, false);
+        return applyDraft(relativePath, false, null);
+    }
+
+    public Path applyDraft(String relativePath, boolean force) {
+        return applyDraft(relativePath, force, null);
     }
 
     /**
      * As {@link #applyDraft(String)}, but {@code force} overwrites a source that changed since the
-     * draft was started (Studio backlog D5). Without {@code force}, a concurrent-edit conflict is
-     * rejected so the draft cannot silently clobber another change (last-apply-wins).
+     * draft was started (Studio backlog D5), and {@code actor} (the caller, for the audit trail,
+     * Studio backlog D6) is recorded once the draft is promoted. Without {@code force}, a
+     * concurrent-edit conflict is rejected so the draft cannot silently clobber another change
+     * (last-apply-wins).
      */
-    public Path applyDraft(String relativePath, boolean force) {
+    public Path applyDraft(String relativePath, boolean force, String actor) {
         if (readOnly) {
             throw new TqlException(READ_ONLY, "Studio is read-only; apply is disabled");
         }
@@ -748,6 +767,7 @@ public final class StudioService {
         } catch (IOException ex) {
             throw new UncheckedIOException(ex);
         }
+        recordAudit(actor, "apply", relativePath);
         return target;
     }
 
@@ -782,6 +802,55 @@ public final class StudioService {
         } catch (IOException ex) {
             throw new UncheckedIOException(ex);
         }
+    }
+
+    /**
+     * The audit trail (Studio backlog D6): who applied or scaffolded what, when — newest first, up to
+     * {@code limit} entries. The trail is the append-only {@code work/studio/audit/audit.jsonl} log
+     * the source-writing operations stamp; an empty list when the log is absent.
+     */
+    public List<AuditEntry> auditEntries(int limit) {
+        Path log = auditLog();
+        if (!Files.isRegularFile(log)) {
+            return List.of();
+        }
+        List<AuditEntry> entries = new ArrayList<>();
+        try {
+            for (String line : Files.readAllLines(log)) {
+                if (line.isBlank()) {
+                    continue;
+                }
+                JsonNode node = jsonMapper.readTree(line);
+                entries.add(
+                        new AuditEntry(node.path("at").asText(""), node.path("actor").asText(""),
+                                node.path("action").asText(""), node.path("target").asText("")));
+            }
+        } catch (IOException ex) {
+            throw new UncheckedIOException(ex);
+        }
+        java.util.Collections.reverse(entries);
+        return entries.size() > limit ? List.copyOf(entries.subList(0, limit)) : entries;
+    }
+
+    /** Appends one audit entry for a source-writing action (Studio backlog D6). */
+    private void recordAudit(String actor, String action, String target) {
+        Map<String, Object> entry = new LinkedHashMap<>();
+        entry.put("at", Instant.now().toString());
+        entry.put("actor", actor == null || actor.isBlank() ? "unknown" : actor);
+        entry.put("action", action);
+        entry.put("target", target);
+        Path log = auditLog();
+        try {
+            Files.createDirectories(log.getParent());
+            Files.writeString(log, jsonMapper.writeValueAsString(entry) + "\n",
+                    StandardOpenOption.CREATE, StandardOpenOption.APPEND);
+        } catch (IOException ex) {
+            throw new UncheckedIOException(ex);
+        }
+    }
+
+    private Path auditLog() {
+        return appHome.resolve("work/studio/audit/audit.jsonl").normalize();
     }
 
     /** Reads a previously saved draft, or null if none exists. */
@@ -886,6 +955,14 @@ public final class StudioService {
      * whether it conflicts with a source that changed underneath it, and whether it is a new file.
      */
     public record DraftSummary(String path, boolean conflict, boolean isNew) {
+    }
+
+    /**
+     * One audit-trail entry (Studio backlog D6): when a source-writing action happened ({@code at},
+     * an ISO-8601 instant), who did it ({@code actor}), the {@code action} ({@code apply}/{@code
+     * scaffold}), and the {@code target} (the applied path or the scaffolded table).
+     */
+    public record AuditEntry(String at, String actor, String action, String target) {
     }
 
     /**

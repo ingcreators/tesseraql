@@ -19,6 +19,7 @@ sql:
   params:
     path: params.path
     force: params.force
+    actor: principal.loginId
 
 response:
   redirect:
