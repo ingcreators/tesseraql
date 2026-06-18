@@ -1557,6 +1557,21 @@ class StudioIntegrationTest {
     }
 
     @Test
+    void uiSqlBuilderFiltersByAChosenColumnViaTheCascade() throws Exception {
+        // The column cascade returns the table's columns as select options.
+        HttpResponse<String> columns = get(
+                "/_tesseraql/studio/ui/sql-builder/columns?table=" + enc("customers"), true);
+        assertThat(columns.statusCode()).isEqualTo(200);
+        assertThat(columns.body()).contains(">id<").contains(">email<");
+
+        // select-by-column filters on the chosen column with a params bind.
+        HttpResponse<String> select = postForm("/_tesseraql/studio/ui/sql-builder/build",
+                "table=customers&operation=select-by-column&column=email");
+        assertThat(select.body()).contains("from customers")
+                .contains("where email = /* params.email */");
+    }
+
+    @Test
     void uiMigrationPageOffersSchemaDiffWhenABaselineIsPresent() throws Exception {
         HttpResponse<String> response = get("/_tesseraql/studio/ui/migration", true);
 

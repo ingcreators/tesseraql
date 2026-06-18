@@ -8,6 +8,14 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- Studio: a by-column filter in the 2-way SQL builder (follow-on). The SQL builder gains a
+  **select-by-column** operation and a **Filter column** dropdown that is cascade-loaded from the
+  selected table's columns (htmx, on table change) — so you can generate
+  `select … from <t> where <col> = /* params.<col> */ <dummy>` filtering on any column, not just the
+  primary key, with the bind typed from the column. New `studio.sqlBuilder.columns` cascade provider
+  and `/_tesseraql/studio/ui/sql-builder/columns` fragment; `SqlBuilder.generate` gains the filter
+  column.
+
 - Studio: a 2-way SQL builder (Studio backlog: schema-driven authoring). A new **SQL builder** page
   (linked from the explorer when editable) generates a route's `select`/`insert`/`update`/`delete`
   **2-way SQL** for an introspected table and operation — with the bind directives written for you

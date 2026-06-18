@@ -25,10 +25,19 @@ public final class SqlBuilder {
     private SqlBuilder() {
     }
 
-    /** The 2-way SQL for {@code operation} on {@code table}; an empty string for an unknown operation. */
+    /** The 2-way SQL for {@code operation} on {@code table} (no filter column). */
     public static String generate(CatalogSchema.Table table, String operation) {
+        return generate(table, operation, null);
+    }
+
+    /**
+     * The 2-way SQL for {@code operation} on {@code table}; an empty string for an unknown operation.
+     * {@code column} is the filter column for {@code select-by-column}, ignored otherwise.
+     */
+    public static String generate(CatalogSchema.Table table, String operation, String column) {
         return switch (operation == null ? "" : operation) {
             case "select-by-pk" -> selectByPk(table);
+            case "select-by-column" -> selectByColumn(table, column);
             case "insert" -> insert(table);
             case "update-by-pk" -> updateByPk(table);
             case "delete-by-pk" -> deleteByPk(table);
@@ -37,10 +46,25 @@ public final class SqlBuilder {
     }
 
     private static String selectByPk(CatalogSchema.Table table) {
+        return "select " + projection(table) + "\nfrom " + table.name() + "\nwhere "
+                + keyPredicate(table) + ";\n";
+    }
+
+    private static String selectByColumn(CatalogSchema.Table table, String column) {
+        String filter = column == null ? "" : column.strip();
+        if (filter.isEmpty()) {
+            return "select " + projection(table) + "\nfrom " + table.name()
+                    + "\nwhere /* TODO: pick a column */;\n";
+        }
+        return "select " + projection(table) + "\nfrom " + table.name() + "\nwhere " + filter
+                + " = /* params." + filter + " */ " + dummy(typeOf(table, filter)) + ";\n";
+    }
+
+    /** The comma-separated list of every column name, for a select projection. */
+    private static String projection(CatalogSchema.Table table) {
         List<String> columns = new ArrayList<>();
         table.columns().forEach(column -> columns.add(column.name()));
-        return "select " + String.join(", ", columns) + "\nfrom " + table.name() + "\nwhere "
-                + keyPredicate(table) + ";\n";
+        return String.join(", ", columns);
     }
 
     private static String insert(CatalogSchema.Table table) {
