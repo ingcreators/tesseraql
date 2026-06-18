@@ -733,6 +733,31 @@ class StudioIntegrationTest {
                 .contains("hx-post=\"/_tesseraql/studio/ui/scaffold/apply\"");
     }
 
+    @Test
+    void uiNewRouteCreatesStarterDraftAndRedirectsToEditor() throws Exception {
+        String path = "web/api/newthing/get.yml";
+        HttpResponse<String> created = postForm("/_tesseraql/studio/ui/new",
+                "path=" + enc(path) + "&recipe=query-json");
+
+        assertThat(created.statusCode()).isEqualTo(303);
+        String location = created.headers().firstValue("location").orElseThrow();
+        assertThat(location).startsWith("/_tesseraql/studio/ui/source?path=");
+
+        // Following the redirect opens the source editor on the freshly saved starter draft.
+        HttpResponse<String> editor = get(location, true);
+        assertThat(editor.statusCode()).isEqualTo(200);
+        assertThat(editor.body()).contains("api.newthing.get").contains("query-json");
+    }
+
+    @Test
+    void uiExplorerOffersNewRouteFormWhenWritable() throws Exception {
+        HttpResponse<String> response = get("/_tesseraql/studio/ui", true);
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(response.body()).contains("New route")
+                .contains("action=\"/_tesseraql/studio/ui/new\"");
+    }
+
     private static JsonNode applyGadgets(boolean force) throws Exception {
         HttpResponse<String> response = post(
                 "/_tesseraql/studio/scaffold/apply?table=gadgets&force=" + force, "", true);

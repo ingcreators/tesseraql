@@ -46,6 +46,7 @@ public final class StudioService {
     private static final TqlErrorCode NOT_FOUND = new TqlErrorCode(TqlDomain.STUDIO, 4040);
     private static final TqlErrorCode INVALID_DRAFT = new TqlErrorCode(TqlDomain.STUDIO, 4221);
     private static final TqlErrorCode RENDER = new TqlErrorCode(TqlDomain.STUDIO, 4222);
+    private static final TqlErrorCode NEW_ROUTE = new TqlErrorCode(TqlDomain.STUDIO, 4224);
 
     /** The HTTP-method stems that name a route document under {@code web/} (and its fixtures). */
     private static final Set<String> HTTP_METHODS = Set.of("get", "post", "put", "patch", "delete",
@@ -467,6 +468,101 @@ public final class StudioService {
                 .toList();
         return new ScaffoldResult(table.name(), report.written(), report.unchanged(),
                 report.skipped(), newRoutes, report.blocked());
+    }
+
+    /**
+     * Creates a new route from a starter skeleton for the given {@code recipe} (Studio backlog B3):
+     * it saves the skeleton as a draft at {@code path} — a {@code web/**}/{@code <method>.yml} file
+     * that must not already exist — so the source editor's validate → apply flow then finishes
+     * creating it (the new route needs a restart to be served, like any newly added route). Rejected
+     * in read-only mode. Returns the draft path.
+     */
+    public Path newRouteDraft(String path, String recipe) {
+        if (readOnly) {
+            throw new TqlException(READ_ONLY, "Studio is read-only; creating routes is disabled");
+        }
+        if (!isRouteYaml(path)) {
+            throw new TqlException(NEW_ROUTE,
+                    "A new route path must be a web/**/<method>.yml file: " + path);
+        }
+        if (sourceIfExists(path) != null) {
+            throw new TqlException(NEW_ROUTE, "A file already exists at " + path
+                    + "; open it in the editor instead");
+        }
+        return saveDraft(path, starterRoute(path, recipe));
+    }
+
+    /** The starter route skeleton for a recipe: a parseable draft the author then completes. */
+    private static String starterRoute(String path, String recipe) {
+        String id = path.substring("web/".length(), path.length() - ".yml".length())
+                .replace('/', '.');
+        return switch (recipe) {
+            case "query-html" ->
+                """
+                        version: tesseraql/v1
+                        id: %s
+                        kind: route
+                        recipe: query-html
+
+                        security:
+                          auth: bearer
+
+                        sql:
+                          file: query.sql
+                          mode: query
+
+                        response:
+                          html:
+                            status: 200
+                            template: page.html
+                            model:
+                              rows: sql.rows
+                            headers:
+                              Content-Security-Policy: "default-src 'self'; style-src 'self' 'unsafe-inline'; frame-ancestors 'none'"
+                              X-Content-Type-Options: nosniff
+                              X-Frame-Options: DENY
+                              Referrer-Policy: no-referrer
+                        """
+                        .formatted(id);
+            case "command-json" -> """
+                    version: tesseraql/v1
+                    id: %s
+                    kind: route
+                    recipe: command-json
+
+                    security:
+                      auth: bearer
+
+                    sql:
+                      file: command.sql
+                      mode: update
+
+                    response:
+                      json:
+                        status: 200
+                        body:
+                          affected: sql.affectedRows
+                    """.formatted(id);
+            default -> """
+                    version: tesseraql/v1
+                    id: %s
+                    kind: route
+                    recipe: query-json
+
+                    security:
+                      auth: bearer
+
+                    sql:
+                      file: query.sql
+                      mode: query
+
+                    response:
+                      json:
+                        status: 200
+                        body:
+                          data: sql.rows
+                    """.formatted(id);
+        };
     }
 
     /** The disposition an apply would give a generated file, by reading its on-disk counterpart. */

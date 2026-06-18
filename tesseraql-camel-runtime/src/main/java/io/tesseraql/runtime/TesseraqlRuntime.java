@@ -743,6 +743,13 @@ public final class TesseraqlRuntime implements AutoCloseable {
                             studio.saveDraft(path, content == null ? "" : String.valueOf(content));
                             return Map.of("saved", path);
                         })
+                        .register("studio.newRoute", params -> {
+                            String path = String.valueOf(params.get("path"));
+                            Object recipe = params.get("recipe");
+                            studio.newRouteDraft(path,
+                                    recipe == null ? "query-json" : String.valueOf(recipe));
+                            return Map.of("created", path);
+                        })
                         .register("studio.apply", params -> {
                             String path = String.valueOf(params.get("path"));
                             studio.applyDraft(path);

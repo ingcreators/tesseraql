@@ -12,6 +12,26 @@
   </div>
 </th:block>
 <div id="page-content" class="hc-stack">
+<section class="hc-card" th:if="${studio.editable}">
+  <h2>New route</h2>
+  <p class="hc-field__message">Creates a starter route as a draft and opens it in the editor to finish. A new route needs a restart to be served.</p>
+  <form class="hc-stack" method="post" action="/_tesseraql/studio/ui/new">
+    <div class="hc-field">
+      <label class="hc-field__label" for="new-route-path">Path</label>
+      <input class="hc-input" id="new-route-path" type="text" name="path" required
+             placeholder="web/api/widgets/get.yml">
+    </div>
+    <div class="hc-field">
+      <label class="hc-field__label" for="new-route-recipe">Recipe</label>
+      <select class="hc-select" id="new-route-recipe" name="recipe">
+        <option value="query-json">query-json</option>
+        <option value="query-html">query-html</option>
+        <option value="command-json">command-json</option>
+      </select>
+    </div>
+    <div class="hc-cluster"><button type="submit" class="hc-button" data-variant="primary">Create route</button></div>
+  </form>
+</section>
 <section class="hc-card">
   <h2>Routes</h2>
   <div class="hc-empty" th:unless="${studio.hasRoutes}"><p class="hc-empty__title">No routes defined.</p></div>

@@ -27,6 +27,12 @@ All notable changes to TesseraQL are documented here. The format follows
   /_tesseraql/studio/scaffold/apply` JSON endpoints, and the `/_tesseraql/studio/ui/scaffold` page.
   Ties to milestone M7 ("schema → verified CRUD in ten minutes"). See
   [docs/studio-backlog.md](docs/studio-backlog.md).
+- Studio editor: create a new route from the explorer (Studio backlog B3). A **New route** form on
+  the explorer (when Studio is writable) takes a `web/**/<method>.yml` path and a recipe
+  (`query-json`/`query-html`/`command-json`) and saves a parseable starter skeleton as a draft, then
+  opens it in the source editor to finish — so creation reuses the existing validate → apply flow
+  (the new route needs a restart to be served). Database-free `StudioService.newRouteDraft`; the
+  `studio.newRoute` provider and the `/_tesseraql/studio/ui/new` route.
 - Studio editor: run a route's or job's declarative tests from the editor (Studio backlog A2). A
   route or job source page gains a **Run tests** action that runs every declarative test case kind
   covering it — `sql` queries **and writes** (an `INSERT … RETURNING` runs and is rolled back),
