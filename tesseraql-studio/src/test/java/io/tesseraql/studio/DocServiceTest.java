@@ -36,6 +36,23 @@ class DocServiceTest {
     }
 
     @Test
+    void routesForTableIndexesReadersAndWritersFromTheBoundSql() {
+        DocService service = new DocService(exampleManifest());
+
+        DocService.RouteUsage users = service.routesForTable("users");
+        // users.search SELECTs from users; the deactivate/provision routes write to it.
+        assertThat(users.readers()).extracting(DocService.RouteRef::id).contains("users.search");
+        assertThat(users.writers()).isNotEmpty();
+        assertThat(users.readers())
+                .allSatisfy(ref -> assertThat(ref.url()).contains("docs/route?id=" + ref.id()));
+        // The lookup is case-insensitive; an untouched or null table has an empty usage.
+        assertThat(service.routesForTable("USERS").readers())
+                .extracting(DocService.RouteRef::id).contains("users.search");
+        assertThat(service.routesForTable("no_such_table").isEmpty()).isTrue();
+        assertThat(service.routesForTable(null).isEmpty()).isTrue();
+    }
+
+    @Test
     void readsThePackagedSpecWithTestCrossReferences(@TempDir Path dir) throws Exception {
         Files.createDirectories(dir.resolve("config"));
         Files.writeString(dir.resolve("config/tesseraql.yml"),

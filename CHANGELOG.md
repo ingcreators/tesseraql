@@ -16,7 +16,11 @@ All notable changes to TesseraQL are documented here. The format follows
   derived-table subqueries. A read/write table that the `schema` goal introspected into the schema
   portal cross-links to its table page; an un-introspected one stays plain text. It is a best-effort
   navigation aid, not an execution fact, and is computed live from the spec (no `spec.json` change).
-  `DocService.tableLinks`; `DocViews.route` gains the data-dependency projection.
+  `DocService.tableLinks`; `DocViews.route` gains the data-dependency projection. The schema **table**
+  page now shows the reverse: a **Used by routes** card listing the routes whose SQL reads from and
+  writes to that table, each linking back to its route reference — so the dependency graph is
+  navigable both ways. Built once as a cached reverse index over every route's bound SQL
+  (`DocService.routesForTable`); the public shared-table view deliberately omits it.
 
 - MCP: application-declared prompts (`kind: prompt`). An app can now declare its own MCP **prompt**
   under `mcp/` — the application-side counterpart of the dev-tool `studio_copilot` prompt — as a

@@ -74,6 +74,7 @@ public final class DocService {
     private final Path appHome;
     private volatile List<Hit> corpus;
     private volatile Map<String, Set<Integer>> inverted;
+    private volatile Map<String, RouteUsage> tableUsage;
 
     public DocService(AppManifest manifest) {
         this.manifest = manifest;
@@ -217,6 +218,71 @@ public final class DocService {
             }
         }
         return null;
+    }
+
+    /**
+     * The routes whose SQL reads from or writes to the given table — the reverse of the route page's
+     * data dependencies (Studio backlog: the SQL&rarr;table dependency graph). Computed over every
+     * route's bound 2-way SQL by {@link SqlTableReferences} and cached at first use; the table page
+     * cross-links each entry back to its route reference. An empty usage for an unknown/untouched
+     * table.
+     */
+    public RouteUsage routesForTable(String tableName) {
+        if (tableName == null) {
+            return RouteUsage.EMPTY;
+        }
+        ensureTableUsage();
+        return tableUsage.getOrDefault(tableName.toLowerCase(Locale.ROOT), RouteUsage.EMPTY);
+    }
+
+    /** Builds the reverse table&rarr;routes index once, keyed by lowercased table name. */
+    private synchronized void ensureTableUsage() {
+        if (tableUsage != null) {
+            return;
+        }
+        Map<String, List<RouteRef>> readers = new HashMap<>();
+        Map<String, List<RouteRef>> writers = new HashMap<>();
+        for (RouteEntry entry : spec().routes()) {
+            RouteSpec route = entry.route();
+            if (route == null) {
+                continue;
+            }
+            RouteRef ref = new RouteRef(route.id(), route.method(), routeUrl(route.id()));
+            Set<String> reads = new LinkedHashSet<>();
+            Set<String> writes = new LinkedHashSet<>();
+            for (RouteSpec.SqlStatement statement : route.sql()) {
+                if (statement.statement() == null) {
+                    continue;
+                }
+                for (io.tesseraql.core.sql.SqlTableReferences.TableRef table : io.tesseraql.core.sql.SqlTableReferences
+                        .extract(statement.statement())) {
+                    (table.access() == io.tesseraql.core.sql.SqlTableReferences.Access.READ
+                            ? reads
+                            : writes).add(table.table().toLowerCase(Locale.ROOT));
+                }
+            }
+            reads.forEach(name -> readers.computeIfAbsent(name, key -> new ArrayList<>()).add(ref));
+            writes.forEach(
+                    name -> writers.computeIfAbsent(name, key -> new ArrayList<>()).add(ref));
+        }
+        Set<String> names = new java.util.TreeSet<>();
+        names.addAll(readers.keySet());
+        names.addAll(writers.keySet());
+        Map<String, RouteUsage> usage = new java.util.LinkedHashMap<>();
+        for (String name : names) {
+            usage.put(name,
+                    new RouteUsage(sortById(readers.get(name)), sortById(writers.get(name))));
+        }
+        this.tableUsage = usage;
+    }
+
+    private static List<RouteRef> sortById(List<RouteRef> refs) {
+        if (refs == null) {
+            return List.of();
+        }
+        List<RouteRef> sorted = new ArrayList<>(refs);
+        sorted.sort(Comparator.comparing(RouteRef::id));
+        return sorted;
     }
 
     /**
@@ -485,6 +551,29 @@ public final class DocService {
 
     /** A covering test case projected to the facts the portal shows. */
     public record TestRef(String name, String kind, String target) {
+    }
+
+    /** A reference to a route from the table page: its id, HTTP method, and detail link. */
+    public record RouteRef(String id, String method, String url) {
+    }
+
+    /**
+     * The routes that touch one table, split by access — the reverse of a route's data dependencies.
+     * Each list is sorted by route id for a stable display.
+     */
+    public record RouteUsage(List<RouteRef> readers, List<RouteRef> writers) {
+
+        static final RouteUsage EMPTY = new RouteUsage(List.of(), List.of());
+
+        public RouteUsage {
+            readers = List.copyOf(readers);
+            writers = List.copyOf(writers);
+        }
+
+        /** Whether no route reads or writes the table. */
+        public boolean isEmpty() {
+            return readers.isEmpty() && writers.isEmpty();
+        }
     }
 
     /** One run's trend point from {@code history.json} (studio-side mirror of the build's entry). */

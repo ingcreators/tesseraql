@@ -567,6 +567,18 @@ class StudioIntegrationTest {
     }
 
     @Test
+    void uiDocsSchemaTableCrossLinksTheRoutesThatUseIt() throws Exception {
+        HttpResponse<String> response = get(
+                "/_tesseraql/studio/ui/docs/schema/table?ds=main&name=" + enc("customers"), true);
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        // The reverse SQL->table graph: the table page lists the routes that touch it, linking back
+        // to each route page. `deps.customers` reads `customers` (see prepareAppHome).
+        assertThat(response.body()).contains("Used by routes").contains("read by")
+                .contains("/_tesseraql/studio/ui/docs/route?id=deps.customers");
+    }
+
+    @Test
     void uiDocsSchemaRequiresAuthentication() throws Exception {
         assertThat(get("/_tesseraql/studio/ui/docs/schema", false).statusCode()).isEqualTo(401);
     }
