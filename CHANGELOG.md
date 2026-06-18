@@ -8,6 +8,16 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- Docs portal: API spec diff / changelog on the Export page (Studio backlog). When an OpenAPI
+  **baseline** sidecar is present (`.tesseraql/docs/openapi.baseline.json` — copy a released
+  `openapi.json` there), the Export page shows **what changed** in the API since that baseline:
+  operations **added**, **removed**, or **changed**, and for a changed operation what about it changed
+  (parameters added/removed/required/typed, request body, responses, security). A new canonical
+  `OpenApiDiff` engine (`tesseraql-yaml`) diffs the current generated OpenAPI against the baseline by
+  HTTP method and path (so a route re-ordering is not a change), deterministically; added/changed
+  entries link to their route page. Off until a baseline is captured; a corrupt baseline degrades to
+  a note. `DocService.apiChangelog`; `DocViews.export` gains the changelog projection.
+
 - Docs portal: SQL&rarr;table dependency graph on the route page (Studio backlog, v3.1 deferred
   slice). A route's reference now shows the **tables its SQL reads from and writes to**, inferred
   from the bound 2-way SQL by a new dependency-free extractor (`SqlTableReferences` in

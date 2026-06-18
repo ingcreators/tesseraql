@@ -10,6 +10,7 @@ import io.tesseraql.yaml.docs.RouteSpecGenerator;
 import io.tesseraql.yaml.docs.RouteSpecModel;
 import io.tesseraql.yaml.manifest.AppManifest;
 import io.tesseraql.yaml.openapi.HtmxContractGenerator;
+import io.tesseraql.yaml.openapi.OpenApiDiff;
 import io.tesseraql.yaml.openapi.OpenApiGenerator;
 import io.tesseraql.yaml.scaffold.CatalogSchema;
 import java.io.IOException;
@@ -54,6 +55,9 @@ public final class DocService {
 
     /** App-home-relative location the {@code schema} goal writes the catalog overlay at (portal v3). */
     public static final String SCHEMA_PATH = ".tesseraql/docs/schema.json";
+
+    /** App-home-relative location of the optional OpenAPI baseline to diff the current spec against. */
+    public static final String OPENAPI_BASELINE_PATH = ".tesseraql/docs/openapi.baseline.json";
 
     private static final String ROUTE_URL = "/_tesseraql/studio/ui/docs/route?id=";
     private static final String TABLE_URL = "/_tesseraql/studio/ui/docs/schema/table?";
@@ -474,6 +478,30 @@ public final class DocService {
      */
     public String openApiJson() {
         return new OpenApiGenerator().toJson(manifest);
+    }
+
+    /** Whether an OpenAPI baseline sidecar is present to diff the current spec against. */
+    public boolean hasApiBaseline() {
+        return Files.isRegularFile(appHome.resolve(OPENAPI_BASELINE_PATH));
+    }
+
+    /**
+     * The API changelog of the current OpenAPI document against the baseline sidecar
+     * ({@link #OPENAPI_BASELINE_PATH}) — what operations were added, removed, or changed since the
+     * operator captured that baseline (typically a previously-released {@code openapi.json}). Returns
+     * {@code null} when no baseline is present; a corrupt/unreadable baseline degrades to {@code null}
+     * so the export page keeps working. Diffed by the canonical {@link OpenApiDiff}.
+     */
+    public OpenApiDiff.ApiChangelog apiChangelog() {
+        Path baseline = appHome.resolve(OPENAPI_BASELINE_PATH);
+        if (!Files.isRegularFile(baseline)) {
+            return null;
+        }
+        try {
+            return new OpenApiDiff().diff(Files.readString(baseline), openApiJson());
+        } catch (IOException | TqlException ex) {
+            return null;
+        }
     }
 
     /**

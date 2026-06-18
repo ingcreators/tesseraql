@@ -29,6 +29,41 @@
   </table>
 </section>
 <section class="hc-card">
+  <h2>API changes</h2>
+  <p class="hc-field__label">What changed in the API since the captured baseline &mdash; operations
+    added, removed, or changed (parameters, request body, responses, security). Inferred by diffing
+    the current OpenAPI against the baseline; a derived view, not an execution fact.</p>
+  <th:block th:if="${docs.hasBaseline}">
+    <div class="hc-cluster">
+      <span class="hc-badge" data-variant="success" th:text="|${docs.addedCount} added|"></span>
+      <span class="hc-badge" data-variant="error" th:text="|${docs.removedCount} removed|"></span>
+      <span class="hc-badge" data-variant="warning" th:text="|${docs.changedCount} changed|"></span>
+    </div>
+    <div class="hc-empty" th:unless="${docs.hasChanges}">
+      <p class="hc-empty__title">No changes since the baseline.</p>
+    </div>
+    <ul class="hc-stack" th:if="${docs.hasChanges}">
+      <li th:each="c : ${docs.changes}">
+        <div class="hc-cluster">
+          <span class="hc-badge"
+                th:attr="data-variant=${c.kind == 'added'} ? 'success' : (${c.kind == 'removed'} ? 'error' : 'warning')"
+                th:text="${c.kind}"></span>
+          <span class="hc-badge" th:text="${c.method}"></span>
+          <a th:if="${c.url}" th:href="${c.url}"><code th:text="${c.path}"></code></a>
+          <code th:unless="${c.url}" th:text="${c.path}"></code>
+          <span class="hc-field__label" th:if="${c.operationId}" th:text="${c.operationId}"></span>
+        </div>
+        <ul th:unless="${#lists.isEmpty(c.details)}">
+          <li th:each="d : ${c.details}" th:text="${d}"></li>
+        </ul>
+      </li>
+    </ul>
+  </th:block>
+  <p class="hc-field__label" th:unless="${docs.hasBaseline}">No baseline captured. Copy this app's
+    <code>openapi.json</code> to <code th:text="${docs.baselinePath}"></code> (for example at release
+    time) to track what changed since then.</p>
+</section>
+<section class="hc-card">
   <h2>Printable route catalog</h2>
   <p class="hc-field__label">The app's routes as a PDF table, rendered server-side &mdash; for
     sharing or printing.</p>

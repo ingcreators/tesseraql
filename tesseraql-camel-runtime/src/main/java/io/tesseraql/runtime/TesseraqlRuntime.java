@@ -925,7 +925,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
                         // streamed as downloadable JSON (the download routes' response.file emits the
                         // provider's raw JSON string verbatim).
                         .register("docs.export", params -> io.tesseraql.studio.DocViews
-                                .export(doc.appName()))
+                                .export(doc.appName(), doc.apiChangelog()))
                         .register("docs.openapi", params -> doc.openApiJson())
                         .register("docs.htmx", params -> doc.htmxContractJson())
                         // Printable route catalog (F8, slice 2): render the route rows to a PDF
