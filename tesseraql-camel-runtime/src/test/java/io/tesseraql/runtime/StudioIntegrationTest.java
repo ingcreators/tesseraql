@@ -688,6 +688,50 @@ class StudioIntegrationTest {
     }
 
     @Test
+    void uiDocsTableOffersAShareLinkAndRendersItPublicly() throws Exception {
+        HttpResponse<String> page = get(
+                "/_tesseraql/studio/ui/docs/schema/table?ds=main&name=" + enc("orders"), true);
+        assertThat(page.statusCode()).isEqualTo(200);
+        assertThat(page.body()).contains("/_tesseraql/docs/share/table?ds=main");
+        java.util.regex.Matcher matcher = java.util.regex.Pattern.compile(
+                "/_tesseraql/docs/share/table\\?ds=main&amp;name=orders&amp;exp=(\\d+)&amp;sig="
+                        + "([A-Za-z0-9_-]+)")
+                .matcher(page.body());
+        assertThat(matcher.find()).isTrue();
+        String shareUrl = "/_tesseraql/docs/share/table?ds=main&name=orders&exp=" + matcher.group(1)
+                + "&sig=" + matcher.group(2);
+
+        // Opened with NO bearer token: the signed link is the authorization.
+        HttpResponse<String> shared = get(shareUrl, false);
+        assertThat(shared.statusCode()).isEqualTo(200);
+        assertThat(shared.body()).contains("shared").contains("orders").contains("customer_id");
+        // A forged token renders the notice, never the table.
+        assertThat(get("/_tesseraql/docs/share/table?ds=main&name=orders&exp=9999999999&sig=forged",
+                false).body()).contains("invalid or has expired").doesNotContain("customer_id");
+    }
+
+    @Test
+    void uiDocsCoverageOffersAShareLinkAndRendersItPublicly() throws Exception {
+        HttpResponse<String> page = get("/_tesseraql/studio/ui/docs/coverage", true);
+        assertThat(page.body()).contains("/_tesseraql/docs/share/coverage?exp=");
+        java.util.regex.Matcher matcher = java.util.regex.Pattern.compile(
+                "/_tesseraql/docs/share/coverage\\?exp=(\\d+)&amp;sig=([A-Za-z0-9_-]+)")
+                .matcher(page.body());
+        assertThat(matcher.find()).isTrue();
+        String shareUrl = "/_tesseraql/docs/share/coverage?exp=" + matcher.group(1)
+                + "&sig=" + matcher.group(2);
+
+        HttpResponse<String> shared = get(shareUrl, false);
+        assertThat(shared.statusCode()).isEqualTo(200);
+        assertThat(shared.body()).contains("shared").contains("Coverage summary")
+                .contains("2/2 passed");
+        // The public coverage view withholds the per-test failure list.
+        assertThat(shared.body()).doesNotContain("Failing tests");
+        assertThat(get("/_tesseraql/docs/share/coverage?exp=9999999999&sig=forged", false).body())
+                .contains("invalid or has expired");
+    }
+
+    @Test
     void uiSaveAndApplyDraftViaForm() throws Exception {
         String path = "web/api/formtest/get.yml";
         String content = """

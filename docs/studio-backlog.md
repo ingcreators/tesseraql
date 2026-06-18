@@ -254,7 +254,12 @@ and is being adopted (see E below).
      `auth: public` share route verifies it (constant-time) and the expiry, else shows an
      invalid/expired notice. The public view omits SQL/tests/coverage; the secret is dedicated (not
      the JWT key). Off until the secret is set. Runtime `ShareLinks`; `DocViews.share`; `docs.share`
-     provider; `/_tesseraql/docs/share/route` route.
+     provider; `/_tesseraql/docs/share/route` route. **Extended** to also share a **schema table**
+     page and the **coverage** dashboard (same opt-in secret): the HMAC binds a per-kind label
+     (route/table/coverage) so a link of one kind can't be replayed as another; the public coverage
+     view withholds the per-test failure detail and the public table view drops bearer-gated nav.
+     `ShareLinks.mintTable`/`mintCoverage`; `DocViews.shareTable`/`shareCoverage`; `docs.shareTable`/
+     `docs.shareCoverage` providers; `/_tesseraql/docs/share/table` + `/.../share/coverage` routes.
 9. **Coverage trend depth** — *done*: the run-history ring is no longer fixed at 20 runs — a
    non-positive `tesseraql.historyLimit` (`report` goal) / `--history-limit` (`tesseraql test
    --report`) keeps the full history, so the trend spans far more than the former cap. The trend

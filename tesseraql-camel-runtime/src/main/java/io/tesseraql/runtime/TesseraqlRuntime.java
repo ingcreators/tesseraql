@@ -888,8 +888,17 @@ public final class TesseraqlRuntime implements AutoCloseable {
                             String q = query == null ? "" : String.valueOf(query);
                             return io.tesseraql.studio.DocViews.searchResults(q, doc.search(q));
                         })
-                        .register("docs.coverage", params -> io.tesseraql.studio.DocViews
-                                .coverage(doc.appName(), doc.report(), doc.history()))
+                        .register("docs.coverage", params -> {
+                            io.tesseraql.studio.ReportOverlay overlay = doc.report();
+                            Map<String, Object> model = io.tesseraql.studio.DocViews
+                                    .coverage(doc.appName(), overlay, doc.history());
+                            // Offer a signed share link for the dashboard when sharing is configured
+                            // and there is a run report to share (F8 slice 3, extended).
+                            if (shareLinks.enabled() && overlay != null) {
+                                model.put("shareUrl", shareLinks.mintCoverage());
+                            }
+                            return model;
+                        })
                         .register("docs.schema", params -> io.tesseraql.studio.DocViews
                                 .schema(doc.appName(), doc.schema()))
                         .register("docs.table", params -> {
@@ -900,7 +909,12 @@ public final class TesseraqlRuntime implements AutoCloseable {
                             if (table == null) {
                                 return Map.of("notFound", true, "name", name, "datasource", ds);
                             }
-                            return io.tesseraql.studio.DocViews.table(ds, table);
+                            Map<String, Object> model = io.tesseraql.studio.DocViews.table(ds,
+                                    table);
+                            if (shareLinks.enabled()) {
+                                model.put("shareUrl", shareLinks.mintTable(ds, name));
+                            }
+                            return model;
                         })
                         // Export/share (documentation portal F8): the OpenAPI document and the htmx
                         // contract, generated live from the manifest by the canonical generators and
@@ -943,6 +957,43 @@ public final class TesseraqlRuntime implements AutoCloseable {
                                 return Map.of("shared", true, "shareInvalid", true);
                             }
                             return io.tesseraql.studio.DocViews.share(entry);
+                        })
+                        // Public shared schema table (F8 slice 3, extended): verify the signed token,
+                        // then render the table's read-only reference; invalid/expired -> notice.
+                        .register("docs.shareTable", params -> {
+                            String ds = params.get("ds") == null
+                                    ? null
+                                    : String.valueOf(params.get("ds"));
+                            String name = params.get("name") == null
+                                    ? null
+                                    : String.valueOf(params.get("name"));
+                            String exp = params.get("exp") == null
+                                    ? null
+                                    : String.valueOf(params.get("exp"));
+                            String sig = params.get("sig") == null
+                                    ? null
+                                    : String.valueOf(params.get("sig"));
+                            io.tesseraql.yaml.scaffold.CatalogSchema.Table table = shareLinks
+                                    .verifyTable(ds, name, exp, sig) ? doc.table(ds, name) : null;
+                            if (table == null) {
+                                return Map.of("shared", true, "shareInvalid", true);
+                            }
+                            return io.tesseraql.studio.DocViews.shareTable(ds, table);
+                        })
+                        // Public shared coverage dashboard (F8 slice 3, extended): same verification;
+                        // the public view withholds the per-test failure detail.
+                        .register("docs.shareCoverage", params -> {
+                            String exp = params.get("exp") == null
+                                    ? null
+                                    : String.valueOf(params.get("exp"));
+                            String sig = params.get("sig") == null
+                                    ? null
+                                    : String.valueOf(params.get("sig"));
+                            if (!shareLinks.verifyCoverage(exp, sig)) {
+                                return Map.of("shared", true, "shareInvalid", true);
+                            }
+                            return io.tesseraql.studio.DocViews.shareCoverage(doc.appName(),
+                                    doc.report(), doc.history());
                         });
             }
             // Retention (design ch. 44): enabled by configuring the sweep interval. When

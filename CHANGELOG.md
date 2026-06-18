@@ -8,6 +8,16 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- Docs portal: signed share links for schema tables and the coverage dashboard (Studio backlog F8
+  slice 3, extended). The opt-in `tesseraql.docs.share.secret` sharing that route pages had now also
+  covers a **schema table** page and the **coverage** dashboard: an authenticated user gets a Share
+  card with a signed, expiring link that opens that one page **read-only without signing in**. The
+  HMAC now binds a **per-kind label** (route / table / coverage) plus the page's identity and expiry,
+  so a link of one kind can't be replayed as another. The public coverage view withholds the
+  per-test failure detail; the public table view drops the bearer-gated navigation links. New public
+  `auth: public` routes `/_tesseraql/docs/share/table` and `/.../share/coverage`; `ShareLinks`
+  generalized to `mintTable`/`mintCoverage` (+ verify); `DocViews.shareTable`/`shareCoverage`.
+
 - Studio editor: confirm-the-diff-before-every-apply (Studio backlog D5 follow-up). A new opt-in
   `tesseraql.studio.confirmApply` flag makes the editor acknowledge the compare-panel diff before
   **every** draft apply, not only when there's a concurrent-edit conflict. When on, the source page

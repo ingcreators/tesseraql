@@ -1,22 +1,21 @@
 <!DOCTYPE html>
 <html xmlns:th="http://www.thymeleaf.org"
-      th:replace="~{tql/shell :: page(|TesseraQL Coverage · ${cov.appName}|, ~{:: #page-header}, ~{:: #page-content})}">
+      th:replace="~{tql/shell :: page(|TesseraQL · Shared coverage · ${cov.appName}|, ~{:: #page-header}, ~{:: #page-content})}">
 <th:block id="page-header">
   <span class="hc-spacer"></span>
-  <div class="hc-cluster">
-    <a class="hc-button" data-variant="ghost" data-size="sm" href="/_tesseraql/studio/ui/docs">&larr; docs</a>
-    <a class="hc-button" data-variant="ghost" data-size="sm" href="/_tesseraql/studio/ui/docs/schema">schema</a>
-  </div>
+  <span class="hc-badge" data-variant="info">shared · read-only</span>
 </th:block>
 <div id="page-content" class="hc-stack">
-  <section class="hc-card" th:unless="${cov.hasReport}">
-    <h2>Coverage</h2>
+  <section class="hc-card" th:if="${cov.shareInvalid}">
     <div class="hc-empty">
-      <p class="hc-empty__title">No test run recorded yet.</p>
-      <p>Run the <code>tesseraql:report</code> goal to populate test results and coverage.</p>
+      <p class="hc-empty__title">This shared link is invalid or has expired.</p>
+      <p class="hc-empty__body">Ask the person who shared it for a fresh link.</p>
     </div>
   </section>
-  <th:block th:if="${cov.hasReport}">
+  <section class="hc-card" th:if="${not cov.shareInvalid and not cov.hasReport}">
+    <div class="hc-empty"><p class="hc-empty__title">No test run recorded yet.</p></div>
+  </section>
+  <th:block th:if="${not cov.shareInvalid and cov.hasReport}">
     <section class="hc-card">
       <h2>Coverage summary</h2>
       <div class="hc-cluster">
@@ -28,19 +27,6 @@
               th:text="${cov.report.gatePassed} ? 'gate passed' : 'gate failed'"></span>
       </div>
       <span class="hc-field__label" th:if="${cov.report.runId}" th:text="|run ${cov.report.runId}|"></span>
-      <ul th:if="${cov.hasGateFailures}">
-        <li th:each="f : ${cov.gateFailures}" th:text="${f}"></li>
-      </ul>
-    </section>
-    <section class="hc-card" th:if="${cov.shareUrl}">
-      <h3>Share</h3>
-      <p class="hc-field__label">A signed, expiring read-only link to this dashboard &mdash; openable
-        without signing in. The shared view withholds per-test failure detail.</p>
-      <input class="hc-input" type="text" readonly th:value="${cov.shareUrl}">
-      <div class="hc-cluster">
-        <a class="hc-button" data-variant="ghost" data-size="sm" target="_blank" rel="noopener"
-           th:href="${cov.shareUrl}">Open shared view &rarr;</a>
-      </div>
     </section>
     <section class="hc-card" th:if="${cov.trend}">
       <h2>Trend <span class="hc-field__label" th:text="|over ${cov.trend.runs} runs|"></span></h2>
@@ -64,13 +50,11 @@
           <span class="hc-badge" data-variant="info" th:text="|${cov.trend.branchPct}%|"></span>
         </div>
       </div>
-      <span class="hc-field__label" th:if="${cov.trend.from}"
-            th:text="|${cov.trend.from} → ${cov.trend.to}. Set tesseraql.historyLimit (0 keeps all) to tune retention.|"></span>
     </section>
     <section class="hc-card">
       <h2>Item coverage</h2>
       <table class="hc-table" th:if="${cov.hasKinds}">
-        <thead><tr><th>Kind</th><th>Covered</th><th>Ratio</th><th>Uncovered</th></tr></thead>
+        <thead><tr><th>Kind</th><th>Covered</th><th>Ratio</th></tr></thead>
         <tbody>
           <tr th:each="k : ${cov.kinds}">
             <td th:text="${k.kind}"></td>
@@ -79,24 +63,6 @@
               <span class="hc-badge" th:attr="data-variant=${k.full} ? 'success' : 'warning'"
                     th:text="|${k.pct}%|"></span>
             </td>
-            <td>
-              <span class="hc-badge" data-variant="warning" th:each="u : ${k.uncovered}" th:text="${u}"></span>
-              <span class="hc-field__label" th:if="${k.uncoveredMore > 0}"
-                    th:text="|+${k.uncoveredMore} more|"></span>
-            </td>
-          </tr>
-        </tbody>
-      </table>
-    </section>
-    <section class="hc-card" th:if="${cov.hasFailingCases}">
-      <h2>Failing tests</h2>
-      <table class="hc-table">
-        <thead><tr><th>Route</th><th>Case</th><th>Message</th></tr></thead>
-        <tbody>
-          <tr th:each="c : ${cov.failingCases}">
-            <td th:text="${c.route}"></td>
-            <td th:text="${c.name}"></td>
-            <td th:text="${c.message}"></td>
           </tr>
         </tbody>
       </table>
