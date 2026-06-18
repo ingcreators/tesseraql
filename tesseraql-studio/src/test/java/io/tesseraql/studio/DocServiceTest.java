@@ -108,6 +108,10 @@ class DocServiceTest {
         assertThat(service.tableNames()).containsExactly("users");
         assertThat(service.columnNames("users")).containsExactly("id", "email");
         assertThat(service.columnNames("no_such_table")).isEmpty();
+        // tableByName returns the full introspected table (columns + key) for the 2-way SQL builder.
+        assertThat(service.tableByName("users")).isNotNull()
+                .satisfies(table -> assertThat(table.primaryKey()).containsExactly("id"));
+        assertThat(service.tableByName("no_such_table")).isNull();
     }
 
     @Test

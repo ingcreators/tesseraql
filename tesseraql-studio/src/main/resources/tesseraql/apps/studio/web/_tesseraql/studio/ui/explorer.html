@@ -9,6 +9,7 @@
     <a th:if="${studio.editable}" href="/_tesseraql/studio/ui/audit">audit &rarr;</a>
     <a th:if="${studio.scaffoldEnabled}" href="/_tesseraql/studio/ui/scaffold">scaffold &rarr;</a>
     <a th:if="${studio.editable}" href="/_tesseraql/studio/ui/migration">migration &rarr;</a>
+    <a th:if="${studio.editable}" href="/_tesseraql/studio/ui/sql-builder">sql builder &rarr;</a>
     <a href="/_tesseraql/studio/ui/wizard">wizards &rarr;</a>
     <span class="hc-badge" data-variant="warning" th:if="${studio.readOnly}">read-only</span>
     <span class="hc-badge" data-variant="success" th:if="${studio.editable}">editable</span>

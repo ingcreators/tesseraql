@@ -844,6 +844,36 @@ public final class TesseraqlRuntime implements AutoCloseable {
                             }
                             return Map.of("ddl", ddl);
                         })
+                        // The 2-way SQL builder (migration authoring follow-on): generate a route's
+                        // select/insert/update/delete 2-way SQL for a chosen table + operation, from
+                        // the schema overlay. Pure generation — no side effect.
+                        .register("studio.sqlBuilder.new", params -> {
+                            boolean canEdit = studioAccess.canEdit(params.get("roles"));
+                            java.util.List<String> tables = new io.tesseraql.studio.DocService(
+                                    manifest).tableNames();
+                            Map<String, Object> model = new java.util.LinkedHashMap<>();
+                            model.put("editable", canEdit);
+                            model.put("readOnly", !canEdit);
+                            model.put("tables", tables);
+                            model.put("hasTables", !tables.isEmpty());
+                            return model;
+                        })
+                        .register("studio.sqlBuilder.build", params -> {
+                            String tableName = params.get("table") == null
+                                    ? null
+                                    : String.valueOf(params.get("table"));
+                            io.tesseraql.yaml.scaffold.CatalogSchema.Table table = new io.tesseraql.studio.DocService(
+                                    manifest).tableByName(tableName);
+                            String sql;
+                            if (table == null) {
+                                sql = "-- No such table in the schema overlay: " + tableName;
+                            } else {
+                                String generated = io.tesseraql.studio.SqlBuilder.generate(table,
+                                        String.valueOf(params.get("operation")));
+                                sql = generated.isEmpty() ? "-- Unknown operation." : generated;
+                            }
+                            return Map.of("sql", sql);
+                        })
                         .register("studio.migration.create", params -> {
                             studioAccess.requireEdit(params.get("roles"));
                             String datasource = params.get("datasource") == null
