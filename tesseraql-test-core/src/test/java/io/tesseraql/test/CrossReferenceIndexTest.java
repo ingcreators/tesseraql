@@ -34,7 +34,8 @@ class CrossReferenceIndexTest {
     private static AppManifest manifest() {
         return new AppManifest(APP_HOME, new AppConfig(Map.of(), name -> null),
                 List.of(), List.of(), List.of(), List.of(), List.of(), List.of(),
-                List.of(), List.of(), List.of(), List.of(), ManifestIndex.of(Map.of(), "test"));
+                List.of(), List.of(), List.of(), List.of(), List.of(),
+                ManifestIndex.of(Map.of(), "test"));
     }
 
     private static CrossReferenceIndex index(TestSuite... suites) {

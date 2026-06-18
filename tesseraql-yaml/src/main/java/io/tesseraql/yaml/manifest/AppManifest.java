@@ -20,13 +20,14 @@ import java.util.List;
  * @param workflows   approval-workflow definitions discovered under {@code workflow/} (Phase 28)
  * @param attachments attachment definitions discovered under {@code attachments/} (Phase 30)
  * @param migrations  Flyway migration files listed (not parsed) under {@code db/} (spec layer)
+ * @param prompts     application-declared MCP prompt files discovered under {@code mcp/}
  * @param index       checksum index of the manifest source files
  */
 public record AppManifest(Path appHome, AppConfig config, List<RouteFile> routes,
         List<JobFile> jobs, List<ToolFile> tools, List<ResourceFile> resources,
         List<UiResourceFile> uiResources, List<RouteFile> consumers, List<ScopeFile> scopes,
         List<WorkflowFile> workflows, List<AttachmentFile> attachments,
-        List<MigrationFile> migrations, ManifestIndex index) {
+        List<MigrationFile> migrations, List<PromptFile> prompts, ManifestIndex index) {
 
     public AppManifest {
         routes = List.copyOf(routes);
@@ -34,6 +35,7 @@ public record AppManifest(Path appHome, AppConfig config, List<RouteFile> routes
         tools = List.copyOf(tools);
         resources = List.copyOf(resources);
         uiResources = List.copyOf(uiResources);
+        prompts = List.copyOf(prompts);
         consumers = List.copyOf(consumers);
         scopes = List.copyOf(scopes);
         workflows = List.copyOf(workflows);

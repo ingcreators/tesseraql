@@ -3,16 +3,22 @@ package io.tesseraql.runtime;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import io.tesseraql.compiler.binding.Templates;
 import io.tesseraql.mcp.McpCallContext;
+import io.tesseraql.mcp.McpPrompt;
+import io.tesseraql.mcp.McpPromptResult;
 import io.tesseraql.mcp.McpResource;
 import io.tesseraql.mcp.McpServer;
 import io.tesseraql.mcp.McpTool;
 import io.tesseraql.mcp.McpToolResult;
 import io.tesseraql.yaml.manifest.AppManifest;
+import io.tesseraql.yaml.manifest.PromptFile;
 import io.tesseraql.yaml.manifest.ResourceFile;
 import io.tesseraql.yaml.manifest.ToolFile;
 import io.tesseraql.yaml.manifest.UiResourceFile;
 import io.tesseraql.yaml.model.UiSpec;
+import java.nio.file.Path;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import org.apache.camel.Exchange;
@@ -106,6 +112,35 @@ final class AppMcpServer {
             }
             builder.resource(resourceBuilder.build());
         }
+        for (PromptFile prompt : manifest.prompts()) {
+            McpPrompt.Builder promptBuilder = McpPrompt.builder(prompt.id())
+                    .description(prompt.description());
+            for (PromptFile.Argument argument : prompt.arguments()) {
+                promptBuilder.argument(argument.name(), argument.description(),
+                        argument.required());
+            }
+            Path appHome = manifest.appHome();
+            Path template = prompt.template() == null
+                    ? null
+                    : prompt.source().getParent().resolve(prompt.template()).normalize();
+            promptBuilder.handler(args -> renderPrompt(appHome, template, args));
+            builder.prompt(promptBuilder.build());
+        }
+    }
+
+    /**
+     * Renders an app prompt's colocated template (Thymeleaf TEXT mode) against the argument values as
+     * a single {@code user} message — the prompt is pure text, so this runs no SQL and needs no auth.
+     */
+    private static McpPromptResult renderPrompt(Path appHome, Path template,
+            Map<String, String> arguments) {
+        if (template == null) {
+            return McpPromptResult.user("This prompt has no template configured.");
+        }
+        Map<String, Object> model = new LinkedHashMap<>(arguments);
+        String name = appHome.toAbsolutePath().normalize().relativize(template).toString()
+                .replace('\\', '/');
+        return McpPromptResult.user(Templates.render(appHome, name, model));
     }
 
     /** A linking tool's {@code _meta.ui}: the UI resource it renders into, visible to model and app. */

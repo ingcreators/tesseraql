@@ -49,7 +49,8 @@ public final class ManifestLoader {
         List<ToolFile> tools = new ArrayList<>();
         List<ResourceFile> resources = new ArrayList<>();
         List<UiResourceFile> uiResources = new ArrayList<>();
-        loadMcp(home, tools, resources, uiResources);
+        List<PromptFile> prompts = new ArrayList<>();
+        loadMcp(home, tools, resources, uiResources, prompts);
         List<RouteFile> consumers = loadConsumers(home);
         List<ScopeFile> scopes = loadScopes(home);
         List<WorkflowFile> workflows = loadWorkflows(home);
@@ -57,7 +58,7 @@ public final class ManifestLoader {
         List<MigrationFile> migrations = loadMigrations(home);
         ManifestIndex index = buildIndex(home);
         return new AppManifest(home, config, routes, jobs, tools, resources, uiResources, consumers,
-                scopes, workflows, attachments, migrations, index);
+                scopes, workflows, attachments, migrations, prompts, index);
     }
 
     /**
@@ -321,7 +322,7 @@ public final class ManifestLoader {
      * hint read from the same document.
      */
     private void loadMcp(Path home, List<ToolFile> tools, List<ResourceFile> resources,
-            List<UiResourceFile> uiResources) {
+            List<UiResourceFile> uiResources, List<PromptFile> prompts) {
         Path mcpRoot = home.resolve("mcp");
         if (!Files.isDirectory(mcpRoot)) {
             return;
@@ -332,10 +333,16 @@ public final class ManifestLoader {
                     .sorted()
                     .forEach(file -> {
                         requireInside(home, file);
-                        RouteDefinition definition = parser.parseRoute(file);
                         Map<String, Object> tree = parser.parseTree(file);
                         String description = string(tree.get("description"));
                         Object kind = tree.get("kind");
+                        // A prompt is pure text (no recipe/SQL), so it is parsed from the tree
+                        // directly rather than through the route parser (which requires a recipe).
+                        if ("prompt".equals(kind)) {
+                            prompts.add(promptFile(file, tree, description));
+                            return;
+                        }
+                        RouteDefinition definition = parser.parseRoute(file);
                         if ("resource".equals(kind)) {
                             resources.add(new ResourceFile(file, definition, description,
                                     string(tree.get("uri")), string(tree.get("mimeType"))));
@@ -351,6 +358,26 @@ public final class ManifestLoader {
         } catch (IOException ex) {
             throw new UncheckedIOException(ex);
         }
+    }
+
+    /** Parses a {@code kind: prompt} document into a {@link PromptFile} (id, arguments, template). */
+    @SuppressWarnings("unchecked")
+    private static PromptFile promptFile(Path file, Map<String, Object> tree, String description) {
+        List<PromptFile.Argument> arguments = new ArrayList<>();
+        if (tree.get("input") instanceof Map<?, ?> input) {
+            for (Map.Entry<?, ?> entry : input.entrySet()) {
+                String name = String.valueOf(entry.getKey());
+                String argDescription = null;
+                boolean required = false;
+                if (entry.getValue() instanceof Map<?, ?> spec) {
+                    argDescription = string(((Map<String, Object>) spec).get("description"));
+                    required = Boolean.TRUE.equals(((Map<String, Object>) spec).get("required"));
+                }
+                arguments.add(new PromptFile.Argument(name, argDescription, required));
+            }
+        }
+        return new PromptFile(file, string(tree.get("id")), description, arguments,
+                string(tree.get("template")));
     }
 
     private static String string(Object value) {

@@ -308,6 +308,46 @@ The runtime serves it over the same `/_tesseraql/mcp` endpoint as the tools and 
   resource like a read route (never `advanced`, since it cannot write); and an `mcp-ui` coverage
   kind tracks which UI resources your declarative suites exercise.
 
+## Application MCP prompts
+
+An app can also declare an MCP **prompt** — a parameterized, reusable message template the
+connecting agent surfaces to its model (an IDE slash command, say), the third MCP primitive
+alongside tools and resources:
+
+```yaml
+# mcp/draft-welcome.yml
+version: tesseraql/v1
+id: draft-welcome
+kind: prompt
+description: Draft a welcome message for a new user.
+
+input:
+  name:
+    type: string
+    required: true
+    description: The new user's name.
+  tone:
+    type: string
+    required: false
+
+template: draft-welcome.txt.tpl
+```
+
+```text
+# mcp/draft-welcome.txt.tpl  (Thymeleaf TEXT mode)
+Write a [(${tone})] welcome message for [(${name})].
+```
+
+- **Pure text, no SQL.** Unlike a tool or resource, a prompt is not compiled to a route and runs no
+  query — `prompts/get` renders the colocated `template` (Thymeleaf TEXT mode) against the supplied
+  argument values and returns it as one `user` message. So a prompt has no recipe and no per-prompt
+  security beyond the endpoint's own auth. The declared `input:` becomes the prompt's arguments
+  (name, optional description, required flag).
+- **Advertised like the rest.** The runtime serves prompts at the same `/_tesseraql/mcp` endpoint;
+  `prompts/list` enumerates them and the `prompts` capability is negotiated in `initialize` when an
+  app declares any. This is the application-side counterpart of the dev-tool `studio_copilot` prompt
+  — TesseraQL ships the workflow, the agent's own model does the reasoning, no embedded LLM.
+
 ## Mounted-app tools
 
 A TesseraQL runtime hosts the main app and any mounted or bundled system apps (design ch. 32) —

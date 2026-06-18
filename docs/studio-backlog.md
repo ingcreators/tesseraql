@@ -278,6 +278,12 @@ and is being adopted (see E below).
     architecturally-correct reading of decision point 4 (the MCP loop, not an embedded LLM, is the AI
     surface). Phase 24's draft/preview/apply tools already existed; this completes the loop. Deeper,
     in-product copilot UX (e.g. a Studio-embedded chat) would still be a separate, larger bet.
+    - **App-declared prompts** — *done* (follow-on): an app can declare its own MCP prompt as a
+      `mcp/*.yml` `kind: prompt` document (a parameterized message template rendered from a colocated
+      Thymeleaf TEXT file against the supplied arguments), served at the runtime `/_tesseraql/mcp`
+      endpoint alongside its tools/resources/UI — the application-side counterpart of the dev-tool
+      `studio_copilot` prompt, still with no embedded LLM. `PromptFile` + `AppManifest.prompts()`;
+      `ManifestLoader` parses `kind: prompt`; `AppMcpServer` registers it and renders the template.
 
 ## Recommended next
 
