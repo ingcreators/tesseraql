@@ -12,14 +12,15 @@ import java.util.Arrays;
 import java.util.List;
 
 /**
- * Maintains the bounded run history that feeds the portal's coverage trend (documentation portal
- * v2). Each run appends a compact {@link Entry} to {@code history.json}; the file is kept as a ring
- * of the most recent {@link #DEFAULT_MAX_ENTRIES} runs so the app home never grows unbounded. Like
+ * Maintains the run history that feeds the portal's coverage trend (documentation portal v2). Each
+ * run appends a compact {@link Entry} to {@code history.json}; by default the file is kept as a ring
+ * of the most recent {@link #DEFAULT_MAX_ENTRIES} runs so the app home never grows unbounded, but a
+ * non-positive cap retains the full history for longer-term trends (Studio backlog F9). Like
  * {@code report.json}, it is an optional sidecar that is never packed into the {@code .tqlapp}.
  */
 public final class ReportHistory {
 
-    /** The default number of runs retained in {@code history.json}. */
+    /** The default number of runs retained in {@code history.json} (a non-positive cap keeps all). */
     public static final int DEFAULT_MAX_ENTRIES = 20;
 
     private static final TqlErrorCode HISTORY_ERROR = new TqlErrorCode(TqlDomain.REPORT, 2006);
@@ -54,12 +55,13 @@ public final class ReportHistory {
 
     /**
      * Appends {@code entry} to the history at {@code historyFile}, trimming to the most recent
-     * {@code maxEntries}, and writes the file back. Returns the retained entries, oldest first.
+     * {@code maxEntries}, and writes the file back. Returns the retained entries, oldest first. A
+     * non-positive {@code maxEntries} keeps the full history (an unbounded trend, Studio backlog F9).
      */
     public static List<Entry> append(Path historyFile, Entry entry, int maxEntries) {
         List<Entry> entries = read(historyFile);
         entries.add(entry);
-        if (entries.size() > maxEntries) {
+        if (maxEntries > 0 && entries.size() > maxEntries) {
             entries = new ArrayList<>(entries.subList(entries.size() - maxEntries, entries.size()));
         }
         write(historyFile, entries);

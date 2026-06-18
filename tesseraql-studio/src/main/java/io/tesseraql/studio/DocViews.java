@@ -660,6 +660,10 @@ public final class DocViews {
         }
         Map<String, Object> model = new LinkedHashMap<>();
         model.put("runs", history.size());
+        // The retained span (oldest -> newest run date) conveys the trend's depth (backlog F9): with
+        // the history cap relaxed it can cover far more than the former 20 runs.
+        model.put("from", runDate(history.get(0)));
+        model.put("to", runDate(history.get(history.size() - 1)));
         model.put("passSpark", spark(pass));
         model.put("passPct", pct(pass.get(pass.size() - 1)));
         model.put("lineSpark", spark(line));
@@ -667,6 +671,16 @@ public final class DocViews {
         model.put("branchSpark", spark(branch));
         model.put("branchPct", pct(branch.get(branch.size() - 1)));
         return model;
+    }
+
+    /** The calendar date of a run (the date part of its ISO instant), or {@code null} when unknown. */
+    private static String runDate(DocService.HistoryPoint point) {
+        String at = point.generatedAt();
+        if (at == null || at.isBlank()) {
+            return null;
+        }
+        int t = at.indexOf('T');
+        return t < 0 ? at : at.substring(0, t);
     }
 
     /**

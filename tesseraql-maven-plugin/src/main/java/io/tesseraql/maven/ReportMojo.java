@@ -58,7 +58,7 @@ public class ReportMojo extends AbstractMojo {
     @Parameter(property = "tesseraql.runId")
     private String runId;
 
-    /** Number of runs retained in {@code history.json}. */
+    /** Number of runs retained in {@code history.json}; 0 (or negative) keeps the full history. */
     @Parameter(property = "tesseraql.historyLimit", defaultValue = "20")
     private int historyLimit;
 
@@ -91,8 +91,9 @@ public class ReportMojo extends AbstractMojo {
         try {
             Files.createDirectories(docsDir);
             Files.writeString(docsDir.resolve("report.json"), generator.toJson(report));
+            // A non-positive limit keeps the full history (longer-term trends, backlog F9).
             ReportHistory.append(docsDir.resolve("history.json"), ReportHistory.Entry.from(report),
-                    Math.max(1, historyLimit));
+                    historyLimit);
         } catch (IOException ex) {
             throw new MojoExecutionException("Failed to write report overlay to " + docsDir, ex);
         }
