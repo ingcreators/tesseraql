@@ -1,5 +1,9 @@
 package io.tesseraql.runtime;
 
+import io.tesseraql.core.expr.EvaluationContext;
+import io.tesseraql.core.sql.BoundSql;
+import io.tesseraql.core.sql.Sql2WayParser;
+import io.tesseraql.core.sql.SqlRenderer;
 import io.tesseraql.test.CrossReferenceIndex;
 import io.tesseraql.test.TestReport;
 import io.tesseraql.test.TestRunner;
@@ -9,11 +13,19 @@ import io.tesseraql.test.TestSuiteLoader;
 import io.tesseraql.yaml.manifest.AppManifest;
 import io.tesseraql.yaml.manifest.ManifestLoader;
 import io.tesseraql.yaml.manifest.RouteFile;
+import io.tesseraql.yaml.model.RouteDefinition;
+import io.tesseraql.yaml.model.SqlBinding;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.ResultSetMetaData;
+import java.sql.SQLException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -147,5 +159,70 @@ final class StudioTestService {
 
     private String relative(Path source) {
         return appHome.relativize(source).toString().replace('\\', '/');
+    }
+
+    /**
+     * Executes a route's main {@code sql} query against the sandbox and returns its rows as the
+     * {@code sql} result for the rendered preview (Studio backlog A1 "real bound params"): a
+     * {@link StudioService.RowSource}. The bind params resolve from the render context (the sample's
+     * {@code params}/{@code query}); the same {@link SandboxDataSource} guards apply (read-only,
+     * timeout, row cap, rollback). Returns null — keeping the hand-authored sample — when the route
+     * has no runnable read query (a service/contract/sequence binding, a non-{@code query} mode, or
+     * no SQL file).
+     */
+    Map<String, Object> liveRows(RouteDefinition route, Path routeDir,
+            Map<String, Object> context) {
+        SqlBinding sql = route.sql();
+        if (sql == null || sql.file() == null || sql.isService() || sql.isContract()
+                || sql.isSequence() || !sql.effectiveMode().startsWith("query")) {
+            return null;
+        }
+        Path sqlFile = routeDir.resolve(sql.file()).normalize();
+        if (!sqlFile.startsWith(appHome)) {
+            throw new IllegalArgumentException("SQL file escapes app home: " + sql.file());
+        }
+        EvaluationContext evaluation = new EvaluationContext(context);
+        Map<String, Object> bindParams = new LinkedHashMap<>();
+        sql.params().forEach((name, expr) -> bindParams.put(name,
+                evaluation.resolve(Arrays.asList(expr.split("\\.")))));
+        BoundSql bound = SqlRenderer.render(Sql2WayParser.parse(read(sqlFile)), bindParams);
+        DataSource sandbox = new SandboxDataSource(dataSource, queryTimeoutSeconds, maxRows);
+        try (Connection connection = sandbox.getConnection();
+                PreparedStatement statement = connection.prepareStatement(bound.sql())) {
+            for (int i = 0; i < bound.parameters().size(); i++) {
+                statement.setObject(i + 1, bound.parameters().get(i).value());
+            }
+            try (ResultSet resultSet = statement.executeQuery()) {
+                List<Map<String, Object>> rows = readRows(resultSet);
+                Map<String, Object> result = new LinkedHashMap<>();
+                result.put("rows", rows);
+                result.put("rowCount", rows.size());
+                return result;
+            }
+        } catch (SQLException ex) {
+            throw new IllegalStateException("Live query failed: " + ex.getMessage(), ex);
+        }
+    }
+
+    private static List<Map<String, Object>> readRows(ResultSet resultSet) throws SQLException {
+        ResultSetMetaData metaData = resultSet.getMetaData();
+        int columns = metaData.getColumnCount();
+        List<Map<String, Object>> rows = new ArrayList<>();
+        while (resultSet.next()) {
+            Map<String, Object> row = new LinkedHashMap<>();
+            for (int col = 1; col <= columns; col++) {
+                row.put(metaData.getColumnLabel(col), resultSet.getObject(col));
+            }
+            rows.add(row);
+        }
+        return rows;
+    }
+
+    private static String read(Path path) {
+        try {
+            return Files.readString(path);
+        } catch (IOException ex) {
+            throw new UncheckedIOException(ex);
+        }
     }
 }

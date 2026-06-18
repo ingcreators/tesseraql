@@ -500,13 +500,32 @@ class StudioIntegrationTest {
     }
 
     @Test
-    void uiSourceRouteOffersRunTestsWhenEnabled() throws Exception {
+    void renderEndpointWithLiveDataRunsRouteSqlForRealRows() throws Exception {
+        // No hand-authored sql.rows: live=true runs search.sql (q=sato) against the seeded DB.
+        String body = MAPPER.writeValueAsString(Map.of(
+                "sampleModel", "query:\n  q: sato\n  limit: 50\n  offset: 0\n",
+                "live", "true"));
+        HttpResponse<String> response = post(
+                "/_tesseraql/studio/render?path=" + enc("web/api/users/get.yml"), body, true);
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        JsonNode render = MAPPER.readTree(response.body());
+        assertThat(render.get("ok").asBoolean()).isTrue();
+        assertThat(render.get("kind").asText()).isEqualTo("json");
+        // Real rows from the seeded users table, not a hand-authored fixture.
+        assertThat(render.get("output").asText()).contains("sato").contains("\"count\" : 1");
+    }
+
+    @Test
+    void uiSourceRouteOffersRunTestsAndLiveDataWhenEnabled() throws Exception {
         HttpResponse<String> response = get("/_tesseraql/studio/ui/source?path="
                 + enc("web/api/users/get.yml"), true);
 
         assertThat(response.statusCode()).isEqualTo(200);
         assertThat(response.body()).contains("Run tests")
-                .contains("hx-post=\"/_tesseraql/studio/ui/run-tests\"");
+                .contains("hx-post=\"/_tesseraql/studio/ui/run-tests\"")
+                // the render panel offers the live-data toggle on a route page when enabled
+                .contains("Use live data").contains("name=\"live\"");
     }
 
     @Test

@@ -21,6 +21,14 @@ All notable changes to TesseraQL are documented here. The format follows
   `studio.runTests` provider, the `POST /_tesseraql/studio/runTests` JSON endpoint, and the
   `/_tesseraql/studio/ui/run-tests` editor fragment. See
   [docs/studio-backlog.md](docs/studio-backlog.md).
+- Studio editor: live data in the rendered preview (Studio backlog A1 "real bound params" × the A2
+  sandbox). The route render panel gains a **Use live data** toggle (when the test runner is
+  enabled): instead of a hand-authored `sql.rows` fixture, the preview runs the route's main `sql`
+  query through the same `SandboxDataSource` (bind params resolved from the sample's `params`/
+  `query`) and injects the real `rows`/`rowCount` — so editing a route previews the actual page/JSON
+  over live dev data. Studio stays database-free via a `StudioService.RowSource` callback the runtime
+  fills with `StudioTestService.liveRows`; `live` flows through the `studio.render` provider, `POST
+  /_tesseraql/studio/render`, and the `/_tesseraql/studio/ui/render` fragment.
 
 - Studio editor: rendered preview against sample data (Studio backlog A1). A renderable file
   opened in the editor now renders against a sample model — not just the empty-model "parses" check
