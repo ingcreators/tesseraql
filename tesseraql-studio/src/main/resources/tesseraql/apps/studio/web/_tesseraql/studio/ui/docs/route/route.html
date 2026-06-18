@@ -21,6 +21,16 @@
       </div>
       <h2 th:text="${doc.id}"></h2>
     </section>
+    <section class="hc-card" th:if="${doc.shareUrl}">
+      <h3>Share</h3>
+      <p class="hc-field__label">A signed, expiring read-only link to this route's contract &mdash;
+        openable without signing in. Copy it to share, or open it to preview.</p>
+      <input class="hc-input" type="text" readonly th:value="${doc.shareUrl}">
+      <div class="hc-cluster">
+        <a class="hc-button" data-variant="ghost" data-size="sm" target="_blank" rel="noopener"
+           th:href="${doc.shareUrl}">Open shared view &rarr;</a>
+      </div>
+    </section>
     <section class="hc-card" th:if="${doc.hasReport}">
       <h3>Last test run</h3>
       <div class="hc-cluster">

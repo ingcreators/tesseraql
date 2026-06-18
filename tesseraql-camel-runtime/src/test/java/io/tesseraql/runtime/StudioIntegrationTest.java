@@ -634,6 +634,56 @@ class StudioIntegrationTest {
         assertThat(get("/_tesseraql/studio/ui/docs/export/pdf", false).statusCode()).isEqualTo(401);
     }
 
+    // ---- F8 slice 3: opt-in signed share links (the IT config sets tesseraql.docs.share.secret) ---
+
+    private static final java.util.regex.Pattern SHARE_URL = java.util.regex.Pattern.compile(
+            "/_tesseraql/docs/share/route\\?id=users\\.search&amp;exp=(\\d+)&amp;sig=([A-Za-z0-9_-]+)");
+
+    /** Pulls the minted (HTML-escaped) share link out of a route doc page and unescapes it. */
+    private static String shareUrlFrom(String routePageHtml) {
+        java.util.regex.Matcher matcher = SHARE_URL.matcher(routePageHtml);
+        assertThat(matcher.find()).as("route page offers a share link").isTrue();
+        return "/_tesseraql/docs/share/route?id=users.search&exp=" + matcher.group(1)
+                + "&sig=" + matcher.group(2);
+    }
+
+    @Test
+    void uiDocsRouteOffersASignedShareLinkWhenSharingIsEnabled() throws Exception {
+        HttpResponse<String> response = get(
+                "/_tesseraql/studio/ui/docs/route?id=" + enc("users.search"), true);
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(response.body()).contains("Share")
+                .contains("/_tesseraql/docs/share/route?id=users.search");
+        assertThat(shareUrlFrom(response.body())).isNotBlank();
+    }
+
+    @Test
+    void docsShareRendersThePublicContractWithoutAuthentication() throws Exception {
+        String shareUrl = shareUrlFrom(get(
+                "/_tesseraql/studio/ui/docs/route?id=" + enc("users.search"), true).body());
+
+        // Opened with NO bearer token: the signed link is the authorization.
+        HttpResponse<String> shared = get(shareUrl, false);
+        assertThat(shared.statusCode()).isEqualTo(200);
+        assertThat(shared.body()).contains("shared").contains("GET").contains("/api/users")
+                .contains("read-only view of this route");
+        // The implementation is withheld from the public view: no SQL card, no column internals.
+        assertThat(shared.body()).doesNotContain("<h3>SQL</h3>").doesNotContain("created_at");
+    }
+
+    @Test
+    void docsShareRejectsATamperedOrMissingToken() throws Exception {
+        // A forged signature renders the invalid-link notice, never the route (still no auth).
+        HttpResponse<String> forged = get(
+                "/_tesseraql/docs/share/route?id=users.search&exp=9999999999&sig=forged", false);
+        assertThat(forged.statusCode()).isEqualTo(200);
+        assertThat(forged.body()).contains("invalid or has expired").doesNotContain("/api/users");
+        // No token at all is the same notice.
+        assertThat(get("/_tesseraql/docs/share/route", false).body())
+                .contains("invalid or has expired");
+    }
+
     @Test
     void uiSaveAndApplyDraftViaForm() throws Exception {
         String path = "web/api/formtest/get.yml";
@@ -1362,6 +1412,9 @@ class StudioIntegrationTest {
                       enabled: true
                     scaffold:
                       enabled: true
+                  docs:
+                    share:
+                      secret: it-docs-share-secret-0123456789
                 """.formatted(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(),
                 POSTGRES.getPassword()));
         // A run overlay in the reserved namespace exercises the portal's report-layer rendering

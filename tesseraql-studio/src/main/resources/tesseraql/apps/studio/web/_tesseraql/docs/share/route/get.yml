@@ -1,0 +1,40 @@
+version: tesseraql/v1
+id: tql.studio.docs.share.route
+kind: route
+recipe: query-html
+
+# Public by design (F8, slice 3): the signed, expiring token in the query is the authorization.
+# The docs.share provider verifies the HMAC and expiry before rendering; an invalid, tampered, or
+# expired token (or sharing disabled) renders the invalid-link notice, never the route.
+input:
+  id:
+    type: string
+    required: false
+  exp:
+    type: string
+    required: false
+  sig:
+    type: string
+    required: false
+
+security:
+  auth: public
+
+sql:
+  service: docs.share
+  params:
+    id: query.id
+    exp: query.exp
+    sig: query.sig
+
+response:
+  html:
+    status: 200
+    template: share.html
+    model:
+      doc: sql
+    headers:
+      Content-Security-Policy: "default-src 'self'; style-src 'self' 'unsafe-inline'; frame-ancestors 'none'"
+      X-Content-Type-Options: nosniff
+      X-Frame-Options: DENY
+      Referrer-Policy: no-referrer
