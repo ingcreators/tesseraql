@@ -226,6 +226,17 @@ and is being adopted (see E below).
 
 8. **Export / share** — OpenAPI/JSON export, printable docs (reuse the PDF codec),
    per-route shareable links (docs are in-app/bearer-only today).
+   - **API-spec export** — *done* (slice 1): an **Export** page (linked from the docs chrome) serves
+     the app's OpenAPI 3 document and its htmx interaction contract as downloadable JSON, generated
+     live from the manifest by the canonical `OpenApiGenerator` / `HtmxContractGenerator` (byte-identical
+     to the build's `openapi.json` / `htmx-contract.json`). The download endpoints stream the spec as a
+     `Content-Disposition` attachment via the standard `response.file` recipe, bearer-gated like the rest
+     of the portal. `DocService.openApiJson`/`htmxContractJson`; `DocViews.export`; `docs.export`/
+     `docs.openapi`/`docs.htmx` providers; `/ui/docs/export` (+ `/openapi`, `/htmx`) routes.
+   - **Printable docs (PDF)** — *open* (slice 2): render the route/index/schema doc pages to PDF,
+     reusing the PDF codec.
+   - **Per-route shareable links** — *open* (slice 3): docs are in-app/bearer-only today; a shareable
+     link needs a scoped, expiring token path.
 9. **Coverage trend depth** — relax the "last 20 runs" cap for longer-term trends.
 
 ### G. Studio copilot — **gated (roadmap decision point 4)**

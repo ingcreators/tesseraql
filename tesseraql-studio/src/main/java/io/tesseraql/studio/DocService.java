@@ -9,6 +9,8 @@ import io.tesseraql.yaml.docs.RouteSpec;
 import io.tesseraql.yaml.docs.RouteSpecGenerator;
 import io.tesseraql.yaml.docs.RouteSpecModel;
 import io.tesseraql.yaml.manifest.AppManifest;
+import io.tesseraql.yaml.openapi.HtmxContractGenerator;
+import io.tesseraql.yaml.openapi.OpenApiGenerator;
 import io.tesseraql.yaml.scaffold.CatalogSchema;
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -374,6 +376,25 @@ public final class DocService {
             }
         }
         return tokens;
+    }
+
+    /**
+     * The app's OpenAPI 3 document as pretty JSON, generated live from the manifest by the canonical
+     * {@link OpenApiGenerator} (the same generator the build's {@code generate} goal writes
+     * {@code openapi.json} with, so the portal download is byte-identical to the build artifact). A
+     * derived view of the routes; the Simple YAML routes remain the source of truth.
+     */
+    public String openApiJson() {
+        return new OpenApiGenerator().toJson(manifest);
+    }
+
+    /**
+     * The app's htmx interaction contract as pretty JSON, generated live from the manifest by the
+     * canonical {@link HtmxContractGenerator} (the same generator the build writes
+     * {@code htmx-contract.json} with). Like {@link #openApiJson()}, a derived, deterministic view.
+     */
+    public String htmxContractJson() {
+        return new HtmxContractGenerator().toJson(manifest);
     }
 
     /** Reads a hand-written Markdown doc under the app home and renders it to CSP-safe HTML. */

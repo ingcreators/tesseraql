@@ -560,6 +560,53 @@ class StudioIntegrationTest {
     }
 
     @Test
+    void uiDocsExportPageListsTheDownloadableSpecs() throws Exception {
+        HttpResponse<String> response = get("/_tesseraql/studio/ui/docs/export", true);
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(response.body()).startsWith("<!DOCTYPE html>")
+                .contains("Export API specs")
+                .contains("openapi.json")
+                .contains("/_tesseraql/studio/ui/docs/export/openapi")
+                .contains("htmx-contract.json")
+                .contains("/_tesseraql/studio/ui/docs/export/htmx");
+    }
+
+    @Test
+    void uiDocsExportOpenApiStreamsTheSpecAsADownload() throws Exception {
+        HttpResponse<String> response = get("/_tesseraql/studio/ui/docs/export/openapi", true);
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(response.headers().firstValue("content-type").orElse(""))
+                .contains("application/json");
+        assertThat(response.headers().firstValue("content-disposition").orElse(""))
+                .contains("attachment").contains("openapi.json");
+        // The body is the real OpenAPI document, generated live from the manifest, byte-for-byte.
+        JsonNode doc = MAPPER.readTree(response.body());
+        assertThat(doc.path("openapi").asText()).isEqualTo("3.0.3");
+        assertThat(doc.path("paths").has("/api/users")).isTrue();
+    }
+
+    @Test
+    void uiDocsExportHtmxStreamsTheContractAsADownload() throws Exception {
+        HttpResponse<String> response = get("/_tesseraql/studio/ui/docs/export/htmx", true);
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(response.headers().firstValue("content-type").orElse(""))
+                .contains("application/json");
+        assertThat(response.headers().firstValue("content-disposition").orElse(""))
+                .contains("attachment").contains("htmx-contract.json");
+        assertThat(MAPPER.readTree(response.body()).isObject()).isTrue();
+    }
+
+    @Test
+    void uiDocsExportRequiresAuthentication() throws Exception {
+        assertThat(get("/_tesseraql/studio/ui/docs/export", false).statusCode()).isEqualTo(401);
+        assertThat(get("/_tesseraql/studio/ui/docs/export/openapi", false).statusCode())
+                .isEqualTo(401);
+    }
+
+    @Test
     void uiSaveAndApplyDraftViaForm() throws Exception {
         String path = "web/api/formtest/get.yml";
         String content = """

@@ -1,0 +1,18 @@
+version: tesseraql/v1
+id: tql.studio.docs.export.htmx
+kind: route
+recipe: query-html
+
+security:
+  auth: bearer
+
+sql:
+  service: docs.htmx
+
+response:
+  file:
+    template: htmx-contract.json.tpl
+    contentType: "application/json; charset=utf-8"
+    filename: htmx-contract.json
+    model:
+      htmx: sql
