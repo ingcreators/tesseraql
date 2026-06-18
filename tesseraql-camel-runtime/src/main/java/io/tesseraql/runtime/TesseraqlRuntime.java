@@ -879,7 +879,8 @@ public final class TesseraqlRuntime implements AutoCloseable {
                             }
                             io.tesseraql.studio.ReportOverlay overlay = doc.report();
                             Map<String, Object> model = io.tesseraql.studio.DocViews.route(entry,
-                                    overlay == null ? null : overlay.routeReport(id));
+                                    overlay == null ? null : overlay.routeReport(id),
+                                    doc.tableLinks());
                             // Offer a signed, expiring share link when sharing is configured.
                             if (shareLinks.enabled()) {
                                 model.put("shareUrl", shareLinks.mintRoute(id));

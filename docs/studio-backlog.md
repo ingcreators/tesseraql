@@ -260,6 +260,18 @@ and is being adopted (see E below).
      view withholds the per-test failure detail and the public table view drops bearer-gated nav.
      `ShareLinks.mintTable`/`mintCoverage`; `DocViews.shareTable`/`shareCoverage`; `docs.shareTable`/
      `docs.shareCoverage` providers; `/_tesseraql/docs/share/table` + `/.../share/coverage` routes.
+   - **SQL&rarr;table dependency graph** — *in progress* (v3.1, the slice deferred from portal v3):
+     the route reference page now lists the **tables a route's SQL reads from and writes to**,
+     inferred from the bound 2-way SQL by a new dependency-free `SqlTableReferences` extractor
+     (`tesseraql-core`) — a lexical heuristic, not a full parser: `FROM`/`JOIN`/`USING` are reads,
+     `INSERT INTO`/`UPDATE`/`DELETE FROM`/`MERGE INTO` are writes, with comments, directives, CTE
+     names, and derived-table subqueries skipped. A table the `schema` goal introspected cross-links
+     to its table page; otherwise it stays plain text. Computed live from the spec's SQL text, so no
+     `spec.json` change. `DocService.tableLinks`; `DocViews.route` data-dependency projection. *Next:*
+     the reverse direction (a table page listing the routes that read/write it). The DB-free DDL
+     parser the v3.1 note also mentioned stays deferred — `schema.json` already gives table structure
+     from live introspection, so the dependency graph (SQL side) is the valuable half.
+
 9. **Coverage trend depth** — *done*: the run-history ring is no longer fixed at 20 runs — a
    non-positive `tesseraql.historyLimit` (`report` goal) / `--history-limit` (`tesseraql test
    --report`) keeps the full history, so the trend spans far more than the former cap. The trend

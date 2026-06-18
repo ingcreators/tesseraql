@@ -106,6 +106,25 @@
         <span class="hc-badge" th:if="${doc.response.location}" th:text="|&rarr; ${doc.response.location}|"></span>
       </div>
     </section>
+    <section class="hc-card" th:if="${doc.hasDataDeps}">
+      <h3>Data dependencies</h3>
+      <p class="hc-field__label">The tables this route's SQL reads from and writes to, inferred from
+        the statements (best-effort). A table introspected into the schema portal links to its page.</p>
+      <div class="hc-cluster" th:unless="${#lists.isEmpty(doc.reads)}">
+        <span class="hc-field__label">reads</span>
+        <th:block th:each="t : ${doc.reads}">
+          <a class="hc-badge" data-variant="info" th:if="${t.url}" th:href="${t.url}" th:text="${t.name}"></a>
+          <span class="hc-badge" data-variant="info" th:unless="${t.url}" th:text="${t.name}"></span>
+        </th:block>
+      </div>
+      <div class="hc-cluster" th:unless="${#lists.isEmpty(doc.writes)}">
+        <span class="hc-field__label">writes</span>
+        <th:block th:each="t : ${doc.writes}">
+          <a class="hc-badge" data-variant="warning" th:if="${t.url}" th:href="${t.url}" th:text="${t.name}"></a>
+          <span class="hc-badge" data-variant="warning" th:unless="${t.url}" th:text="${t.name}"></span>
+        </th:block>
+      </div>
+    </section>
     <section class="hc-card" th:if="${doc.hasSql}">
       <h3>SQL</h3>
       <div class="hc-cluster" th:if="${doc.hasReport}">
