@@ -672,6 +672,24 @@ class StudioIntegrationTest {
     }
 
     @Test
+    void renderEndpointMasksJsonOutputFields() throws Exception {
+        // The users.search route masks created_at (mask: fixed); the preview shows the redacted
+        // value, not the raw one (Studio backlog A1 follow-up).
+        String body = MAPPER.writeValueAsString(Map.of("sampleModel",
+                "sql:\n  rows:\n    - id: 7\n      name: Sato\n"
+                        + "      created_at: 2026-06-18T00:00:00Z\n  rowCount: 1\n"
+                        + "params:\n  limit: 50\n  offset: 0\n"));
+        HttpResponse<String> response = post(
+                "/_tesseraql/studio/render?path=" + enc("web/api/users/get.yml"), body, true);
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        JsonNode render = MAPPER.readTree(response.body());
+        assertThat(render.get("ok").asBoolean()).isTrue();
+        assertThat(render.get("output").asText()).contains("Sato").contains("[MASKED]")
+                .doesNotContain("2026-06-18T00:00:00Z");
+    }
+
+    @Test
     void uiSourceRouteOffersRenderedPreviewPanel() throws Exception {
         HttpResponse<String> response = get("/_tesseraql/studio/ui/source?path="
                 + enc("web/users/fragments/table/get.yml"), true);

@@ -267,30 +267,50 @@ public final class StudioService {
      * <p>{@code sampleModel} is YAML/JSON; when blank it falls back to the colocated
      * {@code *.sample.yml} fixture, then an empty model. The same three-resolver engine as
      * {@link #preview} resolves {@code tql/*} fragments and sibling app templates, so HTML output
-     * matches a real response. Field-level output masking ({@code response.json.fields}) is not
-     * applied in preview.
+     * matches a real response. A {@code query-json} route's output-field masking
+     * ({@code response.json.fields}) is applied when a {@link FieldMask} is supplied.
      */
     public RenderResult render(String relativePath, String content, String sampleModel) {
-        return render(relativePath, content, sampleModel, null);
+        return render(relativePath, content, sampleModel, null, null);
+    }
+
+    public RenderResult render(String relativePath, String content, String sampleModel,
+            RowSource liveRows) {
+        return render(relativePath, content, sampleModel, liveRows, null);
     }
 
     /**
      * As {@link #render(String, String, String)}, but for a web route a non-null {@code liveRows}
      * supplies the {@code sql} rows by executing the route's query against the dev datasource (the
-     * Studio backlog A1 "real bound params" end, powered by the A2 sandbox) instead of taking them
-     * from the hand-authored sample. Studio itself stays database-free: the caller (the runtime)
-     * provides the sandboxed row source.
+     * Studio backlog A1 "real bound params" end, powered by the A2 sandbox), and a non-null
+     * {@code fieldMask} applies a {@code query-json} route's {@code response.json.fields} output
+     * masking to the resolved body (Studio backlog A1 follow-up). Studio itself stays free of the
+     * security/compiler stack: the caller (the runtime) provides the sandboxed row source and the
+     * mask over the canonical field-policy applier.
      */
     public RenderResult render(String relativePath, String content, String sampleModel,
-            RowSource liveRows) {
+            RowSource liveRows, FieldMask fieldMask) {
         if (isTemplate(relativePath)) {
             return renderTemplateFile(relativePath, content, sampleModel);
         }
         if (isRouteYaml(relativePath)) {
-            return renderRoute(relativePath, content, sampleModel, liveRows);
+            return renderRoute(relativePath, content, sampleModel, liveRows, fieldMask);
         }
         return RenderResult.invalid("text",
                 "Rendered preview is only available for templates and web routes");
+    }
+
+    /**
+     * Applies a {@code query-json} route's {@code response.json.fields} output masking to the
+     * resolved body (Studio backlog A1 follow-up): hide/redact fields per their policy, evaluated for
+     * the sample principal in {@code context.get("principal")}. Implemented by the runtime over the
+     * canonical {@code FieldPolicyApplier} so Studio stays free of the security/compiler stack.
+     */
+    @FunctionalInterface
+    public interface FieldMask {
+        /** The masked body for {@code fields}, evaluated against the sample principal in context. */
+        Object mask(Map<String, ResponseSpec.FieldPolicy> fields, Object body,
+                Map<String, Object> context);
     }
 
     /**
@@ -322,7 +342,7 @@ public final class StudioService {
     }
 
     private RenderResult renderRoute(String relativePath, String content, String sampleModel,
-            RowSource liveRows) {
+            RowSource liveRows, FieldMask fieldMask) {
         String text = content != null ? content : source(relativePath);
         RouteDefinition definition;
         try {
@@ -354,7 +374,7 @@ public final class StudioService {
             return renderHtmlRoute(relativePath, response.html(), evaluation);
         }
         if (response != null && response.json() != null) {
-            return renderJsonRoute(response.json(), evaluation);
+            return renderJsonRoute(response.json(), evaluation, context, fieldMask);
         }
         return RenderResult.invalid("route",
                 "Rendered preview supports query-html/page and query-json routes only");
@@ -379,8 +399,18 @@ public final class StudioService {
     }
 
     private RenderResult renderJsonRoute(ResponseSpec.JsonResponse json,
-            EvaluationContext evaluation) {
+            EvaluationContext evaluation, Map<String, Object> context, FieldMask fieldMask) {
         Object body = resolveJson(json.body(), evaluation);
+        // Output-field masking (Studio backlog A1 follow-up): the runtime supplies the mask over the
+        // canonical FieldPolicyApplier, evaluated for the sample principal, so the preview shows what
+        // a caller would actually see — hidden/redacted fields included.
+        if (fieldMask != null && !json.fields().isEmpty()) {
+            try {
+                body = fieldMask.mask(json.fields(), body, context);
+            } catch (RuntimeException ex) {
+                return RenderResult.invalid("json", "Field masking: " + rootMessage(ex));
+            }
+        }
         try {
             return RenderResult.ok("json",
                     jsonMapper.writerWithDefaultPrettyPrinter().writeValueAsString(body));
