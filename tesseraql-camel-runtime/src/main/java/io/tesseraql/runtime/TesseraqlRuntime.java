@@ -914,7 +914,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
                                 return Map.of("notFound", true, "name", name, "datasource", ds);
                             }
                             Map<String, Object> model = io.tesseraql.studio.DocViews.table(ds,
-                                    table);
+                                    table, doc.routesForTable(name));
                             if (shareLinks.enabled()) {
                                 model.put("shareUrl", shareLinks.mintTable(ds, name));
                             }

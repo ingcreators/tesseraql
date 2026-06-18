@@ -32,6 +32,21 @@
            th:href="${tbl.shareUrl}">Open shared view &rarr;</a>
       </div>
     </section>
+    <section class="hc-card" th:if="${tbl.hasRouteUsage}">
+      <h3>Used by routes</h3>
+      <p class="hc-field__label">The routes whose SQL reads from or writes to this table, inferred
+        from the statements (best-effort). Each links to its route reference.</p>
+      <div class="hc-cluster" th:unless="${#lists.isEmpty(tbl.readByRoutes)}">
+        <span class="hc-field__label">read by</span>
+        <a class="hc-badge" data-variant="info" th:each="r : ${tbl.readByRoutes}"
+           th:href="${r.url}" th:text="${r.id}"></a>
+      </div>
+      <div class="hc-cluster" th:unless="${#lists.isEmpty(tbl.writeByRoutes)}">
+        <span class="hc-field__label">written by</span>
+        <a class="hc-badge" data-variant="warning" th:each="r : ${tbl.writeByRoutes}"
+           th:href="${r.url}" th:text="${r.id}"></a>
+      </div>
+    </section>
     <section class="hc-card">
       <h2>Columns</h2>
       <table class="hc-table">

@@ -264,12 +264,20 @@ public final class DocViews {
         return model;
     }
 
+    /** The per-table reference model without route-usage cross-links (used by the public share view). */
+    public static Map<String, Object> table(String datasource, CatalogSchema.Table table) {
+        return table(datasource, table, DocService.RouteUsage.EMPTY);
+    }
+
     /**
      * The per-table reference model (documentation portal v3): the columns (readable type,
      * nullability, default, primary-key/auto-increment flags), the primary key, the foreign keys
-     * (each linked to its referenced table page), and the unique indexes.
+     * (each linked to its referenced table page), and the unique indexes. {@code usage} adds the
+     * reverse data-dependency cross-links — the routes whose SQL reads from and writes to this table
+     * (Studio backlog: the SQL&rarr;table dependency graph) — each linking back to its route page.
      */
-    public static Map<String, Object> table(String datasource, CatalogSchema.Table table) {
+    public static Map<String, Object> table(String datasource, CatalogSchema.Table table,
+            DocService.RouteUsage usage) {
         Set<String> pk = new HashSet<>(table.primaryKey());
         Map<String, Object> model = new LinkedHashMap<>();
         model.put("datasource", datasource);
@@ -314,7 +322,24 @@ public final class DocViews {
         }
         model.put("uniqueIndexes", indexes);
         model.put("hasUniqueIndexes", !indexes.isEmpty());
+
+        model.put("readByRoutes", routeRefs(usage.readers()));
+        model.put("writeByRoutes", routeRefs(usage.writers()));
+        model.put("hasRouteUsage", !usage.isEmpty());
         return model;
+    }
+
+    /** Route-reference rows (id, method, detail link) for a table's reverse data dependencies. */
+    private static List<Map<String, Object>> routeRefs(List<DocService.RouteRef> refs) {
+        List<Map<String, Object>> rows = new ArrayList<>();
+        for (DocService.RouteRef ref : refs) {
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("id", ref.id());
+            row.put("method", ref.method());
+            row.put("url", ref.url());
+            rows.add(row);
+        }
+        return rows;
     }
 
     /** A readable column type: the SQL type name, with a length appended for character types. */

@@ -267,10 +267,13 @@ and is being adopted (see E below).
      `INSERT INTO`/`UPDATE`/`DELETE FROM`/`MERGE INTO` are writes, with comments, directives, CTE
      names, and derived-table subqueries skipped. A table the `schema` goal introspected cross-links
      to its table page; otherwise it stays plain text. Computed live from the spec's SQL text, so no
-     `spec.json` change. `DocService.tableLinks`; `DocViews.route` data-dependency projection. *Next:*
-     the reverse direction (a table page listing the routes that read/write it). The DB-free DDL
-     parser the v3.1 note also mentioned stays deferred — `schema.json` already gives table structure
-     from live introspection, so the dependency graph (SQL side) is the valuable half.
+     `spec.json` change. `DocService.tableLinks`; `DocViews.route` data-dependency projection. The
+     reverse direction also ships: the schema **table** page has a *Used by routes* card listing the
+     routes that read/write it (cached reverse index `DocService.routesForTable`; the public
+     shared-table view omits it), so the graph is navigable both ways. The DB-free DDL parser the
+     v3.1 note also mentioned stays deferred — `schema.json` already gives table structure from live
+     introspection, so the dependency graph (SQL side) is the valuable half. *Possible follow-on:* a
+     single dependency-overview page (the full route&times;table matrix).
 
 9. **Coverage trend depth** — *done*: the run-history ring is no longer fixed at 20 runs — a
    non-positive `tesseraql.historyLimit` (`report` goal) / `--history-limit` (`tesseraql test

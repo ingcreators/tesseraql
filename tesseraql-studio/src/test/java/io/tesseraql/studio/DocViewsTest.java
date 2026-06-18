@@ -318,6 +318,29 @@ class DocViewsTest {
     }
 
     @Test
+    void tableModelCrossLinksTheRoutesThatReadAndWriteIt() {
+        CatalogSchema.Table customers = sampleSchema().datasource("main").tables().stream()
+                .filter(table -> table.name().equals("customers")).findFirst().orElseThrow();
+        DocService.RouteUsage usage = new DocService.RouteUsage(
+                List.of(new DocService.RouteRef("orders.list", "GET",
+                        "/_tesseraql/studio/ui/docs/route?id=orders.list")),
+                List.of(new DocService.RouteRef("customers.create", "POST",
+                        "/_tesseraql/studio/ui/docs/route?id=customers.create")));
+
+        Map<String, Object> model = DocViews.table("main", customers, usage);
+
+        assertThat(model).containsEntry("hasRouteUsage", true);
+        assertThat(asRows(model.get("readByRoutes"))).singleElement().satisfies(row -> {
+            assertThat(row).containsEntry("id", "orders.list").containsEntry("method", "GET");
+            assertThat((String) row.get("url")).contains("docs/route?id=orders.list");
+        });
+        assertThat(asRows(model.get("writeByRoutes"))).singleElement()
+                .satisfies(row -> assertThat(row).containsEntry("id", "customers.create"));
+        // The plain (no-usage) overload — used by the public share view — omits the cross-links.
+        assertThat(DocViews.table("main", customers)).containsEntry("hasRouteUsage", false);
+    }
+
+    @Test
     void tableModelRendersCharacterTypeLengthAndUniqueIndex() {
         CatalogSchema.Table customers = sampleSchema().datasource("main").tables().stream()
                 .filter(table -> table.name().equals("customers")).findFirst().orElseThrow();
