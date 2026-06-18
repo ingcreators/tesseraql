@@ -71,6 +71,10 @@ Studio editor + docs work (2026-06):
   `tesseraql.studio.scaffold.enabled`. `studio.scaffold.tables`/`studio.scaffold.preview`/
   `studio.scaffold.apply` providers, `GET /scaffold/tables` + `POST /scaffold/preview` + `POST
   /scaffold/apply` endpoints, the `/_tesseraql/studio/ui/scaffold` page.
+- **New route from the explorer (B3, slice 3)** — a **New route** form on the explorer (when
+  writable) takes a `web/**/<method>.yml` path and a recipe and saves a parseable starter skeleton as
+  a draft, then opens it in the source editor to finish, reusing the existing validate → apply flow.
+  Database-free `StudioService.newRouteDraft`; the `studio.newRoute` provider and `/ui/new` route.
 
 Upstream Hypermedia Components briefs filed and adopted: `hc-code` (read-only block,
 gutter, diff), editable `hc-code`, `hc-sparkline`, and read-only syntax highlighting
@@ -107,11 +111,10 @@ gutter, diff), editable `hc-code`, `hc-sparkline`, and read-only syntax highligh
 
 ### B. Creation / scaffolding in the UI
 
-3. **New route / file creation and CRUD scaffold from the explorer** — Studio is
-   single-file *edit* only; creation and scaffold are CLI-only (Phase 23). Wire
-   "new route" and "scaffold CRUD from table" to the v3 schema introspection (the
-   schema catalog already lists tables). Note the hot-reload limit: new/removed routes
-   need a restart.
+3. **New route / file creation and CRUD scaffold from the explorer** — *done* (slices 1–3): Studio
+   was single-file *edit* only; it now also **creates**. "Scaffold CRUD from table" (preview + apply)
+   and "new route" both ship, wired to the v3 schema introspection. The hot-reload limit stands:
+   newly created routes need a restart to be served, surfaced in the UI.
    - **Scaffold CRUD — preview** — *done* (slice 1): a **scaffold** page (linked from the explorer
      chrome when enabled) lists the dev datasource's tables introspected live (`CatalogIntrospector`)
      and previews the CRUD slice the generator would produce for a chosen table, reusing the CLI's
@@ -128,8 +131,11 @@ gutter, diff), editable `hc-code`, `hc-sparkline`, and read-only syntax highligh
      to the source editor) and flags newly written routes the manifest did not declare, which need a
      restart to be served (the hot reloader only swaps existing routes). Database-free
      `StudioService.scaffoldApply`; `studio.scaffold.apply` provider; `POST /scaffold/apply` endpoint.
-   - **New blank route** — *later*: create a single starter route file from a small form, separate
-     from the CRUD scaffold.
+   - **New blank route** — *done* (slice 3): a **New route** form on the explorer (when writable)
+     takes a `web/**/<method>.yml` path and a recipe (`query-json`/`query-html`/`command-json`) and
+     saves a parseable starter skeleton as a draft, then opens it in the source editor to finish — so
+     creation reuses the existing validate → apply flow. Database-free `StudioService.newRouteDraft`;
+     the `studio.newRoute` provider and the `/_tesseraql/studio/ui/new` route.
 
 ### C. Explorer / navigation polish
 
@@ -168,8 +174,8 @@ gutter, diff), editable `hc-code`, `hc-sparkline`, and read-only syntax highligh
 
 **A1 (rendered preview, incl. live data) is done**, and **A2 is fully done** — Run tests covers
 every declarative case kind (`sql` read/write, `validate`, `contract`, `notify`, `http-call`) for
-routes and jobs, sandboxed with auto-rollback. **B3 (scaffold-from-explorer)**: preview (slice 1)
-and apply (slice 2) shipped — pick a table, preview its CRUD slice, and create the files (edit
-detection + force), with a restart notice for new routes. Remaining B3: the optional **new blank
-route** form. A1's PDF preview and JSON field-masking are optional follow-ups. E waits on hc #264; G
-is gated.
+routes and jobs, sandboxed with auto-rollback. **B3 (scaffold-from-explorer) is fully done**:
+preview (slice 1), apply (slice 2), and new blank route (slice 3) all shipped — pick a table, preview
+its CRUD slice, and create the files (edit detection + force), or create a single starter route, each
+with a restart notice for new routes. Recommended next: **C4 (explorer tree + filter)** — low effort,
+or A1's optional PDF preview / JSON field-masking. E waits on hc #264; G is gated.

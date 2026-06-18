@@ -494,6 +494,45 @@ class StudioServiceTest {
                 .hasMessageContaining("primary key");
     }
 
+    @Test
+    void newRouteDraftSavesAValidStarterAndRejectsBadInput(@TempDir Path dir) throws Exception {
+        Files.createDirectories(dir.resolve("config"));
+        Files.writeString(dir.resolve("config/tesseraql.yml"), "tesseraql:\n  app:\n    name: t\n");
+        StudioService studio = new StudioService(new ManifestLoader().load(dir), false);
+
+        studio.newRouteDraft("web/api/widgets/get.yml", "query-json");
+        String draft = studio.readDraft("web/api/widgets/get.yml");
+        assertThat(draft).contains("id: api.widgets.get").contains("recipe: query-json");
+        // The starter parses as a valid route, so the editor's apply flow accepts it.
+        assertThat(studio.preview("web/api/widgets/get.yml", draft).valid()).isTrue();
+
+        // query-html carries the response/CSP scaffolding; command-json the write shape.
+        studio.newRouteDraft("web/page/get.yml", "query-html");
+        assertThat(studio.readDraft("web/page/get.yml")).contains("recipe: query-html")
+                .contains("template: page.html").contains("Content-Security-Policy");
+        studio.newRouteDraft("web/api/widgets/post.yml", "command-json");
+        assertThat(studio.readDraft("web/api/widgets/post.yml")).contains("recipe: command-json")
+                .contains("affected: sql.affectedRows");
+
+        // A non-route path and an already-existing file are rejected.
+        assertThatThrownBy(() -> studio.newRouteDraft("web/api/widgets/notes.yml", "query-json"))
+                .isInstanceOf(TqlException.class).hasMessageContaining("web/**");
+        Files.createDirectories(dir.resolve("web/api/exists"));
+        Files.writeString(dir.resolve("web/api/exists/get.yml"), "version: tesseraql/v1\nid: e\n");
+        assertThatThrownBy(() -> studio.newRouteDraft("web/api/exists/get.yml", "query-json"))
+                .isInstanceOf(TqlException.class).hasMessageContaining("already exists");
+    }
+
+    @Test
+    void newRouteDraftRejectedInReadOnlyMode(@TempDir Path dir) throws Exception {
+        Files.createDirectories(dir.resolve("config"));
+        Files.writeString(dir.resolve("config/tesseraql.yml"), "tesseraql:\n  app:\n    name: t\n");
+        StudioService readOnly = new StudioService(new ManifestLoader().load(dir), true);
+
+        assertThatThrownBy(() -> readOnly.newRouteDraft("web/api/x/get.yml", "query-json"))
+                .isInstanceOf(TqlException.class).hasMessageContaining("read-only");
+    }
+
     private static String statusOf(StudioService.ScaffoldPreview preview, String path) {
         return preview.files().stream()
                 .filter(file -> file.path().equals(path))

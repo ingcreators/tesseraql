@@ -1,0 +1,25 @@
+version: tesseraql/v1
+id: tql.studio.newRoute
+kind: route
+recipe: command-json
+
+input:
+  path:
+    type: string
+    required: true
+  recipe:
+    type: string
+    required: false
+
+security:
+  auth: bearer
+
+sql:
+  service: studio.newRoute
+  params:
+    path: params.path
+    recipe: params.recipe
+
+response:
+  redirect:
+    location: /_tesseraql/studio/ui/source?path={params.path}
