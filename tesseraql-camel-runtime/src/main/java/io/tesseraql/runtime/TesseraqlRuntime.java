@@ -739,6 +739,8 @@ public final class TesseraqlRuntime implements AutoCloseable {
                             }
                             // Offer the "run tests" action on a route page only when A2 is enabled.
                             model.put("testRunnerEnabled", testRunnerEnabled);
+                            // Warn when applying would overwrite a concurrently changed source (D5).
+                            model.put("conflict", draft != null && studio.draftConflicts(path));
                             return model;
                         })
                         .register("studio.save", params -> {
@@ -756,7 +758,9 @@ public final class TesseraqlRuntime implements AutoCloseable {
                         })
                         .register("studio.apply", params -> {
                             String path = String.valueOf(params.get("path"));
-                            studio.applyDraft(path);
+                            // force=true overwrites a concurrently changed source (backlog D5).
+                            boolean force = "true".equals(String.valueOf(params.get("force")));
+                            studio.applyDraft(path, force);
                             reloader.reload();
                             return Map.of("applied", path);
                         })

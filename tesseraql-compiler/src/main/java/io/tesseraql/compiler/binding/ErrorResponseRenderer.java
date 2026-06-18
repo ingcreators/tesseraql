@@ -229,9 +229,10 @@ public final class ErrorResponseRenderer implements Processor {
             case RATE -> 429;
             case LANE -> code.number() == 5031 ? 503 : 500;
             case STUDIO -> switch (code.number()) {
-                case 4002 -> 400;
+                case 4002, 4224 -> 400; // missing parameter / invalid new-route request
                 case 4030 -> 403;
                 case 4040 -> 404;
+                case 4090 -> 409; // a draft applied over a concurrently changed source (backlog D5)
                 case 4221 -> 422;
                 default -> 500;
             };

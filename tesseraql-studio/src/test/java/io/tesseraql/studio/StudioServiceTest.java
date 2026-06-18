@@ -400,6 +400,46 @@ class StudioServiceTest {
     }
 
     @Test
+    void applyDetectsConcurrentSourceChangeAndForceOverrides(@TempDir Path dir) throws Exception {
+        Files.createDirectories(dir.resolve("config"));
+        Files.writeString(dir.resolve("config/tesseraql.yml"), "tesseraql:\n  app:\n    name: t\n");
+        Files.createDirectories(dir.resolve("web/api/x"));
+        String source = """
+                version: tesseraql/v1
+                id: x
+                kind: route
+                recipe: query-json
+                sql:
+                  file: x.sql
+                response:
+                  json:
+                    body:
+                      data: sql.rows
+                """;
+        Files.writeString(dir.resolve("web/api/x/get.yml"), source);
+        StudioService studio = new StudioService(new ManifestLoader().load(dir), false);
+
+        studio.saveDraft("web/api/x/get.yml", source.replace("id: x", "id: x-edited"));
+        // The draft is based on the current source, so there is no conflict.
+        assertThat(studio.draftConflicts("web/api/x/get.yml")).isFalse();
+
+        // A concurrent change to the source under the draft is detected.
+        Files.writeString(dir.resolve("web/api/x/get.yml"), source.replace("id: x", "id: x-other"));
+        assertThat(studio.draftConflicts("web/api/x/get.yml")).isTrue();
+
+        // Applying without force is rejected so the draft cannot clobber the other change.
+        assertThatThrownBy(() -> studio.applyDraft("web/api/x/get.yml"))
+                .isInstanceOf(TqlException.class).hasMessageContaining("changed since");
+        assertThat(studio.source("web/api/x/get.yml")).contains("id: x-other");
+
+        // force overwrites the changed source with the draft and clears the draft + recorded base.
+        studio.applyDraft("web/api/x/get.yml", true);
+        assertThat(studio.source("web/api/x/get.yml")).contains("id: x-edited");
+        assertThat(studio.readDraft("web/api/x/get.yml")).isNull();
+        assertThat(studio.draftConflicts("web/api/x/get.yml")).isFalse();
+    }
+
+    @Test
     void applyRejectsInvalidDraftAndReadOnly(@TempDir Path dir) throws Exception {
         Files.createDirectories(dir.resolve("config"));
         Files.writeString(dir.resolve("config/tesseraql.yml"), "tesseraql:\n  app:\n    name: t\n");

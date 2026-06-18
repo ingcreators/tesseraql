@@ -114,7 +114,8 @@ final class StudioRouteBuilder extends RouteBuilder {
         from("direct:studio.apply").routeId("studio.apply")
                 .to(AUTH).process(json(exchange -> {
                     String path = requirePath(exchange);
-                    studio.applyDraft(path);
+                    // force=true overwrites a source that changed under the draft (backlog D5).
+                    studio.applyDraft(path, flag(exchange, "force"));
                     Map<String, Object> result = new LinkedHashMap<>();
                     result.put("applied", path);
                     return result;

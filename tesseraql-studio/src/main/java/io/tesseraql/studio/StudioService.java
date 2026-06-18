@@ -1,5 +1,6 @@
 package io.tesseraql.studio;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.tesseraql.core.error.TqlDomain;
 import io.tesseraql.core.error.TqlErrorCode;
@@ -47,6 +48,7 @@ public final class StudioService {
     private static final TqlErrorCode INVALID_DRAFT = new TqlErrorCode(TqlDomain.STUDIO, 4221);
     private static final TqlErrorCode RENDER = new TqlErrorCode(TqlDomain.STUDIO, 4222);
     private static final TqlErrorCode NEW_ROUTE = new TqlErrorCode(TqlDomain.STUDIO, 4224);
+    private static final TqlErrorCode CONFLICT = new TqlErrorCode(TqlDomain.STUDIO, 4090);
 
     /** The HTTP-method stems that name a route document under {@code web/} (and its fixtures). */
     private static final Set<String> HTTP_METHODS = Set.of("get", "post", "put", "patch", "delete",
@@ -143,11 +145,17 @@ public final class StudioService {
         }
         resolve(relativePath); // validate the target path before writing the draft
         Path draft = draftPath(relativePath);
+        // The first save records the source the edit is based on, so a later apply can detect that
+        // the source changed underneath it (concurrent-edit conflict, Studio backlog D5).
+        boolean firstSave = !Files.isRegularFile(draft);
         try {
             Files.createDirectories(draft.getParent());
             Files.writeString(draft, content);
         } catch (IOException ex) {
             throw new UncheckedIOException(ex);
+        }
+        if (firstSave) {
+            writeBaseMeta(relativePath, sourceIfExists(relativePath));
         }
         return draft;
     }
@@ -165,10 +173,28 @@ public final class StudioService {
         }
         resolve(relativePath); // validate the target path before touching the draft
         try {
-            return Files.deleteIfExists(draftPath(relativePath));
+            boolean removed = Files.deleteIfExists(draftPath(relativePath));
+            Files.deleteIfExists(draftMetaPath(relativePath));
+            return removed;
         } catch (IOException ex) {
             throw new UncheckedIOException(ex);
         }
+    }
+
+    /**
+     * Whether applying {@code relativePath}'s draft would overwrite a source that changed since the
+     * draft was started (Studio backlog D5): the recorded base differs from the current source. False
+     * when there is no draft or no recorded base (e.g. a draft from before base tracking).
+     */
+    public boolean draftConflicts(String relativePath) {
+        if (readDraft(relativePath) == null) {
+            return false;
+        }
+        BaseMeta meta = readBaseMeta(relativePath);
+        if (meta == null) {
+            return false;
+        }
+        return !java.util.Objects.equals(meta.base(), sourceIfExists(relativePath));
     }
 
     /**
@@ -687,12 +713,26 @@ public final class StudioService {
      * Rejected in read-only mode; the draft is removed once applied.
      */
     public Path applyDraft(String relativePath) {
+        return applyDraft(relativePath, false);
+    }
+
+    /**
+     * As {@link #applyDraft(String)}, but {@code force} overwrites a source that changed since the
+     * draft was started (Studio backlog D5). Without {@code force}, a concurrent-edit conflict is
+     * rejected so the draft cannot silently clobber another change (last-apply-wins).
+     */
+    public Path applyDraft(String relativePath, boolean force) {
         if (readOnly) {
             throw new TqlException(READ_ONLY, "Studio is read-only; apply is disabled");
         }
         String draft = readDraft(relativePath);
         if (draft == null) {
             throw new TqlException(NOT_FOUND, "No draft to apply for: " + relativePath);
+        }
+        if (!force && draftConflicts(relativePath)) {
+            throw new TqlException(CONFLICT,
+                    "The saved source changed since this draft was started;"
+                            + " review the diff and re-apply to overwrite, or discard the draft.");
         }
         PreviewResult preview = preview(relativePath, draft);
         if (!preview.valid()) {
@@ -703,6 +743,7 @@ public final class StudioService {
             Files.createDirectories(target.getParent());
             Files.writeString(target, draft);
             Files.deleteIfExists(draftPath(relativePath));
+            Files.deleteIfExists(draftMetaPath(relativePath));
         } catch (IOException ex) {
             throw new UncheckedIOException(ex);
         }
@@ -748,6 +789,44 @@ public final class StudioService {
             throw new TqlException(TRAVERSAL, "Draft path escapes drafts dir: " + relativePath);
         }
         return resolved;
+    }
+
+    /** The sidecar recording the source a draft is based on (Studio backlog D5). */
+    private Path draftMetaPath(String relativePath) {
+        Path draft = draftPath(relativePath);
+        return draft.resolveSibling(draft.getFileName().toString() + ".meta");
+    }
+
+    /** Records the source content a draft is based on ({@code null} when the source did not exist). */
+    private void writeBaseMeta(String relativePath, String base) {
+        Path meta = draftMetaPath(relativePath);
+        Map<String, Object> data = new LinkedHashMap<>();
+        data.put("base", base);
+        try {
+            Files.createDirectories(meta.getParent());
+            Files.writeString(meta, jsonMapper.writeValueAsString(data));
+        } catch (IOException ex) {
+            throw new UncheckedIOException(ex);
+        }
+    }
+
+    /** Reads the recorded base for a draft, or {@code null} when none was recorded. */
+    private BaseMeta readBaseMeta(String relativePath) {
+        Path meta = draftMetaPath(relativePath);
+        if (!Files.isRegularFile(meta)) {
+            return null;
+        }
+        try {
+            JsonNode node = jsonMapper.readTree(Files.readString(meta));
+            JsonNode base = node.get("base");
+            return new BaseMeta(base == null || base.isNull() ? null : base.asText());
+        } catch (IOException ex) {
+            return null;
+        }
+    }
+
+    /** The source a draft was based on ({@code base} is null when the source did not exist). */
+    private record BaseMeta(String base) {
     }
 
     private RouteSummary routeSummary(RouteFile route) {

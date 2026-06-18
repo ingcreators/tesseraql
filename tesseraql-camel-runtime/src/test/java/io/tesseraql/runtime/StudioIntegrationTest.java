@@ -208,6 +208,51 @@ class StudioIntegrationTest {
     }
 
     @Test
+    void uiSourceWarnsWhenSourceChangedUnderAnEditedDraft() throws Exception {
+        // A bound SQL file (not a route document, so it never joins the manifest) carries the draft.
+        String path = "web/api/cedit/q.sql";
+        Files.createDirectories(appHome.resolve("web/api/cedit"));
+        Files.writeString(appHome.resolve(path), "select 1 as base_value\n");
+        assertThat(
+                post("/_tesseraql/studio/drafts?path=" + enc(path), "select 2 as drafted\n", true)
+                        .statusCode())
+                .isEqualTo(200);
+
+        // Based on the current source: the editor shows the draft without a conflict warning.
+        assertThat(get("/_tesseraql/studio/ui/source?path=" + enc(path), true).body())
+                .doesNotContain("changed since this draft");
+
+        // A concurrent change to the source surfaces the conflict warning and the force checkbox.
+        Files.writeString(appHome.resolve(path), "select 3 as changed\n");
+        assertThat(get("/_tesseraql/studio/ui/source?path=" + enc(path), true).body())
+                .contains("changed since this draft").contains("name=\"force\"");
+    }
+
+    @Test
+    void applyEndpointRejectsConcurrentConflictUnlessForced() throws Exception {
+        String path = "web/api/capply/q.sql";
+        Files.createDirectories(appHome.resolve("web/api/capply"));
+        Files.writeString(appHome.resolve(path), "select 1 as base_value\n");
+        assertThat(
+                post("/_tesseraql/studio/drafts?path=" + enc(path), "select 2 as drafted\n", true)
+                        .statusCode())
+                .isEqualTo(200);
+
+        // A concurrent change to the source under the draft.
+        Files.writeString(appHome.resolve(path), "select 3 as changed\n");
+
+        // Apply without force is a 409 conflict; the source is left untouched.
+        assertThat(post("/_tesseraql/studio/apply?path=" + enc(path), "", true).statusCode())
+                .isEqualTo(409);
+        assertThat(Files.readString(appHome.resolve(path))).contains("changed");
+
+        // force applies the draft over the changed source.
+        assertThat(post("/_tesseraql/studio/apply?path=" + enc(path) + "&force=true", "", true)
+                .statusCode()).isEqualTo(200);
+        assertThat(Files.readString(appHome.resolve(path))).contains("drafted");
+    }
+
+    @Test
     void explorerRequiresAuthentication() throws Exception {
         assertThat(get("/_tesseraql/studio/explorer", false).statusCode()).isEqualTo(401);
     }

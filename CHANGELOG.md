@@ -8,6 +8,14 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- Studio editor: concurrent-edit conflict detection (Studio backlog D5). Saving a draft now records
+  the source it is based on, so applying detects when the source changed underneath it and refuses to
+  silently overwrite the other change (no more last-apply-wins): the editor shows a conflict warning
+  and requires an explicit **overwrite** confirmation, and the apply endpoint answers `409 Conflict`
+  unless `force` is set. Database-free `StudioService.draftConflicts` + `applyDraft(path, force)` (the
+  base is a sidecar beside the draft); the `studio.apply` provider and `POST
+  /_tesseraql/studio/apply` endpoint take `force`; the source page carries the warning and a
+  review-gated force checkbox.
 - Studio editor: directory tree and filter in the explorer (Studio backlog C4). The flat route/job
   tables become a single **directory tree** folded from the source paths (folders as nested
   disclosures, each route/job a leaf linking to its source, with a method/`job` badge), and a
