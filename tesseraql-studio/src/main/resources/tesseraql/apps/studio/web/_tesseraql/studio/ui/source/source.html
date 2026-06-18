@@ -29,7 +29,7 @@
     </div>
     <form method="post" action="/_tesseraql/studio/ui/save">
       <input type="hidden" id="src-path" name="path" th:value="${src.path}">
-      <div class="hc-code" data-editable data-gutter="line-numbers">
+      <div class="hc-code" data-editable data-gutter="line-numbers" th:attr="data-lang=${src.lang}">
         <textarea id="source-editor" name="content" class="hc-code__input" spellcheck="false" aria-label="Source editor"
                   th:text="${src.content}"
                   hx-post="/_tesseraql/studio/ui/preview"
@@ -45,7 +45,7 @@
       <p class="hc-field__message" th:if="${src.isRoute}">Renders this route's response against the sample <em>execution context</em> below (e.g. <code>params</code>, <code>sql.rows</code>) &mdash; prefilled from the colocated <code>.sample.yml</code> fixture when present. A <code>query-json</code> route's <code>response.json.fields</code> masking is applied; add a <code>principal</code> (e.g. <code>permissions</code>/<code>roles</code>) to the sample to preview a privileged view.</p>
       <p class="hc-field__message" th:unless="${src.isRoute}">Renders the draft against the sample <em>template variables</em> below &mdash; prefilled from the colocated <code>.sample.yml</code> fixture when present, blank falls back to an empty model.</p>
       <label class="hc-field__label" for="sample-editor">Sample data (YAML)</label>
-      <div class="hc-code" data-editable data-gutter="line-numbers">
+      <div class="hc-code" data-editable data-gutter="line-numbers" data-lang="yaml">
         <textarea id="sample-editor" name="sampleModel" class="hc-code__input" spellcheck="false"
                   aria-label="Sample data" th:text="${src.sampleModel}"></textarea>
       </div>

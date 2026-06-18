@@ -217,6 +217,8 @@ public final class StudioViews {
         model.put("isRenderable", isTemplate || isRoute);
         // A route or a job carries declarative test cases the editor can run (Studio backlog A2).
         model.put("isTestable", isRoute || isJob);
+        // The hc-code data-lang grammar for live-highlighting the editable field (Studio backlog E).
+        model.put("lang", editorLang(path));
         model.put("sampleModel", sampleModel == null ? "" : sampleModel);
         if (hasDraft) {
             model.put("diff", diffLines(path, sourceContent == null ? "" : sourceContent,
@@ -398,6 +400,31 @@ public final class StudioViews {
         }
         return "<!DOCTYPE html><html lang=\"en\" data-theme=\"dark\"><head>" + PREVIEW_HEAD
                 + "</head><body>" + html + "</body></html>";
+    }
+
+    /**
+     * The {@code hc-code} {@code data-lang} grammar key for live-highlighting the editable field
+     * (Studio backlog E, hc #264): {@code installCodeEditor}'s built-in {@code sql}/{@code yaml}/
+     * {@code html}/{@code json} grammars, by file extension. An empty value leaves the field a plain
+     * textarea (an unknown {@code data-lang} degrades cleanly).
+     */
+    private static String editorLang(String path) {
+        if (path == null) {
+            return "";
+        }
+        if (path.endsWith(".sql")) {
+            return "sql";
+        }
+        if (path.endsWith(".json")) {
+            return "json";
+        }
+        if (path.endsWith(".html")) {
+            return "html";
+        }
+        if (path.endsWith(".yml") || path.endsWith(".yaml") || path.endsWith(".yml.tpl")) {
+            return "yaml";
+        }
+        return "";
     }
 
     private static final java.util.Set<String> HTTP_METHODS = java.util.Set.of("get", "post", "put",

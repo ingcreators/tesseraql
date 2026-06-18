@@ -397,6 +397,15 @@ class StudioIntegrationTest {
     }
 
     @Test
+    void uiSourceEditorCarriesTheLiveHighlightLanguage() throws Exception {
+        // The editable hc-code field opts into hc's live syntax highlighting via data-lang (E).
+        assertThat(get("/_tesseraql/studio/ui/source?path=" + enc("web/api/users/search.sql"), true)
+                .body()).contains("data-editable").contains("data-lang=\"sql\"");
+        assertThat(get("/_tesseraql/studio/ui/source?path=" + enc("web/api/users/get.yml"), true)
+                .body()).contains("data-lang=\"yaml\"");
+    }
+
+    @Test
     void uiExplorerRequiresAuthentication() throws Exception {
         assertThat(get("/_tesseraql/studio/ui", false).statusCode()).isEqualTo(401);
     }
