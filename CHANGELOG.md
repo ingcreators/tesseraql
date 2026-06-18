@@ -8,6 +8,15 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- Studio editor: output-field masking in the JSON rendered preview (Studio backlog A1 follow-up). A
+  `query-json` route's `response.json.fields` policy is now applied to the rendered preview, so the
+  preview shows what a caller would actually see — fields hidden (`visible: false` / a `policy:` the
+  viewer fails) or redacted (`mask`/`classification`) just as in production. It reuses the canonical
+  `FieldPolicyApplier`, evaluated for the sample principal the developer can put under `principal`
+  (e.g. `permissions`/`roles`) in the render sample, so a privileged view can be previewed too;
+  policy-gated fields default to hidden for an anonymous sample. Studio stays free of the
+  security/compiler stack — the runtime supplies the mask through a `StudioService.FieldMask`
+  callback (the same pattern as the A1 live-rows `RowSource`).
 - Studio editor: per-role edit permission (Studio backlog D6). The all-or-nothing
   `tesseraql.studio.readOnly` switch is refined by an optional `tesseraql.studio.editRoles`
   allow-list: when set (and Studio is writable), only a caller holding one of those roles may mutate

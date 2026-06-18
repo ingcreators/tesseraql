@@ -321,6 +321,59 @@ class StudioServiceTest {
     }
 
     @Test
+    void rendersJsonRouteAppliesTheFieldMaskWhenFieldsArePresent(@TempDir Path dir)
+            throws Exception {
+        Files.createDirectories(dir.resolve("config"));
+        Files.writeString(dir.resolve("config/tesseraql.yml"), "tesseraql:\n  app:\n    name: t\n");
+        Files.createDirectories(dir.resolve("web/api/x"));
+        Path route = dir.resolve("web/api/x/get.yml");
+        Files.writeString(route, """
+                version: tesseraql/v1
+                id: x
+                kind: route
+                recipe: query-json
+                response:
+                  json:
+                    body:
+                      email: params.email
+                    fields:
+                      email:
+                        mask: email
+                """);
+        StudioService studio = new StudioService(new ManifestLoader().load(dir), true);
+
+        // The mask receives the route's fields and the resolved body; its output is what renders.
+        StudioService.FieldMask mask = (fields, body, context) -> {
+            assertThat(fields).containsKey("email");
+            return Map.of("masked", true);
+        };
+        StudioService.RenderResult masked = studio.render("web/api/x/get.yml", null,
+                "params:\n  email: sato@example.com\n", null, mask);
+        assertThat(masked.ok()).isTrue();
+        assertThat(masked.output()).contains("\"masked\" : true")
+                .doesNotContain("sato@example.com");
+
+        // A route with no fields never invokes the mask (a throwing mask proves it is not called).
+        Files.writeString(route, """
+                version: tesseraql/v1
+                id: x
+                kind: route
+                recipe: query-json
+                response:
+                  json:
+                    body:
+                      email: params.email
+                """);
+        StudioService.FieldMask boom = (fields, body, context) -> {
+            throw new IllegalStateException("must not run when there are no fields");
+        };
+        StudioService.RenderResult plain = studio.render("web/api/x/get.yml", null,
+                "params:\n  email: sato@example.com\n", null, boom);
+        assertThat(plain.ok()).isTrue();
+        assertThat(plain.output()).contains("sato@example.com");
+    }
+
+    @Test
     void rendersHtmlRouteWithLiveRowSource() {
         StudioService studio = new StudioService(exampleManifest(), true);
         // A stub row source stands in for the runtime's sandboxed query: the sample carries no sql.

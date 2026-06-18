@@ -715,8 +715,17 @@ public final class TesseraqlRuntime implements AutoCloseable {
                                 .collect(java.util.stream.Collectors.toSet()))
                         .orElse(java.util.Set.of());
                 StudioAccess studioAccess = new StudioAccess(!readOnly, editRoles);
+                // Output-field masking in the JSON render preview (Studio backlog A1 follow-up): the
+                // runtime supplies the mask over the canonical FieldPolicyApplier (so Studio stays
+                // free of the security/compiler stack), evaluated for the sample principal the
+                // developer puts under `principal` in the render sample.
+                PolicyEngine studioPolicyEngine = context.getRegistry().lookupByNameAndType(
+                        TesseraqlProperties.POLICY_ENGINE_BEAN, PolicyEngine.class);
+                io.tesseraql.studio.StudioService.FieldMask studioMask = (fields, body,
+                        ctx) -> new io.tesseraql.compiler.binding.FieldPolicyApplier(fields,
+                                studioPolicyEngine, samplePrincipal(ctx)).apply(body);
                 context.addRoutes(new StudioRouteBuilder(studio, reloader, studioTests,
-                        studioScaffold, studioAccess));
+                        studioScaffold, studioAccess, studioMask));
                 // Providers backing the bundled studio app (design ch. 16, 47).
                 serviceProviders
                         .register("studio.explorer", params -> {
@@ -802,7 +811,8 @@ public final class TesseraqlRuntime implements AutoCloseable {
                                     && studioTests.isEnabled() ? studioTests::liveRows : null;
                             return io.tesseraql.studio.StudioViews.render(studio.render(path,
                                     content == null ? null : String.valueOf(content),
-                                    sample == null ? null : String.valueOf(sample), rows));
+                                    sample == null ? null : String.valueOf(sample), rows,
+                                    studioMask));
                         })
                         .register("studio.runTests",
                                 params -> studioTests
@@ -1051,6 +1061,31 @@ public final class TesseraqlRuntime implements AutoCloseable {
     private static String actorOf(Map<String, Object> params) {
         Object actor = params.get("actor");
         return actor == null ? null : String.valueOf(actor);
+    }
+
+    /**
+     * The sample principal for a Studio JSON render's field masking (backlog A1 follow-up): built from
+     * the render context's {@code principal} map ({@code roles}/{@code permissions}/…), or {@code null}
+     * (an anonymous viewer) when the sample carries none.
+     */
+    @SuppressWarnings("unchecked")
+    private static io.tesseraql.security.Principal samplePrincipal(Map<String, Object> context) {
+        if (!(context.get("principal") instanceof Map<?, ?> map)) {
+            return null;
+        }
+        java.util.function.Function<String, String> str = key -> map.get(key) == null
+                ? null
+                : String.valueOf(map.get(key));
+        java.util.function.Function<String, List<String>> list = key -> map
+                .get(key) instanceof List<?> values
+                        ? values.stream().map(String::valueOf).toList()
+                        : List.of();
+        Map<String, Object> claims = map.get("claims") instanceof Map<?, ?> raw
+                ? (Map<String, Object>) raw
+                : Map.of();
+        return new io.tesseraql.security.Principal(str.apply("subject"), str.apply("loginId"),
+                str.apply("displayName"), str.apply("tenantId"), list.apply("groups"),
+                list.apply("roles"), list.apply("permissions"), claims);
     }
 
     /** The configured dialect for the main datasource, or inferred from its JDBC URL (design ch. 42). */

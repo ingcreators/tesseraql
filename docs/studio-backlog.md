@@ -30,8 +30,8 @@ Studio editor + docs work (2026-06):
   - a **template file** (`.html`/`.tpl`) against the sample as its template variables;
   - a **web route** (`web/**/<method>.yml`) against the sample as the execution context (`params`,
     `sql.rows`, …): `query-html`/`page` resolves `response.html.model` and renders the route's
-    template, `query-json` resolves `response.json.body` and pretty-prints it (output-field masking
-    `response.json.fields` is not applied in preview).
+    template, `query-json` resolves `response.json.body`, applies its `response.json.fields`
+    output-field masking, and pretty-prints it.
 
   The sample is YAML/JSON typed in the editor, prefilled from a colocated `<name>.sample.yml`
   fixture (blank falls back to it). `StudioService.render`/`sampleModel`, the `studio.render`
@@ -117,8 +117,11 @@ gutter, diff), editable `hc-code`, `hc-sparkline`, and read-only syntax highligh
    met. Optional follow-ups, not blockers (pick up opportunistically):
    - **PDF preview** — needs a `tesseraql-pdf` dependency and a binary-friendly surface (a `data:`
      URL / download); the HTML stage that feeds the PDF already previews.
-   - **Output-field masking** — apply `response.json.fields` masking in the JSON preview (needs the
-     policy engine + a sample principal); today the preview shows the unmasked resolved body.
+   - **Output-field masking** — *done*: the JSON preview applies a `query-json` route's
+     `response.json.fields` masking (hide/redact per policy/classification/mask), reusing the canonical
+     `FieldPolicyApplier` evaluated for the sample principal the developer puts under `principal` in the
+     render sample. Studio stays free of the security/compiler stack — the runtime supplies the mask via
+     a `StudioService.FieldMask` callback (the A1 live-rows `RowSource` pattern).
 
    The "render against **real** bound params" end — executing the route's SQL through the A2
    sandbox to populate live rows instead of a hand-authored `sql.rows` fixture — is **done** (the
@@ -228,8 +231,9 @@ its CRUD slice, and create the files (edit detection + force), or create a singl
 with a restart notice for new routes. **C4 (explorer tree + filter) is done** — the explorer is a
 filterable directory tree. **D5 (draft robustness) is done**: concurrent-edit
 conflict detection and the draft overview shipped. **D6 (granular read-only + audit) is done**: the
-audit trail and per-role edit permission both shipped. With A1, A2, B3, C4, D5, and D6 complete, the
-remaining backlog is A1's optional PDF preview / JSON field-masking, the docs-portal F8/F9 items
+audit trail and per-role edit permission both shipped. **A1's JSON output-field masking follow-up is
+done** (the preview applies `response.json.fields`). With A1 (incl. masking), A2, B3, C4, D5, and D6
+complete, the remaining backlog is A1's optional **PDF preview**, the docs-portal **F8/F9** items
 (OpenAPI/printable export, coverage-trend depth), E (editor live highlighting, blocked on hc #264),
-and G (Studio copilot, gated). Recommended next: **A1 JSON field-masking** (small, closes an A1
-follow-up) or **F8 docs export**. E waits on hc #264; G is gated.
+and G (Studio copilot, gated). Recommended next: **F8 docs export** or **A1 PDF preview**. E waits on
+hc #264; G is gated.
