@@ -1,0 +1,22 @@
+version: tesseraql/v1
+id: tql.studio.drafts
+kind: route
+recipe: query-html
+
+security:
+  auth: bearer
+
+sql:
+  service: studio.drafts
+
+response:
+  html:
+    status: 200
+    template: drafts.html
+    model:
+      page: sql
+    headers:
+      Content-Security-Policy: "default-src 'self'; style-src 'self' 'unsafe-inline'; frame-ancestors 'none'"
+      X-Content-Type-Options: nosniff
+      X-Frame-Options: DENY
+      Referrer-Policy: no-referrer

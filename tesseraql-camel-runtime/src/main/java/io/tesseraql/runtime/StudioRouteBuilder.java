@@ -41,6 +41,7 @@ final class StudioRouteBuilder extends RouteBuilder {
 
         rest().get("/_tesseraql/studio/explorer").to("direct:studio.explorer");
         rest().get("/_tesseraql/studio/source").to("direct:studio.source");
+        rest().get("/_tesseraql/studio/drafts").to("direct:studio.drafts");
         rest().post("/_tesseraql/studio/drafts").to("direct:studio.draft");
         rest().post("/_tesseraql/studio/preview").to("direct:studio.preview");
         rest().post("/_tesseraql/studio/render").to("direct:studio.render");
@@ -60,6 +61,10 @@ final class StudioRouteBuilder extends RouteBuilder {
                     String path = requirePath(exchange);
                     return Map.of("path", path, "content", studio.source(path));
                 }));
+
+        // Lists every pending draft with its conflict status (backlog D5 draft overview).
+        from("direct:studio.drafts").routeId("studio.drafts")
+                .to(AUTH).process(json(exchange -> studio.drafts()));
 
         from("direct:studio.draft").routeId("studio.draft")
                 .to(AUTH).process(json(exchange -> {

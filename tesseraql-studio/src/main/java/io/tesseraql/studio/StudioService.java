@@ -31,6 +31,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Stream;
 
 /**
  * The backend for TesseraQL Studio (design ch. 16): an explorer over the app's routes and jobs,
@@ -760,6 +761,29 @@ public final class StudioService {
         return explorer();
     }
 
+    /**
+     * Every pending draft under {@code work/studio/drafts} (Studio backlog D5): the app-relative path
+     * each one edits, whether it conflicts with a source that changed underneath it, and whether it is
+     * a new file (no source yet). Sorted by path; the base sidecars are skipped.
+     */
+    public List<DraftSummary> drafts() {
+        Path draftsDir = appHome.resolve("work/studio/drafts").normalize();
+        if (!Files.isDirectory(draftsDir)) {
+            return List.of();
+        }
+        try (Stream<Path> walk = Files.walk(draftsDir)) {
+            return walk.filter(Files::isRegularFile)
+                    .filter(file -> !file.getFileName().toString().endsWith(".meta"))
+                    .map(file -> draftsDir.relativize(file).toString().replace('\\', '/'))
+                    .sorted()
+                    .map(path -> new DraftSummary(path, draftConflicts(path),
+                            sourceIfExists(path) == null))
+                    .toList();
+        } catch (IOException ex) {
+            throw new UncheckedIOException(ex);
+        }
+    }
+
     /** Reads a previously saved draft, or null if none exists. */
     public String readDraft(String relativePath) {
         Path draft = draftPath(relativePath);
@@ -855,6 +879,13 @@ public final class StudioService {
 
     /** A job entry in the explorer. */
     public record JobSummary(String id, String recipe, String source) {
+    }
+
+    /**
+     * A pending draft in the draft overview (Studio backlog D5): the app-relative path it edits,
+     * whether it conflicts with a source that changed underneath it, and whether it is a new file.
+     */
+    public record DraftSummary(String path, boolean conflict, boolean isNew) {
     }
 
     /**

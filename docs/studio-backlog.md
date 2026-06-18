@@ -86,6 +86,9 @@ Studio editor + docs work (2026-06):
   and refuses to overwrite it (no last-apply-wins) unless forced — the editor shows a conflict warning
   and a review-gated overwrite checkbox, and `POST /apply` answers `409` without `force`. Database-free
   `StudioService.draftConflicts` + `applyDraft(path, force)`; `STUDIO-4090 → 409` in the error map.
+- **Draft overview (D5, slice 2)** — a **drafts** page (linked from the explorer when writable) lists
+  every pending draft under `work/studio/drafts` with a link to its editor, a new/edit kind, and a
+  conflict badge. Database-free `StudioService.drafts()`; `studio.drafts` provider; `GET /drafts`.
 
 Upstream Hypermedia Components briefs filed and adopted: `hc-code` (read-only block,
 gutter, diff), editable `hc-code`, `hc-sparkline`, and read-only syntax highlighting
@@ -164,8 +167,10 @@ gutter, diff), editable `hc-code`, `hc-sparkline`, and read-only syntax highligh
      apply refuses to overwrite a source that changed underneath it (no last-apply-wins) — the editor
      shows a conflict warning + a review-gated overwrite confirmation, and the apply endpoint answers
      `409` unless `force` is set. `StudioService.draftConflicts` / `applyDraft(path, force)`.
-   - **Draft overview** — *next slice*: a list of all pending drafts (with their conflict status),
-     linked from the explorer, so edits in flight are visible in one place.
+   - **Draft overview** — *done*: a **drafts** page (linked from the explorer when writable) lists
+     every pending draft under `work/studio/drafts` with a link to its editor, a new/edit kind, and a
+     conflict badge, plus a count of conflicting drafts. Database-free `StudioService.drafts()`; the
+     `studio.drafts` provider and `GET /drafts` endpoint.
    - **Confirm-diff-before-apply** — partially met (the conflict case forces a review); a general
      "review the diff before every apply" gate is still open.
 6. **Granular read-only + audit** — read-only is all-or-nothing; add per-role edit
@@ -199,7 +204,8 @@ routes and jobs, sandboxed with auto-rollback. **B3 (scaffold-from-explorer) is 
 preview (slice 1), apply (slice 2), and new blank route (slice 3) all shipped — pick a table, preview
 its CRUD slice, and create the files (edit detection + force), or create a single starter route, each
 with a restart notice for new routes. **C4 (explorer tree + filter) is done** — the explorer is a
-filterable directory tree. **D5 is underway**: concurrent-edit conflict detection (slice 1) shipped;
-next is the **draft overview** slice (a list of pending drafts with conflict status). After that:
-**D6 (granular read-only + audit)**, or A1's optional PDF preview / JSON field-masking. E waits on hc
-#264; G is gated.
+filterable directory tree. **D5 (draft robustness) is done**: concurrent-edit
+conflict detection (slice 1) and the draft overview (slice 2) shipped; a general
+confirm-diff-before-every-apply gate remains optional. Recommended next: **D6 (granular read-only +
+audit — per-role edit permission + an audit trail)**, or A1's optional PDF preview / JSON
+field-masking. E waits on hc #264; G is gated.

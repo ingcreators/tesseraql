@@ -2,6 +2,8 @@
 # Each route folder is the complete unit: yml + colocated template(s).
 web/_tesseraql/studio/ui/get.yml
 web/_tesseraql/studio/ui/explorer.html
+web/_tesseraql/studio/ui/drafts/get.yml
+web/_tesseraql/studio/ui/drafts/drafts.html
 web/_tesseraql/studio/ui/docs/get.yml
 web/_tesseraql/studio/ui/docs/docs.html
 web/_tesseraql/studio/ui/docs/route/get.yml

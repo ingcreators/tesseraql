@@ -79,6 +79,23 @@ class StudioViewsTest {
                         .containsEntry("badge", "job"));
     }
 
+    @Test
+    void draftsBuildsOverviewModel() {
+        Map<String, Object> model = StudioViews.drafts(List.of(
+                new StudioService.DraftSummary("web/api/a/get.yml", false, false),
+                new StudioService.DraftSummary("web/api/b/get.yml", true, true)));
+
+        assertThat(model).containsEntry("count", 2).containsEntry("hasDrafts", true)
+                .containsEntry("conflictCount", 1).containsEntry("hasConflicts", true);
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> rows = (List<Map<String, Object>>) model.get("drafts");
+        assertThat(rows.get(0)).containsEntry("path", "web/api/a/get.yml")
+                .containsEntry("kind", "edit").containsEntry("conflict", false)
+                .containsEntry("sourceUrl",
+                        "/_tesseraql/studio/ui/source?path=web%2Fapi%2Fa%2Fget.yml");
+        assertThat(rows.get(1)).containsEntry("kind", "new").containsEntry("conflict", true);
+    }
+
     @SuppressWarnings("unchecked")
     private static Map<String, Object> tree(Map<String, Object> model) {
         return (Map<String, Object>) model.get("tree");
