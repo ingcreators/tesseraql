@@ -488,15 +488,18 @@ public final class TesseraqlRuntime implements AutoCloseable {
             int mcpTools = mcpApps.stream().mapToInt(app -> app.tools().size()).sum();
             int mcpResources = mcpApps.stream().mapToInt(app -> app.resources().size()).sum();
             int mcpUiResources = mcpApps.stream().mapToInt(app -> app.uiResources().size()).sum();
-            if ((mcpTools > 0 || mcpResources > 0 || mcpUiResources > 0)
+            int mcpPrompts = mcpApps.stream().mapToInt(app -> app.prompts().size()).sum();
+            if ((mcpTools > 0 || mcpResources > 0 || mcpUiResources > 0 || mcpPrompts > 0)
                     && manifest.config().getString("tesseraql.mcp.enabled")
                             .map(Boolean::parseBoolean).orElse(true)) {
                 io.tesseraql.mcp.McpServer mcpServer = AppMcpServer.build(appName, mcpApps,
                         context.createProducerTemplate());
                 context.addRoutes(new McpRouteBuilder(
                         new io.tesseraql.mcp.McpHttpHandler(mcpServer, null)));
-                LOG.info("Serving {} MCP tool(s), {} resource(s), and {} UI resource(s) at"
-                        + " /_tesseraql/mcp", mcpTools, mcpResources, mcpUiResources);
+                LOG.info(
+                        "Serving {} MCP tool(s), {} resource(s), {} UI resource(s), and {} prompt(s)"
+                                + " at /_tesseraql/mcp",
+                        mcpTools, mcpResources, mcpUiResources, mcpPrompts);
             }
             // Static assets (design ch. 12, 40): the main app's assets/, each mounted app's
             // assets/ under its name, framework css under /assets/_tesseraql, vendored WebJars

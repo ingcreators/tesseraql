@@ -8,6 +8,16 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- MCP: application-declared prompts (`kind: prompt`). An app can now declare its own MCP **prompt**
+  under `mcp/` — the application-side counterpart of the dev-tool `studio_copilot` prompt — as a
+  parameterized message template the runtime serves at `/_tesseraql/mcp` alongside its tools,
+  resources, and UI resources. A `kind: prompt` document declares its `input:` (the prompt's
+  arguments) and a colocated `template` (rendered in Thymeleaf TEXT mode against the supplied
+  argument values); `prompts/list` advertises it and `prompts/get` returns the rendered text as a
+  `user` message. A prompt is pure text — no recipe, no SQL, no embedded LLM — so it carries no
+  per-prompt security beyond the endpoint's own auth. New `PromptFile` + `AppManifest.prompts()`;
+  `ManifestLoader` parses the new kind; `AppMcpServer` registers each prompt and renders its template.
+
 - OpenAPI: structured JSON response schemas. The generated OpenAPI document (the `generate` goal /
   the docs portal export) now describes a JSON route's response **shape** instead of an opaque
   `{type: object}`: `OpenApiGenerator` mirrors the `response.json.body` template's object/array

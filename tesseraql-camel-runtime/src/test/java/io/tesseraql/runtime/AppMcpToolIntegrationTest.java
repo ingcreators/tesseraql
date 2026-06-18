@@ -213,6 +213,38 @@ class AppMcpToolIntegrationTest {
         assertThat(noToken.path("error").path("code").asInt()).isEqualTo(-32603);
     }
 
+    @Test
+    void initializeAdvertisesThePromptsCapability() throws Exception {
+        JsonNode capabilities = rpc(initializeBody(), null, null).path("result")
+                .path("capabilities");
+        assertThat(capabilities.path("prompts").path("listChanged").asBoolean()).isFalse();
+    }
+
+    @Test
+    void promptsListAdvertisesTheDeclaredPromptWithItsArguments() throws Exception {
+        JsonNode prompts = rpc(rpcBody("prompts/list", null), session, null).path("result")
+                .path("prompts");
+        JsonNode draft = stream(prompts)
+                .filter(p -> p.path("name").asText().equals("draft-welcome"))
+                .findFirst().orElseThrow();
+        assertThat(draft.path("description").asText()).isNotBlank();
+        JsonNode name = stream(draft.path("arguments"))
+                .filter(a -> a.path("name").asText().equals("name")).findFirst().orElseThrow();
+        assertThat(name.path("required").asBoolean()).isTrue();
+        assertThat(name.path("description").asText()).isEqualTo("The new user's name.");
+    }
+
+    @Test
+    void promptsGetRendersTheTemplateAgainstTheArguments() throws Exception {
+        String params = MAPPER.writeValueAsString(Map.of("name", "draft-welcome",
+                "arguments", Map.of("name", "sato", "tone", "warm")));
+        JsonNode result = rpc(rpcBody("prompts/get", params), session, null).path("result");
+        JsonNode message = result.path("messages").get(0);
+        assertThat(message.path("role").asText()).isEqualTo("user");
+        assertThat(message.path("content").path("text").asText())
+                .isEqualTo("Write a warm welcome message for sato.");
+    }
+
     // ----- MCP helpers ------------------------------------------------------
 
     private JsonNode call(String tool, Map<String, Object> arguments, String bearer)
@@ -418,6 +450,29 @@ class AppMcpToolIntegrationTest {
                   </ul>
                 </section>
                 """);
+
+        // The app also declares an MCP prompt (kind: prompt): a parameterized, reusable message
+        // template the connecting agent surfaces to its model. It runs no SQL - its colocated TEXT
+        // template is rendered against the supplied arguments and returned by prompts/get.
+        Files.writeString(mcp.resolve("draft-welcome.yml"), """
+                version: tesseraql/v1
+                id: draft-welcome
+                kind: prompt
+                description: Draft a welcome message for a new user.
+
+                input:
+                  name:
+                    type: string
+                    required: true
+                    description: The new user's name.
+                  tone:
+                    type: string
+                    required: false
+
+                template: draft-welcome.txt.tpl
+                """);
+        Files.writeString(mcp.resolve("draft-welcome.txt.tpl"),
+                "Write a [(${tone})] welcome message for [(${name})].");
         return target;
     }
 
