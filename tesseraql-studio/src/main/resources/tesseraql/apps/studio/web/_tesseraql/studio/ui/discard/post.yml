@@ -15,6 +15,7 @@ sql:
   service: studio.discard
   params:
     path: params.path
+    roles: principal.roles
 
 response:
   redirect:

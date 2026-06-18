@@ -706,8 +706,17 @@ public final class TesseraqlRuntime implements AutoCloseable {
                         name -> context.getRegistry().lookupByNameAndType(name,
                                 javax.sql.DataSource.class),
                         "main", studio, scaffoldEnabled);
-                context.addRoutes(
-                        new StudioRouteBuilder(studio, reloader, studioTests, studioScaffold));
+                // Granular read-only (backlog D6): an optional editRoles allow-list refines the
+                // writable master switch — when set, only callers holding one of those roles may edit.
+                java.util.Set<String> editRoles = manifest.config()
+                        .getString("tesseraql.studio.editRoles")
+                        .map(roles -> java.util.Arrays.stream(roles.split(","))
+                                .map(String::trim).filter(role -> !role.isEmpty())
+                                .collect(java.util.stream.Collectors.toSet()))
+                        .orElse(java.util.Set.of());
+                StudioAccess studioAccess = new StudioAccess(!readOnly, editRoles);
+                context.addRoutes(new StudioRouteBuilder(studio, reloader, studioTests,
+                        studioScaffold, studioAccess));
                 // Providers backing the bundled studio app (design ch. 16, 47).
                 serviceProviders
                         .register("studio.explorer", params -> {
@@ -715,8 +724,12 @@ public final class TesseraqlRuntime implements AutoCloseable {
                             String q = query == null ? "" : String.valueOf(query);
                             Map<String, Object> model = io.tesseraql.studio.StudioViews
                                     .explorer(studio.explorer(q));
-                            // Offer the scaffold action in the explorer chrome only when B3 is on.
-                            model.put("scaffoldEnabled", scaffoldEnabled);
+                            // Edit affordances follow the caller's edit permission (backlog D6).
+                            boolean canEdit = studioAccess.canEdit(params.get("roles"));
+                            model.put("editable", canEdit);
+                            model.put("readOnly", !canEdit);
+                            // Offer the scaffold action only when B3 is on and the caller may edit.
+                            model.put("scaffoldEnabled", scaffoldEnabled && canEdit);
                             // Echo the filter query (Studio backlog C4) so the input keeps its value.
                             model.put("query", q);
                             return model;
@@ -741,15 +754,21 @@ public final class TesseraqlRuntime implements AutoCloseable {
                             model.put("testRunnerEnabled", testRunnerEnabled);
                             // Warn when applying would overwrite a concurrently changed source (D5).
                             model.put("conflict", draft != null && studio.draftConflicts(path));
+                            // The edit surface follows the caller's edit permission (backlog D6).
+                            boolean canEdit = studioAccess.canEdit(params.get("roles"));
+                            model.put("editable", canEdit);
+                            model.put("readOnly", !canEdit);
                             return model;
                         })
                         .register("studio.save", params -> {
+                            studioAccess.requireEdit(params.get("roles"));
                             String path = String.valueOf(params.get("path"));
                             Object content = params.get("content");
                             studio.saveDraft(path, content == null ? "" : String.valueOf(content));
                             return Map.of("saved", path);
                         })
                         .register("studio.newRoute", params -> {
+                            studioAccess.requireEdit(params.get("roles"));
                             String path = String.valueOf(params.get("path"));
                             Object recipe = params.get("recipe");
                             studio.newRouteDraft(path,
@@ -757,6 +776,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
                             return Map.of("created", path);
                         })
                         .register("studio.apply", params -> {
+                            studioAccess.requireEdit(params.get("roles"));
                             String path = String.valueOf(params.get("path"));
                             // force=true overwrites a concurrently changed source (backlog D5).
                             boolean force = "true".equals(String.valueOf(params.get("force")));
@@ -794,14 +814,15 @@ public final class TesseraqlRuntime implements AutoCloseable {
                                 params -> io.tesseraql.studio.StudioViews.scaffoldPreview(
                                         studioScaffold.preview(
                                                 String.valueOf(params.get("table")))))
-                        .register("studio.scaffold.apply",
-                                params -> io.tesseraql.studio.StudioViews.scaffoldResult(
-                                        studioScaffold.apply(
-                                                String.valueOf(params.get("table")),
-                                                "true".equals(
-                                                        String.valueOf(params.get("force"))),
-                                                actorOf(params))))
+                        .register("studio.scaffold.apply", params -> {
+                            studioAccess.requireEdit(params.get("roles"));
+                            return io.tesseraql.studio.StudioViews.scaffoldResult(
+                                    studioScaffold.apply(String.valueOf(params.get("table")),
+                                            "true".equals(String.valueOf(params.get("force"))),
+                                            actorOf(params)));
+                        })
                         .register("studio.discard", params -> {
+                            studioAccess.requireEdit(params.get("roles"));
                             String path = String.valueOf(params.get("path"));
                             studio.deleteDraft(path);
                             return Map.of("discarded", path);

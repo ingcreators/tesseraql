@@ -20,6 +20,7 @@ sql:
     table: params.table
     force: params.force
     actor: principal.loginId
+    roles: principal.roles
 
 response:
   html:

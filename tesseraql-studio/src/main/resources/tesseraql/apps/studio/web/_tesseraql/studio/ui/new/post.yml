@@ -19,6 +19,7 @@ sql:
   params:
     path: params.path
     recipe: params.recipe
+    roles: principal.roles
 
 response:
   redirect:

@@ -8,6 +8,15 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- Studio editor: per-role edit permission (Studio backlog D6). The all-or-nothing
+  `tesseraql.studio.readOnly` switch is refined by an optional `tesseraql.studio.editRoles`
+  allow-list: when set (and Studio is writable), only a caller holding one of those roles may mutate
+  (save/apply a draft, discard, create a route, apply a scaffold) — every mutating endpoint and UI
+  action answers `403` for everyone else, and the explorer/source pages render the read-only view
+  (no edit chrome) for them. With no allow-list, any authenticated caller may edit a writable Studio,
+  as before. The decision is per-caller from `principal.roles` (a new runtime `StudioAccess` gate),
+  with the database-free `StudioService` still enforcing the master read-only switch as defense in
+  depth.
 - Studio editor: audit trail (Studio backlog D6). Every source-writing action — applying a draft and
   applying a scaffold — is now stamped to an append-only `work/studio/audit/audit.jsonl` log with
   **who** (the authenticated caller's login id), **what** (apply / scaffold), the **target** (the

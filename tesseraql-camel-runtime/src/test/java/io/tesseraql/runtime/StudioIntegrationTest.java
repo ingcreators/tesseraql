@@ -320,6 +320,36 @@ class StudioIntegrationTest {
     }
 
     @Test
+    void editsRequireAnEditRoleWhenEditRolesAreConfigured() throws Exception {
+        // The app sets editRoles: ADMIN; a caller without that role is read-only (backlog D6).
+        String viewer = token(List.of("VIEWER"));
+
+        // Every mutating endpoint is forbidden for the non-editor (403, not 401).
+        assertThat(postWithToken("/_tesseraql/studio/drafts?path=" + enc("web/api/users/get.yml"),
+                "x", viewer).statusCode()).isEqualTo(403);
+        assertThat(postWithToken("/_tesseraql/studio/apply?path=" + enc("web/api/users/get.yml"),
+                "", viewer).statusCode()).isEqualTo(403);
+        assertThat(postWithToken("/_tesseraql/studio/scaffold/apply?table=gadgets", "", viewer)
+                .statusCode()).isEqualTo(403);
+
+        // Reads still work, and the explorer renders the read-only view — no edit chrome.
+        assertThat(getWithToken("/_tesseraql/studio/explorer", viewer).statusCode()).isEqualTo(200);
+        String ui = getWithToken("/_tesseraql/studio/ui", viewer).body();
+        assertThat(ui).contains("read-only")
+                .doesNotContain("action=\"/_tesseraql/studio/ui/new\"")
+                .doesNotContain("/_tesseraql/studio/ui/audit");
+    }
+
+    @Test
+    void editorRoleSeesTheEditChrome() throws Exception {
+        // The configured edit role (ADMIN) keeps the full edit surface.
+        String ui = get("/_tesseraql/studio/ui", true).body();
+        assertThat(ui).contains("editable")
+                .contains("action=\"/_tesseraql/studio/ui/new\"")
+                .contains("/_tesseraql/studio/ui/audit");
+    }
+
+    @Test
     void explorerRequiresAuthentication() throws Exception {
         assertThat(get("/_tesseraql/studio/explorer", false).statusCode()).isEqualTo(401);
     }
@@ -1150,13 +1180,32 @@ class StudioIntegrationTest {
         return URLEncoder.encode(value, StandardCharsets.UTF_8);
     }
 
+    private static HttpResponse<String> getWithToken(String path, String bearer) throws Exception {
+        HttpRequest request = HttpRequest.newBuilder(
+                URI.create("http://localhost:" + runtime.port() + path))
+                .header("Authorization", "Bearer " + bearer).build();
+        return HttpClient.newHttpClient().send(request, HttpResponse.BodyHandlers.ofString());
+    }
+
+    private static HttpResponse<String> postWithToken(String path, String body, String bearer)
+            throws Exception {
+        HttpRequest request = HttpRequest.newBuilder(
+                URI.create("http://localhost:" + runtime.port() + path))
+                .header("Authorization", "Bearer " + bearer)
+                .POST(HttpRequest.BodyPublishers.ofString(body)).build();
+        return HttpClient.newHttpClient().send(request, HttpResponse.BodyHandlers.ofString());
+    }
+
     private static String token() throws Exception {
+        return token(List.of("ADMIN"));
+    }
+
+    private static String token(List<String> roles) throws Exception {
         Base64.Encoder encoder = Base64.getUrlEncoder().withoutPadding();
         String header = encoder
                 .encodeToString("{\"alg\":\"HS256\"}".getBytes(StandardCharsets.UTF_8));
         String payload = encoder.encodeToString(MAPPER.writeValueAsBytes(Map.of(
-                "sub", "studio-user", "preferred_username", "studio-user",
-                "roles", List.of("ADMIN"))));
+                "sub", "studio-user", "preferred_username", "studio-user", "roles", roles)));
         Mac mac = Mac.getInstance("HmacSHA256");
         mac.init(new SecretKeySpec(
                 "dev-only-secret-change-me-in-production".getBytes(StandardCharsets.UTF_8),
@@ -1186,6 +1235,7 @@ class StudioIntegrationTest {
                   studio:
                     enabled: true
                     readOnly: false
+                    editRoles: ADMIN
                     testRunner:
                       enabled: true
                     scaffold:
