@@ -192,8 +192,12 @@ and is being adopted (see E below).
      every pending draft under `work/studio/drafts` with a link to its editor, a new/edit kind, and a
      conflict badge, plus a count of conflicting drafts. Database-free `StudioService.drafts()`; the
      `studio.drafts` provider and `GET /drafts` endpoint.
-   - **Confirm-diff-before-apply** — partially met (the conflict case forces a review); a general
-     "review the diff before every apply" gate is still open.
+   - **Confirm-diff-before-apply** — *done*: the optional `tesseraql.studio.confirmApply` flag makes
+     the editor acknowledge the diff before **every** apply (not only on a conflict). When on, the
+     source page shows a `required` confirm checkbox by the compare panel, and the UI apply route
+     rejects an unacknowledged apply (`STUDIO-4223 → 422`); the conflict force checkbox counts as the
+     acknowledgment. UI-only — the programmatic JSON and MCP apply paths are not gated (no human diff
+     to review). Runtime `StudioAccess.requireConfirm` / `confirmApply()`.
 6. **Granular read-only + audit** — *done* (production hardening): per-role edit permission plus an
    audit trail.
    - **Audit trail** — *done*: every source-writing action (apply a draft, apply a scaffold) is

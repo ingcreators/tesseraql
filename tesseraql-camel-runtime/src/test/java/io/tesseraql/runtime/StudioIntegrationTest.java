@@ -723,7 +723,13 @@ class StudioIntegrationTest {
         Files.createDirectories(appHome.resolve("web/api/formtest"));
         Files.writeString(appHome.resolve("web/api/formtest/formtest.sql"), "select 1");
 
-        HttpResponse<String> apply = postForm("/_tesseraql/studio/ui/apply", "path=" + enc(path));
+        // Confirm-before-apply is on (IT config): applying without acknowledgment is rejected...
+        HttpResponse<String> blocked = postForm("/_tesseraql/studio/ui/apply", "path=" + enc(path));
+        assertThat(blocked.statusCode()).isEqualTo(422);
+        assertThat(blocked.body()).contains("TQL-STUDIO-4223");
+        // ...and applying with the diff acknowledgment succeeds.
+        HttpResponse<String> apply = postForm("/_tesseraql/studio/ui/apply",
+                "path=" + enc(path) + "&confirm=true");
         assertThat(apply.statusCode()).isEqualTo(303);
         HttpResponse<String> afterApply = get(apply.headers().firstValue("location").orElseThrow(),
                 true);
@@ -1411,6 +1417,7 @@ class StudioIntegrationTest {
                     enabled: true
                     readOnly: false
                     editRoles: ADMIN
+                    confirmApply: true
                     testRunner:
                       enabled: true
                     scaffold:
