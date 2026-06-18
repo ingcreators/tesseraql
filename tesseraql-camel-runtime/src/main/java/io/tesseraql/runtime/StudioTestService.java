@@ -6,6 +6,7 @@ import io.tesseraql.core.sql.Sql2WayParser;
 import io.tesseraql.core.sql.SqlRenderer;
 import io.tesseraql.identity.IdentityService;
 import io.tesseraql.identity.RealmConfig;
+import io.tesseraql.studio.StudioService;
 import io.tesseraql.test.CrossReferenceIndex;
 import io.tesseraql.test.TestReport;
 import io.tesseraql.test.TestRunner;
@@ -28,6 +29,7 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
+import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
@@ -286,6 +288,31 @@ final class StudioTestService {
         if (result != null) {
             results.put(key, result);
             working.put(key, result);
+        }
+    }
+
+    /**
+     * Dry-runs a migration's DDL against the sandbox (auto-rollback) so it never persists, for the
+     * editor's migration dry-run (Studio backlog: migration authoring). Postgres only: its DDL is
+     * transactional and rolls back cleanly, whereas MySQL/Oracle/SQL Server auto-commit DDL — a
+     * dry-run there could leave changes behind, so it is declined. The DDL runs whole (Postgres
+     * executes the {@code ;}-separated statements in the one rolled-back transaction).
+     */
+    StudioService.DryRunResult dryRunDdl(String ddl) {
+        if (!"postgres".equals(dialect)) {
+            return StudioService.DryRunResult.declined("Dry-run is Postgres only — "
+                    + (dialect == null ? "unknown" : dialect)
+                    + " auto-commits DDL, which can't be rolled back.");
+        }
+        if (ddl == null || ddl.isBlank()) {
+            return StudioService.DryRunResult.declined("No DDL to dry-run.");
+        }
+        try (Connection connection = sandbox("main").getConnection();
+                Statement statement = connection.createStatement()) {
+            statement.execute(ddl);
+            return StudioService.DryRunResult.applied();
+        } catch (SQLException ex) {
+            return StudioService.DryRunResult.failed(ex.getMessage());
         }
     }
 

@@ -40,6 +40,8 @@ web/_tesseraql/studio/ui/render/post.yml
 web/_tesseraql/studio/ui/render/render.html
 web/_tesseraql/studio/ui/run-tests/post.yml
 web/_tesseraql/studio/ui/run-tests/run-tests.html
+web/_tesseraql/studio/ui/dry-run/post.yml
+web/_tesseraql/studio/ui/dry-run/dry-run.html
 web/_tesseraql/studio/ui/scaffold/get.yml
 web/_tesseraql/studio/ui/scaffold/scaffold.html
 web/_tesseraql/studio/ui/scaffold/preview/post.yml

@@ -8,6 +8,16 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- Studio: dry-run a migration's DDL before it lands (Studio backlog: migration authoring, slice 2).
+  A migration file's source editor now offers a **Dry-run** action that runs the DDL — the live
+  editor buffer — against the dev datasource inside a **sandboxed, auto-rollback** transaction, so it
+  applies and then rolls back without persisting, surfacing "applies cleanly" or the database error
+  before the next migrate. **Postgres only**: its DDL is transactional and rolls back cleanly, whereas
+  MySQL/Oracle/SQL Server auto-commit DDL, so a dry-run there is declined with a clear note. Gated
+  like the test runner (`tesseraql.studio.testRunner.enabled`) and reusing the same `SandboxDataSource`.
+  `StudioService.dryRunMigration` / `DdlDryRun` / `isMigrationPath`; `StudioTestService.dryRunDdl`;
+  the `studio.migration.dryRun` provider and `/_tesseraql/studio/ui/dry-run` fragment route.
+
 - Studio: author Flyway migrations from the editor (Studio backlog: migration authoring). A new
   **New migration** page (linked from the explorer when editable) creates a migration under
   `db/…/migration` — a **versioned** one auto-numbered `V<n>` (plain sequential, no zero-padding; the

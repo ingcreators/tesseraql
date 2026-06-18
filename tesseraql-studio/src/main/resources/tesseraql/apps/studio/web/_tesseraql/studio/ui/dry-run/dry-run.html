@@ -1,0 +1,6 @@
+<div class="hc-stack" xmlns:th="http://www.thymeleaf.org" th:fragment="dryRun">
+  <p class="hc-alert" data-variant="info" role="status" th:unless="${dryRun.ran}"
+     th:text="${dryRun.message}"></p>
+  <p class="hc-alert" role="status" th:if="${dryRun.ran}"
+     th:attr="data-variant=${dryRun.ok} ? 'success' : 'error'" th:text="${dryRun.message}"></p>
+</div>

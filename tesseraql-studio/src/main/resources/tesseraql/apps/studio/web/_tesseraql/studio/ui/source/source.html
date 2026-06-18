@@ -68,6 +68,15 @@
       </ol>
       <pre class="hc-code" th:unless="${src.diff}"><code th:utext="${src.sourceContentHtml}"></code></pre>
     </details>
+    <div class="hc-stack" th:if="${src.isMigration and src.testRunnerEnabled}">
+      <h2>Dry-run</h2>
+      <p class="hc-field__message">Runs this migration's DDL against the dev datasource in a sandboxed transaction that is rolled back &mdash; nothing persists &mdash; so you can check it applies before the next migrate. Postgres only (other dialects auto-commit DDL).</p>
+      <form hx-post="/_tesseraql/studio/ui/dry-run" hx-include="#source-editor" hx-target="#dry-run-result" hx-swap="innerHTML">
+        <input type="hidden" name="path" th:value="${src.path}">
+        <div class="hc-cluster"><button type="submit" class="hc-button" data-variant="primary">Dry-run</button></div>
+      </form>
+      <div id="dry-run-result" class="hc-stack" aria-live="polite"></div>
+    </div>
     <div class="hc-stack" th:if="${src.isTestable and src.testRunnerEnabled}">
       <h2>Tests</h2>
       <p class="hc-field__message">Runs the declarative test cases covering this <span th:text="${src.isJob} ? 'job' : 'route'">route</span> (<code>sql</code>, <code>validate</code>, <code>notify</code>, <code>http-call</code>) against the dev datasource, sandboxed (auto-rollback, timeout, row cap) &mdash; a write case executes and is rolled back, so nothing persists.</p>
