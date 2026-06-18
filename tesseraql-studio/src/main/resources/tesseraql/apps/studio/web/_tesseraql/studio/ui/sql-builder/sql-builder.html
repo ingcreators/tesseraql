@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{tql/shell :: page(|TesseraQL Studio · SQL builder|, ~{:: #page-header}, ~{:: #page-content})}">
+<th:block id="page-header">
+  <span class="hc-spacer"></span>
+  <div class="hc-cluster">
+    <a href="/_tesseraql/studio/ui">&larr; explorer</a>
+  </div>
+</th:block>
+<div id="page-content" class="hc-stack">
+  <section class="hc-card">
+    <h2>2-way SQL builder</h2>
+    <p class="hc-field__message">Generate a route's <code>select</code>/<code>insert</code>/<code>update</code>/<code>delete</code>
+      2-way SQL for an introspected table &mdash; with the bind directives written for you
+      (<code>/* params.id */ 0</code>) &mdash; then copy it into your route's <code>.sql</code> file.
+      Binds in a <code>where</code> read from <code>params</code>; inserted/updated values from
+      <code>body</code>.</p>
+    <th:block th:if="${b.hasTables}">
+      <form class="hc-stack" hx-post="/_tesseraql/studio/ui/sql-builder/build"
+            hx-target="#sql-out" hx-swap="innerHTML">
+        <div class="hc-cluster">
+          <div class="hc-field"><label class="hc-field__label">Table</label>
+            <select class="hc-select" name="table" required>
+              <option th:each="t : ${b.tables}" th:value="${t}" th:text="${t}"></option>
+            </select>
+          </div>
+          <div class="hc-field"><label class="hc-field__label">Operation</label>
+            <select class="hc-select" name="operation">
+              <option value="select-by-pk">select by primary key</option>
+              <option value="insert">insert</option>
+              <option value="update-by-pk">update by primary key</option>
+              <option value="delete-by-pk">delete by primary key</option>
+            </select>
+          </div>
+        </div>
+        <div class="hc-cluster">
+          <button type="submit" class="hc-button" data-variant="primary">Generate</button>
+        </div>
+      </form>
+      <div class="hc-field">
+        <label class="hc-field__label" for="sql-out">Generated SQL</label>
+        <textarea class="hc-input" id="sql-out" rows="8" spellcheck="false"
+                  aria-label="Generated SQL"></textarea>
+      </div>
+    </th:block>
+    <div class="hc-empty" th:unless="${b.hasTables}">
+      <p class="hc-empty__title">No introspected schema.</p>
+      <p class="hc-field__message">Run the <code>schema</code> goal so
+        <code>.tesseraql/docs/schema.json</code> is present, then the builder can read your tables.</p>
+    </div>
+  </section>
+</div>
+</html>

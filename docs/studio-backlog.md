@@ -367,6 +367,16 @@ and is being adopted (see E below).
       schema-populated inputs + schema-diff). Command `U` (undo) stays out (paid Flyway feature; not
       modeled).
 
+12. **2-way SQL builder** — *done* (net-new): a **SQL builder** page (linked from the explorer when
+    editable) generates a route's `select`/`insert`/`update`/`delete` 2-way SQL for an introspected
+    table + operation — with the bind directives written (`/* params.id */ 0`, runnable as plain SQL)
+    — to copy into a route's `.sql` file. Schema-driven (columns + primary key from the overlay;
+    identity columns skipped on insert; dummy literal typed per column); `where` binds from `params`,
+    value binds from `body`. New pure `SqlBuilder` + `DocService.tableByName`;
+    `studio.sqlBuilder.new`/`studio.sqlBuilder.build`; `/_tesseraql/studio/ui/sql-builder`. *Next:*
+    a by-column filter (cascade), IN-list/`if` directives, and dropping the snippet straight into the
+    source editor.
+
 ## Recommended next
 
 **A1, A2, B3, C4, D5, D6, and E are all done** (see the per-section notes above): rendered preview

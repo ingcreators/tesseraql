@@ -1530,6 +1530,33 @@ class StudioIntegrationTest {
     }
 
     @Test
+    void uiSqlBuilderPageRendersTheTableDropdownAndOperations() throws Exception {
+        HttpResponse<String> response = get("/_tesseraql/studio/ui/sql-builder", true);
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        // The 2-way SQL builder offers the introspected tables and the DML operations.
+        assertThat(response.body()).contains("2-way SQL builder").contains(">customers<")
+                .contains("select by primary key").contains("insert");
+    }
+
+    @Test
+    void uiSqlBuilderGeneratesTwoWaySqlForATable() throws Exception {
+        HttpResponse<String> select = postForm("/_tesseraql/studio/ui/sql-builder/build",
+                "table=customers&operation=select-by-pk");
+        assertThat(select.statusCode()).isEqualTo(200);
+        // The key bind reads from params with a typed dummy literal (id is bigint -> 0).
+        assertThat(select.body()).contains("select id, email").contains("from customers")
+                .contains("where id = /* params.id */ 0;");
+
+        // Insert skips the identity column (customers.id) and binds values from the body. (The body
+        // is HTML-escaped for the textarea swap, so the string-dummy quote is &#39;, not '.)
+        HttpResponse<String> insert = postForm("/_tesseraql/studio/ui/sql-builder/build",
+                "table=customers&operation=insert");
+        assertThat(insert.body()).contains("insert into customers (email)")
+                .contains("/* body.email */");
+    }
+
+    @Test
     void uiMigrationPageOffersSchemaDiffWhenABaselineIsPresent() throws Exception {
         HttpResponse<String> response = get("/_tesseraql/studio/ui/migration", true);
 

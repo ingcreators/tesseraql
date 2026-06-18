@@ -8,6 +8,17 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- Studio: a 2-way SQL builder (Studio backlog: schema-driven authoring). A new **SQL builder** page
+  (linked from the explorer when editable) generates a route's `select`/`insert`/`update`/`delete`
+  **2-way SQL** for an introspected table and operation — with the bind directives written for you
+  (`/* params.id */ 0`) so the template stays runnable in a plain SQL tool — to copy into a route's
+  `.sql` file. It is schema-driven: the projected/inserted/updated columns and the `where` key come
+  from the table's introspected columns and primary key (identity columns are skipped on insert), and
+  each bind's dummy literal is typed from the column (`0` for a number, `false` for a boolean, `'x'`
+  otherwise). Where-clause binds read from `params`, value binds from `body`. New pure `SqlBuilder`
+  and `DocService.tableByName`; the `studio.sqlBuilder.new` / `studio.sqlBuilder.build` providers and
+  `/_tesseraql/studio/ui/sql-builder` page.
+
 - Studio: generate a migration from the schema diff (Studio backlog: migration authoring, final
   slice). When a schema **baseline** sidecar is present (`.tesseraql/docs/schema.baseline.json` — copy
   a captured `schema.json` there), the New migration page can **generate the migration DDL** that

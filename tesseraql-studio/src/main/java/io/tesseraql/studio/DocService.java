@@ -282,6 +282,26 @@ public final class DocService {
         return List.of();
     }
 
+    /**
+     * The first introspected table matching {@code name} across the schema overlay (with its columns
+     * and primary key), for the 2-way SQL builder, or {@code null} when no schema overlay or no such
+     * table.
+     */
+    public CatalogSchema.Table tableByName(String name) {
+        SchemaOverlay overlay = schema();
+        if (overlay == null || name == null) {
+            return null;
+        }
+        for (CatalogSchema catalog : overlay.datasources().values()) {
+            for (CatalogSchema.Table table : catalog.tables()) {
+                if (name.equals(table.name())) {
+                    return table;
+                }
+            }
+        }
+        return null;
+    }
+
     /** The doc entry for one route id, or {@code null} when no such route exists. */
     public RouteEntry route(String id) {
         for (RouteEntry entry : spec().routes()) {
