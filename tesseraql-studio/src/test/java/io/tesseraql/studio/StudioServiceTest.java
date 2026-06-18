@@ -485,6 +485,86 @@ class StudioServiceTest {
         assertThat(result.error()).contains("Live data").contains("connection refused");
     }
 
+    private static StudioService migrationStudio(Path dir) throws Exception {
+        Files.createDirectories(dir.resolve("config"));
+        Files.writeString(dir.resolve("config/tesseraql.yml"), "tesseraql:\n  app:\n    name: t\n");
+        return new StudioService(new ManifestLoader().load(dir), false); // writable
+    }
+
+    @Test
+    void nextMigrationVersionIsNumericNotLexicographic(@TempDir Path dir) throws Exception {
+        StudioService studio = migrationStudio(dir);
+        assertThat(studio.nextMigrationVersion("main", null)).isEqualTo("1");
+
+        Files.createDirectories(dir.resolve("db/migration"));
+        Files.writeString(dir.resolve("db/migration/V1__a.sql"), "select 1\n");
+        Files.writeString(dir.resolve("db/migration/V2__b.sql"), "select 1\n");
+        Files.writeString(dir.resolve("db/migration/V10__c.sql"), "select 1\n");
+        Files.writeString(dir.resolve("db/migration/R__view.sql"), "select 1\n"); // ignored
+        // 11, not 3 (lexicographic V10 < V2 would have given 3) — the framework orders numerically.
+        assertThat(new StudioService(new ManifestLoader().load(dir), false)
+                .nextMigrationVersion("main", null)).isEqualTo("11");
+    }
+
+    @Test
+    void createMigrationWritesAVersionedFileWithTheDdlAndAudits(@TempDir Path dir)
+            throws Exception {
+        StudioService studio = migrationStudio(dir);
+
+        StudioService.MigrationResult result = studio.createMigration("main", null, false,
+                "Add user index", "create index ix_user on users(name);", false, "alice");
+
+        assertThat(result.path()).isEqualTo("db/migration/V1__Add_user_index.sql");
+        assertThat(result.version()).isEqualTo("1");
+        assertThat(result.repeatable()).isFalse();
+        assertThat(Files.readString(dir.resolve(result.path())))
+                .contains("create index ix_user on users(name);");
+        // The write is recorded to the audit trail (like apply/scaffold).
+        assertThat(studio.auditEntries(10)).anySatisfy(entry -> assertThat(entry.action())
+                .isEqualTo("migration"));
+    }
+
+    @Test
+    void createMigrationSupportsRepeatableVendorAndOtherDatasource(@TempDir Path dir)
+            throws Exception {
+        StudioService studio = migrationStudio(dir);
+
+        assertThat(studio.createMigration("main", null, true, "user summary view", "", false, null)
+                .path()).isEqualTo("db/migration/R__user_summary_view.sql");
+        assertThat(studio.createMigration("main", "postgres", false, "x", "", false, null).path())
+                .isEqualTo("db/migration-postgres/V1__x.sql");
+        assertThat(studio.createMigration("reporting", null, false, "y", "", false, null).path())
+                .isEqualTo("db/reporting/migration/V1__y.sql");
+    }
+
+    @Test
+    void createMigrationRefusesToOverwriteUnlessForcedAndNeedsADescription(@TempDir Path dir)
+            throws Exception {
+        StudioService studio = migrationStudio(dir);
+        studio.createMigration("main", null, true, "v", "first\n", false, null);
+
+        // The same repeatable name already exists.
+        assertThatThrownBy(() -> studio.createMigration("main", null, true, "v", "second\n", false,
+                null)).isInstanceOf(TqlException.class).hasMessageContaining("already exists");
+        // force overwrites.
+        studio.createMigration("main", null, true, "v", "second\n", true, null);
+        assertThat(Files.readString(dir.resolve("db/migration/R__v.sql"))).contains("second");
+        // An empty description is rejected.
+        assertThatThrownBy(() -> studio.createMigration("main", null, false, "  ", "", false, null))
+                .isInstanceOf(TqlException.class).hasMessageContaining("description");
+    }
+
+    @Test
+    void createMigrationIsRejectedInReadOnlyMode(@TempDir Path dir) throws Exception {
+        Files.createDirectories(dir.resolve("config"));
+        Files.writeString(dir.resolve("config/tesseraql.yml"), "tesseraql:\n  app:\n    name: t\n");
+        StudioService readOnly = new StudioService(new ManifestLoader().load(dir), true); // read-only
+
+        assertThatThrownBy(
+                () -> readOnly.createMigration("main", null, false, "x", "", false, null))
+                .isInstanceOf(TqlException.class).hasMessageContaining("read-only");
+    }
+
     @Test
     void renderRejectsRouteWithoutHtmlOrJsonResponse(@TempDir Path dir) throws Exception {
         Files.createDirectories(dir.resolve("config"));

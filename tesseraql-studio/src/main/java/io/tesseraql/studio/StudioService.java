@@ -13,6 +13,7 @@ import io.tesseraql.yaml.SimpleYamlParser;
 import io.tesseraql.yaml.manifest.AppManifest;
 import io.tesseraql.yaml.manifest.JobFile;
 import io.tesseraql.yaml.manifest.ManifestLoader;
+import io.tesseraql.yaml.manifest.MigrationFile;
 import io.tesseraql.yaml.manifest.RouteFile;
 import io.tesseraql.yaml.model.ResponseSpec;
 import io.tesseraql.yaml.model.RouteDefinition;
@@ -33,6 +34,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Stream;
 
 /**
@@ -52,6 +55,8 @@ public final class StudioService {
     private static final TqlErrorCode RENDER = new TqlErrorCode(TqlDomain.STUDIO, 4222);
     private static final TqlErrorCode NEW_ROUTE = new TqlErrorCode(TqlDomain.STUDIO, 4224);
     private static final TqlErrorCode CONFLICT = new TqlErrorCode(TqlDomain.STUDIO, 4090);
+    private static final Pattern LEADING_DIGITS = Pattern.compile("^\\d+");
+    private static final Pattern IDENTIFIER = Pattern.compile("[A-Za-z0-9_-]+");
 
     /** The HTTP-method stems that name a route document under {@code web/} (and its fixtures). */
     private static final Set<String> HTTP_METHODS = Set.of("get", "post", "put", "patch", "delete",
@@ -654,6 +659,122 @@ public final class StudioService {
                     + "; open it in the editor instead");
         }
         return saveDraft(path, starterRoute(path, recipe));
+    }
+
+    /** The next versioned-migration number for a datasource/vendor (the Flyway {@code V<n>} prefix). */
+    public String nextMigrationVersion(String datasource, String vendor) {
+        return nextVersion(migrationDir(identifier(datasource, "main"), normalVendor(vendor)));
+    }
+
+    /**
+     * Creates a new Flyway migration under {@code db/…/migration[-vendor]} (Studio backlog: migration
+     * authoring). A versioned migration ({@code repeatable == false}) is auto-numbered {@code V<n>}
+     * from the existing files (plain sequential, no zero-padding — the framework orders versions
+     * numerically); a repeatable one is {@code R__<slug>}. The DDL is written verbatim (a placeholder
+     * when blank). Gated by the read-only master switch and recorded to the audit trail; the new file
+     * needs a restart + migrate to be applied (the running app only lists it). Refuses to overwrite an
+     * existing file unless {@code force}.
+     */
+    public MigrationResult createMigration(String datasource, String vendor, boolean repeatable,
+            String description, String ddl, boolean force, String actor) {
+        if (readOnly) {
+            throw new TqlException(READ_ONLY,
+                    "Studio is read-only; creating migrations is disabled");
+        }
+        String dir = migrationDir(identifier(datasource, "main"), normalVendor(vendor));
+        String version = repeatable ? null : nextVersion(dir);
+        String slug = slug(description);
+        String filename = repeatable ? "R__" + slug + ".sql" : "V" + version + "__" + slug + ".sql";
+        String relativePath = dir + "/" + filename;
+        Path target = resolve(relativePath);
+        if (Files.isRegularFile(target) && !force) {
+            throw new TqlException(CONFLICT, "A migration already exists at " + relativePath
+                    + (repeatable
+                            ? "; open it in the editor, or use a different description."
+                            : "; refresh the page and retry."));
+        }
+        try {
+            Files.createDirectories(target.getParent());
+            Files.writeString(target, migrationBody(ddl, repeatable));
+        } catch (IOException ex) {
+            throw new UncheckedIOException(ex);
+        }
+        recordAudit(actor, "migration", relativePath);
+        return new MigrationResult(relativePath, filename, version, repeatable);
+    }
+
+    /** The app-relative migration directory for a datasource and optional vendor overlay. */
+    private static String migrationDir(String datasource, String vendor) {
+        String base = "main".equals(datasource) ? "db" : "db/" + datasource;
+        return base + "/" + (vendor == null ? "migration" : "migration-" + vendor);
+    }
+
+    /** The next {@code V<n>} for a migration directory: one past the highest existing version. */
+    private String nextVersion(String dirRelative) {
+        Path dir = appHome.resolve(dirRelative).normalize();
+        int max = 0;
+        if (Files.isDirectory(dir)) {
+            try (Stream<Path> files = Files.list(dir)) {
+                for (Path file : (Iterable<Path>) files::iterator) {
+                    MigrationFile parsed = MigrationFile.parse("main", null, file);
+                    if (parsed != null && parsed.version() != null) {
+                        Matcher matcher = LEADING_DIGITS.matcher(parsed.version());
+                        if (matcher.find()) {
+                            max = Math.max(max, Integer.parseInt(matcher.group()));
+                        }
+                    }
+                }
+            } catch (IOException ex) {
+                throw new UncheckedIOException(ex);
+            }
+        }
+        return String.valueOf(max + 1);
+    }
+
+    /** Validates a datasource/vendor identifier, defaulting a blank one to {@code fallback}. */
+    private static String identifier(String value, String fallback) {
+        if (value == null || value.isBlank()) {
+            return fallback;
+        }
+        String trimmed = value.trim();
+        if (!IDENTIFIER.matcher(trimmed).matches()) {
+            throw new TqlException(NEW_ROUTE, "Invalid datasource/vendor name: " + value);
+        }
+        return trimmed;
+    }
+
+    private static String normalVendor(String vendor) {
+        return vendor == null || vendor.isBlank() ? null : identifier(vendor, null);
+    }
+
+    /** Slugs a description into the Flyway {@code __<description>} segment (underscore-separated). */
+    private static String slug(String description) {
+        String slug = description == null
+                ? ""
+                : description.strip().replaceAll("[^A-Za-z0-9]+", "_").replaceAll("^_+|_+$", "");
+        if (slug.isEmpty()) {
+            throw new TqlException(NEW_ROUTE, "A migration needs a description");
+        }
+        return slug;
+    }
+
+    /** The migration file body: the supplied DDL, or a kind-appropriate placeholder when blank. */
+    private static String migrationBody(String ddl, boolean repeatable) {
+        String body = ddl == null ? "" : ddl.strip();
+        if (body.isEmpty()) {
+            body = repeatable
+                    ? "-- Repeatable migration: redefine idempotently, e.g. CREATE OR REPLACE VIEW ..."
+                    : "-- TODO: write the migration DDL.";
+        }
+        return body + "\n";
+    }
+
+    /**
+     * The outcome of creating a migration: its app-relative path, filename, the assigned version
+     * ({@code null} for a repeatable migration), and whether it is repeatable.
+     */
+    public record MigrationResult(String path, String filename, String version,
+            boolean repeatable) {
     }
 
     /** The starter route skeleton for a recipe: a parseable draft the author then completes. */
