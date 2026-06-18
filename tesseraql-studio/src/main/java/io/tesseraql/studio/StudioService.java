@@ -339,16 +339,18 @@ public final class StudioService {
     }
 
     /**
-     * Supplies live {@code sql} rows for a route render by executing its query against the dev
-     * datasource (Studio backlog A1/A2). Implemented by the runtime over the sandboxed datasource so
-     * Studio stays database-free.
+     * Supplies live read results for a route render by executing its queries against the dev
+     * datasource (Studio backlog A1/A2; multi-binding): the main {@code sql} <em>and</em> every
+     * named {@code query}, each keyed by its model name. Implemented by the runtime over the
+     * sandboxed datasource so Studio stays database-free.
      */
     @FunctionalInterface
     public interface RowSource {
         /**
-         * The live {@code sql} result ({@code rows}/{@code rowCount}) for the route's main query,
-         * its bind params resolved from {@code context}; null to keep the hand-authored sample's
-         * {@code sql}. May throw to report a query failure.
+         * The live results keyed by model name — the main query under {@code sql} and each named
+         * {@code query} under its own name, each a {@code {rows, rowCount}} map — with bind params
+         * resolved from {@code context} in authored order (so a later query may read an earlier
+         * one's result). Null or empty keeps the hand-authored sample. May throw to report a failure.
          */
         Map<String, Object> rowsFor(RouteDefinition route, Path routeDir,
                 Map<String, Object> context);
@@ -384,10 +386,11 @@ public final class StudioService {
         }
         if (liveRows != null) {
             try {
-                Map<String, Object> sql = liveRows.rowsFor(definition,
+                Map<String, Object> live = liveRows.rowsFor(definition,
                         resolve(relativePath).getParent(), context);
-                if (sql != null) {
-                    context.put("sql", sql);
+                if (live != null) {
+                    // Each entry is a model key: the main `sql` plus every named query by its name.
+                    live.forEach(context::put);
                 }
             } catch (RuntimeException ex) {
                 return RenderResult.invalid("route", "Live data: " + rootMessage(ex));

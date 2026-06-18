@@ -419,15 +419,56 @@ class StudioServiceTest {
     void rendersHtmlRouteWithLiveRowSource() {
         StudioService studio = new StudioService(exampleManifest(), true);
         // A stub row source stands in for the runtime's sandboxed query: the sample carries no sql.
-        StudioService.RowSource live = (route, dir, context) -> Map.of(
+        // The source keys each result by its model name — the main query under `sql`.
+        StudioService.RowSource live = (route, dir, context) -> Map.of("sql", Map.of(
                 "rows", List.of(Map.of("id", 9, "name", "Live row", "status", "ACTIVE")),
-                "rowCount", 1);
+                "rowCount", 1));
 
         StudioService.RenderResult result = studio.render(
                 "web/users/fragments/table/get.yml", null, "params: {}", live);
 
         assertThat(result.ok()).isTrue();
         assertThat(result.output()).contains("Live row").contains("ACTIVE");
+    }
+
+    @Test
+    void liveRowSourceInjectsEveryNamedQueryResult(@TempDir Path dir) throws Exception {
+        Files.createDirectories(dir.resolve("config"));
+        Files.writeString(dir.resolve("config/tesseraql.yml"), "tesseraql:\n  app:\n    name: t\n");
+        Files.createDirectories(dir.resolve("web/report"));
+        // A multi-binding query-json route: the body references the main `sql` and a named query.
+        Files.writeString(dir.resolve("web/report/get.yml"), """
+                version: tesseraql/v1
+                id: report.get
+                kind: route
+                recipe: query-json
+                sql:
+                  file: main.sql
+                queries:
+                  totals:
+                    file: totals.sql
+                response:
+                  json:
+                    status: 200
+                    body:
+                      items: sql.rows
+                      total: totals.rows
+                """);
+        Files.writeString(dir.resolve("web/report/main.sql"), "select 1\n");
+        Files.writeString(dir.resolve("web/report/totals.sql"), "select 2\n");
+
+        StudioService studio = new StudioService(new ManifestLoader().load(dir), true);
+        // The runtime's RowSource keys the main query under `sql` and the named query under its name.
+        StudioService.RowSource live = (route, routeDir, context) -> Map.of(
+                "sql", Map.of("rows", List.of(Map.of("id", 1)), "rowCount", 1),
+                "totals", Map.of("rows", List.of(Map.of("n", 42)), "rowCount", 1));
+
+        StudioService.RenderResult result = studio.render("web/report/get.yml", null, "{}", live);
+
+        assertThat(result.ok()).isTrue();
+        // Both the main `sql.rows` and the named query `totals.rows` are injected into the JSON
+        // (the value 42 only appears if the named query result reached the body).
+        assertThat(result.output()).contains("items").contains("total").contains("42");
     }
 
     @Test
