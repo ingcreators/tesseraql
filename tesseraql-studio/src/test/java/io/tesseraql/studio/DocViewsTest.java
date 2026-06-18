@@ -345,6 +345,36 @@ class DocViewsTest {
         assertThat(absent).containsEntry("hasPdf", false).doesNotContainKey("pdfUrl");
     }
 
+    @Test
+    void shareTableModelIsTheTableReferenceMarkedShared() {
+        CatalogSchema.Table orders = sampleSchema().datasource("main").tables().stream()
+                .filter(table -> table.name().equals("orders")).findFirst().orElseThrow();
+
+        Map<String, Object> model = DocViews.shareTable("main", orders);
+
+        assertThat(model).containsEntry("shared", true).containsEntry("shareInvalid", false)
+                .containsEntry("name", "orders").containsEntry("hasForeignKeys", true);
+        assertThat(asRows(model.get("columns"))).isNotEmpty();
+    }
+
+    @Test
+    void shareCoverageModelWithholdsThePerTestFailureDetail() {
+        ReportOverlay.RouteReport search = new ReportOverlay.RouteReport(true,
+                List.of(new ReportOverlay.CaseResult("broken", false, "boom")), List.of(),
+                Map.of());
+        ReportOverlay overlay = new ReportOverlay(1, "run-1", "2026-06-15T12:00:00Z",
+                new ReportOverlay.Summary(1, 0, 1, 0.5, 1.0, false),
+                new ReportOverlay.Thresholds(0.0, 0.0, Map.of()),
+                new ReportOverlay.Gate(false, List.of()), List.of(),
+                Map.of("users.search", search));
+
+        Map<String, Object> model = DocViews.shareCoverage("demo", overlay, List.of());
+
+        // The public view keeps the summary/gate but never the failing-case names/messages.
+        assertThat(model).containsEntry("shared", true).containsEntry("hasReport", true)
+                .containsEntry("hasFailingCases", false).doesNotContainKey("failingCases");
+    }
+
     @SuppressWarnings("unchecked")
     private static List<Map<String, Object>> asRows(Object value) {
         return (List<Map<String, Object>>) value;

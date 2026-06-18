@@ -1,18 +1,18 @@
 <!DOCTYPE html>
 <html xmlns:th="http://www.thymeleaf.org"
-      th:replace="~{tql/shell :: page(|TesseraQL Table · ${tbl.name}|, ~{:: #page-header}, ~{:: #page-content})}">
+      th:replace="~{tql/shell :: page(|TesseraQL · Shared table · ${tbl.name}|, ~{:: #page-header}, ~{:: #page-content})}">
 <th:block id="page-header">
   <span class="hc-spacer"></span>
-  <div class="hc-cluster">
-    <a class="hc-button" data-variant="ghost" data-size="sm" href="/_tesseraql/studio/ui/docs/schema">&larr; schema</a>
-  </div>
+  <span class="hc-badge" data-variant="info">shared · read-only</span>
 </th:block>
 <div id="page-content" class="hc-stack">
-  <section class="hc-card" th:if="${tbl.notFound}">
-    <h2>Table</h2>
-    <div class="hc-empty"><p class="hc-empty__title" th:text="|No such table: ${tbl.name}|"></p></div>
+  <section class="hc-card" th:if="${tbl.shareInvalid}">
+    <div class="hc-empty">
+      <p class="hc-empty__title">This shared link is invalid or has expired.</p>
+      <p class="hc-empty__body">Ask the person who shared it for a fresh link.</p>
+    </div>
   </section>
-  <th:block th:unless="${tbl.notFound}">
+  <th:block th:unless="${tbl.shareInvalid}">
     <section class="hc-card">
       <h2 th:text="${tbl.name}"></h2>
       <div class="hc-cluster">
@@ -20,16 +20,6 @@
         <span class="hc-field__label" th:text="|datasource ${tbl.datasource}|"></span>
         <span class="hc-field__label" th:if="${tbl.schema}" th:text="|schema ${tbl.schema}|"></span>
         <span class="hc-field__label" th:if="${tbl.hasPrimaryKey}" th:text="|primary key (${tbl.primaryKey})|"></span>
-      </div>
-    </section>
-    <section class="hc-card" th:if="${tbl.shareUrl}">
-      <h3>Share</h3>
-      <p class="hc-field__label">A signed, expiring read-only link to this table's reference &mdash;
-        openable without signing in.</p>
-      <input class="hc-input" type="text" readonly th:value="${tbl.shareUrl}">
-      <div class="hc-cluster">
-        <a class="hc-button" data-variant="ghost" data-size="sm" target="_blank" rel="noopener"
-           th:href="${tbl.shareUrl}">Open shared view &rarr;</a>
       </div>
     </section>
     <section class="hc-card">
@@ -61,7 +51,7 @@
           <tr th:each="f : ${tbl.foreignKeys}">
             <td th:text="${f.name}"></td>
             <td th:text="${f.columns}"></td>
-            <td><a th:href="${f.refUrl}" th:text="|${f.refTable}(${f.refColumns})|"></a></td>
+            <td th:text="|${f.refTable}(${f.refColumns})|"></td>
           </tr>
         </tbody>
       </table>

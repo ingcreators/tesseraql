@@ -124,6 +124,35 @@ public final class DocViews {
         return model;
     }
 
+    /**
+     * The public shared-link view of a schema table (F8 slice 3, extended): the same read-only
+     * column/key/index reference as {@link #table}, marked as the shared view. The foreign-key
+     * targets are rendered as plain text by the public template (their detail links would be
+     * bearer-gated), so no privileged navigation is offered.
+     */
+    public static Map<String, Object> shareTable(String datasource, CatalogSchema.Table table) {
+        Map<String, Object> model = table(datasource, table);
+        model.put("shared", true);
+        model.put("shareInvalid", false);
+        return model;
+    }
+
+    /**
+     * The public shared-link view of the coverage dashboard (F8 slice 3, extended): the run summary,
+     * gate verdict, item-coverage standing, and trend — but <em>not</em> the per-test failure list,
+     * which is withheld from an unauthenticated viewer.
+     */
+    public static Map<String, Object> shareCoverage(String appName, ReportOverlay overlay,
+            List<DocService.HistoryPoint> history) {
+        Map<String, Object> model = coverage(appName, overlay, history);
+        model.put("shared", true);
+        model.put("shareInvalid", false);
+        // Withhold per-test failure detail (names/messages) from the public view.
+        model.remove("failingCases");
+        model.put("hasFailingCases", false);
+        return model;
+    }
+
     /** Number of uncovered item ids listed per kind before collapsing to a "+N more" hint. */
     private static final int UNCOVERED_LIMIT = 10;
 

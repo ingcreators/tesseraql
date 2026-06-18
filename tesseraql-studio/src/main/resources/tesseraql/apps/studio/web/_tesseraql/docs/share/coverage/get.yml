@@ -1,0 +1,36 @@
+version: tesseraql/v1
+id: tql.studio.docs.share.coverage
+kind: route
+recipe: query-html
+
+# Public by design (F8, slice 3, extended): the signed, expiring token in the query is the
+# authorization. The docs.shareCoverage provider verifies the HMAC and expiry before rendering the
+# dashboard read-only (without the per-test failure detail); an invalid token renders the notice.
+input:
+  exp:
+    type: string
+    required: false
+  sig:
+    type: string
+    required: false
+
+security:
+  auth: public
+
+sql:
+  service: docs.shareCoverage
+  params:
+    exp: query.exp
+    sig: query.sig
+
+response:
+  html:
+    status: 200
+    template: share-coverage.html
+    model:
+      cov: sql
+    headers:
+      Content-Security-Policy: "default-src 'self'; style-src 'self' 'unsafe-inline'; frame-ancestors 'none'"
+      X-Content-Type-Options: nosniff
+      X-Frame-Options: DENY
+      Referrer-Policy: no-referrer
