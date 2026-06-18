@@ -13,8 +13,10 @@ class TemplateHighlighterTest {
         String html = TemplateHighlighter
                 .highlight("<p th:text=\"${user.name}\" class=\"x\">hi</p>");
 
-        assertThat(html).contains("<span class=\"hc-code__tok\" data-tok=\"keyword\">p</span>")
+        assertThat(html).contains("<span class=\"hc-code__tok\" data-tok=\"tag\">p</span>")
                 .contains("<span class=\"hc-code__tok\" data-tok=\"meta\">th:text</span>")
+                // a plain HTML attribute is an `attribute` token; a directive stays `meta`
+                .contains("<span class=\"hc-code__tok\" data-tok=\"attribute\">class</span>")
                 .contains(
                         "<span class=\"hc-code__tok\" data-tok=\"string\">\"${user.name}\"</span>")
                 // text between tags stays plain and HTML-escaped
@@ -35,7 +37,7 @@ class TemplateHighlighterTest {
                 .isEqualTo(
                         "<span class=\"hc-code__tok\" data-tok=\"comment\">&lt;!-- start</span>");
         assertThat(lines.get(1)).contains("data-tok=\"comment\">still --&gt;</span>")
-                .contains("data-tok=\"keyword\">b</span>");
+                .contains("data-tok=\"tag\">b</span>");
     }
 
     @Test

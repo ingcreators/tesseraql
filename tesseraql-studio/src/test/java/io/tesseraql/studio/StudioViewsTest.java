@@ -100,7 +100,7 @@ class StudioViewsTest {
     void sourceModelCarriesTheEditorLanguage() {
         // The data-lang grammar for live-highlighting the editable field, by extension (backlog E).
         assertThat(StudioViews.source("web/api/users/search.sql", "", false, false, "", null))
-                .containsEntry("lang", "sql");
+                .containsEntry("lang", "tql-sql");
         assertThat(StudioViews.source("web/api/users/get.yml", "", false, false, "", null))
                 .containsEntry("lang", "yaml");
         assertThat(StudioViews.source("web/users/table.html", "", false, false, "", null))

@@ -208,17 +208,19 @@ and is being adopted (see E below).
      (runtime `StudioAccess` gate); `StudioService` keeps enforcing the master switch. `STUDIO-4031 →
      403`.
 
-### E. Editor live highlighting — **unblocked (hc #264 shipped in 0.1.5)**
+### E. Editor live highlighting — **done (hc #264 shipped in 0.1.5)**
 
-7. Live highlighting of the editable textarea (hc #264).
+7. Live highlighting of the editable textarea (hc #264) — *done*.
    - **Built-in grammars** — *done* (slice 1): the editable `hc-code` source and sample fields opt
      into `installCodeEditor`'s `data-lang` overlay, grammar chosen by file type
      (`sql`/`yaml`/`html`/`json`); hc bumped 0.1.4 → 0.1.5. `StudioViews.editorLang`; `data-lang` on
      the editor divs.
-   - **2-way SQL tokenizer + richer tokens** — *next slice*: register a JS `tql-sql` grammar via hc's
-     `registerCodeLanguage` (ported from the server `SqlHighlighter`) so 2-way directives classify as
-     `meta` like the read-only path, and adopt hc 0.1.5's new `property`/`tag`/`attribute` `data-tok`
-     values in the server-side YAML/template highlighters.
+   - **2-way SQL tokenizer + richer tokens** — *done* (slice 2): the server YAML/template highlighters
+     adopt hc 0.1.5's `property` (YAML keys) / `tag` (elements) / `attribute` (plain attrs) tokens —
+     directives stay `meta` — so the read-only/diff views match the live overlay's built-in grammars;
+     and a `tql-sql` grammar registered via `registerCodeLanguage` in `tesseraql.js` (mirroring the
+     server `SqlHighlighter`) gives the editable SQL field live highlighting with 2-way directives as
+     `meta`. Editable `.sql` uses `data-lang="tql-sql"`. **E is now fully done.**
 
 ### F. Docs portal
 
@@ -247,5 +249,7 @@ audit trail and per-role edit permission both shipped. **A1 is now fully complet
 the remaining backlog is the docs-portal **F8/F9** items (OpenAPI/printable export, coverage-trend
 depth), E (editor live highlighting, blocked on hc #264), and G (Studio copilot, gated). Recommended
 next: **F8 docs export** (OpenAPI/JSON export, printable docs reusing the PDF codec, per-route
-shareable links). **E is unblocked** (hc 0.1.5 shipped #264): slice 1 (built-in `data-lang` grammars)
-done; the 2-way-SQL tokenizer + richer tokens are the next E slice. G is gated.
+shareable links). **E is done** (hc 0.1.5 shipped #264): live highlighting of the
+editable field (built-in grammars + a `tql-sql` 2-way grammar) and the richer read-only tokens both
+shipped. With A1, A2, B3, C4, D5, D6, and E complete, the remaining backlog is the docs-portal F8/F9
+items and G (Studio copilot, gated). G is gated.

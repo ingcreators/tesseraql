@@ -8,6 +8,15 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- Studio editor: richer syntax tokens and a 2-way SQL live grammar (Studio backlog E, completing it;
+  hc 0.1.5 / #264). The server-side read-only highlighters now emit hc 0.1.5's new semantic tokens —
+  YAML mapping keys as `property`, HTML element names as `tag`, plain attributes as `attribute`
+  (Thymeleaf/htmx/`data-` directives stay `meta`) — so the read-only/diff views read correctly and
+  match the live overlay's built-in grammars. And a consumer `tql-sql` grammar (registered through
+  hc's new `registerCodeLanguage`, mirroring the server `SqlHighlighter`) gives the editable SQL field
+  live highlighting that classifies 2-way SQL block-comment directives (`/*%if … */`, binds) as
+  `meta` — which a generic SQL grammar can't — so the editor matches the read-only view for 2-way SQL
+  too. Editable `.sql` fields use `data-lang="tql-sql"`.
 - Studio editor: live syntax highlighting of the editable field (Studio backlog E; adopts Hypermedia
   Components 0.1.5 / hc #264). The editable `hc-code` source and sample fields now opt into hc's
   `installCodeEditor` `data-lang` overlay — a synced, CSP-safe highlight layer behind the textarea

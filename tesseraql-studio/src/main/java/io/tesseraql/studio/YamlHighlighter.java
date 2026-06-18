@@ -58,7 +58,8 @@ public final class YamlHighlighter {
         if (colon >= 0) {
             String key = line.substring(i, colon);
             char first = key.isEmpty() ? '\0' : key.charAt(0);
-            SyntaxSpans.span(out, first == '"' || first == '\'' ? "string" : "keyword", key);
+            // A mapping key is a `property` token (hc 0.1.5 / #264); a quoted key stays a string.
+            SyntaxSpans.span(out, first == '"' || first == '\'' ? "string" : "property", key);
             SyntaxSpans.escape(out, ":");
             scanValue(line, colon + 1, out);
             return;

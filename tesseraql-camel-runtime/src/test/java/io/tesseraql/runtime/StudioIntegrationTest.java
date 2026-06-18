@@ -398,11 +398,15 @@ class StudioIntegrationTest {
 
     @Test
     void uiSourceEditorCarriesTheLiveHighlightLanguage() throws Exception {
-        // The editable hc-code field opts into hc's live syntax highlighting via data-lang (E).
+        // The editable hc-code field opts into hc's live syntax highlighting via data-lang (E);
+        // .sql uses the consumer-registered 2-way SQL grammar (tql-sql), .yml a built-in grammar.
         assertThat(get("/_tesseraql/studio/ui/source?path=" + enc("web/api/users/search.sql"), true)
-                .body()).contains("data-editable").contains("data-lang=\"sql\"");
+                .body()).contains("data-editable").contains("data-lang=\"tql-sql\"");
         assertThat(get("/_tesseraql/studio/ui/source?path=" + enc("web/api/users/get.yml"), true)
                 .body()).contains("data-lang=\"yaml\"");
+        // The bootstrap asset registers the tql-sql grammar (Studio backlog E slice 2).
+        assertThat(get("/assets/_tesseraql/tesseraql.js", true).body())
+                .contains("registerCodeLanguage(\"tql-sql\"");
     }
 
     @Test
