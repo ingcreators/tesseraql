@@ -24,12 +24,14 @@ final class StudioRouteBuilder extends RouteBuilder {
     private final StudioService studio;
     private final RouteReloader reloader;
     private final StudioTestService studioTests;
+    private final StudioScaffoldService studioScaffold;
 
     StudioRouteBuilder(StudioService studio, RouteReloader reloader,
-            StudioTestService studioTests) {
+            StudioTestService studioTests, StudioScaffoldService studioScaffold) {
         this.studio = studio;
         this.reloader = reloader;
         this.studioTests = studioTests;
+        this.studioScaffold = studioScaffold;
     }
 
     @Override
@@ -43,6 +45,8 @@ final class StudioRouteBuilder extends RouteBuilder {
         rest().post("/_tesseraql/studio/preview").to("direct:studio.preview");
         rest().post("/_tesseraql/studio/render").to("direct:studio.render");
         rest().post("/_tesseraql/studio/runTests").to("direct:studio.runTests");
+        rest().get("/_tesseraql/studio/scaffold/tables").to("direct:studio.scaffold.tables");
+        rest().post("/_tesseraql/studio/scaffold/preview").to("direct:studio.scaffold.preview");
         rest().post("/_tesseraql/studio/apply").to("direct:studio.apply");
         rest().post("/_tesseraql/studio/reload").to("direct:studio.reload");
 
@@ -89,6 +93,16 @@ final class StudioRouteBuilder extends RouteBuilder {
         from("direct:studio.runTests").routeId("studio.runTests")
                 .to(AUTH).process(json(exchange -> studioTests.runForPath(requirePath(exchange))));
 
+        // Lists the dev datasource's tables for the scaffold picker, and previews one table's
+        // generated CRUD slice (backlog B3); both return ran/enabled:false notes when disabled.
+        from("direct:studio.scaffold.tables").routeId("studio.scaffold.tables")
+                .to(AUTH).process(json(exchange -> io.tesseraql.studio.StudioViews.scaffoldTables(
+                        studioScaffold.tables(), studioScaffold.isEnabled())));
+
+        from("direct:studio.scaffold.preview").routeId("studio.scaffold.preview")
+                .to(AUTH).process(json(exchange -> io.tesseraql.studio.StudioViews.scaffoldPreview(
+                        studioScaffold.preview(requireTable(exchange)))));
+
         from("direct:studio.apply").routeId("studio.apply")
                 .to(AUTH).process(json(exchange -> {
                     String path = requirePath(exchange);
@@ -103,14 +117,22 @@ final class StudioRouteBuilder extends RouteBuilder {
     }
 
     private static String requirePath(Exchange exchange) {
-        String path = exchange.getMessage().getHeader("path", String.class);
-        if (path == null || path.isBlank()) {
+        return require(exchange, "path");
+    }
+
+    private static String requireTable(Exchange exchange) {
+        return require(exchange, "table");
+    }
+
+    private static String require(Exchange exchange, String name) {
+        String value = exchange.getMessage().getHeader(name, String.class);
+        if (value == null || value.isBlank()) {
             throw new io.tesseraql.core.error.TqlException(
                     new io.tesseraql.core.error.TqlErrorCode(
                             io.tesseraql.core.error.TqlDomain.STUDIO, 4002),
-                    "Missing 'path' parameter");
+                    "Missing '" + name + "' parameter");
         }
-        return path;
+        return value;
     }
 
     /** Parses the request body as a JSON object, or null when the body is blank or not JSON. */

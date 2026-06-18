@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{tql/shell :: page('TesseraQL Studio · Scaffold', ~{:: #page-header}, ~{:: #page-content})}">
+<th:block id="page-header">
+  <span class="hc-spacer"></span>
+  <div class="hc-cluster">
+    <a class="hc-button" data-variant="ghost" data-size="sm" href="/_tesseraql/studio/ui">&larr; explorer</a>
+  </div>
+</th:block>
+<div id="page-content" class="hc-stack">
+<section class="hc-card">
+  <h2>Scaffold CRUD from a table</h2>
+  <p class="hc-field__message">Generates a table's CRUD slice &mdash; list, detail, and edit pages, 2-way SQL, and a declarative test suite &mdash; from its introspected schema, exactly as the <code>scaffold crud</code> CLI command does. New routes need a restart to be served.</p>
+  <p class="hc-alert" data-variant="info" role="status" th:unless="${scaffold.enabled}" th:text="${scaffold.note}"></p>
+  <th:block th:if="${scaffold.enabled}">
+    <div class="hc-empty" th:unless="${scaffold.hasTables}"><p class="hc-empty__title">No tables found in the dev datasource.</p></div>
+    <table class="hc-table" th:if="${scaffold.hasTables}">
+      <thead><tr><th>Table</th><th>Type</th><th>Columns</th><th>Primary key</th><th></th></tr></thead>
+      <tbody>
+        <tr th:each="t : ${scaffold.tables}">
+          <td th:text="${t.name}"></td>
+          <td th:text="${t.type}"></td>
+          <td th:text="${t.columnCount}"></td>
+          <td th:text="${t.primaryKey}"></td>
+          <td>
+            <form th:if="${t.scaffoldable}" hx-post="/_tesseraql/studio/ui/scaffold/preview"
+                  hx-target="#scaffold-preview" hx-swap="innerHTML">
+              <input type="hidden" name="table" th:value="${t.name}">
+              <button type="submit" class="hc-button" data-variant="primary" data-size="sm">Preview CRUD</button>
+            </form>
+            <span class="hc-field__message" th:unless="${t.scaffoldable}">needs a single-column primary key</span>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </th:block>
+</section>
+<section class="hc-card" th:if="${scaffold.enabled}">
+  <div id="scaffold-preview" class="hc-stack" aria-live="polite"></div>
+</section>
+</div>
+</html>

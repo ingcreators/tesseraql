@@ -696,12 +696,27 @@ public final class TesseraqlRuntime implements AutoCloseable {
                                 javax.sql.DataSource.class),
                         appHome, realm, datasourceDialect(manifest.config()),
                         testRunnerEnabled, testTimeout, testMaxRows);
-                context.addRoutes(new StudioRouteBuilder(studio, reloader, studioTests));
+                // The Studio scaffold generator (backlog B3): introspect a table from the dev
+                // datasource and generate its CRUD slice, reusing the CLI's introspection + generator
+                // so the output is byte-identical. Gated on writable Studio + an explicit opt-in.
+                boolean scaffoldEnabled = !readOnly
+                        && manifest.config().getString("tesseraql.studio.scaffold.enabled")
+                                .map(Boolean::parseBoolean).orElse(false);
+                StudioScaffoldService studioScaffold = new StudioScaffoldService(
+                        name -> context.getRegistry().lookupByNameAndType(name,
+                                javax.sql.DataSource.class),
+                        "main", studio, scaffoldEnabled);
+                context.addRoutes(
+                        new StudioRouteBuilder(studio, reloader, studioTests, studioScaffold));
                 // Providers backing the bundled studio app (design ch. 16, 47).
                 serviceProviders
-                        .register("studio.explorer",
-                                params -> io.tesseraql.studio.StudioViews
-                                        .explorer(studio.explorer()))
+                        .register("studio.explorer", params -> {
+                            Map<String, Object> model = io.tesseraql.studio.StudioViews
+                                    .explorer(studio.explorer());
+                            // Offer the scaffold action in the explorer chrome only when B3 is on.
+                            model.put("scaffoldEnabled", scaffoldEnabled);
+                            return model;
+                        })
                         .register("studio.source", params -> {
                             String path = String.valueOf(params.get("path"));
                             String sample = studio.sampleModel(path);
@@ -756,6 +771,13 @@ public final class TesseraqlRuntime implements AutoCloseable {
                         .register("studio.runTests",
                                 params -> studioTests
                                         .runForPath(String.valueOf(params.get("path"))))
+                        .register("studio.scaffold.tables",
+                                params -> io.tesseraql.studio.StudioViews.scaffoldTables(
+                                        studioScaffold.tables(), studioScaffold.isEnabled()))
+                        .register("studio.scaffold.preview",
+                                params -> io.tesseraql.studio.StudioViews.scaffoldPreview(
+                                        studioScaffold.preview(
+                                                String.valueOf(params.get("table")))))
                         .register("studio.discard", params -> {
                             String path = String.valueOf(params.get("path"));
                             studio.deleteDraft(path);

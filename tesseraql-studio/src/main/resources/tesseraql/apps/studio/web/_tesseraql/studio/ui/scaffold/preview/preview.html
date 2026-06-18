@@ -1,0 +1,24 @@
+<div class="hc-stack" xmlns:th="http://www.thymeleaf.org" th:fragment="scaffoldPreview">
+  <p class="hc-alert" data-variant="info" role="status"
+     th:unless="${scaffold.enabled}" th:text="${scaffold.note}"></p>
+  <th:block th:if="${scaffold.enabled}">
+    <h3 th:text="|Scaffold preview: ${scaffold.table}|">Scaffold preview</h3>
+    <p class="hc-alert" role="status"
+       th:attr="data-variant=${scaffold.hasConflicts} ? 'warning' : 'success'"
+       th:text="|${scaffold.writeCount} of ${scaffold.total} files to write, ${scaffold.conflictCount} conflict(s)|"></p>
+    <p class="hc-field__message" th:if="${scaffold.hasConflicts}">A conflict is a file you edited or own; an apply leaves it alone unless forced.</p>
+    <ul class="hc-stack">
+      <li th:each="f : ${scaffold.files}">
+        <details class="hc-stack">
+          <summary class="hc-cluster">
+            <span class="hc-badge"
+                  th:attr="data-variant=${f.status == 'conflict'} ? 'warning' : (${f.status == 'unchanged'} ? 'neutral' : 'success')"
+                  th:text="${f.status}"></span>
+            <code th:text="${f.path}"></code>
+          </summary>
+          <pre class="hc-code"><code th:utext="${f.contentHtml}"></code></pre>
+        </details>
+      </li>
+    </ul>
+  </th:block>
+</div>

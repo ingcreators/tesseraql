@@ -15,6 +15,10 @@ import io.tesseraql.yaml.manifest.ManifestLoader;
 import io.tesseraql.yaml.manifest.RouteFile;
 import io.tesseraql.yaml.model.ResponseSpec;
 import io.tesseraql.yaml.model.RouteDefinition;
+import io.tesseraql.yaml.scaffold.CrudScaffolder;
+import io.tesseraql.yaml.scaffold.ScaffoldChecksum;
+import io.tesseraql.yaml.scaffold.ScaffoldedFile;
+import io.tesseraql.yaml.scaffold.TableSchema;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
@@ -405,6 +409,56 @@ public final class StudioService {
         return sourceIfExists(fixture);
     }
 
+    /**
+     * Previews the CRUD slice the scaffold would generate for an introspected table (Studio backlog
+     * B3, roadmap Phase 23) without writing anything: every generated file with its content and the
+     * disposition an {@link io.tesseraql.yaml.scaffold.ScaffoldWriter} apply would give it. Studio
+     * itself stays database-free — the caller (the runtime) introspects the dev datasource and hands
+     * over the {@link TableSchema}, exactly the shape the CLI {@code scaffold crud} works from, so the
+     * preview and a later apply are byte-identical to the command-line generator.
+     *
+     * <p>Each file's {@code status} mirrors {@code ScaffoldWriter.decide}: {@code new} (no such file
+     * yet), {@code unchanged} (already byte-identical to the generation), {@code regenerate} (a
+     * pristine generated file an apply would overwrite), or {@code conflict} (a file the user edited
+     * or owns, which an apply leaves alone unless forced). Generation throws when the table cannot be
+     * scaffolded (e.g. a composite or missing primary key).
+     */
+    public ScaffoldPreview scaffoldPreview(TableSchema table) {
+        List<ScaffoldFile> files = new ArrayList<>();
+        int writes = 0;
+        int conflicts = 0;
+        for (ScaffoldedFile file : new CrudScaffolder().scaffold(table)) {
+            String status = scaffoldStatus(file);
+            files.add(new ScaffoldFile(file.path(), file.content(), status));
+            if ("new".equals(status) || "regenerate".equals(status)) {
+                writes++;
+            } else if ("conflict".equals(status)) {
+                conflicts++;
+            }
+        }
+        return new ScaffoldPreview(table.name(), files, files.size(), writes, conflicts);
+    }
+
+    /** The disposition an apply would give a generated file, by reading its on-disk counterpart. */
+    private String scaffoldStatus(ScaffoldedFile file) {
+        Path target = resolve(file.path());
+        if (!Files.isRegularFile(target)) {
+            return "new";
+        }
+        String existing;
+        try {
+            existing = Files.readString(target);
+        } catch (IOException ex) {
+            throw new UncheckedIOException(ex);
+        }
+        if (existing.equals(file.stampedContent())) {
+            return "unchanged";
+        }
+        return ScaffoldChecksum.status(existing) == ScaffoldChecksum.Status.PRISTINE
+                ? "regenerate"
+                : "conflict";
+    }
+
     private static boolean isTemplate(String relativePath) {
         return relativePath.endsWith(".html") || relativePath.endsWith(".tpl");
     }
@@ -570,6 +624,27 @@ public final class StudioService {
 
     /** A job entry in the explorer. */
     public record JobSummary(String id, String recipe, String source) {
+    }
+
+    /**
+     * The preview of a table's scaffolded CRUD slice (Studio backlog B3): every generated file with
+     * its content and apply disposition, plus the counts a confirmation step shows — how many files
+     * an apply would write and how many it would skip as conflicts.
+     */
+    public record ScaffoldPreview(String table, List<ScaffoldFile> files, int total,
+            int writeCount, int conflictCount) {
+
+        public ScaffoldPreview {
+            files = List.copyOf(files);
+        }
+    }
+
+    /**
+     * One previewed scaffold file: its app-home-relative path, generated content (before checksum
+     * stamping), and the {@code status} an apply would give it ({@code new}/{@code unchanged}/
+     * {@code regenerate}/{@code conflict}).
+     */
+    public record ScaffoldFile(String path, String content, String status) {
     }
 
     /** The outcome of a preview/validation: whether it compiled, and the result or error detail. */

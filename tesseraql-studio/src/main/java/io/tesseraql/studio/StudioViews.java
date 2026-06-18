@@ -5,6 +5,9 @@ import io.tesseraql.studio.StudioService.JobSummary;
 import io.tesseraql.studio.StudioService.PreviewResult;
 import io.tesseraql.studio.StudioService.RenderResult;
 import io.tesseraql.studio.StudioService.RouteSummary;
+import io.tesseraql.studio.StudioService.ScaffoldFile;
+import io.tesseraql.studio.StudioService.ScaffoldPreview;
+import io.tesseraql.yaml.scaffold.CatalogSchema;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -134,6 +137,73 @@ public final class StudioViews {
         if (result.ok() && isHtml) {
             model.put("previewDoc", previewDoc(output));
         }
+        return model;
+    }
+
+    private static final String SCAFFOLD_DISABLED = "Scaffolding is disabled "
+            + "(set tesseraql.studio.scaffold.enabled and make Studio writable).";
+    private static final String PREVIEW_URL = "/_tesseraql/studio/ui/scaffold/preview";
+
+    /**
+     * The scaffold page model (Studio backlog B3): the dev datasource's introspected tables, each
+     * flagged {@code scaffoldable} (a base table with a single-column primary key the CRUD generator
+     * supports). A {@code null} catalog — scaffolding disabled, or no datasource — yields an empty,
+     * {@code enabled: false} model carrying an explanatory note.
+     */
+    public static Map<String, Object> scaffoldTables(CatalogSchema catalog, boolean enabled) {
+        Map<String, Object> model = new LinkedHashMap<>();
+        model.put("enabled", enabled);
+        model.put("previewUrl", PREVIEW_URL);
+        List<Map<String, Object>> tables = new ArrayList<>();
+        if (enabled && catalog != null) {
+            for (CatalogSchema.Table table : catalog.tables()) {
+                Map<String, Object> row = new LinkedHashMap<>();
+                row.put("name", table.name());
+                row.put("type", table.type());
+                row.put("columnCount", table.columns().size());
+                row.put("primaryKey", String.join(", ", table.primaryKey()));
+                boolean scaffoldable = "TABLE".equalsIgnoreCase(table.type())
+                        && table.primaryKey().size() == 1;
+                row.put("scaffoldable", scaffoldable);
+                tables.add(row);
+            }
+        }
+        model.put("tables", tables);
+        model.put("hasTables", !tables.isEmpty());
+        model.put("note", enabled ? null : SCAFFOLD_DISABLED);
+        return model;
+    }
+
+    /**
+     * The scaffold-preview fragment model (Studio backlog B3): the generated CRUD files for one
+     * table, each with its highlighted content and apply disposition ({@code status}), plus the
+     * write/conflict counts a confirmation step shows. A {@code null} preview — scaffolding disabled
+     * — yields an {@code enabled: false} model with a note.
+     */
+    public static Map<String, Object> scaffoldPreview(ScaffoldPreview preview) {
+        Map<String, Object> model = new LinkedHashMap<>();
+        if (preview == null) {
+            model.put("enabled", false);
+            model.put("note", SCAFFOLD_DISABLED);
+            model.put("files", List.of());
+            return model;
+        }
+        model.put("enabled", true);
+        model.put("table", preview.table());
+        model.put("total", preview.total());
+        model.put("writeCount", preview.writeCount());
+        model.put("conflictCount", preview.conflictCount());
+        model.put("hasConflicts", preview.conflictCount() > 0);
+        List<Map<String, Object>> files = new ArrayList<>();
+        for (ScaffoldFile file : preview.files()) {
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("path", file.path());
+            row.put("status", file.status());
+            row.put("contentHtml", Highlighter.highlight(file.path(), file.content()));
+            row.put("sourceUrl", sourceUrl(file.path()));
+            files.add(row);
+        }
+        model.put("files", files);
         return model;
     }
 

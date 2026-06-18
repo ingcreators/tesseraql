@@ -59,6 +59,16 @@ Studio editor + docs work (2026-06):
   `StudioService.RowSource` (a DB-free callback the runtime fills with `StudioTestService.liveRows`);
   `live` flows through the `studio.render` provider, `POST /_tesseraql/studio/render`, and the
   `/_tesseraql/studio/ui/render` fragment.
+- **Scaffold CRUD from a table — preview (B3, slice 1)** — a **scaffold** page (linked from the
+  explorer chrome when enabled) lists the dev datasource's tables, introspected live with the same
+  `CatalogIntrospector` the portal's schema view uses, and previews the CRUD slice the generator
+  would produce for a chosen table — reusing the CLI's `TableIntrospector` + `CrudScaffolder` so the
+  files are byte-identical to `scaffold crud`. Each generated file is shown highlighted with the apply
+  disposition (`new`/`unchanged`/`regenerate`/`conflict`); the slice writes nothing. Database-free
+  `StudioService.scaffoldPreview`; runtime `StudioScaffoldService` owns the introspection. Gated on
+  writable Studio + `tesseraql.studio.scaffold.enabled`. `studio.scaffold.tables`/
+  `studio.scaffold.preview` providers, `GET /_tesseraql/studio/scaffold/tables` + `POST
+  /_tesseraql/studio/scaffold/preview` endpoints, the `/_tesseraql/studio/ui/scaffold` page.
 
 Upstream Hypermedia Components briefs filed and adopted: `hc-code` (read-only block,
 gutter, diff), editable `hc-code`, `hc-sparkline`, and read-only syntax highlighting
@@ -100,6 +110,20 @@ gutter, diff), editable `hc-code`, `hc-sparkline`, and read-only syntax highligh
    "new route" and "scaffold CRUD from table" to the v3 schema introspection (the
    schema catalog already lists tables). Note the hot-reload limit: new/removed routes
    need a restart.
+   - **Scaffold CRUD — preview** — *done* (slice 1): a **scaffold** page (linked from the explorer
+     chrome when enabled) lists the dev datasource's tables introspected live (`CatalogIntrospector`)
+     and previews the CRUD slice the generator would produce for a chosen table, reusing the CLI's
+     `TableIntrospector` + `CrudScaffolder` so the output is byte-identical. Each generated file is
+     shown highlighted with the apply disposition (`new`/`unchanged`/`regenerate`/`conflict`); the
+     slice writes nothing. Database-free `StudioService.scaffoldPreview` (generation + conflict
+     status); runtime `StudioScaffoldService` owns the introspection. Gated on writable Studio +
+     `tesseraql.studio.scaffold.enabled`. `studio.scaffold.tables`/`studio.scaffold.preview`
+     providers, `GET /scaffold/tables` + `POST /scaffold/preview` endpoints, `/ui/scaffold` page.
+   - **Scaffold CRUD — apply** — *next slice*: write the previewed files (`ScaffoldWriter`, honoring
+     the checksum/edit-detection contract and an optional `force`), then reload; new route files need
+     a restart to be served, surfaced in the result.
+   - **New blank route** — *later*: create a single starter route file from a small form, separate
+     from the CRUD scaffold.
 
 ### C. Explorer / navigation polish
 
@@ -138,6 +162,7 @@ gutter, diff), editable `hc-code`, `hc-sparkline`, and read-only syntax highligh
 
 **A1 (rendered preview, incl. live data) is done**, and **A2 is fully done** — Run tests covers
 every declarative case kind (`sql` read/write, `validate`, `contract`, `notify`, `http-call`) for
-routes and jobs, sandboxed with auto-rollback. Recommended next: **B3 (scaffold-from-explorer)**
-toward M7. A1's PDF preview and JSON field-masking are optional follow-ups. E waits on hc #264; G is
-gated.
+routes and jobs, sandboxed with auto-rollback. **B3 (scaffold-from-explorer) is underway**: slice 1
+(preview the CRUD slice for a table) shipped; next is the **apply** slice (write the files, honoring
+edit detection, then reload) followed by the optional **new blank route** form. A1's PDF preview and
+JSON field-masking are optional follow-ups. E waits on hc #264; G is gated.
