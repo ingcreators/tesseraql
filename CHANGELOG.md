@@ -8,6 +8,15 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- Studio editor: directory tree and filter in the explorer (Studio backlog C4). The flat route/job
+  tables become a single **directory tree** folded from the source paths (folders as nested
+  disclosures, each route/job a leaf linking to its source, with a method/`job` badge), and a
+  **filter** box narrows it live as you type — a case-insensitive match over each entry's id, source
+  path, recipe, and (for a route) HTTP method and URL path, which prunes the tree to matching
+  branches. The filter re-renders server-side via htmx (`hx-get` the explorer with `hx-select` on the
+  tree), so it needs no bespoke client JS. Database-free `StudioService.explorer(query)`; the tree is
+  built in `StudioViews`; the `studio.explorer` provider and `GET /_tesseraql/studio/explorer?q=…`
+  endpoint take the query.
 - Studio editor: scaffold a table's CRUD slice from the explorer (Studio backlog B3). A new
   **scaffold** page lists the dev datasource's tables (introspected live with the same
   `CatalogIntrospector` the documentation portal's schema view uses); choosing a table **previews**

@@ -75,6 +75,12 @@ Studio editor + docs work (2026-06):
   writable) takes a `web/**/<method>.yml` path and a recipe and saves a parseable starter skeleton as
   a draft, then opens it in the source editor to finish, reusing the existing validate → apply flow.
   Database-free `StudioService.newRouteDraft`; the `studio.newRoute` provider and `/ui/new` route.
+- **Explorer directory tree + filter (C4)** — the flat route/job tables became one directory tree
+  folded from the source paths (nested `<details>` folders, each route/job a leaf linking to its
+  source with a method/`job` badge), with a live filter box (case-insensitive over
+  id/path/recipe/method/source) that prunes the tree, re-rendered server-side via htmx (`hx-get` +
+  `hx-select`, no bespoke JS). Database-free `StudioService.explorer(query)`; the tree (a recursive
+  `StudioViews` fold + a self-referencing Thymeleaf fragment); `GET /explorer?q=…` carries the query.
 
 Upstream Hypermedia Components briefs filed and adopted: `hc-code` (read-only block,
 gutter, diff), editable `hc-code`, `hc-sparkline`, and read-only syntax highlighting
@@ -139,8 +145,12 @@ gutter, diff), editable `hc-code`, `hc-sparkline`, and read-only syntax highligh
 
 ### C. Explorer / navigation polish
 
-4. **Explorer tree + filter** — the flat route/job table → a directory tree and a
-   filter box (the docs search index exists, but the explorer has none). Low effort.
+4. **Explorer tree + filter** — *done*: the flat route/job tables became a single directory tree
+   folded from the source paths (folders as nested disclosures, each route/job a leaf linking to its
+   source), with a live **filter** box (case-insensitive over id/path/recipe/method/source) that
+   prunes the tree, re-rendered server-side via htmx (`hx-get` + `hx-select`, no bespoke JS).
+   Database-free `StudioService.explorer(query)`; the tree is built in `StudioViews`; the
+   `studio.explorer` provider and `GET /explorer?q=…` endpoint take the query.
 
 ### D. Editing safety / operations
 
@@ -177,5 +187,7 @@ every declarative case kind (`sql` read/write, `validate`, `contract`, `notify`,
 routes and jobs, sandboxed with auto-rollback. **B3 (scaffold-from-explorer) is fully done**:
 preview (slice 1), apply (slice 2), and new blank route (slice 3) all shipped — pick a table, preview
 its CRUD slice, and create the files (edit detection + force), or create a single starter route, each
-with a restart notice for new routes. Recommended next: **C4 (explorer tree + filter)** — low effort,
-or A1's optional PDF preview / JSON field-masking. E waits on hc #264; G is gated.
+with a restart notice for new routes. **C4 (explorer tree + filter) is done** — the explorer is a
+filterable directory tree. Recommended next: **D5 (draft robustness — confirm-diff-before-apply,
+concurrent-edit detection)**, or A1's optional PDF preview / JSON field-masking. E waits on hc #264;
+G is gated.

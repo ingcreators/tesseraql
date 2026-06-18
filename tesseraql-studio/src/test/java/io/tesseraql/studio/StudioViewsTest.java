@@ -45,6 +45,58 @@ class StudioViewsTest {
         assertThat(model.get("editable")).isEqualTo(false);
         assertThat(model.get("hasRoutes")).isEqualTo(false);
         assertThat(model.get("hasJobs")).isEqualTo(false);
+        assertThat(model.get("count")).isEqualTo(0);
+        assertThat(tree(model).get("empty")).isEqualTo(true);
+    }
+
+    @Test
+    void explorerFoldsSourcesIntoADirectoryTree() {
+        Explorer explorer = new Explorer("app", false,
+                List.of(new RouteSummary("users.search", "GET", "/api/users", "query-json",
+                        "web/api/users/get.yml"),
+                        new RouteSummary("users.create", "POST", "/api/users", "command-json",
+                                "web/api/users/post.yml")),
+                List.of(new JobSummary("nightly", "batch-pipeline", "batch/nightly/job.yml")));
+
+        Map<String, Object> tree = tree(StudioViews.explorer(explorer));
+
+        // Top-level folders are batch/ and web/, sorted by name.
+        assertThat(subfolders(tree)).extracting(folder -> folder.get("name"))
+                .containsExactly("batch", "web");
+        // web → api → users holds both route leaves, sorted by file name (get.yml, post.yml).
+        Map<String, Object> users = folder(subfolders(folder(subfolders(
+                folder(subfolders(tree), "web")), "api")), "users");
+        assertThat(leaves(users)).extracting(leaf -> leaf.get("label"))
+                .containsExactly("users.search", "users.create");
+        assertThat(leaves(users).get(0)).containsEntry("badge", "GET")
+                .containsEntry("sourceUrl",
+                        "/_tesseraql/studio/ui/source?path=web%2Fapi%2Fusers%2Fget.yml");
+        // The job is a leaf carrying the synthetic "job" badge.
+        Map<String, Object> nightly = folder(subfolders(folder(subfolders(tree), "batch")),
+                "nightly");
+        assertThat(leaves(nightly)).singleElement()
+                .satisfies(leaf -> assertThat(leaf).containsEntry("label", "nightly")
+                        .containsEntry("badge", "job"));
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Map<String, Object> tree(Map<String, Object> model) {
+        return (Map<String, Object>) model.get("tree");
+    }
+
+    @SuppressWarnings("unchecked")
+    private static List<Map<String, Object>> subfolders(Map<String, Object> folder) {
+        return (List<Map<String, Object>>) folder.get("folders");
+    }
+
+    @SuppressWarnings("unchecked")
+    private static List<Map<String, Object>> leaves(Map<String, Object> folder) {
+        return (List<Map<String, Object>>) folder.get("leaves");
+    }
+
+    private static Map<String, Object> folder(List<Map<String, Object>> folders, String name) {
+        return folders.stream().filter(folder -> name.equals(folder.get("name")))
+                .findFirst().orElseThrow();
     }
 
     @Test

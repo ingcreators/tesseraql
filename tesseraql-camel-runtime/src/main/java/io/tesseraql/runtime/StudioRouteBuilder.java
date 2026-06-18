@@ -52,7 +52,8 @@ final class StudioRouteBuilder extends RouteBuilder {
         rest().post("/_tesseraql/studio/reload").to("direct:studio.reload");
 
         from("direct:studio.explorer").routeId("studio.explorer")
-                .to(AUTH).process(json(exchange -> studio.explorer()));
+                .to(AUTH).process(json(exchange -> studio
+                        .explorer(exchange.getMessage().getHeader("q", String.class))));
 
         from("direct:studio.source").routeId("studio.source")
                 .to(AUTH).process(json(exchange -> {

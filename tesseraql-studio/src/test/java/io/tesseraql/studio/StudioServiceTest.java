@@ -40,6 +40,25 @@ class StudioServiceTest {
     }
 
     @Test
+    void explorerFiltersRoutesAndJobsByQuery() {
+        StudioService studio = new StudioService(exampleManifest(), true);
+
+        Explorer all = studio.explorer();
+        Explorer filtered = studio.explorer("search");
+        // A query narrows the listing to entries whose id/path/recipe/source contains it.
+        assertThat(filtered.routes().size()).isLessThan(all.routes().size()).isPositive();
+        assertThat(filtered.routes()).anySatisfy(
+                route -> assertThat(route.id()).isEqualTo("users.search"));
+        assertThat(filtered.routes()).allSatisfy(route -> assertThat(
+                (route.id() + route.path() + route.recipe() + route.source() + route.method())
+                        .toLowerCase())
+                .contains("search"));
+        // A blank query is the full listing; a non-matching query is empty.
+        assertThat(studio.explorer("   ").routes()).hasSameSizeAs(all.routes());
+        assertThat(studio.explorer("no-such-route-xyz").routes()).isEmpty();
+    }
+
+    @Test
     void readsSourceFileAndRejectsTraversal() {
         StudioService studio = new StudioService(exampleManifest(), true);
 
