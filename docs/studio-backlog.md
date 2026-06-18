@@ -339,8 +339,15 @@ and is being adopted (see E below).
       DDL so it is declined. Gated like the test runner, reusing `SandboxDataSource`.
       `StudioService.dryRunMigration`/`DdlDryRun`/`isMigrationPath`; `StudioTestService.dryRunDdl`;
       `studio.migration.dryRun`; `/_tesseraql/studio/ui/dry-run`.
-    - *Next slices:* form-driven DDL builders ("add column", "create index") off the schema portal;
-      schema-diff generation. Command `U` (undo) stays out (paid Flyway feature; not modeled).
+    - **Form-driven DDL builder** — *done* (slice 3): a **DDL builder** on the New migration page
+      generates standard DDL for **add column** and **create index** from structured form input (with
+      a conventional `<table>_<cols>_idx` default index name) and drops it into the DDL field to review
+      — so the author doesn't hand-write the syntax. A forgiving helper (rejects only an empty required
+      field or an embedded `;`), not a validator. New pure `MigrationDdl`; `studio.migration.build`;
+      `/_tesseraql/studio/ui/migration/build`.
+    - *Next slices:* populate the builder's table/column inputs from the schema portal (dropdowns);
+      a create-table builder; schema-diff generation. Command `U` (undo) stays out (paid Flyway
+      feature; not modeled).
 
 ## Recommended next
 

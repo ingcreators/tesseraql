@@ -8,6 +8,16 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- Studio: form-driven DDL builder on the New migration page (Studio backlog: migration authoring,
+  slice 3). A **DDL builder** helper generates standard DDL for two common operations from structured
+  form input — **add column** (`ALTER TABLE … ADD COLUMN … [DEFAULT …] [NOT NULL]`) and **create
+  index** (`CREATE [UNIQUE] INDEX … ON … (…)`, with a conventional `<table>_<cols>_idx` default name)
+  — and drops it into the migration's DDL field to review and refine before creating the migration,
+  so you don't hand-write the syntax. A forgiving helper (it trims input and rejects only an empty
+  required field or an embedded `;`), not a validator — the result is shown in the editor. New pure
+  `MigrationDdl` (`addColumn`/`createIndex`); the `studio.migration.build` provider and
+  `/_tesseraql/studio/ui/migration/build` fragment route.
+
 - Studio: dry-run a migration's DDL before it lands (Studio backlog: migration authoring, slice 2).
   A migration file's source editor now offers a **Dry-run** action that runs the DDL — the live
   editor buffer — against the dev datasource inside a **sandboxed, auto-rollback** transaction, so it

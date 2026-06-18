@@ -1,0 +1,61 @@
+version: tesseraql/v1
+id: tql.studio.migration.build
+kind: route
+recipe: query-html
+
+input:
+  operation:
+    type: string
+    required: true
+  table:
+    type: string
+    required: false
+  column:
+    type: string
+    required: false
+  type:
+    type: string
+    required: false
+  default:
+    type: string
+    required: false
+  notNull:
+    type: string
+    required: false
+  columns:
+    type: string
+    required: false
+  name:
+    type: string
+    required: false
+  unique:
+    type: string
+    required: false
+
+security:
+  auth: bearer
+
+sql:
+  service: studio.migration.build
+  params:
+    operation: params.operation
+    table: params.table
+    column: params.column
+    type: params.type
+    default: params.default
+    notNull: params.notNull
+    columns: params.columns
+    name: params.name
+    unique: params.unique
+
+response:
+  html:
+    status: 200
+    template: build.html
+    model:
+      build: sql
+    headers:
+      Content-Security-Policy: "default-src 'self'; style-src 'self' 'unsafe-inline'; frame-ancestors 'none'"
+      X-Content-Type-Options: nosniff
+      X-Frame-Options: DENY
+      Referrer-Policy: no-referrer

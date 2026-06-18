@@ -862,6 +862,29 @@ public final class TesseraqlRuntime implements AutoCloseable {
                             model.put("message", result.message());
                             return model;
                         })
+                        // Form-driven DDL builder (migration authoring): generate standard DDL for a
+                        // common operation, dropped into the New migration page's DDL field. Pure
+                        // generation — no side effect — so no edit gate beyond the endpoint's auth.
+                        .register("studio.migration.build", params -> {
+                            java.util.function.Function<String, String> field = key -> params
+                                    .get(key) == null ? null : String.valueOf(params.get(key));
+                            String operation = String.valueOf(params.get("operation"));
+                            String ddl = switch (operation) {
+                                case "add-column" -> io.tesseraql.studio.MigrationDdl.addColumn(
+                                        field.apply("table"), field.apply("column"),
+                                        field.apply("type"),
+                                        !"true".equals(field.apply("notNull")),
+                                        field.apply("default"));
+                                case "create-index" -> io.tesseraql.studio.MigrationDdl.createIndex(
+                                        field.apply("table"), field.apply("columns"),
+                                        "true".equals(field.apply("unique")), field.apply("name"));
+                                default -> throw new io.tesseraql.core.error.TqlException(
+                                        new io.tesseraql.core.error.TqlErrorCode(
+                                                io.tesseraql.core.error.TqlDomain.STUDIO, 4224),
+                                        "Unknown DDL operation: " + operation);
+                            };
+                            return Map.of("ddl", ddl);
+                        })
                         .register("studio.apply", params -> {
                             studioAccess.requireEdit(params.get("roles"));
                             String path = String.valueOf(params.get("path"));

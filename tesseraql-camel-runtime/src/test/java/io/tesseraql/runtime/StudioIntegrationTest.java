@@ -1487,6 +1487,37 @@ class StudioIntegrationTest {
                 .contains("data-variant=\"error\"");
     }
 
+    @Test
+    void uiMigrationPageOffersTheDdlBuilder() throws Exception {
+        HttpResponse<String> response = get("/_tesseraql/studio/ui/migration", true);
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        // The form-driven DDL builder (migration authoring slice 3).
+        assertThat(response.body()).contains("DDL builder").contains("Add column")
+                .contains("Create index");
+    }
+
+    @Test
+    void uiMigrationBuildGeneratesAddColumnDdl() throws Exception {
+        HttpResponse<String> response = postForm("/_tesseraql/studio/ui/migration/build",
+                "operation=add-column&table=users&column=nickname&type=text&notNull=true");
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(response.body())
+                .contains("ALTER TABLE users ADD COLUMN nickname text NOT NULL;");
+    }
+
+    @Test
+    void uiMigrationBuildGeneratesCreateIndexDdl() throws Exception {
+        HttpResponse<String> response = postForm("/_tesseraql/studio/ui/migration/build",
+                "operation=create-index&table=users&columns=" + enc("name, status")
+                        + "&unique=true");
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(response.body())
+                .contains("CREATE UNIQUE INDEX users_name_status_idx ON users (name, status);");
+    }
+
     private static HttpResponse<String> postForm(String path, String form) throws Exception {
         HttpRequest request = HttpRequest.newBuilder(
                 URI.create("http://localhost:" + runtime.port() + path))
