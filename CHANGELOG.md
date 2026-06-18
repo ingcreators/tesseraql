@@ -8,6 +8,14 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- Studio editor: live syntax highlighting of the editable field (Studio backlog E; adopts Hypermedia
+  Components 0.1.5 / hc #264). The editable `hc-code` source and sample fields now opt into hc's
+  `installCodeEditor` `data-lang` overlay — a synced, CSP-safe highlight layer behind the textarea
+  that re-tokenizes as you type and reuses the same `hc-code__tok` palette as the read-only/diff
+  views, so the editor matches them. The grammar is chosen by file type (`sql`/`yaml`/`html`/`json`
+  built-in grammars); the bundled hc WebJar is bumped 0.1.4 → 0.1.5. Degrades cleanly to a plain
+  textarea with no JS or an unknown type.
+
 - Studio editor: PDF preview for export routes (Studio backlog A1 follow-up). A `query-export`
   `format: pdf` route now renders an actual PDF in the editor's rendered-preview panel — the route's
   print template is converted to PDF from the sample's `sql.rows` and shown in an `<iframe>` (a

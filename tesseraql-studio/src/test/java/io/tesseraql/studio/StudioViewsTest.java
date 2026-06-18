@@ -97,6 +97,22 @@ class StudioViewsTest {
     }
 
     @Test
+    void sourceModelCarriesTheEditorLanguage() {
+        // The data-lang grammar for live-highlighting the editable field, by extension (backlog E).
+        assertThat(StudioViews.source("web/api/users/search.sql", "", false, false, "", null))
+                .containsEntry("lang", "sql");
+        assertThat(StudioViews.source("web/api/users/get.yml", "", false, false, "", null))
+                .containsEntry("lang", "yaml");
+        assertThat(StudioViews.source("web/users/table.html", "", false, false, "", null))
+                .containsEntry("lang", "html");
+        assertThat(StudioViews.source("web/x/wizard.yml.tpl", "", false, false, "", null))
+                .containsEntry("lang", "yaml");
+        // An unrecognised extension leaves the field a plain textarea.
+        assertThat(StudioViews.source("docs/notes.md", "", false, false, "", null))
+                .containsEntry("lang", "");
+    }
+
+    @Test
     void renderModelCarriesPdfDataUrl() {
         Map<String, Object> model = StudioViews.render(
                 StudioService.RenderResult.ok("pdf", "data:application/pdf;base64,JVBERi0="));
