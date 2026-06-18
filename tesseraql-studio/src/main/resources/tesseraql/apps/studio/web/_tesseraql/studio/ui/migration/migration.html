@@ -64,12 +64,27 @@
         <h3>Add column</h3>
         <div class="hc-cluster">
           <div class="hc-field"><label class="hc-field__label">Table</label>
-            <input class="hc-input" name="table" required placeholder="users"></div>
+            <select class="hc-select" name="table" th:if="${mig.hasTables}" required>
+              <option th:each="t : ${mig.tables}" th:value="${t}" th:text="${t}"></option>
+            </select>
+            <input class="hc-input" name="table" th:unless="${mig.hasTables}" required placeholder="users"></div>
           <div class="hc-field"><label class="hc-field__label">Column</label>
             <input class="hc-input" name="column" required placeholder="nickname"></div>
           <div class="hc-field"><label class="hc-field__label">Type</label>
-            <input class="hc-input" name="type" required placeholder="text"></div>
+            <input class="hc-input" name="type" required placeholder="text" list="mig-types"></div>
         </div>
+        <datalist id="mig-types">
+          <option value="text"></option>
+          <option value="varchar(255)"></option>
+          <option value="integer"></option>
+          <option value="bigint"></option>
+          <option value="boolean"></option>
+          <option value="numeric(10,2)"></option>
+          <option value="timestamptz"></option>
+          <option value="date"></option>
+          <option value="uuid"></option>
+          <option value="jsonb"></option>
+        </datalist>
         <div class="hc-cluster">
           <div class="hc-field"><label class="hc-field__label">Default (optional)</label>
             <input class="hc-input" name="default" placeholder="0"></div>
@@ -85,9 +100,16 @@
         <h3>Create index</h3>
         <div class="hc-cluster">
           <div class="hc-field"><label class="hc-field__label">Table</label>
-            <input class="hc-input" name="table" required placeholder="users"></div>
+            <select class="hc-select" name="table" th:if="${mig.hasTables}" required
+                    hx-get="/_tesseraql/studio/ui/migration/columns"
+                    hx-target="#index-cols" hx-swap="innerHTML" hx-trigger="change">
+              <option value="" disabled selected>Choose a table&hellip;</option>
+              <option th:each="t : ${mig.tables}" th:value="${t}" th:text="${t}"></option>
+            </select>
+            <input class="hc-input" name="table" th:unless="${mig.hasTables}" required placeholder="users"></div>
           <div class="hc-field"><label class="hc-field__label">Columns (comma-separated)</label>
-            <input class="hc-input" name="columns" required placeholder="name, status"></div>
+            <input class="hc-input" name="columns" required placeholder="name, status" list="index-cols">
+            <datalist id="index-cols"></datalist></div>
           <div class="hc-field"><label class="hc-field__label">Name (optional)</label>
             <input class="hc-input" name="name" placeholder="users_name_status_idx"></div>
           <label class="hc-field"><input type="checkbox" name="unique" value="true"> Unique</label>

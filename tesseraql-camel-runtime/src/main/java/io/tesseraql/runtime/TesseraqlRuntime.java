@@ -809,8 +809,21 @@ public final class TesseraqlRuntime implements AutoCloseable {
                             model.put("editable", canEdit);
                             model.put("readOnly", !canEdit);
                             model.put("nextVersion", studio.nextMigrationVersion("main", null));
+                            // The DDL builder's table dropdown is populated from the schema overlay.
+                            java.util.List<String> tables = new io.tesseraql.studio.DocService(
+                                    manifest).tableNames();
+                            model.put("tables", tables);
+                            model.put("hasTables", !tables.isEmpty());
                             return model;
                         })
+                        // Cascade for the DDL builder: a chosen table's columns, for the index
+                        // builder's column autocomplete (rendered as datalist options).
+                        .register("studio.migration.columns",
+                                params -> Map.of("columns", new io.tesseraql.studio.DocService(
+                                        manifest).columnNames(
+                                                params.get("table") == null
+                                                        ? null
+                                                        : String.valueOf(params.get("table")))))
                         .register("studio.migration.create", params -> {
                             studioAccess.requireEdit(params.get("roles"));
                             String datasource = params.get("datasource") == null

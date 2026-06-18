@@ -345,9 +345,14 @@ and is being adopted (see E below).
       — so the author doesn't hand-write the syntax. A forgiving helper (rejects only an empty required
       field or an embedded `;`), not a validator. New pure `MigrationDdl`; `studio.migration.build`;
       `/_tesseraql/studio/ui/migration/build`.
-    - *Next slices:* populate the builder's table/column inputs from the schema portal (dropdowns);
-      a create-table builder; schema-diff generation. Command `U` (undo) stays out (paid Flyway
-      feature; not modeled).
+    - **Schema-populated builder inputs** — *done* (follow-on): the builder's **Table** field is a
+      dropdown of the introspected tables (`schema.json` overlay) and the create-index **Columns**
+      field autocompletes from the chosen table's columns (htmx cascade on table change); the
+      add-column **Type** field offers a common-types datalist. Degrades to free-text when no schema
+      overlay. `DocService.tableNames`/`columnNames`; `studio.migration.columns`;
+      `/_tesseraql/studio/ui/migration/columns`.
+    - *Next slices:* a create-table builder; schema-diff generation. Command `U` (undo) stays out
+      (paid Flyway feature; not modeled).
 
 ## Recommended next
 

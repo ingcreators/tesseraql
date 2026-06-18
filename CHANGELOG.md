@@ -8,6 +8,15 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- Studio: the migration DDL builder's table and column inputs are populated from the schema portal
+  (Studio backlog: migration authoring, follow-on). The builder's **Table** field is now a dropdown
+  of the introspected tables (from the `schema.json` overlay), and the create-index **Columns** field
+  autocompletes from the chosen table's columns — loaded by an htmx cascade when the table changes —
+  so you pick from what exists instead of retyping names. The add-column **Type** field offers a
+  datalist of common SQL types. All of it degrades to plain free-text fields when no schema overlay
+  is present. New `DocService.tableNames` / `columnNames`; the `studio.migration.columns` cascade
+  provider and `/_tesseraql/studio/ui/migration/columns` fragment route.
+
 - Studio: form-driven DDL builder on the New migration page (Studio backlog: migration authoring,
   slice 3). A **DDL builder** helper generates standard DDL for two common operations from structured
   form input — **add column** (`ALTER TABLE … ADD COLUMN … [DEFAULT …] [NOT NULL]`) and **create

@@ -214,6 +214,44 @@ public final class DocService {
         return links;
     }
 
+    /**
+     * Every introspected table name across the schema overlay, sorted and de-duplicated, for the
+     * Studio DDL builder's table dropdown (migration authoring). Empty when no {@code schema.json} is
+     * present (the builder then falls back to a free-text field).
+     */
+    public List<String> tableNames() {
+        SchemaOverlay overlay = schema();
+        if (overlay == null) {
+            return List.of();
+        }
+        java.util.TreeSet<String> names = new java.util.TreeSet<>();
+        for (CatalogSchema catalog : overlay.datasources().values()) {
+            for (CatalogSchema.Table table : catalog.tables()) {
+                names.add(table.name());
+            }
+        }
+        return List.copyOf(names);
+    }
+
+    /**
+     * The column names of the first introspected table matching {@code name}, for the DDL builder's
+     * column autocomplete (migration authoring). Empty when no schema overlay or no such table.
+     */
+    public List<String> columnNames(String name) {
+        SchemaOverlay overlay = schema();
+        if (overlay == null || name == null) {
+            return List.of();
+        }
+        for (CatalogSchema catalog : overlay.datasources().values()) {
+            for (CatalogSchema.Table table : catalog.tables()) {
+                if (name.equals(table.name())) {
+                    return table.columns().stream().map(CatalogSchema.Column::name).toList();
+                }
+            }
+        }
+        return List.of();
+    }
+
     /** The doc entry for one route id, or {@code null} when no such route exists. */
     public RouteEntry route(String id) {
         for (RouteEntry entry : spec().routes()) {

@@ -82,6 +82,35 @@ class DocServiceTest {
     }
 
     @Test
+    void tableNamesAndColumnNamesComeFromTheSchemaOverlay(@TempDir Path dir) throws Exception {
+        Files.createDirectories(dir.resolve("config"));
+        Files.writeString(dir.resolve("config/tesseraql.yml"),
+                "tesseraql:\n  app:\n    name: demo\n");
+        DocService noSchema = new DocService(new ManifestLoader().load(dir));
+        // No schema.json -> empty, so the builder falls back to free-text fields.
+        assertThat(noSchema.tableNames()).isEmpty();
+        assertThat(noSchema.columnNames("users")).isEmpty();
+
+        Files.createDirectories(dir.resolve(".tesseraql/docs"));
+        Files.writeString(dir.resolve(".tesseraql/docs/schema.json"), """
+                { "schemaVersion": 1, "generatedAt": "2026-06-18T12:00:00Z",
+                  "datasources": { "main": { "tables": [
+                    { "name": "users", "type": "TABLE", "schema": "public",
+                      "columns": [
+                        { "name": "id", "jdbcType": -5, "sqlTypeName": "bigint", "size": 19,
+                          "nullable": false, "autoincrement": true, "defaultValue": null },
+                        { "name": "email", "jdbcType": 12, "sqlTypeName": "varchar", "size": 320,
+                          "nullable": false, "autoincrement": false, "defaultValue": null } ],
+                      "primaryKey": ["id"], "foreignKeys": [], "uniqueIndexes": [] } ] } } }
+                """);
+        DocService service = new DocService(new ManifestLoader().load(dir));
+
+        assertThat(service.tableNames()).containsExactly("users");
+        assertThat(service.columnNames("users")).containsExactly("id", "email");
+        assertThat(service.columnNames("no_such_table")).isEmpty();
+    }
+
+    @Test
     void readsThePackagedSpecWithTestCrossReferences(@TempDir Path dir) throws Exception {
         Files.createDirectories(dir.resolve("config"));
         Files.writeString(dir.resolve("config/tesseraql.yml"),
