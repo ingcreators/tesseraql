@@ -8,6 +8,12 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- Studio editor: pending-draft overview (Studio backlog D5). A new **drafts** page (linked from the
+  explorer when Studio is writable) lists every unsaved draft under `work/studio/drafts` with a link
+  to its editor, whether it is a new file or an edit, and whether it conflicts with a source that
+  changed underneath it — so edits in flight, and any that need attention, are visible in one place.
+  Database-free `StudioService.drafts()`; the `studio.drafts` provider and `GET
+  /_tesseraql/studio/drafts` endpoint.
 - Studio editor: concurrent-edit conflict detection (Studio backlog D5). Saving a draft now records
   the source it is based on, so applying detects when the source changed underneath it and refuses to
   silently overwrite the other change (no more last-apply-wins): the editor shows a conflict warning

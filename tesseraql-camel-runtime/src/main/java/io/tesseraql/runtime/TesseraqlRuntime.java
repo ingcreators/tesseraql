@@ -803,7 +803,9 @@ public final class TesseraqlRuntime implements AutoCloseable {
                             String path = String.valueOf(params.get("path"));
                             studio.deleteDraft(path);
                             return Map.of("discarded", path);
-                        });
+                        })
+                        .register("studio.drafts", params -> io.tesseraql.studio.StudioViews
+                                .drafts(studio.drafts()));
                 // Providers backing the bundled documentation portal (documentation portal v1/v2/v3):
                 // they read the packaged spec.json, falling back to a live model from the manifest,
                 // and overlay the optional run report.json (test results + coverage) and schema.json

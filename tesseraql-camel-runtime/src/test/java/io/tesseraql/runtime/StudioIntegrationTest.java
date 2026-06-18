@@ -253,6 +253,42 @@ class StudioIntegrationTest {
     }
 
     @Test
+    void draftsOverviewListsPendingDraftsWithConflictStatus() throws Exception {
+        String path = "web/api/dlist/q.sql";
+        Files.createDirectories(appHome.resolve("web/api/dlist"));
+        Files.writeString(appHome.resolve(path), "select 1\n");
+        assertThat(post("/_tesseraql/studio/drafts?path=" + enc(path), "select 2\n", true)
+                .statusCode()).isEqualTo(200);
+
+        // The JSON overview includes the draft, not in conflict, as an edit (the source exists).
+        assertThat(MAPPER.readTree(get("/_tesseraql/studio/drafts", true).body()))
+                .anySatisfy(draft -> {
+                    assertThat(draft.get("path").asText()).isEqualTo(path);
+                    assertThat(draft.get("conflict").asBoolean()).isFalse();
+                    assertThat(draft.get("isNew").asBoolean()).isFalse();
+                });
+
+        // A concurrent change to the source flags the draft as conflicting.
+        Files.writeString(appHome.resolve(path), "select 3\n");
+        assertThat(MAPPER.readTree(get("/_tesseraql/studio/drafts", true).body()))
+                .anySatisfy(draft -> {
+                    assertThat(draft.get("path").asText()).isEqualTo(path);
+                    assertThat(draft.get("conflict").asBoolean()).isTrue();
+                });
+
+        // The overview page lists the draft (linked to its editor); the explorer links to the page.
+        assertThat(get("/_tesseraql/studio/ui/drafts", true).body()).contains(path)
+                .contains("conflict").contains("/_tesseraql/studio/ui/source?path=");
+        assertThat(get("/_tesseraql/studio/ui", true).body())
+                .contains("/_tesseraql/studio/ui/drafts");
+    }
+
+    @Test
+    void draftsOverviewRequiresAuthentication() throws Exception {
+        assertThat(get("/_tesseraql/studio/drafts", false).statusCode()).isEqualTo(401);
+    }
+
+    @Test
     void explorerRequiresAuthentication() throws Exception {
         assertThat(get("/_tesseraql/studio/explorer", false).statusCode()).isEqualTo(401);
     }

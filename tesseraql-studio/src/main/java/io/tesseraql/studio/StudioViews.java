@@ -1,5 +1,6 @@
 package io.tesseraql.studio;
 
+import io.tesseraql.studio.StudioService.DraftSummary;
 import io.tesseraql.studio.StudioService.Explorer;
 import io.tesseraql.studio.StudioService.JobSummary;
 import io.tesseraql.studio.StudioService.PreviewResult;
@@ -63,6 +64,35 @@ public final class StudioViews {
         model.put("tree", tree(explorer));
         model.put("count", explorer.routes().size() + explorer.jobs().size());
         model.put("query", "");
+        return model;
+    }
+
+    /**
+     * The draft-overview page model (Studio backlog D5): every pending draft with a link to its
+     * editor, a {@code conflict} flag (the source changed underneath it), and a {@code new}/{@code
+     * edit} kind, plus the totals a badge shows.
+     */
+    public static Map<String, Object> drafts(List<DraftSummary> drafts) {
+        List<Map<String, Object>> rows = new ArrayList<>();
+        int conflicts = 0;
+        for (DraftSummary draft : drafts) {
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("path", draft.path());
+            row.put("sourceUrl", sourceUrl(draft.path()));
+            row.put("conflict", draft.conflict());
+            row.put("isNew", draft.isNew());
+            row.put("kind", draft.isNew() ? "new" : "edit");
+            rows.add(row);
+            if (draft.conflict()) {
+                conflicts++;
+            }
+        }
+        Map<String, Object> model = new LinkedHashMap<>();
+        model.put("drafts", rows);
+        model.put("hasDrafts", !rows.isEmpty());
+        model.put("count", rows.size());
+        model.put("conflictCount", conflicts);
+        model.put("hasConflicts", conflicts > 0);
         return model;
     }
 

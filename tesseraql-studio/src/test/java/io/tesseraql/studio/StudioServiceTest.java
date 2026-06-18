@@ -59,6 +59,42 @@ class StudioServiceTest {
     }
 
     @Test
+    void draftsListsPendingDraftsWithConflictAndNewFlags(@TempDir Path dir) throws Exception {
+        Files.createDirectories(dir.resolve("config"));
+        Files.writeString(dir.resolve("config/tesseraql.yml"), "tesseraql:\n  app:\n    name: t\n");
+        Files.createDirectories(dir.resolve("web/api/a"));
+        Files.writeString(dir.resolve("web/api/a/q.sql"), "select 1\n");
+        StudioService studio = new StudioService(new ManifestLoader().load(dir), false);
+
+        assertThat(studio.drafts()).isEmpty();
+
+        // One draft edits an existing source, one is for a not-yet-created file.
+        studio.saveDraft("web/api/a/q.sql", "select 2\n");
+        studio.saveDraft("web/api/b/q.sql", "select 9\n");
+
+        assertThat(studio.drafts()).hasSize(2);
+        assertThat(studio.drafts()).anySatisfy(draft -> {
+            assertThat(draft.path()).isEqualTo("web/api/a/q.sql");
+            assertThat(draft.isNew()).isFalse();
+            assertThat(draft.conflict()).isFalse();
+        });
+        assertThat(studio.drafts()).anySatisfy(draft -> {
+            assertThat(draft.path()).isEqualTo("web/api/b/q.sql");
+            assertThat(draft.isNew()).isTrue();
+        });
+
+        // A concurrent change to the edited source flags that draft as conflicting.
+        Files.writeString(dir.resolve("web/api/a/q.sql"), "select 3\n");
+        assertThat(studio.drafts()).filteredOn(draft -> draft.path().equals("web/api/a/q.sql"))
+                .singleElement().satisfies(draft -> assertThat(draft.conflict()).isTrue());
+
+        // Discarding removes it from the overview.
+        studio.deleteDraft("web/api/a/q.sql");
+        assertThat(studio.drafts()).extracting(StudioService.DraftSummary::path)
+                .containsExactly("web/api/b/q.sql");
+    }
+
+    @Test
     void readsSourceFileAndRejectsTraversal() {
         StudioService studio = new StudioService(exampleManifest(), true);
 
