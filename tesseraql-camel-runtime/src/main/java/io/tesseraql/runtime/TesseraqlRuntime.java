@@ -1026,13 +1026,13 @@ public final class TesseraqlRuntime implements AutoCloseable {
                 def.reminders().escalated());
     }
 
-    /** The configured dialect for the main datasource, or inferred from its JDBC URL (design ch. 42). */
     /** The audit actor a Studio service provider was bound (the caller's {@code principal.loginId}). */
     private static String actorOf(Map<String, Object> params) {
         Object actor = params.get("actor");
         return actor == null ? null : String.valueOf(actor);
     }
 
+    /** The configured dialect for the main datasource, or inferred from its JDBC URL (design ch. 42). */
     private static String datasourceDialect(AppConfig config) {
         String prefix = "tesseraql.datasources.main.";
         return config.getString(prefix + "dialect")
