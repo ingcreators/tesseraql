@@ -105,6 +105,12 @@
       <version>${project.version}</version>
     </dependency>
     <dependency>
+      <!-- The declarative test engine, run from Studio against the dev datasource (backlog A2). -->
+      <groupId>io.tesseraql</groupId>
+      <artifactId>tesseraql-test-core</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+    <dependency>
       <groupId>io.tesseraql</groupId>
       <artifactId>tesseraql-mcp</artifactId>
       <version>${project.version}</version>

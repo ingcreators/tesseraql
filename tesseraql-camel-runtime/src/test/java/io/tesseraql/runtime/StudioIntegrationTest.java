@@ -1,6 +1,7 @@
 package io.tesseraql.runtime;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -470,6 +471,88 @@ class StudioIntegrationTest {
     }
 
     @Test
+    void runTestsEndpointRunsRouteSqlCasesAgainstDevDatasource() throws Exception {
+        HttpResponse<String> response = post(
+                "/_tesseraql/studio/runTests?path=" + enc("web/api/users/get.yml"), "", true);
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        JsonNode result = MAPPER.readTree(response.body());
+        assertThat(result.get("ran").asBoolean()).isTrue();
+        // The two sql cases targeting search.sql run against the seeded users table.
+        assertThat(result.get("total").asInt()).isEqualTo(2);
+        // The q=sato case passes against the seeded row; the runner reports a genuine result.
+        assertThat(result.get("cases")).anySatisfy(testCase -> {
+            assertThat(testCase.get("name").asText()).isEqualTo("search finds sato by name");
+            assertThat(testCase.get("passed").asBoolean()).isTrue();
+        });
+    }
+
+    @Test
+    void runTestsReportsNoSqlCasesForUncoveredRoute() throws Exception {
+        // users.table binds search-table.sql, which no declarative sql case targets.
+        HttpResponse<String> response = post("/_tesseraql/studio/runTests?path="
+                + enc("web/users/fragments/table/get.yml"), "", true);
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        JsonNode result = MAPPER.readTree(response.body());
+        assertThat(result.get("ran").asBoolean()).isFalse();
+        assertThat(result.get("note").asText()).contains("No read-only SQL test cases");
+    }
+
+    @Test
+    void uiSourceRouteOffersRunTestsWhenEnabled() throws Exception {
+        HttpResponse<String> response = get("/_tesseraql/studio/ui/source?path="
+                + enc("web/api/users/get.yml"), true);
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(response.body()).contains("Run tests")
+                .contains("hx-post=\"/_tesseraql/studio/ui/run-tests\"");
+    }
+
+    @Test
+    void sandboxDataSourceIsReadOnlyAndCapsRows() throws Exception {
+        try (com.zaxxer.hikari.HikariDataSource raw = rawDataSource()) {
+            javax.sql.DataSource sandbox = new SandboxDataSource(raw, 5, 2);
+            try (java.sql.Connection conn = sandbox.getConnection()) {
+                // Row cap: a 100-row query yields at most maxRows (2).
+                try (java.sql.PreparedStatement query = conn.prepareStatement(
+                        "select g from generate_series(1, 100) g");
+                        java.sql.ResultSet rs = query.executeQuery()) {
+                    int count = 0;
+                    while (rs.next()) {
+                        count++;
+                    }
+                    assertThat(count).isEqualTo(2);
+                }
+                // Read-only: a write is rejected by the transaction.
+                assertThatThrownBy(() -> {
+                    try (java.sql.PreparedStatement write = conn.prepareStatement(
+                            "create table sandbox_probe (id int)")) {
+                        write.executeUpdate();
+                    }
+                }).isInstanceOf(java.sql.SQLException.class);
+            }
+            // The probe table never persisted (read-only + rollback on close).
+            try (java.sql.Connection check = raw.getConnection();
+                    java.sql.PreparedStatement probe = check.prepareStatement(
+                            "select to_regclass('public.sandbox_probe')");
+                    java.sql.ResultSet rs = probe.executeQuery()) {
+                rs.next();
+                assertThat(rs.getObject(1)).isNull();
+            }
+        }
+    }
+
+    private static com.zaxxer.hikari.HikariDataSource rawDataSource() {
+        com.zaxxer.hikari.HikariConfig config = new com.zaxxer.hikari.HikariConfig();
+        config.setJdbcUrl(POSTGRES.getJdbcUrl());
+        config.setUsername(POSTGRES.getUsername());
+        config.setPassword(POSTGRES.getPassword());
+        config.setMaximumPoolSize(2);
+        return new com.zaxxer.hikari.HikariDataSource(config);
+    }
+
+    @Test
     void uiSourceShowsDraftBadgeAndDiscardClearsIt() throws Exception {
         String path = "web/api/users/search.sql";
 
@@ -643,6 +726,8 @@ class StudioIntegrationTest {
                   studio:
                     enabled: true
                     readOnly: false
+                    testRunner:
+                      enabled: true
                 """.formatted(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(),
                 POSTGRES.getPassword()));
         // A run overlay in the reserved namespace exercises the portal's report-layer rendering
