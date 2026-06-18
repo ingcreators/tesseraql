@@ -55,6 +55,22 @@
       </div>
     </form>
     <details class="hc-disclosure">
+      <summary>From schema changes</summary>
+      <p class="hc-field__message">Generate a migration from the difference between the captured
+        schema baseline and the current schema &mdash; to capture changes made directly to the
+        database back into a migration. Additive changes become real DDL; destructive ones are
+        emitted as comments to review.</p>
+      <form class="hc-stack" th:if="${mig.hasSchemaBaseline}"
+            hx-post="/_tesseraql/studio/ui/migration/diff" hx-target="#mig-ddl" hx-swap="innerHTML">
+        <div class="hc-cluster">
+          <button type="submit" class="hc-button" data-variant="ghost">Generate from diff &uarr;</button>
+        </div>
+      </form>
+      <p class="hc-field__message" th:unless="${mig.hasSchemaBaseline}">No schema baseline captured.
+        Copy <code>.tesseraql/docs/schema.json</code> to <code>schema.baseline.json</code> (e.g. at a
+        release), then this generates the migration for changes since.</p>
+    </details>
+    <details class="hc-disclosure">
       <summary>DDL builder (optional)</summary>
       <p class="hc-field__message">Generate standard DDL for a common operation and drop it into the
         DDL field above to review and refine. Identifiers are not validated &mdash; check the result.</p>

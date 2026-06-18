@@ -111,6 +111,40 @@ class DocServiceTest {
     }
 
     @Test
+    void schemaDiffDdlComparesTheBaselineToTheCurrentSchema(@TempDir Path dir) throws Exception {
+        Files.createDirectories(dir.resolve("config"));
+        Files.writeString(dir.resolve("config/tesseraql.yml"),
+                "tesseraql:\n  app:\n    name: demo\n");
+        DocService noBaseline = new DocService(new ManifestLoader().load(dir));
+        assertThat(noBaseline.hasSchemaBaseline()).isFalse();
+        assertThat(noBaseline.schemaDiffDdl()).isNull();
+
+        Files.createDirectories(dir.resolve(".tesseraql/docs"));
+        // Current schema: users has id + email. Baseline: users has only id.
+        Files.writeString(dir.resolve(".tesseraql/docs/schema.json"), """
+                { "schemaVersion": 1, "generatedAt": "t", "datasources": { "main": { "tables": [
+                  { "name": "users", "type": "TABLE", "schema": "public", "columns": [
+                      { "name": "id", "jdbcType": -5, "sqlTypeName": "int8", "size": 19,
+                        "nullable": false, "autoincrement": true, "defaultValue": null },
+                      { "name": "email", "jdbcType": 12, "sqlTypeName": "varchar", "size": 320,
+                        "nullable": true, "autoincrement": false, "defaultValue": null } ],
+                    "primaryKey": ["id"], "foreignKeys": [], "uniqueIndexes": [] } ] } } }
+                """);
+        Files.writeString(dir.resolve(".tesseraql/docs/schema.baseline.json"), """
+                { "schemaVersion": 1, "generatedAt": "t", "datasources": { "main": { "tables": [
+                  { "name": "users", "type": "TABLE", "schema": "public", "columns": [
+                      { "name": "id", "jdbcType": -5, "sqlTypeName": "int8", "size": 19,
+                        "nullable": false, "autoincrement": true, "defaultValue": null } ],
+                    "primaryKey": ["id"], "foreignKeys": [], "uniqueIndexes": [] } ] } } }
+                """);
+        DocService service = new DocService(new ManifestLoader().load(dir));
+
+        assertThat(service.hasSchemaBaseline()).isTrue();
+        assertThat(service.schemaDiffDdl())
+                .isEqualTo("ALTER TABLE users ADD COLUMN email varchar(320);\n");
+    }
+
+    @Test
     void readsThePackagedSpecWithTestCrossReferences(@TempDir Path dir) throws Exception {
         Files.createDirectories(dir.resolve("config"));
         Files.writeString(dir.resolve("config/tesseraql.yml"),

@@ -8,6 +8,17 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- Studio: generate a migration from the schema diff (Studio backlog: migration authoring, final
+  slice). When a schema **baseline** sidecar is present (`.tesseraql/docs/schema.baseline.json` — copy
+  a captured `schema.json` there), the New migration page can **generate the migration DDL** that
+  transforms the baseline into the current schema, dropping it into the DDL field — to capture changes
+  made directly to a database back into a migration so the schema stays reproducible. A new
+  `SchemaDiff` engine compares the two introspected catalogs: a table or column present only in the
+  current schema becomes a real `CREATE TABLE` / `ALTER TABLE … ADD COLUMN`, while a destructive
+  change (a table/column removed, or a column type changed) is emitted only as a commented-out line to
+  review — additive-and-safe, never applied automatically. New `DocService.schemaDiffDdl`; the
+  `studio.migration.diff` provider and `/_tesseraql/studio/ui/migration/diff` route.
+
 - Studio: a create-table builder in the migration DDL builder (Studio backlog: migration authoring,
   follow-on). The New migration page's DDL builder gains a **Create table** form: a table name, a
   **columns** textarea (one column definition per line — `name type [modifiers]`, emitted verbatim so
