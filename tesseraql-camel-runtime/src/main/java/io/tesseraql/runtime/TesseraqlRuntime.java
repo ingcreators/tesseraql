@@ -810,10 +810,13 @@ public final class TesseraqlRuntime implements AutoCloseable {
                             model.put("readOnly", !canEdit);
                             model.put("nextVersion", studio.nextMigrationVersion("main", null));
                             // The DDL builder's table dropdown is populated from the schema overlay.
-                            java.util.List<String> tables = new io.tesseraql.studio.DocService(
-                                    manifest).tableNames();
+                            io.tesseraql.studio.DocService migrationDoc = new io.tesseraql.studio.DocService(
+                                    manifest);
+                            java.util.List<String> tables = migrationDoc.tableNames();
                             model.put("tables", tables);
                             model.put("hasTables", !tables.isEmpty());
+                            // A schema baseline enables generating a migration from the schema diff.
+                            model.put("hasSchemaBaseline", migrationDoc.hasSchemaBaseline());
                             return model;
                         })
                         // Cascade for the DDL builder: a chosen table's columns, for the index
@@ -824,6 +827,23 @@ public final class TesseraqlRuntime implements AutoCloseable {
                                                 params.get("table") == null
                                                         ? null
                                                         : String.valueOf(params.get("table")))))
+                        // Generate a migration from the schema diff (baseline schema.json vs current):
+                        // captures direct database changes back into a migration. Pure generation.
+                        .register("studio.migration.diff", params -> {
+                            io.tesseraql.studio.DocService diffDoc = new io.tesseraql.studio.DocService(
+                                    manifest);
+                            String ddl;
+                            if (!diffDoc.hasSchemaBaseline()) {
+                                ddl = "-- No schema baseline. Copy .tesseraql/docs/schema.json to "
+                                        + "schema.baseline.json, then regenerate to see changes since.";
+                            } else {
+                                String diff = diffDoc.schemaDiffDdl();
+                                ddl = diff == null || diff.isBlank()
+                                        ? "-- No schema changes since the baseline."
+                                        : diff;
+                            }
+                            return Map.of("ddl", ddl);
+                        })
                         .register("studio.migration.create", params -> {
                             studioAccess.requireEdit(params.get("roles"));
                             String datasource = params.get("datasource") == null

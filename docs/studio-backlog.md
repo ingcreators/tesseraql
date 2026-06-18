@@ -356,7 +356,15 @@ and is being adopted (see E below).
       an optional comma-separated *primary key* — generating `CREATE TABLE … (…[, PRIMARY KEY (…)]);`.
       The one-definition-per-line textarea handles a variable column count in plain HTML.
       `MigrationDdl.createTable`; a `create-table` case in `studio.migration.build`.
-    - *Next slices:* schema-diff generation. Command `U` (undo) stays out (paid Flyway feature; not
+    - **Schema-diff generation** — *done* (final slice): with a schema **baseline** sidecar
+      (`.tesseraql/docs/schema.baseline.json`), the New migration page generates the migration DDL
+      transforming the baseline into the current schema — to capture direct database changes back into
+      a migration. The `SchemaDiff` engine makes a table/column added since the baseline a real
+      `CREATE TABLE`/`ALTER … ADD COLUMN`, and a destructive change (removed table/column, type
+      change) a commented-out line to review (additive-and-safe). `DocService.schemaDiffDdl`;
+      `studio.migration.diff`; `/_tesseraql/studio/ui/migration/diff`. **Migration authoring is now
+      complete** (create V/R + dry-run + DDL builder incl. add-column/create-index/create-table with
+      schema-populated inputs + schema-diff). Command `U` (undo) stays out (paid Flyway feature; not
       modeled).
 
 ## Recommended next

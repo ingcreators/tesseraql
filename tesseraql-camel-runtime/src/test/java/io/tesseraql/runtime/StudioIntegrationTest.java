@@ -1530,6 +1530,24 @@ class StudioIntegrationTest {
     }
 
     @Test
+    void uiMigrationPageOffersSchemaDiffWhenABaselineIsPresent() throws Exception {
+        HttpResponse<String> response = get("/_tesseraql/studio/ui/migration", true);
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(response.body()).contains("From schema changes").contains("Generate from diff");
+    }
+
+    @Test
+    void uiMigrationDiffGeneratesAMigrationFromTheSchemaBaseline() throws Exception {
+        HttpResponse<String> response = postForm("/_tesseraql/studio/ui/migration/diff", "");
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        // The baseline lacks customers.email and the orders table, so the diff adds both.
+        assertThat(response.body()).contains("ALTER TABLE customers ADD COLUMN email")
+                .contains("CREATE TABLE orders (");
+    }
+
+    @Test
     void uiMigrationBuilderTablesComeFromTheSchemaOverlay() throws Exception {
         HttpResponse<String> response = get("/_tesseraql/studio/ui/migration", true);
 
@@ -1711,6 +1729,16 @@ class StudioIntegrationTest {
                                          "refColumns": ["id"] } ],
                       "uniqueIndexes": [] }
                   ] } } }
+                """);
+        // A schema baseline (customers without email, and no orders table) so the migration page's
+        // schema-diff generates the migration capturing those additions (migration authoring).
+        Files.writeString(target.resolve(".tesseraql/docs/schema.baseline.json"), """
+                { "schemaVersion": 1, "generatedAt": "2026-06-15T12:00:00Z",
+                  "datasources": { "main": { "tables": [
+                    { "name": "customers", "type": "TABLE", "schema": "public", "columns": [
+                        { "name": "id", "jdbcType": -5, "sqlTypeName": "bigserial", "size": 19,
+                          "nullable": false, "autoincrement": true, "defaultValue": null } ],
+                      "primaryKey": ["id"], "foreignKeys": [], "uniqueIndexes": [] } ] } } }
                 """);
         // An OpenAPI baseline sidecar so the export page renders the API changelog (spec diff): it
         // names a legacy operation the current app no longer has (-> removed) while the current

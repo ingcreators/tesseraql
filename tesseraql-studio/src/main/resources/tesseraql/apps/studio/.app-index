@@ -57,6 +57,8 @@ web/_tesseraql/studio/ui/migration/build/post.yml
 web/_tesseraql/studio/ui/migration/build/build.html
 web/_tesseraql/studio/ui/migration/columns/get.yml
 web/_tesseraql/studio/ui/migration/columns/columns.html
+web/_tesseraql/studio/ui/migration/diff/post.yml
+web/_tesseraql/studio/ui/migration/diff/diff.html
 web/_tesseraql/studio/ui/save/post.yml
 web/_tesseraql/studio/ui/apply/post.yml
 web/_tesseraql/studio/ui/discard/post.yml
