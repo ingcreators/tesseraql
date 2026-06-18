@@ -374,6 +374,48 @@ class StudioServiceTest {
     }
 
     @Test
+    void rendersExportPdfRouteThroughThePdfRenderCallback(@TempDir Path dir) throws Exception {
+        Files.createDirectories(dir.resolve("config"));
+        Files.writeString(dir.resolve("config/tesseraql.yml"), "tesseraql:\n  app:\n    name: t\n");
+        Files.createDirectories(dir.resolve("web/api/x"));
+        Files.writeString(dir.resolve("web/api/x/get.yml"), """
+                version: tesseraql/v1
+                id: x.print
+                kind: route
+                recipe: query-export
+                sql:
+                  file: print.sql
+                export:
+                  format: pdf
+                  filename: x.pdf
+                  template: print.html
+                  columns:
+                    - { name: name, header: Name }
+                    - { name: status, header: Status }
+                """);
+        StudioService studio = new StudioService(new ManifestLoader().load(dir), true);
+
+        byte[] fakePdf = {'%', 'P', 'D', 'F', '-', '1', '.', '4'};
+        StudioService.PdfRender pdf = (export, routeDir, rows) -> {
+            assertThat(export.format()).isEqualTo("pdf");
+            assertThat(rows).hasSize(1); // from the sample's sql.rows
+            return fakePdf;
+        };
+        StudioService.RenderResult result = studio.render("web/api/x/get.yml", null,
+                "sql:\n  rows:\n    - name: Sato\n      status: ACTIVE\n", null, null, pdf);
+        assertThat(result.ok()).isTrue();
+        assertThat(result.kind()).isEqualTo("pdf");
+        assertThat(result.output()).isEqualTo("data:application/pdf;base64,"
+                + java.util.Base64.getEncoder().encodeToString(fakePdf));
+
+        // With no renderer (the optional module is absent) the preview reports it unavailable.
+        StudioService.RenderResult unavailable = studio.render("web/api/x/get.yml", null,
+                "sql:\n  rows: []\n", null, null, null);
+        assertThat(unavailable.ok()).isFalse();
+        assertThat(unavailable.error()).contains("tesseraql-pdf module");
+    }
+
+    @Test
     void rendersHtmlRouteWithLiveRowSource() {
         StudioService studio = new StudioService(exampleManifest(), true);
         // A stub row source stands in for the runtime's sandboxed query: the sample carries no sql.
@@ -423,7 +465,7 @@ class StudioServiceTest {
         StudioService.RenderResult result = studio.render("web/go/post.yml", null, null);
 
         assertThat(result.ok()).isFalse();
-        assertThat(result.error()).contains("query-html/page and query-json");
+        assertThat(result.error()).contains("query-html/page, query-json, and query-export");
     }
 
     @Test

@@ -290,11 +290,23 @@ public final class StudioService {
      */
     public RenderResult render(String relativePath, String content, String sampleModel,
             RowSource liveRows, FieldMask fieldMask) {
+        return render(relativePath, content, sampleModel, liveRows, fieldMask, null);
+    }
+
+    /**
+     * As {@link #render(String, String, String, RowSource, FieldMask)}, but a non-null
+     * {@code pdfRender} renders a {@code query-export} {@code format: pdf} route's PDF from its query
+     * rows (Studio backlog A1 follow-up — PDF preview), returned as a {@code data:} URL. Studio stays
+     * free of the heavy (optional) PDF stack: the runtime provides the renderer over the canonical PDF
+     * codec when the {@code tesseraql-pdf} module is on the classpath.
+     */
+    public RenderResult render(String relativePath, String content, String sampleModel,
+            RowSource liveRows, FieldMask fieldMask, PdfRender pdfRender) {
         if (isTemplate(relativePath)) {
             return renderTemplateFile(relativePath, content, sampleModel);
         }
         if (isRouteYaml(relativePath)) {
-            return renderRoute(relativePath, content, sampleModel, liveRows, fieldMask);
+            return renderRoute(relativePath, content, sampleModel, liveRows, fieldMask, pdfRender);
         }
         return RenderResult.invalid("text",
                 "Rendered preview is only available for templates and web routes");
@@ -311,6 +323,19 @@ public final class StudioService {
         /** The masked body for {@code fields}, evaluated against the sample principal in context. */
         Object mask(Map<String, ResponseSpec.FieldPolicy> fields, Object body,
                 Map<String, Object> context);
+    }
+
+    /**
+     * Renders a {@code query-export} {@code format: pdf} route to PDF bytes from its query
+     * {@code rows} (Studio backlog A1 follow-up — PDF preview). Implemented by the runtime over the
+     * canonical PDF codec so Studio stays free of the optional {@code tesseraql-pdf} stack; returns
+     * {@code null} when no PDF codec is on the classpath.
+     */
+    @FunctionalInterface
+    public interface PdfRender {
+        /** PDF bytes for the export route, or null when the {@code tesseraql-pdf} module is absent. */
+        byte[] render(io.tesseraql.yaml.model.ExportSpec export, Path routeDir,
+                List<Map<String, Object>> rows);
     }
 
     /**
@@ -342,7 +367,7 @@ public final class StudioService {
     }
 
     private RenderResult renderRoute(String relativePath, String content, String sampleModel,
-            RowSource liveRows, FieldMask fieldMask) {
+            RowSource liveRows, FieldMask fieldMask, PdfRender pdfRender) {
         String text = content != null ? content : source(relativePath);
         RouteDefinition definition;
         try {
@@ -368,6 +393,10 @@ public final class StudioService {
                 return RenderResult.invalid("route", "Live data: " + rootMessage(ex));
             }
         }
+        io.tesseraql.yaml.model.ExportSpec export = definition.fileExport();
+        if (export != null && "pdf".equalsIgnoreCase(export.format())) {
+            return renderPdfRoute(export, resolve(relativePath).getParent(), context, pdfRender);
+        }
         EvaluationContext evaluation = new EvaluationContext(context);
         ResponseSpec response = definition.response();
         if (response != null && response.html() != null) {
@@ -376,8 +405,44 @@ public final class StudioService {
         if (response != null && response.json() != null) {
             return renderJsonRoute(response.json(), evaluation, context, fieldMask);
         }
-        return RenderResult.invalid("route",
-                "Rendered preview supports query-html/page and query-json routes only");
+        return RenderResult.invalid("route", "Rendered preview supports query-html/page,"
+                + " query-json, and query-export (pdf) routes only");
+    }
+
+    /**
+     * Renders a {@code query-export} {@code format: pdf} route to a {@code data:} URL preview (Studio
+     * backlog A1 follow-up): the sample's {@code sql.rows} feed the route's PDF, produced by the
+     * runtime-provided {@link PdfRender} over the canonical PDF codec. Degrades to a clear message
+     * when no PDF renderer/codec is available (the optional {@code tesseraql-pdf} module is absent).
+     */
+    private RenderResult renderPdfRoute(io.tesseraql.yaml.model.ExportSpec export, Path routeDir,
+            Map<String, Object> context, PdfRender pdfRender) {
+        if (pdfRender == null) {
+            return RenderResult.invalid("pdf",
+                    "PDF preview is unavailable (the tesseraql-pdf module is not loaded).");
+        }
+        byte[] pdf;
+        try {
+            pdf = pdfRender.render(export, routeDir, sampleRows(context));
+        } catch (RuntimeException ex) {
+            return RenderResult.invalid("pdf", rootMessage(ex));
+        }
+        if (pdf == null) {
+            return RenderResult.invalid("pdf",
+                    "PDF preview needs the tesseraql-pdf module on the classpath.");
+        }
+        return RenderResult.ok("pdf", "data:application/pdf;base64,"
+                + java.util.Base64.getEncoder().encodeToString(pdf));
+    }
+
+    /** The sample's {@code sql.rows} as the export route's query rows, or empty. */
+    @SuppressWarnings("unchecked")
+    private static List<Map<String, Object>> sampleRows(Map<String, Object> context) {
+        if (context.get("sql") instanceof Map<?, ?> sql
+                && sql.get("rows") instanceof List<?> rows) {
+            return (List<Map<String, Object>>) (List<?>) rows;
+        }
+        return List.of();
     }
 
     private RenderResult renderHtmlRoute(String routePath, ResponseSpec.HtmlResponse html,

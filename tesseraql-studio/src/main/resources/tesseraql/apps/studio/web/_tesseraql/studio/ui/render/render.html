@@ -2,7 +2,7 @@
   <p class="hc-alert" data-variant="error" role="alert"
      th:unless="${render.ok}" th:text="${render.error}"></p>
   <th:block th:if="${render.ok}">
-    <details class="hc-stack" open>
+    <details class="hc-stack" th:unless="${render.isPdf}" open>
       <summary>Rendered output</summary>
       <pre class="hc-code"><code th:utext="${render.outputHtml}"></code></pre>
     </details>
@@ -11,5 +11,12 @@
       <iframe class="tql-preview-frame" sandbox="" title="Rendered preview"
               th:attr="srcdoc=${render.previewDoc}"></iframe>
     </details>
+    <div class="hc-stack" th:if="${render.isPdf}">
+      <iframe class="tql-preview-frame" title="PDF preview" th:attr="src=${render.pdfUrl}"></iframe>
+      <div class="hc-cluster">
+        <a class="hc-button" data-variant="ghost" data-size="sm"
+           th:attr="href=${render.pdfUrl}" download="preview.pdf">Download PDF</a>
+      </div>
+    </div>
   </th:block>
 </div>

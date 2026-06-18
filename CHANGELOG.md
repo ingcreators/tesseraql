@@ -8,6 +8,15 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- Studio editor: PDF preview for export routes (Studio backlog A1 follow-up). A `query-export`
+  `format: pdf` route now renders an actual PDF in the editor's rendered-preview panel — the route's
+  print template is converted to PDF from the sample's `sql.rows` and shown in an `<iframe>` (a
+  `data:` URL) with a download link, so print layout (`@page`, fonts, pagination) can be checked
+  without running an export. It reuses the canonical PDF codec, so the preview matches a real export;
+  Studio stays free of the heavy, optional `tesseraql-pdf` stack — the runtime supplies the renderer
+  through a new `StudioService.PdfRender` callback (the A1 live-rows/`FieldMask` pattern) and degrades
+  to a clear message when the `tesseraql-pdf` module is not on the classpath. The source/render CSP
+  gains `data:` in `frame-src` for the embedded PDF.
 - Studio editor: output-field masking in the JSON rendered preview (Studio backlog A1 follow-up). A
   `query-json` route's `response.json.fields` policy is now applied to the rendered preview, so the
   preview shows what a caller would actually see — fields hidden (`visible: false` / a `policy:` the

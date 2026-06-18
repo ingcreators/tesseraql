@@ -97,6 +97,16 @@ class StudioViewsTest {
     }
 
     @Test
+    void renderModelCarriesPdfDataUrl() {
+        Map<String, Object> model = StudioViews.render(
+                StudioService.RenderResult.ok("pdf", "data:application/pdf;base64,JVBERi0="));
+
+        assertThat(model).containsEntry("isPdf", true).containsEntry("isHtml", false)
+                .containsEntry("pdfUrl", "data:application/pdf;base64,JVBERi0=")
+                .doesNotContainKey("outputHtml");
+    }
+
+    @Test
     void auditBuildsTrailModel() {
         Map<String, Object> model = StudioViews.audit(List.of(
                 new StudioService.AuditEntry("2026-06-18T10:00:00Z", "alice", "apply",
