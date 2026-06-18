@@ -1,5 +1,6 @@
 package io.tesseraql.studio;
 
+import io.tesseraql.studio.StudioService.AuditEntry;
 import io.tesseraql.studio.StudioService.DraftSummary;
 import io.tesseraql.studio.StudioService.Explorer;
 import io.tesseraql.studio.StudioService.JobSummary;
@@ -93,6 +94,29 @@ public final class StudioViews {
         model.put("count", rows.size());
         model.put("conflictCount", conflicts);
         model.put("hasConflicts", conflicts > 0);
+        return model;
+    }
+
+    /**
+     * The audit-trail page model (Studio backlog D6): each entry's time, actor, action, and target,
+     * with the target linked to the source editor when it is an applied path.
+     */
+    public static Map<String, Object> audit(List<AuditEntry> entries) {
+        List<Map<String, Object>> rows = new ArrayList<>();
+        for (AuditEntry entry : entries) {
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("at", entry.at());
+            row.put("actor", entry.actor());
+            row.put("action", entry.action());
+            row.put("target", entry.target());
+            // An apply targets a source path the editor can open; a scaffold targets a table name.
+            row.put("targetUrl", "apply".equals(entry.action()) ? sourceUrl(entry.target()) : null);
+            rows.add(row);
+        }
+        Map<String, Object> model = new LinkedHashMap<>();
+        model.put("entries", rows);
+        model.put("hasEntries", !rows.isEmpty());
+        model.put("count", rows.size());
         return model;
     }
 

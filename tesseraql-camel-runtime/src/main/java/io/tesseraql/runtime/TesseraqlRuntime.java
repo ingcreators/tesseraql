@@ -760,7 +760,8 @@ public final class TesseraqlRuntime implements AutoCloseable {
                             String path = String.valueOf(params.get("path"));
                             // force=true overwrites a concurrently changed source (backlog D5).
                             boolean force = "true".equals(String.valueOf(params.get("force")));
-                            studio.applyDraft(path, force);
+                            // The caller is recorded to the audit trail (backlog D6).
+                            studio.applyDraft(path, force, actorOf(params));
                             reloader.reload();
                             return Map.of("applied", path);
                         })
@@ -798,14 +799,17 @@ public final class TesseraqlRuntime implements AutoCloseable {
                                         studioScaffold.apply(
                                                 String.valueOf(params.get("table")),
                                                 "true".equals(
-                                                        String.valueOf(params.get("force"))))))
+                                                        String.valueOf(params.get("force"))),
+                                                actorOf(params))))
                         .register("studio.discard", params -> {
                             String path = String.valueOf(params.get("path"));
                             studio.deleteDraft(path);
                             return Map.of("discarded", path);
                         })
                         .register("studio.drafts", params -> io.tesseraql.studio.StudioViews
-                                .drafts(studio.drafts()));
+                                .drafts(studio.drafts()))
+                        .register("studio.audit", params -> io.tesseraql.studio.StudioViews
+                                .audit(studio.auditEntries(200)));
                 // Providers backing the bundled documentation portal (documentation portal v1/v2/v3):
                 // they read the packaged spec.json, falling back to a live model from the manifest,
                 // and overlay the optional run report.json (test results + coverage) and schema.json
@@ -1023,6 +1027,12 @@ public final class TesseraqlRuntime implements AutoCloseable {
     }
 
     /** The configured dialect for the main datasource, or inferred from its JDBC URL (design ch. 42). */
+    /** The audit actor a Studio service provider was bound (the caller's {@code principal.loginId}). */
+    private static String actorOf(Map<String, Object> params) {
+        Object actor = params.get("actor");
+        return actor == null ? null : String.valueOf(actor);
+    }
+
     private static String datasourceDialect(AppConfig config) {
         String prefix = "tesseraql.datasources.main.";
         return config.getString(prefix + "dialect")

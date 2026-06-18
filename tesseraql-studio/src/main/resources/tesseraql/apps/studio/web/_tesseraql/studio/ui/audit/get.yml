@@ -1,32 +1,20 @@
 version: tesseraql/v1
-id: tql.studio.scaffold.apply
+id: tql.studio.audit
 kind: route
 recipe: query-html
-
-input:
-  table:
-    type: string
-    required: true
-  force:
-    type: string
-    required: false
 
 security:
   auth: bearer
 
 sql:
-  service: studio.scaffold.apply
-  params:
-    table: params.table
-    force: params.force
-    actor: principal.loginId
+  service: studio.audit
 
 response:
   html:
     status: 200
-    template: apply.html
+    template: audit.html
     model:
-      scaffold: sql
+      page: sql
     headers:
       Content-Security-Policy: "default-src 'self'; style-src 'self' 'unsafe-inline'; frame-ancestors 'none'"
       X-Content-Type-Options: nosniff

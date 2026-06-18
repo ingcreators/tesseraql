@@ -96,6 +96,24 @@ class StudioViewsTest {
         assertThat(rows.get(1)).containsEntry("kind", "new").containsEntry("conflict", true);
     }
 
+    @Test
+    void auditBuildsTrailModel() {
+        Map<String, Object> model = StudioViews.audit(List.of(
+                new StudioService.AuditEntry("2026-06-18T10:00:00Z", "alice", "apply",
+                        "web/api/x/get.yml"),
+                new StudioService.AuditEntry("2026-06-18T09:00:00Z", "bob", "scaffold",
+                        "widgets")));
+
+        assertThat(model).containsEntry("count", 2).containsEntry("hasEntries", true);
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> rows = (List<Map<String, Object>>) model.get("entries");
+        assertThat(rows.get(0)).containsEntry("actor", "alice").containsEntry("action", "apply")
+                .containsEntry("targetUrl",
+                        "/_tesseraql/studio/ui/source?path=web%2Fapi%2Fx%2Fget.yml");
+        // A scaffold targets a table name, not a linkable source path.
+        assertThat(rows.get(1).get("targetUrl")).isNull();
+    }
+
     @SuppressWarnings("unchecked")
     private static Map<String, Object> tree(Map<String, Object> model) {
         return (Map<String, Object>) model.get("tree");

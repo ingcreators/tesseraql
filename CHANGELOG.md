@@ -8,6 +8,15 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- Studio editor: audit trail (Studio backlog D6). Every source-writing action — applying a draft and
+  applying a scaffold — is now stamped to an append-only `work/studio/audit/audit.jsonl` log with
+  **who** (the authenticated caller's login id), **what** (apply / scaffold), the **target** (the
+  applied path or scaffolded table), and **when**. A new **audit** page (linked from the explorer when
+  Studio is writable) lists the trail newest-first, with applied paths linking back to their editor.
+  Database-free `StudioService.applyDraft(path, force, actor)` / `scaffoldApply(table, force, actor)`
+  record the entry at the single point each write happens (so no caller path can bypass it) and
+  `auditEntries(limit)` reads it; the `studio.audit` provider and `GET /_tesseraql/studio/audit`
+  endpoint expose it. The Studio routes bind the actor from `principal.loginId`.
 - Studio editor: pending-draft overview (Studio backlog D5). A new **drafts** page (linked from the
   explorer when Studio is writable) lists every unsaved draft under `work/studio/drafts` with a link
   to its editor, whether it is a new file or an edit, and whether it conflicts with a source that

@@ -577,6 +577,54 @@ class StudioServiceTest {
     }
 
     @Test
+    void applyAndScaffoldRecordTheAuditTrail(@TempDir Path dir) throws Exception {
+        Files.createDirectories(dir.resolve("config"));
+        Files.writeString(dir.resolve("config/tesseraql.yml"), "tesseraql:\n  app:\n    name: t\n");
+        Files.createDirectories(dir.resolve("web/api/x"));
+        String source = """
+                version: tesseraql/v1
+                id: x
+                kind: route
+                recipe: query-json
+                sql:
+                  file: x.sql
+                response:
+                  json:
+                    body:
+                      data: sql.rows
+                """;
+        Files.writeString(dir.resolve("web/api/x/get.yml"), source);
+        StudioService studio = new StudioService(new ManifestLoader().load(dir), false);
+
+        assertThat(studio.auditEntries(10)).isEmpty();
+
+        // Applying a draft and scaffolding a table each stamp an audit entry with their actor.
+        studio.saveDraft("web/api/x/get.yml", source.replace("id: x", "id: x-2"));
+        studio.applyDraft("web/api/x/get.yml", false, "alice");
+        studio.scaffoldApply(widgetsSchema(), false, "bob");
+
+        List<StudioService.AuditEntry> entries = studio.auditEntries(10);
+        assertThat(entries).hasSize(2);
+        // Newest first: the scaffold, then the apply.
+        assertThat(entries.get(0)).satisfies(entry -> {
+            assertThat(entry.action()).isEqualTo("scaffold");
+            assertThat(entry.actor()).isEqualTo("bob");
+            assertThat(entry.target()).isEqualTo("widgets");
+            assertThat(entry.at()).isNotBlank();
+        });
+        assertThat(entries.get(1)).satisfies(entry -> {
+            assertThat(entry.action()).isEqualTo("apply");
+            assertThat(entry.actor()).isEqualTo("alice");
+            assertThat(entry.target()).isEqualTo("web/api/x/get.yml");
+        });
+
+        // A null actor is recorded as "unknown".
+        studio.saveDraft("web/api/x/get.yml", source.replace("id: x", "id: x-3"));
+        studio.applyDraft("web/api/x/get.yml", false, null);
+        assertThat(studio.auditEntries(1).get(0).actor()).isEqualTo("unknown");
+    }
+
+    @Test
     void scaffoldPreviewRejectsTableWithoutSingleColumnPrimaryKey() {
         StudioService studio = new StudioService(exampleManifest(), true);
         TableSchema noKey = new TableSchema("t",

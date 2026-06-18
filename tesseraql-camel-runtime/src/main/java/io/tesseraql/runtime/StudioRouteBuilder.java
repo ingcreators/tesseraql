@@ -1,8 +1,10 @@
 package io.tesseraql.runtime;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.tesseraql.camel.TesseraqlProperties;
 import io.tesseraql.compiler.binding.ErrorResponseRenderer;
 import io.tesseraql.core.error.TqlException;
+import io.tesseraql.security.Principal;
 import io.tesseraql.studio.StudioService;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -49,6 +51,7 @@ final class StudioRouteBuilder extends RouteBuilder {
         rest().get("/_tesseraql/studio/scaffold/tables").to("direct:studio.scaffold.tables");
         rest().post("/_tesseraql/studio/scaffold/preview").to("direct:studio.scaffold.preview");
         rest().post("/_tesseraql/studio/scaffold/apply").to("direct:studio.scaffold.apply");
+        rest().get("/_tesseraql/studio/audit").to("direct:studio.audit");
         rest().post("/_tesseraql/studio/apply").to("direct:studio.apply");
         rest().post("/_tesseraql/studio/reload").to("direct:studio.reload");
 
@@ -114,13 +117,19 @@ final class StudioRouteBuilder extends RouteBuilder {
         // force=true; new route files need a restart, surfaced in the result.
         from("direct:studio.scaffold.apply").routeId("studio.scaffold.apply")
                 .to(AUTH).process(json(exchange -> io.tesseraql.studio.StudioViews.scaffoldResult(
-                        studioScaffold.apply(requireTable(exchange), flag(exchange, "force")))));
+                        studioScaffold.apply(requireTable(exchange), flag(exchange, "force"),
+                                actor(exchange)))));
+
+        // The audit trail (backlog D6): who applied or scaffolded what, when (newest first).
+        from("direct:studio.audit").routeId("studio.audit")
+                .to(AUTH).process(json(exchange -> studio.auditEntries(200)));
 
         from("direct:studio.apply").routeId("studio.apply")
                 .to(AUTH).process(json(exchange -> {
                     String path = requirePath(exchange);
-                    // force=true overwrites a source that changed under the draft (backlog D5).
-                    studio.applyDraft(path, flag(exchange, "force"));
+                    // force=true overwrites a source that changed under the draft (backlog D5); the
+                    // caller is recorded to the audit trail (backlog D6).
+                    studio.applyDraft(path, flag(exchange, "force"), actor(exchange));
                     Map<String, Object> result = new LinkedHashMap<>();
                     result.put("applied", path);
                     return result;
@@ -141,6 +150,15 @@ final class StudioRouteBuilder extends RouteBuilder {
     /** An optional boolean query flag: true only when the header is exactly {@code "true"}. */
     private static boolean flag(Exchange exchange, String name) {
         return "true".equals(exchange.getMessage().getHeader(name, String.class));
+    }
+
+    /** The audit actor: the authenticated caller's login id (or subject), or null (backlog D6). */
+    private static String actor(Exchange exchange) {
+        Principal principal = exchange.getProperty(TesseraqlProperties.PRINCIPAL, Principal.class);
+        if (principal == null) {
+            return null;
+        }
+        return principal.loginId() != null ? principal.loginId() : principal.subject();
     }
 
     private static String require(Exchange exchange, String name) {

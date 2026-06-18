@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{tql/shell :: page('TesseraQL Studio · Audit', ~{:: #page-header}, ~{:: #page-content})}">
+<th:block id="page-header">
+  <span class="hc-spacer"></span>
+  <div class="hc-cluster">
+    <a class="hc-button" data-variant="ghost" data-size="sm" href="/_tesseraql/studio/ui">&larr; explorer</a>
+  </div>
+</th:block>
+<div id="page-content" class="hc-stack">
+<section class="hc-card">
+  <h2>Audit trail</h2>
+  <p class="hc-field__message">Who applied or scaffolded what, and when &mdash; recorded under <code>work/studio/audit</code>, newest first.</p>
+  <div class="hc-empty" th:unless="${page.hasEntries}"><p class="hc-empty__title">No audited actions yet.</p></div>
+  <table class="hc-table" th:if="${page.hasEntries}">
+    <thead><tr><th>When</th><th>Actor</th><th>Action</th><th>Target</th></tr></thead>
+    <tbody>
+      <tr th:each="e : ${page.entries}">
+        <td th:text="${e.at}"></td>
+        <td th:text="${e.actor}"></td>
+        <td><span class="hc-badge" th:attr="data-variant=${e.action == 'scaffold'} ? 'info' : 'success'" th:text="${e.action}"></span></td>
+        <td>
+          <a th:if="${e.targetUrl}" th:href="${e.targetUrl}" th:text="${e.target}"></a>
+          <code th:unless="${e.targetUrl}" th:text="${e.target}"></code>
+        </td>
+      </tr>
+    </tbody>
+  </table>
+</section>
+</div>
+</html>
