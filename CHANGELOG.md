@@ -8,6 +8,18 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- Coverage regression gate (Studio backlog category 3). Beyond the existing **absolute** coverage
+  gate, the build can now fail when SQL coverage **drops against the previous run** — the guard that
+  catches a change quietly lowering coverage while every absolute threshold still passes. The
+  `report` goal compares this run's aggregate SQL line/branch coverage to the most recent
+  `history.json` entry (captured before this run is appended) and, with
+  `tesseraql.failOnCoverageRegression` set, fails the build if it dropped by more than
+  `tesseraql.coverageRegressionTolerance` percentage points (default 0); a regression is always
+  logged as a warning. `tesseraql test --report --fail-on-regression [--regression-tolerance N]`
+  exits `2` for the same. New `CoverageRegression` (tesseraql-coverage-core) and `ReportRegression`
+  (tesseraql-report). For a meaningful baseline, `history.json` must persist across runs (committed
+  or CI-cached).
+
 - Docs portal: API spec diff / changelog on the Export page (Studio backlog). When an OpenAPI
   **baseline** sidecar is present (`.tesseraql/docs/openapi.baseline.json` — copy a released
   `openapi.json` there), the Export page shows **what changed** in the API since that baseline:
