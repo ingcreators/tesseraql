@@ -15,7 +15,8 @@
   <h2>Search</h2>
   <input class="hc-input" type="search" name="q" autocomplete="off" placeholder="Search routes, paths, SQL, tests&hellip; (try status:failing, coverage:untested)"
          hx-get="/_tesseraql/studio/ui/docs/search" hx-trigger="input changed delay:200ms, search"
-         hx-target="#docs-search-results" hx-swap="innerHTML">
+         hx-target="#docs-search-results" hx-swap="innerHTML" hx-indicator="next .htmx-indicator">
+  <th:block th:replace="~{tql/shell :: busy('Searching…')}"/>
   <div id="docs-search-results" class="hc-stack"></div>
 </section>
 <section class="hc-card" th:if="${docs.hasReport}">

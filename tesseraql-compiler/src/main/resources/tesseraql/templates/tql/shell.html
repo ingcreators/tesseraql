@@ -49,3 +49,9 @@
   <a class="hc-item" href="/_tesseraql/studio/ui">Studio</a>
   <a class="hc-item" href="/_tesseraql/admin/users">IAM Admin</a>
 </th:block>
+<!-- A loading affordance for an async (htmx) action: htmx toggles the `htmx-indicator`
+     element visible while the request is in flight (its injected indicator style applies
+     under the `style-src 'unsafe-inline'` CSP), so a slow DB call no longer reads as a hang.
+     Place it inside the request-initiating element (e.g. a form's button cluster) or point an
+     `hx-indicator` at one by id. role="status" announces it to assistive tech. -->
+<th:block th:fragment="busy(label)"><span class="htmx-indicator hc-field__message" role="status" th:text="${label}">Working…</span></th:block>

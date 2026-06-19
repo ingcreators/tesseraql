@@ -18,9 +18,11 @@
       <h2>Rendered preview</h2>
       <p class="hc-field__message">Rendered against the colocated <code>.sample.yml</code> fixture (or an empty model).</p>
       <input type="hidden" id="src-path" name="path" th:value="${src.path}">
+      <th:block th:replace="~{tql/shell :: busy('Rendering…')}"/>
       <div id="render-result" class="hc-stack" aria-live="polite"
            hx-post="/_tesseraql/studio/ui/render" hx-trigger="load"
-           hx-include="#src-path" hx-target="this" hx-swap="innerHTML"></div>
+           hx-include="#src-path" hx-target="this" hx-swap="innerHTML"
+           hx-indicator="previous span"></div>
     </div>
   </th:block>
   <th:block th:if="${src.editable}">
@@ -35,8 +37,10 @@
                   hx-post="/_tesseraql/studio/ui/preview"
                   hx-trigger="keyup changed delay:300ms, change"
                   hx-include="#src-path"
-                  hx-target="#preview-result" hx-swap="innerHTML"></textarea>
+                  hx-target="#preview-result" hx-swap="innerHTML"
+                  hx-indicator="#preview-busy"></textarea>
       </div>
+      <span id="preview-busy" class="htmx-indicator hc-field__message" role="status">Checking…</span>
       <div id="preview-result" class="hc-stack" aria-live="polite"></div>
       <div class="hc-cluster"><button type="submit" class="hc-button" data-variant="primary">Save draft</button></div>
     </form>
@@ -53,11 +57,12 @@
         <input type="checkbox" id="render-live" name="live" value="true">
         Use live data &mdash; run the route's SQL against the dev datasource (sandboxed)
       </label>
+      <th:block th:replace="~{tql/shell :: busy('Rendering…')}"/>
       <div id="render-result" class="hc-stack" aria-live="polite"
            hx-post="/_tesseraql/studio/ui/render"
            hx-trigger="load, keyup changed delay:400ms from:#source-editor, keyup changed delay:400ms from:#sample-editor, change from:#render-live"
            hx-include="#src-path, #source-editor, #sample-editor, #render-live"
-           hx-target="this" hx-swap="innerHTML"></div>
+           hx-target="this" hx-swap="innerHTML" hx-indicator="previous span"></div>
     </div>
     <details class="hc-stack" th:if="${src.hasDraft}">
       <summary>Compare against saved source</summary>
@@ -71,18 +76,18 @@
     <div class="hc-stack" th:if="${src.isMigration and src.testRunnerEnabled}">
       <h2>Dry-run</h2>
       <p class="hc-field__message">Runs this migration's DDL against the dev datasource in a sandboxed transaction that is rolled back &mdash; nothing persists &mdash; so you can check it applies before the next migrate. Postgres only (other dialects auto-commit DDL).</p>
-      <form hx-post="/_tesseraql/studio/ui/dry-run" hx-include="#source-editor" hx-target="#dry-run-result" hx-swap="innerHTML">
+      <form hx-post="/_tesseraql/studio/ui/dry-run" hx-include="#source-editor" hx-target="#dry-run-result" hx-swap="innerHTML" hx-disabled-elt="find button">
         <input type="hidden" name="path" th:value="${src.path}">
-        <div class="hc-cluster"><button type="submit" class="hc-button" data-variant="primary">Dry-run</button></div>
+        <div class="hc-cluster"><button type="submit" class="hc-button" data-variant="primary">Dry-run</button><th:block th:replace="~{tql/shell :: busy('Running…')}"/></div>
       </form>
       <div id="dry-run-result" class="hc-stack" aria-live="polite"></div>
     </div>
     <div class="hc-stack" th:if="${src.isTestable and src.testRunnerEnabled}">
       <h2>Tests</h2>
       <p class="hc-field__message">Runs the declarative test cases covering this <span th:text="${src.isJob} ? 'job' : 'route'">route</span> (<code>sql</code>, <code>validate</code>, <code>notify</code>, <code>http-call</code>) against the dev datasource, sandboxed (auto-rollback, timeout, row cap) &mdash; a write case executes and is rolled back, so nothing persists.</p>
-      <form hx-post="/_tesseraql/studio/ui/run-tests" hx-target="#run-tests-result" hx-swap="innerHTML">
+      <form hx-post="/_tesseraql/studio/ui/run-tests" hx-target="#run-tests-result" hx-swap="innerHTML" hx-disabled-elt="find button">
         <input type="hidden" name="path" th:value="${src.path}">
-        <div class="hc-cluster"><button type="submit" class="hc-button" data-variant="primary">Run tests</button></div>
+        <div class="hc-cluster"><button type="submit" class="hc-button" data-variant="primary">Run tests</button><th:block th:replace="~{tql/shell :: busy('Running…')}"/></div>
       </form>
       <div id="run-tests-result" class="hc-stack" aria-live="polite"></div>
     </div>
@@ -92,7 +97,7 @@
         2-way SQL snippet for a table and append it to the editor above (the bind directives are
         written for you; a <code>-- sql.params</code> comment lists the mappings to add to the route).</p>
       <form hx-post="/_tesseraql/studio/ui/sql-builder/build"
-            hx-target="#source-editor" hx-swap="beforeend">
+            hx-target="#source-editor" hx-swap="beforeend" hx-disabled-elt="find button">
         <div class="hc-cluster">
           <div class="hc-field"><label class="hc-field__label">Table</label>
             <select class="hc-select" name="table" required
@@ -116,12 +121,12 @@
             <select class="hc-select" name="column" id="sb-col"></select>
           </div>
         </div>
-        <div class="hc-cluster"><button type="submit" class="hc-button" data-variant="ghost">Append to editor &uarr;</button></div>
+        <div class="hc-cluster"><button type="submit" class="hc-button" data-variant="ghost">Append to editor &uarr;</button><th:block th:replace="~{tql/shell :: busy('Building…')}"/></div>
       </form>
     </details>
     <p class="hc-alert" data-variant="warning" role="alert" th:if="${src.conflict}">The saved source changed since this draft was started &mdash; applying overwrites those changes. Review the compare panel above first.</p>
     <p class="hc-alert" data-variant="info" role="note" th:if="${src.confirmApply and not src.conflict and src.hasDraft}">Confirm-before-apply is on: review the compare panel above, then confirm.</p>
-    <form hx-post="/_tesseraql/studio/ui/apply" hx-target="#apply-result" hx-swap="innerHTML">
+    <form hx-post="/_tesseraql/studio/ui/apply" hx-target="#apply-result" hx-swap="innerHTML" hx-disabled-elt="find button">
       <input type="hidden" name="path" th:value="${src.path}">
       <label class="hc-field" th:if="${src.conflict}">
         <input type="checkbox" name="force" value="true" required>
@@ -131,7 +136,7 @@
         <input type="checkbox" name="confirm" value="true" required>
         I reviewed the diff above &mdash; apply this draft
       </label>
-      <div class="hc-cluster"><button type="submit" class="hc-button" data-variant="primary">Apply draft &amp; reload</button></div>
+      <div class="hc-cluster"><button type="submit" class="hc-button" data-variant="primary">Apply draft &amp; reload</button><th:block th:replace="~{tql/shell :: busy('Applying…')}"/></div>
     </form>
     <div id="apply-result" class="hc-stack" aria-live="polite"></div>
     <form method="post" action="/_tesseraql/studio/ui/discard" th:if="${src.hasDraft}">

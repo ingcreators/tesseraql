@@ -43,7 +43,9 @@
     <input class="hc-input" id="explorer-filter" type="search" name="q" th:value="${studio.query}"
            placeholder="Filter by id, path, recipe…" autocomplete="off"
            hx-get="/_tesseraql/studio/ui" hx-trigger="keyup changed delay:250ms, search"
-           hx-target="#explorer-tree" hx-select="#explorer-tree" hx-swap="outerHTML">
+           hx-target="#explorer-tree" hx-select="#explorer-tree" hx-swap="outerHTML"
+           hx-indicator="next .htmx-indicator">
+    <th:block th:replace="~{tql/shell :: busy('Filtering…')}"/>
   </div>
   <div id="explorer-tree" class="hc-stack" th:with="root=${studio.tree}">
     <div class="hc-empty" th:if="${root.empty}">

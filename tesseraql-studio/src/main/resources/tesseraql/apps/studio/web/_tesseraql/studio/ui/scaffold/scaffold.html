@@ -24,9 +24,9 @@
           <td th:text="${t.primaryKey}"></td>
           <td>
             <form th:if="${t.scaffoldable}" hx-post="/_tesseraql/studio/ui/scaffold/preview"
-                  hx-target="#scaffold-preview" hx-swap="innerHTML">
+                  hx-target="#scaffold-preview" hx-swap="innerHTML" hx-disabled-elt="find button">
               <input type="hidden" name="table" th:value="${t.name}">
-              <button type="submit" class="hc-button" data-variant="primary" data-size="sm">Preview CRUD</button>
+              <div class="hc-cluster"><button type="submit" class="hc-button" data-variant="primary" data-size="sm">Preview CRUD</button><th:block th:replace="~{tql/shell :: busy('Generating…')}"/></div>
             </form>
             <span class="hc-field__message" th:unless="${t.scaffoldable}">needs a single-column primary key</span>
           </td>

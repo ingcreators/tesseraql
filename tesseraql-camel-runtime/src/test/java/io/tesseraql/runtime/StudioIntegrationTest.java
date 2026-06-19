@@ -945,6 +945,21 @@ class StudioIntegrationTest {
     }
 
     @Test
+    void uiSourceAsyncActionsShowALoadingIndicator() throws Exception {
+        HttpResponse<String> response = get("/_tesseraql/studio/ui/source?path="
+                + enc("web/users/fragments/table/get.yml"), true);
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        // Every async action carries the htmx-native loading affordance (the shared tql/shell::busy
+        // fragment) so a slow DB call no longer reads as a hang: the indicator span renders and the
+        // submit button disables while the request is in flight.
+        assertThat(response.body()).contains("class=\"htmx-indicator hc-field__message\"")
+                .contains("role=\"status\"").contains("hx-disabled-elt=\"find button\"")
+                // the live preview/render panels point an hx-indicator at their busy span
+                .contains("hx-indicator=");
+    }
+
+    @Test
     void uiSourceTemplateOffersRenderedPreviewPanel() throws Exception {
         HttpResponse<String> response = get("/_tesseraql/studio/ui/source?path="
                 + enc("web/users/fragments/table/table.html"), true);
