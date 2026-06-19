@@ -1,9 +1,14 @@
 # Hypermedia Components — improvement briefs
 
-Drafts for upstream [Hypermedia Components](https://ingcreators.com/hypermedia-components)
+Briefs for upstream [Hypermedia Components](https://ingcreators.com/hypermedia-components)
 improvements, per [AGENTS.md](../AGENTS.md) rule 11 (UI gaps belong upstream, not papered over
-in TesseraQL). Each is ready to file as an hc issue; TesseraQL carries a local stand-in only
-until the released feature can be adopted.
+in TesseraQL). TesseraQL carries a local stand-in only until the released feature can be adopted.
+
+Filed upstream as `ingcreators/hypermedia-components` issues
+[#270](https://github.com/ingcreators/hypermedia-components/issues/270) (`data-hc-copy`),
+[#271](https://github.com/ingcreators/hypermedia-components/issues/271) (`hc-toc` + `data-hc-spy`),
+and [#272](https://github.com/ingcreators/hypermedia-components/issues/272)
+(`data-hc-nav-current`).
 
 These three gaps were confirmed absent from hc **0.1.5** — checked against both the CSS
 (`dist/hc.min.css`, `.hc-*` roots) and the behaviors bundle (`dist/*.js`). They surfaced while
@@ -19,6 +24,8 @@ this bar; these briefs ask the same of the proposed additions.
 ---
 
 ## Brief 1 — `data-hc-copy`: copy-to-clipboard behavior
+
+*Filed: [ingcreators/hypermedia-components#270](https://github.com/ingcreators/hypermedia-components/issues/270)*
 
 ### Problem
 
@@ -81,6 +88,8 @@ accessible name throughout.
 
 ## Brief 2 — `hc-toc` + `data-hc-spy`: in-page table of contents with scrollspy
 
+*Filed: [ingcreators/hypermedia-components#271](https://github.com/ingcreators/hypermedia-components/issues/271)*
+
 ### Problem
 
 Long reference pages (the Studio route- and table-doc pages have 8+ sections) benefit from an
@@ -140,6 +149,8 @@ would gain the missing active-section highlight.
 ---
 
 ## Brief 3 — current-nav marking by URL (`data-hc-nav-current`)
+
+*Filed: [ingcreators/hypermedia-components#272](https://github.com/ingcreators/hypermedia-components/issues/272)*
 
 ### Problem
 

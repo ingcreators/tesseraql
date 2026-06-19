@@ -521,6 +521,7 @@ in-page-TOC** behavior (the H4 "On this page" anchors don't highlight the curren
 and **active-nav marking by URL** (the `aria-current` logic in `tesseraql.js` — `hc-shell`/`hc-navmenu`
 don't own it).
 
-**Drafted** as fileable upstream briefs in [hc-briefs.md](hc-briefs.md) (`data-hc-copy`, `hc-toc` +
-`data-hc-spy`, `data-hc-nav-current`), each with the proposed markup, the CSP/a11y constraints, and
-the TesseraQL stand-in to retire. File them as hc issues and adopt the released features.
+Drafted and **filed upstream** as [hc-briefs.md](hc-briefs.md) → `ingcreators/hypermedia-components`
+issues #270 (`data-hc-copy`), #271 (`hc-toc` + `data-hc-spy`), #272 (`data-hc-nav-current`), each
+with the proposed markup, the CSP/a11y constraints, and the TesseraQL stand-in to retire on
+adoption.
