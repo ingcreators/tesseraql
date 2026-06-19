@@ -8,6 +8,13 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- Studio: **Copy buttons on the share-URL fields** (platform-UX track H6). The read-only share-link
+  inputs on the route, table, and coverage pages forced a manual select+copy. Each now has a **Copy**
+  button driven by a small `[data-copy]` behavior in `tesseraql.js` (copies the named field's value
+  via the Clipboard API and flips its label to "Copied" briefly). Copy needs JS and the strict CSP
+  forbids inline handlers, so it lives in the shared app bootstrap — a candidate to upstream into the
+  hc kit. A harmless no-op where the Clipboard API is unavailable.
+
 - Studio: **a live filter on the audit trail and the drafts list** (platform-UX track H5). Both were
   dense tables with no way to narrow them (audit grows unbounded). Each now carries the explorer's
   live-filter pattern — an htmx filter input that re-selects a swappable `#…-table` region. The audit

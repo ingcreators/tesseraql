@@ -115,3 +115,28 @@ const current = Array.from(document.querySelectorAll(".hc-shell__sidebar a[href]
 if (current) {
     current.setAttribute("aria-current", "page");
 }
+
+// Copy-to-clipboard control (Studio platform-UX H6): a `[data-copy]` button copies the value (or
+// text) of the element its selector names — used by the read-only share-URL fields, which otherwise
+// force a manual select+copy. The strict default-src 'self' CSP forbids inline handlers, so this
+// lives in the app bootstrap; it is a candidate to upstream into the hc kit (rule 11). The Clipboard
+// API needs a secure context (https or localhost); where it is absent the click is a harmless no-op.
+document.body.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-copy]");
+    if (!button) {
+        return;
+    }
+    const target = document.querySelector(button.getAttribute("data-copy"));
+    if (!target || !navigator.clipboard) {
+        return;
+    }
+    const value = target.value !== undefined ? target.value : target.textContent;
+    navigator.clipboard.writeText(value).then(() => {
+        const original = button.getAttribute("data-copy-label") || button.textContent;
+        button.setAttribute("data-copy-label", original);
+        button.textContent = "Copied";
+        setTimeout(() => {
+            button.textContent = button.getAttribute("data-copy-label") || original;
+        }, 1500);
+    });
+});
