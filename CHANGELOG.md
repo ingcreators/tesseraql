@@ -8,6 +8,14 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- Studio: **a live filter on the audit trail and the drafts list** (platform-UX track H5). Both were
+  dense tables with no way to narrow them (audit grows unbounded). Each now carries the explorer's
+  live-filter pattern — an htmx filter input that re-selects a swappable `#…-table` region. The audit
+  filter searches **server-side over the whole log** before the newest-200 window applies (so it
+  reaches older actions), and the window cap is now stated rather than silent; the drafts filter
+  narrows its list in the view. (`StudioService.auditEntries(limit, query)`,
+  `StudioViews.audit/drafts(…, query)`, a `q` input on both routes.)
+
 - Studio: **breadcrumbs and an "On this page" jump nav on the detail pages** (platform-UX track H4).
   The route reference (8+ sections) and the table reference were long scrolls with no in-page
   wayfinding. Each now carries a breadcrumb in the header (Docs › ‹id› / Schema › ‹table›) and a jump

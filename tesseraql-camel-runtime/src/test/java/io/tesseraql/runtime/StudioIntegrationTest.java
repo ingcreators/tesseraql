@@ -307,11 +307,17 @@ class StudioIntegrationTest {
                     assertThat(entry.get("at").asText()).isNotBlank();
                 });
 
-        // The audit page renders the entry; the explorer links to it.
+        // The audit page renders the entry, with the filter chrome (H5); the explorer links to it.
         assertThat(get("/_tesseraql/studio/ui/audit", true).body()).contains("Audit trail")
-                .contains(path);
+                .contains(path).contains("id=\"audit-filter\"").contains("id=\"audit-table\"");
         assertThat(get("/_tesseraql/studio/ui", true).body())
                 .contains("/_tesseraql/studio/ui/audit");
+
+        // The filter searches the whole log (H5): a matching query keeps the entry, a miss drops it.
+        assertThat(get("/_tesseraql/studio/ui/audit?q=" + enc("aud/q"), true).body())
+                .contains(path);
+        assertThat(get("/_tesseraql/studio/ui/audit?q=zzznomatch", true).body())
+                .contains("No actions match").doesNotContain(path);
     }
 
     @Test

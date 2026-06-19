@@ -97,6 +97,20 @@ class StudioViewsTest {
     }
 
     @Test
+    void draftsFilterKeepsOnlyMatchingPaths() {
+        // Platform-UX H5: a query narrows the drafts list (case-insensitive substring over the path).
+        Map<String, Object> model = StudioViews.drafts(List.of(
+                new StudioService.DraftSummary("web/api/users/get.yml", false, false),
+                new StudioService.DraftSummary("web/api/orders/get.yml", false, false)), "ORDERS");
+
+        assertThat(model).containsEntry("count", 1).containsEntry("query", "ORDERS");
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> rows = (List<Map<String, Object>>) model.get("drafts");
+        assertThat(rows).singleElement().extracting(r -> r.get("path"))
+                .isEqualTo("web/api/orders/get.yml");
+    }
+
+    @Test
     void sourceModelCarriesTheEditorLanguage() {
         // The data-lang grammar for live-highlighting the editable field, by extension (backlog E).
         assertThat(StudioViews.source("web/api/users/search.sql", "", false, false, "", null))

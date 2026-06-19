@@ -11,21 +11,35 @@
 <section class="hc-card">
   <h2>Audit trail</h2>
   <p class="hc-field__message">Who applied or scaffolded what, and when &mdash; recorded under <code>work/studio/audit</code>, newest first.</p>
-  <div class="hc-empty" th:unless="${page.hasEntries}"><p class="hc-empty__title">No audited actions yet.</p></div>
-  <table class="hc-table" th:if="${page.hasEntries}">
-    <thead><tr><th>When</th><th>Actor</th><th>Action</th><th>Target</th></tr></thead>
-    <tbody>
-      <tr th:each="e : ${page.entries}">
-        <td th:text="${e.at}"></td>
-        <td th:text="${e.actor}"></td>
-        <td><span class="hc-badge" th:attr="data-variant=${e.action == 'scaffold'} ? 'info' : 'success'" th:text="${e.action}"></span></td>
-        <td>
-          <a th:if="${e.targetUrl}" th:href="${e.targetUrl}" th:text="${e.target}"></a>
-          <code th:unless="${e.targetUrl}" th:text="${e.target}"></code>
-        </td>
-      </tr>
-    </tbody>
-  </table>
+  <div class="hc-field">
+    <label class="hc-field__label" for="audit-filter">Filter</label>
+    <input class="hc-input" id="audit-filter" type="search" name="q" th:value="${page.query}"
+           placeholder="Filter by actor, action, target&hellip;" autocomplete="off"
+           hx-get="/_tesseraql/studio/ui/audit" hx-trigger="keyup changed delay:250ms, search"
+           hx-target="#audit-table" hx-select="#audit-table" hx-swap="outerHTML"
+           hx-indicator="next .htmx-indicator">
+    <th:block th:replace="~{tql/shell :: busy('Filtering…')}"/>
+  </div>
+  <div id="audit-table" class="hc-stack">
+    <p class="hc-field__message" th:if="${page.atLimit}">Showing the newest 200 actions &mdash; a filter still searches the whole log.</p>
+    <div class="hc-empty" th:unless="${page.hasEntries}">
+      <p class="hc-empty__title" th:text="${#strings.isEmpty(page.query)} ? 'No audited actions yet.' : 'No actions match.'">No matches.</p>
+    </div>
+    <table class="hc-table" th:if="${page.hasEntries}">
+      <thead><tr><th>When</th><th>Actor</th><th>Action</th><th>Target</th></tr></thead>
+      <tbody>
+        <tr th:each="e : ${page.entries}">
+          <td th:text="${e.at}"></td>
+          <td th:text="${e.actor}"></td>
+          <td><span class="hc-badge" th:attr="data-variant=${e.action == 'scaffold'} ? 'info' : 'success'" th:text="${e.action}"></span></td>
+          <td>
+            <a th:if="${e.targetUrl}" th:href="${e.targetUrl}" th:text="${e.target}"></a>
+            <code th:unless="${e.targetUrl}" th:text="${e.target}"></code>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
 </section>
 </div>
 </html>
