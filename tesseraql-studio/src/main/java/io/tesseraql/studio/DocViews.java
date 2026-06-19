@@ -91,15 +91,24 @@ public final class DocViews {
         boolean desc = "desc".equalsIgnoreCase(dir);
         Comparator<Map<String, Object>> cmp = routeComparator(key);
         routes.sort(desc ? cmp.reversed() : cmp);
+        putSortLinks(ROUTE_SORT_COLS, key, desc, "/_tesseraql/studio/ui/docs", model);
+    }
+
+    /**
+     * Records the sort state for an hc-datagrid: per sortable column, the header link
+     * ({@code ?sort=col&dir=<flip>}) and the {@code aria-sort} the kit renders the arrow from. The
+     * active column flips its direction on click; any other column starts ascending (platform-UX I2).
+     */
+    private static void putSortLinks(List<String> cols, String key, boolean desc, String baseUrl,
+            Map<String, Object> model) {
         model.put("sortKey", key);
         model.put("sortDir", desc ? "desc" : "asc");
         Map<String, String> sortHref = new LinkedHashMap<>();
         Map<String, String> ariaSort = new LinkedHashMap<>();
-        for (String col : ROUTE_SORT_COLS) {
+        for (String col : cols) {
             boolean active = col.equals(key);
-            // Clicking the active column flips its direction; any other column starts ascending.
             String next = active && !desc ? "desc" : "asc";
-            sortHref.put(col, "/_tesseraql/studio/ui/docs?sort=" + col + "&dir=" + next);
+            sortHref.put(col, baseUrl + "?sort=" + col + "&dir=" + next);
             ariaSort.put(col, active ? (desc ? "descending" : "ascending") : "none");
         }
         model.put("sortHref", sortHref);
@@ -286,6 +295,21 @@ public final class DocViews {
      * no schema overlay is present.
      */
     public static Map<String, Object> schema(String appName, SchemaOverlay overlay) {
+        return schema(appName, overlay, null, null);
+    }
+
+    /** The sortable columns of each datasource's table list, in header order (platform-UX I2). */
+    private static final List<String> SCHEMA_SORT_COLS = List.of("name", "type", "columnCount",
+            "foreignKeyCount");
+
+    /**
+     * The schema index sorted by a table-list column (platform-UX I2): {@code sort} names one of
+     * {@link #SCHEMA_SORT_COLS} (default {@code name}) and {@code dir} is {@code asc}/{@code desc}; the
+     * same sort applies to every datasource's table list, and the model carries the header link and
+     * {@code aria-sort} the hc-datagrid renders from.
+     */
+    public static Map<String, Object> schema(String appName, SchemaOverlay overlay, String sort,
+            String dir) {
         Map<String, Object> model = new LinkedHashMap<>();
         model.put("appName", appName);
         boolean has = overlay != null && !overlay.datasources().isEmpty();
@@ -293,6 +317,9 @@ public final class DocViews {
         if (!has) {
             return model;
         }
+        String key = sort != null && SCHEMA_SORT_COLS.contains(sort) ? sort : "name";
+        boolean desc = "desc".equalsIgnoreCase(dir);
+        Comparator<Map<String, Object>> cmp = schemaComparator(key);
         List<Map<String, Object>> datasources = new ArrayList<>();
         for (Map.Entry<String, CatalogSchema> entry : overlay.datasources().entrySet()) {
             Map<String, Object> ds = new LinkedHashMap<>();
@@ -308,12 +335,24 @@ public final class DocViews {
                 row.put("detailUrl", tableUrl(entry.getKey(), table.name()));
                 tables.add(row);
             }
+            tables.sort(desc ? cmp.reversed() : cmp);
             ds.put("tables", tables);
             ds.put("tableCount", tables.size());
             datasources.add(ds);
         }
         model.put("datasources", datasources);
+        putSortLinks(SCHEMA_SORT_COLS, key, desc, "/_tesseraql/studio/ui/docs/schema", model);
         return model;
+    }
+
+    private static Comparator<Map<String, Object>> schemaComparator(String key) {
+        return switch (key) {
+            case "columnCount", "foreignKeyCount" -> Comparator.comparingInt(
+                    r -> ((Number) r.getOrDefault(key, 0)).intValue());
+            // name / type: case-insensitive text.
+            default -> Comparator.comparing(
+                    r -> String.valueOf(r.getOrDefault(key, "")).toLowerCase(Locale.ROOT));
+        };
     }
 
     /** The per-table reference model without route-usage cross-links (used by the public share view). */

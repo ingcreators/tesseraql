@@ -1089,8 +1089,14 @@ public final class TesseraqlRuntime implements AutoCloseable {
                             }
                             return model;
                         })
-                        .register("docs.schema", params -> io.tesseraql.studio.DocViews
-                                .schema(doc.appName(), doc.schema()))
+                        .register("docs.schema", params -> io.tesseraql.studio.DocViews.schema(
+                                doc.appName(), doc.schema(),
+                                params.get("sort") == null
+                                        ? null
+                                        : String.valueOf(params.get("sort")),
+                                params.get("dir") == null
+                                        ? null
+                                        : String.valueOf(params.get("dir"))))
                         .register("docs.table", params -> {
                             String ds = String.valueOf(params.get("ds"));
                             String name = String.valueOf(params.get("name"));

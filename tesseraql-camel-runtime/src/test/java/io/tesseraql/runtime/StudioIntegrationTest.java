@@ -640,6 +640,21 @@ class StudioIntegrationTest {
     }
 
     @Test
+    void uiDocsSchemaTablesAreSortable() throws Exception {
+        // Platform-UX I2: the schema table list is an hc-datagrid with server-driven column sort
+        // (same CSP-clean pattern as the route catalog).
+        String asc = get("/_tesseraql/studio/ui/docs/schema?sort=name&dir=asc", true).body();
+        assertThat(asc).contains("class=\"hc-datagrid\"").contains("data-sortable")
+                .contains("aria-sort=\"ascending\"").contains("sort=name&amp;dir=desc");
+        // ascending by name: the customers row's link text precedes the orders row's
+        assertThat(asc.indexOf(">customers<")).isLessThan(asc.indexOf(">orders<"));
+
+        String desc = get("/_tesseraql/studio/ui/docs/schema?sort=name&dir=desc", true).body();
+        assertThat(desc).contains("aria-sort=\"descending\"").contains("sort=name&amp;dir=asc");
+        assertThat(desc.indexOf(">orders<")).isLessThan(desc.indexOf(">customers<"));
+    }
+
+    @Test
     void uiDocsSchemaTableRendersColumnsKeysAndForeignKeys() throws Exception {
         HttpResponse<String> response = get(
                 "/_tesseraql/studio/ui/docs/schema/table?ds=main&name=" + enc("orders"), true);

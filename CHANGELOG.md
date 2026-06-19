@@ -452,6 +452,9 @@ All notable changes to TesseraQL are documented here. The format follows
   kit renders the sort arrow from it. No JS and no `hx-vals='js:'` — it works under the strict CSP
   because the arrow is pure CSS keyed off `aria-sort` and the datagrid's click handler does not
   `preventDefault` a header link. `DocViews.index(…, sort, dir)` does the sort.
+- Studio: **the schema table list is a sortable `hc-datagrid`** (platform-UX track I) — each
+  datasource's tables sort by name / type / columns / FKs, with the same CSP-clean server-driven
+  pattern as the route catalog (`DocViews.schema(…, sort, dir)`).
 - Studio: **the audit trail is paginated with `hc-pagination`** (platform-UX track I). H5 capped the
   page at the newest 200 entries; the whole log is now navigable in 50-entry pages (newest first) via
   an `hc-pagination` nav of plain styled links (no JS, CSP-clean). The H5 filter still searches the
