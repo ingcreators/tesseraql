@@ -525,6 +525,35 @@ class StudioServiceTest {
     }
 
     @Test
+    void auditPageSortsTheFilteredLogByColumn(@TempDir Path dir) throws Exception {
+        Files.createDirectories(dir.resolve("config"));
+        Files.writeString(dir.resolve("config/tesseraql.yml"), "tesseraql:\n  app:\n    name: t\n");
+        StudioService studio = new StudioService(new ManifestLoader().load(dir), false);
+        Path log = dir.resolve("work/studio/audit/audit.jsonl");
+        Files.createDirectories(log.getParent());
+        Files.writeString(log, """
+                {"at":"2026-06-18T10:00:00Z","actor":"carol","action":"apply","target":"web/c.yml"}
+                {"at":"2026-06-18T11:00:00Z","actor":"alice","action":"scaffold","target":"widgets"}
+                {"at":"2026-06-18T12:00:00Z","actor":"bob","action":"apply","target":"web/b.yml"}
+                """);
+
+        // Platform-UX I2: the whole filtered log is sorted before paging.
+        assertThat(studio.auditPage(null, "actor", "asc", 1, 50).entries())
+                .extracting(StudioService.AuditEntry::actor)
+                .containsExactly("alice", "bob", "carol");
+        assertThat(studio.auditPage(null, "actor", "desc", 1, 50).entries())
+                .extracting(StudioService.AuditEntry::actor)
+                .containsExactly("carol", "bob", "alice");
+        // No explicit sort = newest first (at desc): bob 12:00, alice 11:00, carol 10:00.
+        assertThat(studio.auditPage(null, null, null, 1, 50).entries())
+                .extracting(StudioService.AuditEntry::actor)
+                .containsExactly("bob", "alice", "carol");
+        // Sort composes with the filter: only bob's apply matches, still sorted.
+        assertThat(studio.auditPage("bob", "actor", "asc", 1, 50).entries())
+                .extracting(StudioService.AuditEntry::actor).containsExactly("bob");
+    }
+
+    @Test
     void createMigrationSupportsRepeatableVendorAndOtherDatasource(@TempDir Path dir)
             throws Exception {
         StudioService studio = migrationStudio(dir);

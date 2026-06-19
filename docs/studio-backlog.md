@@ -499,8 +499,13 @@ Retire the hand-rolled versions in favour of the blessed components.
   `aria-sort` on the active column, and the kit renders the arrow — no JS, no `hx-vals='js:'`,
   CSP-clean. `DocViews.index(…, sort, dir)` does the sort + emits the per-column `sortHref`/`ariaSort`.
   Extended to the **schema table list** (`schema.html` — each datasource's tables sort by
-  name/type/columns/FKs via `DocViews.schema(…, sort, dir)`, sharing the `putSortLinks` helper).
-  *Next (optional):* the audit trail (its sort would compose with the existing filter + pagination).
+  name/type/columns/FKs via `DocViews.schema(…, sort, dir)`, sharing the `putSortLinks` helper) and
+  the **audit trail** (`audit.html` — sort by When/Actor/Action/Target via
+  `StudioService.auditPage(query, sort, dir, page, size)`, the whole filtered log sorted before
+  paging). Audit composes all three: a **sort** link carries the filter `q` and resets the page; a
+  **page** link carries `q` + sort; the **filter** input keeps the sort across an htmx re-filter via a
+  static-JSON `hx-vals` (CSP-clean, not `hx-vals='js:'`). All three Studio sortable tables now use the
+  same server-driven hc-datagrid pattern.
 - [x] **I3 — `hc-pagination` for the audit trail** (P2) — *done*: H5 capped the trail at the newest
   200; now the whole log is navigable. `StudioService.auditPage(query, page, size)` returns one
   50-entry page (newest first) of the filtered log plus the total; `StudioViews.audit(AuditPage, q)`

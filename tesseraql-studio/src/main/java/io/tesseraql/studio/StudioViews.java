@@ -143,6 +143,41 @@ public final class StudioViews {
         return model;
     }
 
+    /** The sortable columns of the audit trail, in header order (platform-UX I2). */
+    private static final List<String> AUDIT_SORT_COLS = List.of("at", "actor", "action", "target");
+
+    /**
+     * The paged audit model plus the hc-datagrid sort state (platform-UX I2): the per-column header
+     * link and {@code aria-sort}, with the current filter {@code q} carried on each sort link and an
+     * {@code hxVals} so the filter input preserves the sort across an htmx re-filter.
+     */
+    public static Map<String, Object> audit(StudioService.AuditPage page, String query, String sort,
+            String dir) {
+        Map<String, Object> model = audit(page, query);
+        boolean explicit = sort != null && AUDIT_SORT_COLS.contains(sort);
+        String key = explicit ? sort : "at";
+        boolean desc = explicit ? "desc".equalsIgnoreCase(dir) : true;
+        model.put("sortKey", key);
+        model.put("sortDir", desc ? "desc" : "asc");
+        String qParam = query == null || query.isBlank()
+                ? ""
+                : "&q=" + URLEncoder.encode(query, StandardCharsets.UTF_8);
+        Map<String, String> sortHref = new LinkedHashMap<>();
+        Map<String, String> ariaSort = new LinkedHashMap<>();
+        for (String col : AUDIT_SORT_COLS) {
+            boolean active = col.equals(key);
+            String next = active && !desc ? "desc" : "asc";
+            sortHref.put(col, "/_tesseraql/studio/ui/audit?sort=" + col + "&dir=" + next + qParam);
+            ariaSort.put(col, active ? (desc ? "descending" : "ascending") : "none");
+        }
+        model.put("sortHref", sortHref);
+        model.put("ariaSort", ariaSort);
+        // Static JSON (not hx-vals='js:') so the CSP-clean filter input keeps the sort on re-filter.
+        model.put("hxVals",
+                "{\"sort\": \"" + key + "\", \"dir\": \"" + (desc ? "desc" : "asc") + "\"}");
+        return model;
+    }
+
     private static Map<String, Object> auditRows(List<AuditEntry> entries, String query) {
         List<Map<String, Object>> rows = new ArrayList<>();
         for (AuditEntry entry : entries) {

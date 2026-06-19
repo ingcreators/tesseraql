@@ -17,36 +17,45 @@
            placeholder="Filter by actor, action, target&hellip;" autocomplete="off"
            hx-get="/_tesseraql/studio/ui/audit" hx-trigger="keyup changed delay:250ms, search"
            hx-target="#audit-table" hx-select="#audit-table" hx-swap="outerHTML"
-           hx-indicator="next .htmx-indicator">
+           hx-indicator="next .htmx-indicator" th:attr="hx-vals=${page.hxVals}">
     <th:block th:replace="~{tql/shell :: busy('Filtering…')}"/>
   </div>
   <div id="audit-table" class="hc-stack">
     <p class="hc-field__message" th:if="${page.hasEntries}"
-       th:text="${page.total + ' action' + (page.total == 1 ? '' : 's') + (page.paged ? ', newest first' : '')}">0 actions</p>
+       th:text="${page.total + ' action' + (page.total == 1 ? '' : 's')}">0 actions</p>
     <div class="hc-empty" th:unless="${page.hasEntries}">
       <p class="hc-empty__title" th:text="${#strings.isEmpty(page.query)} ? 'No audited actions yet.' : 'No actions match.'">No matches.</p>
     </div>
-    <table class="hc-table" th:if="${page.hasEntries}">
-      <thead><tr><th>When</th><th>Actor</th><th>Action</th><th>Target</th></tr></thead>
-      <tbody>
-        <tr th:each="e : ${page.entries}">
-          <td th:text="${e.at}"></td>
-          <td th:text="${e.actor}"></td>
-          <td><span class="hc-badge" th:attr="data-variant=${e.action == 'scaffold'} ? 'info' : 'success'" th:text="${e.action}"></span></td>
-          <td>
-            <a th:if="${e.targetUrl}" th:href="${e.targetUrl}" th:text="${e.target}"></a>
-            <code th:unless="${e.targetUrl}" th:text="${e.target}"></code>
-          </td>
-        </tr>
-      </tbody>
-    </table>
+    <div class="hc-datagrid" th:if="${page.hasEntries}">
+      <div class="hc-datagrid__scroll">
+        <table class="hc-datagrid__table">
+          <thead class="hc-datagrid__head"><tr>
+            <th class="hc-datagrid__headcell" data-sortable data-col="at" th:attr="aria-sort=${page.ariaSort.at}"><a th:href="${page.sortHref.at}">When</a></th>
+            <th class="hc-datagrid__headcell" data-sortable data-col="actor" th:attr="aria-sort=${page.ariaSort.actor}"><a th:href="${page.sortHref.actor}">Actor</a></th>
+            <th class="hc-datagrid__headcell" data-sortable data-col="action" th:attr="aria-sort=${page.ariaSort.action}"><a th:href="${page.sortHref.action}">Action</a></th>
+            <th class="hc-datagrid__headcell" data-sortable data-col="target" th:attr="aria-sort=${page.ariaSort.target}"><a th:href="${page.sortHref.target}">Target</a></th>
+          </tr></thead>
+          <tbody class="hc-datagrid__body">
+            <tr class="hc-datagrid__row" th:each="e : ${page.entries}">
+              <td class="hc-datagrid__cell" th:text="${e.at}"></td>
+              <td class="hc-datagrid__cell" th:text="${e.actor}"></td>
+              <td class="hc-datagrid__cell"><span class="hc-badge" th:attr="data-variant=${e.action == 'scaffold'} ? 'info' : 'success'" th:text="${e.action}"></span></td>
+              <td class="hc-datagrid__cell">
+                <a th:if="${e.targetUrl}" th:href="${e.targetUrl}" th:text="${e.target}"></a>
+                <code th:unless="${e.targetUrl}" th:text="${e.target}"></code>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
     <nav class="hc-pagination" aria-label="Pagination" th:if="${page.paged}">
       <a th:if="${page.hasPrev}" class="hc-pagination__item"
-         th:href="@{/_tesseraql/studio/ui/audit(q=${page.query},page=${page.prevPage})}">&lsaquo; Prev</a>
+         th:href="@{/_tesseraql/studio/ui/audit(q=${page.query},page=${page.prevPage},sort=${page.sortKey},dir=${page.sortDir})}">&lsaquo; Prev</a>
       <span th:unless="${page.hasPrev}" class="hc-pagination__item" aria-disabled="true">&lsaquo; Prev</span>
       <span class="hc-pagination__item" aria-current="page" th:text="|Page ${page.pageNum} of ${page.totalPages}|">Page 1 of 1</span>
       <a th:if="${page.hasNext}" class="hc-pagination__item"
-         th:href="@{/_tesseraql/studio/ui/audit(q=${page.query},page=${page.nextPage})}">Next &rsaquo;</a>
+         th:href="@{/_tesseraql/studio/ui/audit(q=${page.query},page=${page.nextPage},sort=${page.sortKey},dir=${page.sortDir})}">Next &rsaquo;</a>
       <span th:unless="${page.hasNext}" class="hc-pagination__item" aria-disabled="true">Next &rsaquo;</span>
     </nav>
   </div>

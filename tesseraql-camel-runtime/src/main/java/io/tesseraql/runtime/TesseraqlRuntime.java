@@ -1033,13 +1033,20 @@ public final class TesseraqlRuntime implements AutoCloseable {
                             return io.tesseraql.studio.StudioViews.drafts(studio.drafts(), q);
                         })
                         .register("studio.audit", params -> {
-                            // Filter the whole log, then return one page of it (H5 filter + I3 paging).
+                            // Filter the whole log, then sort + page it (H5 filter + I3 paging + I2 sort).
                             String q = params.get("q") == null
                                     ? null
                                     : String.valueOf(params.get("q"));
-                            return io.tesseraql.studio.StudioViews.audit(studio.auditPage(q,
-                                    parsePage(params.get("page")),
-                                    io.tesseraql.studio.StudioViews.AUDIT_PAGE_SIZE), q);
+                            String sort = params.get("sort") == null
+                                    ? null
+                                    : String.valueOf(params.get("sort"));
+                            String dir = params.get("dir") == null
+                                    ? null
+                                    : String.valueOf(params.get("dir"));
+                            return io.tesseraql.studio.StudioViews.audit(
+                                    studio.auditPage(q, sort, dir, parsePage(params.get("page")),
+                                            io.tesseraql.studio.StudioViews.AUDIT_PAGE_SIZE),
+                                    q, sort, dir);
                         });
                 // Providers backing the bundled documentation portal (documentation portal v1/v2/v3):
                 // they read the packaged spec.json, falling back to a live model from the manifest,

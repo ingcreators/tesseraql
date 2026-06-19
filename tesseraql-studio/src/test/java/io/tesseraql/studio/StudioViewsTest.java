@@ -174,6 +174,35 @@ class StudioViewsTest {
                 .containsEntry("paged", false).containsEntry("totalPages", 1);
     }
 
+    @Test
+    void auditSortLinksCarryTheFilterAndPreserveSortOnRefilter() {
+        // Platform-UX I2: the sort state, per-column header link / aria-sort, and the hx-vals that
+        // keeps the sort when the filter re-requests #audit-table.
+        StudioService.AuditEntry e = new StudioService.AuditEntry("t", "a", "apply",
+                "web/x/get.yml");
+        StudioService.AuditPage page = new StudioService.AuditPage(List.of(e), 1, 50, 1);
+
+        // Default = newest first (at desc); the active 'at' header flips to ascending.
+        Map<String, Object> def = StudioViews.audit(page, null, null, null);
+        assertThat(def).containsEntry("sortKey", "at").containsEntry("sortDir", "desc");
+        @SuppressWarnings("unchecked")
+        Map<String, String> aria = (Map<String, String>) def.get("ariaSort");
+        assertThat(aria).containsEntry("at", "descending").containsEntry("actor", "none");
+        @SuppressWarnings("unchecked")
+        Map<String, String> href = (Map<String, String>) def.get("sortHref");
+        assertThat(href.get("at")).contains("sort=at&dir=asc");
+        assertThat((String) def.get("hxVals")).contains("\"sort\": \"at\"")
+                .contains("\"dir\": \"desc\"");
+
+        // Explicit actor-asc with a filter: the sort link carries q, hx-vals carries the sort.
+        Map<String, Object> byActor = StudioViews.audit(page, "alice", "actor", "asc");
+        assertThat(byActor).containsEntry("sortKey", "actor").containsEntry("sortDir", "asc");
+        @SuppressWarnings("unchecked")
+        Map<String, String> href2 = (Map<String, String>) byActor.get("sortHref");
+        assertThat(href2.get("actor")).contains("sort=actor&dir=desc").contains("q=alice");
+        assertThat((String) byActor.get("hxVals")).contains("\"sort\": \"actor\"");
+    }
+
     @SuppressWarnings("unchecked")
     private static Map<String, Object> tree(Map<String, Object> model) {
         return (Map<String, Object>) model.get("tree");

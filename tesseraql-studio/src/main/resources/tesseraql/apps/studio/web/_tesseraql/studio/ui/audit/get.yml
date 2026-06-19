@@ -10,6 +10,12 @@ input:
   page:
     type: integer
     required: false
+  sort:
+    type: string
+    required: false
+  dir:
+    type: string
+    required: false
 
 security:
   auth: bearer
@@ -19,6 +25,8 @@ sql:
   params:
     q: params.q
     page: params.page
+    sort: params.sort
+    dir: params.dir
 
 response:
   html:
