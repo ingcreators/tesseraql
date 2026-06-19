@@ -27,6 +27,9 @@ public final class StudioViews {
 
     private static final String SOURCE_URL = "/_tesseraql/studio/ui/source?path=";
 
+    /** The cap on audit entries loaded into the trail page (Studio platform-UX H5). */
+    public static final int AUDIT_LIMIT = 200;
+
     private StudioViews() {
     }
 
@@ -73,9 +76,6 @@ public final class StudioViews {
      * editor, a {@code conflict} flag (the source changed underneath it), and a {@code new}/{@code
      * edit} kind, plus the totals a badge shows.
      */
-    /** The cap on audit entries loaded into the trail page (Studio platform-UX H5). */
-    public static final int AUDIT_LIMIT = 200;
-
     public static Map<String, Object> drafts(List<DraftSummary> drafts) {
         return drafts(drafts, null);
     }
