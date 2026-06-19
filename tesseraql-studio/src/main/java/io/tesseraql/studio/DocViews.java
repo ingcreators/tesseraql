@@ -12,6 +12,7 @@ import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.sql.Types;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -40,6 +41,20 @@ public final class DocViews {
      * line coverage). The overlay is optional; columns degrade to absent when it is {@code null}.
      */
     public static Map<String, Object> index(String appName, DocSpec spec, ReportOverlay overlay) {
+        return index(appName, spec, overlay, null, null);
+    }
+
+    /** The sortable columns of the route catalog, in their header order (platform-UX I2). */
+    private static final List<String> ROUTE_SORT_COLS = List.of("id", "method", "path", "recipe",
+            "testCount", "linePct");
+
+    /**
+     * The docs index sorted by a route-catalog column (platform-UX I2): {@code sort} names one of
+     * {@link #ROUTE_SORT_COLS} (default {@code id}) and {@code dir} is {@code asc}/{@code desc}. The
+     * model carries the per-column header link and {@code aria-sort} the hc-datagrid renders from.
+     */
+    public static Map<String, Object> index(String appName, DocSpec spec, ReportOverlay overlay,
+            String sort, String dir) {
         Map<String, Object> model = new LinkedHashMap<>();
         model.put("appName", appName);
         List<Map<String, Object>> routes = new ArrayList<>();
@@ -55,6 +70,7 @@ public final class DocViews {
             applyRouteOverlay(row, overlay == null ? null : overlay.routeReport(route.id()));
             routes.add(row);
         }
+        sortRoutes(routes, sort, dir, model);
         model.put("routes", routes);
         model.put("hasRoutes", !routes.isEmpty());
         model.put("hasReport", overlay != null);
@@ -66,6 +82,41 @@ public final class DocViews {
         model.put("migrations", migrations);
         model.put("hasMigrations", !migrations.isEmpty());
         return model;
+    }
+
+    /** Sorts the route rows by the chosen column and records the sort state for the header links. */
+    private static void sortRoutes(List<Map<String, Object>> routes, String sort, String dir,
+            Map<String, Object> model) {
+        String key = sort != null && ROUTE_SORT_COLS.contains(sort) ? sort : "id";
+        boolean desc = "desc".equalsIgnoreCase(dir);
+        Comparator<Map<String, Object>> cmp = routeComparator(key);
+        routes.sort(desc ? cmp.reversed() : cmp);
+        model.put("sortKey", key);
+        model.put("sortDir", desc ? "desc" : "asc");
+        Map<String, String> sortHref = new LinkedHashMap<>();
+        Map<String, String> ariaSort = new LinkedHashMap<>();
+        for (String col : ROUTE_SORT_COLS) {
+            boolean active = col.equals(key);
+            // Clicking the active column flips its direction; any other column starts ascending.
+            String next = active && !desc ? "desc" : "asc";
+            sortHref.put(col, "/_tesseraql/studio/ui/docs?sort=" + col + "&dir=" + next);
+            ariaSort.put(col, active ? (desc ? "descending" : "ascending") : "none");
+        }
+        model.put("sortHref", sortHref);
+        model.put("ariaSort", ariaSort);
+    }
+
+    private static Comparator<Map<String, Object>> routeComparator(String key) {
+        return switch (key) {
+            case "testCount" -> Comparator.comparingInt(
+                    r -> ((Number) r.getOrDefault("testCount", 0)).intValue());
+            case "linePct" -> Comparator.comparing(
+                    r -> (Integer) r.get("linePct"),
+                    Comparator.nullsLast(Comparator.naturalOrder()));
+            // id / method / path / recipe: case-insensitive text.
+            default -> Comparator.comparing(
+                    r -> String.valueOf(r.getOrDefault(key, "")).toLowerCase(Locale.ROOT));
+        };
     }
 
     /** The full per-route reference model without data-dependency links (no schema overlay). */

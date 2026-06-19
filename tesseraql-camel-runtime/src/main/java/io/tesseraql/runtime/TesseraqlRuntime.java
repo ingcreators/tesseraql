@@ -1049,8 +1049,14 @@ public final class TesseraqlRuntime implements AutoCloseable {
                 // Opt-in signed share links (F8, slice 3): off unless a signing secret is set.
                 ShareLinks shareLinks = ShareLinks.from(manifest.config());
                 serviceProviders
-                        .register("docs.index", params -> io.tesseraql.studio.DocViews
-                                .index(doc.appName(), doc.spec(), doc.report()))
+                        .register("docs.index", params -> io.tesseraql.studio.DocViews.index(
+                                doc.appName(), doc.spec(), doc.report(),
+                                params.get("sort") == null
+                                        ? null
+                                        : String.valueOf(params.get("sort")),
+                                params.get("dir") == null
+                                        ? null
+                                        : String.valueOf(params.get("dir"))))
                         .register("docs.route", params -> {
                             String id = String.valueOf(params.get("id"));
                             io.tesseraql.studio.DocService.RouteEntry entry = doc.route(id);

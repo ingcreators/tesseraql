@@ -37,37 +37,46 @@
 <section class="hc-card">
   <h2>Routes &amp; pages</h2>
   <div class="hc-empty" th:unless="${docs.hasRoutes}"><p class="hc-empty__title">No routes defined.</p></div>
-  <table class="hc-table" th:if="${docs.hasRoutes}">
-    <thead><tr>
-      <th>Id</th><th>Method</th><th>Path</th><th>Recipe</th><th>Tests</th>
-      <th th:if="${docs.hasReport}">Result</th>
-      <th th:if="${docs.hasReport}">Coverage</th>
-    </tr></thead>
-    <tbody>
-      <tr th:each="r : ${docs.routes}">
-        <td><a th:href="${r.detailUrl}" th:text="${r.id}"></a></td>
-        <td th:text="${r.method}"></td>
-        <td th:text="${r.path}"></td>
-        <td th:text="${r.recipe}"></td>
-        <td th:text="${r.testCount}"></td>
-        <td th:if="${docs.hasReport}">
-          <th:block th:if="${r.hasReport}">
-            <span class="hc-badge" th:if="${r.covered}" data-variant="success">covered</span>
-            <span class="hc-badge" th:unless="${r.covered}" data-variant="warning">untested</span>
-            <span class="hc-badge" th:if="${r.testsRun > 0}"
-                  th:attr="data-variant=${r.allPassed} ? 'success' : 'error'"
-                  th:text="|${r.testsPassed}/${r.testsRun}|"></span>
-          </th:block>
-          <span th:unless="${r.hasReport}">&mdash;</span>
-        </td>
-        <td th:if="${docs.hasReport}">
-          <span class="hc-badge" data-variant="info" th:if="${r.linePct != null}"
-                th:text="|${r.linePct}% lines|"></span>
-          <span th:if="${r.linePct == null}">&mdash;</span>
-        </td>
-      </tr>
-    </tbody>
-  </table>
+  <p class="hc-field__message" th:if="${docs.hasRoutes}">Sortable — click a column header.</p>
+  <div class="hc-datagrid" th:if="${docs.hasRoutes}">
+    <div class="hc-datagrid__scroll">
+      <table class="hc-datagrid__table">
+        <thead class="hc-datagrid__head"><tr>
+          <th class="hc-datagrid__headcell" data-sortable data-col="id" th:attr="aria-sort=${docs.ariaSort.id}"><a th:href="${docs.sortHref.id}">Id</a></th>
+          <th class="hc-datagrid__headcell" data-sortable data-col="method" th:attr="aria-sort=${docs.ariaSort.method}"><a th:href="${docs.sortHref.method}">Method</a></th>
+          <th class="hc-datagrid__headcell" data-sortable data-col="path" th:attr="aria-sort=${docs.ariaSort.path}"><a th:href="${docs.sortHref.path}">Path</a></th>
+          <th class="hc-datagrid__headcell" data-sortable data-col="recipe" th:attr="aria-sort=${docs.ariaSort.recipe}"><a th:href="${docs.sortHref.recipe}">Recipe</a></th>
+          <th class="hc-datagrid__headcell" data-sortable data-col="testCount" th:attr="aria-sort=${docs.ariaSort.testCount}"><a th:href="${docs.sortHref.testCount}">Tests</a></th>
+          <th class="hc-datagrid__headcell" th:if="${docs.hasReport}">Result</th>
+          <th class="hc-datagrid__headcell" data-sortable data-col="linePct" th:if="${docs.hasReport}" th:attr="aria-sort=${docs.ariaSort.linePct}"><a th:href="${docs.sortHref.linePct}">Coverage</a></th>
+        </tr></thead>
+        <tbody class="hc-datagrid__body">
+          <tr class="hc-datagrid__row" th:each="r : ${docs.routes}">
+            <td class="hc-datagrid__cell"><a th:href="${r.detailUrl}" th:text="${r.id}"></a></td>
+            <td class="hc-datagrid__cell" th:text="${r.method}"></td>
+            <td class="hc-datagrid__cell" th:text="${r.path}"></td>
+            <td class="hc-datagrid__cell" th:text="${r.recipe}"></td>
+            <td class="hc-datagrid__cell" th:text="${r.testCount}"></td>
+            <td class="hc-datagrid__cell" th:if="${docs.hasReport}">
+              <th:block th:if="${r.hasReport}">
+                <span class="hc-badge" th:if="${r.covered}" data-variant="success">covered</span>
+                <span class="hc-badge" th:unless="${r.covered}" data-variant="warning">untested</span>
+                <span class="hc-badge" th:if="${r.testsRun > 0}"
+                      th:attr="data-variant=${r.allPassed} ? 'success' : 'error'"
+                      th:text="|${r.testsPassed}/${r.testsRun}|"></span>
+              </th:block>
+              <span th:unless="${r.hasReport}">&mdash;</span>
+            </td>
+            <td class="hc-datagrid__cell" th:if="${docs.hasReport}">
+              <span class="hc-badge" data-variant="info" th:if="${r.linePct != null}"
+                    th:text="|${r.linePct}% lines|"></span>
+              <span th:if="${r.linePct == null}">&mdash;</span>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
 </section>
 <section class="hc-card">
   <h2>Migrations</h2>

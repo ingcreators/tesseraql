@@ -551,6 +551,23 @@ class StudioIntegrationTest {
     }
 
     @Test
+    void uiDocsRouteCatalogIsSortable() throws Exception {
+        // Platform-UX I2: the route catalog is an hc-datagrid with server-driven column sort — each
+        // header is a link that re-requests sorted, and the server sets aria-sort the kit renders the
+        // arrow from. No JS / no hx-vals='js:' — works under the strict CSP.
+        String asc = get("/_tesseraql/studio/ui/docs?sort=id&dir=asc", true).body();
+        assertThat(asc).contains("class=\"hc-datagrid\"").contains("data-sortable")
+                // the active column reports ascending and its header link flips to descending
+                .contains("aria-sort=\"ascending\"").contains("sort=id&amp;dir=desc");
+        // ascending by id: deps.* sorts before users.*
+        assertThat(asc.indexOf("deps.customers")).isLessThan(asc.indexOf("users.search"));
+
+        String desc = get("/_tesseraql/studio/ui/docs?sort=id&dir=desc", true).body();
+        assertThat(desc).contains("aria-sort=\"descending\"").contains("sort=id&amp;dir=asc");
+        assertThat(desc.indexOf("users.search")).isLessThan(desc.indexOf("deps.customers"));
+    }
+
+    @Test
     void uiDocsRouteRendersTheRunOverlay() throws Exception {
         HttpResponse<String> response = get(
                 "/_tesseraql/studio/ui/docs/route?id=" + enc("users.search"), true);
