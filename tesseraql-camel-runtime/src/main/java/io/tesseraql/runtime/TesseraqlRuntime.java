@@ -1233,7 +1233,6 @@ public final class TesseraqlRuntime implements AutoCloseable {
                 manifest.config(), pinningSource, otelSdk, opsDashboard, outboxSink);
     }
 
-    /** Whether any declared workflow runs in managed mode (the default or a per-workflow override). */
     /** A 1-based page number from a request param (Integer or String), defaulting to 1 (I3). */
     private static int parsePage(Object raw) {
         if (raw == null) {
@@ -1246,6 +1245,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
         }
     }
 
+    /** Whether any declared workflow runs in managed mode (the default or a per-workflow override). */
     private static boolean workflowsNeedManagedStore(
             io.tesseraql.yaml.manifest.AppManifest manifest) {
         if (manifest.workflows().isEmpty()) {
