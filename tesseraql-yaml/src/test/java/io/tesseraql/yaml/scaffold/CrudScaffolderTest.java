@@ -143,7 +143,19 @@ class CrudScaffolderTest {
                 .contains("class=\"hc-datagrid\"")
                 .contains("class=\"hc-datagrid__table\"")
                 .contains("<td class=\"hc-datagrid__cell\"")
+                // Server-driven sort: sortable headers, aria-sort, hidden state, and the htmx swap.
+                .contains("data-sortable data-col=\"name\"")
+                .contains("aria-sort=${sort == 'name'")
+                .contains("<input type=\"hidden\" name=\"sort\"")
+                .contains("hx-include=\"[name='q']\"")
                 .doesNotContain("<html");
+        // The fragment route declares the sort/dir inputs and the SQL allowlists the columns.
+        assertThat(content(files, "web/items/fragments/table/get.yml"))
+                .contains("sort: query.sort")
+                .contains("sort: params.sort");
+        assertThat(content(files, "web/items/fragments/table/search.sql"))
+                .contains("/*%if sort == \"quantity\" */")
+                .contains("/*%if dir == \"desc\" */");
         String edit = content(files, "web/items/{id}/edit.html");
         assertThat(edit)
                 .contains("class=\"hc-datepicker\" id=\"field-due-date\" type=\"date\"")
@@ -242,9 +254,11 @@ class CrudScaffolderTest {
         assertThat(content(files, "web/codes/{code}/update/update.sql"))
                 .doesNotContain("version");
 
-        // No character data column: the list page has no live-search branch at all.
-        assertThat(content(files, "web/codes/fragments/table/search.sql"))
-                .doesNotContain("%if");
+        // No character data column: the list page has no live-search filter (no q branch),
+        // though the headers still sort (the ORDER BY allowlists the data columns).
+        String bareSearch = content(files, "web/codes/fragments/table/search.sql");
+        assertThat(bareSearch).doesNotContain("like").doesNotContain("q != null");
+        assertThat(bareSearch).contains("/*%if sort ==").contains("/*%if dir ==");
         assertThat(content(files, "web/codes/new/new.html")).doesNotContain("hc-datepicker");
     }
 

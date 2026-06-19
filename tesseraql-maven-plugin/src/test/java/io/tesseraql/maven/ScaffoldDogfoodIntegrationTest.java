@@ -117,10 +117,13 @@ class ScaffoldDogfoodIntegrationTest {
         AppTestRunner.RunResult result = new AppTestRunner()
                 .run(EXAMPLE, dataSource, RealmConfig.managed("local", "main"), reportDir);
 
-        assertThat(result.report().results()).hasSize(5);
+        // Two skeleton smoke cases + the crud suite (filter, detail, and one case per sortable
+        // column so the dynamic ORDER BY stays fully branch-covered).
+        assertThat(result.report().results()).hasSize(11);
         assertThat(result.report().allPassed())
                 .as(() -> result.report().results().toString()).isTrue();
-        // Both branches of both generated search templates are exercised.
+        // Every branch of both generated search templates is exercised — including, for the crud
+        // fragment, each column's ORDER BY branch and the descending toggle.
         assertThat(result.coverage().report("web/api/items/search.sql").branchRatio())
                 .isEqualTo(1.0);
         assertThat(result.coverage().report("web/items/fragments/table/search.sql")
