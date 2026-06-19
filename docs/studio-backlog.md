@@ -417,12 +417,17 @@ order below (P0 → P1 → P2).
   slow DB ops (it read as a hang). Added an htmx-native `htmx-indicator` affordance (a reusable
   `tql/shell :: busy(label)` fragment) plus `hx-disabled-elt` to every async action. CSP allows
   `style-src 'unsafe-inline'`, so htmx's injected indicator style applies with no custom CSS/JS.
-- [ ] **H1 — Studio sidebar nav + breadcrumbs** (P0): Studio pages use the shell's `page(...)` form,
-  which renders only the 3-link system nav — there is no Studio section nav and no breadcrumbs (the
-  explorer header link-cluster is the only wayfinding). Switch Studio to the generic
-  `shell(title, nav, header, content)` form with a Studio `nav` (Explorer, Docs, Coverage, Schema,
-  Scaffold, Migration, SQL builder, Drafts, Audit, Wizards); `tesseraql.js` already sets
-  `aria-current="page"` on the matching sidebar link. Add a breadcrumb row to detail pages.
+- [x] **H1 — Studio sidebar nav** (P0) — *done*: Studio pages used the shell's `page(...)` form,
+  which renders only the 3-link system nav — there was no Studio section nav (the explorer header
+  link-cluster was the only wayfinding). Added a `tql/shell :: studio-page(...)` form that mounts a
+  `studio-nav` sidebar (Explorer, Docs, Coverage, Schema, Export, Scaffold, Migration, SQL builder,
+  Drafts, Audit, Wizards, then the system apps); the 20 authenticated `studio/ui/**` pages use it
+  (the 3 public share views keep the plain `page(...)`). `tesseraql.js` already sets
+  `aria-current="page"` on the deepest matching link, so the current section highlights. The nav is
+  unconditional (editor-only sections render their own disabled state — honest wayfinding); the
+  explorer header dropped its now-duplicated link cluster, keeping the mode badge. A dedicated
+  breadcrumb component is folded into H4 (detail-page in-page nav), where it pairs with the route /
+  table jump-nav; today the sidebar current-item highlight + the existing header back-links cover it.
 - [ ] **H3 — Source editor restructure** (P1): `source.html` stacks 9+ panels in one card. Sticky
   action bar (save/apply/discard) + segmented secondary panels (Preview/Compare/Tests/Dry-run/SQL
   builder).

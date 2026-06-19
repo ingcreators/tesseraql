@@ -332,12 +332,16 @@ class StudioIntegrationTest {
         assertThat(postWithToken("/_tesseraql/studio/scaffold/apply?table=gadgets", "", viewer)
                 .statusCode()).isEqualTo(403);
 
-        // Reads still work, and the explorer renders the read-only view — no edit chrome.
+        // Reads still work, and the explorer renders the read-only view — no edit chrome in the page
+        // content (no New-route form). The Studio sidebar nav (track H1) lists every section
+        // unconditionally for wayfinding; the editor-only pages render their own disabled state, so a
+        // read-only viewer still cannot mutate (the POST endpoints 403 above).
         assertThat(getWithToken("/_tesseraql/studio/explorer", viewer).statusCode()).isEqualTo(200);
         String ui = getWithToken("/_tesseraql/studio/ui", viewer).body();
         assertThat(ui).contains("read-only")
                 .doesNotContain("action=\"/_tesseraql/studio/ui/new\"")
-                .doesNotContain("/_tesseraql/studio/ui/audit");
+                // the sidebar nav renders the Studio sections (Audit among them)
+                .contains("/_tesseraql/studio/ui/audit");
     }
 
     @Test
@@ -347,6 +351,23 @@ class StudioIntegrationTest {
         assertThat(ui).contains("editable")
                 .contains("action=\"/_tesseraql/studio/ui/new\"")
                 .contains("/_tesseraql/studio/ui/audit");
+    }
+
+    @Test
+    void studioPagesCarryTheStudioSidebarNav() throws Exception {
+        // Track H1: Studio pages mount their own section nav in the shell sidebar (via the
+        // studio-page fragment), not just the 3-app system nav — so every section is reachable
+        // from anywhere, not only via the explorer header. The same nav renders on a deep page.
+        for (String path : new String[]{"/_tesseraql/studio/ui", "/_tesseraql/studio/ui/docs"}) {
+            String body = get(path, true).body();
+            assertThat(body).contains("hc-shell__sidebar")
+                    .contains(">Explorer<").contains(">Docs<").contains(">Coverage<")
+                    .contains(">Schema<").contains(">Scaffold<").contains(">Migration<")
+                    .contains(">SQL builder<").contains(">Drafts<").contains(">Audit<")
+                    .contains(">Wizards<")
+                    // the system apps stay reachable from Studio's sidebar
+                    .contains(">Operations<").contains(">IAM Admin<");
+        }
     }
 
     @Test
