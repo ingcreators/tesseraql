@@ -219,6 +219,8 @@ public final class StudioViews {
         model.put("isTestable", isRoute || isJob);
         // A migration file can be dry-run against the sandbox before it lands (migration authoring).
         model.put("isMigration", StudioService.isMigrationPath(path));
+        // A route SQL file (web/**/*.sql) can have a generated 2-way SQL snippet inserted (SQL builder).
+        model.put("isRouteSql", path != null && path.startsWith("web/") && path.endsWith(".sql"));
         // The hc-code data-lang grammar for live-highlighting the editable field (Studio backlog E).
         model.put("lang", editorLang(path));
         model.put("sampleModel", sampleModel == null ? "" : sampleModel);

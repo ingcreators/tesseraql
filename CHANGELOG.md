@@ -8,6 +8,14 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- Studio: the 2-way SQL builder is available inline in the source editor (follow-on). When editing a
+  route SQL file (`web/**/*.sql`), the editor offers a **SQL builder** panel — the same table /
+  operation / filter-column controls as the standalone page — whose **Append to editor** button drops
+  the generated snippet straight into the editor's textarea (htmx appends it, so existing content is
+  kept), instead of having to copy it from the standalone page. `StudioViews.source` flags a route SQL
+  file (`isRouteSql`) and the `studio.source` provider populates its table dropdown from the schema
+  overlay; the panel reuses the existing build/columns endpoints.
+
 - Studio: IN-list and optional (`/*%if*/`) filters in the 2-way SQL builder, and a corrected,
   self-documenting bind style. The SQL builder gains **select by column (in list)** —
   `where <col> in /* <col> */ (<dummy>)` — and **select by column (optional)** —

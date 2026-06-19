@@ -86,6 +86,39 @@
       </form>
       <div id="run-tests-result" class="hc-stack" aria-live="polite"></div>
     </div>
+    <details class="hc-disclosure" th:if="${src.isRouteSql and src.hasTables}">
+      <summary>SQL builder</summary>
+      <p class="hc-field__message">Generate a <code>select</code>/<code>insert</code>/<code>update</code>/<code>delete</code>
+        2-way SQL snippet for a table and append it to the editor above (the bind directives are
+        written for you; a <code>-- sql.params</code> comment lists the mappings to add to the route).</p>
+      <form hx-post="/_tesseraql/studio/ui/sql-builder/build"
+            hx-target="#source-editor" hx-swap="beforeend">
+        <div class="hc-cluster">
+          <div class="hc-field"><label class="hc-field__label">Table</label>
+            <select class="hc-select" name="table" required
+                    hx-get="/_tesseraql/studio/ui/sql-builder/columns"
+                    hx-target="#sb-col" hx-swap="innerHTML" hx-trigger="load, change">
+              <option th:each="t : ${src.tables}" th:value="${t}" th:text="${t}"></option>
+            </select>
+          </div>
+          <div class="hc-field"><label class="hc-field__label">Operation</label>
+            <select class="hc-select" name="operation">
+              <option value="select-by-pk">select by primary key</option>
+              <option value="select-by-column">select by column (=)</option>
+              <option value="select-by-column-in">select by column (in list)</option>
+              <option value="select-by-column-optional">select by column (optional /*%if*/)</option>
+              <option value="insert">insert</option>
+              <option value="update-by-pk">update by primary key</option>
+              <option value="delete-by-pk">delete by primary key</option>
+            </select>
+          </div>
+          <div class="hc-field"><label class="hc-field__label">Filter column</label>
+            <select class="hc-select" name="column" id="sb-col"></select>
+          </div>
+        </div>
+        <div class="hc-cluster"><button type="submit" class="hc-button" data-variant="ghost">Append to editor &uarr;</button></div>
+      </form>
+    </details>
     <p class="hc-alert" data-variant="warning" role="alert" th:if="${src.conflict}">The saved source changed since this draft was started &mdash; applying overwrites those changes. Review the compare panel above first.</p>
     <p class="hc-alert" data-variant="info" role="note" th:if="${src.confirmApply and not src.conflict and src.hasDraft}">Confirm-before-apply is on: review the compare panel above, then confirm.</p>
     <form hx-post="/_tesseraql/studio/ui/apply" hx-target="#apply-result" hx-swap="innerHTML">
