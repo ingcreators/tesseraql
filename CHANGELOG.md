@@ -455,6 +455,11 @@ All notable changes to TesseraQL are documented here. The format follows
 - Studio: **the schema table list is a sortable `hc-datagrid`** (platform-UX track I) — each
   datasource's tables sort by name / type / columns / FKs, with the same CSP-clean server-driven
   pattern as the route catalog (`DocViews.schema(…, sort, dir)`).
+- Studio: **the audit trail is sortable** (platform-UX track I), composing the new column sort with
+  the existing filter and pagination: a sort header link carries the filter `q` and resets the page,
+  a page link carries `q` + the sort, and the filter input keeps the sort across an htmx re-filter
+  via a static-JSON `hx-vals` (CSP-clean). The whole filtered log is sorted before paging
+  (`StudioService.auditPage(query, sort, dir, page, size)`).
 - Studio: **the audit trail is paginated with `hc-pagination`** (platform-UX track I). H5 capped the
   page at the newest 200 entries; the whole log is now navigable in 50-entry pages (newest first) via
   an `hc-pagination` nav of plain styled links (no JS, CSP-clean). The H5 filter still searches the

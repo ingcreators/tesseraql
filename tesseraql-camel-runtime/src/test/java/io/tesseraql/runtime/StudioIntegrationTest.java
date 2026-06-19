@@ -307,11 +307,13 @@ class StudioIntegrationTest {
                     assertThat(entry.get("at").asText()).isNotBlank();
                 });
 
-        // The audit page renders the entry, with the filter chrome (H5) and the total caption (I3);
-        // the explorer links to it.
+        // The audit page renders the entry, with the filter chrome (H5), the total caption (I3), and
+        // the sortable hc-datagrid headers (I2); the explorer links to it.
         assertThat(get("/_tesseraql/studio/ui/audit", true).body()).contains("Audit trail")
                 .contains(path).contains("id=\"audit-filter\"").contains("id=\"audit-table\"")
-                .contains("1 action");
+                .contains("1 action").contains("class=\"hc-datagrid\"").contains("data-sortable")
+                // default newest-first; the filter input keeps the sort across an htmx re-filter
+                .contains("aria-sort=\"descending\"").contains("hx-vals=");
         assertThat(get("/_tesseraql/studio/ui", true).body())
                 .contains("/_tesseraql/studio/ui/audit");
 

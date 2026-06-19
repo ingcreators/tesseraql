@@ -30,6 +30,7 @@ import java.nio.file.StandardOpenOption;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -1099,18 +1100,43 @@ public final class StudioService {
         return entries.size() > limit ? List.copyOf(entries.subList(0, limit)) : entries;
     }
 
-    /**
-     * One page of the audit trail matching {@code query}, newest first (Studio platform-UX I3): the
-     * {@code page}-th slice (1-based) of {@code size} entries, plus the filtered {@code total} so the
-     * view can render pagination. The filter runs over the whole log before paging.
-     */
+    /** The sortable columns of the audit trail (Studio platform-UX I2). */
+    public static final Set<String> AUDIT_SORT_COLS = Set.of("at", "actor", "action", "target");
+
     public AuditPage auditPage(String query, int page, int size) {
+        return auditPage(query, null, null, page, size);
+    }
+
+    /**
+     * One page of the audit trail matching {@code query} (Studio platform-UX I3 + I2 sort): the whole
+     * log is filtered, then sorted by {@code sort} (one of {@link #AUDIT_SORT_COLS}; default {@code at}
+     * newest-first), then sliced to the {@code page}-th 1-based page of {@code size}. The filtered
+     * {@code total} comes back so the view can render pagination.
+     */
+    public AuditPage auditPage(String query, String sort, String dir, int page, int size) {
         int p = Math.max(1, page);
-        List<AuditEntry> all = filteredAuditNewestFirst(query);
+        List<AuditEntry> all = new ArrayList<>(filteredAuditNewestFirst(query));
+        boolean explicit = sort != null && AUDIT_SORT_COLS.contains(sort);
+        String key = explicit ? sort : "at";
+        // No explicit sort means the default newest-first (at desc); an explicit column defaults asc.
+        boolean desc = explicit ? "desc".equalsIgnoreCase(dir) : true;
+        Comparator<AuditEntry> cmp = auditComparator(key);
+        all.sort(desc ? cmp.reversed() : cmp);
         int total = all.size();
         int from = Math.min((p - 1) * size, total);
         int to = Math.min(from + size, total);
         return new AuditPage(List.copyOf(all.subList(from, to)), p, size, total);
+    }
+
+    private static Comparator<AuditEntry> auditComparator(String key) {
+        return switch (key) {
+            case "actor" -> Comparator.comparing(e -> e.actor().toLowerCase(java.util.Locale.ROOT));
+            case "action" ->
+                Comparator.comparing(e -> e.action().toLowerCase(java.util.Locale.ROOT));
+            case "target" ->
+                Comparator.comparing(e -> e.target().toLowerCase(java.util.Locale.ROOT));
+            default -> Comparator.comparing(AuditEntry::at); // "at": ISO timestamps sort lexically
+        };
     }
 
     /** Every audit entry matching {@code query} (whole log), newest first. */
