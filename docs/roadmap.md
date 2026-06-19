@@ -432,6 +432,46 @@ SQL, YAML, SCIM filters), and a supported-versions/LTS statement in SECURITY.md.
 **Milestone M11** — 1.0 GA on Maven Central with a documentation site and a compatibility
 contract.
 
+## Horizon 7 — ecosystem and a trusted app marketplace (post-1.0)
+
+### Phase 37 — pluggable apps and a curated marketplace
+
+A forward-looking direction (recorded 2026-06-19, not scheduled). Make TesseraQL apps distributable
+as plugins and, on top, a marketplace that shares only **trusted** apps. Three increments, each
+building on existing seams:
+
+1. **Pluggable generators** — a `Scaffolder` SPI: the CRUD generator becomes the default provider and
+   third-party JARs contribute alternative scaffold styles, mirroring the existing
+   `FileCodec`/`PdfEngine`/`BlobStore` SPIs (extension principle 5).
+2. **Plugin apps + an SDK** — whole apps already mount as plugins via `AppSourceProvider` +
+   `ServiceLoader` (design ch. 32, 47 — the system apps *are* this), and `AppSource` already
+   anticipates **`.tqlapp` packages** (a materializable file tree, not a bytecode JAR). The gap is
+   ergonomics: a `tesseraql new --plugin` / Studio flow that scaffolds the module skeleton
+   (`pom`, `resources/tesseraql/apps/<name>/`, the `AppSourceProvider` registration) — turning "ship
+   an app as a plugin" from tribal knowledge into one command.
+3. **A trusted-only marketplace** — share only curated/verified apps. The de-risking decision is to
+   constrain marketplace apps to **declarative `.tqlapp` only** (no custom Java / `RuntimeExtension`
+   SPI): the capability surface is then the framework's interpreted recipes — bounded, lintable,
+   analyzable — so *the framework is the sandbox* and arbitrary bytecode never has to be isolated. The
+   trust pipeline composes primitives that already exist:
+   - **Admission gate** — the `AppLinter` (+ `GovernanceGate`) run as a "marketplace profile" the app
+     must pass before publish: policies defined (deny-by-default), egress allowlisted, embedded
+     variables enum-gated (`TQL-SQL-2109`), CSP intact, declarative-only.
+   - **Provenance** — sign the package; attach an SBOM (`SbomGenerator`) and release evidence
+     (`ReleaseEvidence`); pin the content hash (`ScaffoldChecksum`); the runtime verifies signature +
+     hash before mounting.
+   - **Capability permits** — the app declares the capabilities it needs (datasources, egress hosts,
+     policies, MCP tools); the installer reviews and grants, extending `tesseraql.modules` opt-in and
+     per-app `enabled`.
+   - **Curation** — a marketplace operator approves publishers/apps (human trust atop the automated gate).
+
+   Open questions (security-design-first — a design doc precedes code): the capability-permit manifest
+   schema + install-time review; signature/key management + a publisher registry; the distribution
+   registry + Studio browse/install UI; datasource-access scoping (which host data a marketplace app may
+   reach, atop tenancy + scopes); resource/query budgets (a declarative app can still write expensive
+   SQL); and multi-app Studio scope. Keeps extension principles 2 (declarative, governed), 3
+   (deny-by-default), 4 (machine-checkable), and 5 (module boundaries / SPI).
+
 ## Continuous tracks
 
 - **Platform maintenance**: weekly Dependabot triage (policy encoded in
