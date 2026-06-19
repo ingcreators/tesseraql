@@ -750,7 +750,9 @@ class StudioIntegrationTest {
 
         assertThat(response.statusCode()).isEqualTo(200);
         assertThat(response.body()).contains("Share")
-                .contains("/_tesseraql/docs/share/route?id=users.search");
+                .contains("/_tesseraql/docs/share/route?id=users.search")
+                // H6: the share URL field carries a copy-to-clipboard button (handled by tesseraql.js).
+                .contains("id=\"share-route\"").contains("data-copy=\"#share-route\"");
         assertThat(shareUrlFrom(response.body())).isNotBlank();
     }
 

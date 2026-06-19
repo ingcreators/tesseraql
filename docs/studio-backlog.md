@@ -452,7 +452,12 @@ order below (P0 → P1 → P2).
   list in the view. Docs already had a search box. (`auditEntries(limit, query)`,
   `StudioViews.audit/drafts(…, query)`, `q` input on both routes.) True offset paging is deferred —
   the 200-cap + whole-log filter covers the practical need.
-- [ ] **H6 — Copy buttons on share URLs** (P1): the read-only share inputs have no copy affordance.
+- [x] **H6 — Copy buttons on share URLs** (P1) — *done*: the read-only share-URL fields (route,
+  table, coverage) forced a manual select+copy. Each now has a **Copy** button driven by a small
+  `[data-copy]` behavior in `tesseraql.js` (copies the named element's value via the Clipboard API,
+  flips the label to "Copied" briefly). Copy needs JS and the strict CSP forbids inline handlers, so
+  it lives in the shared app bootstrap — a candidate to upstream into the hc kit (rule 11; hc 0.1.5
+  ships no copy behavior). Secure-context only; a harmless no-op where the Clipboard API is absent.
 - [ ] **H7 — Wizard stepper + inline help** (P2): no progress indicator; jargon without help text;
   inconsistent required/optional markers.
 - [ ] **H8 — Correctness + search polish** (P2): fix the stale `sql-builder.html` prose
