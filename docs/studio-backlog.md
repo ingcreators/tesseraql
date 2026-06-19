@@ -519,4 +519,8 @@ Confirmed absent from hc 0.1.5 (CSS **and** behaviors): a **copy-to-clipboard** 
 `[data-copy]` in `tesseraql.js` is the local stand-in — upstream as `data-hc-copy`); a **scrollspy /
 in-page-TOC** behavior (the H4 "On this page" anchors don't highlight the current section on scroll);
 and **active-nav marking by URL** (the `aria-current` logic in `tesseraql.js` — `hc-shell`/`hc-navmenu`
-don't own it). File these as hc briefs and adopt once released.
+don't own it).
+
+**Drafted** as fileable upstream briefs in [hc-briefs.md](hc-briefs.md) (`data-hc-copy`, `hc-toc` +
+`data-hc-spy`, `data-hc-nav-current`), each with the proposed markup, the CSP/a11y constraints, and
+the TesseraQL stand-in to retire. File them as hc issues and adopt the released features.
