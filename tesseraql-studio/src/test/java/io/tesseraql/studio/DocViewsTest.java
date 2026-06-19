@@ -327,6 +327,24 @@ class DocViewsTest {
     }
 
     @Test
+    void schemaSortsEachDatasourceTableList() {
+        // Platform-UX I2: server-driven sort over each datasource's table list.
+        assertThat(tableNames(DocViews.schema("demo", sampleSchema(), "name", "asc")))
+                .containsExactly("customers", "orders");
+        Map<String, Object> desc = DocViews.schema("demo", sampleSchema(), "name", "desc");
+        assertThat(tableNames(desc)).containsExactly("orders", "customers");
+        assertThat(desc).containsEntry("sortKey", "name").containsEntry("sortDir", "desc");
+        assertThat(asMap(desc.get("ariaSort"))).containsEntry("name", "descending")
+                .containsEntry("type", "none");
+        assertThat((String) asMap(desc.get("sortHref")).get("name")).contains("sort=name&dir=asc");
+    }
+
+    private static List<String> tableNames(Map<String, Object> model) {
+        Map<String, Object> ds = asRows(model.get("datasources")).get(0);
+        return asRows(ds.get("tables")).stream().map(t -> (String) t.get("name")).toList();
+    }
+
+    @Test
     void schemaModelIsEmptyWithoutAnOverlay() {
         assertThat(DocViews.schema("demo", null)).containsEntry("hasSchema", false)
                 .doesNotContainKey("datasources");

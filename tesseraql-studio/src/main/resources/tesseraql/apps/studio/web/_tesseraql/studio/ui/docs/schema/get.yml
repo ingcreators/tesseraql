@@ -3,11 +3,22 @@ id: tql.studio.docs.schema
 kind: route
 recipe: query-html
 
+input:
+  sort:
+    type: string
+    required: false
+  dir:
+    type: string
+    required: false
+
 security:
   auth: bearer
 
 sql:
   service: docs.schema
+  params:
+    sort: params.sort
+    dir: params.dir
 
 response:
   html:

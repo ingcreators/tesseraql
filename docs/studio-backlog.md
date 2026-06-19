@@ -498,8 +498,9 @@ Retire the hand-rolled versions in favour of the blessed components.
   sort: each header is a link to `?sort=<col>&dir=<flip>`, the server sorts the rows and sets
   `aria-sort` on the active column, and the kit renders the arrow — no JS, no `hx-vals='js:'`,
   CSP-clean. `DocViews.index(…, sort, dir)` does the sort + emits the per-column `sortHref`/`ariaSort`.
-  *Next (optional):* apply the same pattern to the schema table list and the audit trail (audit would
-  compose sort with its filter + pagination).
+  Extended to the **schema table list** (`schema.html` — each datasource's tables sort by
+  name/type/columns/FKs via `DocViews.schema(…, sort, dir)`, sharing the `putSortLinks` helper).
+  *Next (optional):* the audit trail (its sort would compose with the existing filter + pagination).
 - [x] **I3 — `hc-pagination` for the audit trail** (P2) — *done*: H5 capped the trail at the newest
   200; now the whole log is navigable. `StudioService.auditPage(query, page, size)` returns one
   50-entry page (newest first) of the filtered log plus the total; `StudioViews.audit(AuditPage, q)`
