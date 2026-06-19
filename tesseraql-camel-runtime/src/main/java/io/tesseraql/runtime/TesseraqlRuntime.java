@@ -858,6 +858,13 @@ public final class TesseraqlRuntime implements AutoCloseable {
                             model.put("hasTables", !tables.isEmpty());
                             return model;
                         })
+                        // Cascade: a chosen table's columns for the by-column filter dropdown.
+                        .register("studio.sqlBuilder.columns",
+                                params -> Map.of("columns", new io.tesseraql.studio.DocService(
+                                        manifest).columnNames(
+                                                params.get("table") == null
+                                                        ? null
+                                                        : String.valueOf(params.get("table")))))
                         .register("studio.sqlBuilder.build", params -> {
                             String tableName = params.get("table") == null
                                     ? null
@@ -869,7 +876,10 @@ public final class TesseraqlRuntime implements AutoCloseable {
                                 sql = "-- No such table in the schema overlay: " + tableName;
                             } else {
                                 String generated = io.tesseraql.studio.SqlBuilder.generate(table,
-                                        String.valueOf(params.get("operation")));
+                                        String.valueOf(params.get("operation")),
+                                        params.get("column") == null
+                                                ? null
+                                                : String.valueOf(params.get("column")));
                                 sql = generated.isEmpty() ? "-- Unknown operation." : generated;
                             }
                             return Map.of("sql", sql);

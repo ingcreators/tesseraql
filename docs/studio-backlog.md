@@ -373,9 +373,12 @@ and is being adopted (see E below).
     — to copy into a route's `.sql` file. Schema-driven (columns + primary key from the overlay;
     identity columns skipped on insert; dummy literal typed per column); `where` binds from `params`,
     value binds from `body`. New pure `SqlBuilder` + `DocService.tableByName`;
-    `studio.sqlBuilder.new`/`studio.sqlBuilder.build`; `/_tesseraql/studio/ui/sql-builder`. *Next:*
-    a by-column filter (cascade), IN-list/`if` directives, and dropping the snippet straight into the
-    source editor.
+    `studio.sqlBuilder.new`/`studio.sqlBuilder.build`; `/_tesseraql/studio/ui/sql-builder`.
+    - **By-column filter** — *done* (follow-on): a **select-by-column** operation + a **Filter column**
+      dropdown cascade-loaded from the chosen table's columns (htmx on table change) generates
+      `select … where <col> = /* params.<col> */ <dummy>` on any column, the bind typed from it.
+      `studio.sqlBuilder.columns`; `/_tesseraql/studio/ui/sql-builder/columns`.
+    - *Next:* IN-list/`if` directives, and dropping the snippet straight into the source editor.
 
 ## Recommended next
 

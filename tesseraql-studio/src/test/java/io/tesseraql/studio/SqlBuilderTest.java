@@ -30,6 +30,21 @@ class SqlBuilderTest {
     }
 
     @Test
+    void selectByColumnFiltersOnTheChosenColumnWithATypedBind() {
+        assertThat(SqlBuilder.generate(USERS, "select-by-column", "name")).isEqualTo("""
+                select id, name, active
+                from users
+                where name = /* params.name */ 'x';
+                """);
+        // A boolean filter column gets a boolean dummy.
+        assertThat(SqlBuilder.generate(USERS, "select-by-column", "active"))
+                .contains("where active = /* params.active */ false;");
+        // No column chosen yet -> a TODO predicate to fill in.
+        assertThat(SqlBuilder.generate(USERS, "select-by-column", ""))
+                .contains("where /* TODO: pick a column */;");
+    }
+
+    @Test
     void insertSkipsIdentityColumnsAndBindsFromBodyWithTypedDummies() {
         assertThat(SqlBuilder.generate(USERS, "insert")).isEqualTo("""
                 insert into users (name, active)

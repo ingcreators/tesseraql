@@ -1,16 +1,10 @@
 version: tesseraql/v1
-id: tql.studio.sqlBuilder.build
+id: tql.studio.sqlBuilder.columns
 kind: route
 recipe: query-html
 
 input:
   table:
-    type: string
-    required: true
-  operation:
-    type: string
-    required: true
-  column:
     type: string
     required: false
 
@@ -18,18 +12,16 @@ security:
   auth: bearer
 
 sql:
-  service: studio.sqlBuilder.build
+  service: studio.sqlBuilder.columns
   params:
     table: params.table
-    operation: params.operation
-    column: params.column
 
 response:
   html:
     status: 200
-    template: build.html
+    template: columns.html
     model:
-      b: sql
+      cols: sql
     headers:
       Content-Security-Policy: "default-src 'self'; style-src 'self' 'unsafe-inline'; frame-ancestors 'none'"
       X-Content-Type-Options: nosniff

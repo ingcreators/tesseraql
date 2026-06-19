@@ -20,17 +20,23 @@
             hx-target="#sql-out" hx-swap="innerHTML">
         <div class="hc-cluster">
           <div class="hc-field"><label class="hc-field__label">Table</label>
-            <select class="hc-select" name="table" required>
+            <select class="hc-select" name="table" required
+                    hx-get="/_tesseraql/studio/ui/sql-builder/columns"
+                    hx-target="#sql-col" hx-swap="innerHTML" hx-trigger="load, change">
               <option th:each="t : ${b.tables}" th:value="${t}" th:text="${t}"></option>
             </select>
           </div>
           <div class="hc-field"><label class="hc-field__label">Operation</label>
             <select class="hc-select" name="operation">
               <option value="select-by-pk">select by primary key</option>
+              <option value="select-by-column">select by column</option>
               <option value="insert">insert</option>
               <option value="update-by-pk">update by primary key</option>
               <option value="delete-by-pk">delete by primary key</option>
             </select>
+          </div>
+          <div class="hc-field"><label class="hc-field__label">Filter column (for &ldquo;select by column&rdquo;)</label>
+            <select class="hc-select" name="column" id="sql-col"></select>
           </div>
         </div>
         <div class="hc-cluster">
