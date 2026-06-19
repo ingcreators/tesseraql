@@ -384,7 +384,11 @@ and is being adopted (see E below).
       the **param name** (`/* id */`, resolved against `sql.params` at render — the runtime renders
       against the resolved binds, not request namespaces) and the snippet is prefixed with a
       `-- sql.params` comment listing each mapping, so it is complete and correct.
-    - *Next:* dropping the snippet straight into the source editor.
+    - **In-editor insertion** — *done* (follow-on): editing a route SQL file (`web/**/*.sql`) offers
+      the SQL builder inline (`StudioViews.source` `isRouteSql`; the `studio.source` provider fills the
+      table dropdown), and its *Append to editor* button drops the generated snippet straight into the
+      editor textarea (htmx `beforeend`, so existing content is kept) instead of copying from the
+      standalone page. Reuses the build/columns endpoints. **The 2-way SQL builder is now complete.**
 
 ## Recommended next
 

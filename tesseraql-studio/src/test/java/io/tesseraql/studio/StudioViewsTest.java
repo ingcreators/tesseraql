@@ -161,6 +161,17 @@ class StudioViewsTest {
     }
 
     @Test
+    void sourceFlagsARouteSqlFileForTheInEditorSqlBuilder() {
+        // A route SQL file offers the in-editor SQL builder; a migration SQL or a route yml does not.
+        assertThat(StudioViews.source("web/api/users/search.sql", "", false, false, "", null))
+                .containsEntry("isRouteSql", true);
+        assertThat(StudioViews.source("db/migration/V1__init.sql", "", false, false, "", null))
+                .containsEntry("isRouteSql", false);
+        assertThat(StudioViews.source("web/api/users/get.yml", "", false, false, "", null))
+                .containsEntry("isRouteSql", false);
+    }
+
+    @Test
     void sourceBuildsModel() {
         Map<String, Object> model = StudioViews.source("a.sql", "select 1", false, false,
                 "select 1", null);

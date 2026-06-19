@@ -783,6 +783,14 @@ public final class TesseraqlRuntime implements AutoCloseable {
                             boolean canEdit = studioAccess.canEdit(params.get("roles"));
                             model.put("editable", canEdit);
                             model.put("readOnly", !canEdit);
+                            // On a route SQL file, offer the 2-way SQL builder inline (insert into the
+                            // editor): populate its table dropdown from the schema overlay.
+                            if (Boolean.TRUE.equals(model.get("isRouteSql"))) {
+                                java.util.List<String> tables = new io.tesseraql.studio.DocService(
+                                        manifest).tableNames();
+                                model.put("tables", tables);
+                                model.put("hasTables", !tables.isEmpty());
+                            }
                             return model;
                         })
                         .register("studio.save", params -> {

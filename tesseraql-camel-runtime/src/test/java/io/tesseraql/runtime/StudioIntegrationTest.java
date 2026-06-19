@@ -1571,6 +1571,19 @@ class StudioIntegrationTest {
     }
 
     @Test
+    void uiSourceRouteSqlOffersTheInEditorSqlBuilder() throws Exception {
+        HttpResponse<String> response = get("/_tesseraql/studio/ui/source?path="
+                + enc("web/api/users/search.sql"), true);
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        // A route .sql editor offers the SQL builder, which appends the snippet into the editor
+        // textarea (hx-target the editor, beforeend), with the table dropdown from the schema overlay.
+        assertThat(response.body()).contains("SQL builder")
+                .contains("hx-target=\"#source-editor\"").contains("hx-swap=\"beforeend\"")
+                .contains(">customers<");
+    }
+
+    @Test
     void uiSqlBuilderGeneratesInListAndOptionalIfFilters() throws Exception {
         // IN-list: the directive is followed by a parenthesized typed dummy.
         HttpResponse<String> inList = postForm("/_tesseraql/studio/ui/sql-builder/build",
