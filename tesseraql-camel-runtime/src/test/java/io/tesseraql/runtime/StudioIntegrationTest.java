@@ -494,8 +494,8 @@ class StudioIntegrationTest {
 
         assertThat(response.statusCode()).isEqualTo(200);
         assertThat(response.body())
-                .contains("aria-label=\"Breadcrumb\"")
-                .contains("aria-label=\"On this page\"")
+                .contains("class=\"hc-breadcrumb\"").contains("aria-label=\"Breadcrumb\"")
+                .contains("hc-breadcrumb__current").contains("aria-label=\"On this page\"")
                 // jump links resolve to real section anchors
                 .contains("href=\"#sec-inputs\"").contains("id=\"sec-inputs\"")
                 .contains("href=\"#sec-sql\"").contains("id=\"sec-sql\"");
@@ -508,7 +508,7 @@ class StudioIntegrationTest {
 
         assertThat(response.statusCode()).isEqualTo(200);
         assertThat(response.body())
-                .contains("aria-label=\"Breadcrumb\"").contains(">Schema<")
+                .contains("class=\"hc-breadcrumb\"").contains(">Schema<")
                 .contains("aria-label=\"On this page\"")
                 .contains("href=\"#sec-columns\"").contains("id=\"sec-columns\"");
     }
@@ -1011,10 +1011,10 @@ class StudioIntegrationTest {
                 + enc("web/users/fragments/table/get.yml"), true);
 
         assertThat(response.statusCode()).isEqualTo(200);
-        // Every async action carries the htmx-native loading affordance (the shared tql/shell::busy
-        // fragment) so a slow DB call no longer reads as a hang: the indicator span renders and the
-        // submit button disables while the request is in flight.
-        assertThat(response.body()).contains("class=\"htmx-indicator hc-field__message\"")
+        // Every async action carries the loading affordance (the shared tql/shell::busy fragment,
+        // now the kit's hc-spinner) so a slow DB call no longer reads as a hang: the indicator
+        // renders and the submit button disables while the request is in flight.
+        assertThat(response.body()).contains("htmx-indicator").contains("class=\"hc-spinner\"")
                 .contains("role=\"status\"").contains("hx-disabled-elt=\"find button\"")
                 // the live preview/render panels point an hx-indicator at their busy span
                 .contains("hx-indicator=");

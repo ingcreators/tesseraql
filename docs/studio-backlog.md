@@ -477,3 +477,32 @@ order below (P0 → P1 → P2).
 **Track H complete (H1–H8).** The Studio platform-UX review is fully addressed: section nav +
 breadcrumbs, async loading feedback, a de-cluttered editor, in-page detail nav, table filtering,
 share-URL copy, clearer wizards, and the correctness/search polish.
+
+## Track I — adopt off-the-shelf hc components (rule 11)
+
+A follow-up: several Track-H affordances were hand-rolled before confirming the hc kit already ships
+them (the components are CSS-only, so they were missed when only the behaviors bundle was searched).
+Retire the hand-rolled versions in favour of the blessed components.
+
+- [x] **I1 — `hc-spinner` + `hc-breadcrumb`** — *done*: the `tql/shell :: busy` loading affordance now
+  renders the kit's `hc-spinner` (CSS-only, reduced-motion aware) with a contextual label instead of
+  a bare "Working…" text fade; the route/table breadcrumbs use `hc-breadcrumb` (semantic `ol`,
+  CSS-injected separators) instead of a hand-built `hc-cluster` with a literal `›`. Both ship in hc
+  0.1.5 already — no version bump. (H2/H4 retired their hand-rolled markup.)
+- [ ] **I2 — sortable tables via `hc-datagrid`**: the docs/audit/schema tables have no column sort
+  (review gap); `hc-datagrid` adds `data-sortable` column sorting + row selection.
+- [ ] **I3 — `hc-pagination` for the audit trail**: H5 deferred offset paging, but hc ships
+  `hc-pagination`; pair it with the existing whole-log filter so the trail is fully navigable.
+- [ ] **I4 — `hc-tooltip` / `hc-hovercard`**: replace the `title=` tooltips (route test-failure
+  messages, coverage swatches) and surface the wizard jargon help on hover/focus (discoverable on
+  touch + SR, unlike `title=`).
+- [ ] **I5 — `hc-toast`**: transient feedback (copy "Copied", save/apply success) via the toast
+  region instead of mutating button text / inline alerts.
+
+### Genuine hc gaps — file upstream briefs (rule 11)
+
+Confirmed absent from hc 0.1.5 (CSS **and** behaviors): a **copy-to-clipboard** behavior (H6's
+`[data-copy]` in `tesseraql.js` is the local stand-in — upstream as `data-hc-copy`); a **scrollspy /
+in-page-TOC** behavior (the H4 "On this page" anchors don't highlight the current section on scroll);
+and **active-nav marking by URL** (the `aria-current` logic in `tesseraql.js` — `hc-shell`/`hc-navmenu`
+don't own it). File these as hc briefs and adopt once released.

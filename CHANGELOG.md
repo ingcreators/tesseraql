@@ -446,6 +446,13 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Changed
 
+- Studio: **adopt the kit's `hc-spinner` and `hc-breadcrumb`** instead of the hand-rolled equivalents
+  (platform-UX track I). The shared loading affordance (`tql/shell :: busy`) now renders the CSS-only,
+  reduced-motion-aware `hc-spinner` with a contextual label rather than a bare "Working…" text fade,
+  and the route/table breadcrumbs use the semantic `hc-breadcrumb` (CSS-injected separators) instead
+  of a hand-built cluster with a literal `›`. Both components already ship in Hypermedia Components
+  0.1.5 — they were missed earlier because they are CSS-only (absent from the behaviors bundle), so
+  no version bump is needed.
 - Upgraded Testcontainers 1.20.4 → 2.0.5 (docker-java 3.4.0 → 3.7.1). docker-java 3.4.0 could not
   validate Docker Engine 29's raised API floor (`MinAPIVersion` 1.40), so every Testcontainers IT
   failed with "Could not find a valid Docker environment" on hosts running Docker 29 (e.g. the dev

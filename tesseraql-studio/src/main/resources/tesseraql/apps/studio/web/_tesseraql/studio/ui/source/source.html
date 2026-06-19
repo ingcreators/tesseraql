@@ -40,7 +40,7 @@
                   hx-target="#preview-result" hx-swap="innerHTML"
                   hx-indicator="#preview-busy"></textarea>
       </div>
-      <span id="preview-busy" class="htmx-indicator hc-field__message" role="status">Checking…</span>
+      <span id="preview-busy" class="htmx-indicator hc-cluster" role="status"><span class="hc-spinner" data-size="sm" aria-hidden="true"></span><span class="hc-field__message">Checking…</span></span>
       <div id="preview-result" class="hc-stack" aria-live="polite"></div>
       <div class="hc-cluster"><button type="submit" class="hc-button" data-variant="primary">Save draft</button></div>
     </form>
