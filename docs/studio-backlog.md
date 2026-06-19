@@ -437,8 +437,13 @@ order below (P0 → P1 → P2).
   tabs component). The literal *sticky action bar* is unneeded now the page is short, so it is
   deferred; the inspect-then-commit order (tools above Apply) is preserved, keeping the
   "review the compare panel above" confirm wording valid.
-- [ ] **H4 — Detail-page in-page nav** (P1): `route.html` (8 tables) / `table.html` — a sticky
-  "on this page" jump list or progressive disclosure.
+- [x] **H4 — Detail-page in-page nav + breadcrumbs** (P1) — *done*: the route reference (8+ sections)
+  and the table reference were long single-column scrolls with no in-page wayfinding. Each detail
+  page now carries a **breadcrumb** in the header (Docs › ‹id› / Schema › ‹table›, replacing the ad-hoc
+  back-link) and an **"On this page" jump nav** of native `#anchor` links to each *present* section
+  (the section `<section>`s got `id`s; the jump links share each section's `th:if`, so only real
+  anchors are offered). Pure HTML anchors — CSP-safe, no JS/CSS. (This also delivers the breadcrumb
+  deferred from H1.)
 - [ ] **H5 — Table filter/paging** (P1): reuse the explorer live-filter on audit/drafts/docs; simple
   paging for the unbounded audit trail.
 - [ ] **H6 — Copy buttons on share URLs** (P1): the read-only share inputs have no copy affordance.

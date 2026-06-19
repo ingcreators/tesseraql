@@ -476,6 +476,34 @@ class StudioIntegrationTest {
     }
 
     @Test
+    void uiDocsRouteCarriesBreadcrumbAndOnThisPageNav() throws Exception {
+        // Track H4: the 8-section route reference gets a breadcrumb (Docs > id) and an in-page jump
+        // nav anchoring each present section, so a long page is navigable.
+        HttpResponse<String> response = get(
+                "/_tesseraql/studio/ui/docs/route?id=" + enc("users.search"), true);
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(response.body())
+                .contains("aria-label=\"Breadcrumb\"")
+                .contains("aria-label=\"On this page\"")
+                // jump links resolve to real section anchors
+                .contains("href=\"#sec-inputs\"").contains("id=\"sec-inputs\"")
+                .contains("href=\"#sec-sql\"").contains("id=\"sec-sql\"");
+    }
+
+    @Test
+    void uiDocsTableCarriesBreadcrumbAndOnThisPageNav() throws Exception {
+        HttpResponse<String> response = get(
+                "/_tesseraql/studio/ui/docs/schema/table?ds=main&name=" + enc("customers"), true);
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(response.body())
+                .contains("aria-label=\"Breadcrumb\"").contains(">Schema<")
+                .contains("aria-label=\"On this page\"")
+                .contains("href=\"#sec-columns\"").contains("id=\"sec-columns\"");
+    }
+
+    @Test
     void uiDocsRouteCrossLinksDataDependenciesToSchemaTables() throws Exception {
         HttpResponse<String> response = get(
                 "/_tesseraql/studio/ui/docs/route?id=" + enc("deps.customers"), true);

@@ -8,6 +8,13 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- Studio: **breadcrumbs and an "On this page" jump nav on the detail pages** (platform-UX track H4).
+  The route reference (8+ sections) and the table reference were long scrolls with no in-page
+  wayfinding. Each now carries a breadcrumb in the header (Docs › ‹id› / Schema › ‹table›) and a jump
+  nav of native `#anchor` links to each present section (the sections gained `id`s; the jump links
+  share each section's condition, so only real anchors are offered). Pure HTML anchors — CSP-safe,
+  no JS or CSS.
+
 - Studio: **the source editor's secondary tools are collapsible panels** (platform-UX track H3). The
   editor stacked 9+ always-open panels in one card, so the page overwhelmed and Save/Apply/Discard sat
   far below the preview output. Each tool — Rendered preview, Compare, Dry-run, Tests, SQL builder —
