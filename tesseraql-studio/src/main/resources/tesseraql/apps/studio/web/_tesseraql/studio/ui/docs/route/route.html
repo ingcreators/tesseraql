@@ -3,10 +3,11 @@
       th:replace="~{tql/shell :: studio-page(|TesseraQL Docs · ${doc.id}|, ~{:: #page-header}, ~{:: #page-content})}">
 <th:block id="page-header">
   <span class="hc-spacer"></span>
-  <div class="hc-cluster">
-    <a class="hc-button" data-variant="ghost" data-size="sm" href="/_tesseraql/studio/ui/docs/coverage">coverage</a>
-    <a class="hc-button" data-variant="ghost" data-size="sm" href="/_tesseraql/studio/ui/docs">&larr; docs</a>
-  </div>
+  <nav class="hc-cluster" aria-label="Breadcrumb">
+    <a href="/_tesseraql/studio/ui/docs">Docs</a>
+    <span aria-hidden="true">&rsaquo;</span>
+    <span th:text="${doc.id}">route</span>
+  </nav>
 </th:block>
 <div id="page-content" class="hc-stack">
   <section class="hc-card" th:if="${doc.notFound}">
@@ -21,6 +22,18 @@
       </div>
       <h2 th:text="${doc.id}"></h2>
     </section>
+    <nav class="hc-cluster" aria-label="On this page"
+         th:if="${doc.security or doc.hasInputs or doc.hasValidations or doc.hasNotifications or doc.response or doc.hasDataDeps or doc.hasSql or doc.hasTests}">
+      <span class="hc-field__label">On this page</span>
+      <a th:if="${doc.security}" href="#sec-security">Security</a>
+      <a th:if="${doc.hasInputs}" href="#sec-inputs">Inputs</a>
+      <a th:if="${doc.hasValidations}" href="#sec-validation">Validation</a>
+      <a th:if="${doc.hasNotifications}" href="#sec-notifications">Notifications</a>
+      <a th:if="${doc.response}" href="#sec-response">Response</a>
+      <a th:if="${doc.hasDataDeps}" href="#sec-data">Data dependencies</a>
+      <a th:if="${doc.hasSql}" href="#sec-sql">SQL</a>
+      <a th:if="${doc.hasTests}" href="#sec-tests">Tests</a>
+    </nav>
     <section class="hc-card" th:if="${doc.shareUrl}">
       <h3>Share</h3>
       <p class="hc-field__label">A signed, expiring read-only link to this route's contract &mdash;
@@ -45,7 +58,7 @@
               th:text="|branches ${doc.sqlBranchPct}%|"></span>
       </div>
     </section>
-    <section class="hc-card" th:if="${doc.security}">
+    <section class="hc-card" id="sec-security" th:if="${doc.security}">
       <h3>Security</h3>
       <div class="hc-cluster">
         <span class="hc-badge" th:if="${doc.security.auth}" th:text="|auth: ${doc.security.auth}|"></span>
@@ -54,7 +67,7 @@
         <span class="hc-badge" data-variant="warning" th:if="${doc.security.csrf}">CSRF</span>
       </div>
     </section>
-    <section class="hc-card" th:if="${doc.hasInputs}">
+    <section class="hc-card" id="sec-inputs" th:if="${doc.hasInputs}">
       <h3>Inputs</h3>
       <table class="hc-table">
         <thead><tr><th>Name</th><th>Type</th><th>Required</th><th>Constraints</th></tr></thead>
@@ -68,7 +81,7 @@
         </tbody>
       </table>
     </section>
-    <section class="hc-card" th:if="${doc.hasValidations}">
+    <section class="hc-card" id="sec-validation" th:if="${doc.hasValidations}">
       <h3>Validation</h3>
       <table class="hc-table">
         <thead><tr><th>Rule</th><th>Kind</th><th>Expression / file</th><th>Field</th></tr></thead>
@@ -82,7 +95,7 @@
         </tbody>
       </table>
     </section>
-    <section class="hc-card" th:if="${doc.hasNotifications}">
+    <section class="hc-card" id="sec-notifications" th:if="${doc.hasNotifications}">
       <h3>Notifications</h3>
       <table class="hc-table">
         <thead><tr><th>Id</th><th>Channel</th><th>When</th><th>Payload</th></tr></thead>
@@ -96,7 +109,7 @@
         </tbody>
       </table>
     </section>
-    <section class="hc-card" th:if="${doc.response}">
+    <section class="hc-card" id="sec-response" th:if="${doc.response}">
       <h3>Response</h3>
       <div class="hc-cluster">
         <span class="hc-badge" data-variant="info" th:text="${doc.response.kind}"></span>
@@ -106,7 +119,7 @@
         <span class="hc-badge" th:if="${doc.response.location}" th:text="|&rarr; ${doc.response.location}|"></span>
       </div>
     </section>
-    <section class="hc-card" th:if="${doc.hasDataDeps}">
+    <section class="hc-card" id="sec-data" th:if="${doc.hasDataDeps}">
       <h3>Data dependencies</h3>
       <p class="hc-field__label">The tables this route's SQL reads from and writes to, inferred from
         the statements (best-effort). A table introspected into the schema portal links to its page.</p>
@@ -125,7 +138,7 @@
         </th:block>
       </div>
     </section>
-    <section class="hc-card" th:if="${doc.hasSql}">
+    <section class="hc-card" id="sec-sql" th:if="${doc.hasSql}">
       <h3>SQL</h3>
       <div class="hc-cluster" th:if="${doc.hasReport}">
         <span class="hc-code__swatch" data-state="covered"></span><span class="hc-field__label">covered</span>
@@ -156,7 +169,7 @@
         <pre class="hc-code" th:if="${s.statement != null and s.lines == null}"><code th:utext="${s.statementHtml}"></code></pre>
       </div>
     </section>
-    <section class="hc-card" th:if="${doc.hasTests}">
+    <section class="hc-card" id="sec-tests" th:if="${doc.hasTests}">
       <h3>Tests</h3>
       <table class="hc-table">
         <thead><tr><th>Name</th><th>Kind</th><th>Target</th>
