@@ -16,8 +16,9 @@ All notable changes to TesseraQL are documented here. The format follows
   `sql.params` maps (`/* id */`, resolved against `sql.params` at render — the runtime renders 2-way
   SQL against the resolved binds, not the request namespaces), rather than a request expression, and
   every snippet is **prefixed with a `-- sql.params` comment** listing the mapping each bind needs
-  (`id: params.id` for a key/filter, `email: body.email` for a value) so the snippet is complete and
-  correct. `SqlBuilder` adds the new operations and the param-mapping prefix.
+  (each from `params.<name>` — the coerced declared inputs, matching the `scaffold crud` convention)
+  so the snippet is complete and correct. `SqlBuilder` adds the new operations and the param-mapping
+  prefix.
 
 - Studio: a by-column filter in the 2-way SQL builder (follow-on). The SQL builder gains a
   **select-by-column** operation and a **Filter column** dropdown that is cascade-loaded from the
@@ -34,7 +35,7 @@ All notable changes to TesseraQL are documented here. The format follows
   `.sql` file. It is schema-driven: the projected/inserted/updated columns and the `where` key come
   from the table's introspected columns and primary key (identity columns are skipped on insert), and
   each bind's dummy literal is typed from the column (`0` for a number, `false` for a boolean, `'x'`
-  otherwise). Where-clause binds map from `params`, value binds from `body`. New pure `SqlBuilder`
+  otherwise). Binds map from `params.<name>` (the coerced declared inputs). New pure `SqlBuilder`
   and `DocService.tableByName`; the `studio.sqlBuilder.new` / `studio.sqlBuilder.build` providers and
   `/_tesseraql/studio/ui/sql-builder` page.
 

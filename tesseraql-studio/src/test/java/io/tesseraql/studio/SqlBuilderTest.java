@@ -54,22 +54,22 @@ class SqlBuilderTest {
     }
 
     @Test
-    void insertSkipsIdentityColumnsAndBindsValuesFromTheBody() {
+    void insertSkipsIdentityColumnsAndBindsValuesFromParams() {
         assertThat(SqlBuilder.generate(USERS, "insert")).isEqualTo("""
                 -- sql.params (add to the route's sql block):
-                --   name: body.name
-                --   active: body.active
+                --   name: params.name
+                --   active: params.active
                 insert into users (name, active)
                 values (/* name */ 'x', /* active */ false);
                 """);
     }
 
     @Test
-    void updateByPkSetsNonKeyValuesFromBodyAndFiltersByKeyFromParams() {
+    void updateByPkSetsNonKeyValuesAndFiltersByKeyFromParams() {
         assertThat(SqlBuilder.generate(USERS, "update-by-pk")).isEqualTo("""
                 -- sql.params (add to the route's sql block):
-                --   name: body.name
-                --   active: body.active
+                --   name: params.name
+                --   active: params.active
                 --   id: params.id
                 update users
                 set name = /* name */ 'x',

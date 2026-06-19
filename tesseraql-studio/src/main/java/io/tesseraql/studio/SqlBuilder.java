@@ -16,9 +16,11 @@ import java.util.Set;
  * an {@code in (…)} or optional {@code /*%if *}{@code /} filter is spelled correctly.
  *
  * <p>Each bind references a name the route's {@code sql.params} maps to its source, so the snippet is
- * prefixed with a {@code -- sql.params} comment listing those mappings ({@code params.<key>} for the
- * {@code where} key/filter, {@code body.<column>} for inserted/updated values) — the route author
- * copies the SQL into the {@code .sql} file and the mappings into the route. It is schema-driven: the
+ * prefixed with a {@code -- sql.params} comment listing those mappings — each from
+ * {@code params.<name>}, the coerced declared inputs (so a typed column binds a typed value, not the
+ * raw body string; the route declares the field in {@code input:} for that coercion), matching the
+ * {@code scaffold crud} convention. The route author copies the SQL into the {@code .sql} file and
+ * the mappings into the route. It is schema-driven: the
  * columns and the {@code where} key come from the table's introspected columns and primary key
  * (identity columns are skipped on insert), and each bind's dummy literal is typed from the column
  * ({@code 0} for a number, {@code false} for a boolean, {@code 'x'} otherwise).
@@ -90,7 +92,7 @@ public final class SqlBuilder {
             }
             names.add(column.name());
             values.add("/* " + column.name() + " */ " + dummy(column.jdbcType()));
-            binds.add(new Bind(column.name(), "body." + column.name()));
+            binds.add(new Bind(column.name(), "params." + column.name()));
         }
         if (names.isEmpty()) {
             return "insert into " + table.name() + " (/* TODO: columns */)\nvalues ();\n";
@@ -108,7 +110,7 @@ public final class SqlBuilder {
                 continue;
             }
             sets.add(column.name() + " = /* " + column.name() + " */ " + dummy(column.jdbcType()));
-            binds.add(new Bind(column.name(), "body." + column.name()));
+            binds.add(new Bind(column.name(), "params." + column.name()));
         }
         String setClause = sets.isEmpty() ? "/* TODO: columns */" : String.join(",\n  ", sets);
         String where = keyPredicate(table, binds);

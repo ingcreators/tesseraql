@@ -1553,7 +1553,7 @@ class StudioIntegrationTest {
         HttpResponse<String> insert = postForm("/_tesseraql/studio/ui/sql-builder/build",
                 "table=customers&operation=insert");
         assertThat(insert.body()).contains("insert into customers (email)").contains("/* email */")
-                .contains("--   email: body.email");
+                .contains("--   email: params.email");
     }
 
     @Test
