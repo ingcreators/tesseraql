@@ -8,6 +8,14 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- Studio: **search polish and a SQL-builder doc fix** (platform-UX track H8, completing the track).
+  The docs search lifts its query operators out of the placeholder into a visible hint
+  (`status:passing|failing`, `coverage:covered|untested`) and the results fragment now leads with a
+  result count. The standalone SQL builder's intro is corrected to the actual bind style — a directive
+  names a bind (`/* id */`) resolved against the route's `sql.params`, each binding from `params` —
+  instead of the stale `/* params.id */` / "values from body" copy left over before the bind-style
+  fix. This completes Track H (Studio platform UX, H1–H8).
+
 - Studio: **clearer identity-provider setup wizards** (platform-UX track H7). The SAML/OIDC/SCIM/
   identity-realm wizards threw jargon (ACS URL, NameID, OID attributes, SCIM outbound, realm type) at
   the user with no explanation, and the index gave no "which one, in what order?" guidance. The wizard

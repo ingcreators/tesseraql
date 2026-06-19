@@ -13,10 +13,13 @@
 <div id="page-content" class="hc-stack">
 <section class="hc-card">
   <h2>Search</h2>
-  <input class="hc-input" type="search" name="q" autocomplete="off" placeholder="Search routes, paths, SQL, tests&hellip; (try status:failing, coverage:untested)"
+  <input class="hc-input" type="search" name="q" autocomplete="off" placeholder="Search routes, paths, SQL, tests&hellip;"
          hx-get="/_tesseraql/studio/ui/docs/search" hx-trigger="input changed delay:200ms, search"
          hx-target="#docs-search-results" hx-swap="innerHTML" hx-indicator="next .htmx-indicator">
   <th:block th:replace="~{tql/shell :: busy('Searching…')}"/>
+  <p class="hc-field__message">Free text matches the id, path, and SQL. Filter by status with
+    <code>status:passing</code> / <code>status:failing</code> or by coverage with
+    <code>coverage:covered</code> / <code>coverage:untested</code>.</p>
   <div id="docs-search-results" class="hc-stack"></div>
 </section>
 <section class="hc-card" th:if="${docs.hasReport}">

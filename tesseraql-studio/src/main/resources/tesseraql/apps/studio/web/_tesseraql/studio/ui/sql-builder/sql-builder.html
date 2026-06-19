@@ -12,9 +12,10 @@
     <h2>2-way SQL builder</h2>
     <p class="hc-field__message">Generate a route's <code>select</code>/<code>insert</code>/<code>update</code>/<code>delete</code>
       2-way SQL for an introspected table &mdash; with the bind directives written for you
-      (<code>/* params.id */ 0</code>) &mdash; then copy it into your route's <code>.sql</code> file.
-      Binds in a <code>where</code> read from <code>params</code>; inserted/updated values from
-      <code>body</code>.</p>
+      (<code>/* id */ 0</code>) &mdash; then copy it into your route's <code>.sql</code> file. Each
+      directive names a bind (resolved against the route's <code>sql.params</code> at render), and the
+      snippet is prefixed with a <code>-- sql.params</code> comment listing the mappings to add to the
+      route &mdash; each binds from <code>params</code>.</p>
     <th:block th:if="${b.hasTables}">
       <form class="hc-stack" hx-post="/_tesseraql/studio/ui/sql-builder/build"
             hx-target="#sql-out" hx-swap="innerHTML" hx-disabled-elt="find button">

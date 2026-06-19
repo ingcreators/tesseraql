@@ -453,8 +453,10 @@ class StudioIntegrationTest {
                 .contains("users.search")
                 .contains("/_tesseraql/studio/ui/docs/route?id=users.search")
                 .contains("Migrations")
-                // The live-search input wires htmx to the search fragment.
-                .contains("hx-get=\"/_tesseraql/studio/ui/docs/search\"");
+                // The live-search input wires htmx to the search fragment, with a visible syntax hint
+                // (H8) rather than burying the operators in the placeholder.
+                .contains("hx-get=\"/_tesseraql/studio/ui/docs/search\"")
+                .contains("<code>status:failing</code>").contains("<code>coverage:untested</code>");
     }
 
     @Test
@@ -463,9 +465,11 @@ class StudioIntegrationTest {
                 "/_tesseraql/studio/ui/docs/search?q=" + enc("users provision"), true);
 
         assertThat(response.statusCode()).isEqualTo(200);
-        // Only the provisioning route matches both terms; the fragment links to its detail page.
+        // The provisioning route ranks first for both terms; the fragment links to its detail page,
+        // and (H8) leads with a result count.
         assertThat(response.body()).contains("users.apiProvision")
-                .contains("/_tesseraql/studio/ui/docs/route?id=users.apiProvision");
+                .contains("/_tesseraql/studio/ui/docs/route?id=users.apiProvision")
+                .contains("matches</li>");
     }
 
     @Test
@@ -1630,7 +1634,11 @@ class StudioIntegrationTest {
         assertThat(response.statusCode()).isEqualTo(200);
         // The 2-way SQL builder offers the introspected tables and the DML operations.
         assertThat(response.body()).contains("2-way SQL builder").contains(">customers<")
-                .contains("select by primary key").contains("insert");
+                .contains("select by primary key").contains("insert")
+                // H8: the intro describes the actual bind style (a bind name + sql.params), not the
+                // stale "/* params.id */ … values from body" copy from before #153/#154.
+                .contains("<code>/* id */ 0</code>").contains("-- sql.params")
+                .doesNotContain("/* params.id */");
     }
 
     @Test

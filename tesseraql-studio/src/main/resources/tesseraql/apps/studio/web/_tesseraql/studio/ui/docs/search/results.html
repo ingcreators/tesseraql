@@ -3,6 +3,8 @@
     <span class="hc-empty__title"
           th:text="${#strings.isEmpty(results.query)} ? 'Type to search routes.' : 'No matches.'">Type to search routes.</span>
   </li>
+  <li class="hc-field__message" th:if="${results.hasResults}"
+      th:text="${results.count + ' match' + (results.count == 1 ? '' : 'es')}">0 matches</li>
   <li class="hc-cluster" th:each="r : ${results.results}">
     <a th:href="${r.detailUrl}" th:text="${r.id}"></a>
     <span class="hc-badge" th:text="${r.method}"></span>
