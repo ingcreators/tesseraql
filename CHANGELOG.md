@@ -8,10 +8,22 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- Studio: IN-list and optional (`/*%if*/`) filters in the 2-way SQL builder, and a corrected,
+  self-documenting bind style. The SQL builder gains **select by column (in list)** —
+  `where <col> in /* <col> */ (<dummy>)` — and **select by column (optional)** —
+  `where 1 = 1 /*%if <col> != null */ and <col> = /* <col> */ <dummy> /*%end*/`, the common
+  optional-search-filter pattern. The generated binds now reference the **param name** the route's
+  `sql.params` maps (`/* id */`, resolved against `sql.params` at render — the runtime renders 2-way
+  SQL against the resolved binds, not the request namespaces), rather than a request expression, and
+  every snippet is **prefixed with a `-- sql.params` comment** listing the mapping each bind needs
+  (each from `params.<name>` — the coerced declared inputs, matching the `scaffold crud` convention)
+  so the snippet is complete and correct. `SqlBuilder` adds the new operations and the param-mapping
+  prefix.
+
 - Studio: a by-column filter in the 2-way SQL builder (follow-on). The SQL builder gains a
   **select-by-column** operation and a **Filter column** dropdown that is cascade-loaded from the
   selected table's columns (htmx, on table change) — so you can generate
-  `select … from <t> where <col> = /* params.<col> */ <dummy>` filtering on any column, not just the
+  `select … from <t> where <col> = /* <col> */ <dummy>` filtering on any column, not just the
   primary key, with the bind typed from the column. New `studio.sqlBuilder.columns` cascade provider
   and `/_tesseraql/studio/ui/sql-builder/columns` fragment; `SqlBuilder.generate` gains the filter
   column.
@@ -19,11 +31,11 @@ All notable changes to TesseraQL are documented here. The format follows
 - Studio: a 2-way SQL builder (Studio backlog: schema-driven authoring). A new **SQL builder** page
   (linked from the explorer when editable) generates a route's `select`/`insert`/`update`/`delete`
   **2-way SQL** for an introspected table and operation — with the bind directives written for you
-  (`/* params.id */ 0`) so the template stays runnable in a plain SQL tool — to copy into a route's
+  (`/* id */ 0`) so the template stays runnable in a plain SQL tool — to copy into a route's
   `.sql` file. It is schema-driven: the projected/inserted/updated columns and the `where` key come
   from the table's introspected columns and primary key (identity columns are skipped on insert), and
   each bind's dummy literal is typed from the column (`0` for a number, `false` for a boolean, `'x'`
-  otherwise). Where-clause binds read from `params`, value binds from `body`. New pure `SqlBuilder`
+  otherwise). Binds map from `params.<name>` (the coerced declared inputs). New pure `SqlBuilder`
   and `DocService.tableByName`; the `studio.sqlBuilder.new` / `studio.sqlBuilder.build` providers and
   `/_tesseraql/studio/ui/sql-builder` page.
 

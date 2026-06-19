@@ -12,17 +12,26 @@ import java.util.Set;
  * migration authoring follow-on — the 2-way SQL builder). It pairs with the schema portal: pick a
  * table and an operation and it writes the {@code select}/{@code insert}/{@code update}/{@code delete}
  * with the right <em>2-way directives</em> — the part that is fiddly to hand-write — so a bind reads
- * {@code /* params.id *}{@code / 0} (the dummy literal keeps the template runnable in a plain SQL
- * tool) rather than a bare {@code ?}.
+ * {@code /* id *}{@code / 0} (the dummy literal keeps the template runnable in a plain SQL tool) and
+ * an {@code in (…)} or optional {@code /*%if *}{@code /} filter is spelled correctly.
  *
- * <p>It is schema-driven: the projected/inserted/updated columns and the {@code where} key come from
- * the table's introspected columns and primary key, and each bind's dummy literal is typed from the
- * column ({@code 0} for a number, {@code false} for a boolean, {@code 'x'} otherwise). It is a
- * starting point dropped into the route's {@code .sql} file to review and refine.
+ * <p>Each bind references a name the route's {@code sql.params} maps to its source, so the snippet is
+ * prefixed with a {@code -- sql.params} comment listing those mappings — each from
+ * {@code params.<name>}, the coerced declared inputs (so a typed column binds a typed value, not the
+ * raw body string; the route declares the field in {@code input:} for that coercion), matching the
+ * {@code scaffold crud} convention. The route author copies the SQL into the {@code .sql} file and
+ * the mappings into the route. It is schema-driven: the
+ * columns and the {@code where} key come from the table's introspected columns and primary key
+ * (identity columns are skipped on insert), and each bind's dummy literal is typed from the column
+ * ({@code 0} for a number, {@code false} for a boolean, {@code 'x'} otherwise).
  */
 public final class SqlBuilder {
 
     private SqlBuilder() {
+    }
+
+    /** One bind: the name a directive references and the {@code sql.params} source it maps to. */
+    private record Bind(String name, String source) {
     }
 
     /** The 2-way SQL for {@code operation} on {@code table} (no filter column). */
@@ -32,12 +41,14 @@ public final class SqlBuilder {
 
     /**
      * The 2-way SQL for {@code operation} on {@code table}; an empty string for an unknown operation.
-     * {@code column} is the filter column for {@code select-by-column}, ignored otherwise.
+     * {@code column} is the filter column for the {@code select-by-column*} operations, else ignored.
      */
     public static String generate(CatalogSchema.Table table, String operation, String column) {
         return switch (operation == null ? "" : operation) {
             case "select-by-pk" -> selectByPk(table);
-            case "select-by-column" -> selectByColumn(table, column);
+            case "select-by-column" -> selectByColumn(table, column, "eq");
+            case "select-by-column-in" -> selectByColumn(table, column, "in");
+            case "select-by-column-optional" -> selectByColumn(table, column, "optional");
             case "insert" -> insert(table);
             case "update-by-pk" -> updateByPk(table);
             case "delete-by-pk" -> deleteByPk(table);
@@ -46,18 +57,84 @@ public final class SqlBuilder {
     }
 
     private static String selectByPk(CatalogSchema.Table table) {
-        return "select " + projection(table) + "\nfrom " + table.name() + "\nwhere "
-                + keyPredicate(table) + ";\n";
+        List<Bind> binds = new ArrayList<>();
+        String where = keyPredicate(table, binds);
+        return render(binds,
+                "select " + projection(table) + "\nfrom " + table.name() + "\nwhere " + where
+                        + ";\n");
     }
 
-    private static String selectByColumn(CatalogSchema.Table table, String column) {
+    /** A select filtered by one column: an equality ({@code eq}), an {@code in} list, or optional. */
+    private static String selectByColumn(CatalogSchema.Table table, String column, String mode) {
         String filter = column == null ? "" : column.strip();
+        String head = "select " + projection(table) + "\nfrom " + table.name();
         if (filter.isEmpty()) {
-            return "select " + projection(table) + "\nfrom " + table.name()
-                    + "\nwhere /* TODO: pick a column */;\n";
+            return head + "\nwhere /* TODO: pick a column */;\n";
         }
-        return "select " + projection(table) + "\nfrom " + table.name() + "\nwhere " + filter
-                + " = /* params." + filter + " */ " + dummy(typeOf(table, filter)) + ";\n";
+        String dummy = dummy(typeOf(table, filter));
+        String where = switch (mode) {
+            case "in" -> filter + " in /* " + filter + " */ (" + dummy + ")";
+            case "optional" -> "1 = 1\n/*%if " + filter + " != null */\n  and " + filter + " = /* "
+                    + filter + " */ " + dummy + "\n/*%end*/";
+            default -> filter + " = /* " + filter + " */ " + dummy;
+        };
+        return render(List.of(new Bind(filter, "params." + filter)),
+                head + "\nwhere " + where + ";\n");
+    }
+
+    private static String insert(CatalogSchema.Table table) {
+        List<Bind> binds = new ArrayList<>();
+        List<String> names = new ArrayList<>();
+        List<String> values = new ArrayList<>();
+        for (CatalogSchema.Column column : table.columns()) {
+            if (column.autoincrement()) {
+                continue; // the database generates identity/serial columns
+            }
+            names.add(column.name());
+            values.add("/* " + column.name() + " */ " + dummy(column.jdbcType()));
+            binds.add(new Bind(column.name(), "params." + column.name()));
+        }
+        if (names.isEmpty()) {
+            return "insert into " + table.name() + " (/* TODO: columns */)\nvalues ();\n";
+        }
+        return render(binds, "insert into " + table.name() + " (" + String.join(", ", names)
+                + ")\nvalues (" + String.join(", ", values) + ");\n");
+    }
+
+    private static String updateByPk(CatalogSchema.Table table) {
+        Set<String> key = new LinkedHashSet<>(table.primaryKey());
+        List<Bind> binds = new ArrayList<>();
+        List<String> sets = new ArrayList<>();
+        for (CatalogSchema.Column column : table.columns()) {
+            if (key.contains(column.name()) || column.autoincrement()) {
+                continue;
+            }
+            sets.add(column.name() + " = /* " + column.name() + " */ " + dummy(column.jdbcType()));
+            binds.add(new Bind(column.name(), "params." + column.name()));
+        }
+        String setClause = sets.isEmpty() ? "/* TODO: columns */" : String.join(",\n  ", sets);
+        String where = keyPredicate(table, binds);
+        return render(binds,
+                "update " + table.name() + "\nset " + setClause + "\nwhere " + where + ";\n");
+    }
+
+    private static String deleteByPk(CatalogSchema.Table table) {
+        List<Bind> binds = new ArrayList<>();
+        String where = keyPredicate(table, binds);
+        return render(binds, "delete from " + table.name() + "\nwhere " + where + ";\n");
+    }
+
+    /** The {@code where} predicate over the primary key (each bound from {@code params}), or a TODO. */
+    private static String keyPredicate(CatalogSchema.Table table, List<Bind> binds) {
+        if (table.primaryKey().isEmpty()) {
+            return "1 = 1 /* TODO: add a key predicate */";
+        }
+        List<String> predicates = new ArrayList<>();
+        for (String key : table.primaryKey()) {
+            predicates.add(key + " = /* " + key + " */ " + dummy(typeOf(table, key)));
+            binds.add(new Bind(key, "params." + key));
+        }
+        return String.join("\n  and ", predicates);
     }
 
     /** The comma-separated list of every column name, for a select projection. */
@@ -67,52 +144,16 @@ public final class SqlBuilder {
         return String.join(", ", columns);
     }
 
-    private static String insert(CatalogSchema.Table table) {
-        List<String> names = new ArrayList<>();
-        List<String> binds = new ArrayList<>();
-        for (CatalogSchema.Column column : table.columns()) {
-            if (column.autoincrement()) {
-                continue; // the database generates identity/serial columns
-            }
-            names.add(column.name());
-            binds.add("/* body." + column.name() + " */ " + dummy(column.jdbcType()));
+    /** Prefixes the SQL with the {@code sql.params} mapping each bind needs (none -> just the SQL). */
+    private static String render(List<Bind> binds, String sql) {
+        if (binds.isEmpty()) {
+            return sql;
         }
-        if (names.isEmpty()) {
-            return "insert into " + table.name() + " (/* TODO: columns */)\nvalues ();\n";
+        StringBuilder out = new StringBuilder("-- sql.params (add to the route's sql block):\n");
+        for (Bind bind : binds) {
+            out.append("--   ").append(bind.name()).append(": ").append(bind.source()).append('\n');
         }
-        return "insert into " + table.name() + " (" + String.join(", ", names) + ")\nvalues ("
-                + String.join(", ", binds) + ");\n";
-    }
-
-    private static String updateByPk(CatalogSchema.Table table) {
-        Set<String> key = new LinkedHashSet<>(table.primaryKey());
-        List<String> sets = new ArrayList<>();
-        for (CatalogSchema.Column column : table.columns()) {
-            if (key.contains(column.name()) || column.autoincrement()) {
-                continue;
-            }
-            sets.add(column.name() + " = /* body." + column.name() + " */ "
-                    + dummy(column.jdbcType()));
-        }
-        String setClause = sets.isEmpty() ? "/* TODO: columns */" : String.join(",\n  ", sets);
-        return "update " + table.name() + "\nset " + setClause + "\nwhere " + keyPredicate(table)
-                + ";\n";
-    }
-
-    private static String deleteByPk(CatalogSchema.Table table) {
-        return "delete from " + table.name() + "\nwhere " + keyPredicate(table) + ";\n";
-    }
-
-    /** The {@code where} predicate over the primary key (bound from {@code params}), or a TODO. */
-    private static String keyPredicate(CatalogSchema.Table table) {
-        if (table.primaryKey().isEmpty()) {
-            return "1 = 1 /* TODO: add a key predicate */";
-        }
-        List<String> predicates = new ArrayList<>();
-        for (String key : table.primaryKey()) {
-            predicates.add(key + " = /* params." + key + " */ " + dummy(typeOf(table, key)));
-        }
-        return String.join("\n  and ", predicates);
+        return out.append(sql).toString();
     }
 
     private static int typeOf(CatalogSchema.Table table, String column) {
