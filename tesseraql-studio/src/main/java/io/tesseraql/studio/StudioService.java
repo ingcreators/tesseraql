@@ -1086,10 +1086,20 @@ public final class StudioService {
      * the source-writing operations stamp; an empty list when the log is absent.
      */
     public List<AuditEntry> auditEntries(int limit) {
+        return auditEntries(limit, null);
+    }
+
+    /**
+     * The newest {@code limit} audit entries matching {@code query} (Studio platform-UX H5). The
+     * filter runs over the <em>whole</em> log before the limit applies, so a search reaches older
+     * actions, not just the newest window; an empty query returns the newest {@code limit} entries.
+     */
+    public List<AuditEntry> auditEntries(int limit, String query) {
         Path log = auditLog();
         if (!Files.isRegularFile(log)) {
             return List.of();
         }
+        String q = query == null ? "" : query.strip().toLowerCase(java.util.Locale.ROOT);
         List<AuditEntry> entries = new ArrayList<>();
         try {
             for (String line : Files.readAllLines(log)) {
@@ -1097,15 +1107,25 @@ public final class StudioService {
                     continue;
                 }
                 JsonNode node = jsonMapper.readTree(line);
-                entries.add(
-                        new AuditEntry(node.path("at").asText(""), node.path("actor").asText(""),
-                                node.path("action").asText(""), node.path("target").asText("")));
+                AuditEntry entry = new AuditEntry(node.path("at").asText(""),
+                        node.path("actor").asText(""),
+                        node.path("action").asText(""), node.path("target").asText(""));
+                if (q.isEmpty() || matchesAudit(entry, q)) {
+                    entries.add(entry);
+                }
             }
         } catch (IOException ex) {
             throw new UncheckedIOException(ex);
         }
         java.util.Collections.reverse(entries);
         return entries.size() > limit ? List.copyOf(entries.subList(0, limit)) : entries;
+    }
+
+    private static boolean matchesAudit(AuditEntry entry, String lowerQuery) {
+        return entry.actor().toLowerCase(java.util.Locale.ROOT).contains(lowerQuery)
+                || entry.action().toLowerCase(java.util.Locale.ROOT).contains(lowerQuery)
+                || entry.target().toLowerCase(java.util.Locale.ROOT).contains(lowerQuery)
+                || entry.at().toLowerCase(java.util.Locale.ROOT).contains(lowerQuery);
     }
 
     /** Appends one audit entry for a source-writing action (Studio backlog D6). */

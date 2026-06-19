@@ -444,8 +444,14 @@ order below (P0 → P1 → P2).
   (the section `<section>`s got `id`s; the jump links share each section's `th:if`, so only real
   anchors are offered). Pure HTML anchors — CSP-safe, no JS/CSS. (This also delivers the breadcrumb
   deferred from H1.)
-- [ ] **H5 — Table filter/paging** (P1): reuse the explorer live-filter on audit/drafts/docs; simple
-  paging for the unbounded audit trail.
+- [x] **H5 — Table filter** (P1) — *done*: the audit trail and the drafts list were dense tables with
+  no way to narrow them (audit grows unbounded). Both now carry the explorer's live-filter pattern
+  (an htmx `hx-get` that re-selects a swappable `#…-table` region, keeping focus on the input). Audit
+  filters **server-side over the whole log** before the newest-200 window applies, so a search reaches
+  older actions; the window cap is now stated (`atLimit`), not silent. Drafts filters its (uncapped)
+  list in the view. Docs already had a search box. (`auditEntries(limit, query)`,
+  `StudioViews.audit/drafts(…, query)`, `q` input on both routes.) True offset paging is deferred —
+  the 200-cap + whole-log filter covers the practical need.
 - [ ] **H6 — Copy buttons on share URLs** (P1): the read-only share inputs have no copy affordance.
 - [ ] **H7 — Wizard stepper + inline help** (P2): no progress indicator; jargon without help text;
   inconsistent required/optional markers.

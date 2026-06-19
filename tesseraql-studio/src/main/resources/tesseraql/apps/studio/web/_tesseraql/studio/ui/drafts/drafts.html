@@ -13,20 +13,33 @@
   <p class="hc-field__message">Unsaved edits held under <code>work/studio/drafts</code>. Open one to review it, then apply or discard.</p>
   <p class="hc-alert" data-variant="warning" role="status" th:if="${page.hasConflicts}"
      th:text="|${page.conflictCount} draft(s) conflict with a source that changed underneath them.|"></p>
-  <div class="hc-empty" th:unless="${page.hasDrafts}"><p class="hc-empty__title">No pending drafts.</p></div>
-  <table class="hc-table" th:if="${page.hasDrafts}">
-    <thead><tr><th>Path</th><th>Kind</th><th>Status</th></tr></thead>
-    <tbody>
-      <tr th:each="d : ${page.drafts}">
-        <td><a th:href="${d.sourceUrl}" th:text="${d.path}"></a></td>
-        <td><span class="hc-badge" th:attr="data-variant=${d.isNew} ? 'info' : 'neutral'" th:text="${d.kind}"></span></td>
-        <td>
-          <span class="hc-badge" data-variant="warning" th:if="${d.conflict}">conflict</span>
-          <span th:unless="${d.conflict}">&mdash;</span>
-        </td>
-      </tr>
-    </tbody>
-  </table>
+  <div class="hc-field">
+    <label class="hc-field__label" for="drafts-filter">Filter</label>
+    <input class="hc-input" id="drafts-filter" type="search" name="q" th:value="${page.query}"
+           placeholder="Filter by path&hellip;" autocomplete="off"
+           hx-get="/_tesseraql/studio/ui/drafts" hx-trigger="keyup changed delay:250ms, search"
+           hx-target="#drafts-table" hx-select="#drafts-table" hx-swap="outerHTML"
+           hx-indicator="next .htmx-indicator">
+    <th:block th:replace="~{tql/shell :: busy('Filtering…')}"/>
+  </div>
+  <div id="drafts-table" class="hc-stack">
+    <div class="hc-empty" th:unless="${page.hasDrafts}">
+      <p class="hc-empty__title" th:text="${#strings.isEmpty(page.query)} ? 'No pending drafts.' : 'No drafts match.'">No matches.</p>
+    </div>
+    <table class="hc-table" th:if="${page.hasDrafts}">
+      <thead><tr><th>Path</th><th>Kind</th><th>Status</th></tr></thead>
+      <tbody>
+        <tr th:each="d : ${page.drafts}">
+          <td><a th:href="${d.sourceUrl}" th:text="${d.path}"></a></td>
+          <td><span class="hc-badge" th:attr="data-variant=${d.isNew} ? 'info' : 'neutral'" th:text="${d.kind}"></span></td>
+          <td>
+            <span class="hc-badge" data-variant="warning" th:if="${d.conflict}">conflict</span>
+            <span th:unless="${d.conflict}">&mdash;</span>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
 </section>
 </div>
 </html>

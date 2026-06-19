@@ -27,6 +27,9 @@ public final class StudioViews {
 
     private static final String SOURCE_URL = "/_tesseraql/studio/ui/source?path=";
 
+    /** The cap on audit entries loaded into the trail page (Studio platform-UX H5). */
+    public static final int AUDIT_LIMIT = 200;
+
     private StudioViews() {
     }
 
@@ -74,9 +77,17 @@ public final class StudioViews {
      * edit} kind, plus the totals a badge shows.
      */
     public static Map<String, Object> drafts(List<DraftSummary> drafts) {
+        return drafts(drafts, null);
+    }
+
+    public static Map<String, Object> drafts(List<DraftSummary> drafts, String query) {
+        String q = query == null ? "" : query.strip().toLowerCase(java.util.Locale.ROOT);
         List<Map<String, Object>> rows = new ArrayList<>();
         int conflicts = 0;
         for (DraftSummary draft : drafts) {
+            if (!q.isEmpty() && !draft.path().toLowerCase(java.util.Locale.ROOT).contains(q)) {
+                continue;
+            }
             Map<String, Object> row = new LinkedHashMap<>();
             row.put("path", draft.path());
             row.put("sourceUrl", sourceUrl(draft.path()));
@@ -94,6 +105,7 @@ public final class StudioViews {
         model.put("count", rows.size());
         model.put("conflictCount", conflicts);
         model.put("hasConflicts", conflicts > 0);
+        model.put("query", query == null ? "" : query);
         return model;
     }
 
@@ -102,6 +114,10 @@ public final class StudioViews {
      * with the target linked to the source editor when it is an applied path.
      */
     public static Map<String, Object> audit(List<AuditEntry> entries) {
+        return audit(entries, null);
+    }
+
+    public static Map<String, Object> audit(List<AuditEntry> entries, String query) {
         List<Map<String, Object>> rows = new ArrayList<>();
         for (AuditEntry entry : entries) {
             Map<String, Object> row = new LinkedHashMap<>();
@@ -117,6 +133,10 @@ public final class StudioViews {
         model.put("entries", rows);
         model.put("hasEntries", !rows.isEmpty());
         model.put("count", rows.size());
+        model.put("query", query == null ? "" : query);
+        // The page loads at most AUDIT_LIMIT entries; flag when the window is full so the cap is
+        // stated, not silent (a filter still searches the whole log before the cap applies).
+        model.put("atLimit", rows.size() >= AUDIT_LIMIT);
         return model;
     }
 

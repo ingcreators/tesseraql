@@ -3,11 +3,18 @@ id: tql.studio.drafts
 kind: route
 recipe: query-html
 
+input:
+  q:
+    type: string
+    required: false
+
 security:
   auth: bearer
 
 sql:
   service: studio.drafts
+  params:
+    q: params.q
 
 response:
   html:
