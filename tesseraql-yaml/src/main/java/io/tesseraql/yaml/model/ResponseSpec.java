@@ -113,7 +113,9 @@ public record ResponseSpec(JsonResponse json, HtmlResponse html, StreamResponse 
      * @param template template path relative to the template root
      * @param model    template model: each value is a source expression (e.g. {@code sql.rows})
      * @param headers  response headers; nested map values (e.g. {@code HX-Trigger}) are serialized
-     *                 to JSON
+     *                 to JSON, and {@code {expression}} placeholders in values are resolved against
+     *                 the execution context (like the redirect location), so a header can carry
+     *                 per-request data — e.g. a dynamic {@code HX-Trigger} toast message
      */
     @JsonIgnoreProperties(ignoreUnknown = true)
     public record HtmlResponse(Integer status, String template,
