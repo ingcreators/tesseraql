@@ -981,6 +981,23 @@ class StudioIntegrationTest {
     }
 
     @Test
+    void uiSourceToolPanelsAreCollapsibleDisclosures() throws Exception {
+        // Track H3: the editor's secondary tools are uniform collapsible disclosures so the page is
+        // no longer an overwhelming stack of open panels. Rendered preview stays open (primary
+        // feedback); the on-demand tools collapse.
+        HttpResponse<String> response = get("/_tesseraql/studio/ui/source?path="
+                + enc("web/users/fragments/table/get.yml"), true);
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(response.body())
+                .contains("<details class=\"hc-disclosure\" open")
+                .contains("<summary>Rendered preview</summary>")
+                .contains("<summary>Tests</summary>")
+                // the bulky heading-stacked layout is gone — these are summaries now, not <h2>
+                .doesNotContain("<h2>Rendered preview</h2>").doesNotContain("<h2>Tests</h2>");
+    }
+
+    @Test
     void uiSourceTemplateOffersRenderedPreviewPanel() throws Exception {
         HttpResponse<String> response = get("/_tesseraql/studio/ui/source?path="
                 + enc("web/users/fragments/table/table.html"), true);
