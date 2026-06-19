@@ -6,6 +6,7 @@ import io.tesseraql.core.error.TqlDomain;
 import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
 import io.tesseraql.yaml.i18n.MessageCatalog;
+import io.tesseraql.yaml.model.ResponseSpec.OnError;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -33,13 +34,24 @@ public final class ErrorResponseRenderer implements Processor {
 
     private final ObjectMapper mapper = new ObjectMapper();
     private final I18nSettings i18n;
+    private final Map<String, OnError> onErrorByRoute;
 
     public ErrorResponseRenderer() {
         this(I18nSettings.defaults());
     }
 
     public ErrorResponseRenderer(I18nSettings i18n) {
+        this(i18n, Map.of());
+    }
+
+    /**
+     * @param onErrorByRoute per-route {@code response.onError} steering (HX-Retarget/HX-Reswap),
+     *                       keyed by route id; the failing route is resolved from
+     *                       {@link Exchange#FAILURE_ROUTE_ID} at error time.
+     */
+    public ErrorResponseRenderer(I18nSettings i18n, Map<String, OnError> onErrorByRoute) {
         this.i18n = i18n;
+        this.onErrorByRoute = onErrorByRoute == null ? Map.of() : Map.copyOf(onErrorByRoute);
     }
 
     @Override
@@ -71,11 +83,31 @@ public final class ErrorResponseRenderer implements Processor {
         exchange.getMessage().setHeader(Exchange.HTTP_RESPONSE_CODE, status);
         if ("true".equals(exchange.getMessage().getHeader("HX-Request", String.class))) {
             exchange.getMessage().setHeader(Exchange.CONTENT_TYPE, "text/html; charset=utf-8");
+            applyOnError(exchange);
             exchange.getMessage().setBody(htmxFragment(error));
             return;
         }
         exchange.getMessage().setHeader(Exchange.CONTENT_TYPE, "application/json; charset=utf-8");
         exchange.getMessage().setBody(mapper.writeValueAsString(body));
+    }
+
+    /**
+     * Steers the htmx error response per the failing route's {@code response.onError}: sets
+     * {@code HX-Retarget}/{@code HX-Reswap} so the error fragment can land in e.g. a flash region
+     * instead of the form's own target. Routes without {@code onError} are unaffected.
+     */
+    private void applyOnError(Exchange exchange) {
+        String routeId = exchange.getProperty(Exchange.FAILURE_ROUTE_ID, String.class);
+        OnError onError = routeId == null ? null : onErrorByRoute.get(routeId);
+        if (onError == null) {
+            return;
+        }
+        if (onError.retarget() != null && !onError.retarget().isBlank()) {
+            exchange.getMessage().setHeader("HX-Retarget", onError.retarget());
+        }
+        if (onError.reswap() != null && !onError.reswap().isBlank()) {
+            exchange.getMessage().setHeader("HX-Reswap", onError.reswap());
+        }
     }
 
     /** Localizes the field-error entries in place: {@code messageKey} + resolved {@code message}. */

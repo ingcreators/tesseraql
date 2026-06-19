@@ -4,11 +4,26 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 
 /**
  * Route response declaration (design ch. 6.3, 6.4): JSON, HTML (template-rendered), streaming
- * (large-data export), redirect, and generated-file shapes.
+ * (large-data export), redirect, and generated-file shapes, plus an optional {@code onError} that
+ * steers the error response of an htmx caller.
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public record ResponseSpec(JsonResponse json, HtmlResponse html, StreamResponse stream,
-        RedirectResponse redirect, FileResponse file) {
+        RedirectResponse redirect, FileResponse file, OnError onError) {
+
+    /**
+     * How an htmx caller's <em>error</em> response is steered (design ch. 6.4): the error renderer
+     * sets {@code HX-Retarget} (a CSS selector — send the error fragment to e.g. a flash region
+     * instead of the triggering element) and/or {@code HX-Reswap} (override the swap strategy) on a
+     * 4xx/5xx response to an {@code HX-Request}. Both are optional; absent leaves htmx's defaults
+     * (the field-errors fragment swaps into the form's own target).
+     *
+     * @param retarget the {@code HX-Retarget} CSS selector for the error response
+     * @param reswap   the {@code HX-Reswap} strategy for the error response (e.g. {@code outerHTML})
+     */
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public record OnError(String retarget, String reswap) {
+    }
 
     /**
      * A template-generated file response (design ch. 6.4): the template is rendered against the

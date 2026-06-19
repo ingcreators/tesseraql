@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import io.tesseraql.core.error.TqlDomain;
 import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
+import io.tesseraql.yaml.model.ResponseSpec.OnError;
 import java.util.List;
 import java.util.Map;
 import org.apache.camel.Exchange;
@@ -61,6 +62,30 @@ class ErrorResponseRendererTest {
                 .contains("data-error-code=\"TQL-SQL-4092\"")
                 .contains("hc-alert__body")
                 .contains("changed by another user");
+    }
+
+    @Test
+    void steersTheHtmxErrorResponseWhenTheFailingRouteDeclaresOnError() throws Exception {
+        ErrorResponseRenderer renderer = new ErrorResponseRenderer(I18nSettings.defaults(),
+                Map.of("members.create", new OnError("#flash", "outerHTML")));
+
+        // The failing route declares onError: the error fragment is retargeted/reswapped.
+        Exchange steered = exchangeWith(
+                TqlException.builder(new TqlErrorCode(TqlDomain.FIELD, 4220)).build());
+        steered.getMessage().setHeader("HX-Request", "true");
+        steered.setProperty(Exchange.FAILURE_ROUTE_ID, "members.create");
+        renderer.process(steered);
+        assertThat(steered.getMessage().getHeader("HX-Retarget")).isEqualTo("#flash");
+        assertThat(steered.getMessage().getHeader("HX-Reswap")).isEqualTo("outerHTML");
+
+        // A route without onError keeps htmx's defaults (no steering headers).
+        Exchange plain = exchangeWith(
+                TqlException.builder(new TqlErrorCode(TqlDomain.FIELD, 4220)).build());
+        plain.getMessage().setHeader("HX-Request", "true");
+        plain.setProperty(Exchange.FAILURE_ROUTE_ID, "other.route");
+        renderer.process(plain);
+        assertThat(plain.getMessage().getHeader("HX-Retarget")).isNull();
+        assertThat(plain.getMessage().getHeader("HX-Reswap")).isNull();
     }
 
     @Test
