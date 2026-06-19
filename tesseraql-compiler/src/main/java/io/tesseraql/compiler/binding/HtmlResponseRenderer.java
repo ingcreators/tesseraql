@@ -6,6 +6,8 @@ import io.tesseraql.core.error.TqlDomain;
 import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
 import io.tesseraql.core.expr.EvaluationContext;
+import io.tesseraql.core.expr.Expr;
+import io.tesseraql.core.expr.ExpressionParser;
 import io.tesseraql.yaml.model.ResponseSpec.HtmlResponse;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -38,6 +40,7 @@ public final class HtmlResponseRenderer implements Processor {
     private final Path appHome;
     private final String templateName;
     private final String defaultLocaleTag;
+    private final Map<String, Expr> headerGuards;
     private final ObjectMapper mapper = new ObjectMapper();
 
     public HtmlResponseRenderer(HtmlResponse response, Path appHome, Path routeDir) {
@@ -50,6 +53,13 @@ public final class HtmlResponseRenderer implements Processor {
         this.appHome = appHome.toAbsolutePath().normalize();
         this.templateName = resolveTemplate(this.appHome, routeDir, response.template());
         this.defaultLocaleTag = defaultLocaleTag;
+        // Pre-compile each header's optional guard expression so a syntax error fails the build.
+        this.headerGuards = new LinkedHashMap<>();
+        response.headersWhen().forEach((name, when) -> {
+            if (when != null && !when.isBlank()) {
+                headerGuards.put(name, ExpressionParser.parse(when));
+            }
+        });
     }
 
     /**
@@ -104,6 +114,12 @@ public final class HtmlResponseRenderer implements Processor {
 
     private void applyHeaders(Exchange exchange, EvaluationContext evaluation) {
         response.headers().forEach((name, value) -> {
+            // A header with a guard (headersWhen) is emitted only when its condition is truthy, so a
+            // single fragment can fire e.g. HX-Trigger on success but not on a handled error.
+            Expr guard = headerGuards.get(name);
+            if (guard != null && !guard.evalBoolean(evaluation)) {
+                return;
+            }
             try {
                 // Resolve {expression} placeholders against the execution context (recursively for a
                 // nested map/list), so a header like HX-Trigger can carry per-request data; a value

@@ -116,14 +116,22 @@ public record ResponseSpec(JsonResponse json, HtmlResponse html, StreamResponse 
      *                 to JSON, and {@code {expression}} placeholders in values are resolved against
      *                 the execution context (like the redirect location), so a header can carry
      *                 per-request data — e.g. a dynamic {@code HX-Trigger} toast message
+     * @param headersWhen  per-header guard expressions (header name → boolean expression); a header
+     *                 is emitted only when its guard is truthy (or it has none), so e.g. an
+     *                 {@code HX-Trigger} toast can fire only on success within a single fragment
+     *                 response
      */
     @JsonIgnoreProperties(ignoreUnknown = true)
     public record HtmlResponse(Integer status, String template,
-            java.util.Map<String, Object> model, java.util.Map<String, Object> headers) {
+            java.util.Map<String, Object> model, java.util.Map<String, Object> headers,
+            java.util.Map<String, String> headersWhen) {
 
         public HtmlResponse {
             model = model == null ? java.util.Map.of() : java.util.Map.copyOf(model);
             headers = headers == null ? java.util.Map.of() : java.util.Map.copyOf(headers);
+            headersWhen = headersWhen == null
+                    ? java.util.Map.of()
+                    : java.util.Map.copyOf(headersWhen);
         }
 
         public int effectiveStatus() {
