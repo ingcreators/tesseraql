@@ -49,6 +49,30 @@
   <a class="hc-item" href="/_tesseraql/studio/ui">Studio</a>
   <a class="hc-item" href="/_tesseraql/admin/users">IAM Admin</a>
 </th:block>
+<!-- The Studio app's own section navigation (Studio platform UX, track H1): the system console
+     `page(...)` form only renders the 3-app `system-nav`, leaving Studio with no section nav, so
+     every section was reachable only via the explorer's header link cluster. `studio-page(...)`
+     mounts this sidebar instead; tesseraql.js sets aria-current on the deepest matching link.
+     The list is unconditional — sections gated by mode (read-only / scaffolding off) render their
+     own disabled state, which is honest wayfinding. The system apps stay reachable below. -->
+<th:block th:fragment="studio-page(title, header, content)"
+          th:replace="~{tql/shell :: shell(${title}, ~{tql/shell :: studio-nav}, ${header}, ${content})}"/>
+<th:block th:fragment="studio-nav">
+  <a class="hc-item" href="/_tesseraql/studio/ui">Explorer</a>
+  <a class="hc-item" href="/_tesseraql/studio/ui/docs">Docs</a>
+  <a class="hc-item" href="/_tesseraql/studio/ui/docs/coverage">Coverage</a>
+  <a class="hc-item" href="/_tesseraql/studio/ui/docs/schema">Schema</a>
+  <a class="hc-item" href="/_tesseraql/studio/ui/docs/export">Export</a>
+  <a class="hc-item" href="/_tesseraql/studio/ui/scaffold">Scaffold</a>
+  <a class="hc-item" href="/_tesseraql/studio/ui/migration">Migration</a>
+  <a class="hc-item" href="/_tesseraql/studio/ui/sql-builder">SQL builder</a>
+  <a class="hc-item" href="/_tesseraql/studio/ui/drafts">Drafts</a>
+  <a class="hc-item" href="/_tesseraql/studio/ui/audit">Audit</a>
+  <a class="hc-item" href="/_tesseraql/studio/ui/wizard">Wizards</a>
+  <hr aria-hidden="true">
+  <a class="hc-item" href="/_tesseraql/ops/console">Operations</a>
+  <a class="hc-item" href="/_tesseraql/admin/users">IAM Admin</a>
+</th:block>
 <!-- A loading affordance for an async (htmx) action: htmx toggles the `htmx-indicator`
      element visible while the request is in flight (its injected indicator style applies
      under the `style-src 'unsafe-inline'` CSP), so a slow DB call no longer reads as a hang.

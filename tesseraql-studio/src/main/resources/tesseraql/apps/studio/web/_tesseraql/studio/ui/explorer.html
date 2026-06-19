@@ -1,16 +1,11 @@
 <!DOCTYPE html>
 <html xmlns:th="http://www.thymeleaf.org"
-      th:replace="~{tql/shell :: page(|TesseraQL Studio · ${studio.appName}|, ~{:: #page-header}, ~{:: #page-content})}">
+      th:replace="~{tql/shell :: studio-page(|TesseraQL Studio · ${studio.appName}|, ~{:: #page-header}, ~{:: #page-content})}">
 <th:block id="page-header">
   <span class="hc-spacer"></span>
   <div class="hc-cluster">
-    <a href="/_tesseraql/studio/ui/docs">docs &rarr;</a>
-    <a th:if="${studio.editable}" href="/_tesseraql/studio/ui/drafts">drafts &rarr;</a>
-    <a th:if="${studio.editable}" href="/_tesseraql/studio/ui/audit">audit &rarr;</a>
-    <a th:if="${studio.scaffoldEnabled}" href="/_tesseraql/studio/ui/scaffold">scaffold &rarr;</a>
-    <a th:if="${studio.editable}" href="/_tesseraql/studio/ui/migration">migration &rarr;</a>
-    <a th:if="${studio.editable}" href="/_tesseraql/studio/ui/sql-builder">sql builder &rarr;</a>
-    <a href="/_tesseraql/studio/ui/wizard">wizards &rarr;</a>
+    <!-- The section links moved to the Studio sidebar nav (track H1); the header keeps the
+         mode badge so the editable/read-only state stays visible from the landing page. -->
     <span class="hc-badge" data-variant="warning" th:if="${studio.readOnly}">read-only</span>
     <span class="hc-badge" data-variant="success" th:if="${studio.editable}">editable</span>
   </div>

@@ -8,6 +8,13 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- Studio: **a Studio section sidebar nav** (platform-UX track H1). Studio pages used the shell's
+  `page(...)` form, which renders only the 3-app system nav, so the Studio sections were reachable
+  only via the explorer's header link cluster. A new `tql/shell :: studio-page(...)` form mounts a
+  `studio-nav` sidebar (Explorer, Docs, Coverage, Schema, Export, Scaffold, Migration, SQL builder,
+  Drafts, Audit, Wizards, then the system apps); the 20 authenticated `studio/ui/**` pages adopt it
+  (the public share views keep the plain `page(...)`). `tesseraql.js` highlights the current section
+  via `aria-current`. The explorer header drops its now-duplicated link cluster.
 - Studio: **loading indicators on every async action** (platform-UX track H2). No template used
   `hx-indicator`/`aria-busy`, so a slow database call (live render, dry-run, run-tests, scaffold,
   migration build, SQL builder, search) gave no "working" cue and read as a hang. A reusable
