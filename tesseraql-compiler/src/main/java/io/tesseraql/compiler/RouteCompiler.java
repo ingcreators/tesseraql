@@ -245,14 +245,6 @@ public final class RouteCompiler {
         applyIdempotencyComplete(route, routeFile.definition());
     }
 
-    /**
-     * Whether the route runs through the transactional command processor (roadmap Phase 18):
-     * any route declaring an outbox event, command steps, validation rules (Phase 19), or
-     * notifications (Phase 20), and every file-based command-json route — so audit binds,
-     * row-count expectations, constraint mapping, and declarative validation apply uniformly.
-     * Contract/service-bound command routes keep the standard execution pipeline (and fail fast
-     * when they declare validate:).
-     */
     /** Each route's {@code response.onError} steering, keyed by route id (htmx error retarget). */
     private static java.util.Map<String, io.tesseraql.yaml.model.ResponseSpec.OnError> onErrorByRoute(
             AppManifest manifest) {
@@ -266,6 +258,14 @@ public final class RouteCompiler {
         return map;
     }
 
+    /**
+     * Whether the route runs through the transactional command processor (roadmap Phase 18):
+     * any route declaring an outbox event, command steps, validation rules (Phase 19), or
+     * notifications (Phase 20), and every file-based command-json route — so audit binds,
+     * row-count expectations, constraint mapping, and declarative validation apply uniformly.
+     * Contract/service-bound command routes keep the standard execution pipeline (and fail fast
+     * when they declare validate:).
+     */
     private static boolean usesTransactionalCommand(RouteDefinition definition) {
         return definition.outbox() != null
                 || !definition.steps().isEmpty()
