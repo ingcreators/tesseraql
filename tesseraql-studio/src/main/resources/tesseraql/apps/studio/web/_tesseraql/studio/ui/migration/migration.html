@@ -61,9 +61,9 @@
         database back into a migration. Additive changes become real DDL; destructive ones are
         emitted as comments to review.</p>
       <form class="hc-stack" th:if="${mig.hasSchemaBaseline}"
-            hx-post="/_tesseraql/studio/ui/migration/diff" hx-target="#mig-ddl" hx-swap="innerHTML">
+            hx-post="/_tesseraql/studio/ui/migration/diff" hx-target="#mig-ddl" hx-swap="innerHTML" hx-disabled-elt="find button">
         <div class="hc-cluster">
-          <button type="submit" class="hc-button" data-variant="ghost">Generate from diff &uarr;</button>
+          <button type="submit" class="hc-button" data-variant="ghost">Generate from diff &uarr;</button><th:block th:replace="~{tql/shell :: busy('Diffing…')}"/>
         </div>
       </form>
       <p class="hc-field__message" th:unless="${mig.hasSchemaBaseline}">No schema baseline captured.
@@ -75,7 +75,7 @@
       <p class="hc-field__message">Generate standard DDL for a common operation and drop it into the
         DDL field above to review and refine. Identifiers are not validated &mdash; check the result.</p>
       <form class="hc-stack" hx-post="/_tesseraql/studio/ui/migration/build"
-            hx-target="#mig-ddl" hx-swap="innerHTML">
+            hx-target="#mig-ddl" hx-swap="innerHTML" hx-disabled-elt="find button">
         <input type="hidden" name="operation" value="add-column">
         <h3>Add column</h3>
         <div class="hc-cluster">
@@ -107,11 +107,11 @@
           <label class="hc-field"><input type="checkbox" name="notNull" value="true"> Not null</label>
         </div>
         <div class="hc-cluster">
-          <button type="submit" class="hc-button" data-variant="ghost">Generate &uarr;</button>
+          <button type="submit" class="hc-button" data-variant="ghost">Generate &uarr;</button><th:block th:replace="~{tql/shell :: busy('Building…')}"/>
         </div>
       </form>
       <form class="hc-stack" hx-post="/_tesseraql/studio/ui/migration/build"
-            hx-target="#mig-ddl" hx-swap="innerHTML">
+            hx-target="#mig-ddl" hx-swap="innerHTML" hx-disabled-elt="find button">
         <input type="hidden" name="operation" value="create-table">
         <h3>Create table</h3>
         <div class="hc-cluster">
@@ -126,11 +126,11 @@
                     placeholder="id bigint generated always as identity&#10;name text not null&#10;created_at timestamptz not null default now()"></textarea>
         </div>
         <div class="hc-cluster">
-          <button type="submit" class="hc-button" data-variant="ghost">Generate &uarr;</button>
+          <button type="submit" class="hc-button" data-variant="ghost">Generate &uarr;</button><th:block th:replace="~{tql/shell :: busy('Building…')}"/>
         </div>
       </form>
       <form class="hc-stack" hx-post="/_tesseraql/studio/ui/migration/build"
-            hx-target="#mig-ddl" hx-swap="innerHTML">
+            hx-target="#mig-ddl" hx-swap="innerHTML" hx-disabled-elt="find button">
         <input type="hidden" name="operation" value="create-index">
         <h3>Create index</h3>
         <div class="hc-cluster">
@@ -150,7 +150,7 @@
           <label class="hc-field"><input type="checkbox" name="unique" value="true"> Unique</label>
         </div>
         <div class="hc-cluster">
-          <button type="submit" class="hc-button" data-variant="ghost">Generate &uarr;</button>
+          <button type="submit" class="hc-button" data-variant="ghost">Generate &uarr;</button><th:block th:replace="~{tql/shell :: busy('Building…')}"/>
         </div>
       </form>
     </details>

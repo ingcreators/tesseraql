@@ -404,3 +404,35 @@ the `studio_copilot` describe→draft→preview→apply prompt, the architectura
 decision point 4 (the MCP loop, not an in-app LLM, is the AI surface). Every A–G backlog item now has
 shipped at least its core slice. Anything further is net-new: file new Studio DX ideas here as they
 arise (e.g. a Studio-embedded copilot UX, multi-binding live render, confirm-diff-before-every-apply).
+
+## Track H — Studio platform UX
+
+A cross-cutting UX track from a full design review (2026-06). The per-feature work (A–G) is solid,
+but the platform-level *journey* lags the individual pages: navigation/wayfinding, async feedback,
+and information density. Each slice ships as its own PR (CI green, squash-merge), in the recommended
+order below (P0 → P1 → P2).
+
+- [x] **H2 — Shared loading indicators** (P0) — *done*: no template used `hx-indicator`/`aria-busy`,
+  so preview/render/dry-run/run-tests/scaffold/migration/sql-builder/search gave no "working" cue on
+  slow DB ops (it read as a hang). Added an htmx-native `htmx-indicator` affordance (a reusable
+  `tql/shell :: busy(label)` fragment) plus `hx-disabled-elt` to every async action. CSP allows
+  `style-src 'unsafe-inline'`, so htmx's injected indicator style applies with no custom CSS/JS.
+- [ ] **H1 — Studio sidebar nav + breadcrumbs** (P0): Studio pages use the shell's `page(...)` form,
+  which renders only the 3-link system nav — there is no Studio section nav and no breadcrumbs (the
+  explorer header link-cluster is the only wayfinding). Switch Studio to the generic
+  `shell(title, nav, header, content)` form with a Studio `nav` (Explorer, Docs, Coverage, Schema,
+  Scaffold, Migration, SQL builder, Drafts, Audit, Wizards); `tesseraql.js` already sets
+  `aria-current="page"` on the matching sidebar link. Add a breadcrumb row to detail pages.
+- [ ] **H3 — Source editor restructure** (P1): `source.html` stacks 9+ panels in one card. Sticky
+  action bar (save/apply/discard) + segmented secondary panels (Preview/Compare/Tests/Dry-run/SQL
+  builder).
+- [ ] **H4 — Detail-page in-page nav** (P1): `route.html` (8 tables) / `table.html` — a sticky
+  "on this page" jump list or progressive disclosure.
+- [ ] **H5 — Table filter/paging** (P1): reuse the explorer live-filter on audit/drafts/docs; simple
+  paging for the unbounded audit trail.
+- [ ] **H6 — Copy buttons on share URLs** (P1): the read-only share inputs have no copy affordance.
+- [ ] **H7 — Wizard stepper + inline help** (P2): no progress indicator; jargon without help text;
+  inconsistent required/optional markers.
+- [ ] **H8 — Correctness + search polish** (P2): fix the stale `sql-builder.html` prose
+  (`/* params.id */` / "values from body" → bind names / all `params`, post #153/#154); a search
+  syntax hint + result count; move focus to results after an htmx swap.

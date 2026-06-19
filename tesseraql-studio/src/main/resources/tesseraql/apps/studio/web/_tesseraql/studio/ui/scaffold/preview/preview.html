@@ -21,14 +21,14 @@
       </li>
     </ul>
     <form class="hc-stack" hx-post="/_tesseraql/studio/ui/scaffold/apply"
-          hx-target="#scaffold-apply-result" hx-swap="innerHTML">
+          hx-target="#scaffold-apply-result" hx-swap="innerHTML" hx-disabled-elt="find button">
       <input type="hidden" name="table" th:value="${scaffold.table}">
       <label class="hc-field" th:if="${scaffold.hasConflicts}">
         <input type="checkbox" name="force" value="true">
         Overwrite files you have edited (force)
       </label>
       <div class="hc-cluster">
-        <button type="submit" class="hc-button" data-variant="primary">Create these files</button>
+        <button type="submit" class="hc-button" data-variant="primary">Create these files</button><th:block th:replace="~{tql/shell :: busy('Writing…')}"/>
       </div>
     </form>
     <div id="scaffold-apply-result" class="hc-stack" aria-live="polite"></div>

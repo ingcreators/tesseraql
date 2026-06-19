@@ -17,7 +17,7 @@
       <code>body</code>.</p>
     <th:block th:if="${b.hasTables}">
       <form class="hc-stack" hx-post="/_tesseraql/studio/ui/sql-builder/build"
-            hx-target="#sql-out" hx-swap="innerHTML">
+            hx-target="#sql-out" hx-swap="innerHTML" hx-disabled-elt="find button">
         <div class="hc-cluster">
           <div class="hc-field"><label class="hc-field__label">Table</label>
             <select class="hc-select" name="table" required
@@ -42,7 +42,7 @@
           </div>
         </div>
         <div class="hc-cluster">
-          <button type="submit" class="hc-button" data-variant="primary">Generate</button>
+          <button type="submit" class="hc-button" data-variant="primary">Generate</button><th:block th:replace="~{tql/shell :: busy('Building…')}"/>
         </div>
       </form>
       <div class="hc-field">

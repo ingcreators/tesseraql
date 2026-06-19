@@ -8,6 +8,13 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- Studio: **loading indicators on every async action** (platform-UX track H2). No template used
+  `hx-indicator`/`aria-busy`, so a slow database call (live render, dry-run, run-tests, scaffold,
+  migration build, SQL builder, search) gave no "working" cue and read as a hang. A reusable
+  `tql/shell :: busy(label)` fragment renders an htmx-native `htmx-indicator` (announced via
+  `role="status"`), and each submit form disables its button (`hx-disabled-elt`) while the request is
+  in flight. CSP already allows `style-src 'unsafe-inline'`, so htmx's injected indicator style
+  applies with no custom CSS or JS.
 - Studio: the 2-way SQL builder is available inline in the source editor (follow-on). When editing a
   route SQL file (`web/**/*.sql`), the editor offers a **SQL builder** panel — the same table /
   operation / filter-column controls as the standalone page — whose **Append to editor** button drops
