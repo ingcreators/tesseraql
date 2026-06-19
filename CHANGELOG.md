@@ -6,6 +6,18 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ## Unreleased
 
+### Changed
+
+- UI: **adopted Hypermedia Components 0.1.6**, retiring three local stand-ins for the kit's new
+  auto-installed behaviors (the upstream issues this project filed, now shipped). The share-URL Copy
+  buttons use **`data-hc-copy`** (`installCopy`, #270) instead of the `tesseraql.js` `[data-copy]`
+  handler; the route/table "On this page" navs are an **`hc-toc`** with **`data-hc-spy`** scrollspy
+  (`installSpy`, #271), so the current section's link is highlighted (`aria-current="location"`); and
+  the shell sidebar opts into **`data-hc-nav-current`** (`installNavCurrent`, #272) for active-link
+  marking instead of the `tesseraql.js` `aria-current` script. All three are CSP-clean (declarative
+  markup, behaviors from the same-origin bundle) — `tesseraql.js` shrinks to just the htmx
+  error-swap wiring and the live-editor SQL grammar.
+
 ### Added
 
 - 2-way SQL: **embedded variables** (`/*# template *​/`, Doma-style). A `{placeholder}` in the

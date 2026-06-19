@@ -25,12 +25,14 @@
         <span class="hc-field__label" th:if="${tbl.hasPrimaryKey}" th:text="|primary key (${tbl.primaryKey})|"></span>
       </div>
     </section>
-    <nav class="hc-cluster" aria-label="On this page">
+    <nav class="hc-toc" aria-label="On this page" data-hc-spy>
       <span class="hc-field__label">On this page</span>
-      <a th:if="${tbl.hasRouteUsage}" href="#sec-usage">Used by routes</a>
-      <a href="#sec-columns">Columns</a>
-      <a th:if="${tbl.hasForeignKeys}" href="#sec-fks">Foreign keys</a>
-      <a th:if="${tbl.hasUniqueIndexes}" href="#sec-indexes">Unique indexes</a>
+      <ul class="hc-toc__list">
+        <li class="hc-toc__item" th:if="${tbl.hasRouteUsage}"><a class="hc-toc__link" href="#sec-usage">Used by routes</a></li>
+        <li class="hc-toc__item"><a class="hc-toc__link" href="#sec-columns">Columns</a></li>
+        <li class="hc-toc__item" th:if="${tbl.hasForeignKeys}"><a class="hc-toc__link" href="#sec-fks">Foreign keys</a></li>
+        <li class="hc-toc__item" th:if="${tbl.hasUniqueIndexes}"><a class="hc-toc__link" href="#sec-indexes">Unique indexes</a></li>
+      </ul>
     </nav>
     <section class="hc-card" th:if="${tbl.shareUrl}">
       <h3>Share</h3>
@@ -38,7 +40,7 @@
         openable without signing in.</p>
       <input class="hc-input" type="text" readonly id="share-table" th:value="${tbl.shareUrl}">
       <div class="hc-cluster">
-        <button type="button" class="hc-button" data-variant="ghost" data-size="sm" data-copy="#share-table">Copy</button>
+        <button type="button" class="hc-button" data-variant="ghost" data-size="sm" data-hc-copy="#share-table">Copy</button>
         <a class="hc-button" data-variant="ghost" data-size="sm" target="_blank" rel="noopener"
            th:href="${tbl.shareUrl}">Open shared view &rarr;</a>
       </div>

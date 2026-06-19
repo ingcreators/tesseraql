@@ -33,7 +33,10 @@
     <strong th:text="${title}">TesseraQL</strong>
     <th:block th:replace="${header}"/>
   </header>
-  <nav class="hc-shell__sidebar" aria-label="Primary">
+  <!-- data-hc-nav-current: the kit's installNavCurrent behavior marks the active link with
+       aria-current="page" (longest path-segment prefix wins, re-applied after htmx history nav) — the
+       hc-item selected style keys off it. CSP-safe, no inline JS. -->
+  <nav class="hc-shell__sidebar" aria-label="Primary" data-hc-nav-current>
     <th:block th:replace="${nav}"/>
   </nav>
   <main class="hc-shell__main">
@@ -52,7 +55,7 @@
 <!-- The Studio app's own section navigation (Studio platform UX, track H1): the system console
      `page(...)` form only renders the 3-app `system-nav`, leaving Studio with no section nav, so
      every section was reachable only via the explorer's header link cluster. `studio-page(...)`
-     mounts this sidebar instead; tesseraql.js sets aria-current on the deepest matching link.
+     mounts this sidebar instead; the kit's installNavCurrent (data-hc-nav-current) marks the link.
      The list is unconditional — sections gated by mode (read-only / scaffolding off) render their
      own disabled state, which is honest wayfinding. The system apps stay reachable below. -->
 <th:block th:fragment="studio-page(title, header, content)"

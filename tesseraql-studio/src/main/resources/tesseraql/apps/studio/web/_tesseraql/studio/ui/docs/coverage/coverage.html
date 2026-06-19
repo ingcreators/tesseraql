@@ -38,7 +38,7 @@
         without signing in. The shared view withholds per-test failure detail.</p>
       <input class="hc-input" type="text" readonly id="share-coverage" th:value="${cov.shareUrl}">
       <div class="hc-cluster">
-        <button type="button" class="hc-button" data-variant="ghost" data-size="sm" data-copy="#share-coverage">Copy</button>
+        <button type="button" class="hc-button" data-variant="ghost" data-size="sm" data-hc-copy="#share-coverage">Copy</button>
         <a class="hc-button" data-variant="ghost" data-size="sm" target="_blank" rel="noopener"
            th:href="${cov.shareUrl}">Open shared view &rarr;</a>
       </div>
