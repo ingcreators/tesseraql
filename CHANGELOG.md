@@ -6,6 +6,8 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ## Unreleased
 
+## 0.3.0 - 2026-06-19
+
 ### Changed
 
 - UI: **adopted Hypermedia Components 0.1.6**, retiring three local stand-ins for the kit's new
