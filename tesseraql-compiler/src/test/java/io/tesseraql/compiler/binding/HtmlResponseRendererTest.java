@@ -83,7 +83,7 @@ class HtmlResponseRendererTest {
         headers.put("HX-Trigger", Map.of("hc:toast", toast));
         headers.put("Content-Security-Policy", "default-src 'self'");
         HtmlResponseRenderer renderer = new HtmlResponseRenderer(
-                new HtmlResponse(200, "ok.html", Map.of(), headers), dir, dir);
+                new HtmlResponse(200, "ok.html", Map.of(), headers, null), dir, dir);
 
         Exchange exchange = new DefaultExchange(new DefaultCamelContext());
         exchange.setProperty(TesseraqlProperties.CONTEXT,
@@ -95,5 +95,31 @@ class HtmlResponseRendererTest {
                 .isEqualTo("{\"hc:toast\":{\"message\":\"Saved\"}}");
         assertThat(exchange.getMessage().getHeader("Content-Security-Policy"))
                 .isEqualTo("default-src 'self'");
+    }
+
+    @Test
+    void aGuardedHeaderIsEmittedOnlyWhenItsConditionIsTruthy(@TempDir Path dir) throws Exception {
+        Files.writeString(dir.resolve("ok.html"), "<p th:text=\"'ok'\"></p>");
+        Map<String, Object> headers = Map.of("HX-Trigger",
+                Map.of("hc:toast", Map.of("message", "ok")));
+        Map<String, String> guards = Map.of("HX-Trigger", "result.ok");
+        HtmlResponseRenderer renderer = new HtmlResponseRenderer(
+                new HtmlResponse(200, "ok.html", Map.of(), headers, guards), dir, dir);
+
+        // Condition true: the header is emitted.
+        Exchange ok = exchange(dir, Map.of("result", Map.of("ok", true)), renderer);
+        assertThat(ok.getMessage().getHeader("HX-Trigger")).isNotNull();
+
+        // Condition false: the guarded header is skipped (e.g. a handled-error fragment).
+        Exchange notOk = exchange(dir, Map.of("result", Map.of("ok", false)), renderer);
+        assertThat(notOk.getMessage().getHeader("HX-Trigger")).isNull();
+    }
+
+    private static Exchange exchange(Path dir, Map<String, Object> context,
+            HtmlResponseRenderer renderer) throws Exception {
+        Exchange exchange = new DefaultExchange(new DefaultCamelContext());
+        exchange.setProperty(TesseraqlProperties.CONTEXT, context);
+        renderer.process(exchange);
+        return exchange;
     }
 }

@@ -132,6 +132,24 @@ emits these headers, while a validation failure takes the field-errors renderer 
 not. `HX-Reswap` / `HX-Retarget` can likewise be set as (static or interpolated) header values when
 a response needs to override its swap strategy or target.
 
+When a single fragment carries both outcomes (a `200` whose body shows success *or* a handled
+error), gate a header with `headersWhen` — a boolean expression per header name — so it fires only
+when the condition is truthy:
+
+```yaml
+response:
+  html:
+    template: result.html
+    headers:
+      HX-Trigger:
+        "hc:toast": { message: "Applied", variant: success }
+    headersWhen:
+      HX-Trigger: result.applied   # the toast fires only when the apply succeeded
+```
+
+A header with no `headersWhen` entry is always emitted; the guard expression is the same language as
+a validation/notification `when:` and is compiled at build time.
+
 ## Mutating forms
 
 A form that changes server state follows the kit's `mutating-form` recipe — the composition
