@@ -150,6 +150,20 @@ response:
 A header with no `headersWhen` entry is always emitted; the guard expression is the same language as
 a validation/notification `when:` and is compiled at build time.
 
+To steer an htmx caller's **error** response — send the error fragment to a flash region instead of
+the triggering element, or override its swap — declare `response.onError`. The shared error renderer
+sets `HX-Retarget` / `HX-Reswap` on the `4xx`/`5xx` reply to an `HX-Request` for that route (resolved
+from the failing route id), leaving routes without `onError` on htmx's defaults (the field-errors
+fragment swaps into the form's own target):
+
+```yaml
+response:
+  redirect: { location: /members/{params.id} }
+  onError:
+    retarget: "#flash"     # send the error fragment to a flash region…
+    reswap: outerHTML      # …replacing it whole
+```
+
 ## Mutating forms
 
 A form that changes server state follows the kit's `mutating-form` recipe — the composition

@@ -87,10 +87,14 @@ public final class RouteCompiler {
                 if (mountRest) {
                     restConfiguration().component("platform-http");
                 }
+                // Per-route response.onError steering (HX-Retarget/HX-Reswap), resolved at error
+                // time from the failing route id; the error renderer is one shared exception handler.
+                java.util.Map<String, io.tesseraql.yaml.model.ResponseSpec.OnError> onErrorByRoute = onErrorByRoute(
+                        manifest);
                 onException(TqlException.class).handled(true)
-                        .process(new ErrorResponseRenderer(i18n));
+                        .process(new ErrorResponseRenderer(i18n, onErrorByRoute));
                 onException(Exception.class).handled(true)
-                        .process(new ErrorResponseRenderer(i18n));
+                        .process(new ErrorResponseRenderer(i18n, onErrorByRoute));
                 for (RouteFile routeFile : manifest.routes()) {
                     if (onlyRouteIds == null
                             || onlyRouteIds.contains(routeFile.definition().id())) {
@@ -239,6 +243,19 @@ public final class RouteCompiler {
         ProcessorDefinition<?> route = pipelineThroughSql(builder, routeFile)
                 .process(responseRenderer(routeFile.definition()));
         applyIdempotencyComplete(route, routeFile.definition());
+    }
+
+    /** Each route's {@code response.onError} steering, keyed by route id (htmx error retarget). */
+    private static java.util.Map<String, io.tesseraql.yaml.model.ResponseSpec.OnError> onErrorByRoute(
+            AppManifest manifest) {
+        java.util.Map<String, io.tesseraql.yaml.model.ResponseSpec.OnError> map = new java.util.LinkedHashMap<>();
+        for (RouteFile routeFile : manifest.routes()) {
+            RouteDefinition definition = routeFile.definition();
+            if (definition.response() != null && definition.response().onError() != null) {
+                map.put(definition.id(), definition.response().onError());
+            }
+        }
+        return map;
     }
 
     /**
@@ -472,7 +489,7 @@ public final class RouteCompiler {
         return new io.tesseraql.yaml.model.ResponseSpec(
                 new io.tesseraql.yaml.model.ResponseSpec.JsonResponse(200,
                         java.util.Map.of("ok", Boolean.TRUE), null),
-                null, null, null, null);
+                null, null, null, null, null);
     }
 
     /** The command's binds: the document key (always) plus the transition's declared params. */
