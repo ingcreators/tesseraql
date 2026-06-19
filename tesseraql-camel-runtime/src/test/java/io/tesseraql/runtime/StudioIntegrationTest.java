@@ -374,6 +374,8 @@ class StudioIntegrationTest {
         for (String path : new String[]{"/_tesseraql/studio/ui", "/_tesseraql/studio/ui/docs"}) {
             String body = get(path, true).body();
             assertThat(body).contains("hc-shell__sidebar")
+                    // the kit's installNavCurrent marks the active link (data-hc-nav-current opt-in)
+                    .contains("data-hc-nav-current")
                     .contains(">Explorer<").contains(">Docs<").contains(">Coverage<")
                     .contains(">Schema<").contains(">Scaffold<").contains(">Migration<")
                     .contains(">SQL builder<").contains(">Drafts<").contains(">Audit<")
@@ -503,6 +505,9 @@ class StudioIntegrationTest {
         assertThat(response.body())
                 .contains("class=\"hc-breadcrumb\"").contains("aria-label=\"Breadcrumb\"")
                 .contains("hc-breadcrumb__current").contains("aria-label=\"On this page\"")
+                // the "On this page" nav is an hc-toc with scrollspy (the kit's installSpy)
+                .contains("class=\"hc-toc\"").contains("data-hc-spy")
+                .contains("class=\"hc-toc__link\" href=\"#sec-inputs\"")
                 // jump links resolve to real section anchors
                 .contains("href=\"#sec-inputs\"").contains("id=\"sec-inputs\"")
                 .contains("href=\"#sec-sql\"").contains("id=\"sec-sql\"");
@@ -797,8 +802,8 @@ class StudioIntegrationTest {
         assertThat(response.statusCode()).isEqualTo(200);
         assertThat(response.body()).contains("Share")
                 .contains("/_tesseraql/docs/share/route?id=users.search")
-                // H6: the share URL field carries a copy-to-clipboard button (handled by tesseraql.js).
-                .contains("id=\"share-route\"").contains("data-copy=\"#share-route\"");
+                // The share URL field carries a copy button via the kit's installCopy behavior.
+                .contains("id=\"share-route\"").contains("data-hc-copy=\"#share-route\"");
         assertThat(shareUrlFrom(response.body())).isNotBlank();
     }
 

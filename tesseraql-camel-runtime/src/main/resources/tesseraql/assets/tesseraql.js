@@ -105,38 +105,6 @@ document.body.addEventListener("htmx:beforeSwap", (event) => {
     }
 });
 
-// Mark the current sidebar nav item; aria-current="page" drives the hc-item selected
-// style. The longest matching path prefix wins so a section link stays current on its
-// subpages (full page loads only — the sidebar sits outside every htmx swap target).
-const here = location.pathname;
-const current = Array.from(document.querySelectorAll(".hc-shell__sidebar a[href]"))
-    .filter((a) => here === a.pathname || here.startsWith(a.pathname + "/"))
-    .sort((a, b) => b.pathname.length - a.pathname.length)[0];
-if (current) {
-    current.setAttribute("aria-current", "page");
-}
-
-// Copy-to-clipboard control (Studio platform-UX H6): a `[data-copy]` button copies the value (or
-// text) of the element its selector names — used by the read-only share-URL fields, which otherwise
-// force a manual select+copy. The strict default-src 'self' CSP forbids inline handlers, so this
-// lives in the app bootstrap; it is a candidate to upstream into the hc kit (rule 11). The Clipboard
-// API needs a secure context (https or localhost); where it is absent the click is a harmless no-op.
-document.body.addEventListener("click", (event) => {
-    const button = event.target.closest("[data-copy]");
-    if (!button) {
-        return;
-    }
-    const target = document.querySelector(button.getAttribute("data-copy"));
-    if (!target || !navigator.clipboard) {
-        return;
-    }
-    const value = target.value !== undefined ? target.value : target.textContent;
-    navigator.clipboard.writeText(value).then(() => {
-        const original = button.getAttribute("data-copy-label") || button.textContent;
-        button.setAttribute("data-copy-label", original);
-        button.textContent = "Copied";
-        setTimeout(() => {
-            button.textContent = button.getAttribute("data-copy-label") || original;
-        }, 1500);
-    });
-});
+// Sidebar active-link marking (data-hc-nav-current on the shell sidebar) and share-URL copy buttons
+// (data-hc-copy) are now the kit's installNavCurrent and installCopy behaviors (hc 0.1.6, #270/#272),
+// auto-installed by the behaviors bundle imported above — the local stand-ins they replaced are gone.

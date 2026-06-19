@@ -10,6 +10,12 @@ Filed upstream as `ingcreators/hypermedia-components` issues
 and [#272](https://github.com/ingcreators/hypermedia-components/issues/272)
 (`data-hc-nav-current`).
 
+> **Status: shipped and adopted.** All three landed in **hc 0.1.6** (`installCopy`, `hc-toc` +
+> `installSpy`, `installNavCurrent`). TesseraQL bumped to 0.1.6 and adopted them, deleting the local
+> stand-ins (`tesseraql.js` `[data-copy]` and sidebar `aria-current` marking) — the share-URL Copy
+> buttons use `data-hc-copy`, the "On this page" navs are `hc-toc` + `data-hc-spy`, and the shell
+> sidebar opts in with `data-hc-nav-current`. The briefs below are retained as the design record.
+
 These three gaps were confirmed absent from hc **0.1.5** — checked against both the CSS
 (`dist/hc.min.css`, `.hc-*` roots) and the behaviors bundle (`dist/*.js`). They surfaced while
 building the Studio platform-UX work (Track H/I in [studio-backlog.md](studio-backlog.md)).

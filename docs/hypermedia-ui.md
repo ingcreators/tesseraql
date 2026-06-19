@@ -4,10 +4,11 @@ TesseraQL pages are server-rendered Thymeleaf composed with
 [Hypermedia Components](https://ingcreators.com/hypermedia-components) (`hc-*` markup, served
 from the WebJar at version-less `/assets/vendor/` paths, see [app-layout.md](app-layout.md))
 and htmx. The framework bootstrap (`/assets/_tesseraql/tesseraql.js`) imports the kit's
-behaviors bundle — it auto-installs every behavior at DOMContentLoaded — wires htmx error
-swapping, and marks the current sidebar item (`aria-current="page"`, longest path prefix
-wins). This page records the blessed htmx patterns the system apps use, so user apps can
-copy them instead of inventing their own.
+behaviors bundle, which auto-installs every behavior at DOMContentLoaded — including
+`installNavCurrent`, which marks the current sidebar item (`aria-current="page"`, longest
+path-segment prefix wins) from the `data-hc-nav-current` opt-in on the shell sidebar — and the
+bootstrap itself wires the htmx error-fragment swap. This page records the blessed htmx patterns
+the system apps use, so user apps can copy them instead of inventing their own.
 
 ## Confirmed actions
 

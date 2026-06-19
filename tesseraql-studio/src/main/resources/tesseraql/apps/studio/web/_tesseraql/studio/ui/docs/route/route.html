@@ -23,17 +23,19 @@
       </div>
       <h2 th:text="${doc.id}"></h2>
     </section>
-    <nav class="hc-cluster" aria-label="On this page"
+    <nav class="hc-toc" aria-label="On this page" data-hc-spy
          th:if="${doc.security or doc.hasInputs or doc.hasValidations or doc.hasNotifications or doc.response or doc.hasDataDeps or doc.hasSql or doc.hasTests}">
       <span class="hc-field__label">On this page</span>
-      <a th:if="${doc.security}" href="#sec-security">Security</a>
-      <a th:if="${doc.hasInputs}" href="#sec-inputs">Inputs</a>
-      <a th:if="${doc.hasValidations}" href="#sec-validation">Validation</a>
-      <a th:if="${doc.hasNotifications}" href="#sec-notifications">Notifications</a>
-      <a th:if="${doc.response}" href="#sec-response">Response</a>
-      <a th:if="${doc.hasDataDeps}" href="#sec-data">Data dependencies</a>
-      <a th:if="${doc.hasSql}" href="#sec-sql">SQL</a>
-      <a th:if="${doc.hasTests}" href="#sec-tests">Tests</a>
+      <ul class="hc-toc__list">
+        <li class="hc-toc__item" th:if="${doc.security}"><a class="hc-toc__link" href="#sec-security">Security</a></li>
+        <li class="hc-toc__item" th:if="${doc.hasInputs}"><a class="hc-toc__link" href="#sec-inputs">Inputs</a></li>
+        <li class="hc-toc__item" th:if="${doc.hasValidations}"><a class="hc-toc__link" href="#sec-validation">Validation</a></li>
+        <li class="hc-toc__item" th:if="${doc.hasNotifications}"><a class="hc-toc__link" href="#sec-notifications">Notifications</a></li>
+        <li class="hc-toc__item" th:if="${doc.response}"><a class="hc-toc__link" href="#sec-response">Response</a></li>
+        <li class="hc-toc__item" th:if="${doc.hasDataDeps}"><a class="hc-toc__link" href="#sec-data">Data dependencies</a></li>
+        <li class="hc-toc__item" th:if="${doc.hasSql}"><a class="hc-toc__link" href="#sec-sql">SQL</a></li>
+        <li class="hc-toc__item" th:if="${doc.hasTests}"><a class="hc-toc__link" href="#sec-tests">Tests</a></li>
+      </ul>
     </nav>
     <section class="hc-card" th:if="${doc.shareUrl}">
       <h3>Share</h3>
@@ -41,7 +43,7 @@
         openable without signing in. Copy it to share, or open it to preview.</p>
       <input class="hc-input" type="text" readonly id="share-route" th:value="${doc.shareUrl}">
       <div class="hc-cluster">
-        <button type="button" class="hc-button" data-variant="ghost" data-size="sm" data-copy="#share-route">Copy</button>
+        <button type="button" class="hc-button" data-variant="ghost" data-size="sm" data-hc-copy="#share-route">Copy</button>
         <a class="hc-button" data-variant="ghost" data-size="sm" target="_blank" rel="noopener"
            th:href="${doc.shareUrl}">Open shared view &rarr;</a>
       </div>
