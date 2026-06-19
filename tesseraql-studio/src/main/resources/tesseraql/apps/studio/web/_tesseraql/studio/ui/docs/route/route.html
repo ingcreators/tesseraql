@@ -3,10 +3,11 @@
       th:replace="~{tql/shell :: studio-page(|TesseraQL Docs · ${doc.id}|, ~{:: #page-header}, ~{:: #page-content})}">
 <th:block id="page-header">
   <span class="hc-spacer"></span>
-  <nav class="hc-cluster" aria-label="Breadcrumb">
-    <a href="/_tesseraql/studio/ui/docs">Docs</a>
-    <span aria-hidden="true">&rsaquo;</span>
-    <span th:text="${doc.id}">route</span>
+  <nav class="hc-breadcrumb" aria-label="Breadcrumb">
+    <ol class="hc-breadcrumb__list">
+      <li class="hc-breadcrumb__item"><a class="hc-breadcrumb__link" href="/_tesseraql/studio/ui/docs">Docs</a></li>
+      <li class="hc-breadcrumb__item"><span class="hc-breadcrumb__current" aria-current="page" th:text="${doc.id}">route</span></li>
+    </ol>
   </nav>
 </th:block>
 <div id="page-content" class="hc-stack">

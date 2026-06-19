@@ -76,6 +76,8 @@
 <!-- A loading affordance for an async (htmx) action: htmx toggles the `htmx-indicator`
      element visible while the request is in flight (its injected indicator style applies
      under the `style-src 'unsafe-inline'` CSP), so a slow DB call no longer reads as a hang.
+     Uses the kit's `hc-spinner` (CSS-only, reduced-motion aware) with a contextual label; the
+     spinner is decorative (`aria-hidden`) and role="status" on the wrapper announces the label.
      Place it inside the request-initiating element (e.g. a form's button cluster) or point an
-     `hx-indicator` at one by id. role="status" announces it to assistive tech. -->
-<th:block th:fragment="busy(label)"><span class="htmx-indicator hc-field__message" role="status" th:text="${label}">Working…</span></th:block>
+     `hx-indicator` at one. -->
+<th:block th:fragment="busy(label)"><span class="htmx-indicator hc-cluster" role="status"><span class="hc-spinner" data-size="sm" aria-hidden="true"></span><span class="hc-field__message" th:text="${label}">Working…</span></span></th:block>
