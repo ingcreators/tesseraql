@@ -49,7 +49,7 @@ key, single-column unique indexes) and drives the generated slice:
 
 ```
 web/items/                       list page (live htmx search over a table fragment)
-web/items/fragments/table/       query-html fragment + search.sql + table.html
+web/items/fragments/table/       query-html fragment + search.sql + table.html (hc-datagrid)
 web/items/new/                   create form page
 web/items/create/                command-json insert (one transaction, audit binds)
 web/items/{id}/                  detail/edit page + select.sql
@@ -79,7 +79,10 @@ Conventions are applied when the table opts in:
   drivers append `RETURNING` for generated-key capture, which a terminator would break.
 
 The pages compose the framework `tql/shell` layout with `templates/nav.html :: app-nav`. The
-create and edit forms follow the Hypermedia Components **mutating-form recipe**: an htmx post
+list page renders its rows as a Hypermedia Components **`hc-datagrid`** — a scroll container that
+keeps wide tables horizontally scrollable with the header in view, degrading to a plain styled grid
+with no JavaScript. The create and edit forms follow the Hypermedia Components **mutating-form
+recipe**: an htmx post
 (`hx-post` mirroring `method`/`action`) with an in-form field-errors container, a
 double-submit guard and busy spinner, and the hidden CSRF field — degrading to a plain form
 post with no JavaScript. A failed write swaps the kit's field-errors fragment inline (a `422`

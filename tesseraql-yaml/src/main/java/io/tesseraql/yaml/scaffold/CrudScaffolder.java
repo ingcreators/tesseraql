@@ -291,32 +291,39 @@ public final class CrudScaffolder {
         StringBuilder html = new StringBuilder();
         html.append("""
                 <!-- Scaffolded table fragment for the %s table: partial markup swapped into
-                     the list page (the fragments URL convention, design ch. 4). -->
-                <div id="%s-table" class="hc-card">
-                  <table class="hc-table">
-                    <thead>
-                      <tr>
+                     the list page (the fragments URL convention, design ch. 4). The hc-datagrid
+                     component scrolls wide tables horizontally and keeps the header in view; it
+                     degrades to a plain styled grid with no JavaScript (docs/hypermedia-ui.md). -->
+                <div id="%s-table" class="hc-datagrid">
+                  <div class="hc-datagrid__scroll">
+                    <table class="hc-datagrid__table">
+                      <thead class="hc-datagrid__head">
+                        <tr>
                 """.formatted(names.table(), names.table()));
         for (TableSchema.Column column : listed) {
-            html.append("        <th>").append(Names.label(Names.columnName(column)))
-                    .append("</th>\n");
+            html.append("          <th class=\"hc-datagrid__headcell\">")
+                    .append(Names.label(Names.columnName(column))).append("</th>\n");
         }
-        html.append("        <th></th>\n      </tr>\n    </thead>\n    <tbody>\n");
-        html.append("      <tr th:each=\"r : ${rows}\">\n");
+        html.append("          <th class=\"hc-datagrid__headcell\"></th>\n        </tr>\n"
+                + "      </thead>\n      <tbody class=\"hc-datagrid__body\">\n");
+        html.append("        <tr class=\"hc-datagrid__row\" th:each=\"r : ${rows}\">\n");
         for (TableSchema.Column column : listed) {
-            html.append("        <td th:text=\"${r.").append(Names.columnName(column))
-                    .append("}\"></td>\n");
+            html.append("          <td class=\"hc-datagrid__cell\" th:text=\"${r.")
+                    .append(Names.columnName(column)).append("}\"></td>\n");
         }
-        html.append("""
-                        <td><a class="hc-button" data-size="sm" th:href="|%s/${r.%s}|">Open</a></td>
-                      </tr>
-                      <tr th:if="${#lists.isEmpty(rows)}">
-                        <td colspan="%d">No rows</td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-                """.formatted(names.url(), names.pkColumn(), listed.size() + 1));
+        html.append(
+                """
+                                  <td class="hc-datagrid__cell"><a class="hc-button" data-size="sm" th:href="|%s/${r.%s}|">Open</a></td>
+                                </tr>
+                                <tr class="hc-datagrid__row" th:if="${#lists.isEmpty(rows)}">
+                                  <td class="hc-datagrid__cell" colspan="%d">No rows</td>
+                                </tr>
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                        """
+                        .formatted(names.url(), names.pkColumn(), listed.size() + 1));
         return html.toString();
     }
 

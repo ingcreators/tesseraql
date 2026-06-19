@@ -140,7 +140,9 @@ class CrudScaffolderTest {
                 .contains("hx-get=\"/items/fragments/table\"")
                 .contains("hx-trigger=\"input changed delay:300ms, search\"");
         assertThat(content(files, "web/items/fragments/table/table.html"))
-                .contains("class=\"hc-table\"")
+                .contains("class=\"hc-datagrid\"")
+                .contains("class=\"hc-datagrid__table\"")
+                .contains("<td class=\"hc-datagrid__cell\"")
                 .doesNotContain("<html");
         String edit = content(files, "web/items/{id}/edit.html");
         assertThat(edit)
