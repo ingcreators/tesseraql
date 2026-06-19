@@ -18,6 +18,7 @@
     <div class="hc-field">
       <label class="hc-field__label" for="realm-type">Realm type</label>
       <select class="hc-select" id="realm-type" name="type" required><option value="managed">managed</option><option value="sql">sql</option></select>
+      <p class="hc-field__message"><code>managed</code> stores accounts in TesseraQL's own tables; <code>sql</code> maps them to your existing tables via a SQL contract (set its root below).</p>
     </div>
     <div class="hc-field">
       <label class="hc-field__label" for="datasource">Datasource name</label>

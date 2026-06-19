@@ -458,8 +458,13 @@ order below (P0 → P1 → P2).
   flips the label to "Copied" briefly). Copy needs JS and the strict CSP forbids inline handlers, so
   it lives in the shared app bootstrap — a candidate to upstream into the hc kit (rule 11; hc 0.1.5
   ships no copy behavior). Secure-context only; a harmless no-op where the Clipboard API is absent.
-- [ ] **H7 — Wizard stepper + inline help** (P2): no progress indicator; jargon without help text;
-  inconsistent required/optional markers.
+- [x] **H7 — Wizard clarity** (P2) — *done*: the identity-provider wizards threw jargon (ACS URL,
+  NameID, OID attributes, SCIM outbound/token, realm type) at the user with no explanation, and the
+  index gave no "which one, in what order?" guidance. The index now describes each wizard and says to
+  start with the identity realm; the jargony fields carry concise inline `hc-field__message` help
+  (what the field is / where it's registered / when it applies). A literal multi-step *stepper* does
+  not fit these single-page forms, so it is dropped in favour of the help; the required/optional
+  convention (unmarked = required, "(optional)" suffix) is already consistent.
 - [ ] **H8 — Correctness + search polish** (P2): fix the stale `sql-builder.html` prose
   (`/* params.id */` / "values from body" → bind names / all `params`, post #153/#154); a search
   syntax hint + result count; move focus to results after an htmx swap.

@@ -8,6 +8,12 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- Studio: **clearer identity-provider setup wizards** (platform-UX track H7). The SAML/OIDC/SCIM/
+  identity-realm wizards threw jargon (ACS URL, NameID, OID attributes, SCIM outbound, realm type) at
+  the user with no explanation, and the index gave no "which one, in what order?" guidance. The wizard
+  index now describes each wizard and says to start with the identity realm; the jargony fields carry
+  concise inline help (what the field is, where it's registered, when it applies).
+
 - Studio: **Copy buttons on the share-URL fields** (platform-UX track H6). The read-only share-link
   inputs on the route, table, and coverage pages forced a manual select+copy. Each now has a **Copy**
   button driven by a small `[data-copy]` behavior in `tesseraql.js` (copies the named field's value
