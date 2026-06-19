@@ -6,6 +6,16 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ## Unreleased
 
+### Changed
+
+- Scaffolding: the **CRUD list table now renders as a Hypermedia Components `hc-datagrid`** instead
+  of a plain `hc-table`. The generated `web/<table>/fragments/table/table.html` wraps the rows in the
+  kit's datagrid (`hc-datagrid__scroll` → `hc-datagrid__table` with `__head`/`__headcell`/`__body`/
+  `__row`/`__cell`), so wide scaffolded tables scroll horizontally with the header in view and pick up
+  the kit's grid styling — degrading to a plain styled grid with no JavaScript (CSP-clean, no inline
+  JS). Markup-only: the route, search SQL, and live-search wiring are unchanged. The dogfooded example
+  gallery (`examples/scaffold-demo-app`) is regenerated to match.
+
 ### Added
 
 - Studio: **search polish and a SQL-builder doc fix** (platform-UX track H8, completing the track).

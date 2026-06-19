@@ -1,34 +1,38 @@
-<!-- tesseraql-scaffold-checksum: sha256:9e8139dd469b3c18faa94510780f95cb0589b446fbc69b8204bee08ead891de2 -->
+<!-- tesseraql-scaffold-checksum: sha256:3ec3c1df525f4fcd62e0abc6a5278a7e708e90a369eebf9a80c606db0f739656 -->
 <!-- Scaffolded table fragment for the items table: partial markup swapped into
-     the list page (the fragments URL convention, design ch. 4). -->
-<div id="items-table" class="hc-card">
-  <table class="hc-table">
-    <thead>
-      <tr>
-        <th>Id</th>
-        <th>Name</th>
-        <th>Quantity</th>
-        <th>Unit price</th>
-        <th>Due date</th>
-        <th>Active</th>
-        <th>Note</th>
-        <th></th>
-      </tr>
-    </thead>
-    <tbody>
-      <tr th:each="r : ${rows}">
-        <td th:text="${r.id}"></td>
-        <td th:text="${r.name}"></td>
-        <td th:text="${r.quantity}"></td>
-        <td th:text="${r.unit_price}"></td>
-        <td th:text="${r.due_date}"></td>
-        <td th:text="${r.active}"></td>
-        <td th:text="${r.note}"></td>
-        <td><a class="hc-button" data-size="sm" th:href="|/items/${r.id}|">Open</a></td>
-      </tr>
-      <tr th:if="${#lists.isEmpty(rows)}">
-        <td colspan="8">No rows</td>
-      </tr>
-    </tbody>
-  </table>
+     the list page (the fragments URL convention, design ch. 4). The hc-datagrid
+     component scrolls wide tables horizontally and keeps the header in view; it
+     degrades to a plain styled grid with no JavaScript (docs/hypermedia-ui.md). -->
+<div id="items-table" class="hc-datagrid">
+  <div class="hc-datagrid__scroll">
+    <table class="hc-datagrid__table">
+      <thead class="hc-datagrid__head">
+        <tr>
+          <th class="hc-datagrid__headcell">Id</th>
+          <th class="hc-datagrid__headcell">Name</th>
+          <th class="hc-datagrid__headcell">Quantity</th>
+          <th class="hc-datagrid__headcell">Unit price</th>
+          <th class="hc-datagrid__headcell">Due date</th>
+          <th class="hc-datagrid__headcell">Active</th>
+          <th class="hc-datagrid__headcell">Note</th>
+          <th class="hc-datagrid__headcell"></th>
+        </tr>
+      </thead>
+      <tbody class="hc-datagrid__body">
+        <tr class="hc-datagrid__row" th:each="r : ${rows}">
+          <td class="hc-datagrid__cell" th:text="${r.id}"></td>
+          <td class="hc-datagrid__cell" th:text="${r.name}"></td>
+          <td class="hc-datagrid__cell" th:text="${r.quantity}"></td>
+          <td class="hc-datagrid__cell" th:text="${r.unit_price}"></td>
+          <td class="hc-datagrid__cell" th:text="${r.due_date}"></td>
+          <td class="hc-datagrid__cell" th:text="${r.active}"></td>
+          <td class="hc-datagrid__cell" th:text="${r.note}"></td>
+          <td class="hc-datagrid__cell"><a class="hc-button" data-size="sm" th:href="|/items/${r.id}|">Open</a></td>
+        </tr>
+        <tr class="hc-datagrid__row" th:if="${#lists.isEmpty(rows)}">
+          <td class="hc-datagrid__cell" colspan="8">No rows</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
 </div>
