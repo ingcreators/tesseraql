@@ -428,9 +428,15 @@ order below (P0 → P1 → P2).
   explorer header dropped its now-duplicated link cluster, keeping the mode badge. A dedicated
   breadcrumb component is folded into H4 (detail-page in-page nav), where it pairs with the route /
   table jump-nav; today the sidebar current-item highlight + the existing header back-links cover it.
-- [ ] **H3 — Source editor restructure** (P1): `source.html` stacks 9+ panels in one card. Sticky
-  action bar (save/apply/discard) + segmented secondary panels (Preview/Compare/Tests/Dry-run/SQL
-  builder).
+- [x] **H3 — Source editor restructure** (P1) — *done*: `source.html` stacked 9+ always-open panels
+  in one card, so the page was overwhelming and the primary actions sat far below the preview output.
+  Every secondary tool is now a uniform collapsible `<details class="hc-disclosure">` panel
+  (Rendered preview / Compare / Dry-run / Tests / SQL builder) — Rendered preview stays open as the
+  primary feedback, the on-demand tools collapse — so the page is compact and Save/Apply/Discard are
+  within reach without scrolling past everything. Pure `<details>` (CSP-safe, no JS/CSS; hc has no
+  tabs component). The literal *sticky action bar* is unneeded now the page is short, so it is
+  deferred; the inspect-then-commit order (tools above Apply) is preserved, keeping the
+  "review the compare panel above" confirm wording valid.
 - [ ] **H4 — Detail-page in-page nav** (P1): `route.html` (8 tables) / `table.html` — a sticky
   "on this page" jump list or progressive disclosure.
 - [ ] **H5 — Table filter/paging** (P1): reuse the explorer live-filter on audit/drafts/docs; simple

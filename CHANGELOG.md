@@ -8,6 +8,13 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- Studio: **the source editor's secondary tools are collapsible panels** (platform-UX track H3). The
+  editor stacked 9+ always-open panels in one card, so the page overwhelmed and Save/Apply/Discard sat
+  far below the preview output. Each tool — Rendered preview, Compare, Dry-run, Tests, SQL builder —
+  is now a uniform `<details class="hc-disclosure">` panel (Rendered preview open as the primary
+  feedback; the on-demand tools collapsed), so the page is compact and the primary actions are within
+  reach. Native `<details>`, so CSP-safe with no JS or CSS.
+
 - Studio: **a Studio section sidebar nav** (platform-UX track H1). Studio pages used the shell's
   `page(...)` form, which renders only the 3-app system nav, so the Studio sections were reachable
   only via the explorer's header link cluster. A new `tql/shell :: studio-page(...)` form mounts a
