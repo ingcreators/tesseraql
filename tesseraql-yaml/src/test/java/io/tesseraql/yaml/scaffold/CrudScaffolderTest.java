@@ -149,13 +149,18 @@ class CrudScaffolderTest {
                 .contains("<input type=\"hidden\" name=\"sort\"")
                 .contains("hx-include=\"[name='q']\"")
                 .doesNotContain("<html");
-        // The fragment route declares the sort/dir inputs and the SQL allowlists the columns.
+        // The fragment route declares enum-constrained sort/dir inputs (the embedded-ORDER-BY
+        // allowlist) and echoes them to the model.
         assertThat(content(files, "web/items/fragments/table/get.yml"))
                 .contains("sort: query.sort")
-                .contains("sort: params.sort");
+                .contains("sort: params.sort")
+                .contains("enum: [id, name, quantity, unit_price, due_date, active, note]")
+                .contains("enum: [asc, desc]");
+        // The ORDER BY is a single embedded variable (whole clause in the comment → plain-runnable),
+        // interpolating the enum-checked sort/dir with a primary-key tiebreaker.
         assertThat(content(files, "web/items/fragments/table/search.sql"))
-                .contains("/*%if sort == \"quantity\" */")
-                .contains("/*%if dir == \"desc\" */");
+                .contains("/*# order by t.{sort} {dir}, t.id */")
+                .doesNotContain("/*%if sort");
         String edit = content(files, "web/items/{id}/edit.html");
         assertThat(edit)
                 .contains("class=\"hc-datepicker\" id=\"field-due-date\" type=\"date\"")
@@ -258,7 +263,7 @@ class CrudScaffolderTest {
         // though the headers still sort (the ORDER BY allowlists the data columns).
         String bareSearch = content(files, "web/codes/fragments/table/search.sql");
         assertThat(bareSearch).doesNotContain("like").doesNotContain("q != null");
-        assertThat(bareSearch).contains("/*%if sort ==").contains("/*%if dir ==");
+        assertThat(bareSearch).contains("/*# order by t.{sort} {dir}, t.code */");
         assertThat(content(files, "web/codes/new/new.html")).doesNotContain("hc-datepicker");
     }
 

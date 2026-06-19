@@ -29,6 +29,22 @@ public sealed interface SqlNode {
     record ListBind(String expressionSource, Expr expression, int sourceLine) implements SqlNode {
     }
 
+    /**
+     * An embedded-variable site: {@code /*# template *}{@code /} (Doma-style). The template's
+     * {@code {placeholder}} references are resolved against the parameters and the result is emitted
+     * into the SQL <em>text</em> directly — not as a {@code ?} bind — so it can drive an
+     * identifier-position fragment a bind cannot, such as a dynamic {@code ORDER BY}. Because the
+     * whole fragment lives inside the comment, the template stays runnable in a plain SQL tool (the
+     * comment is skipped, the surrounding statement runs unordered).
+     *
+     * <p>A resolved value is interpolated into SQL text, so it MUST be constrained to a safe set:
+     * each placeholder should reference an {@code enum}-validated input (the linter enforces this).
+     * As defense in depth the renderer rejects a resolved value carrying SQL meta-characters
+     * (quotes, {@code ;}, comment markers, control characters).
+     */
+    record Embedded(String template, int sourceLine) implements SqlNode {
+    }
+
     /** A conditional {@code /*%if *}{@code /} chain with optional elseif/else branches. */
     record If(List<Branch> branches) implements SqlNode {
         public If {

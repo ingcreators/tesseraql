@@ -19,6 +19,11 @@ import java.util.List;
  *   <li>{@code /*%for item : items *}{@code / ... /*%end*}{@code /} — optionally
  *       {@code /*%for item : items separator ',' *}{@code /}; the loop exposes
  *       {@code item_index} (0-based) alongside {@code item}</li>
+ *   <li>{@code /*# template *}{@code /} — embedded variable; {@code {placeholder}} references in the
+ *       template are interpolated into the SQL text (not bound as {@code ?}), for identifier-position
+ *       fragments a bind cannot drive such as a dynamic {@code ORDER BY}. The whole fragment lives in
+ *       the comment, so the statement stays SQL-tool-runnable; placeholders must be enum-constrained
+ *       (see {@link SqlNode.Embedded})</li>
  * </ul>
  *
  * <p>Every {@code /* ... *}{@code /} block comment is treated as a directive (Doma-style 2-way SQL
@@ -71,6 +76,8 @@ public final class Sql2WayParser {
                         }
                         default -> throw error("Unknown directive '" + directive.keyword() + "'");
                     }
+                } else if (directive.embedded()) {
+                    nodes.add(parseEmbedded(directive));
                 } else {
                     nodes.add(parseBind(directive));
                 }
@@ -81,6 +88,16 @@ public final class Sql2WayParser {
         }
         flushText(nodes, text, textStartLine);
         return nodes;
+    }
+
+    private SqlNode parseEmbedded(Directive directive) {
+        String template = directive.content();
+        if (template.isEmpty()) {
+            throw error("Empty embedded variable");
+        }
+        // No dummy follows: the whole fragment lives inside the comment, so the surrounding
+        // statement stays runnable in a plain SQL tool. The renderer interpolates {placeholder}s.
+        return new SqlNode.Embedded(template, directive.sourceLine());
     }
 
     private SqlNode parseBind(Directive directive) {
@@ -208,8 +225,11 @@ public final class Sql2WayParser {
     private Directive readComment() {
         int directiveLine = line;
         pos += 2; // consume "/*"
+        // A leading '%' marks a control directive (/*%if%/ …); a leading '#' an embedded variable
+        // (/*# … %/, Doma-style); anything else is a bind site (/* expr %/ dummy).
         boolean control = pos < length && source.charAt(pos) == '%';
-        if (control) {
+        boolean embedded = !control && pos < length && source.charAt(pos) == '#';
+        if (control || embedded) {
             pos++;
         }
         StringBuilder content = new StringBuilder();
@@ -221,7 +241,7 @@ public final class Sql2WayParser {
             throw error("Unterminated comment");
         }
         pos += 2; // consume "*/"
-        return new Directive(control, content.toString().trim(), directiveLine);
+        return new Directive(control, embedded, content.toString().trim(), directiveLine);
     }
 
     private void skipDummy(boolean list) {
@@ -291,7 +311,7 @@ public final class Sql2WayParser {
         return TqlException.builder(PARSE_ERROR).message(message).line(line).build();
     }
 
-    private record Directive(boolean control, String content, int sourceLine) {
+    private record Directive(boolean control, boolean embedded, String content, int sourceLine) {
         String keyword() {
             int space = content.indexOf(' ');
             return space < 0 ? content : content.substring(0, space);

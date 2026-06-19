@@ -218,6 +218,10 @@ public final class RouteSpecGenerator {
                 case SqlNode.Text ignored -> {
                     // Literal SQL text carries no binds or control structure.
                 }
+                case SqlNode.Embedded ignored -> {
+                    // An embedded variable interpolates into the SQL text, not a ? bind, and adds no
+                    // control structure; its placeholders are surfaced through the route's inputs.
+                }
             }
         }
     }

@@ -2,6 +2,8 @@ package io.tesseraql.yaml.lint;
 
 import io.tesseraql.core.expr.Expr;
 import io.tesseraql.core.expr.ExpressionParser;
+import io.tesseraql.core.sql.Sql2WayParser;
+import io.tesseraql.core.sql.SqlNode;
 import io.tesseraql.yaml.config.AppConfig;
 import io.tesseraql.yaml.manifest.AppManifest;
 import io.tesseraql.yaml.manifest.ManifestLoader;
@@ -9,6 +11,7 @@ import io.tesseraql.yaml.manifest.RouteFile;
 import io.tesseraql.yaml.manifest.ScopeFile;
 import io.tesseraql.yaml.manifest.WorkflowFile;
 import io.tesseraql.yaml.model.DeadlineSpec;
+import io.tesseraql.yaml.model.InputField;
 import io.tesseraql.yaml.model.MatchArm;
 import io.tesseraql.yaml.model.RouteDefinition;
 import io.tesseraql.yaml.model.ScopeDefinition;
@@ -625,6 +628,7 @@ public final class AppLinter {
                     + definition.recipe() + "' recipe"));
         }
         lintPdfExport(route, definition, source, findings);
+        lintEmbeddedVariables(route, definition, source, findings);
         if (definition.security() != null && definition.security().policy() != null
                 && !policyDefined(config, definition.security().policy())) {
             findings.add(new LintFinding("TQL-SEC-4030", "warning", source,
@@ -632,6 +636,83 @@ public final class AppLinter {
                             + "' (deny by default)"));
         }
         lintTenantPredicate(config, route, definition, source, findings);
+    }
+
+    /** A {@code {placeholder}} reference inside an embedded-variable template. */
+    private static final Pattern EMBEDDED_PLACEHOLDER = Pattern.compile("\\{([^}]+)}");
+
+    /**
+     * An embedded variable ({@code /*# … {x} … *}{@code /}) interpolates its placeholder values into
+     * the SQL text, not a {@code ?} bind, so a request-controlled value there is an injection vector
+     * unless allowlisted. This requires every placeholder that resolves to a request input to be
+     * {@code enum}-constrained (the runtime guard against meta-characters is only defense in depth).
+     */
+    private void lintEmbeddedVariables(RouteFile route, RouteDefinition definition, String source,
+            List<LintFinding> findings) {
+        SqlBinding sql = definition.sql();
+        if (sql == null || sql.isContract() || sql.file() == null) {
+            return;
+        }
+        Path sqlFile = route.source().getParent().resolve(sql.file());
+        if (!Files.isRegularFile(sqlFile)) {
+            return; // missing-file is reported separately
+        }
+        Set<String> placeholders = new LinkedHashSet<>();
+        try {
+            collectEmbeddedPlaceholders(Sql2WayParser.parse(Files.readString(sqlFile)),
+                    placeholders);
+        } catch (Exception ignored) {
+            return; // SQL syntax / IO errors surface through other checks
+        }
+        Map<String, String> params = sql.params() == null ? Map.of() : sql.params();
+        Map<String, InputField> inputs = definition.input() == null ? Map.of() : definition.input();
+        for (String placeholder : placeholders) {
+            int dot = placeholder.indexOf('.');
+            String root = dot < 0 ? placeholder : placeholder.substring(0, dot);
+            String input = requestInput(params.get(root));
+            if (input == null) {
+                continue; // not a request input (constant / principal / loop var) — trusted
+            }
+            InputField field = inputs.get(input);
+            if (field == null || field.enumValues() == null || field.enumValues().isEmpty()) {
+                findings.add(new LintFinding("TQL-SQL-2109", "error", source,
+                        "Embedded variable '{" + placeholder + "}' interpolates request input '"
+                                + input + "' into SQL; constrain it with an 'enum' allowlist to "
+                                + "prevent injection"));
+            }
+        }
+    }
+
+    /** The input name a {@code sql.params} source binds from a request, or {@code null} otherwise. */
+    private static String requestInput(String paramSource) {
+        if (paramSource == null) {
+            return null;
+        }
+        for (String prefix : List.of("query.", "params.", "body.")) {
+            if (paramSource.startsWith(prefix)) {
+                return paramSource.substring(prefix.length());
+            }
+        }
+        return null;
+    }
+
+    private static void collectEmbeddedPlaceholders(List<SqlNode> nodes, Set<String> out) {
+        for (SqlNode node : nodes) {
+            switch (node) {
+                case SqlNode.Embedded embedded -> {
+                    Matcher matcher = EMBEDDED_PLACEHOLDER.matcher(embedded.template());
+                    while (matcher.find()) {
+                        out.add(matcher.group(1).trim());
+                    }
+                }
+                case SqlNode.If conditional -> conditional.branches()
+                        .forEach(branch -> collectEmbeddedPlaceholders(branch.body(), out));
+                case SqlNode.For loop -> collectEmbeddedPlaceholders(loop.body(), out);
+                default -> {
+                    // Text/Bind/ListBind/Scope hold no embedded placeholders.
+                }
+            }
+        }
     }
 
     /**

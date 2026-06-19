@@ -240,15 +240,20 @@ public final class CrudScaffolder {
                 route.append("    maxLength: ").append(search.size()).append('\n');
             }
         });
-        // Sort state from the datagrid header links; the SQL allowlists the columns, so an
-        // unknown sort value falls back to the primary key (no dynamic-column injection).
+        // Sort state from the datagrid header links. The sortable columns are an enum allowlist, so
+        // the SQL's embedded ORDER BY only ever interpolates a known column (no dynamic-column
+        // injection — TQL-SQL-2109), and each input defaults so the fragment is ordered on first load.
+        List<TableSchema.Column> sortable = new ArrayList<>();
+        sortable.add(names.pk());
+        sortable.addAll(table.dataColumns());
+        StringBuilder columns = new StringBuilder();
+        for (int i = 0; i < sortable.size(); i++) {
+            columns.append(i == 0 ? "" : ", ").append(Names.columnName(sortable.get(i)));
+        }
+        route.append("  sort:\n    type: string\n    enum: [").append(columns)
+                .append("]\n    default: ").append(names.pkColumn()).append('\n');
+        route.append("  dir:\n    type: string\n    enum: [asc, desc]\n    default: asc\n");
         route.append("""
-                  sort:
-                    type: string
-                    required: false
-                  dir:
-                    type: string
-                    required: false
 
                 security:
                   auth: browser
@@ -282,10 +287,10 @@ public final class CrudScaffolder {
     private static String searchSql(TableSchema table, Names names) {
         StringBuilder sql = new StringBuilder();
         sql.append("-- Scaffolded search for the ").append(names.table())
-                .append(" table. The WHERE filter runs as-is in a plain SQL tool; the ORDER BY is\n");
+                .append(" table; runnable as-is in a plain SQL tool. The ORDER BY lives in an\n");
         sql.append(
-                "-- resolved by the engine from the sort/dir inputs — the column allowlist is\n");
-        sql.append("-- baked in below, so an unknown sort value falls back to the primary key.\n");
+                "-- embedded variable, applied at render time from the sort/dir inputs (an enum\n");
+        sql.append("-- allowlist), so a plain tool runs the base query unordered.\n");
         sql.append("select\n");
         List<TableSchema.Column> listed = new ArrayList<>();
         listed.add(names.pk());
@@ -302,28 +307,11 @@ public final class CrudScaffolder {
                   and t.%s like /* q */ 'sample'
                 /*%%end*/
                 """.formatted(Names.columnName(search))));
-        // Dynamic ORDER BY: each data column is its own allowlisted /*%if*/ block (the column name
-        // is baked in, never the input value), and the primary-key fallback is a separate block
-        // whose condition is "no column matched". Separate blocks — not an if/elseif/else chain —
-        // keep every branch independently coverable (an /*%else*/ never records its false outcome).
-        List<TableSchema.Column> sortColumns = table.dataColumns();
-        sql.append("order by\n");
-        if (sortColumns.isEmpty()) {
-            sql.append("  t.").append(names.pkColumn()).append('\n');
-        } else {
-            for (TableSchema.Column column : sortColumns) {
-                String col = Names.columnName(column);
-                sql.append("/*%if sort == \"").append(col).append("\" */\n  t.").append(col)
-                        .append("\n/*%end*/\n");
-            }
-            sql.append("/*%if ");
-            for (int i = 0; i < sortColumns.size(); i++) {
-                sql.append(i == 0 ? "" : " && ").append("sort != \"")
-                        .append(Names.columnName(sortColumns.get(i))).append('"');
-            }
-            sql.append(" */\n  t.").append(names.pkColumn()).append("\n/*%end*/\n");
-        }
-        sql.append("/*%if dir == \"desc\" */\n  desc\n/*%end*/\n");
+        // The whole ORDER BY lives inside an embedded variable, so the statement stays runnable in a
+        // plain SQL tool (the comment is skipped). {sort}/{dir} are enum-constrained inputs (the
+        // route allowlists them), interpolated into the SQL text at render time; the primary key is
+        // a stable tiebreaker so equal-keyed rows page deterministically.
+        sql.append("/*# order by t.{sort} {dir}, t.").append(names.pkColumn()).append(" */\n");
         sql.append("limit 50\n;\n");
         return sql.toString();
     }
@@ -840,12 +828,16 @@ public final class CrudScaffolder {
                 # queries with data-independent expectations, so it passes against any contents.
                 tests:
                 """.formatted(names.table()));
+        // Every search.sql case sets sort/dir: the ORDER BY is an embedded variable, so it needs
+        // them to render (input defaults apply only on the live route, not to a raw SQL test).
         suite.append("""
                   - name: the %s search runs without a filter
                     sql:
                       file: %s/fragments/table/search.sql
-                    params: {}
-                """.formatted(names.table(), names.dir()));
+                    params:
+                      sort: %s
+                      dir: asc
+                """.formatted(names.table(), names.dir(), names.pkColumn()));
         names.searchColumn().ifPresent(search -> suite.append("""
 
                   - name: the %s search filters by %s
@@ -853,33 +845,26 @@ public final class CrudScaffolder {
                       file: %s/fragments/table/search.sql
                     params:
                       q: no-such-row
+                      sort: %s
+                      dir: asc
                     expect:
                       rowCount: 0
-                """.formatted(names.table(), Names.columnName(search), names.dir())));
-        // One case per data column exercises its ORDER BY branch; the first also goes descending,
-        // so the suite covers every sort branch the dynamic ORDER BY adds (keeps 100% branch
-        // coverage, design ch. 13). Cases are data-independent — they assert the query runs.
-        List<TableSchema.Column> sortColumns = table.dataColumns();
-        for (int i = 0; i < sortColumns.size(); i++) {
-            String col = Names.columnName(sortColumns.get(i));
-            boolean desc = i == 0;
-            suite.append("\n  - name: the ").append(names.table()).append(" search sorts by ")
-                    .append(col).append(desc ? " (descending)\n" : "\n");
-            suite.append("    sql:\n      file: ").append(names.dir())
-                    .append("/fragments/table/search.sql\n");
-            suite.append("    params:\n      sort: ").append(col).append('\n');
-            if (desc) {
-                suite.append("      dir: desc\n");
-            }
-        }
-        if (sortColumns.isEmpty()) {
-            // No sortable data columns, but the descending toggle still needs a covering case.
-            suite.append("\n  - name: the ").append(names.table())
-                    .append(" search sorts descending\n");
-            suite.append("    sql:\n      file: ").append(names.dir())
-                    .append("/fragments/table/search.sql\n");
-            suite.append("    params:\n      dir: desc\n");
-        }
+                """.formatted(names.table(), Names.columnName(search), names.dir(),
+                names.pkColumn())));
+        // The embedded ORDER BY adds no branches; one case with a non-default column and descending
+        // direction proves it renders and runs (data-independent).
+        String sortCol = table.dataColumns().isEmpty()
+                ? names.pkColumn()
+                : Names.columnName(table.dataColumns().get(0));
+        suite.append("""
+
+                  - name: the %s search sorts by %s descending
+                    sql:
+                      file: %s/fragments/table/search.sql
+                    params:
+                      sort: %s
+                      dir: desc
+                """.formatted(names.table(), sortCol, names.dir(), sortCol));
         suite.append("""
 
                   - name: the %s detail select misses for an unknown key

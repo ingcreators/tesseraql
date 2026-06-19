@@ -29,6 +29,7 @@ public final class SqlCoverableLines {
                 case SqlNode.Text text -> addTextLines(text, out);
                 case SqlNode.Bind bind -> out.add(bind.sourceLine());
                 case SqlNode.ListBind listBind -> out.add(listBind.sourceLine());
+                case SqlNode.Embedded embedded -> out.add(embedded.sourceLine());
                 case SqlNode.If conditional -> conditional.branches()
                         .forEach(branch -> collect(branch.body(), out));
                 case SqlNode.For loop -> collect(loop.body(), out);
