@@ -84,10 +84,12 @@ keeps wide tables horizontally scrollable with the header in view, degrading to 
 with no JavaScript. Its **column headers sort server-side**: each header is a link to
 `fragments/table?sort=<col>&dir=<asc|desc>`, swapped in over htmx (search term and sort state ride
 along via `hx-include`), and `aria-sort` drives the kit's sort arrow — CSP-clean, no inline JS. The
-`search.sql` `ORDER BY` allowlists the columns in `/*%if sort == "…" *​/` blocks (the column name is
-baked in, never the input value, so there is no dynamic-column injection; an unknown sort value falls
-back to the primary key). The generated suite adds one case per sortable column so the dynamic
-`ORDER BY` stays fully branch-covered. The create and edit forms follow the Hypermedia Components
+`search.sql` `ORDER BY` is an [embedded variable](transactional-writes.md#embedded-variables-dynamic-identifiers)
+— `/*# order by t.{sort} {dir}, t.<pk> */` — so the whole clause lives in a comment and the file
+stays runnable in a plain SQL tool, with the primary key as a stable pagination tiebreaker. The
+`sort`/`dir` inputs are `enum` allowlists (so an interpolated value can only be a known column or
+direction — no injection, enforced by `TQL-SQL-2109`), defaulting to the primary key / ascending. The
+create and edit forms follow the Hypermedia Components
 **mutating-form recipe**: an htmx post
 (`hx-post` mirroring `method`/`action`) with an in-form field-errors container, a
 double-submit guard and busy spinner, and the hidden CSRF field — degrading to a plain form

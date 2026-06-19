@@ -1,7 +1,7 @@
--- tesseraql-scaffold-checksum: sha256:2860b84dd2c5412422a8d3c53f86868462ebb268a88ef05ac66ffdfd25bee865
--- Scaffolded search for the items table. The WHERE filter runs as-is in a plain SQL tool; the ORDER BY is
--- resolved by the engine from the sort/dir inputs — the column allowlist is
--- baked in below, so an unknown sort value falls back to the primary key.
+-- tesseraql-scaffold-checksum: sha256:26cdf0bb0c98a97503d2bee610de9d2595905ee00762c9ea97c37a08a8a961be
+-- Scaffolded search for the items table; runnable as-is in a plain SQL tool. The ORDER BY lives in an
+-- embedded variable, applied at render time from the sort/dir inputs (an enum
+-- allowlist), so a plain tool runs the base query unordered.
 select
   t.id,
   t.name,
@@ -17,30 +17,6 @@ where
 /*%if q != null && q != "" */
   and t.name like /* q */ 'sample'
 /*%end*/
-order by
-/*%if sort == "name" */
-  t.name
-/*%end*/
-/*%if sort == "quantity" */
-  t.quantity
-/*%end*/
-/*%if sort == "unit_price" */
-  t.unit_price
-/*%end*/
-/*%if sort == "due_date" */
-  t.due_date
-/*%end*/
-/*%if sort == "active" */
-  t.active
-/*%end*/
-/*%if sort == "note" */
-  t.note
-/*%end*/
-/*%if sort != "name" && sort != "quantity" && sort != "unit_price" && sort != "due_date" && sort != "active" && sort != "note" */
-  t.id
-/*%end*/
-/*%if dir == "desc" */
-  desc
-/*%end*/
+/*# order by t.{sort} {dir}, t.id */
 limit 50
 ;

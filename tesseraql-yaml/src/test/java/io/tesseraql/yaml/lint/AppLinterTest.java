@@ -71,6 +71,57 @@ class AppLinterTest {
     }
 
     @Test
+    void flagsAnEmbeddedVariableNotBackedByAnEnumInput(@TempDir Path dir) throws Exception {
+        Files.createDirectories(dir.resolve("config"));
+        Files.writeString(dir.resolve("config/tesseraql.yml"), """
+                tesseraql:
+                  app:
+                    name: t
+                  security:
+                    policies:
+                      app.read:
+                        anyOf:
+                          - role: READ
+                """);
+        Files.createDirectories(dir.resolve("web/items"));
+        Files.writeString(dir.resolve("web/items/search.sql"),
+                "select 1 from items t\n/*# order by t.{sort} */\n");
+        String route = """
+                version: tesseraql/v1
+                id: items.list
+                kind: route
+                recipe: query-json
+                input:
+                  sort:
+                    type: string
+                %s
+                security:
+                  auth: browser
+                  policy: app.read
+                sql:
+                  file: search.sql
+                  mode: query
+                  params:
+                    sort: query.sort
+                response:
+                  json:
+                    body:
+                      rows: sql.rows
+                """;
+
+        // No enum on the interpolated input: the embedded variable is an injection vector.
+        Files.writeString(dir.resolve("web/items/get.yml"), route.formatted(""));
+        assertThat(new AppLinter().lint(dir)).anyMatch(f -> f.code().equals("TQL-SQL-2109")
+                && f.isError() && f.source().contains("get.yml"));
+
+        // An enum allowlist clears it.
+        Files.writeString(dir.resolve("web/items/get.yml"),
+                route.formatted("    enum: [id, name]"));
+        assertThat(new AppLinter().lint(dir))
+                .noneMatch(f -> f.code().equals("TQL-SQL-2109"));
+    }
+
+    @Test
     void lintsMcpResources(@TempDir Path dir) throws Exception {
         Files.createDirectories(dir.resolve("config"));
         Files.writeString(dir.resolve("config/tesseraql.yml"), """

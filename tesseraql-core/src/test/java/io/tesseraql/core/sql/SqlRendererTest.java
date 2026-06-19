@@ -139,4 +139,38 @@ class SqlRendererTest {
         assertThatThrownBy(() -> SqlRenderer.render(sql, Map.of("ids", "not-a-list")))
                 .isInstanceOf(TqlException.class);
     }
+
+    @Test
+    void embeddedVariableInterpolatesPlaceholdersIntoTheSqlTextNotABind() {
+        String sql = "select * from t\n/*# order by t.{sort} {dir}, t.id */\nlimit 50";
+        BoundSql bound = SqlRenderer.render(sql, Map.of("sort", "name", "dir", "asc"));
+
+        assertThat(bound.sql()).contains("order by t.name asc, t.id");
+        // Interpolated into text, so no bind parameter is produced.
+        assertThat(bound.parameters()).isEmpty();
+    }
+
+    @Test
+    void embeddedVariableWithAnUnknownPlaceholderResolvesToEmpty() {
+        BoundSql bound = SqlRenderer.render("a /*# {missing} */ b", Map.of());
+        assertThat(bound.sql()).isEqualTo("a  b");
+    }
+
+    @Test
+    void embeddedVariableRejectsAValueWithSqlMetaCharacters() {
+        String sql = "select * from t /*# order by t.{sort} */";
+        assertThatThrownBy(() -> SqlRenderer.render(sql, Map.of("sort", "id; drop table t")))
+                .isInstanceOf(TqlException.class)
+                .hasMessageContaining("TQL-SQL-2108");
+        assertThatThrownBy(() -> SqlRenderer.render(sql, Map.of("sort", "id' --")))
+                .isInstanceOf(TqlException.class)
+                .hasMessageContaining("TQL-SQL-2108");
+    }
+
+    @Test
+    void embeddedVariableAddsNoBranchesToCoverage() {
+        BoundSql bound = SqlRenderer.render("select 1 /*# order by t.{sort} */",
+                Map.of("sort", "id"));
+        assertThat(bound.coverageTrace().branches()).isEmpty();
+    }
 }

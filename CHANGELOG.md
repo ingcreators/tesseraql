@@ -8,16 +8,23 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
-- Scaffolding: the **CRUD list datagrid is now sortable** — every column header sorts server-side.
-  Each header is a link to `fragments/table?sort=<col>&dir=<asc|desc>`, swapped in over htmx (the
-  search term rides along via `hx-include`, and the live-search box conversely keeps the current sort
-  via the fragment's hidden `sort`/`dir` inputs), and `aria-sort` drives the kit's sort arrow — CSP-
-  clean, no inline JS. The generated `search.sql` resolves the `ORDER BY` from `sort`/`dir` inputs:
-  each column is its own allowlisted `/*%if sort == "…" *​/` block (the column name is baked in, never
-  the input value — no dynamic-column injection) with a primary-key fallback, so an unknown sort value
-  is safe. The generated test suite adds one case per sortable column (the first also descending) so
-  the dynamic `ORDER BY` stays at 100% branch coverage. Trade-off: the `search.sql` `ORDER BY` is no
-  longer runnable verbatim in a plain SQL tool (the `WHERE` filter still is); the file comment says so.
+- 2-way SQL: **embedded variables** (`/*# template *​/`, Doma-style). A `{placeholder}` in the
+  template is interpolated into the SQL *text* at render time (not bound as `?`), for an
+  identifier-position fragment a bind cannot drive — a dynamic `ORDER BY` column, sort direction, or
+  table name. The whole fragment lives in the comment, so the statement stays runnable in a plain SQL
+  tool. Because the value is written into SQL text it must be safe: the linter requires every
+  placeholder to resolve to an `enum`-constrained input (`TQL-SQL-2109`), and the renderer rejects a
+  resolved value carrying SQL meta-characters (`TQL-SQL-2108`) as defense in depth. See
+  [transactional-writes.md](docs/transactional-writes.md#embedded-variables-dynamic-identifiers).
+- Scaffolding: the **CRUD list datagrid is sortable** — every column header sorts server-side. Each
+  header links to `fragments/table?sort=<col>&dir=<asc|desc>`, swapped in over htmx (the search box
+  carries the current sort and vice-versa via `hx-include`), and `aria-sort` drives the kit's sort
+  arrow — CSP-clean, no inline JS (`hc-datagrid` expects server-driven sort: its JS only sets
+  `aria-sort`, never reordering rows). The generated `search.sql` orders by a single embedded variable
+  `/*# order by t.{sort} {dir}, t.<pk> *​/` — the whole clause lives in the comment, so the file stays
+  runnable in a plain SQL tool, with the primary key as a stable pagination tiebreaker — and the
+  `sort`/`dir` inputs are `enum` allowlists with defaults, so an interpolated value can only be a known
+  column or direction (no injection; enforced by `TQL-SQL-2109`).
 
 ### Changed
 

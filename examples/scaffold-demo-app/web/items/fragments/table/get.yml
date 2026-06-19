@@ -1,4 +1,4 @@
-# tesseraql-scaffold-checksum: sha256:3572f30267c0276500e56706c97567ab484d37794e590ed51a3f1080df41eb54
+# tesseraql-scaffold-checksum: sha256:5de3bc241252addf1dc289e360e9dbefaf46bd22fb3f1c75270cc94468848b43
 # Scaffolded table fragment for the items table; the list page swaps it in via htmx.
 version: tesseraql/v1
 id: items.table
@@ -12,10 +12,12 @@ input:
     maxLength: 200
   sort:
     type: string
-    required: false
+    enum: [id, name, quantity, unit_price, due_date, active, note]
+    default: id
   dir:
     type: string
-    required: false
+    enum: [asc, desc]
+    default: asc
 
 security:
   auth: browser

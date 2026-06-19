@@ -6,11 +6,14 @@ import io.tesseraql.core.error.TqlException;
 import io.tesseraql.core.expr.EvaluationContext;
 import java.lang.reflect.Array;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * Renders a parsed 2-way SQL template against parameters into an executable {@link BoundSql}
@@ -20,6 +23,10 @@ import java.util.Objects;
 public final class SqlRenderer {
 
     private static final TqlErrorCode MISSING_LIST = new TqlErrorCode(TqlDomain.SQL, 2001);
+    /** TQL-SQL-2108: an embedded variable resolved to a value carrying SQL meta-characters. */
+    private static final TqlErrorCode UNSAFE_EMBEDDED = new TqlErrorCode(TqlDomain.SQL, 2108);
+    /** A {@code {placeholder}} reference inside an embedded-variable template. */
+    private static final Pattern PLACEHOLDER = Pattern.compile("\\{([^}]+)}");
 
     private final StringBuilder out = new StringBuilder();
     private final List<BoundParameter> parameters = new ArrayList<>();
@@ -71,6 +78,7 @@ public final class SqlRenderer {
                 case SqlNode.Text text -> appendText(text.text(), text.startLine());
                 case SqlNode.Bind bind -> appendBind(bind);
                 case SqlNode.ListBind listBind -> appendListBind(listBind);
+                case SqlNode.Embedded embedded -> appendEmbedded(embedded);
                 case SqlNode.If ifNode -> renderIf(ifNode);
                 case SqlNode.For forNode -> renderFor(forNode);
                 case SqlNode.Scope scopeNode -> renderScope(scopeNode);
@@ -163,6 +171,45 @@ public final class SqlRenderer {
             scope.put(name, previous);
         } else {
             scope.remove(name);
+        }
+    }
+
+    /**
+     * Emits an embedded variable: each {@code {placeholder}} in the template is resolved against the
+     * parameters and the result is appended to the SQL <em>text</em> (no {@code ?} bind). The
+     * resolved value of each placeholder is screened for SQL meta-characters (defense in depth — the
+     * value should already be {@code enum}-constrained at the input layer); the template's literal
+     * text, being author-written, is emitted as-is.
+     */
+    private void appendEmbedded(SqlNode.Embedded embedded) {
+        Matcher matcher = PLACEHOLDER.matcher(embedded.template());
+        StringBuilder rendered = new StringBuilder();
+        while (matcher.find()) {
+            String path = matcher.group(1).trim();
+            Object value = context.resolve(Arrays.asList(path.split("\\.")));
+            String text = value == null ? "" : String.valueOf(value);
+            guardEmbedded(text, path, embedded.sourceLine());
+            matcher.appendReplacement(rendered, Matcher.quoteReplacement(text));
+        }
+        matcher.appendTail(rendered);
+        mapToSource(rendered.toString(), embedded.sourceLine());
+        coverage.coverLine(embedded.sourceLine());
+    }
+
+    /** Rejects an interpolated value that could break out of its SQL position (Doma-style guard). */
+    private void guardEmbedded(String value, String path, int sourceLine) {
+        boolean unsafe = value.indexOf('\'') >= 0 || value.indexOf(';') >= 0
+                || value.contains("--") || value.contains("/*") || value.contains("*/");
+        for (int i = 0; !unsafe && i < value.length(); i++) {
+            unsafe = Character.isISOControl(value.charAt(i));
+        }
+        if (unsafe) {
+            throw TqlException.builder(UNSAFE_EMBEDDED)
+                    .message("Embedded variable '" + path + "' resolved to a value with SQL "
+                            + "meta-characters or control characters; constrain it with an "
+                            + "enum input. Value: " + value)
+                    .line(sourceLine)
+                    .build();
         }
     }
 

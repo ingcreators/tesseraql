@@ -80,6 +80,38 @@ values
 /*%end*/
 ```
 
+### Embedded variables (dynamic identifiers)
+
+A `/* expr */` bind becomes a `?` placeholder — safe, but a placeholder is only valid where a
+*value* goes, never an identifier. For an identifier-position fragment a bind cannot drive — a
+dynamic `ORDER BY` column, sort direction, or table name — use a **`/*# template */` embedded
+variable** (Doma-style). Its `{placeholder}` references are interpolated into the SQL *text* at
+render time, not bound. Keep the whole fragment inside the comment so the statement stays runnable
+in a plain SQL tool (the comment is skipped, the base query runs):
+
+```sql
+select * from items t
+where 1 = 1
+/*# order by t.{sort} {dir}, t.id */   -- applied at render time; a plain tool runs it unordered
+limit 50
+```
+
+Because the value is written into SQL text, it **must** be constrained to a safe set: every
+placeholder has to resolve to an `enum`-validated input, or the build fails (`TQL-SQL-2109`). The
+renderer additionally rejects a resolved value carrying SQL meta-characters (`TQL-SQL-2108`) as
+defense in depth, but the `enum` allowlist is the real guarantee:
+
+```yaml
+input:
+  sort: { type: string, enum: [id, name, created_at], default: id }
+  dir:  { type: string, enum: [asc, desc], default: asc }
+sql:
+  file: search.sql
+  params: { sort: query.sort, dir: query.dir }
+```
+
+The Phase 23 CRUD scaffold uses exactly this for its sortable list datagrid.
+
 ## Audit binds
 
 `/* audit.user */` and `/* audit.now */` resolve from the authenticated principal (login id,

@@ -1,56 +1,30 @@
-# tesseraql-scaffold-checksum: sha256:3b43a43240151d39e6a6f3adeb7e9a0b8a3e8851973954bd71ebbfa84a50c396
+# tesseraql-scaffold-checksum: sha256:8c024a763fae68652730c220f68beee48ec56c1efbb947f62a781ced88a8ee0d
 # Scaffolded suite for the items table (design ch. 13): exercises the generated
 # queries with data-independent expectations, so it passes against any contents.
 tests:
   - name: the items search runs without a filter
     sql:
       file: web/items/fragments/table/search.sql
-    params: {}
+    params:
+      sort: id
+      dir: asc
 
   - name: the items search filters by name
     sql:
       file: web/items/fragments/table/search.sql
     params:
       q: no-such-row
+      sort: id
+      dir: asc
     expect:
       rowCount: 0
 
-  - name: the items search sorts by name (descending)
+  - name: the items search sorts by name descending
     sql:
       file: web/items/fragments/table/search.sql
     params:
       sort: name
       dir: desc
-
-  - name: the items search sorts by quantity
-    sql:
-      file: web/items/fragments/table/search.sql
-    params:
-      sort: quantity
-
-  - name: the items search sorts by unit_price
-    sql:
-      file: web/items/fragments/table/search.sql
-    params:
-      sort: unit_price
-
-  - name: the items search sorts by due_date
-    sql:
-      file: web/items/fragments/table/search.sql
-    params:
-      sort: due_date
-
-  - name: the items search sorts by active
-    sql:
-      file: web/items/fragments/table/search.sql
-    params:
-      sort: active
-
-  - name: the items search sorts by note
-    sql:
-      file: web/items/fragments/table/search.sql
-    params:
-      sort: note
 
   - name: the items detail select misses for an unknown key
     sql:
