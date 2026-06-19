@@ -465,6 +465,15 @@ order below (P0 → P1 → P2).
   (what the field is / where it's registered / when it applies). A literal multi-step *stepper* does
   not fit these single-page forms, so it is dropped in favour of the help; the required/optional
   convention (unmarked = required, "(optional)" suffix) is already consistent.
-- [ ] **H8 — Correctness + search polish** (P2): fix the stale `sql-builder.html` prose
-  (`/* params.id */` / "values from body" → bind names / all `params`, post #153/#154); a search
-  syntax hint + result count; move focus to results after an htmx swap.
+- [x] **H8 — Correctness + search polish** (P2) — *done*: fixed the stale `sql-builder.html` intro
+  (it still showed `/* params.id */ 0` and "values from body" — both wrong since #153/#154; now
+  `/* id */ 0`, "each directive names a bind … each binds from `params`"). The docs search lifts its
+  query operators out of the placeholder into a visible hint (`status:passing|failing`,
+  `coverage:covered|untested`) and the results fragment now leads with a result count
+  (`DocViews.searchResults` exposes `count`). Moving focus to the results after a swap was
+  intentionally dropped — for the type-ahead search/filter inputs it would interrupt typing; the
+  existing `aria-live` regions already announce updates.
+
+**Track H complete (H1–H8).** The Studio platform-UX review is fully addressed: section nav +
+breadcrumbs, async loading feedback, a de-cluttered editor, in-page detail nav, table filtering,
+share-URL copy, clearer wizards, and the correctness/search polish.

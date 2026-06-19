@@ -476,6 +476,7 @@ public final class DocViews {
         }
         model.put("results", results);
         model.put("hasResults", !results.isEmpty());
+        model.put("count", results.size());
         return model;
     }
 
