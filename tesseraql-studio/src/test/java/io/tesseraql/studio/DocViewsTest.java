@@ -29,6 +29,40 @@ class DocViewsTest {
         return new RouteEntry(route, List.of(new TestRef("finds sato", "sql", "search.sql")));
     }
 
+    private static RouteEntry route(String id, String method) {
+        RouteSpec route = new RouteSpec(id, method, "/x", "query-json", "route", List.of(),
+                new RouteSpec.Security("bearer", null, null, false), List.of(), List.of(),
+                new RouteSpec.Response("json", 200, null, null, null), List.of());
+        return new RouteEntry(route, List.of());
+    }
+
+    @Test
+    void indexSortsTheRouteCatalogByColumn() {
+        // Platform-UX I2: server-driven sort over the route catalog.
+        DocSpec spec = new DocSpec(
+                List.of(route("users.search", "GET"), route("accounts.create", "POST")), List.of());
+
+        // Default and explicit id-asc both order alphabetically by id.
+        assertThat(ids(DocViews.index("demo", spec, null)))
+                .containsExactly("accounts.create", "users.search");
+        assertThat(ids(DocViews.index("demo", spec, null, "id", "desc")))
+                .containsExactly("users.search", "accounts.create");
+        // By method ascending: GET before POST.
+        Map<String, Object> byMethod = DocViews.index("demo", spec, null, "method", "asc");
+        assertThat(ids(byMethod)).containsExactly("users.search", "accounts.create");
+
+        // The sort state and the active column's flip link / aria-sort the headers render from.
+        assertThat(byMethod).containsEntry("sortKey", "method").containsEntry("sortDir", "asc");
+        assertThat(asMap(byMethod.get("ariaSort"))).containsEntry("method", "ascending")
+                .containsEntry("id", "none");
+        assertThat((String) asMap(byMethod.get("sortHref")).get("method"))
+                .contains("sort=method&dir=desc");
+    }
+
+    private static List<String> ids(Map<String, Object> model) {
+        return asRows(model.get("routes")).stream().map(r -> (String) r.get("id")).toList();
+    }
+
     @Test
     void indexModelSummarisesRoutesWithDetailLinksAndMigrations() {
         DocSpec spec = new DocSpec(List.of(searchRoute()), List.of(

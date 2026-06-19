@@ -489,13 +489,17 @@ Retire the hand-rolled versions in favour of the blessed components.
   a bare "Working…" text fade; the route/table breadcrumbs use `hc-breadcrumb` (semantic `ol`,
   CSS-injected separators) instead of a hand-built `hc-cluster` with a literal `›`. Both ship in hc
   0.1.5 already — no version bump. (H2/H4 retired their hand-rolled markup.)
-- [~] **I2 — sortable tables via `hc-datagrid`** — *deferred (CSP)*: `hc-datagrid` is deliberately
-  **not** a client-side sort engine — its header click only toggles `aria-sort` and dispatches a
-  `hc:datagridsort` event; the actual sort must round-trip to the server. Wiring that event's
-  column/direction into an htmx request needs `hx-vals='js:…'` or an inline handler, both forbidden
-  by the strict `default-src 'self'` CSP. Adopting it would mean adding custom JS glue, which defeats
-  "use the off-the-shelf component". Revisit if hc adds a CSP-clean sort→request binding (or if we
-  hand-roll server-sort header links — but that is not an hc adoption).
+- [x] **I2 — sortable tables via `hc-datagrid`** (route catalog) — *done* (an earlier note wrongly
+  deferred this as "CSP-blocked"; that was incorrect). `hc-datagrid` is deliberately **not** a
+  client-side sort engine, but it does **not need JS to be adoptable under our CSP**: (1) the sort
+  arrow is pure CSS keyed off `aria-sort` (`.hc-datagrid__headcell[data-sortable][aria-sort=…]:after`),
+  and (2) `datagrid.js`'s `onSortClick` does **not** `preventDefault`, so a nested header `<a href>`
+  navigates normally. So the route catalog (`docs.html`) is an hc-datagrid with **server-driven**
+  sort: each header is a link to `?sort=<col>&dir=<flip>`, the server sorts the rows and sets
+  `aria-sort` on the active column, and the kit renders the arrow — no JS, no `hx-vals='js:'`,
+  CSP-clean. `DocViews.index(…, sort, dir)` does the sort + emits the per-column `sortHref`/`ariaSort`.
+  *Next (optional):* apply the same pattern to the schema table list and the audit trail (audit would
+  compose sort with its filter + pagination).
 - [x] **I3 — `hc-pagination` for the audit trail** (P2) — *done*: H5 capped the trail at the newest
   200; now the whole log is navigable. `StudioService.auditPage(query, page, size)` returns one
   50-entry page (newest first) of the filtered log plus the total; `StudioViews.audit(AuditPage, q)`
