@@ -6,6 +6,19 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ## Unreleased
 
+### Added
+
+- Scaffolding: the **CRUD list datagrid is now sortable** — every column header sorts server-side.
+  Each header is a link to `fragments/table?sort=<col>&dir=<asc|desc>`, swapped in over htmx (the
+  search term rides along via `hx-include`, and the live-search box conversely keeps the current sort
+  via the fragment's hidden `sort`/`dir` inputs), and `aria-sort` drives the kit's sort arrow — CSP-
+  clean, no inline JS. The generated `search.sql` resolves the `ORDER BY` from `sort`/`dir` inputs:
+  each column is its own allowlisted `/*%if sort == "…" *​/` block (the column name is baked in, never
+  the input value — no dynamic-column injection) with a primary-key fallback, so an unknown sort value
+  is safe. The generated test suite adds one case per sortable column (the first also descending) so
+  the dynamic `ORDER BY` stays at 100% branch coverage. Trade-off: the `search.sql` `ORDER BY` is no
+  longer runnable verbatim in a plain SQL tool (the `WHERE` filter still is); the file comment says so.
+
 ### Changed
 
 - Scaffolding: the **CRUD list table now renders as a Hypermedia Components `hc-datagrid`** instead

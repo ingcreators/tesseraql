@@ -1,4 +1,4 @@
-# tesseraql-scaffold-checksum: sha256:f6bffb31f5c6bd07fdfca386881c0ffb3de91017f9ad0d25c936245ee808642d
+# tesseraql-scaffold-checksum: sha256:3572f30267c0276500e56706c97567ab484d37794e590ed51a3f1080df41eb54
 # Scaffolded table fragment for the items table; the list page swaps it in via htmx.
 version: tesseraql/v1
 id: items.table
@@ -10,6 +10,12 @@ input:
     type: string
     required: false
     maxLength: 200
+  sort:
+    type: string
+    required: false
+  dir:
+    type: string
+    required: false
 
 security:
   auth: browser
@@ -20,6 +26,8 @@ sql:
   mode: query
   params:
     q: query.q
+    sort: query.sort
+    dir: query.dir
 
 response:
   html:
@@ -28,3 +36,5 @@ response:
     model:
       rows: sql.rows
       count: sql.rowCount
+      sort: params.sort
+      dir: params.dir

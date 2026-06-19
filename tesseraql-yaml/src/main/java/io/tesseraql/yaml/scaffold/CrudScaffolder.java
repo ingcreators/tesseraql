@@ -199,12 +199,16 @@ public final class CrudScaffolder {
         if (names.searchColumn().isPresent()) {
             page.append(
                     """
+                              <!-- Live search keeps the current sort by including the fragment's hidden
+                                   sort/dir inputs; the sort header links likewise carry the search term. -->
                               <input class="hc-input" type="search" name="q" placeholder="Search by %s..."
                                      hx-get="%s/fragments/table" hx-trigger="input changed delay:300ms, search"
-                                     hx-target="#%s-table-area" hx-swap="innerHTML">
+                                     hx-target="#%s-table-area" hx-swap="innerHTML"
+                                     hx-include="#%s-table-area input[name='sort'], #%s-table-area input[name='dir']">
                             """
                             .formatted(Names.label(Names.columnName(names.searchColumn().get()))
-                                    .toLowerCase(Locale.ROOT), names.url(), names.table()));
+                                    .toLowerCase(Locale.ROOT), names.url(), names.table(),
+                                    names.table(), names.table()));
         }
         page.append(
                 """
@@ -227,14 +231,24 @@ public final class CrudScaffolder {
                 id: %s.table
                 kind: route
                 recipe: query-html
+
+                input:
                 """.formatted(names.table(), names.entity()));
         names.searchColumn().ifPresent(search -> {
-            route.append("\ninput:\n  q:\n    type: string\n    required: false\n");
+            route.append("  q:\n    type: string\n    required: false\n");
             if (search.size() > 0) {
                 route.append("    maxLength: ").append(search.size()).append('\n');
             }
         });
+        // Sort state from the datagrid header links; the SQL allowlists the columns, so an
+        // unknown sort value falls back to the primary key (no dynamic-column injection).
         route.append("""
+                  sort:
+                    type: string
+                    required: false
+                  dir:
+                    type: string
+                    required: false
 
                 security:
                   auth: browser
@@ -243,11 +257,14 @@ public final class CrudScaffolder {
                 sql:
                   file: search.sql
                   mode: query
+                  params:
                 """);
         if (names.searchColumn().isPresent()) {
-            route.append("  params:\n    q: query.q\n");
+            route.append("    q: query.q\n");
         }
         route.append("""
+                    sort: query.sort
+                    dir: query.dir
 
                 response:
                   html:
@@ -256,6 +273,8 @@ public final class CrudScaffolder {
                     model:
                       rows: sql.rows
                       count: sql.rowCount
+                      sort: params.sort
+                      dir: params.dir
                 """);
         return route.toString();
     }
@@ -263,7 +282,10 @@ public final class CrudScaffolder {
     private static String searchSql(TableSchema table, Names names) {
         StringBuilder sql = new StringBuilder();
         sql.append("-- Scaffolded search for the ").append(names.table())
-                .append(" table; runnable as-is in a plain SQL tool.\n");
+                .append(" table. The WHERE filter runs as-is in a plain SQL tool; the ORDER BY is\n");
+        sql.append(
+                "-- resolved by the engine from the sort/dir inputs — the column allowlist is\n");
+        sql.append("-- baked in below, so an unknown sort value falls back to the primary key.\n");
         sql.append("select\n");
         List<TableSchema.Column> listed = new ArrayList<>();
         listed.add(names.pk());
@@ -280,7 +302,29 @@ public final class CrudScaffolder {
                   and t.%s like /* q */ 'sample'
                 /*%%end*/
                 """.formatted(Names.columnName(search))));
-        sql.append("order by\n  t.").append(names.pkColumn()).append("\nlimit 50\n;\n");
+        // Dynamic ORDER BY: each data column is its own allowlisted /*%if*/ block (the column name
+        // is baked in, never the input value), and the primary-key fallback is a separate block
+        // whose condition is "no column matched". Separate blocks — not an if/elseif/else chain —
+        // keep every branch independently coverable (an /*%else*/ never records its false outcome).
+        List<TableSchema.Column> sortColumns = table.dataColumns();
+        sql.append("order by\n");
+        if (sortColumns.isEmpty()) {
+            sql.append("  t.").append(names.pkColumn()).append('\n');
+        } else {
+            for (TableSchema.Column column : sortColumns) {
+                String col = Names.columnName(column);
+                sql.append("/*%if sort == \"").append(col).append("\" */\n  t.").append(col)
+                        .append("\n/*%end*/\n");
+            }
+            sql.append("/*%if ");
+            for (int i = 0; i < sortColumns.size(); i++) {
+                sql.append(i == 0 ? "" : " && ").append("sort != \"")
+                        .append(Names.columnName(sortColumns.get(i))).append('"');
+            }
+            sql.append(" */\n  t.").append(names.pkColumn()).append("\n/*%end*/\n");
+        }
+        sql.append("/*%if dir == \"desc\" */\n  desc\n/*%end*/\n");
+        sql.append("limit 50\n;\n");
         return sql.toString();
     }
 
@@ -289,20 +333,40 @@ public final class CrudScaffolder {
         listed.add(names.pk());
         listed.addAll(table.dataColumns());
         StringBuilder html = new StringBuilder();
-        html.append("""
-                <!-- Scaffolded table fragment for the %s table: partial markup swapped into
-                     the list page (the fragments URL convention, design ch. 4). The hc-datagrid
-                     component scrolls wide tables horizontally and keeps the header in view; it
-                     degrades to a plain styled grid with no JavaScript (docs/hypermedia-ui.md). -->
-                <div id="%s-table" class="hc-datagrid">
-                  <div class="hc-datagrid__scroll">
-                    <table class="hc-datagrid__table">
-                      <thead class="hc-datagrid__head">
-                        <tr>
-                """.formatted(names.table(), names.table()));
+        html.append(
+                """
+                        <!-- Scaffolded table fragment for the %s table: partial markup swapped into
+                             the list page (the fragments URL convention, design ch. 4). The hc-datagrid
+                             component scrolls wide tables horizontally and keeps the header in view; it
+                             degrades to a plain styled grid with no JavaScript (docs/hypermedia-ui.md).
+                             Column headers sort server-side: each is a link to ?sort=col&dir=…, swapped
+                             over htmx, and aria-sort drives the kit's sort arrow (CSP-clean, no inline JS). -->
+                        <div id="%s-table" class="hc-datagrid">
+                          <input type="hidden" name="sort" th:value="${sort}">
+                          <input type="hidden" name="dir" th:value="${dir}">
+                          <div class="hc-datagrid__scroll">
+                            <table class="hc-datagrid__table">
+                              <thead class="hc-datagrid__head">
+                                <tr>
+                        """
+                        .formatted(names.table(), names.table()));
         for (TableSchema.Column column : listed) {
-            html.append("          <th class=\"hc-datagrid__headcell\">")
-                    .append(Names.label(Names.columnName(column))).append("</th>\n");
+            String col = Names.columnName(column);
+            String flip = "sort == '" + col + "' and dir != 'desc' ? 'desc' : 'asc'";
+            html.append("          <th class=\"hc-datagrid__headcell\" data-sortable data-col=\"")
+                    .append(col).append("\"\n");
+            html.append("              th:attr=\"aria-sort=${sort == '").append(col)
+                    .append("' ? (dir == 'desc' ? 'descending' : 'ascending') : 'none'}\">\n");
+            // A literal URL (|...|), not @{...}: the renderer's Thymeleaf context is not a web
+            // context, so link expressions can't resolve a context-relative path.
+            html.append("            <a th:with=\"u=|").append(names.url())
+                    .append("/fragments/table?sort=").append(col).append("&amp;dir=${").append(flip)
+                    .append("}|\"\n");
+            html.append("               th:href=\"${u}\" th:attr=\"hx-get=${u}\"\n");
+            html.append("               hx-target=\"#").append(names.table())
+                    .append("-table-area\" hx-swap=\"innerHTML\" hx-include=\"[name='q']\">")
+                    .append(Names.label(col)).append("</a>\n");
+            html.append("          </th>\n");
         }
         html.append("          <th class=\"hc-datagrid__headcell\"></th>\n        </tr>\n"
                 + "      </thead>\n      <tbody class=\"hc-datagrid__body\">\n");
@@ -792,6 +856,30 @@ public final class CrudScaffolder {
                     expect:
                       rowCount: 0
                 """.formatted(names.table(), Names.columnName(search), names.dir())));
+        // One case per data column exercises its ORDER BY branch; the first also goes descending,
+        // so the suite covers every sort branch the dynamic ORDER BY adds (keeps 100% branch
+        // coverage, design ch. 13). Cases are data-independent — they assert the query runs.
+        List<TableSchema.Column> sortColumns = table.dataColumns();
+        for (int i = 0; i < sortColumns.size(); i++) {
+            String col = Names.columnName(sortColumns.get(i));
+            boolean desc = i == 0;
+            suite.append("\n  - name: the ").append(names.table()).append(" search sorts by ")
+                    .append(col).append(desc ? " (descending)\n" : "\n");
+            suite.append("    sql:\n      file: ").append(names.dir())
+                    .append("/fragments/table/search.sql\n");
+            suite.append("    params:\n      sort: ").append(col).append('\n');
+            if (desc) {
+                suite.append("      dir: desc\n");
+            }
+        }
+        if (sortColumns.isEmpty()) {
+            // No sortable data columns, but the descending toggle still needs a covering case.
+            suite.append("\n  - name: the ").append(names.table())
+                    .append(" search sorts descending\n");
+            suite.append("    sql:\n      file: ").append(names.dir())
+                    .append("/fragments/table/search.sql\n");
+            suite.append("    params:\n      dir: desc\n");
+        }
         suite.append("""
 
                   - name: the %s detail select misses for an unknown key

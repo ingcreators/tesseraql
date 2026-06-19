@@ -105,7 +105,16 @@ class ScaffoldedCrudIntegrationTest {
 
         HttpResponse<String> fragment = get("/items/fragments/table", cookie);
         assertThat(fragment.statusCode()).isEqualTo(200);
-        assertThat(fragment.body()).contains("First item");
+        assertThat(fragment.body()).contains("First item")
+                // The datagrid headers render the kit's sort affordances; unsorted, all are "none".
+                .contains("data-sortable data-col=\"name\"")
+                .contains("aria-sort=\"none\"");
+
+        // Sorting by a column renders the active aria-sort the kit draws its arrow from, and the
+        // server-side ORDER BY (a per-column allowlist) keeps the seeded row in the result.
+        HttpResponse<String> sorted = get("/items/fragments/table?sort=name&dir=asc", cookie);
+        assertThat(sorted.statusCode()).isEqualTo(200);
+        assertThat(sorted.body()).contains("aria-sort=\"ascending\"").contains("First item");
     }
 
     @Test
