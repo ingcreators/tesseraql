@@ -446,6 +446,11 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Changed
 
+- Studio: **the audit trail is paginated with `hc-pagination`** (platform-UX track I). H5 capped the
+  page at the newest 200 entries; the whole log is now navigable in 50-entry pages (newest first) via
+  an `hc-pagination` nav of plain styled links (no JS, CSP-clean). The H5 filter still searches the
+  whole log and composes with paging. `StudioService.auditPage(query, page, size)` returns the page
+  slice plus the filtered total.
 - Studio: **the route reference's test-result detail uses `hc-tooltip`** instead of a `title=`
   tooltip (platform-UX track I). The pass/fail badge carried its failure message in `title=`, which
   screen-reader and keyboard users can't reach; it now references a sibling `.hc-tooltip` via

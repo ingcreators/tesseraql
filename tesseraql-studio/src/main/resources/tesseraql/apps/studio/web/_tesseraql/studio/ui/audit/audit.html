@@ -21,7 +21,8 @@
     <th:block th:replace="~{tql/shell :: busy('Filtering…')}"/>
   </div>
   <div id="audit-table" class="hc-stack">
-    <p class="hc-field__message" th:if="${page.atLimit}">Showing the newest 200 actions &mdash; a filter still searches the whole log.</p>
+    <p class="hc-field__message" th:if="${page.hasEntries}"
+       th:text="${page.total + ' action' + (page.total == 1 ? '' : 's') + (page.paged ? ', newest first' : '')}">0 actions</p>
     <div class="hc-empty" th:unless="${page.hasEntries}">
       <p class="hc-empty__title" th:text="${#strings.isEmpty(page.query)} ? 'No audited actions yet.' : 'No actions match.'">No matches.</p>
     </div>
@@ -39,6 +40,15 @@
         </tr>
       </tbody>
     </table>
+    <nav class="hc-pagination" aria-label="Pagination" th:if="${page.paged}">
+      <a th:if="${page.hasPrev}" class="hc-pagination__item"
+         th:href="@{/_tesseraql/studio/ui/audit(q=${page.query},page=${page.prevPage})}">&lsaquo; Prev</a>
+      <span th:unless="${page.hasPrev}" class="hc-pagination__item" aria-disabled="true">&lsaquo; Prev</span>
+      <span class="hc-pagination__item" aria-current="page" th:text="|Page ${page.pageNum} of ${page.totalPages}|">Page 1 of 1</span>
+      <a th:if="${page.hasNext}" class="hc-pagination__item"
+         th:href="@{/_tesseraql/studio/ui/audit(q=${page.query},page=${page.nextPage})}">Next &rsaquo;</a>
+      <span th:unless="${page.hasNext}" class="hc-pagination__item" aria-disabled="true">Next &rsaquo;</span>
+    </nav>
   </div>
 </section>
 </div>

@@ -154,6 +154,26 @@ class StudioViewsTest {
         assertThat(rows.get(1).get("targetUrl")).isNull();
     }
 
+    @Test
+    void auditPageBuildsPaginationModel() {
+        // Platform-UX I3: the paged overload adds the pagination coordinates the nav renders from.
+        StudioService.AuditEntry e = new StudioService.AuditEntry("t", "a", "apply",
+                "web/x/get.yml");
+        Map<String, Object> mid = StudioViews.audit(
+                new StudioService.AuditPage(List.of(e), 2, 50, 120), "q");
+        assertThat(mid).containsEntry("total", 120).containsEntry("pageNum", 2)
+                .containsEntry("totalPages", 3).containsEntry("paged", true)
+                .containsEntry("hasPrev", true).containsEntry("hasNext", true)
+                .containsEntry("prevPage", 1).containsEntry("nextPage", 3)
+                .containsEntry("query", "q").containsEntry("hasEntries", true);
+
+        // Last page: no next. Single page: not paged.
+        assertThat(StudioViews.audit(new StudioService.AuditPage(List.of(e), 3, 50, 120), null))
+                .containsEntry("hasNext", false).containsEntry("hasPrev", true);
+        assertThat(StudioViews.audit(new StudioService.AuditPage(List.of(e), 1, 50, 10), null))
+                .containsEntry("paged", false).containsEntry("totalPages", 1);
+    }
+
     @SuppressWarnings("unchecked")
     private static Map<String, Object> tree(Map<String, Object> model) {
         return (Map<String, Object>) model.get("tree");
