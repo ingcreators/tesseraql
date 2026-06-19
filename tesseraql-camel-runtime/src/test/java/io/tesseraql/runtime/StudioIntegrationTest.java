@@ -553,7 +553,10 @@ class StudioIntegrationTest {
         assertThat(response.statusCode()).isEqualTo(200);
         // The route page shows the run status card and the bound SQL's line/branch coverage.
         assertThat(response.body()).contains("Last test run").contains("covered")
-                .contains("lines").contains("branches");
+                .contains("lines").contains("branches")
+                // I4: the test-result detail moved from a title= tooltip (unreachable by SR/keyboard)
+                // to hc-tooltip, so the page emits no title= attribute.
+                .doesNotContain("title=\"");
         // Slice 4: the bound SQL renders line-by-line with per-line coverage classes.
         assertThat(response.body()).contains("hc-code")
                 .contains("data-gutter=\"line-numbers\"").contains("data-state=\"covered\"")

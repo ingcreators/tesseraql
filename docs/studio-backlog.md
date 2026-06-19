@@ -489,13 +489,23 @@ Retire the hand-rolled versions in favour of the blessed components.
   a bare "Working…" text fade; the route/table breadcrumbs use `hc-breadcrumb` (semantic `ol`,
   CSS-injected separators) instead of a hand-built `hc-cluster` with a literal `›`. Both ship in hc
   0.1.5 already — no version bump. (H2/H4 retired their hand-rolled markup.)
-- [ ] **I2 — sortable tables via `hc-datagrid`**: the docs/audit/schema tables have no column sort
-  (review gap); `hc-datagrid` adds `data-sortable` column sorting + row selection.
+- [~] **I2 — sortable tables via `hc-datagrid`** — *deferred (CSP)*: `hc-datagrid` is deliberately
+  **not** a client-side sort engine — its header click only toggles `aria-sort` and dispatches a
+  `hc:datagridsort` event; the actual sort must round-trip to the server. Wiring that event's
+  column/direction into an htmx request needs `hx-vals='js:…'` or an inline handler, both forbidden
+  by the strict `default-src 'self'` CSP. Adopting it would mean adding custom JS glue, which defeats
+  "use the off-the-shelf component". Revisit if hc adds a CSP-clean sort→request binding (or if we
+  hand-roll server-sort header links — but that is not an hc adoption).
 - [ ] **I3 — `hc-pagination` for the audit trail**: H5 deferred offset paging, but hc ships
-  `hc-pagination`; pair it with the existing whole-log filter so the trail is fully navigable.
-- [ ] **I4 — `hc-tooltip` / `hc-hovercard`**: replace the `title=` tooltips (route test-failure
-  messages, coverage swatches) and surface the wizard jargon help on hover/focus (discoverable on
-  touch + SR, unlike `title=`).
+  `hc-pagination` (plain styled `<a>` links, no JS — CSP-clean); pair it with the existing whole-log
+  filter so the trail is fully navigable.
+- [x] **I4 — `hc-tooltip` for the test-result detail** (P2) — *done*: the route reference's pass/fail
+  badge carried its failure message in a `title=` tooltip, which screen-reader and keyboard users
+  can't reach. It now uses `hc-tooltip` (a sibling `.hc-tooltip` element referenced by
+  `aria-describedby`, shown on hover + keyboard focus, dismissible with Escape; the kit's
+  auto-installed behavior). The only other `title=` in Studio templates are legitimate `<iframe>`
+  accessible names, left as-is. (The wizard jargon is already inline help from H7, so no tooltip
+  there.)
 - [ ] **I5 — `hc-toast`**: transient feedback (copy "Copied", save/apply success) via the toast
   region instead of mutating button text / inline alerts.
 
