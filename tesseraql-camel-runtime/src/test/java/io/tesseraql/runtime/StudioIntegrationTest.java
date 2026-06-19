@@ -307,9 +307,11 @@ class StudioIntegrationTest {
                     assertThat(entry.get("at").asText()).isNotBlank();
                 });
 
-        // The audit page renders the entry, with the filter chrome (H5); the explorer links to it.
+        // The audit page renders the entry, with the filter chrome (H5) and the total caption (I3);
+        // the explorer links to it.
         assertThat(get("/_tesseraql/studio/ui/audit", true).body()).contains("Audit trail")
-                .contains(path).contains("id=\"audit-filter\"").contains("id=\"audit-table\"");
+                .contains(path).contains("id=\"audit-filter\"").contains("id=\"audit-table\"")
+                .contains("1 action");
         assertThat(get("/_tesseraql/studio/ui", true).body())
                 .contains("/_tesseraql/studio/ui/audit");
 
@@ -318,6 +320,9 @@ class StudioIntegrationTest {
                 .contains(path);
         assertThat(get("/_tesseraql/studio/ui/audit?q=zzznomatch", true).body())
                 .contains("No actions match").doesNotContain(path);
+        // The page param is accepted and out-of-range pages are graceful (I3): page 2 of a 1-page
+        // trail still renders 200 (an empty slice), it does not error.
+        assertThat(get("/_tesseraql/studio/ui/audit?page=2", true).statusCode()).isEqualTo(200);
     }
 
     @Test

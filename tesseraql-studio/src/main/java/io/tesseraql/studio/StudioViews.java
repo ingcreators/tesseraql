@@ -30,6 +30,9 @@ public final class StudioViews {
     /** The cap on audit entries loaded into the trail page (Studio platform-UX H5). */
     public static final int AUDIT_LIMIT = 200;
 
+    /** The page size for the paginated audit trail (Studio platform-UX I3). */
+    public static final int AUDIT_PAGE_SIZE = 50;
+
     private StudioViews() {
     }
 
@@ -118,6 +121,29 @@ public final class StudioViews {
     }
 
     public static Map<String, Object> audit(List<AuditEntry> entries, String query) {
+        Map<String, Object> model = auditRows(entries, query);
+        // The page loads at most AUDIT_LIMIT entries; flag when the window is full so the cap is
+        // stated, not silent (a filter still searches the whole log before the cap applies).
+        model.put("atLimit", entries.size() >= AUDIT_LIMIT);
+        return model;
+    }
+
+    /** The audit-trail page model for one page, with the pagination coordinates (platform-UX I3). */
+    public static Map<String, Object> audit(StudioService.AuditPage page, String query) {
+        Map<String, Object> model = auditRows(page.entries(), query);
+        int totalPages = Math.max(1, (page.total() + page.size() - 1) / page.size());
+        model.put("total", page.total());
+        model.put("pageNum", page.page());
+        model.put("totalPages", totalPages);
+        model.put("paged", totalPages > 1);
+        model.put("hasPrev", page.page() > 1);
+        model.put("hasNext", page.page() < totalPages);
+        model.put("prevPage", page.page() - 1);
+        model.put("nextPage", page.page() + 1);
+        return model;
+    }
+
+    private static Map<String, Object> auditRows(List<AuditEntry> entries, String query) {
         List<Map<String, Object>> rows = new ArrayList<>();
         for (AuditEntry entry : entries) {
             Map<String, Object> row = new LinkedHashMap<>();
@@ -134,9 +160,6 @@ public final class StudioViews {
         model.put("hasEntries", !rows.isEmpty());
         model.put("count", rows.size());
         model.put("query", query == null ? "" : query);
-        // The page loads at most AUDIT_LIMIT entries; flag when the window is full so the cap is
-        // stated, not silent (a filter still searches the whole log before the cap applies).
-        model.put("atLimit", rows.size() >= AUDIT_LIMIT);
         return model;
     }
 

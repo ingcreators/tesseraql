@@ -1033,12 +1033,13 @@ public final class TesseraqlRuntime implements AutoCloseable {
                             return io.tesseraql.studio.StudioViews.drafts(studio.drafts(), q);
                         })
                         .register("studio.audit", params -> {
-                            // Filter the whole log, then keep the newest AUDIT_LIMIT (H5).
+                            // Filter the whole log, then return one page of it (H5 filter + I3 paging).
                             String q = params.get("q") == null
                                     ? null
                                     : String.valueOf(params.get("q"));
-                            return io.tesseraql.studio.StudioViews.audit(studio.auditEntries(
-                                    io.tesseraql.studio.StudioViews.AUDIT_LIMIT, q), q);
+                            return io.tesseraql.studio.StudioViews.audit(studio.auditPage(q,
+                                    parsePage(params.get("page")),
+                                    io.tesseraql.studio.StudioViews.AUDIT_PAGE_SIZE), q);
                         });
                 // Providers backing the bundled documentation portal (documentation portal v1/v2/v3):
                 // they read the packaged spec.json, falling back to a live model from the manifest,
@@ -1233,6 +1234,18 @@ public final class TesseraqlRuntime implements AutoCloseable {
     }
 
     /** Whether any declared workflow runs in managed mode (the default or a per-workflow override). */
+    /** A 1-based page number from a request param (Integer or String), defaulting to 1 (I3). */
+    private static int parsePage(Object raw) {
+        if (raw == null) {
+            return 1;
+        }
+        try {
+            return Math.max(1, Integer.parseInt(String.valueOf(raw).trim()));
+        } catch (NumberFormatException ignored) {
+            return 1;
+        }
+    }
+
     private static boolean workflowsNeedManagedStore(
             io.tesseraql.yaml.manifest.AppManifest manifest) {
         if (manifest.workflows().isEmpty()) {

@@ -496,9 +496,13 @@ Retire the hand-rolled versions in favour of the blessed components.
   by the strict `default-src 'self'` CSP. Adopting it would mean adding custom JS glue, which defeats
   "use the off-the-shelf component". Revisit if hc adds a CSP-clean sort→request binding (or if we
   hand-roll server-sort header links — but that is not an hc adoption).
-- [ ] **I3 — `hc-pagination` for the audit trail**: H5 deferred offset paging, but hc ships
-  `hc-pagination` (plain styled `<a>` links, no JS — CSP-clean); pair it with the existing whole-log
-  filter so the trail is fully navigable.
+- [x] **I3 — `hc-pagination` for the audit trail** (P2) — *done*: H5 capped the trail at the newest
+  200; now the whole log is navigable. `StudioService.auditPage(query, page, size)` returns one
+  50-entry page (newest first) of the filtered log plus the total; `StudioViews.audit(AuditPage, q)`
+  adds the pagination coordinates and the page renders an `hc-pagination` nav (plain styled `<a>`
+  links — no JS, CSP-clean; disabled prev/next render as a non-link span). The filter and paging
+  compose: filtering re-renders `#audit-table` at page 1 (htmx), paging is a full-page nav that keeps
+  the query. Out-of-range pages are graceful (empty slice, still 200).
 - [x] **I4 — `hc-tooltip` for the test-result detail** (P2) — *done*: the route reference's pass/fail
   badge carried its failure message in a `title=` tooltip, which screen-reader and keyboard users
   can't reach. It now uses `hc-tooltip` (a sibling `.hc-tooltip` element referenced by

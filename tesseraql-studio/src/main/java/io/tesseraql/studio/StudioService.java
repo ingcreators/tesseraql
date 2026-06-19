@@ -1095,6 +1095,26 @@ public final class StudioService {
      * actions, not just the newest window; an empty query returns the newest {@code limit} entries.
      */
     public List<AuditEntry> auditEntries(int limit, String query) {
+        List<AuditEntry> entries = filteredAuditNewestFirst(query);
+        return entries.size() > limit ? List.copyOf(entries.subList(0, limit)) : entries;
+    }
+
+    /**
+     * One page of the audit trail matching {@code query}, newest first (Studio platform-UX I3): the
+     * {@code page}-th slice (1-based) of {@code size} entries, plus the filtered {@code total} so the
+     * view can render pagination. The filter runs over the whole log before paging.
+     */
+    public AuditPage auditPage(String query, int page, int size) {
+        int p = Math.max(1, page);
+        List<AuditEntry> all = filteredAuditNewestFirst(query);
+        int total = all.size();
+        int from = Math.min((p - 1) * size, total);
+        int to = Math.min(from + size, total);
+        return new AuditPage(List.copyOf(all.subList(from, to)), p, size, total);
+    }
+
+    /** Every audit entry matching {@code query} (whole log), newest first. */
+    private List<AuditEntry> filteredAuditNewestFirst(String query) {
         Path log = auditLog();
         if (!Files.isRegularFile(log)) {
             return List.of();
@@ -1118,7 +1138,7 @@ public final class StudioService {
             throw new UncheckedIOException(ex);
         }
         java.util.Collections.reverse(entries);
-        return entries.size() > limit ? List.copyOf(entries.subList(0, limit)) : entries;
+        return entries;
     }
 
     private static boolean matchesAudit(AuditEntry entry, String lowerQuery) {
@@ -1259,6 +1279,10 @@ public final class StudioService {
      * scaffold}), and the {@code target} (the applied path or the scaffolded table).
      */
     public record AuditEntry(String at, String actor, String action, String target) {
+    }
+
+    /** One page of the audit trail: its entries plus the page coordinates and filtered total (I3). */
+    public record AuditPage(List<AuditEntry> entries, int page, int size, int total) {
     }
 
     /**

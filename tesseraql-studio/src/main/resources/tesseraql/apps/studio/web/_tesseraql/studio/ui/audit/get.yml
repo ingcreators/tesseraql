@@ -7,6 +7,9 @@ input:
   q:
     type: string
     required: false
+  page:
+    type: integer
+    required: false
 
 security:
   auth: bearer
@@ -15,6 +18,7 @@ sql:
   service: studio.audit
   params:
     q: params.q
+    page: params.page
 
 response:
   html:
