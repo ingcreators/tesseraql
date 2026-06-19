@@ -177,14 +177,19 @@
         <thead><tr><th>Name</th><th>Kind</th><th>Target</th>
           <th th:if="${doc.hasReport}">Result</th></tr></thead>
         <tbody>
-          <tr th:each="t : ${doc.tests}">
+          <tr th:each="t,tStat : ${doc.tests}">
             <td th:text="${t.name}"></td>
             <td th:text="${t.kind}"></td>
             <td th:text="${t.target}"></td>
-            <td th:if="${doc.hasReport}">
-              <span class="hc-badge" th:if="${t.passed != null}" th:title="${t.message}"
-                    th:attr="data-variant=${t.passed} ? 'success' : 'error'"
+            <td th:if="${doc.hasReport}"
+                th:with="hasMsg=${t.passed != null and !#strings.isEmpty(t.message)},tipId='tip-test-' + ${tStat.index}">
+              <!-- The failure detail is an hc-tooltip (announced via aria-describedby, shown on
+                   hover/focus) instead of a title= tooltip, which screen readers and keyboard users
+                   can't reach (Studio platform-UX I4). -->
+              <span class="hc-badge" th:if="${t.passed != null}"
+                    th:attr="data-variant=${t.passed} ? 'success' : 'error',aria-describedby=${hasMsg} ? ${tipId} : null"
                     th:text="${t.passed} ? 'pass' : 'fail'"></span>
+              <span class="hc-tooltip" th:if="${hasMsg}" th:id="${tipId}" th:text="${t.message}"></span>
               <span th:if="${t.passed == null}">&mdash;</span>
             </td>
           </tr>

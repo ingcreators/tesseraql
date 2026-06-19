@@ -446,6 +446,10 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Changed
 
+- Studio: **the route reference's test-result detail uses `hc-tooltip`** instead of a `title=`
+  tooltip (platform-UX track I). The pass/fail badge carried its failure message in `title=`, which
+  screen-reader and keyboard users can't reach; it now references a sibling `.hc-tooltip` via
+  `aria-describedby` (shown on hover + keyboard focus, dismissible with Escape).
 - Studio: **adopt the kit's `hc-spinner` and `hc-breadcrumb`** instead of the hand-rolled equivalents
   (platform-UX track I). The shared loading affordance (`tql/shell :: busy`) now renders the CSS-only,
   reduced-motion-aware `hc-spinner` with a contextual label rather than a bare "Working…" text fade,
