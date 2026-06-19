@@ -104,6 +104,34 @@ shape is in [declarative-validation.md](declarative-validation.md); conflict hin
   app's entries) before the behaviors install — can re-resolve and interpolate it
   client-side (see [internationalization.md](internationalization.md)).
 
+## Response-header signals (HX-Trigger)
+
+A route's `response.html.headers` are emitted on the rendered response. A nested map value is
+serialized to JSON — which is exactly htmx's `HX-Trigger` shape — and `{expression}` placeholders
+in any value are resolved against the execution context (the same bindings the model uses), so a
+header can carry per-request data. This is how a route fires a client-side event (e.g. the kit's
+`hc:toast`) from the server without coupling the endpoint to a page location:
+
+```yaml
+response:
+  html:
+    template: saved.html
+    headers:
+      HX-Trigger:
+        "hc:toast":
+          message: "Saved {result.name}"
+          variant: success
+```
+
+htmx dispatches each event on `<body>` after the swap, and the kit's auto-installed `installToast`
+behavior renders the notification (a `data-hc-toast-region` container must exist in the shell). A
+value with no `{…}` placeholder (the CSP, `X-Frame-Options`, …) is emitted verbatim.
+
+For a command route, the success/error split makes this conditional for free: a successful render
+emits these headers, while a validation failure takes the field-errors renderer (below), which does
+not. `HX-Reswap` / `HX-Retarget` can likewise be set as (static or interpolated) header values when
+a response needs to override its swap strategy or target.
+
 ## Mutating forms
 
 A form that changes server state follows the kit's `mutating-form` recipe — the composition

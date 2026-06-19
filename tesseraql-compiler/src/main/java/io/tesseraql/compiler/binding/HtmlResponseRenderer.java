@@ -11,7 +11,10 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import org.apache.camel.Exchange;
 import org.apache.camel.Processor;
 
@@ -27,6 +30,9 @@ import org.apache.camel.Processor;
 public final class HtmlResponseRenderer implements Processor {
 
     private static final TqlErrorCode RENDER_ERROR = new TqlErrorCode(TqlDomain.TPL, 2001);
+
+    /** A {@code {expression}} placeholder in a header value, resolved like the redirect location. */
+    private static final Pattern PLACEHOLDER = Pattern.compile("\\{([^}]+)}");
 
     private final HtmlResponse response;
     private final Path appHome;
@@ -92,20 +98,53 @@ public final class HtmlResponseRenderer implements Processor {
 
         exchange.getMessage().setHeader(Exchange.HTTP_RESPONSE_CODE, response.effectiveStatus());
         exchange.getMessage().setHeader(Exchange.CONTENT_TYPE, "text/html; charset=utf-8");
-        applyHeaders(exchange);
+        applyHeaders(exchange, evaluation);
         exchange.getMessage().setBody(html);
     }
 
-    private void applyHeaders(Exchange exchange) {
+    private void applyHeaders(Exchange exchange, EvaluationContext evaluation) {
         response.headers().forEach((name, value) -> {
             try {
-                String headerValue = value instanceof Map || value instanceof java.util.List
-                        ? mapper.writeValueAsString(value)
-                        : String.valueOf(value);
+                // Resolve {expression} placeholders against the execution context (recursively for a
+                // nested map/list), so a header like HX-Trigger can carry per-request data; a value
+                // with no placeholder is unchanged. Nested map/list values then serialize to JSON.
+                Object resolved = interpolate(value, evaluation);
+                String headerValue = resolved instanceof Map || resolved instanceof List
+                        ? mapper.writeValueAsString(resolved)
+                        : String.valueOf(resolved);
                 exchange.getMessage().setHeader(name, headerValue);
             } catch (com.fasterxml.jackson.core.JsonProcessingException ex) {
                 throw new TqlException(RENDER_ERROR, "Failed to serialize header " + name);
             }
         });
+    }
+
+    /** Resolves {@code {expression}} placeholders in a header value (recursively into maps/lists). */
+    @SuppressWarnings("unchecked")
+    static Object interpolate(Object value, EvaluationContext evaluation) {
+        if (value instanceof String string) {
+            return interpolateString(string, evaluation);
+        }
+        if (value instanceof Map<?, ?> map) {
+            Map<String, Object> out = new LinkedHashMap<>();
+            ((Map<String, Object>) map).forEach((k, v) -> out.put(k, interpolate(v, evaluation)));
+            return out;
+        }
+        if (value instanceof List<?> list) {
+            return list.stream().map(element -> interpolate(element, evaluation)).toList();
+        }
+        return value;
+    }
+
+    private static String interpolateString(String template, EvaluationContext evaluation) {
+        Matcher matcher = PLACEHOLDER.matcher(template);
+        StringBuilder out = new StringBuilder();
+        while (matcher.find()) {
+            Object resolved = evaluation.resolve(Arrays.asList(matcher.group(1).split("\\.")));
+            matcher.appendReplacement(out,
+                    Matcher.quoteReplacement(resolved == null ? "" : String.valueOf(resolved)));
+        }
+        matcher.appendTail(out);
+        return out.toString();
     }
 }
