@@ -19,6 +19,7 @@
     <div class="hc-field">
       <label class="hc-field__label" for="scim-outbound">Enable outbound provisioning</label>
       <select class="hc-select" id="scim-outbound" name="outbound"><option value="false">false</option><option value="true">true</option></select>
+      <p class="hc-field__message">Push users and groups to an external SCIM endpoint. The two fields below apply only when this is <code>true</code>.</p>
     </div>
     <div class="hc-field">
       <label class="hc-field__label" for="outbound-url">Outbound target URL (when outbound)</label>
@@ -27,6 +28,7 @@
     <div class="hc-field">
       <label class="hc-field__label" for="token-ref">Outbound token reference (when outbound)</label>
       <input class="hc-input" id="token-ref" type="text" name="tokenRef" value="${SCIM_OUTBOUND_TOKEN}">
+      <p class="hc-field__message">A placeholder resolved from an environment variable at runtime, so the bearer token stays out of the config file.</p>
     </div>
     <div class="hc-cluster"><button type="submit" class="hc-button" data-variant="primary">Generate &amp; download config</button></div>
   </form>

@@ -1440,11 +1440,16 @@ class StudioIntegrationTest {
     void wizardIndexAndFormRender() throws Exception {
         HttpResponse<String> index = get("/_tesseraql/studio/ui/wizard", true);
         assertThat(index.statusCode()).isEqualTo(200);
-        assertThat(index.body()).contains("Setup wizards").contains("SAML SP");
+        assertThat(index.body()).contains("Setup wizards").contains("SAML SP")
+                // H7: the index orients the user — what each wizard does and to start with the realm.
+                .contains("Set up an").contains("Federate logins with a SAML");
 
         HttpResponse<String> form = get("/_tesseraql/studio/ui/wizard/saml", true);
         assertThat(form.statusCode()).isEqualTo(200);
-        assertThat(form.body()).contains("SAML SP wizard").contains("name=\"acsUrl\"");
+        assertThat(form.body()).contains("SAML SP wizard").contains("name=\"acsUrl\"")
+                // H7: jargony fields carry inline help instead of a bare label + cryptic placeholder.
+                .contains("register this exact URL with the IdP")
+                .contains("the example OID is");
     }
 
     @Test

@@ -9,11 +9,28 @@
 </th:block>
 <div id="page-content" class="hc-stack">
 <section class="hc-card">
+  <h2>Setup wizards</h2>
+  <p class="hc-field__message">Each wizard generates a config fragment to merge into
+    <code>config/tesseraql.yml</code> &mdash; nothing is changed in place. Set up an
+    <strong>identity realm</strong> first (it backs who can sign in), then add the protocol your
+    identity provider speaks.</p>
   <nav class="hc-stack" aria-label="Setup wizards">
-    <a class="hc-item" href="/_tesseraql/studio/ui/wizard/saml">SAML SP</a>
-    <a class="hc-item" href="/_tesseraql/studio/ui/wizard/oidc">OIDC provider</a>
-    <a class="hc-item" href="/_tesseraql/studio/ui/wizard/scim">SCIM provisioning</a>
-    <a class="hc-item" href="/_tesseraql/studio/ui/wizard/identity">Identity realm mapping</a>
+    <div>
+      <a class="hc-item" href="/_tesseraql/studio/ui/wizard/identity">Identity realm mapping &rarr;</a>
+      <p class="hc-field__message">Where user accounts live (a managed store or your own SQL). Start here.</p>
+    </div>
+    <div>
+      <a class="hc-item" href="/_tesseraql/studio/ui/wizard/saml">SAML SP &rarr;</a>
+      <p class="hc-field__message">Federate logins with a SAML 2.0 IdP (Okta, ADFS, Azure AD).</p>
+    </div>
+    <div>
+      <a class="hc-item" href="/_tesseraql/studio/ui/wizard/oidc">OIDC provider &rarr;</a>
+      <p class="hc-field__message">Federate logins with an OpenID Connect provider (Google, Entra ID, Auth0).</p>
+    </div>
+    <div>
+      <a class="hc-item" href="/_tesseraql/studio/ui/wizard/scim">SCIM provisioning &rarr;</a>
+      <p class="hc-field__message">Sync users and groups in or out over SCIM 2.0.</p>
+    </div>
   </nav>
 </section>
 </div>
