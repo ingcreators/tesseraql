@@ -1544,16 +1544,16 @@ class StudioIntegrationTest {
         HttpResponse<String> select = postForm("/_tesseraql/studio/ui/sql-builder/build",
                 "table=customers&operation=select-by-pk");
         assertThat(select.statusCode()).isEqualTo(200);
-        // The key bind reads from params with a typed dummy literal (id is bigint -> 0).
+        // The bind references the param NAME (id), with the sql.params mapping documented, and a
+        // typed dummy literal (id is bigint -> 0).
         assertThat(select.body()).contains("select id, email").contains("from customers")
-                .contains("where id = /* params.id */ 0;");
+                .contains("where id = /* id */ 0;").contains("--   id: params.id");
 
-        // Insert skips the identity column (customers.id) and binds values from the body. (The body
-        // is HTML-escaped for the textarea swap, so the string-dummy quote is &#39;, not '.)
+        // Insert skips the identity column (customers.id) and binds values from the body.
         HttpResponse<String> insert = postForm("/_tesseraql/studio/ui/sql-builder/build",
                 "table=customers&operation=insert");
-        assertThat(insert.body()).contains("insert into customers (email)")
-                .contains("/* body.email */");
+        assertThat(insert.body()).contains("insert into customers (email)").contains("/* email */")
+                .contains("--   email: body.email");
     }
 
     @Test
@@ -1567,8 +1567,21 @@ class StudioIntegrationTest {
         // select-by-column filters on the chosen column with a params bind.
         HttpResponse<String> select = postForm("/_tesseraql/studio/ui/sql-builder/build",
                 "table=customers&operation=select-by-column&column=email");
-        assertThat(select.body()).contains("from customers")
-                .contains("where email = /* params.email */");
+        assertThat(select.body()).contains("from customers").contains("where email = /* email */");
+    }
+
+    @Test
+    void uiSqlBuilderGeneratesInListAndOptionalIfFilters() throws Exception {
+        // IN-list: the directive is followed by a parenthesized typed dummy.
+        HttpResponse<String> inList = postForm("/_tesseraql/studio/ui/sql-builder/build",
+                "table=customers&operation=select-by-column-in&column=email");
+        assertThat(inList.body()).contains("where email in /* email */ (");
+
+        // Optional: the predicate is wrapped in a /*%if … */ … /*%end*/ directive.
+        HttpResponse<String> optional = postForm("/_tesseraql/studio/ui/sql-builder/build",
+                "table=customers&operation=select-by-column-optional&column=email");
+        assertThat(optional.body()).contains("/*%if email != null */")
+                .contains("and email = /* email */").contains("/*%end*/");
     }
 
     @Test

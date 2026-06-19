@@ -29,13 +29,15 @@
           <div class="hc-field"><label class="hc-field__label">Operation</label>
             <select class="hc-select" name="operation">
               <option value="select-by-pk">select by primary key</option>
-              <option value="select-by-column">select by column</option>
+              <option value="select-by-column">select by column (=)</option>
+              <option value="select-by-column-in">select by column (in list)</option>
+              <option value="select-by-column-optional">select by column (optional /*%if*/)</option>
               <option value="insert">insert</option>
               <option value="update-by-pk">update by primary key</option>
               <option value="delete-by-pk">delete by primary key</option>
             </select>
           </div>
-          <div class="hc-field"><label class="hc-field__label">Filter column (for &ldquo;select by column&rdquo;)</label>
+          <div class="hc-field"><label class="hc-field__label">Filter column (for the &ldquo;select by column&rdquo; operations)</label>
             <select class="hc-select" name="column" id="sql-col"></select>
           </div>
         </div>

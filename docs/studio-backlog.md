@@ -376,9 +376,15 @@ and is being adopted (see E below).
     `studio.sqlBuilder.new`/`studio.sqlBuilder.build`; `/_tesseraql/studio/ui/sql-builder`.
     - **By-column filter** — *done* (follow-on): a **select-by-column** operation + a **Filter column**
       dropdown cascade-loaded from the chosen table's columns (htmx on table change) generates
-      `select … where <col> = /* params.<col> */ <dummy>` on any column, the bind typed from it.
+      `select … where <col> = /* <col> */ <dummy>` on any column, the bind typed from it.
       `studio.sqlBuilder.columns`; `/_tesseraql/studio/ui/sql-builder/columns`.
-    - *Next:* IN-list/`if` directives, and dropping the snippet straight into the source editor.
+    - **IN-list & optional (`/*%if*/`) filters; corrected bind style** — *done* (follow-on):
+      **select by column (in list)** (`where <col> in /* <col> */ (<dummy>)`) and **(optional)**
+      (`where 1 = 1 /*%if <col> != null */ and <col> = /* <col> */ <dummy> /*%end*/`). Binds now use
+      the **param name** (`/* id */`, resolved against `sql.params` at render — the runtime renders
+      against the resolved binds, not request namespaces) and the snippet is prefixed with a
+      `-- sql.params` comment listing each mapping, so it is complete and correct.
+    - *Next:* dropping the snippet straight into the source editor.
 
 ## Recommended next
 
