@@ -6,6 +6,19 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ## Unreleased
 
+## 0.3.1 - 2026-06-20
+
+### Fixed
+
+- CLI: **`serve --embedded-db` no longer crashes with
+  `NoClassDefFoundError: org.postgresql.ds.PGSimpleDataSource`** (#178). The embedded-db supervisor
+  (zonky `EmbeddedPostgres`) loads the PostgreSQL JDBC driver at runtime to verify the embedded
+  process is ready, but the CLI dist fat jar was missing it: `tesseraql-cli` re-declared
+  `org.postgresql:postgresql` directly at `test` scope, which overrode the `compile`-scoped driver
+  it otherwise inherits transitively from `tesseraql-camel-runtime`, excluding it from the runtime
+  classpath and the shaded jar. The driver is now declared explicitly at compile scope so the dist
+  bundles it.
+
 ## 0.3.0 - 2026-06-19
 
 ### Changed
