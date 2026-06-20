@@ -84,6 +84,12 @@ public final class TesseraqlCli implements Runnable {
                         + "an ephemeral run.")
         String embeddedDb;
 
+        @Option(names = {"--embedded-db-port"}, paramLabel = "<port>", description = "Bind the "
+                + "embedded PostgreSQL to a fixed TCP port (default: a random free port chosen at "
+                + "startup). Use it to connect a local client (e.g. psql) at a stable address. "
+                + "Listens on localhost only.")
+        Integer embeddedDbPort;
+
         @Override
         public Integer call() throws InterruptedException {
             // Load any opt-in plugin modules (file-format codecs, drivers, ...) so route compilation
@@ -110,10 +116,16 @@ public final class TesseraqlCli implements Runnable {
             EmbeddedPostgresSupport.Handle embedded = null;
             if (embeddedDb != null) {
                 Path dataDir = embeddedDb.isEmpty() ? null : Path.of(embeddedDb);
-                embedded = EmbeddedPostgresSupport.start(dataDir, false);
+                embedded = EmbeddedPostgresSupport.start(dataDir, embeddedDbPort, false);
                 dbOverride = embedded.override();
                 System.out.println("Embedded PostgreSQL started"
                         + (dataDir == null ? " (ephemeral)." : " at " + dataDir + "."));
+                // Surface the (otherwise random) port so a local client can attach. Trust auth on
+                // loopback only — the URL already carries user=postgres; the database is postgres.
+                System.out.printf("  Connect a local client on port %d: %s "
+                        + "(no password; localhost only).%n", embedded.port(), embedded.jdbcUrl());
+            } else if (embeddedDbPort != null) {
+                System.err.println("--embedded-db-port is ignored without --embedded-db.");
             }
 
             TesseraqlRuntime runtime = port != null
