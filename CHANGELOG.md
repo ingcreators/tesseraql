@@ -6,6 +6,15 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ## Unreleased
 
+### Fixed
+
+- Release: the **Windows app-image launcher now writes to the console**. The jpackage build omitted
+  `--win-console`, so `tesseraql.exe` was a GUI-subsystem binary that ran but printed nothing when
+  invoked from cmd/PowerShell — the tool looked unresponsive. It is now a console launcher, and the
+  CI smoke test asserts the launcher produces stdout so the regression cannot recur. Affects the
+  `tesseraql-<version>-windows-*.zip` app-image (first shipped in 0.4.0); the
+  `tesseraql-cli-*-dist.zip` console launcher was unaffected.
+
 ## 0.4.0 - 2026-06-20
 
 ### Added
