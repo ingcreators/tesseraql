@@ -472,6 +472,50 @@ building on existing seams:
    SQL); and multi-app Studio scope. Keeps extension principles 2 (declarative, governed), 3
    (deny-by-default), 4 (machine-checkable), and 5 (module boundaries / SPI).
 
+## CLI distribution and upgrade delivery (cross-cutting)
+
+### Phase 38 — CLI distribution and upgrade delivery
+
+A cross-cutting distribution track (recorded 2026-06-20). Tier 1 ships immediately; Tiers 2–3 mature
+alongside Phase 35. Motivated by the 0.3.0 → 0.3.1 hotfix: the 0.3.0 CLI distribution shipped without
+the PostgreSQL JDBC driver (`serve --embedded-db` died with `NoClassDefFoundError`), and a user on the
+broken build had **no in-tool signal** that 0.3.1 fixed it. How users *get* and *update* the CLI is
+its own concern, distinct from Phase 35's artifact publishing (Maven Central / Gradle plugin, aimed at
+app developers).
+
+**Constraint.** The CLI keeps a *dynamic* classpath on purpose — ServiceLoader codecs/drivers, the
+`--modules` child classloader, signed plugins (the `jpackage.yml` rationale) — so a closed-world
+GraalVM single binary is out. The deliverable is therefore the existing **fat jar + JRE**
+(`dist.zip`/`.tar.gz`, already a `bin/`+`lib/` layout) or the **jpackage app-image** (bundled JVM, no
+JRE prerequisite, built per-OS on `v*` tags). This shapes every channel below.
+
+- **Tier 1 — immediate (delivered now).**
+  1. *In-CLI passive update notifier*: on run, an async, daily-cached, opt-out check of the GitHub
+     Releases "latest" tag; if newer than `TesseraqlVersion.current()`, print one hint line
+     (`TesseraQL <new> is available — <releases URL>`). Never blocks the command; fails silent when
+     offline. Directly closes the 0.3.0 blind spot.
+  2. *Attach the jpackage app-images to the GitHub Release* — they are built on tags but currently
+     only uploaded as time-limited CI artifacts, so the JRE-free build has no stable download URL.
+- **Tier 2 — primary channels (automate the version bump in the release workflow).**
+  3. *SDKMAN!* vendor listing — the idiomatic JVM-CLI channel (mvn/gradle/quarkus/jbang);
+     `sdk install/upgrade tesseraql`. The existing `dist.zip` already matches SDKMAN's `bin/`+`lib/`
+     shape, making this the lowest-friction primary.
+  4. *Homebrew tap (macOS/Linux) + Scoop/WinGet (Windows)* — payload is the bundled-JVM app-image (no
+     JRE prerequisite); the package manager owns `upgrade`; the release workflow bumps the
+     formula/manifest.
+- **Tier 3 — complements / later.**
+  5. *install.sh / install.ps1* (`curl … | sh`): detect OS/arch → fetch the latest app-image → unpack
+     to `~/.tesseraql` + symlink; re-run to upgrade. Fallback where no package manager exists.
+  6. *Container image on GHCR* (`docker run ghcr.io/ingcreators/tesseraql:<v>`) for CI/ephemeral use;
+     "upgrade" = a new tag.
+  7. *`tesseraql self-update` subcommand* — fetch the latest release asset and replace the install in
+     place, with checksum/signature verification (mind the Windows exe-lock on self-replacement).
+     Deferred until the notifier + package managers cover the common path.
+
+Keeps extension principle 4 (the notifier is opt-out and deterministic) and 5 (no new
+`tesseraql-core` dependency — the version check lives in the CLI module). Cross-references Phase 35
+(distribution maturity) and Decision point 3 (pull distribution forward if adoption is near-term).
+
 ## Continuous tracks
 
 - **Platform maintenance**: weekly Dependabot triage (policy encoded in

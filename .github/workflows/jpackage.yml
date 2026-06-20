@@ -16,8 +16,10 @@ on:
     tags:
       - 'v*'
 
+# contents:write so the tag build can attach its app-image archive to the GitHub release; only the
+# tag-gated "Attach" step writes (PR/dispatch builds just validate and upload a CI artifact).
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   jpackage:
@@ -80,3 +82,48 @@ jobs:
           name: tesseraql-${{ matrix.os }}
           path: build/jpackage
           if-no-files-found: error
+
+      # Phase 38 Tier 1: ship the JRE-free app-image as a stable Release download (not just a
+      # time-limited CI artifact). tar.gz for Linux/macOS, zip for Windows; named by real version
+      # (the jar manifest version, not the jpackage 1.0.0 placeholder) and runner arch. Runs on PRs
+      # too (the result is only attached on tags) so the archiving is validated before a real release.
+      - name: Archive the app image
+        shell: bash
+        run: |
+          ROOT="$PWD"
+          VERSION=$(./mvnw -q help:evaluate -Dexpression=project.version -DforceStdout)
+          VERSION=${VERSION%-SNAPSHOT}
+          ARCH=$(uname -m)
+          case "$RUNNER_OS" in
+            Linux)
+              ASSET="tesseraql-${VERSION}-linux-${ARCH}.tar.gz"
+              tar -C build/jpackage -czf "$ASSET" tesseraql ;;
+            macOS)
+              ASSET="tesseraql-${VERSION}-macos-${ARCH}.tar.gz"
+              tar -C build/jpackage -czf "$ASSET" tesseraql.app ;;
+            Windows)
+              ASSET="tesseraql-${VERSION}-windows-${ARCH}.zip"
+              ( cd build/jpackage && 7z a -tzip "$ROOT/$ASSET" tesseraql > /dev/null ) ;;
+          esac
+          echo "ASSET=$ASSET" >> "$GITHUB_ENV"
+
+      - name: Attach the app image to the GitHub release
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="$GITHUB_REF_NAME"
+          # release.yml publishes the release near the END of its run (verify + deploy first), so
+          # this per-OS job will usually finish first — poll until the release exists, then attach.
+          for i in $(seq 1 60); do
+            if gh release view "$TAG" >/dev/null 2>&1; then
+              gh release upload "$TAG" "$ASSET" --clobber
+              echo "Attached $ASSET to $TAG"
+              exit 0
+            fi
+            echo "Waiting for release $TAG ($i/60)..."
+            sleep 20
+          done
+          echo "Release $TAG did not appear within the timeout" >&2
+          exit 1
