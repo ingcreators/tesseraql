@@ -58,6 +58,8 @@ public final class TesseraqlCli implements Runnable {
         // Honor HTTP_PROXY/HTTPS_PROXY/NO_PROXY (the container/CI standard the JDK ignores) before
         // any outbound work, so the resolver and runtime clients reach the network behind a proxy.
         ProxyEnvironment.bridgeFromEnvironment();
+        // Passive, opt-out, non-blocking "a newer release is available" nudge (Phase 38 Tier 1).
+        UpdateNotifier.run(System.err);
         int exitCode = new CommandLine(new TesseraqlCli()).execute(args);
         System.exit(exitCode);
     }

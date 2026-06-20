@@ -6,6 +6,19 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ## Unreleased
 
+### Added
+
+- CLI: a passive **"a newer release is available" notice** (Phase 38 Tier 1). On run the CLI prints a
+  one-line hint to stderr when a published GitHub release is newer than the running version. The check
+  is cached per user (`~/.tesseraql/update-check.properties`, refreshed at most once a day on a daemon
+  thread), so it adds no latency to a command, never touches the network on the hot path, and fails
+  silent when offline. Opt out with `TESSERAQL_NO_UPDATE_NOTIFIER=1`; it is also skipped automatically
+  whenever `CI` is set. See [roadmap.md](docs/roadmap.md) Phase 38.
+- Release: the per-OS **jpackage app-image** (a launcher with a bundled JVM — no JRE prerequisite) is
+  now attached to each GitHub release as `tesseraql-<version>-<os>-<arch>.{tar.gz,zip}`, instead of
+  only being kept as a time-limited CI artifact. A stable download for users without a JRE
+  (Phase 38 Tier 1).
+
 ## 0.3.1 - 2026-06-20
 
 ### Fixed
