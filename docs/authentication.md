@@ -253,6 +253,56 @@ discovered `issuer`, the post-login redirect is a fixed configured path (never a
 so there is no open redirect), and the client secret, code, and tokens are never logged. An IAM
 admin wizard in Studio (**OIDC provider**) generates this config block.
 
+## Browser sessions and the admin console
+
+The bundled admin console — **Studio** (`/_tesseraql/studio/ui`), the **Operations console**
+(`/_tesseraql/ops/console`), and **IAM Admin** (`/_tesseraql/admin/users`) — authenticates with a
+**browser session** (`auth: browser`): it is opened in a browser, not with a hand-minted token.
+Opening a protected page without a session redirects (302) to the login page,
+`GET /_tesseraql/login?next=<original-path>`; after signing in, the browser returns to `next`.
+
+A session is established the same way regardless of method — password, OIDC, and SAML all create one
+session cookie (`tesseraql_sid`) — so a route's `auth: browser` is satisfied however the user signed
+in. The login method is therefore a **config switch**, with no per-route changes:
+
+- **Password (default).** The login form posts to `POST /_tesseraql/login`, which verifies a
+  credential in the identity store and opens the session. The store is not seeded automatically —
+  create the first administrator once:
+
+  ```bash
+  tesseraql identity-schema --admin-login admin --admin-password-file ./admin.pw
+  ```
+
+- **OIDC.** Set `tesseraql.oidc.enabled: true` (see *OpenID Connect* above). The login page then
+  shows **Sign in with OIDC**, linking to `GET /_tesseraql/oidc/login`.
+- **SAML.** Set `tesseraql.saml.enabled: true` and configure the SP. The login page shows **Sign in
+  with SAML**, linking to `GET /_tesseraql/saml/login`.
+
+To run **SSO-only**, hide the password form with `tesseraql.console.login.password.enabled: false`;
+turn the login page off entirely with `tesseraql.console.login.enabled: false`. Logging out is
+`GET /_tesseraql/logout` (invalidates the session, clears the cookie).
+
+State-changing console actions are CSRF-protected (`csrf: true`): the page publishes the session's
+token as `<meta name="csrf-token">`, the Hypermedia Components kit replays it as the `X-CSRF-Token`
+header on htmx requests, and no-JS forms carry it as a hidden `_csrf` field.
+
+> **Returning to the requested page after SSO.** Password login honors `next`; OIDC and SAML
+> currently return to their fixed post-login target. To land SSO users on the console, set
+> `tesseraql.oidc.postLoginUrl: /_tesseraql/studio/ui` (OIDC) or the equivalent SAML RelayState.
+
+> The hand-built Studio **JSON API** under `/_tesseraql/studio/*` (distinct from the `/ui` pages)
+> stays `auth: bearer` for programmatic callers; only the browser UI uses sessions.
+
+## Runtime error codes
+
+Returned at request time (distinct from the lint codes below, which are static checks):
+
+| Code | HTTP | Meaning & what to do |
+| --- | --- | --- |
+| `TQL-SEC-4011` | 401 | **Unauthorized** — the route needs authentication and the request carried no valid credential (missing/expired session cookie, or missing/invalid/expired bearer token). For the admin console, sign in at `/_tesseraql/login`; for a bearer route, present a valid `Authorization: Bearer <jwt>`. A browser navigation (`Accept: text/html`) is redirected to the login page automatically. |
+| `TQL-SEC-4031` | 403 | **Forbidden** — authenticated, but the principal does not satisfy the route's `policy` (missing role/permission), or the policy is undefined (deny by default). Grant the role/permission, or define the policy. |
+| `TQL-SEC-4032` | 403 | **CSRF check failed** — a state-changing `auth: browser` request arrived without a valid CSRF token. Send the page's `X-CSRF-Token` header (htmx does this automatically) or the `_csrf` form field from a live session. |
+
 ## Lint rules
 
 | Code | Severity | Meaning |

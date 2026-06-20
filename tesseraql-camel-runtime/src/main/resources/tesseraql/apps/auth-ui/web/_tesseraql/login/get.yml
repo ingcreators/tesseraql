@@ -1,0 +1,37 @@
+version: tesseraql/v1
+id: tql.auth.login
+kind: route
+recipe: query-html
+
+# The admin console's login page. Public by design: it must be reachable without a session.
+# Posting the form to POST /_tesseraql/login (runtime-wired) establishes the browser session and
+# redirects to `next`; the SSO buttons start the OIDC/SAML flows when those are enabled. `next` and
+# `error` ride in from the query (set by the redirect-to-login and the post/redirect/get on failure).
+input:
+  next:
+    type: string
+    required: false
+  error:
+    type: string
+    required: false
+
+security:
+  auth: public
+
+sql:
+  service: auth.loginMethods
+
+response:
+  html:
+    status: 200
+    template: login.html
+    model:
+      methods: sql
+      next: params.next
+      error: params.error
+    headers:
+      Content-Security-Policy: "default-src 'self'; style-src 'self' 'unsafe-inline'; frame-ancestors 'none'"
+      X-Content-Type-Options: nosniff
+      X-Frame-Options: DENY
+      Referrer-Policy: no-referrer
+      Cache-Control: "no-store"

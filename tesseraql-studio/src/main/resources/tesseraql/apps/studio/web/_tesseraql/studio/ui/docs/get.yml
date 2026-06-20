@@ -12,7 +12,7 @@ input:
     required: false
 
 security:
-  auth: bearer
+  auth: browser
 
 sql:
   service: docs.index

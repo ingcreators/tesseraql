@@ -24,7 +24,7 @@ input:
     default: "false"
 
 security:
-  auth: bearer
+  auth: browser
 
 response:
   file:

@@ -1,0 +1,4 @@
+# Bundled login page for the admin console's browser-session auth (GET /_tesseraql/login).
+# The credential endpoints (POST /_tesseraql/login, GET /_tesseraql/logout) are runtime-wired.
+web/_tesseraql/login/get.yml
+web/_tesseraql/login/login.html

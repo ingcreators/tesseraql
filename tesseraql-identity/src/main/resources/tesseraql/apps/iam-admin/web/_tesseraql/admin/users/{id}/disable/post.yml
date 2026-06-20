@@ -4,7 +4,8 @@ kind: route
 recipe: command-json
 
 security:
-  auth: bearer
+  auth: browser
+  csrf: true
   policy: iam.admin.write
 
 sql:

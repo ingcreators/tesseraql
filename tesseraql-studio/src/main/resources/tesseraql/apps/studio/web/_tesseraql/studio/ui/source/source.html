@@ -30,6 +30,7 @@
       <span class="hc-badge" data-variant="warning">unsaved draft</span>
     </div>
     <form method="post" action="/_tesseraql/studio/ui/save">
+      <input type="hidden" name="_csrf" th:value="${_csrf}">
       <input type="hidden" id="src-path" name="path" th:value="${src.path}">
       <div class="hc-code" data-editable data-gutter="line-numbers" th:attr="data-lang=${src.lang}">
         <textarea id="source-editor" name="content" class="hc-code__input" spellcheck="false" aria-label="Source editor"
@@ -140,6 +141,7 @@
     </form>
     <div id="apply-result" class="hc-stack" aria-live="polite"></div>
     <form method="post" action="/_tesseraql/studio/ui/discard" th:if="${src.hasDraft}">
+      <input type="hidden" name="_csrf" th:value="${_csrf}">
       <input type="hidden" name="path" th:value="${src.path}">
       <div class="hc-cluster"><button type="submit" class="hc-button" data-variant="ghost">Discard draft</button></div>
     </form>

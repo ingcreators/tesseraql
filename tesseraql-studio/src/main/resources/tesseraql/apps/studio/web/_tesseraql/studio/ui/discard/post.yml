@@ -9,7 +9,8 @@ input:
     required: true
 
 security:
-  auth: bearer
+  auth: browser
+  csrf: true
 
 sql:
   service: studio.discard

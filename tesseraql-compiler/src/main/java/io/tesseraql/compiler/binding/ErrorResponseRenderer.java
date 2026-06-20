@@ -81,6 +81,13 @@ public final class ErrorResponseRenderer implements Processor {
                         && (value.indexOf('\n') >= 0 || value.indexOf('\r') >= 0));
 
         exchange.getMessage().setHeader(Exchange.HTTP_RESPONSE_CODE, status);
+        // A browser opening an auth: browser admin page with no session gets bounced to the login
+        // page (post/redirect/get) instead of a raw JSON 401 — only for a top-level HTML GET, never
+        // an htmx swap, a JSON/API client, or a 403 (authenticated-but-unauthorized never loops).
+        if (status == 401 && wantsHtmlLoginRedirect(exchange)) {
+            redirectToLogin(exchange);
+            return;
+        }
         if ("true".equals(exchange.getMessage().getHeader("HX-Request", String.class))) {
             exchange.getMessage().setHeader(Exchange.CONTENT_TYPE, "text/html; charset=utf-8");
             applyOnError(exchange);
@@ -89,6 +96,41 @@ public final class ErrorResponseRenderer implements Processor {
         }
         exchange.getMessage().setHeader(Exchange.CONTENT_TYPE, "application/json; charset=utf-8");
         exchange.getMessage().setBody(mapper.writeValueAsString(body));
+    }
+
+    /** The bundled login page (the browser-session entry point for the admin console). */
+    private static final String LOGIN_PATH = "/_tesseraql/login";
+
+    /**
+     * Whether an unauthenticated (401) error should redirect to the login page rather than render a
+     * JSON 401: only a top-level HTML {@code GET} navigation (a browser opening a protected page),
+     * not an htmx request, a JSON/API caller, or a non-GET. Combined with the {@code status == 401}
+     * guard at the call site, a 403 (logged-in but unauthorized) is never redirected, so the login
+     * page cannot loop.
+     */
+    private static boolean wantsHtmlLoginRedirect(Exchange exchange) {
+        if ("true".equals(exchange.getMessage().getHeader("HX-Request", String.class))) {
+            return false;
+        }
+        Object method = exchange.getMessage().getHeader(Exchange.HTTP_METHOD);
+        if (method != null && !"GET".equalsIgnoreCase(String.valueOf(method))) {
+            return false;
+        }
+        String accept = exchange.getMessage().getHeader("Accept", String.class);
+        return accept != null && accept.contains("text/html");
+    }
+
+    /** Emits a 302 to the login page, preserving the original target as a sanitized {@code next}. */
+    private static void redirectToLogin(Exchange exchange) {
+        String path = exchange.getMessage().getHeader(Exchange.HTTP_URI, String.class);
+        String query = exchange.getMessage().getHeader(Exchange.HTTP_QUERY, String.class);
+        String next = (path == null || !path.startsWith("/") || path.startsWith("//") ? "/" : path)
+                + (query == null || query.isBlank() ? "" : "?" + query);
+        exchange.getMessage().setHeader(Exchange.HTTP_RESPONSE_CODE, 302);
+        exchange.getMessage().setHeader("Location", LOGIN_PATH + "?next="
+                + java.net.URLEncoder.encode(next, java.nio.charset.StandardCharsets.UTF_8));
+        exchange.getMessage().setHeader(Exchange.CONTENT_TYPE, "text/plain; charset=utf-8");
+        exchange.getMessage().setBody("");
     }
 
     /**

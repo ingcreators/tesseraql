@@ -12,7 +12,7 @@ input:
     required: true
 
 security:
-  auth: bearer
+  auth: browser
 
 sql:
   service: docs.table
