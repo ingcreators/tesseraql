@@ -23,6 +23,7 @@
       the running app only lists it. Flyway has no built-in undo on the free edition: roll back by
       writing a follow-up migration (fix-forward).</p>
     <form class="hc-stack" method="post" action="/_tesseraql/studio/ui/migration">
+      <input type="hidden" name="_csrf" th:value="${_csrf}">
       <div class="hc-field">
         <label class="hc-field__label" for="mig-kind">Kind</label>
         <select class="hc-select" id="mig-kind" name="kind">

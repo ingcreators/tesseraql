@@ -10,6 +10,7 @@ import java.net.InetSocketAddress;
 import java.net.ServerSocket;
 import java.net.URI;
 import java.net.URLDecoder;
+import java.net.URLEncoder;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
@@ -107,6 +108,29 @@ class OidcLoginIntegrationTest {
         assertThat(callback.headers().firstValue("location")).hasValue("/done");
         assertThat(callback.headers().firstValue("set-cookie"))
                 .hasValueSatisfying(cookie -> assertThat(cookie).contains("tesseraql_sid="));
+    }
+
+    @Test
+    void carriesTheSanitizedNextThroughTheRoundTrip() throws Exception {
+        // /login stashes the same-origin next in a short-lived cookie; the callback returns there.
+        String target = "/_tesseraql/studio/ui";
+        HttpResponse<String> start = get("/_tesseraql/oidc/login?next="
+                + URLEncoder.encode(target, StandardCharsets.UTF_8));
+        String location = start.headers().firstValue("location").orElseThrow();
+        nextNonce = queryParam(location, "nonce");
+        String nextCookie = start.headers().firstValue("set-cookie").orElseThrow().split(";", 2)[0];
+        assertThat(nextCookie).startsWith("tql_oidc_next=");
+
+        HttpResponse<String> callback = HttpClient.newBuilder()
+                .followRedirects(HttpClient.Redirect.NEVER).build().send(
+                        HttpRequest.newBuilder(URI.create("http://localhost:" + runtime.port()
+                                + "/_tesseraql/oidc/callback?code=auth-code&state="
+                                + queryParam(location, "state")))
+                                .header("Cookie", nextCookie).build(),
+                        HttpResponse.BodyHandlers.ofString());
+
+        assertThat(callback.statusCode()).isEqualTo(302);
+        assertThat(callback.headers().firstValue("location")).hasValue(target);
     }
 
     @Test

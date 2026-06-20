@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<!-- The admin console login page (design ch. 11.2). Standalone (not the app shell — no nav before
+     sign-in), styled with the Hypermedia Components kit, no inline script (CSP-safe). A plain HTML
+     form, so it works without JavaScript: the post lands at POST /_tesseraql/login. -->
+<html xmlns:th="http://www.thymeleaf.org" lang="en" th:lang="${#locale.toLanguageTag()}"
+      data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sign in &middot; TesseraQL</title>
+<link rel="stylesheet" href="/assets/vendor/hypermedia-components__core/dist/hc.min.css">
+<link rel="stylesheet" href="/assets/_tesseraql/tesseraql.css">
+</head>
+<body>
+<main class="hc-stack" style="max-width: 24rem; margin: 4rem auto; padding: 0 1rem;">
+  <section class="hc-card hc-stack">
+    <h1>Sign in</h1>
+
+    <div th:if="${error}" class="hc-alert" data-variant="error" role="alert">
+      <p class="hc-alert__title">Invalid credentials. Please try again.</p>
+    </div>
+
+    <form th:if="${methods.password}" class="hc-stack" method="post" action="/_tesseraql/login">
+      <input type="hidden" name="next" th:value="${next}">
+      <div class="hc-field">
+        <label class="hc-field__label" for="loginId">Login</label>
+        <input class="hc-input" id="loginId" name="loginId" autocomplete="username"
+               required autofocus>
+      </div>
+      <div class="hc-field">
+        <label class="hc-field__label" for="password">Password</label>
+        <input class="hc-input" id="password" name="password" type="password"
+               autocomplete="current-password" required>
+      </div>
+      <button class="hc-button" data-variant="primary" type="submit">Sign in</button>
+    </form>
+
+    <div th:if="${methods.sso}" class="hc-stack">
+      <p th:if="${methods.password}" class="hc-field__message" aria-hidden="true">or</p>
+      <a th:if="${methods.oidc.enabled}" class="hc-button" data-variant="secondary"
+         th:href="@{${methods.oidc.url}(next=${next})}">Sign in with OIDC</a>
+      <a th:if="${methods.saml.enabled}" class="hc-button" data-variant="secondary"
+         th:href="@{${methods.saml.url}(RelayState=${next})}">Sign in with SAML</a>
+    </div>
+
+    <p class="hc-field__message">
+      First time? Seed an administrator, then sign in:
+      <br><code th:text="${methods.seedHint}">tesseraql identity-schema --admin-login &lt;id&gt;</code>
+    </p>
+  </section>
+</main>
+</body>
+</html>

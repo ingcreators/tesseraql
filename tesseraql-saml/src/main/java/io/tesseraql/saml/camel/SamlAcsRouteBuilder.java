@@ -11,6 +11,7 @@ import io.tesseraql.saml.SamlRedirect;
 import io.tesseraql.saml.SamlResponseValidator;
 import io.tesseraql.saml.SpMetadata;
 import io.tesseraql.security.Principal;
+import io.tesseraql.security.session.LoginRedirects;
 import io.tesseraql.security.session.SessionStore;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
@@ -234,13 +235,34 @@ final class SamlAcsRouteBuilder extends RouteBuilder {
         Principal principal = withFederationClaims(resolved, assertion);
 
         String sessionId = sessions.create(principal);
-        exchange.getMessage().setHeader(Exchange.HTTP_RESPONSE_CODE, 200);
-        exchange.getMessage().setHeader(Exchange.CONTENT_TYPE, "application/json; charset=utf-8");
         exchange.getMessage().setHeader("Set-Cookie",
                 sessions.cookieName() + "=" + sessionId + "; Path=/; HttpOnly; SameSite=Lax");
+
+        // A browser SP-initiated login carries its return target as RelayState (already matched
+        // against the pending request by the replay guard): send the user there, same-origin paths
+        // only. An absent or non-path RelayState (IdP-initiated or a programmatic post) keeps the
+        // JSON acknowledgement.
+        String target = LoginRedirects.sanitize(returnedRelayState(exchange), null);
+        if (target != null) {
+            exchange.getMessage().setHeader(Exchange.HTTP_RESPONSE_CODE, 302);
+            exchange.getMessage().setHeader("Location", target);
+            exchange.getMessage().setBody(null);
+            return;
+        }
+        exchange.getMessage().setHeader(Exchange.HTTP_RESPONSE_CODE, 200);
+        exchange.getMessage().setHeader(Exchange.CONTENT_TYPE, "application/json; charset=utf-8");
         exchange.getMessage().setBody(mapper.writeValueAsString(
                 Map.of("ok", true, "loginId", principal.loginId(), "subject",
                         principal.subject())));
+    }
+
+    /** The RelayState the IdP echoed back (header or form field), URL-decoded, or null. */
+    private static String returnedRelayState(Exchange exchange) {
+        String relayState = exchange.getMessage().getHeader("RelayState", String.class);
+        if (relayState == null) {
+            relayState = formParam(exchange.getMessage().getBody(String.class), "RelayState");
+        }
+        return relayState;
     }
 
     /**

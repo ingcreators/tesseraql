@@ -44,10 +44,19 @@ class OpsConsoleIntegrationTest {
     static TesseraqlRuntime runtime;
     static Path appHome;
 
+    // The ops console is now browser-session auth; an authenticated GET carries this admin cookie.
+    static String adminCookie;
+
     @BeforeAll
     static void start() throws Exception {
         appHome = prepareAppHome();
         runtime = TesseraqlRuntime.start(appHome, freePort());
+        io.tesseraql.security.session.SessionStore sessions = runtime.camelContext().getRegistry()
+                .lookupByNameAndType(io.tesseraql.camel.TesseraqlProperties.SESSION_STORE_BEAN,
+                        io.tesseraql.security.session.SessionStore.class);
+        adminCookie = sessions.cookieName() + "=" + sessions.create(
+                new io.tesseraql.security.Principal("ops-user", "ops-user", "Ops User", null,
+                        List.of(), List.of("ADMIN"), List.of(), Map.of()));
     }
 
     @AfterAll
@@ -141,7 +150,7 @@ class OpsConsoleIntegrationTest {
         HttpRequest.Builder request = HttpRequest.newBuilder(
                 URI.create("http://localhost:" + runtime.port() + path));
         if (auth) {
-            request.header("Authorization", "Bearer " + token());
+            request.header("Authorization", "Bearer " + token()).header("Cookie", adminCookie);
         }
         return HttpClient.newHttpClient().send(request.build(),
                 HttpResponse.BodyHandlers.ofString());

@@ -564,7 +564,10 @@ public final class TesseraqlRuntime implements AutoCloseable {
                                 .orElse(null);
                         return io.tesseraql.opsui.OpsViews.execution(id, execution,
                                 execution == null ? List.of() : jobRepository.findSteps(id));
-                    });
+                    })
+                    // The bundled login page reads which sign-in methods are available (password
+                    // always; OIDC/SAML when their extension is enabled) plus the first-login hint.
+                    .register("auth.loginMethods", params -> LoginMethods.of(manifest.config()));
             context.getRegistry().bind(TesseraqlProperties.SERVICE_PROVIDERS_BEAN,
                     serviceProviders);
             Map<String, String> claimKeys = new LinkedHashMap<>();

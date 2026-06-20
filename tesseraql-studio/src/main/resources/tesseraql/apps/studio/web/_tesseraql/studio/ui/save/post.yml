@@ -12,7 +12,8 @@ input:
     required: false
 
 security:
-  auth: bearer
+  auth: browser
+  csrf: true
 
 sql:
   service: studio.save

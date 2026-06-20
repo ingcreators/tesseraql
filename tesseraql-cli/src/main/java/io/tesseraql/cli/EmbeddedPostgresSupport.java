@@ -36,6 +36,16 @@ final class EmbeddedPostgresSupport {
             implements
                 AutoCloseable {
 
+        /** The TCP port the instance is listening on (the resolved value when one was random). */
+        int port() {
+            return postgres.getPort();
+        }
+
+        /** The JDBC URL of the instance's {@code postgres} database (trust auth, localhost only). */
+        String jdbcUrl() {
+            return override.jdbcUrl();
+        }
+
         @Override
         public void close() {
             try {
@@ -46,18 +56,30 @@ final class EmbeddedPostgresSupport {
         }
     }
 
+    /** Starts an embedded instance on a random free port (see {@link #start(Path, Integer, boolean)}). */
+    static Handle start(Path dataDir, boolean offline) {
+        return start(dataDir, null, offline);
+    }
+
     /**
      * Resolves the platform's PostgreSQL binary and starts an embedded instance. With {@code dataDir}
      * null the data directory is a fresh temp dir cleaned on close (an ephemeral dev run); otherwise
-     * it persists across restarts (a single-server run).
+     * it persists across restarts (a single-server run). With {@code port} null the instance binds a
+     * random free port chosen at startup; a non-null value pins it (so a local client has a stable
+     * address). Either way it listens on localhost only — zonky's defaults ({@code listen_addresses}
+     * = localhost, {@code pg_hba} trust for loopback) are left unchanged, so it is not reachable from
+     * other hosts.
      */
-    static Handle start(Path dataDir, boolean offline) {
+    static Handle start(Path dataDir, Integer port, boolean offline) {
         Path binaryJar = resolveBinaryJar(EmbeddedPostgresBinary.classifier(), offline);
         try {
             EmbeddedPostgres.Builder builder = EmbeddedPostgres.builder()
                     .setPgBinaryResolver((system, hardware) -> openBinary(binaryJar));
             if (dataDir != null) {
                 builder.setDataDirectory(dataDir).setCleanDataDirectory(false);
+            }
+            if (port != null) {
+                builder.setPort(port);
             }
             EmbeddedPostgres postgres = builder.start();
             DataSources.MainDatasourceOverride override = new DataSources.MainDatasourceOverride(

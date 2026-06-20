@@ -6,6 +6,10 @@ import io.tesseraql.runtime.TesseraqlRuntime;
 import io.tesseraql.yaml.scaffold.AppScaffolder;
 import java.io.IOException;
 import java.net.ServerSocket;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.nio.file.Path;
 import java.sql.Connection;
 import java.sql.DriverManager;
@@ -51,6 +55,114 @@ class EmbeddedDbServeIntegrationTest {
     }
 
     @Test
+    void servesTheBundledLoginPage(@TempDir Path dir) throws Exception {
+        Path app = dir.resolve("demo");
+        AppScaffolder scaffolder = new AppScaffolder();
+        scaffolder.writeNew(app, scaffolder.scaffold("demo"));
+
+        EmbeddedPostgresSupport.Handle embedded = EmbeddedPostgresSupport.start(null, false);
+        TesseraqlRuntime runtime = null;
+        try {
+            runtime = TesseraqlRuntime.start(app, freePort(), embedded.override());
+
+            // The bundled auth-ui app mounts by default and serves a public password login form.
+            HttpResponse<String> response = HttpClient.newHttpClient().send(
+                    HttpRequest.newBuilder()
+                            .uri(URI.create("http://localhost:" + runtime.port()
+                                    + "/_tesseraql/login"))
+                            .GET().build(),
+                    HttpResponse.BodyHandlers.ofString());
+
+            assertThat(response.statusCode()).isEqualTo(200);
+            assertThat(response.body())
+                    .contains("name=\"loginId\"")
+                    .contains("action=\"/_tesseraql/login\"");
+        } finally {
+            if (runtime != null) {
+                runtime.close();
+            }
+            embedded.close();
+        }
+    }
+
+    @Test
+    void browserAuthRedirectsUnauthenticatedNavigationAndAcceptsASessionCookie(@TempDir Path dir)
+            throws Exception {
+        Path app = dir.resolve("demo");
+        AppScaffolder scaffolder = new AppScaffolder();
+        scaffolder.writeNew(app, scaffolder.scaffold("demo"));
+
+        EmbeddedPostgresSupport.Handle embedded = EmbeddedPostgresSupport.start(null, false);
+        TesseraqlRuntime runtime = null;
+        try {
+            runtime = TesseraqlRuntime.start(app, freePort(), embedded.override());
+            String base = "http://localhost:" + runtime.port();
+            HttpClient client = HttpClient.newBuilder()
+                    .followRedirects(HttpClient.Redirect.NEVER).build();
+
+            // A browser opening a protected Studio page with no session is bounced to the login page
+            // (post/redirect/get), carrying the original target as ?next=.
+            HttpResponse<Void> unauth = client.send(HttpRequest.newBuilder()
+                    .uri(URI.create(base + "/_tesseraql/studio/ui")).header("Accept", "text/html")
+                    .GET().build(), HttpResponse.BodyHandlers.discarding());
+            assertThat(unauth.statusCode()).isEqualTo(302);
+            assertThat(unauth.headers().firstValue("location").orElseThrow())
+                    .startsWith("/_tesseraql/login?next=");
+
+            // A valid browser session (any of password/OIDC/SAML would create one) grants access.
+            io.tesseraql.security.session.SessionStore sessions = runtime.camelContext()
+                    .getRegistry()
+                    .lookupByNameAndType(io.tesseraql.camel.TesseraqlProperties.SESSION_STORE_BEAN,
+                            io.tesseraql.security.session.SessionStore.class);
+            String sid = sessions.create(new io.tesseraql.security.Principal("dev", "dev", "Dev",
+                    null, java.util.List.of(), java.util.List.of("ADMIN"), java.util.List.of(),
+                    java.util.Map.of()));
+            HttpResponse<Void> authed = client.send(HttpRequest.newBuilder()
+                    .uri(URI.create(base + "/_tesseraql/studio/ui"))
+                    .header("Cookie", sessions.cookieName() + "=" + sid)
+                    .GET().build(), HttpResponse.BodyHandlers.discarding());
+            assertThat(authed.statusCode()).isEqualTo(200);
+        } finally {
+            if (runtime != null) {
+                runtime.close();
+            }
+            embedded.close();
+        }
+    }
+
+    @Test
+    void mountsStudioAndRedirectsTheBarePathToTheUiLanding(@TempDir Path dir) throws Exception {
+        Path app = dir.resolve("demo");
+        AppScaffolder scaffolder = new AppScaffolder();
+        scaffolder.writeNew(app, scaffolder.scaffold("demo"));
+
+        EmbeddedPostgresSupport.Handle embedded = EmbeddedPostgresSupport.start(null, false);
+        TesseraqlRuntime runtime = null;
+        try {
+            runtime = TesseraqlRuntime.start(app, freePort(), embedded.override());
+
+            // The bundled Studio app mounts via the ServiceLoader; the bare /_tesseraql/studio is a
+            // public alias that 302-redirects to the real UI landing under /ui (which requires a
+            // browser session). Without following the redirect we see the alias's own response.
+            HttpResponse<Void> response = HttpClient.newBuilder()
+                    .followRedirects(HttpClient.Redirect.NEVER).build()
+                    .send(HttpRequest.newBuilder()
+                            .uri(URI.create(
+                                    "http://localhost:" + runtime.port() + "/_tesseraql/studio"))
+                            .GET().build(), HttpResponse.BodyHandlers.discarding());
+
+            assertThat(response.statusCode()).isEqualTo(302);
+            assertThat(response.headers().firstValue("Location"))
+                    .hasValue("/_tesseraql/studio/ui");
+        } finally {
+            if (runtime != null) {
+                runtime.close();
+            }
+            embedded.close();
+        }
+    }
+
+    @Test
     void persistentDataDirectorySurvivesARestart(@TempDir Path dir) throws Exception {
         Path dataDir = dir.resolve("pgdata");
 
@@ -71,6 +183,23 @@ class EmbeddedDbServeIntegrationTest {
             assertThat(rows.getInt("id")).isEqualTo(42);
         } finally {
             second.close();
+        }
+    }
+
+    @Test
+    void fixedPortBindsTheRequestedTcpPort(@TempDir Path dir) throws Exception {
+        int port = freePort();
+
+        EmbeddedPostgresSupport.Handle embedded = EmbeddedPostgresSupport.start(null, port, false);
+        try {
+            assertThat(embedded.port()).isEqualTo(port);
+            assertThat(embedded.jdbcUrl()).contains(":" + port + "/");
+            // Reachable at exactly that address over the loopback trust connection.
+            try (Connection connection = DriverManager.getConnection(embedded.jdbcUrl())) {
+                assertThat(connection.isValid(5)).isTrue();
+            }
+        } finally {
+            embedded.close();
         }
     }
 

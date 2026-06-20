@@ -4,7 +4,7 @@ kind: route
 recipe: page
 
 security:
-  auth: bearer
+  auth: browser
 
 response:
   html:

@@ -49,11 +49,22 @@ class IamAdminIntegrationTest {
     static TesseraqlRuntime runtime;
     static Path appHome;
 
+    // The iam-admin UI is now browser-session auth; requests carry this admin session cookie + CSRF.
+    static String adminCookie;
+    static String adminCsrf;
+
     @BeforeAll
     static void start() throws Exception {
         seedDatabase();
         appHome = prepareAppHome();
         runtime = TesseraqlRuntime.start(appHome, freePort());
+        io.tesseraql.security.session.SessionStore sessions = runtime.camelContext().getRegistry()
+                .lookupByNameAndType(io.tesseraql.camel.TesseraqlProperties.SESSION_STORE_BEAN,
+                        io.tesseraql.security.session.SessionStore.class);
+        String sid = sessions.create(new io.tesseraql.security.Principal("iam-admin", "iam-admin",
+                "IAM Admin", null, List.of(), List.of("ADMIN"), List.of(), Map.of()));
+        adminCookie = sessions.cookieName() + "=" + sid;
+        adminCsrf = sessions.session(sid).csrfToken();
     }
 
     @AfterAll
@@ -141,7 +152,7 @@ class IamAdminIntegrationTest {
         HttpRequest.Builder request = HttpRequest.newBuilder(
                 URI.create("http://localhost:" + runtime.port() + path));
         if (auth) {
-            request.header("Authorization", "Bearer " + token());
+            request.header("Authorization", "Bearer " + token()).header("Cookie", adminCookie);
         }
         return HttpClient.newHttpClient().send(request.build(),
                 HttpResponse.BodyHandlers.ofString());
@@ -151,6 +162,8 @@ class IamAdminIntegrationTest {
         HttpRequest request = HttpRequest.newBuilder(
                 URI.create("http://localhost:" + runtime.port() + path))
                 .header("Authorization", "Bearer " + token())
+                .header("Cookie", adminCookie)
+                .header("X-CSRF-Token", adminCsrf)
                 .POST(HttpRequest.BodyPublishers.noBody())
                 .build();
         return HttpClient.newHttpClient().send(request, HttpResponse.BodyHandlers.ofString());

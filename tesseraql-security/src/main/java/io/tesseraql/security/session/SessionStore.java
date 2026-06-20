@@ -47,5 +47,13 @@ public interface SessionStore {
 
     void invalidate(String sessionId);
 
+    /** Invalidates the session named by a {@code Cookie} header, if one resolves (logout). */
+    default void invalidateFromCookie(String cookieHeader) {
+        String sessionId = Cookies.value(cookieHeader, cookieName());
+        if (sessionId != null) {
+            invalidate(sessionId);
+        }
+    }
+
     String cookieName();
 }

@@ -46,12 +46,36 @@ class StudioIntegrationTest {
     static TesseraqlRuntime runtime;
     static Path appHome;
 
+    // The bundled Studio UI (/_tesseraql/studio/ui/**) authenticates by browser session; the
+    // hand-built JSON API (/_tesseraql/studio/*) still authenticates by bearer JWT. Tests of the UI
+    // carry these session cookies; tests of the JSON API keep using token()/*WithToken bearers.
+    static String adminCookie;
+    static String adminCsrf;
+    static String viewerCookie;
+
     @BeforeAll
     static void start() throws Exception {
         appHome = prepareAppHome();
         runtime = TesseraqlRuntime.start(appHome, freePort());
         seedIdentitySchema();
         seedScaffoldTable();
+        establishSessions();
+    }
+
+    /** Creates browser sessions for an editor (ADMIN) and a read-only viewer, used by the UI tests. */
+    private static void establishSessions() {
+        io.tesseraql.security.session.SessionStore sessions = runtime.camelContext().getRegistry()
+                .lookupByNameAndType(io.tesseraql.camel.TesseraqlProperties.SESSION_STORE_BEAN,
+                        io.tesseraql.security.session.SessionStore.class);
+        String adminSid = sessions.create(principal(List.of("ADMIN")));
+        adminCookie = sessions.cookieName() + "=" + adminSid;
+        adminCsrf = sessions.session(adminSid).csrfToken();
+        viewerCookie = sessions.cookieName() + "=" + sessions.create(principal(List.of("VIEWER")));
+    }
+
+    private static io.tesseraql.security.Principal principal(List<String> roles) {
+        return new io.tesseraql.security.Principal("studio-user", "studio-user", "Studio User",
+                null, List.of(), roles, List.of(), Map.of());
     }
 
     /**
@@ -350,7 +374,8 @@ class StudioIntegrationTest {
         // unconditionally for wayfinding; the editor-only pages render their own disabled state, so a
         // read-only viewer still cannot mutate (the POST endpoints 403 above).
         assertThat(getWithToken("/_tesseraql/studio/explorer", viewer).statusCode()).isEqualTo(200);
-        String ui = getWithToken("/_tesseraql/studio/ui", viewer).body();
+        // The UI landing is browser-auth: a read-only viewer reaches it via a VIEWER session.
+        String ui = getWithCookie("/_tesseraql/studio/ui", viewerCookie).body();
         assertThat(ui).contains("read-only")
                 .doesNotContain("action=\"/_tesseraql/studio/ui/new\"")
                 // the sidebar nav renders the Studio sections (Audit among them)
@@ -1785,21 +1810,26 @@ class StudioIntegrationTest {
         assertThat(response.body()).contains("value=\"id\"").contains("value=\"email\"");
     }
 
+    // The UI form posts go to /_tesseraql/studio/ui/** (browser auth): carry the admin session
+    // cookie and its CSRF token. The bearer is harmless on these routes (browser auth ignores it).
     private static HttpResponse<String> postForm(String path, String form) throws Exception {
         HttpRequest request = HttpRequest.newBuilder(
                 URI.create("http://localhost:" + runtime.port() + path))
-                .header("Authorization", "Bearer " + token())
+                .header("Cookie", adminCookie)
+                .header("X-CSRF-Token", adminCsrf)
                 .header("Content-Type", "application/x-www-form-urlencoded")
                 .POST(HttpRequest.BodyPublishers.ofString(form))
                 .build();
         return HttpClient.newHttpClient().send(request, HttpResponse.BodyHandlers.ofString());
     }
 
+    // Shared helpers carry BOTH a bearer (for the JSON API) and the admin session cookie + CSRF (for
+    // the /ui pages), so each route authenticates with whichever it requires.
     private static HttpResponse<String> get(String path, boolean auth) throws Exception {
         HttpRequest.Builder request = HttpRequest.newBuilder(
                 URI.create("http://localhost:" + runtime.port() + path));
         if (auth) {
-            request.header("Authorization", "Bearer " + token());
+            request.header("Authorization", "Bearer " + token()).header("Cookie", adminCookie);
         }
         return HttpClient.newHttpClient().send(request.build(),
                 HttpResponse.BodyHandlers.ofString());
@@ -1811,10 +1841,19 @@ class StudioIntegrationTest {
                 URI.create("http://localhost:" + runtime.port() + path))
                 .POST(HttpRequest.BodyPublishers.ofString(body));
         if (auth) {
-            request.header("Authorization", "Bearer " + token());
+            request.header("Authorization", "Bearer " + token()).header("Cookie", adminCookie)
+                    .header("X-CSRF-Token", adminCsrf);
         }
         return HttpClient.newHttpClient().send(request.build(),
                 HttpResponse.BodyHandlers.ofString());
+    }
+
+    /** A GET carrying a specific browser-session cookie (for the role-scoped /ui tests). */
+    private static HttpResponse<String> getWithCookie(String path, String cookie) throws Exception {
+        HttpRequest request = HttpRequest.newBuilder(
+                URI.create("http://localhost:" + runtime.port() + path))
+                .header("Cookie", cookie).build();
+        return HttpClient.newHttpClient().send(request, HttpResponse.BodyHandlers.ofString());
     }
 
     private static String enc(String value) {

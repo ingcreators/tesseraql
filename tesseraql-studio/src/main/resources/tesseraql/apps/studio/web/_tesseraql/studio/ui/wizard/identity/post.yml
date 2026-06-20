@@ -21,7 +21,7 @@ input:
     required: false
 
 security:
-  auth: bearer
+  auth: browser
 
 response:
   file:

@@ -27,9 +27,11 @@
   <h2>Actions</h2>
   <div class="hc-cluster">
     <form method="post" th:action="|/_tesseraql/admin/users/${u.user_id}/enable|">
+      <input type="hidden" name="_csrf" th:value="${_csrf}">
       <button type="submit" class="hc-button" data-variant="primary">Enable user</button>
     </form>
     <form method="post" th:action="|/_tesseraql/admin/users/${u.user_id}/disable|">
+      <input type="hidden" name="_csrf" th:value="${_csrf}">
       <button type="submit" class="hc-button" data-variant="error"
               th:attr="data-hc-confirm=|Disable user ${u.login_id}?|"
               data-hc-confirm-title="Confirm disable"

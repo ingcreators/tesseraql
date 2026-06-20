@@ -215,6 +215,29 @@ class ManifestLoaderTest {
     }
 
     @Test
+    void checksumIndexExcludesAnEmbeddedPostgresDataDirInsideTheAppHome(
+            @org.junit.jupiter.api.io.TempDir Path dir) throws Exception {
+        java.nio.file.Files.createDirectories(dir.resolve("config"));
+        java.nio.file.Files.writeString(dir.resolve("config/tesseraql.yml"),
+                "tesseraql:\n  app:\n    name: t\n");
+        // serve --embedded-db=./data persists a live PostgreSQL data dir under the app home. Its
+        // files are non-deterministic runtime state (and on Windows the running postgres OS-locks
+        // them), so the source checksum index must prune the whole subtree, marked by PG_VERSION.
+        java.nio.file.Files.createDirectories(dir.resolve("data/base"));
+        java.nio.file.Files.writeString(dir.resolve("data/PG_VERSION"), "16\n");
+        java.nio.file.Files.writeString(dir.resolve("data/postmaster.pid"), "1234\n");
+        java.nio.file.Files.writeString(dir.resolve("data/base/relation"), "binary\n");
+
+        AppManifest manifest = new ManifestLoader().load(dir);
+
+        assertThat(manifest.index().fileChecksums())
+                .containsKey("config/tesseraql.yml")
+                .doesNotContainKey("data/PG_VERSION")
+                .doesNotContainKey("data/postmaster.pid")
+                .doesNotContainKey("data/base/relation");
+    }
+
+    @Test
     void listsNoMigrationsWhenTheAppHasNoDbDirectory(
             @org.junit.jupiter.api.io.TempDir Path dir) throws Exception {
         java.nio.file.Files.createDirectories(dir.resolve("config"));

@@ -1,0 +1,16 @@
+version: tesseraql/v1
+id: tql.studio.home
+kind: route
+recipe: query-json
+
+# Convenience alias. The Studio UI lives under /_tesseraql/studio/ui, but /_tesseraql/studio is the
+# natural entry point users (and the getting-started docs) reach for. This public route 302-redirects
+# there so the bare path resolves instead of 404ing; the /ui landing page enforces its own
+# auth: browser, so opening the alias is no less guarded than opening the UI directly.
+security:
+  auth: public
+
+response:
+  redirect:
+    status: 302
+    location: /_tesseraql/studio/ui
