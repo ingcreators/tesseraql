@@ -95,6 +95,16 @@
       <artifactId>embedded-postgres</artifactId>
     </dependency>
 
+    <!-- PostgreSQL JDBC driver on the CLI runtime classpath. Required directly here, not just
+         transitively: zonky's EmbeddedPostgres loads org.postgresql.ds.PGSimpleDataSource to verify
+         the embedded-db process is ready, and serve connects to (embedded or external) PostgreSQL
+         through it. Declared explicitly at compile scope so the dist fat jar bundles it regardless of
+         whether tesseraql-camel-runtime keeps shipping the driver transitively. -->
+    <dependency>
+      <groupId>org.postgresql</groupId>
+      <artifactId>postgresql</artifactId>
+    </dependency>
+
     <!-- Embedded Maven artifact resolver for the opt-in tesseraql.modules set: resolves
          coordinates (versions from the BOM) into the module cache the plugin classloader loads,
          reusing ~/.m2/settings.xml so corporate proxies/mirrors apply. No Maven install needed. -->
@@ -132,11 +142,6 @@
     <dependency>
       <groupId>org.testcontainers</groupId>
       <artifactId>testcontainers-junit-jupiter</artifactId>
-      <scope>test</scope>
-    </dependency>
-    <dependency>
-      <groupId>org.postgresql</groupId>
-      <artifactId>postgresql</artifactId>
       <scope>test</scope>
     </dependency>
     <!-- The current CI/devcontainer platform's PostgreSQL binary, so the embedded-db IT resolves it
