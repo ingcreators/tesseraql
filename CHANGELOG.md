@@ -6,6 +6,8 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ## Unreleased
 
+## 0.4.1 - 2026-06-20
+
 ### Fixed
 
 - Release: the **Windows app-image launcher now writes to the console**. The jpackage build omitted
