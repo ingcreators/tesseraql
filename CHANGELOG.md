@@ -6,8 +6,24 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ## Unreleased
 
+## 0.4.0 - 2026-06-20
+
 ### Added
 
+- Admin console **browser-session login**, switchable to **OIDC or SAML** by config alone. The
+  bundled UIs (Studio, Operations console, IAM Admin) now sign in through a login page
+  (`GET /_tesseraql/login`, served by a bundled `auth-ui` app) rather than a hand-minted token —
+  opening a protected page with no session redirects there. Password, OIDC, and SAML all create the
+  same `tesseraql_sid` session, so enabling `tesseraql.oidc.enabled` / `tesseraql.saml.enabled`
+  switches the method with no per-route change; `tesseraql.console.login.password.enabled: false`
+  runs SSO-only. State-changing actions are CSRF-protected. See [authentication.md](docs/authentication.md).
+- Auth: the page a user originally opened is threaded through every login method as a sanitized,
+  same-origin `next` (password redirect, OIDC via a short-lived cookie, SAML via RelayState), so SSO
+  returns to the requested page. A single open-redirect guard rejects off-site targets.
+- CLI: `serve --embedded-db` now **prints the connection URL and port**, and **`--embedded-db-port`**
+  pins the embedded PostgreSQL to a fixed (localhost-only) port so a local client can attach.
+- Studio: a public **`/_tesseraql/studio` → `/_tesseraql/studio/ui` redirect**, so the bare,
+  documented path resolves instead of 404ing.
 - CLI: a passive **"a newer release is available" notice** (Phase 38 Tier 1). On run the CLI prints a
   one-line hint to stderr when a published GitHub release is newer than the running version. The check
   is cached per user (`~/.tesseraql/update-check.properties`, refreshed at most once a day on a daemon
@@ -18,6 +34,19 @@ All notable changes to TesseraQL are documented here. The format follows
   now attached to each GitHub release as `tesseraql-<version>-<os>-<arch>.{tar.gz,zip}`, instead of
   only being kept as a time-limited CI artifact. A stable download for users without a JRE
   (Phase 38 Tier 1).
+
+### Changed
+
+- The bundled admin UIs now authenticate by **browser session (`auth: browser`)** instead of
+  `auth: bearer`. The hand-built Studio JSON API under `/_tesseraql/studio/*` stays `auth: bearer`
+  for programmatic callers; MCP is a separate transport and unaffected.
+
+### Fixed
+
+- **`serve --embedded-db` no longer crashes building the manifest checksum index** when the data
+  directory lives inside the app home: the index walk hashed PostgreSQL's live data files, which the
+  running `postgres` holds OS locks on (a hard failure on Windows; non-deterministic hash elsewhere).
+  Any PostgreSQL data directory (recognized by its `PG_VERSION` marker) is now pruned from the walk.
 
 ## 0.3.1 - 2026-06-20
 
