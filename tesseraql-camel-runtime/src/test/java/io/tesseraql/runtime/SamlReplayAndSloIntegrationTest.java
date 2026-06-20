@@ -91,9 +91,12 @@ class SamlReplayAndSloIntegrationTest {
         // The failed attempt consumed the pending request: a correct retry is also rejected.
         assertThat(postAcs(response(requestId), "/return-here").statusCode()).isEqualTo(401);
 
-        // A fresh login with the matching RelayState succeeds exactly once.
+        // A fresh login with the matching RelayState succeeds exactly once. A same-origin RelayState
+        // is the post-login return target, so the ACS redirects the browser there.
         String secondId = authnRequestId(login("/return-here").get("SAMLRequest"));
-        assertThat(postAcs(response(secondId), "/return-here").statusCode()).isEqualTo(200);
+        HttpResponse<String> ok = postAcs(response(secondId), "/return-here");
+        assertThat(ok.statusCode()).isEqualTo(302);
+        assertThat(ok.headers().firstValue("Location")).hasValue("/return-here");
         assertThat(postAcs(response(secondId), "/return-here").statusCode()).isEqualTo(401);
     }
 

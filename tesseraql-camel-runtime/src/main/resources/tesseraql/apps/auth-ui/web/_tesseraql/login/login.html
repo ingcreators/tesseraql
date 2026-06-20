@@ -38,9 +38,9 @@
     <div th:if="${methods.sso}" class="hc-stack">
       <p th:if="${methods.password}" class="hc-field__message" aria-hidden="true">or</p>
       <a th:if="${methods.oidc.enabled}" class="hc-button" data-variant="secondary"
-         th:href="${methods.oidc.url}">Sign in with OIDC</a>
+         th:href="@{${methods.oidc.url}(next=${next})}">Sign in with OIDC</a>
       <a th:if="${methods.saml.enabled}" class="hc-button" data-variant="secondary"
-         th:href="${methods.saml.url}">Sign in with SAML</a>
+         th:href="@{${methods.saml.url}(RelayState=${next})}">Sign in with SAML</a>
     </div>
 
     <p class="hc-field__message">

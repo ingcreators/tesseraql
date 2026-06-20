@@ -286,9 +286,10 @@ State-changing console actions are CSRF-protected (`csrf: true`): the page publi
 token as `<meta name="csrf-token">`, the Hypermedia Components kit replays it as the `X-CSRF-Token`
 header on htmx requests, and no-JS forms carry it as a hidden `_csrf` field.
 
-> **Returning to the requested page after SSO.** Password login honors `next`; OIDC and SAML
-> currently return to their fixed post-login target. To land SSO users on the console, set
-> `tesseraql.oidc.postLoginUrl: /_tesseraql/studio/ui` (OIDC) or the equivalent SAML RelayState.
+> **Returning to the requested page.** The page the user originally opened is threaded through
+> every method: password login carries `next`, OIDC carries it across the IdP round-trip in a
+> short-lived cookie, and SAML uses RelayState. The target is always sanitized to a same-origin
+> path (no open redirect); `tesseraql.oidc.postLoginUrl` is the fallback when none was requested.
 
 > The hand-built Studio **JSON API** under `/_tesseraql/studio/*` (distinct from the `/ui` pages)
 > stays `auth: bearer` for programmatic callers; only the browser UI uses sessions.

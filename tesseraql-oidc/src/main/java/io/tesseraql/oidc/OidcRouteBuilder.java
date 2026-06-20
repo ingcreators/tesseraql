@@ -2,8 +2,10 @@ package io.tesseraql.oidc;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.tesseraql.security.Principal;
+import io.tesseraql.security.session.LoginRedirects;
 import io.tesseraql.security.session.SessionStore;
 import java.net.URI;
+import java.net.URLDecoder;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
@@ -29,6 +31,9 @@ final class OidcRouteBuilder extends RouteBuilder {
     private final SessionStore sessions;
     private final OidcUserLinker linker;
     private final AtomicReference<OidcTokenValidator> validatorRef = new AtomicReference<>();
+
+    /** Short-lived cookie carrying the sanitized post-login {@code next} from /login to /callback. */
+    private static final String NEXT_COOKIE = "tql_oidc_next";
 
     OidcRouteBuilder(OidcConfig config, OidcDiscovery discovery, OidcStateStore stateStore,
             OidcHttp http, SessionStore sessions, OidcUserLinker linker) {
@@ -62,6 +67,14 @@ final class OidcRouteBuilder extends RouteBuilder {
         String nonce = Pkce.token();
         String verifier = Pkce.verifier();
         stateStore.store(state, nonce, verifier);
+
+        // Carry the (sanitized, same-origin) post-login target across the IdP round-trip in a
+        // short-lived HttpOnly cookie, so the callback can return the user to the page they wanted.
+        String next = LoginRedirects.sanitize(header(exchange, "next"), null);
+        if (next != null) {
+            exchange.getMessage().setHeader("Set-Cookie", NEXT_COOKIE + "=" + encode(next)
+                    + "; Path=/_tesseraql/oidc; HttpOnly; SameSite=Lax; Max-Age=600");
+        }
 
         Map<String, String> params = new LinkedHashMap<>();
         params.put("response_type", "code");
@@ -102,7 +115,14 @@ final class OidcRouteBuilder extends RouteBuilder {
         String sessionId = sessions.create(principal);
         exchange.getMessage().setHeader("Set-Cookie", sessions.cookieName() + "=" + sessionId
                 + "; Path=/; HttpOnly; SameSite=Lax");
-        redirect(exchange, config.postLoginUrl());
+        redirect(exchange, postLoginTarget(exchange));
+    }
+
+    /** The post-login target: the sanitized {@code next} carried since /login, else the default. */
+    private String postLoginTarget(Exchange exchange) {
+        String cookie = cookieValue(header(exchange, "Cookie"), NEXT_COOKIE);
+        String next = cookie == null ? null : URLDecoder.decode(cookie, StandardCharsets.UTF_8);
+        return LoginRedirects.sanitize(next, config.postLoginUrl());
     }
 
     /** Ends the local session and, when the OP advertises one, redirects to its logout endpoint. */

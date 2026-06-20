@@ -7,6 +7,7 @@ import io.tesseraql.identity.PasswordAuthenticator;
 import io.tesseraql.identity.RealmConfig;
 import io.tesseraql.security.Principal;
 import io.tesseraql.security.policy.PolicyEngine;
+import io.tesseraql.security.session.LoginRedirects;
 import io.tesseraql.security.session.SessionStore;
 import java.net.URLDecoder;
 import java.net.URLEncoder;
@@ -120,11 +121,7 @@ final class LoginRouteBuilder extends RouteBuilder {
      * redirect). Anything else falls back to the app root.
      */
     private static String safeNext(Object raw) {
-        String next = str(raw);
-        if (next == null || !next.startsWith("/") || next.startsWith("//")) {
-            return "/";
-        }
-        return next;
+        return LoginRedirects.sanitize(str(raw), "/");
     }
 
     private static boolean isFormPost(Exchange exchange) {
