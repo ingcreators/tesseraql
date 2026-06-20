@@ -58,11 +58,18 @@ jobs:
           case "$APPVER" in 0.*) APPVER=1.0.0 ;; esac
           mkdir -p build/jpackage-input
           cp tesseraql-cli/target/tesseraql-cli-*-all.jar build/jpackage-input/tesseraql.jar
+          # On Windows, build a console-subsystem launcher (--win-console) so the CLI's stdout/stderr
+          # reach the terminal. Without it jpackage produces a GUI-subsystem tesseraql.exe that runs
+          # but prints nothing when invoked from cmd/PowerShell — the tool looks unresponsive. The
+          # flag is Windows-only (jpackage rejects it on Linux/macOS), so add it conditionally.
+          console=()
+          [ "$RUNNER_OS" = "Windows" ] && console=(--win-console)
           jpackage --type app-image --name tesseraql \
             --input build/jpackage-input --main-jar tesseraql.jar \
             --main-class io.tesseraql.cli.TesseraqlCli \
             --add-modules java.se,jdk.crypto.ec,jdk.crypto.cryptoki,jdk.localedata,jdk.unsupported,jdk.management,jdk.naming.dns,jdk.zipfs,jdk.httpserver,jdk.net,jdk.security.auth \
             --app-version "$APPVER" \
+            "${console[@]}" \
             --dest build/jpackage
 
       - name: Smoke-test the native launcher
@@ -73,7 +80,13 @@ jobs:
             macOS) LAUNCHER=build/jpackage/tesseraql.app/Contents/MacOS/tesseraql ;;
             Windows) LAUNCHER=build/jpackage/tesseraql/tesseraql.exe ;;
           esac
-          "$LAUNCHER" routes --app examples/scaffold-demo-app
+          # Assert the launcher actually writes to stdout: a Windows GUI-subsystem launcher (built
+          # without --win-console) runs and exits 0 but prints nothing, so an exit-code-only check
+          # would miss it. Capturing and grepping the output guards that regression.
+          out=$("$LAUNCHER" routes --app examples/scaffold-demo-app)
+          printf '%s\n' "$out"
+          printf '%s' "$out" | grep -q '[^[:space:]]' \
+            || { echo "launcher produced no stdout (Windows console subsystem?)" >&2; exit 1; }
 
       - name: Upload the app image
         if: github.event_name != 'pull_request'
