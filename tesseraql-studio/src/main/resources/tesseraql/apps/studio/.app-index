@@ -1,5 +1,6 @@
 # Studio UI app (design ch. 16): served by the runtime as a mounted system app.
 # Each route folder is the complete unit: yml + colocated template(s).
+web/_tesseraql/studio/get.yml
 web/_tesseraql/studio/ui/get.yml
 web/_tesseraql/studio/ui/explorer.html
 web/_tesseraql/studio/ui/drafts/get.yml

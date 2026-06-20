@@ -35,7 +35,7 @@ Verify: `tesseraql --version`.
 tesseraql new myapp                  # scaffold into your own repo (config, a migration, routes, tests)
 cd myapp
 docker compose up -d                 # a local PostgreSQL (or point config at your own)
-tesseraql serve --app .              # auto-applies db/migration; Studio at /_tesseraql/studio
+tesseraql serve --app .              # auto-applies db/migration; Studio at /_tesseraql/studio/ui
 tesseraql scaffold crud --app . --table items
 ```
 
