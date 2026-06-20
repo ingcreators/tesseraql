@@ -9,8 +9,11 @@ import io.tesseraql.yaml.model.RouteDefinition;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.SimpleFileVisitor;
+import java.nio.file.attribute.BasicFileAttributes;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
@@ -409,18 +412,40 @@ public final class ManifestLoader {
         return HTTP_METHODS.contains(stem);
     }
 
+    /** Marker file PostgreSQL writes at the root of every initialized data directory. */
+    private static final String PG_DATA_MARKER = "PG_VERSION";
+
     private ManifestIndex buildIndex(Path home) {
         Map<String, String> checksums = new TreeMap<>();
         // The index tracks source files only: skip the runtime scratch dir and the reserved
         // .tesseraql dir a packaged app carries build-generated artifacts in (e.g. docs/spec.json),
         // which are derived from the source and would otherwise make the index self-referential.
+        // Also prune any persisted embedded-PostgreSQL data directory the user pointed inside the
+        // app home (serve --embedded-db=<dir>): its files are non-deterministic runtime state, not
+        // source, and on Windows the running postgres holds OS locks on them, so reading them to
+        // hash would fail the load. We prune whole subtrees so the locked files are never read.
         Path work = home.resolve("work");
         Path generated = home.resolve(".tesseraql");
-        try (Stream<Path> files = Files.walk(home)) {
-            files.filter(Files::isRegularFile)
-                    .filter(p -> !p.normalize().startsWith(work))
-                    .filter(p -> !p.normalize().startsWith(generated))
-                    .forEach(file -> checksums.put(relativeKey(home, file), sha256(file)));
+        try {
+            Files.walkFileTree(home, new SimpleFileVisitor<Path>() {
+                @Override
+                public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs) {
+                    Path normalized = dir.normalize();
+                    if (normalized.equals(work) || normalized.equals(generated)
+                            || Files.exists(dir.resolve(PG_DATA_MARKER))) {
+                        return FileVisitResult.SKIP_SUBTREE;
+                    }
+                    return FileVisitResult.CONTINUE;
+                }
+
+                @Override
+                public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) {
+                    if (Files.isRegularFile(file)) {
+                        checksums.put(relativeKey(home, file), sha256(file));
+                    }
+                    return FileVisitResult.CONTINUE;
+                }
+            });
         } catch (IOException ex) {
             throw new UncheckedIOException(ex);
         }
