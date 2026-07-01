@@ -5,8 +5,12 @@
      System-console form, with the built-in system navigation:
        ~{tql/shell :: page(title, header, content)}
      `nav` fills the sidebar, `header` receives per-page top-bar extras (badges, action links),
-     `content` becomes the main region. Pass ~{} for an empty slot. -->
-<html xmlns:th="http://www.thymeleaf.org" th:fragment="shell(title, nav, header, content)"
+     `content` becomes the main region. Pass ~{} for an empty slot.
+     The public `shell(...)` API stays 4-arg for back-compat (app-authored and scaffolder-generated
+     shells call it) and renders a non-collapsible sidebar. `shell-impl(..., collapsible)` is the real
+     skeleton; the framework `page`/`studio-page` forms pass collapsible=true to opt their icon +
+     `.hc-shell__label` navs into the desktop collapse-to-icon-rail control. -->
+<html xmlns:th="http://www.thymeleaf.org" th:fragment="shell-impl(title, nav, header, content, collapsible)"
       lang="en" th:lang="${#locale.toLanguageTag()}" data-theme="dark">
 <head>
 <meta charset="utf-8">
@@ -28,15 +32,28 @@
 <body>
 <div class="hc-shell">
   <header class="hc-shell__header">
-    <button class="hc-button" data-variant="ghost" data-hc-shell-toggle
+    <!-- The hamburger is a MOBILE-only affordance: hc's `.hc-shell__toggle` is display:none on
+         desktop (the sidebar is always visible there) and shows only below the 60rem breakpoint.
+         The class is required — `data-hc-shell-toggle` alone is attribute-driven behavior with no
+         styling, so without it the button leaks onto desktop as a dead no-op. -->
+    <button class="hc-button hc-shell__toggle" data-variant="ghost" data-hc-shell-toggle
             aria-label="Open navigation" type="button">&#9776;</button>
+    <!-- Desktop collapse-to-icon-rail control (only when the caller opts in via `collapsible`).
+         hc hides `[data-hc-shell-collapse]` on mobile — the off-canvas overlay is used there — and
+         the chevron auto-mirrors via `.hc-shell__collapse-icon` when the rail is collapsed. -->
+    <button th:if="${collapsible}" class="hc-button" data-variant="ghost" data-hc-shell-collapse
+            aria-label="Collapse navigation" type="button"><span class="hc-shell__collapse-icon" aria-hidden="true">&#171;</span></button>
     <strong th:text="${title}">TesseraQL</strong>
     <th:block th:replace="${header}"/>
   </header>
   <!-- data-hc-nav-current: the kit's installNavCurrent behavior marks the active link with
        aria-current="page" (longest path-segment prefix wins, re-applied after htmx history nav) — the
-       hc-item selected style keys off it. CSP-safe, no inline JS. -->
-  <nav class="hc-shell__sidebar" aria-label="Primary" data-hc-nav-current>
+       hc-item selected style keys off it. CSP-safe, no inline JS.
+       data-collapsible / data-persist (opt-in via `collapsible`): installShell collapses the sidebar
+       to a 4rem icon rail on desktop from the header's collapse control, remembering the choice in
+       localStorage. Gated because only icon + `.hc-shell__label` navs collapse cleanly. -->
+  <nav class="hc-shell__sidebar" aria-label="Primary" data-hc-nav-current
+       th:attr="data-collapsible=${collapsible} ? 'true' : null, data-persist=${collapsible} ? 'tql.sidebar' : null">
     <th:block th:replace="${nav}"/>
   </nav>
   <main class="hc-shell__main">
@@ -45,36 +62,58 @@
 </div>
 </body>
 </html>
+<!-- Public 4-arg API (back-compat): app-authored and scaffolder-generated shells call this. It
+     renders a non-collapsible sidebar — an app's own nav has no icon + `.hc-shell__label`, so the
+     collapse rail would hide its labels to nothing. Framework navs opt in via `shell-impl(..., true)`. -->
+<th:block th:fragment="shell(title, nav, header, content)"
+          th:replace="~{tql/shell :: shell-impl(${title}, ${nav}, ${header}, ${content}, false)}"/>
 <th:block th:fragment="page(title, header, content)"
-          th:replace="~{tql/shell :: shell(${title}, ~{tql/shell :: system-nav}, ${header}, ${content})}"/>
+          th:replace="~{tql/shell :: shell-impl(${title}, ~{tql/shell :: system-nav}, ${header}, ${content}, true)}"/>
+<!-- The 3-app system navigation. Icons come from the self-hosted sprite (/assets/_tesseraql/icons.svg,
+     served by AssetsRouteBuilder); each label is wrapped in `.hc-shell__label` so it hides in the
+     collapsed icon rail while keeping the link's accessible name. -->
 <th:block th:fragment="system-nav">
-  <a class="hc-item" href="/_tesseraql/ops/console">Operations</a>
-  <a class="hc-item" href="/_tesseraql/studio/ui">Studio</a>
-  <a class="hc-item" href="/_tesseraql/admin/users">IAM Admin</a>
+  <a class="hc-item" href="/_tesseraql/ops/console"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use href="/assets/_tesseraql/icons.svg#activity"/></svg></span><span class="hc-item__title hc-shell__label">Operations</span></a>
+  <a class="hc-item" href="/_tesseraql/studio/ui"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use href="/assets/_tesseraql/icons.svg#layout-dashboard"/></svg></span><span class="hc-item__title hc-shell__label">Studio</span></a>
+  <a class="hc-item" href="/_tesseraql/admin/users"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use href="/assets/_tesseraql/icons.svg#users"/></svg></span><span class="hc-item__title hc-shell__label">IAM Admin</span></a>
 </th:block>
-<!-- The Studio app's own section navigation (Studio platform UX, track H1): the system console
-     `page(...)` form only renders the 3-app `system-nav`, leaving Studio with no section nav, so
-     every section was reachable only via the explorer's header link cluster. `studio-page(...)`
-     mounts this sidebar instead; the kit's installNavCurrent (data-hc-nav-current) marks the link.
-     The list is unconditional — sections gated by mode (read-only / scaffolding off) render their
-     own disabled state, which is honest wayfinding. The system apps stay reachable below. -->
+<!-- The Studio app's own section navigation (Studio platform UX, tracks H1 + sidebar IA): the system
+     console `page(...)` form only renders the 3-app `system-nav`, leaving Studio with no section nav,
+     so `studio-page(...)` mounts this sidebar instead. It is grouped by job — Documentation (read /
+     understand), Authoring (create / modify), Governance (review / audit), System (cross-app) — with
+     the standalone Explorer as the landing, each item carrying an icon from the self-hosted sprite and
+     an `.hc-shell__label` for the collapsed rail. The kit's installNavCurrent (data-hc-nav-current)
+     marks the active link. The list is unconditional — sections gated by mode (read-only / scaffolding
+     off) render their own disabled state, which is honest wayfinding. Groups use `role="group"` +
+     `aria-labelledby` so the section captions name each cluster to assistive tech. -->
 <th:block th:fragment="studio-page(title, header, content)"
-          th:replace="~{tql/shell :: shell(${title}, ~{tql/shell :: studio-nav}, ${header}, ${content})}"/>
+          th:replace="~{tql/shell :: shell-impl(${title}, ~{tql/shell :: studio-nav}, ${header}, ${content}, true)}"/>
 <th:block th:fragment="studio-nav">
-  <a class="hc-item" href="/_tesseraql/studio/ui">Explorer</a>
-  <a class="hc-item" href="/_tesseraql/studio/ui/docs">Docs</a>
-  <a class="hc-item" href="/_tesseraql/studio/ui/docs/coverage">Coverage</a>
-  <a class="hc-item" href="/_tesseraql/studio/ui/docs/schema">Schema</a>
-  <a class="hc-item" href="/_tesseraql/studio/ui/docs/export">Export</a>
-  <a class="hc-item" href="/_tesseraql/studio/ui/scaffold">Scaffold</a>
-  <a class="hc-item" href="/_tesseraql/studio/ui/migration">Migration</a>
-  <a class="hc-item" href="/_tesseraql/studio/ui/sql-builder">SQL builder</a>
-  <a class="hc-item" href="/_tesseraql/studio/ui/drafts">Drafts</a>
-  <a class="hc-item" href="/_tesseraql/studio/ui/audit">Audit</a>
-  <a class="hc-item" href="/_tesseraql/studio/ui/wizard">Wizards</a>
-  <hr aria-hidden="true">
-  <a class="hc-item" href="/_tesseraql/ops/console">Operations</a>
-  <a class="hc-item" href="/_tesseraql/admin/users">IAM Admin</a>
+  <a class="hc-item" href="/_tesseraql/studio/ui"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use href="/assets/_tesseraql/icons.svg#compass"/></svg></span><span class="hc-item__title hc-shell__label">Explorer</span></a>
+  <div class="tql-nav__section" role="group" aria-labelledby="tql-nav-docs">
+    <p class="tql-nav__group" id="tql-nav-docs">Documentation</p>
+    <a class="hc-item" href="/_tesseraql/studio/ui/docs"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use href="/assets/_tesseraql/icons.svg#book-open"/></svg></span><span class="hc-item__title hc-shell__label">Overview</span></a>
+    <a class="hc-item" href="/_tesseraql/studio/ui/docs/schema"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use href="/assets/_tesseraql/icons.svg#database"/></svg></span><span class="hc-item__title hc-shell__label">Schema</span></a>
+    <a class="hc-item" href="/_tesseraql/studio/ui/docs/coverage"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use href="/assets/_tesseraql/icons.svg#shield-check"/></svg></span><span class="hc-item__title hc-shell__label">Coverage</span></a>
+    <a class="hc-item" href="/_tesseraql/studio/ui/docs/export"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use href="/assets/_tesseraql/icons.svg#share-2"/></svg></span><span class="hc-item__title hc-shell__label">Export</span></a>
+  </div>
+  <div class="tql-nav__section" role="group" aria-labelledby="tql-nav-authoring">
+    <p class="tql-nav__group" id="tql-nav-authoring">Authoring</p>
+    <a class="hc-item" href="/_tesseraql/studio/ui/scaffold"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use href="/assets/_tesseraql/icons.svg#blocks"/></svg></span><span class="hc-item__title hc-shell__label">Scaffold</span></a>
+    <a class="hc-item" href="/_tesseraql/studio/ui/sql-builder"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use href="/assets/_tesseraql/icons.svg#wrench"/></svg></span><span class="hc-item__title hc-shell__label">SQL builder</span></a>
+    <a class="hc-item" href="/_tesseraql/studio/ui/migration"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use href="/assets/_tesseraql/icons.svg#database-zap"/></svg></span><span class="hc-item__title hc-shell__label">Migration</span></a>
+    <a class="hc-item" href="/_tesseraql/studio/ui/wizard"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use href="/assets/_tesseraql/icons.svg#wand-sparkles"/></svg></span><span class="hc-item__title hc-shell__label">Wizards</span></a>
+  </div>
+  <div class="tql-nav__section" role="group" aria-labelledby="tql-nav-governance">
+    <p class="tql-nav__group" id="tql-nav-governance">Governance</p>
+    <a class="hc-item" href="/_tesseraql/studio/ui/drafts"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use href="/assets/_tesseraql/icons.svg#file-pen"/></svg></span><span class="hc-item__title hc-shell__label">Drafts</span></a>
+    <a class="hc-item" href="/_tesseraql/studio/ui/audit"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use href="/assets/_tesseraql/icons.svg#scroll-text"/></svg></span><span class="hc-item__title hc-shell__label">Audit</span></a>
+  </div>
+  <div class="tql-nav__section" role="group" aria-labelledby="tql-nav-system">
+    <p class="tql-nav__group" id="tql-nav-system">System</p>
+    <a class="hc-item" href="/_tesseraql/ops/console"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use href="/assets/_tesseraql/icons.svg#activity"/></svg></span><span class="hc-item__title hc-shell__label">Operations</span></a>
+    <a class="hc-item" href="/_tesseraql/admin/users"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use href="/assets/_tesseraql/icons.svg#users"/></svg></span><span class="hc-item__title hc-shell__label">IAM Admin</span></a>
+  </div>
 </th:block>
 <!-- A loading affordance for an async (htmx) action: htmx toggles the `htmx-indicator`
      element visible while the request is in flight (its injected indicator style applies
