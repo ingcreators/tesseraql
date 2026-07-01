@@ -70,6 +70,8 @@ class StudioViewsTest {
                 folder(subfolders(tree), "web")), "api")), "users");
         assertThat(leaves(users)).extracting(leaf -> leaf.get("label"))
                 .containsExactly("users.search", "users.create");
+        // Each folder carries its full app-relative prefix, for the contextual "new route here" link.
+        assertThat(users).containsEntry("path", "web/api/users");
         assertThat(leaves(users).get(0)).containsEntry("badge", "GET")
                 .containsEntry("sourceUrl",
                         "/_tesseraql/studio/ui/source?path=web%2Fapi%2Fusers%2Fget.yml");
@@ -108,6 +110,20 @@ class StudioViewsTest {
                         .containsEntry("edited", false)
                         .containsEntry("sourceUrl",
                                 "/_tesseraql/studio/ui/source?path=web%2Fapi%2Fwidgets%2Fget.yml"));
+    }
+
+    @Test
+    void sourceFlagsNewVsServedFromTheDraftSourcePresence() {
+        // Studio sidebar IA: a draft whose on-disk source is absent is a new (not-yet-served) route;
+        // a draft over an existing source, or a plain source view, is served.
+        assertThat(StudioViews.source("web/api/new/get.yml", "id: x", false, true, null, null))
+                .containsEntry("isNew", true);
+        assertThat(
+                StudioViews.source("web/api/exists/get.yml", "draft", false, true, "id: y", null))
+                .containsEntry("isNew", false);
+        assertThat(
+                StudioViews.source("web/api/exists/get.yml", "id: x", false, false, "id: x", null))
+                .containsEntry("isNew", false);
     }
 
     @Test

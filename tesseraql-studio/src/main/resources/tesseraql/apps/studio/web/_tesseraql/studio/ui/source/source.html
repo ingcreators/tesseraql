@@ -26,9 +26,15 @@
     </details>
   </th:block>
   <th:block th:if="${src.editable}">
-    <div class="hc-cluster" th:if="${src.hasDraft}">
-      <span class="hc-badge" data-variant="warning">unsaved draft</span>
+    <!-- Editing state (Studio sidebar IA): is this a new (not-yet-served) route or an existing served
+         one? — so the apply consequence (a restart serves vs a live reload) is clear; plus the
+         unsaved-draft marker when a draft is in flight. -->
+    <div class="hc-cluster">
+      <span class="hc-badge" data-variant="info" th:if="${src.isNew}">new route &middot; not served yet</span>
+      <span class="hc-badge" data-variant="neutral" th:unless="${src.isNew}">served route</span>
+      <span class="hc-badge" data-variant="warning" th:if="${src.hasDraft}">unsaved draft</span>
     </div>
+    <p class="hc-field__message" th:if="${src.isNew}">This route does not exist yet: saving keeps a draft, applying writes the file, and a restart serves it. An existing route reloads live on apply.</p>
     <form method="post" action="/_tesseraql/studio/ui/save">
       <input type="hidden" name="_csrf" th:value="${_csrf}">
       <input type="hidden" id="src-path" name="path" th:value="${src.path}">
