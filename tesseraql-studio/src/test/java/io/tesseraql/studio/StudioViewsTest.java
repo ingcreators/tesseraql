@@ -17,7 +17,8 @@ class StudioViewsTest {
         Explorer explorer = new Explorer("user-admin", false,
                 List.of(new RouteSummary("users.search", "GET", "/api/users", "query-json",
                         "web/api/users/get.yml")),
-                List.of(new JobSummary("nightly", "batch-pipeline", "jobs/nightly.yml")));
+                List.of(new JobSummary("nightly", "batch-pipeline", "jobs/nightly.yml")),
+                List.of());
 
         Map<String, Object> model = StudioViews.explorer(explorer);
 
@@ -39,7 +40,7 @@ class StudioViewsTest {
     @Test
     void explorerHandlesEmptyApp() {
         Map<String, Object> model = StudioViews.explorer(
-                new Explorer("empty", true, List.of(), List.of()));
+                new Explorer("empty", true, List.of(), List.of(), List.of()));
 
         assertThat(model.get("readOnly")).isEqualTo(true);
         assertThat(model.get("editable")).isEqualTo(false);
@@ -56,7 +57,8 @@ class StudioViewsTest {
                         "web/api/users/get.yml"),
                         new RouteSummary("users.create", "POST", "/api/users", "command-json",
                                 "web/api/users/post.yml")),
-                List.of(new JobSummary("nightly", "batch-pipeline", "batch/nightly/job.yml")));
+                List.of(new JobSummary("nightly", "batch-pipeline", "batch/nightly/job.yml")),
+                List.of());
 
         Map<String, Object> tree = tree(StudioViews.explorer(explorer));
 
@@ -77,6 +79,35 @@ class StudioViewsTest {
         assertThat(leaves(nightly)).singleElement()
                 .satisfies(leaf -> assertThat(leaf).containsEntry("label", "nightly")
                         .containsEntry("badge", "job"));
+    }
+
+    @Test
+    void explorerMarksDraftsAndFoldsNewDraftsAsPendingLeaves() {
+        // Studio sidebar IA: the tree now reflects authoring-in-progress — a served route with a
+        // pending draft is flagged edited (and conflict when the source moved underneath it), and a
+        // new (not-yet-served) draft becomes its own pending node so it is visible before a restart.
+        Explorer explorer = new Explorer("app", false,
+                List.of(new RouteSummary("users.search", "GET", "/api/users", "query-json",
+                        "web/api/users/get.yml")),
+                List.of(),
+                List.of(new StudioService.DraftSummary("web/api/users/get.yml", true, false),
+                        new StudioService.DraftSummary("web/api/widgets/get.yml", false, true)));
+
+        Map<String, Object> tree = tree(StudioViews.explorer(explorer));
+
+        Map<String, Object> api = folder(subfolders(folder(subfolders(tree), "web")), "api");
+        // The served route leaf carries the edited + conflict flags from its pending draft.
+        Map<String, Object> users = folder(subfolders(api), "users");
+        assertThat(leaves(users).get(0)).containsEntry("label", "users.search")
+                .containsEntry("edited", true).containsEntry("conflict", true);
+        // The new draft is its own pending node under web/api/widgets, linking into the editor.
+        Map<String, Object> widgets = folder(subfolders(api), "widgets");
+        assertThat(leaves(widgets)).singleElement()
+                .satisfies(leaf -> assertThat(leaf).containsEntry("label", "get.yml")
+                        .containsEntry("kind", "draft").containsEntry("badge", "new")
+                        .containsEntry("edited", false)
+                        .containsEntry("sourceUrl",
+                                "/_tesseraql/studio/ui/source?path=web%2Fapi%2Fwidgets%2Fget.yml"));
     }
 
     @Test

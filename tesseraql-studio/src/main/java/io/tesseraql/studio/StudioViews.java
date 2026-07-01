@@ -198,19 +198,37 @@ public final class StudioViews {
         return model;
     }
 
-    /** The route/job source paths as a nested folder tree (Studio backlog C4). */
+    /**
+     * The route/job source paths as a nested folder tree (Studio backlog C4), enriched with draft
+     * state (Studio sidebar IA): a served route/job whose source has a pending draft is marked
+     * {@code edited} (and {@code conflict} when the source moved underneath it), and every new
+     * (not-yet-served) draft is folded in as its own pending node so it is visible before a restart
+     * serves it — closing the gap where a just-created route vanished until applied and restarted.
+     */
     private static Map<String, Object> tree(Explorer explorer) {
+        Map<String, DraftSummary> draftByPath = new LinkedHashMap<>();
+        for (DraftSummary draft : explorer.drafts()) {
+            draftByPath.put(draft.path(), draft);
+        }
         TreeNode root = new TreeNode();
         for (RouteSummary route : explorer.routes()) {
-            root.add(route.source().split("/"), 0, routeLeaf(route));
+            root.add(route.source().split("/"), 0,
+                    routeLeaf(route, draftByPath.get(route.source())));
         }
         for (JobSummary job : explorer.jobs()) {
-            root.add(job.source().split("/"), 0, jobLeaf(job));
+            root.add(job.source().split("/"), 0, jobLeaf(job, draftByPath.get(job.source())));
+        }
+        // A new draft has no served source, so it is not among the routes/jobs above — surface it as
+        // its own pending node under the same path so authoring-in-progress shows in the tree.
+        for (DraftSummary draft : explorer.drafts()) {
+            if (draft.isNew()) {
+                root.add(draft.path().split("/"), 0, draftLeaf(draft));
+            }
         }
         return root.toModel("");
     }
 
-    private static Map<String, Object> routeLeaf(RouteSummary route) {
+    private static Map<String, Object> routeLeaf(RouteSummary route, DraftSummary draft) {
         Map<String, Object> leaf = new LinkedHashMap<>();
         leaf.put("label", route.id());
         leaf.put("badge", route.method());
@@ -218,10 +236,11 @@ public final class StudioViews {
         leaf.put("path", route.path());
         leaf.put("kind", "route");
         leaf.put("sourceUrl", sourceUrl(route.source()));
+        markDraft(leaf, draft);
         return leaf;
     }
 
-    private static Map<String, Object> jobLeaf(JobSummary job) {
+    private static Map<String, Object> jobLeaf(JobSummary job, DraftSummary draft) {
         Map<String, Object> leaf = new LinkedHashMap<>();
         leaf.put("label", job.id());
         leaf.put("badge", "job");
@@ -229,7 +248,29 @@ public final class StudioViews {
         leaf.put("path", "");
         leaf.put("kind", "job");
         leaf.put("sourceUrl", sourceUrl(job.source()));
+        markDraft(leaf, draft);
         return leaf;
+    }
+
+    /** A new (not-yet-served) draft rendered as its own pending leaf, linking into the editor. */
+    private static Map<String, Object> draftLeaf(DraftSummary draft) {
+        String fileName = draft.path().substring(draft.path().lastIndexOf('/') + 1);
+        Map<String, Object> leaf = new LinkedHashMap<>();
+        leaf.put("label", fileName);
+        leaf.put("badge", "new");
+        leaf.put("recipe", "unserved draft");
+        leaf.put("path", "");
+        leaf.put("kind", "draft");
+        leaf.put("sourceUrl", sourceUrl(draft.path()));
+        leaf.put("edited", false);
+        leaf.put("conflict", draft.conflict());
+        return leaf;
+    }
+
+    /** Flags a served leaf that has a pending draft (edited) and whether that draft conflicts. */
+    private static void markDraft(Map<String, Object> leaf, DraftSummary draft) {
+        leaf.put("edited", draft != null);
+        leaf.put("conflict", draft != null && draft.conflict());
     }
 
     /**
