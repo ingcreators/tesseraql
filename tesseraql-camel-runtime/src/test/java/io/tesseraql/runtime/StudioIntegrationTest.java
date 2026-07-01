@@ -393,20 +393,30 @@ class StudioIntegrationTest {
 
     @Test
     void studioPagesCarryTheStudioSidebarNav() throws Exception {
-        // Track H1: Studio pages mount their own section nav in the shell sidebar (via the
-        // studio-page fragment), not just the 3-app system nav — so every section is reachable
-        // from anywhere, not only via the explorer header. The same nav renders on a deep page.
+        // Track H1 + sidebar IA: Studio pages mount their own section nav in the shell sidebar (via
+        // the studio-page fragment), not just the 3-app system nav — so every section is reachable
+        // from anywhere, not only via the explorer header. The nav is grouped by job, each item
+        // carries a sprite icon + an `.hc-shell__label` for the collapsible rail. Renders on a deep
+        // page too.
         for (String path : new String[]{"/_tesseraql/studio/ui", "/_tesseraql/studio/ui/docs"}) {
             String body = get(path, true).body();
             assertThat(body).contains("hc-shell__sidebar")
                     // the kit's installNavCurrent marks the active link (data-hc-nav-current opt-in)
                     .contains("data-hc-nav-current")
-                    .contains(">Explorer<").contains(">Docs<").contains(">Coverage<")
+                    // grouped by job — the section captions name each cluster
+                    .contains(">Documentation<").contains(">Authoring<")
+                    .contains(">Governance<").contains(">System<")
+                    // the standalone landing + every section link (labels wrapped for the rail)
+                    .contains(">Explorer<").contains(">Overview<").contains(">Coverage<")
                     .contains(">Schema<").contains(">Scaffold<").contains(">Migration<")
                     .contains(">SQL builder<").contains(">Drafts<").contains(">Audit<")
                     .contains(">Wizards<")
                     // the system apps stay reachable from Studio's sidebar
-                    .contains(">Operations<").contains(">IAM Admin<");
+                    .contains(">Operations<").contains(">IAM Admin<")
+                    // icons via the self-hosted sprite, and the collapse-rail + hamburger plumbing
+                    .contains("/assets/_tesseraql/icons.svg#compass")
+                    .contains("hc-shell__label").contains("data-collapsible")
+                    .contains("hc-shell__toggle");
         }
     }
 
@@ -468,6 +478,17 @@ class StudioIntegrationTest {
         // The bootstrap asset registers the tql-sql grammar (Studio backlog E slice 2).
         assertThat(get("/assets/_tesseraql/tesseraql.js", true).body())
                 .contains("registerCodeLanguage(\"tql-sql\"");
+    }
+
+    @Test
+    void studioSidebarIconSpriteIsServed() throws Exception {
+        // The sidebar icons reference a self-hosted SVG sprite (no external CDN), served as a
+        // framework asset from tesseraql/assets/icons.svg — the <use href> targets must resolve.
+        HttpResponse<String> response = get("/assets/_tesseraql/icons.svg", true);
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(response.headers().firstValue("content-type"))
+                .hasValueSatisfying(value -> assertThat(value).contains("image/svg+xml"));
+        assertThat(response.body()).contains("id=\"compass\"").contains("id=\"scroll-text\"");
     }
 
     @Test
