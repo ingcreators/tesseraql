@@ -105,7 +105,13 @@ public final class StudioService {
                 .filter(job -> q.isEmpty() || jobMatches(job, q))
                 .sorted(java.util.Comparator.comparing(JobSummary::id))
                 .toList();
-        return new Explorer(appName, readOnly, routes, jobs);
+        // Pending drafts, filtered by the same query over their path so filtering prunes the draft
+        // markers with the tree. A draft whose path is a served route/job source marks that leaf as
+        // edited; a new (not-yet-served) draft becomes its own pending node (StudioViews.tree).
+        List<DraftSummary> drafts = drafts().stream()
+                .filter(draft -> q.isEmpty() || contains(draft.path(), q))
+                .toList();
+        return new Explorer(appName, readOnly, routes, jobs, drafts);
     }
 
     private static boolean routeMatches(RouteSummary route, String q) {
@@ -1278,9 +1284,13 @@ public final class StudioService {
         return appHome.relativize(source).toString().replace('\\', '/');
     }
 
-    /** The explorer model: the app and its routes and jobs. */
+    /**
+     * The explorer model: the app, its routes and jobs, and the pending drafts (Studio sidebar IA):
+     * the tree marks a served entry that has an unsaved draft and surfaces a new (not-yet-served)
+     * draft as its own pending node, so "what I am authoring" is visible alongside "what is served".
+     */
     public record Explorer(String appName, boolean readOnly,
-            List<RouteSummary> routes, List<JobSummary> jobs) {
+            List<RouteSummary> routes, List<JobSummary> jobs, List<DraftSummary> drafts) {
     }
 
     /** A route entry in the explorer. */

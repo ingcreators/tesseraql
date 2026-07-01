@@ -1386,6 +1386,12 @@ class StudioIntegrationTest {
         HttpResponse<String> editor = get(location, true);
         assertThat(editor.statusCode()).isEqualTo(200);
         assertThat(editor.body()).contains("api.newthing.get").contains("query-json");
+
+        // Studio sidebar IA: the new (not-yet-served) draft now shows in the Explorer tree as its own
+        // pending node, so it is visible before a restart serves it (no more "created it, where did
+        // it go?"). The folder appears only because of the draft; "unserved draft" marks the leaf.
+        assertThat(get("/_tesseraql/studio/ui", true).body())
+                .contains("newthing").contains("unserved draft");
     }
 
     @Test

@@ -11,26 +11,37 @@
   </div>
 </th:block>
 <div id="page-content" class="hc-stack">
+<!-- Create actions (Studio sidebar IA): the Explorer's job is to browse/open existing routes, so
+     the New-route form is collapsed into a disclosure rather than a permanent panel above the tree,
+     and the sibling creation flows (Scaffold / Migration / Wizards) are surfaced here too — not only
+     in the sidebar — so "start something new" is discoverable from where you browse. -->
 <section class="hc-card" th:if="${studio.editable}">
-  <h2>New route</h2>
-  <p class="hc-field__message">Creates a starter route as a draft and opens it in the editor to finish. A new route needs a restart to be served.</p>
-  <form class="hc-stack" method="post" action="/_tesseraql/studio/ui/new">
+  <details class="hc-disclosure">
+    <summary>New route</summary>
+    <p class="hc-field__message">Creates a starter route as a draft and opens it in the editor to finish. A new route needs a restart to be served.</p>
+    <form class="hc-stack" method="post" action="/_tesseraql/studio/ui/new">
       <input type="hidden" name="_csrf" th:value="${_csrf}">
-    <div class="hc-field">
-      <label class="hc-field__label" for="new-route-path">Path</label>
-      <input class="hc-input" id="new-route-path" type="text" name="path" required
-             placeholder="web/api/widgets/get.yml">
-    </div>
-    <div class="hc-field">
-      <label class="hc-field__label" for="new-route-recipe">Recipe</label>
-      <select class="hc-select" id="new-route-recipe" name="recipe">
-        <option value="query-json">query-json</option>
-        <option value="query-html">query-html</option>
-        <option value="command-json">command-json</option>
-      </select>
-    </div>
-    <div class="hc-cluster"><button type="submit" class="hc-button" data-variant="primary">Create route</button></div>
-  </form>
+      <div class="hc-field">
+        <label class="hc-field__label" for="new-route-path">Path</label>
+        <input class="hc-input" id="new-route-path" type="text" name="path" required
+               placeholder="web/api/widgets/get.yml">
+      </div>
+      <div class="hc-field">
+        <label class="hc-field__label" for="new-route-recipe">Recipe</label>
+        <select class="hc-select" id="new-route-recipe" name="recipe">
+          <option value="query-json">query-json</option>
+          <option value="query-html">query-html</option>
+          <option value="command-json">command-json</option>
+        </select>
+      </div>
+      <div class="hc-cluster"><button type="submit" class="hc-button" data-variant="primary">Create route</button></div>
+    </form>
+  </details>
+  <p class="hc-field__message">Or create with
+    <a href="/_tesseraql/studio/ui/scaffold">Scaffold</a> ·
+    <a href="/_tesseraql/studio/ui/migration">Migration</a> ·
+    <a href="/_tesseraql/studio/ui/wizard">Wizards</a>.
+  </p>
 </section>
 <section class="hc-card">
   <h2>Routes &amp; jobs</h2>
@@ -70,8 +81,14 @@
   </details>
 </th:block>
 <div class="hc-cluster" th:fragment="explorerLeaf(leaf)">
-  <span class="hc-badge" th:attr="data-variant=${leaf.kind == 'job'} ? 'info' : 'neutral'" th:text="${leaf.badge}"></span>
+  <span class="hc-badge"
+        th:attr="data-variant=${leaf.kind == 'job'} ? 'info' : (${leaf.kind == 'draft'} ? 'success' : 'neutral')"
+        th:text="${leaf.badge}"></span>
   <a th:href="${leaf.sourceUrl}" th:text="${leaf.label}"></a>
-  <span class="hc-field__message" th:text="${leaf.recipe}"></span>
+  <span class="hc-field__message" th:text="${leaf.recipe}" th:unless="${#strings.isEmpty(leaf.recipe)}"></span>
+  <!-- Draft state (Studio sidebar IA): a served entry with an unsaved draft, and a conflict when the
+       source moved underneath it. A new draft is its own leaf (kind=draft, the 'new' badge above). -->
+  <span class="hc-badge" data-variant="warning" th:if="${leaf.edited}">unsaved draft</span>
+  <span class="hc-badge" data-variant="error" th:if="${leaf.conflict}">conflict</span>
 </div>
 </html>
