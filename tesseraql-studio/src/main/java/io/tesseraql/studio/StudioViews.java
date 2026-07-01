@@ -225,7 +225,7 @@ public final class StudioViews {
                 root.add(draft.path().split("/"), 0, draftLeaf(draft));
             }
         }
-        return root.toModel("");
+        return root.toModel("", "");
     }
 
     private static Map<String, Object> routeLeaf(RouteSummary route, DraftSummary draft) {
@@ -293,12 +293,17 @@ public final class StudioViews {
                     .add(parts, index + 1, leaf);
         }
 
-        Map<String, Object> toModel(String name) {
+        Map<String, Object> toModel(String name, String path) {
             List<Map<String, Object>> childFolders = new ArrayList<>();
-            folders.forEach((folderName, node) -> childFolders.add(node.toModel(folderName)));
+            folders.forEach((folderName, node) -> childFolders.add(
+                    node.toModel(folderName,
+                            path.isEmpty() ? folderName : path + "/" + folderName)));
             leaves.sort(java.util.Comparator.comparing(leaf -> (String) leaf.get("name")));
             Map<String, Object> model = new LinkedHashMap<>();
             model.put("name", name);
+            // The folder's full app-relative prefix (e.g. web/api/widgets), so the explorer can offer
+            // a "new route here" action that seeds the New-route path with the browsed location.
+            model.put("path", path);
             model.put("folders", childFolders);
             model.put("leaves", leaves);
             model.put("empty", childFolders.isEmpty() && leaves.isEmpty());
@@ -340,6 +345,10 @@ public final class StudioViews {
         model.put("isMigration", StudioService.isMigrationPath(path));
         // A route SQL file (web/**/*.sql) can have a generated 2-way SQL snippet inserted (SQL builder).
         model.put("isRouteSql", path != null && path.startsWith("web/") && path.endsWith(".sql"));
+        // New vs served (Studio sidebar IA): a draft whose on-disk source does not exist yet is a
+        // not-yet-served route — applying writes the file and a restart serves it, where editing an
+        // existing route reloads live on apply. The editor states which, so the consequence is clear.
+        model.put("isNew", hasDraft && sourceContent == null);
         // The hc-code data-lang grammar for live-highlighting the editable field (Studio backlog E).
         model.put("lang", editorLang(path));
         model.put("sampleModel", sampleModel == null ? "" : sampleModel);

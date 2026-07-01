@@ -16,7 +16,9 @@
      and the sibling creation flows (Scaffold / Migration / Wizards) are surfaced here too — not only
      in the sidebar — so "start something new" is discoverable from where you browse. -->
 <section class="hc-card" th:if="${studio.editable}">
-  <details class="hc-disclosure">
+  <!-- Opened and its Path seeded when a folder's "New route here" link passes ?new=<prefix>/, so
+       creating a route inherits the browsed location instead of a hand-typed path. -->
+  <details class="hc-disclosure" th:attr="open=${!#strings.isEmpty(studio.newPath)} ? '' : null">
     <summary>New route</summary>
     <p class="hc-field__message">Creates a starter route as a draft and opens it in the editor to finish. A new route needs a restart to be served.</p>
     <form class="hc-stack" method="post" action="/_tesseraql/studio/ui/new">
@@ -24,7 +26,7 @@
       <div class="hc-field">
         <label class="hc-field__label" for="new-route-path">Path</label>
         <input class="hc-input" id="new-route-path" type="text" name="path" required
-               placeholder="web/api/widgets/get.yml">
+               th:value="${studio.newPath}" placeholder="web/api/widgets/get.yml">
       </div>
       <div class="hc-field">
         <label class="hc-field__label" for="new-route-recipe">Recipe</label>
@@ -71,6 +73,10 @@
   <details class="hc-disclosure" open>
     <summary th:text="${folder.name}"></summary>
     <div class="hc-stack tql-tree__children">
+      <!-- Contextual create (Studio sidebar IA): seeds the New-route form's Path with this folder's
+           prefix so a new route lands where you are browsing, not a path typed from memory. -->
+      <a th:if="${studio.editable}" class="hc-field__message tql-tree__new"
+         th:href="|/_tesseraql/studio/ui?prefix=${folder.path}/|">+ New route here</a>
       <th:block th:each="child : ${folder.folders}">
         <th:block th:replace="~{:: explorerNode(${child})}"></th:block>
       </th:block>

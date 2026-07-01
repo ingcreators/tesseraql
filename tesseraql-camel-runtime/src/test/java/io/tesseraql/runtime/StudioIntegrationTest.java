@@ -464,7 +464,9 @@ class StudioIntegrationTest {
         assertThat(response.statusCode()).isEqualTo(200);
         assertThat(response.headers().firstValue("content-type"))
                 .hasValueSatisfying(value -> assertThat(value).contains("text/html"));
-        assertThat(response.body()).contains("web/api/users/search.sql").contains("select");
+        // An existing on-disk file (no new-file draft) is labeled a served route (Studio sidebar IA).
+        assertThat(response.body()).contains("web/api/users/search.sql").contains("select")
+                .contains("served route");
     }
 
     @Test
@@ -1382,10 +1384,12 @@ class StudioIntegrationTest {
         String location = created.headers().firstValue("location").orElseThrow();
         assertThat(location).startsWith("/_tesseraql/studio/ui/source?path=");
 
-        // Following the redirect opens the source editor on the freshly saved starter draft.
+        // Following the redirect opens the source editor on the freshly saved starter draft, which the
+        // editor labels a new (not-yet-served) route so the restart-to-serve consequence is clear.
         HttpResponse<String> editor = get(location, true);
         assertThat(editor.statusCode()).isEqualTo(200);
-        assertThat(editor.body()).contains("api.newthing.get").contains("query-json");
+        assertThat(editor.body()).contains("api.newthing.get").contains("query-json")
+                .contains("not served yet");
 
         // Studio sidebar IA: the new (not-yet-served) draft now shows in the Explorer tree as its own
         // pending node, so it is visible before a restart serves it (no more "created it, where did
@@ -1401,6 +1405,15 @@ class StudioIntegrationTest {
         assertThat(response.statusCode()).isEqualTo(200);
         assertThat(response.body()).contains("New route")
                 .contains("action=\"/_tesseraql/studio/ui/new\"");
+    }
+
+    @Test
+    void uiExplorerFolderOffersContextualNewRoute() throws Exception {
+        // Studio sidebar IA: each folder offers a "New route here" link; following it (?new=<prefix>/)
+        // opens the New-route form with its Path seeded to the browsed location.
+        assertThat(get("/_tesseraql/studio/ui", true).body()).contains("New route here");
+        assertThat(get("/_tesseraql/studio/ui?prefix=" + enc("web/api/users/"), true).body())
+                .contains("value=\"web/api/users/\"");
     }
 
     private static JsonNode applyGadgets(boolean force) throws Exception {
