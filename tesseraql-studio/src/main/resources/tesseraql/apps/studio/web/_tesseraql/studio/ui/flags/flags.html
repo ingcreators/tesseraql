@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{tql/shell :: studio-page('TesseraQL Studio · Flags', ~{:: #page-header}, ~{:: #page-content})}">
+<th:block id="page-header">
+  <span class="hc-spacer"></span>
+  <div class="hc-cluster">
+    <a class="hc-button" data-variant="ghost" data-size="sm" href="/_tesseraql/studio/ui">&larr; explorer</a>
+  </div>
+</th:block>
+<div id="page-content" class="hc-stack">
+  <section class="hc-card">
+    <h2>Feature flags</h2>
+    <p class="hc-field__message">Live feature flags in <code>config/flags.yml</code>. They are
+      injected into every request as <code>flags.&lt;name&gt;</code>, so routes, templates, and
+      validation rules can gate on them &mdash; e.g. <code>th:if="${flags.betaBanner}"</code> or a
+      <code>when:</code> guard. A change here takes effect on the <strong>next request</strong>, no
+      restart.</p>
+
+    <div class="hc-empty" th:unless="${f.hasFlags}">
+      <p class="hc-empty__title">No flags yet.</p>
+      <p class="hc-empty__body">Add one below to create <code>config/flags.yml</code>.</p>
+    </div>
+
+    <div class="hc-datagrid" th:if="${f.hasFlags}">
+      <div class="hc-datagrid__scroll">
+        <table class="hc-datagrid__table">
+          <thead class="hc-datagrid__head"><tr>
+            <th class="hc-datagrid__headcell">Flag</th>
+            <th class="hc-datagrid__headcell">Value</th>
+            <th class="hc-datagrid__headcell">Type</th>
+            <th class="hc-datagrid__headcell" th:if="${f.editable}">Actions</th>
+          </tr></thead>
+          <tbody class="hc-datagrid__body">
+            <tr class="hc-datagrid__row" th:each="flag : ${f.flags}">
+              <td class="hc-datagrid__cell"><code th:text="${flag.name}">name</code></td>
+              <td class="hc-datagrid__cell" th:text="${flag.value}">value</td>
+              <td class="hc-datagrid__cell">
+                <span class="hc-badge" data-variant="neutral" th:text="${flag.type}">type</span>
+              </td>
+              <td class="hc-datagrid__cell" th:if="${f.editable}">
+                <form method="post" action="/_tesseraql/studio/ui/flags/remove">
+                  <input type="hidden" name="_csrf" th:value="${_csrf}">
+                  <input type="hidden" name="name" th:value="${flag.name}">
+                  <button type="submit" class="hc-button" data-variant="ghost" data-size="sm">Remove</button>
+                </form>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <details class="hc-disclosure" th:if="${f.editable}" th:attr="open=${f.hasFlags} ? null : true">
+      <summary>Set a flag</summary>
+      <form class="hc-stack" method="post" action="/_tesseraql/studio/ui/flags/set">
+        <input type="hidden" name="_csrf" th:value="${_csrf}">
+        <div class="hc-cluster">
+          <div class="hc-field">
+            <label class="hc-field__label" for="flag-name">Name</label>
+            <input class="hc-input" id="flag-name" name="name" required list="flag-name-options"
+                   autocomplete="off" placeholder="betaBanner">
+            <datalist id="flag-name-options">
+              <option th:each="flag : ${f.flags}" th:value="${flag.name}"></option>
+            </datalist>
+          </div>
+          <div class="hc-field">
+            <label class="hc-field__label" for="flag-type">Type</label>
+            <select class="hc-select" id="flag-type" name="type">
+              <option value="boolean">boolean</option>
+              <option value="number">number</option>
+              <option value="string">string</option>
+            </select>
+          </div>
+          <div class="hc-field hc-field--grow">
+            <label class="hc-field__label" for="flag-value">Value</label>
+            <input class="hc-input" id="flag-value" name="value" autocomplete="off"
+                   placeholder="true · 10 · Hello">
+          </div>
+        </div>
+        <div class="hc-cluster">
+          <button type="submit" class="hc-button" data-variant="primary">Save flag</button>
+        </div>
+      </form>
+    </details>
+  </section>
+</div>
+</html>

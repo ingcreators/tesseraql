@@ -38,15 +38,22 @@ public final class RequestBinder implements Processor {
 
     private final RouteDefinition route;
     private final java.util.List<String> pathParams;
+    private final java.nio.file.Path appHome;
     private final ObjectMapper mapper = new ObjectMapper();
 
     public RequestBinder(RouteDefinition route) {
-        this(route, java.util.List.of());
+        this(route, java.util.List.of(), null);
     }
 
     public RequestBinder(RouteDefinition route, java.util.List<String> pathParams) {
+        this(route, pathParams, null);
+    }
+
+    public RequestBinder(RouteDefinition route, java.util.List<String> pathParams,
+            java.nio.file.Path appHome) {
         this.route = route;
         this.pathParams = java.util.List.copyOf(pathParams);
+        this.appHome = appHome;
     }
 
     @Override
@@ -87,6 +94,12 @@ public final class RequestBinder implements Processor {
         context.put("path", path);
         context.put("principal", exchange.getProperty(TesseraqlProperties.PRINCIPAL));
         context.put("tenant", exchange.getProperty(TesseraqlProperties.TENANT));
+        // The app's live feature flags (config/flags.yml), resolvable as flags.<name> in expressions,
+        // templates, and validation. Read live (stat-cheap re-read) so a Studio flag edit takes effect
+        // on the next request; absent file ⇒ an empty map.
+        if (appHome != null) {
+            context.put("flags", io.tesseraql.yaml.flags.FlagsSpec.live(appHome).values());
+        }
         // The negotiated request locale (roadmap Phase 22), resolvable as request.locale.
         String locale = exchange.getProperty(TesseraqlProperties.LOCALE, String.class);
         if (locale != null) {

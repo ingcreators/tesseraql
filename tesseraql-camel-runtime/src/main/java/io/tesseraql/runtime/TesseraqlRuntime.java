@@ -1100,6 +1100,40 @@ public final class TesseraqlRuntime implements AutoCloseable {
                                     value == null ? "" : String.valueOf(value), actorOf(params));
                             return Map.of("saved", true);
                         })
+                        // Live feature flags editor: set/remove a flag in config/flags.yml. The request
+                        // binder reads flags.<name> live, so a change takes effect on the next request
+                        // (no restart). Edit-gated + audited.
+                        .register("studio.flags", params -> {
+                            Map<String, Object> flags = studio.flags();
+                            java.util.List<Map<String, Object>> rows = new java.util.ArrayList<>();
+                            flags.forEach((name, value) -> {
+                                Map<String, Object> row = new java.util.LinkedHashMap<>();
+                                row.put("name", name);
+                                row.put("value", value == null ? "" : String.valueOf(value));
+                                row.put("type", value instanceof Boolean
+                                        ? "boolean"
+                                        : value instanceof Number ? "number" : "string");
+                                rows.add(row);
+                            });
+                            Map<String, Object> model = new java.util.LinkedHashMap<>();
+                            model.put("flags", rows);
+                            model.put("hasFlags", !rows.isEmpty());
+                            model.put("editable", studioAccess.canEdit(params.get("roles")));
+                            return model;
+                        })
+                        .register("studio.flagsSet", params -> {
+                            studioAccess.requireEdit(params.get("principalRoles"));
+                            Object value = params.get("value");
+                            studio.setFlag(str(params, "name"),
+                                    value == null ? "" : String.valueOf(value),
+                                    str(params, "type"), actorOf(params));
+                            return Map.of("saved", true);
+                        })
+                        .register("studio.flagsRemove", params -> {
+                            studioAccess.requireEdit(params.get("principalRoles"));
+                            studio.removeFlag(str(params, "name"), actorOf(params));
+                            return Map.of("removed", true);
+                        })
                         // Data browser (read-only): paginated rows of a chosen table over the dev
                         // datasource, opt-in via tesseraql.studio.dataBrowser.enabled. The table is
                         // validated against the live catalog (no injection); a query error surfaces as
