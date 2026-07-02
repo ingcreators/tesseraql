@@ -997,6 +997,27 @@ public final class TesseraqlRuntime implements AutoCloseable {
                                                 String.valueOf(route.get("source")),
                                                 java.nio.charset.StandardCharsets.UTF_8));
                             }
+                            // Reverse index: which routes each policy guards, so a policy links to
+                            // its consumers and a policy used by none is flagged as dead config.
+                            Map<String, java.util.List<Map<String, Object>>> byPolicy = new java.util.HashMap<>();
+                            for (Map<String, Object> route : routes) {
+                                Object policy = route.get("policy");
+                                if (policy != null) {
+                                    byPolicy.computeIfAbsent(String.valueOf(policy),
+                                            key -> new java.util.ArrayList<>()).add(route);
+                                }
+                            }
+                            int unusedPolicies = 0;
+                            for (Map<String, Object> policy : policies) {
+                                java.util.List<Map<String, Object>> used = byPolicy.getOrDefault(
+                                        String.valueOf(policy.get("id")), java.util.List.of());
+                                policy.put("routes", used);
+                                policy.put("usedBy", used.size());
+                                policy.put("unused", used.isEmpty());
+                                if (used.isEmpty()) {
+                                    unusedPolicies++;
+                                }
+                            }
                             Map<String, Object> model = new java.util.LinkedHashMap<>();
                             model.put("routes", routes);
                             model.put("policies", policies);
@@ -1004,6 +1025,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
                             model.put("unprotected", unprotected);
                             model.put("csrfGaps", csrfGaps);
                             model.put("unknownPolicies", unknownPolicies);
+                            model.put("unusedPolicies", unusedPolicies);
                             model.put("policyCount", policies.size());
                             return model;
                         })

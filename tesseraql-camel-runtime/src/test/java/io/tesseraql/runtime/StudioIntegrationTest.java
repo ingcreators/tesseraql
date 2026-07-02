@@ -1894,6 +1894,8 @@ class StudioIntegrationTest {
                 .contains("users.read").contains("USER_READ");
         // /users is a public page, so an unprotected route is flagged.
         assertThat(response.body()).contains("no auth");
+        // The policy → routes reverse link surfaces how many routes each policy guards.
+        assertThat(response.body()).contains("route(s)").contains("unused-policy");
     }
 
     @Test

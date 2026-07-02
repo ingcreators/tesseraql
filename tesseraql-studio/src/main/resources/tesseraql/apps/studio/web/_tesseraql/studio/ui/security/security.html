@@ -22,6 +22,8 @@
             th:text="|${sec.csrfGaps} CSRF gap(s)|">0 CSRF gap(s)</span>
       <span class="hc-badge" th:attr="data-variant=${sec.unknownPolicies > 0} ? 'warning' : 'neutral'"
             th:text="|${sec.unknownPolicies} undefined-policy|">0 undefined-policy</span>
+      <span class="hc-badge" th:attr="data-variant=${sec.unusedPolicies > 0} ? 'warning' : 'neutral'"
+            th:text="|${sec.unusedPolicies} unused-policy|">0 unused-policy</span>
       <span class="hc-badge" data-variant="neutral" th:text="|${sec.policyCount} policy(ies)|">0 policy(ies)</span>
     </div>
   </section>
@@ -79,11 +81,24 @@
           <thead class="hc-datagrid__head"><tr>
             <th class="hc-datagrid__headcell">Policy</th>
             <th class="hc-datagrid__headcell">Grants access when</th>
+            <th class="hc-datagrid__headcell">Used by</th>
           </tr></thead>
           <tbody class="hc-datagrid__body">
             <tr class="hc-datagrid__row" th:each="p : ${sec.policies}">
               <td class="hc-datagrid__cell"><code th:text="${p.id}">policy.id</code></td>
               <td class="hc-datagrid__cell" th:text="${p.summary}">role X OR permission Y</td>
+              <td class="hc-datagrid__cell">
+                <span class="hc-badge" data-variant="warning" th:if="${p.unused}">unused</span>
+                <details class="hc-disclosure" th:unless="${p.unused}">
+                  <summary th:text="|${p.usedBy} route(s)|">0 route(s)</summary>
+                  <ul class="hc-stack">
+                    <li th:each="r : ${p.routes}">
+                      <a th:href="${r.sourceUrl}"><span th:text="${r.method}">GET</span>
+                        <code th:text="${r.path}">/path</code></a>
+                    </li>
+                  </ul>
+                </details>
+              </td>
             </tr>
           </tbody>
         </table>
