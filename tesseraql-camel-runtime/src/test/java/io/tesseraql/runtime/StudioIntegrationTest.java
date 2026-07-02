@@ -1978,6 +1978,30 @@ class StudioIntegrationTest {
     }
 
     @Test
+    void uiDataBrowserFiltersAndSortsByColumn() throws Exception {
+        // Filter tql_users to the seeded 'admin' login and sort by it — validated columns, bound value.
+        HttpResponse<String> response = get("/_tesseraql/studio/ui/data?table=tql_users"
+                + "&filterColumn=login_id&filterValue=admin&sort=login_id&dir=desc", true);
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(response.body()).contains("admin");
+        // A non-matching filter yields no rows.
+        assertThat(get("/_tesseraql/studio/ui/data?table=tql_users"
+                + "&filterColumn=login_id&filterValue=" + enc("nobody-xyz"), true).body())
+                .contains("No rows");
+    }
+
+    @Test
+    void uiDocsTableLinksToTheDataBrowser() throws Exception {
+        HttpResponse<String> response = get(
+                "/_tesseraql/studio/ui/docs/schema/table?ds=main&name=customers", true);
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(response.body()).contains("Browse data")
+                .contains("/_tesseraql/studio/ui/data?table=");
+    }
+
+    @Test
     void uiDataBrowserRejectsAnUnknownTable() throws Exception {
         // A table not in the live catalog is rejected (guards against SQL injection via the name).
         HttpResponse<String> response = get("/_tesseraql/studio/ui/data?table="

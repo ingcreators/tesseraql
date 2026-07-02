@@ -36,6 +36,39 @@
          th:text="${data.error}">error</p>
 
       <th:block th:if="${data.columns != null}">
+        <!-- Filter & sort: columns are validated server-side; the filter value is a bound param. -->
+        <form class="hc-cluster" method="get" action="/_tesseraql/studio/ui/data">
+          <input type="hidden" name="table" th:value="${data.table}">
+          <div class="hc-field">
+            <label class="hc-field__label" for="data-filter-col">Filter column</label>
+            <select class="hc-select" id="data-filter-col" name="filterColumn">
+              <option value="">(none)</option>
+              <option th:each="c : ${data.columns}" th:value="${c}" th:text="${c}"
+                      th:selected="${c == data.filterColumn}">col</option>
+            </select>
+          </div>
+          <div class="hc-field">
+            <label class="hc-field__label" for="data-filter-val">contains</label>
+            <input class="hc-input" id="data-filter-val" name="filterValue"
+                   th:value="${data.filterValue}" autocomplete="off">
+          </div>
+          <div class="hc-field">
+            <label class="hc-field__label" for="data-sort-col">Sort by</label>
+            <select class="hc-select" id="data-sort-col" name="sort">
+              <option value="">(none)</option>
+              <option th:each="c : ${data.columns}" th:value="${c}" th:text="${c}"
+                      th:selected="${c == data.sortColumn}">col</option>
+            </select>
+          </div>
+          <div class="hc-field">
+            <label class="hc-field__label" for="data-sort-dir">Direction</label>
+            <select class="hc-select" id="data-sort-dir" name="dir">
+              <option value="asc" th:selected="${data.sortDir == 'asc'}">asc</option>
+              <option value="desc" th:selected="${data.sortDir == 'desc'}">desc</option>
+            </select>
+          </div>
+          <button type="submit" class="hc-button" data-variant="primary">Apply</button>
+        </form>
         <div class="hc-cluster">
           <span class="hc-badge" data-variant="neutral"
                 th:text="|${data.rowCount} row(s) on page ${data.page + 1}|">0 rows</span>
@@ -61,9 +94,9 @@
         </div>
         <div class="hc-cluster">
           <a class="hc-button" data-variant="ghost" data-size="sm" th:if="${data.hasPrev}"
-             th:href="|/_tesseraql/studio/ui/data?table=${data.table}&amp;page=${data.prevPage}|">&larr; Prev</a>
+             th:href="|/_tesseraql/studio/ui/data?table=${#uris.escapeQueryParam(data.table)}&amp;page=${data.prevPage}&amp;sort=${#uris.escapeQueryParam(data.sortColumn)}&amp;dir=${data.sortDir}&amp;filterColumn=${#uris.escapeQueryParam(data.filterColumn)}&amp;filterValue=${#uris.escapeQueryParam(data.filterValue)}|">&larr; Prev</a>
           <a class="hc-button" data-variant="ghost" data-size="sm" th:if="${data.hasNext}"
-             th:href="|/_tesseraql/studio/ui/data?table=${data.table}&amp;page=${data.nextPage}|">Next &rarr;</a>
+             th:href="|/_tesseraql/studio/ui/data?table=${#uris.escapeQueryParam(data.table)}&amp;page=${data.nextPage}&amp;sort=${#uris.escapeQueryParam(data.sortColumn)}&amp;dir=${data.sortDir}&amp;filterColumn=${#uris.escapeQueryParam(data.filterColumn)}&amp;filterValue=${#uris.escapeQueryParam(data.filterValue)}|">Next &rarr;</a>
         </div>
       </th:block>
     </th:block>

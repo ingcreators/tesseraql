@@ -23,6 +23,9 @@
         <span class="hc-field__label" th:text="|datasource ${tbl.datasource}|"></span>
         <span class="hc-field__label" th:if="${tbl.schema}" th:text="|schema ${tbl.schema}|"></span>
         <span class="hc-field__label" th:if="${tbl.hasPrimaryKey}" th:text="|primary key (${tbl.primaryKey})|"></span>
+        <span class="hc-spacer"></span>
+        <a class="hc-button" data-variant="ghost" data-size="sm"
+           th:href="|/_tesseraql/studio/ui/data?table=${#uris.escapeQueryParam(tbl.name)}|">Browse data &rarr;</a>
       </div>
     </section>
     <nav class="hc-toc" aria-label="On this page" data-hc-spy>

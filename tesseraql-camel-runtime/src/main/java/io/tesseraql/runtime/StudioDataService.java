@@ -1,13 +1,14 @@
 package io.tesseraql.runtime;
 
 import java.sql.Connection;
+import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
-import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Locale;
 import java.util.function.Function;
 import javax.sql.DataSource;
 
@@ -58,8 +59,15 @@ final class StudioDataService {
         }
     }
 
-    /** One page of rows of {@code table}; {@code page} is zero-based. */
-    DataPage browse(String table, int page) {
+    /**
+     * One page of rows of {@code table}; {@code page} is zero-based. An optional {@code filterColumn}
+     * with a {@code filterValue} keeps rows whose (text-cast) value contains it (case-insensitive);
+     * an optional {@code sortColumn} orders the results. Both columns are validated against the
+     * table's real columns before use (so they can never be an injection vector), and the filter
+     * value is a bound parameter.
+     */
+    DataPage browse(String table, int page, String sortColumn, String sortDir, String filterColumn,
+            String filterValue) {
         if (!tables().contains(table)) {
             throw new IllegalArgumentException("No such table: " + table);
         }
@@ -68,13 +76,29 @@ final class StudioDataService {
         try (Connection connection = datasources.apply("main").getConnection()) {
             connection.setReadOnly(true);
             String quote = connection.getMetaData().getIdentifierQuoteString();
-            String quoted = quote + table.replace(quote, quote + quote) + quote;
-            try (Statement statement = connection.createStatement()) {
+            List<String> tableColumns = columnsOf(connection, table);
+            boolean hasFilter = tableColumns.contains(filterColumn)
+                    && filterValue != null && !filterValue.isBlank();
+            boolean hasSort = tableColumns.contains(sortColumn);
+            StringBuilder sql = new StringBuilder("SELECT * FROM ")
+                    .append(quoteId(quote, table));
+            if (hasFilter) {
+                sql.append(" WHERE LOWER(CAST(").append(quoteId(quote, filterColumn))
+                        .append(" AS VARCHAR(4000))) LIKE ?");
+            }
+            if (hasSort) {
+                sql.append(" ORDER BY ").append(quoteId(quote, sortColumn))
+                        .append("desc".equalsIgnoreCase(sortDir) ? " DESC" : " ASC");
+            }
+            try (PreparedStatement statement = connection.prepareStatement(sql.toString())) {
                 statement.setQueryTimeout(queryTimeoutSeconds);
                 // Cap the scan so a browse never pulls a whole large table; one extra row past the
                 // page detects whether a next page exists.
                 statement.setMaxRows(Math.min(offset + PAGE_SIZE + 1, maxScan));
-                try (ResultSet rs = statement.executeQuery("SELECT * FROM " + quoted)) {
+                if (hasFilter) {
+                    statement.setString(1, "%" + filterValue.toLowerCase(Locale.ROOT) + "%");
+                }
+                try (ResultSet rs = statement.executeQuery()) {
                     ResultSetMetaData meta = rs.getMetaData();
                     int columnCount = meta.getColumnCount();
                     List<String> columns = new ArrayList<>();
@@ -105,6 +129,22 @@ final class StudioDataService {
         } catch (SQLException ex) {
             throw new IllegalStateException("Query failed: " + ex.getMessage(), ex);
         }
+    }
+
+    /** The column names of {@code table} in the {@code main} catalog (for sort/filter validation). */
+    private static List<String> columnsOf(Connection connection, String table) throws SQLException {
+        List<String> columns = new ArrayList<>();
+        try (ResultSet rs = connection.getMetaData().getColumns(connection.getCatalog(), null,
+                table, "%")) {
+            while (rs.next()) {
+                columns.add(rs.getString("COLUMN_NAME"));
+            }
+        }
+        return columns;
+    }
+
+    private static String quoteId(String quote, String identifier) {
+        return quote + identifier.replace(quote, quote + quote) + quote;
     }
 
     private static String truncate(String value) {

@@ -1115,10 +1115,22 @@ public final class TesseraqlRuntime implements AutoCloseable {
                             if (table == null) {
                                 return model;
                             }
+                            // Sort/filter state is echoed to the model so the form and prev/next links
+                            // keep it; the service validates the columns against the real table.
+                            String sortColumn = str(params, "sort");
+                            String sortDir = "desc".equalsIgnoreCase(String.valueOf(
+                                    params.get("dir"))) ? "desc" : "asc";
+                            String filterColumn = str(params, "filterColumn");
+                            String filterValue = str(params, "filterValue");
+                            model.put("sortColumn", sortColumn == null ? "" : sortColumn);
+                            model.put("sortDir", sortDir);
+                            model.put("filterColumn", filterColumn == null ? "" : filterColumn);
+                            model.put("filterValue", filterValue == null ? "" : filterValue);
                             try {
                                 int page = parseIndex(params.get("page"));
                                 StudioDataService.DataPage data = studioData.browse(table,
-                                        page < 0 ? 0 : page);
+                                        page < 0 ? 0 : page, sortColumn, sortDir, filterColumn,
+                                        filterValue);
                                 model.put("table", data.table());
                                 model.put("columns", data.columns());
                                 java.util.List<Map<String, Object>> rows = new java.util.ArrayList<>();
