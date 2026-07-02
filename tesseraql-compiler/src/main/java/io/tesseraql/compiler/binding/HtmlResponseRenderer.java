@@ -8,6 +8,8 @@ import io.tesseraql.core.error.TqlException;
 import io.tesseraql.core.expr.EvaluationContext;
 import io.tesseraql.core.expr.Expr;
 import io.tesseraql.core.expr.ExpressionParser;
+import io.tesseraql.yaml.menu.MenuSpec;
+import io.tesseraql.yaml.menu.MenuSpec.MenuItem;
 import io.tesseraql.yaml.model.ResponseSpec.HtmlResponse;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -40,19 +42,26 @@ public final class HtmlResponseRenderer implements Processor {
     private final Path appHome;
     private final String templateName;
     private final String defaultLocaleTag;
+    private final MenuSpec menu;
     private final Map<String, Expr> headerGuards;
     private final ObjectMapper mapper = new ObjectMapper();
 
     public HtmlResponseRenderer(HtmlResponse response, Path appHome, Path routeDir) {
-        this(response, appHome, routeDir, "en");
+        this(response, appHome, routeDir, "en", MenuSpec.empty());
     }
 
     public HtmlResponseRenderer(HtmlResponse response, Path appHome, Path routeDir,
             String defaultLocaleTag) {
+        this(response, appHome, routeDir, defaultLocaleTag, MenuSpec.empty());
+    }
+
+    public HtmlResponseRenderer(HtmlResponse response, Path appHome, Path routeDir,
+            String defaultLocaleTag, MenuSpec menu) {
         this.response = response;
         this.appHome = appHome.toAbsolutePath().normalize();
         this.templateName = resolveTemplate(this.appHome, routeDir, response.template());
         this.defaultLocaleTag = defaultLocaleTag;
+        this.menu = menu;
         // Pre-compile each header's optional guard expression so a syntax error fails the build.
         this.headerGuards = new LinkedHashMap<>();
         response.headersWhen().forEach((name, when) -> {
@@ -100,6 +109,31 @@ public final class HtmlResponseRenderer implements Processor {
             model.put("_csrf", csrfToken);
         }
 
+        // Publish the app's declarative sidebar menu (config/menu.yml), filtered to the items the
+        // caller's roles/permissions may see, as the reserved `_menu` variable — the shell renders it
+        // in the nav slot in place of the app's hand-authored nav fragment. Hidden items are never
+        // emitted (server-side filter). An absent/empty menu leaves `_menu` unset, so the shell falls
+        // back to the passed nav fragment. Roles/permissions come via the same principal.* the
+        // execution context resolves for routes, so no extra dependency is needed here.
+        if (!menu.isEmpty()) {
+            List<MenuItem> visible = menu.visibleFor(
+                    stringList(evaluation.resolve(List.of("principal", "roles"))),
+                    stringList(evaluation.resolve(List.of("principal", "permissions"))));
+            if (!visible.isEmpty()) {
+                // Expose as plain maps (not records) so the Thymeleaf/OGNL template can read
+                // `item.href`/`item.label`/`item.icon`; a null icon is simply omitted.
+                List<Map<String, Object>> menuModel = new java.util.ArrayList<>();
+                for (MenuItem item : visible) {
+                    Map<String, Object> entry = new LinkedHashMap<>();
+                    entry.put("label", item.label());
+                    entry.put("href", item.href());
+                    entry.put("icon", item.icon());
+                    menuModel.add(entry);
+                }
+                model.put("_menu", menuModel);
+            }
+        }
+
         // The negotiated request locale (roadmap Phase 22) drives #{key} lookups and #locale.
         String tag = exchange.getProperty(TesseraqlProperties.LOCALE, defaultLocaleTag,
                 String.class);
@@ -110,6 +144,13 @@ public final class HtmlResponseRenderer implements Processor {
         exchange.getMessage().setHeader(Exchange.CONTENT_TYPE, "text/html; charset=utf-8");
         applyHeaders(exchange, evaluation);
         exchange.getMessage().setBody(html);
+    }
+
+    /** Coerces a resolved {@code principal.roles}/{@code permissions} value to a string list. */
+    private static List<String> stringList(Object value) {
+        return value instanceof List<?> list
+                ? list.stream().map(String::valueOf).toList()
+                : List.of();
     }
 
     private void applyHeaders(Exchange exchange, EvaluationContext evaluation) {
