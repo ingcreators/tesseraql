@@ -4,9 +4,9 @@
 <th:block id="page-header">
   <span class="hc-spacer"></span>
   <div class="hc-cluster">
-    <a class="hc-button" data-variant="ghost" data-size="sm" href="/_tesseraql/studio/ui/docs/coverage">coverage</a>
-    <a class="hc-button" data-variant="ghost" data-size="sm" href="/_tesseraql/studio/ui/docs/schema">schema</a>
-    <a class="hc-button" data-variant="ghost" data-size="sm" href="/_tesseraql/studio/ui/docs/export">export</a>
+    <!-- The Documentation section links (Overview/Schema/Coverage/Export) live in the sidebar group
+         now (sidebar IA); the header keeps only the back-to-explorer affordance so it no longer
+         duplicates the sidebar. -->
     <a class="hc-button" data-variant="ghost" data-size="sm" href="/_tesseraql/studio/ui">&larr; explorer</a>
   </div>
 </th:block>
@@ -81,18 +81,28 @@
 <section class="hc-card">
   <h2>Migrations</h2>
   <div class="hc-empty" th:unless="${docs.hasMigrations}"><p class="hc-empty__title">No migrations listed.</p></div>
-  <table class="hc-table" th:if="${docs.hasMigrations}">
-    <thead><tr><th>Datasource</th><th>Vendor</th><th>Version</th><th>Description</th><th>Path</th></tr></thead>
-    <tbody>
-      <tr th:each="m : ${docs.migrations}">
-        <td th:text="${m.datasource}"></td>
-        <td th:text="${m.vendor}"></td>
-        <td th:text="${m.version}"></td>
-        <td th:text="${m.description}"></td>
-        <td th:text="${m.path}"></td>
-      </tr>
-    </tbody>
-  </table>
+  <div class="hc-datagrid" th:if="${docs.hasMigrations}">
+    <div class="hc-datagrid__scroll">
+      <table class="hc-datagrid__table">
+        <thead class="hc-datagrid__head"><tr>
+          <th class="hc-datagrid__headcell">Datasource</th>
+          <th class="hc-datagrid__headcell">Vendor</th>
+          <th class="hc-datagrid__headcell">Version</th>
+          <th class="hc-datagrid__headcell">Description</th>
+          <th class="hc-datagrid__headcell">Path</th>
+        </tr></thead>
+        <tbody class="hc-datagrid__body">
+          <tr class="hc-datagrid__row" th:each="m : ${docs.migrations}">
+            <td class="hc-datagrid__cell" th:text="${m.datasource}"></td>
+            <td class="hc-datagrid__cell" th:text="${m.vendor}"></td>
+            <td class="hc-datagrid__cell" th:text="${m.version}"></td>
+            <td class="hc-datagrid__cell" th:text="${m.description}"></td>
+            <td class="hc-datagrid__cell" th:text="${m.path}"></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
 </section>
 </div>
 </html>

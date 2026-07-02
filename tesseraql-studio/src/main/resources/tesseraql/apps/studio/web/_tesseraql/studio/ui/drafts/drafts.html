@@ -26,19 +26,27 @@
     <div class="hc-empty" th:unless="${page.hasDrafts}">
       <p class="hc-empty__title" th:text="${#strings.isEmpty(page.query)} ? 'No pending drafts.' : 'No drafts match.'">No matches.</p>
     </div>
-    <table class="hc-table" th:if="${page.hasDrafts}">
-      <thead><tr><th>Path</th><th>Kind</th><th>Status</th></tr></thead>
-      <tbody>
-        <tr th:each="d : ${page.drafts}">
-          <td><a th:href="${d.sourceUrl}" th:text="${d.path}"></a></td>
-          <td><span class="hc-badge" th:attr="data-variant=${d.isNew} ? 'info' : 'neutral'" th:text="${d.kind}"></span></td>
-          <td>
-            <span class="hc-badge" data-variant="warning" th:if="${d.conflict}">conflict</span>
-            <span th:unless="${d.conflict}">&mdash;</span>
-          </td>
-        </tr>
-      </tbody>
-    </table>
+    <div class="hc-datagrid" th:if="${page.hasDrafts}">
+      <div class="hc-datagrid__scroll">
+        <table class="hc-datagrid__table">
+          <thead class="hc-datagrid__head"><tr>
+            <th class="hc-datagrid__headcell">Path</th>
+            <th class="hc-datagrid__headcell">Kind</th>
+            <th class="hc-datagrid__headcell">Status</th>
+          </tr></thead>
+          <tbody class="hc-datagrid__body">
+            <tr class="hc-datagrid__row" th:each="d : ${page.drafts}">
+              <td class="hc-datagrid__cell"><a th:href="${d.sourceUrl}" th:text="${d.path}"></a></td>
+              <td class="hc-datagrid__cell"><span class="hc-badge" th:attr="data-variant=${d.isNew} ? 'info' : 'neutral'" th:text="${d.kind}"></span></td>
+              <td class="hc-datagrid__cell">
+                <span class="hc-badge" data-variant="warning" th:if="${d.conflict}">conflict</span>
+                <span th:unless="${d.conflict}">&mdash;</span>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
   </div>
 </section>
 </div>
