@@ -26,13 +26,13 @@ final class ClientMessages {
     private static final String WEBJAR = "hypermedia-components__core";
     private static final String WEBJAR_RESOURCES = "META-INF/resources/webjars/";
 
-    private final MessageCatalog catalog;
+    private final Path messagesDir;
     private final String defaultTag;
     private final ObjectMapper mapper = new ObjectMapper();
     private final org.webjars.WebJarVersionLocator webJars = new org.webjars.WebJarVersionLocator();
 
     ClientMessages(Path appHome, String defaultTag) {
-        this.catalog = MessageCatalog.load(appHome.resolve("messages"));
+        this.messagesDir = appHome.resolve("messages");
         this.defaultTag = defaultTag;
     }
 
@@ -40,7 +40,8 @@ final class ClientMessages {
     byte[] script(String localeParam) {
         String tag = normalize(localeParam);
         String language = new Locale.Builder().setLanguageTag(tag).build().getLanguage();
-        Map<String, String> entries = catalog.forLocale(tag);
+        // Read the catalog live so a Studio message edit is served on the next request (no restart).
+        Map<String, String> entries = MessageCatalog.live(messagesDir).forLocale(tag);
         StringBuilder script = new StringBuilder();
         script.append("import { setMessages } from \"")
                 .append(VENDOR_BASE).append("hc.behaviors.min.js\";\n");

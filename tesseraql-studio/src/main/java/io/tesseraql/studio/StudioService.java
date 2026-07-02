@@ -1373,7 +1373,7 @@ public final class StudioService {
     /**
      * Upserts a translation into {@code messages/<locale>.yml} — the dotted {@code key} is written
      * into the nested map, other keys preserved, creating the file/locale if new. Edit-gated and
-     * audited; the change is served after the next reload/restart (the catalog is compiled in).
+     * audited; the message resolver reads the catalog live, so the change is served immediately.
      */
     public void setMessage(String locale, String key, String value, String actor) {
         String tag = requireLocaleTag(locale);

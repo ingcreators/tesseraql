@@ -80,6 +80,29 @@ class I18nIntegrationTest {
     }
 
     @Test
+    void aMessageCatalogEditIsServedLiveWithoutARestart() throws Exception {
+        Path en = appHome.resolve("messages/en.yml");
+        String original = Files.readString(en);
+        try {
+            // The page title (#{users.list.title}) and the client catalog both read "Users".
+            assertThat(get("/users", Map.of()).body()).contains("<h2>Users</h2>");
+            assertThat(get("/assets/_tesseraql/messages.js?locale=en", Map.of()).body())
+                    .contains("Users");
+
+            // Edit the catalog on the running app — no restart.
+            Files.writeString(en, original.replace("title: Users", "title: PeopleLive"));
+
+            // The very next render (server #{}) and the client catalog both reflect the edit.
+            assertThat(get("/users", Map.of()).body()).contains("<h2>PeopleLive</h2>")
+                    .doesNotContain("<h2>Users</h2>");
+            assertThat(get("/assets/_tesseraql/messages.js?locale=en", Map.of()).body())
+                    .contains("PeopleLive");
+        } finally {
+            Files.writeString(en, original);
+        }
+    }
+
+    @Test
     void acceptLanguageNegotiatesJapanese() throws Exception {
         HttpResponse<String> response = get("/users", Map.of("Accept-Language", "ja, en;q=0.5"));
 

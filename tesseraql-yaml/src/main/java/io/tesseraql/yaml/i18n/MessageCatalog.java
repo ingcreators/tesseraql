@@ -55,6 +55,52 @@ public final class MessageCatalog {
     }
 
     /**
+     * Like {@link #load(Path)} but re-reads only when the {@code messages/} directory's {@code .yml}
+     * files change (name/mtime/size signature), so a Studio message edit is served on the next render
+     * without a restart, while an unchanged directory costs a single {@code list}. Process-wide cache
+     * keyed by directory.
+     */
+    public static MessageCatalog live(Path messagesDir) {
+        String signature = signatureOf(messagesDir);
+        LiveEntry entry = LIVE.get(messagesDir);
+        if (entry != null && entry.signature().equals(signature)) {
+            return entry.catalog();
+        }
+        MessageCatalog fresh = load(messagesDir);
+        LIVE.put(messagesDir, new LiveEntry(signature, fresh));
+        return fresh;
+    }
+
+    private record LiveEntry(String signature, MessageCatalog catalog) {
+    }
+
+    private static final java.util.concurrent.ConcurrentHashMap<Path, LiveEntry> LIVE = new java.util.concurrent.ConcurrentHashMap<>();
+
+    /** A change-detection signature over the directory's {@code .yml} files (name:mtime:size). */
+    private static String signatureOf(Path messagesDir) {
+        if (!Files.isDirectory(messagesDir)) {
+            return "";
+        }
+        try (Stream<Path> files = Files.list(messagesDir)) {
+            return files.filter(Files::isRegularFile)
+                    .filter(file -> file.getFileName().toString().endsWith(".yml"))
+                    .sorted()
+                    .map(file -> {
+                        try {
+                            return file.getFileName() + ":"
+                                    + Files.getLastModifiedTime(file).toMillis() + ":"
+                                    + Files.size(file);
+                        } catch (IOException ex) {
+                            return file.getFileName() + ":?";
+                        }
+                    })
+                    .collect(java.util.stream.Collectors.joining("|"));
+        } catch (IOException ex) {
+            return "";
+        }
+    }
+
+    /**
      * Loads every {@code <locale>.yml} file in {@code messagesDir} (an app home's
      * {@code messages/} directory); a missing directory is an empty catalog.
      */

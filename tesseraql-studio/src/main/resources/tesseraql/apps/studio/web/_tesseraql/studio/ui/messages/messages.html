@@ -12,7 +12,7 @@
     <h2>Messages</h2>
     <p class="hc-field__message">The app's i18n catalogs (<code>messages/&lt;locale&gt;.yml</code>),
       one row per dotted key. A key present in one locale but missing in another is flagged. Edits are
-      saved to the locale file and served after the next reload or restart.</p>
+      saved to the locale file and served immediately &mdash; the next page render picks them up.</p>
     <div class="hc-cluster">
       <span class="hc-badge" data-variant="neutral" th:text="|${msg.localeCount} locale(s)|">0 locale(s)</span>
       <span class="hc-badge" data-variant="neutral" th:text="|${msg.keyCount} key(s)|">0 key(s)</span>
