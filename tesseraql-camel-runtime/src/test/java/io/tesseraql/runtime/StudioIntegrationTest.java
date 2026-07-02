@@ -1904,6 +1904,43 @@ class StudioIntegrationTest {
     }
 
     @Test
+    void uiSecurityPolicyEditWritesOverlayAndRebindsTheEngineLive() throws Exception {
+        String policyId = "studio.it.editpolicy";
+        Path overlay = appHome.resolve("config/overlay.yml");
+        io.tesseraql.security.Principal editor = principal(List.of("STUDIO_EDITOR"));
+        try {
+            // The edit form is offered to an editor.
+            assertThat(get("/_tesseraql/studio/ui/security", true).body())
+                    .contains("Grant a role or permission");
+
+            // Grant STUDIO_EDITOR a brand-new policy — creates it in the overlay.
+            assertThat(postForm("/_tesseraql/studio/ui/security/policy/add-rule",
+                    "policy=" + enc(policyId) + "&kind=role&value=STUDIO_EDITOR").statusCode())
+                    .isEqualTo(303);
+            // Written to config/overlay.yml (the base config is untouched) and audited.
+            assertThat(Files.readString(overlay)).contains(policyId).contains("STUDIO_EDITOR");
+            assertThat(Files.readString(appHome.resolve("work/studio/audit/audit.jsonl")))
+                    .contains("\"action\":\"policy\"");
+            // The change is authorized LIVE: the rebound PolicyEngine now permits it.
+            assertThat(currentPolicyEngine().permits(policyId, editor)).isTrue();
+
+            // Revoke it → the policy now grants no one, live.
+            assertThat(postForm("/_tesseraql/studio/ui/security/policy/remove-rule",
+                    "policy=" + enc(policyId) + "&kind=role&value=STUDIO_EDITOR").statusCode())
+                    .isEqualTo(303);
+            assertThat(currentPolicyEngine().permits(policyId, editor)).isFalse();
+        } finally {
+            Files.deleteIfExists(overlay);
+        }
+    }
+
+    private static io.tesseraql.security.policy.PolicyEngine currentPolicyEngine() {
+        return runtime.camelContext().getRegistry().lookupByNameAndType(
+                io.tesseraql.camel.TesseraqlProperties.POLICY_ENGINE_BEAN,
+                io.tesseraql.security.policy.PolicyEngine.class);
+    }
+
+    @Test
     void uiTryConsoleRendersTheFormWithRoutePathSuggestions() throws Exception {
         HttpResponse<String> response = get("/_tesseraql/studio/ui/try", true);
 

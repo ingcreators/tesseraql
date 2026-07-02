@@ -1,0 +1,34 @@
+version: tesseraql/v1
+id: tql.studio.policy.addRule
+kind: route
+recipe: command-json
+
+# Grants a policy a role/permission rule (creating the policy if new) in config/overlay.yml, then
+# rebinds the live PolicyEngine. Edit-gated in the provider.
+input:
+  policy:
+    type: string
+    required: true
+  kind:
+    type: string
+    required: true
+  value:
+    type: string
+    required: true
+
+security:
+  auth: browser
+  csrf: true
+
+sql:
+  service: studio.policyAddRule
+  params:
+    policy: params.policy
+    kind: params.kind
+    value: params.value
+    actor: principal.loginId
+    principalRoles: principal.roles
+
+response:
+  redirect:
+    location: /_tesseraql/studio/ui/security?added=1

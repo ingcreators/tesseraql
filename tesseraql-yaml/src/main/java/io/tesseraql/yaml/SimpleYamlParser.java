@@ -194,6 +194,19 @@ public final class SimpleYamlParser {
         return workflow;
     }
 
+    /**
+     * Serializes a tree (nested maps/lists/scalars) back to a YAML document — the inverse of
+     * {@link #parseTree(Path)}, for a Studio-managed config file such as {@code config/overlay.yml}.
+     * Comments and original formatting are not preserved (a fresh document is emitted).
+     */
+    public String write(Object tree) {
+        try {
+            return mapper.writeValueAsString(tree);
+        } catch (com.fasterxml.jackson.core.JsonProcessingException ex) {
+            throw new TqlException(SCHEMA_ERROR, "Failed to serialize YAML: " + ex.getMessage());
+        }
+    }
+
     /** Parses an arbitrary YAML document into a nested map (for config files). */
     public Map<String, Object> parseTree(Path file) {
         try {

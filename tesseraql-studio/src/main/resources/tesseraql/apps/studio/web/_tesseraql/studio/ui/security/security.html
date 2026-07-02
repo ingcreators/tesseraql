@@ -71,7 +71,7 @@
 
   <section class="hc-card">
     <h3>Policies</h3>
-    <div class="hc-empty" th:if="${sec.policyCount == 0}">
+    <div class="hc-empty" th:if="${sec.policyCount == 0 and !sec.editable}">
       <p class="hc-empty__title">No policies defined.</p>
       <p class="hc-empty__body">Add them under <code>tesseraql.security.policies</code>.</p>
     </div>
@@ -86,7 +86,23 @@
           <tbody class="hc-datagrid__body">
             <tr class="hc-datagrid__row" th:each="p : ${sec.policies}">
               <td class="hc-datagrid__cell"><code th:text="${p.id}">policy.id</code></td>
-              <td class="hc-datagrid__cell" th:text="${p.summary}">role X OR permission Y</td>
+              <td class="hc-datagrid__cell">
+                <div class="hc-cluster">
+                  <span class="hc-badge" data-variant="neutral" th:each="rule : ${p.rules}">
+                    <span th:text="${rule.label}">role X</span>
+                    <form th:if="${sec.editable and rule.editable}" method="post"
+                          action="/_tesseraql/studio/ui/security/policy/remove-rule">
+                      <input type="hidden" name="_csrf" th:value="${_csrf}">
+                      <input type="hidden" name="policy" th:value="${p.id}">
+                      <input type="hidden" name="kind" th:value="${rule.kind}">
+                      <input type="hidden" name="value" th:value="${rule.value}">
+                      <button type="submit" class="hc-button" data-variant="ghost" data-size="sm"
+                              th:attr="aria-label=|Revoke ${rule.label}|">&times;</button>
+                    </form>
+                  </span>
+                  <span class="hc-field__message" th:if="${#lists.isEmpty(p.rules)}">(no rules &mdash; denies all)</span>
+                </div>
+              </td>
               <td class="hc-datagrid__cell">
                 <span class="hc-badge" data-variant="warning" th:if="${p.unused}">unused</span>
                 <details class="hc-disclosure" th:unless="${p.unused}">
@@ -104,6 +120,41 @@
         </table>
       </div>
     </div>
+
+    <details class="hc-disclosure" th:if="${sec.editable}" th:attr="open=${sec.policyCount == 0} ? true : null">
+      <summary>Grant a role or permission</summary>
+      <p class="hc-field__message">Add a rule to a policy, or type a new policy id to create one. The
+        rule is written to <code>config/overlay.yml</code> (the base config is left intact) and takes
+        effect immediately. A policy grants access when the caller matches <em>any</em> of its rules.
+        A base-defined policy can be overridden here but not deleted.</p>
+      <form class="hc-stack" method="post" action="/_tesseraql/studio/ui/security/policy/add-rule">
+        <input type="hidden" name="_csrf" th:value="${_csrf}">
+        <div class="hc-cluster">
+          <div class="hc-field">
+            <label class="hc-field__label" for="policy-id">Policy</label>
+            <input class="hc-input" id="policy-id" name="policy" required list="policy-id-options"
+                   autocomplete="off" placeholder="users.read">
+            <datalist id="policy-id-options">
+              <option th:each="p : ${sec.policies}" th:value="${p.id}"></option>
+            </datalist>
+          </div>
+          <div class="hc-field">
+            <label class="hc-field__label" for="policy-kind">Grant by</label>
+            <select class="hc-select" id="policy-kind" name="kind">
+              <option value="role">role</option>
+              <option value="permission">permission</option>
+            </select>
+          </div>
+          <div class="hc-field">
+            <label class="hc-field__label" for="policy-value">Value</label>
+            <input class="hc-input" id="policy-value" name="value" required placeholder="ADMIN">
+          </div>
+        </div>
+        <div class="hc-cluster">
+          <button type="submit" class="hc-button" data-variant="primary">Add rule</button>
+        </div>
+      </form>
+    </details>
   </section>
 </div>
 </html>
