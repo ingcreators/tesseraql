@@ -1289,6 +1289,19 @@ public final class TesseraqlRuntime implements AutoCloseable {
                             }
                             return Map.of("sql", sql);
                         })
+                        // Validation rule builder: generate a route's validate: YAML for one rule from
+                        // a chosen operation (required/min/max/range/equals/one-of/expression/sql).
+                        // Pure text generation to copy into the route — no side effect.
+                        .register("studio.validationBuilder",
+                                params -> Map.of("editable",
+                                        studioAccess.canEdit(params.get("roles"))))
+                        .register("studio.validationBuilder.build", params -> Map.of("snippet",
+                                io.tesseraql.studio.ValidationRuleBuilder.generate(
+                                        str(params, "operation"), str(params, "source"),
+                                        str(params, "field"), str(params, "value"),
+                                        str(params, "value2"), str(params, "id"),
+                                        str(params, "code"), str(params, "message"),
+                                        str(params, "when"))))
                         .register("studio.migration.create", params -> {
                             studioAccess.requireEdit(params.get("roles"));
                             String datasource = params.get("datasource") == null

@@ -2017,6 +2017,25 @@ class StudioIntegrationTest {
     }
 
     @Test
+    void uiValidationBuilderRendersTheForm() throws Exception {
+        HttpResponse<String> response = get("/_tesseraql/studio/ui/validation-builder", true);
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(response.body()).contains("Validation builder").contains("name=\"operation\"");
+    }
+
+    @Test
+    void uiValidationBuilderGeneratesARuleSnippet() throws Exception {
+        HttpResponse<String> response = postForm("/_tesseraql/studio/ui/validation-builder/build",
+                "operation=min&source=body&field=age&value=18&id=ageAtLeast18");
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        // The generated snippet is HTML-escaped in the fragment (>= becomes &gt;=).
+        assertThat(response.body()).contains("validate:").contains("body.age &gt;= 18")
+                .contains("field: age");
+    }
+
+    @Test
     void uiConfigEditorRejectsANonWhitelistedKey() throws Exception {
         Path overlay = appHome.resolve("config/overlay.yml");
         try {
