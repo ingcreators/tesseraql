@@ -300,9 +300,11 @@ class StudioIntegrationTest {
                     assertThat(draft.get("conflict").asBoolean()).isTrue();
                 });
 
-        // The overview page lists the draft (linked to its editor); the explorer links to the page.
+        // The overview page lists the draft (linked to its editor) in an hc-datagrid (table
+        // consistency pass — same component as Audit / docs Routes); the explorer links to the page.
         assertThat(get("/_tesseraql/studio/ui/drafts", true).body()).contains(path)
-                .contains("conflict").contains("/_tesseraql/studio/ui/source?path=");
+                .contains("conflict").contains("/_tesseraql/studio/ui/source?path=")
+                .contains("hc-datagrid");
         assertThat(get("/_tesseraql/studio/ui", true).body())
                 .contains("/_tesseraql/studio/ui/drafts");
     }
@@ -1316,7 +1318,9 @@ class StudioIntegrationTest {
 
         assertThat(response.statusCode()).isEqualTo(200);
         assertThat(response.body()).contains("Scaffold CRUD from a table").contains("widgets")
-                .contains("hx-post=\"/_tesseraql/studio/ui/scaffold/preview\"");
+                .contains("hx-post=\"/_tesseraql/studio/ui/scaffold/preview\"")
+                // table list uses hc-datagrid (table consistency pass)
+                .contains("hc-datagrid");
     }
 
     @Test

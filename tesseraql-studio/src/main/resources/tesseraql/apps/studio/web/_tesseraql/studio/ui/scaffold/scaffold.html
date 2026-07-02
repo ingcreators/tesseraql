@@ -14,25 +14,35 @@
   <p class="hc-alert" data-variant="info" role="status" th:unless="${scaffold.enabled}" th:text="${scaffold.note}"></p>
   <th:block th:if="${scaffold.enabled}">
     <div class="hc-empty" th:unless="${scaffold.hasTables}"><p class="hc-empty__title">No tables found in the dev datasource.</p></div>
-    <table class="hc-table" th:if="${scaffold.hasTables}">
-      <thead><tr><th>Table</th><th>Type</th><th>Columns</th><th>Primary key</th><th></th></tr></thead>
-      <tbody>
-        <tr th:each="t : ${scaffold.tables}">
-          <td th:text="${t.name}"></td>
-          <td th:text="${t.type}"></td>
-          <td th:text="${t.columnCount}"></td>
-          <td th:text="${t.primaryKey}"></td>
-          <td>
-            <form th:if="${t.scaffoldable}" hx-post="/_tesseraql/studio/ui/scaffold/preview"
-                  hx-target="#scaffold-preview" hx-swap="innerHTML" hx-disabled-elt="find button">
-              <input type="hidden" name="table" th:value="${t.name}">
-              <div class="hc-cluster"><button type="submit" class="hc-button" data-variant="primary" data-size="sm">Preview CRUD</button><th:block th:replace="~{tql/shell :: busy('Generating…')}"/></div>
-            </form>
-            <span class="hc-field__message" th:unless="${t.scaffoldable}">needs a single-column primary key</span>
-          </td>
-        </tr>
-      </tbody>
-    </table>
+    <div class="hc-datagrid" th:if="${scaffold.hasTables}">
+      <div class="hc-datagrid__scroll">
+        <table class="hc-datagrid__table">
+          <thead class="hc-datagrid__head"><tr>
+            <th class="hc-datagrid__headcell">Table</th>
+            <th class="hc-datagrid__headcell">Type</th>
+            <th class="hc-datagrid__headcell">Columns</th>
+            <th class="hc-datagrid__headcell">Primary key</th>
+            <th class="hc-datagrid__headcell"></th>
+          </tr></thead>
+          <tbody class="hc-datagrid__body">
+            <tr class="hc-datagrid__row" th:each="t : ${scaffold.tables}">
+              <td class="hc-datagrid__cell" th:text="${t.name}"></td>
+              <td class="hc-datagrid__cell" th:text="${t.type}"></td>
+              <td class="hc-datagrid__cell" th:text="${t.columnCount}"></td>
+              <td class="hc-datagrid__cell" th:text="${t.primaryKey}"></td>
+              <td class="hc-datagrid__cell">
+                <form th:if="${t.scaffoldable}" hx-post="/_tesseraql/studio/ui/scaffold/preview"
+                      hx-target="#scaffold-preview" hx-swap="innerHTML" hx-disabled-elt="find button">
+                  <input type="hidden" name="table" th:value="${t.name}">
+                  <div class="hc-cluster"><button type="submit" class="hc-button" data-variant="primary" data-size="sm">Preview CRUD</button><th:block th:replace="~{tql/shell :: busy('Generating…')}"/></div>
+                </form>
+                <span class="hc-field__message" th:unless="${t.scaffoldable}">needs a single-column primary key</span>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
   </th:block>
 </section>
 <section class="hc-card" th:if="${scaffold.enabled}">
