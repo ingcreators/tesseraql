@@ -1027,7 +1027,27 @@ public final class TesseraqlRuntime implements AutoCloseable {
                             model.put("unknownPolicies", unknownPolicies);
                             model.put("unusedPolicies", unusedPolicies);
                             model.put("policyCount", policies.size());
+                            model.put("editable", studioAccess.canEdit(params.get("roles")));
                             return model;
+                        })
+                        // Policy editing (security overview, edit slice): grant/revoke a role or
+                        // permission rule on a policy. StudioService writes the policy's full rule set
+                        // to config/overlay.yml (the base config is untouched; overlay overrides it),
+                        // gated + audited; then the PolicyEngine is rebuilt from the fresh config and
+                        // rebound, so the change is authorized live on the next request — no restart.
+                        .register("studio.policyAddRule", params -> {
+                            studioAccess.requireEdit(params.get("principalRoles"));
+                            studio.addPolicyRule(str(params, "policy"), str(params, "kind"),
+                                    str(params, "value"), actorOf(params));
+                            rebindPolicyEngine(context, manifest.appHome());
+                            return Map.of("added", true);
+                        })
+                        .register("studio.policyRemoveRule", params -> {
+                            studioAccess.requireEdit(params.get("principalRoles"));
+                            studio.removePolicyRule(str(params, "policy"), str(params, "kind"),
+                                    str(params, "value"), actorOf(params));
+                            rebindPolicyEngine(context, manifest.appHome());
+                            return Map.of("removed", true);
                         })
                         // API try-it console: invoke one of the app's own routes and show the raw
                         // response (status, headers, body). The run proxies a loopback HTTP call to
@@ -1650,6 +1670,18 @@ public final class TesseraqlRuntime implements AutoCloseable {
             "compass", "book-open", "database", "shield-check", "share-2", "blocks", "wrench",
             "database-zap", "wand-sparkles", "file-pen", "scroll-text", "activity", "users",
             "layout-dashboard", "waypoints", "arrow-left-right", "send", "panel-left");
+
+    /**
+     * Rebuilds the {@link PolicyEngine} from the app's current (re-read) config and rebinds it, so a
+     * Studio policy edit written to {@code config/overlay.yml} is authorized live on the next request
+     * without a restart — the auth producer looks the engine up by name per request, so the rebind
+     * takes effect immediately. Only the policy engine is rebound; the authenticators are unchanged.
+     */
+    private static void rebindPolicyEngine(CamelContext context, Path appHome) {
+        SecurityConfig fresh = SecurityConfigFactory
+                .build(new ManifestLoader().load(appHome).config());
+        context.getRegistry().bind(TesseraqlProperties.POLICY_ENGINE_BEAN, new PolicyEngine(fresh));
+    }
 
     /**
      * The API try-it console's loopback invocation: sends the requested method/path/body to the

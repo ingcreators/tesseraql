@@ -60,8 +60,10 @@ public final class StudioService {
     private static final TqlErrorCode RENDER = new TqlErrorCode(TqlDomain.STUDIO, 4222);
     private static final TqlErrorCode NEW_ROUTE = new TqlErrorCode(TqlDomain.STUDIO, 4224);
     private static final TqlErrorCode MENU = new TqlErrorCode(TqlDomain.STUDIO, 4225);
+    private static final TqlErrorCode POLICY = new TqlErrorCode(TqlDomain.STUDIO, 4226);
     private static final TqlErrorCode CONFLICT = new TqlErrorCode(TqlDomain.STUDIO, 4090);
     private static final Pattern LEADING_DIGITS = Pattern.compile("^\\d+");
+    private static final Pattern POLICY_ID = Pattern.compile("[A-Za-z0-9_.-]+");
     private static final Pattern IDENTIFIER = Pattern.compile("[A-Za-z0-9_-]+");
     private static final Pattern MIGRATION_PATH = Pattern
             .compile("db/(?:[^/]+/)?migration(?:-[^/]+)?/[^/]+\\.sql");
@@ -1329,25 +1331,160 @@ public final class StudioService {
         byId.forEach((id, spec) -> sorted.put(String.valueOf(id), spec));
         sorted.forEach((id, spec) -> {
             List<String> tokens = new ArrayList<>();
+            List<Map<String, Object>> rows = new ArrayList<>();
             if (spec instanceof Map<?, ?> map && map.get("anyOf") instanceof List<?> rules) {
                 for (Object rule : rules) {
                     if (rule instanceof Map<?, ?> r) {
+                        Map<String, Object> row = new LinkedHashMap<>();
                         if (r.get("role") != null) {
-                            tokens.add("role " + r.get("role"));
+                            row.put("kind", "role");
+                            row.put("value", String.valueOf(r.get("role")));
                         } else if (r.get("permission") != null) {
-                            tokens.add("permission " + r.get("permission"));
+                            row.put("kind", "permission");
+                            row.put("value", String.valueOf(r.get("permission")));
                         } else if (r.get("claimName") != null) {
-                            tokens.add("claim " + r.get("claimName") + "=" + r.get("claimValue"));
+                            row.put("kind", "claim");
+                            row.put("value", r.get("claimName") + "=" + r.get("claimValue"));
+                        } else {
+                            continue;
                         }
+                        row.put("label", row.get("kind") + " " + row.get("value"));
+                        // Claims are shown but not individually removable from the editor (only role/
+                        // permission rules are edited here).
+                        row.put("editable", !"claim".equals(row.get("kind")));
+                        tokens.add(String.valueOf(row.get("label")));
+                        rows.add(row);
                     }
                 }
             }
             Map<String, Object> policy = new LinkedHashMap<>();
             policy.put("id", id);
+            policy.put("rules", rows);
             policy.put("summary", tokens.isEmpty() ? "(no rules)" : String.join(" OR ", tokens));
             out.add(policy);
         });
         return out;
+    }
+
+    /**
+     * Grants a policy an extra {@code role} or {@code permission} rule by writing the policy's full
+     * rule set to {@code config/overlay.yml} (the last-merged overlay, so the base config is left
+     * intact). A previously undefined policy is created. Edit-gated and audited; the caller reloads
+     * the security engine so the change is live.
+     */
+    public void addPolicyRule(String policyId, String kind, String value, String actor) {
+        String id = requirePolicyId(policyId);
+        String ruleKind = requireRuleKind(kind);
+        String ruleValue = trimToNull(value);
+        if (ruleValue == null) {
+            throw new TqlException(POLICY, "A policy rule needs a " + ruleKind + " value");
+        }
+        List<Map<String, Object>> rules = effectivePolicyRules(id);
+        boolean present = rules.stream()
+                .anyMatch(r -> ruleValue.equals(String.valueOf(r.get(ruleKind))));
+        if (!present) {
+            Map<String, Object> rule = new LinkedHashMap<>();
+            rule.put(ruleKind, ruleValue);
+            rules.add(rule);
+            writeOverlayPolicy(id, rules, actor);
+        }
+    }
+
+    /**
+     * Revokes a {@code role}/{@code permission} rule from a policy by writing the reduced rule set to
+     * {@code config/overlay.yml} (which overrides the base). Removing the last rule leaves a policy
+     * that grants no one (deny-by-default). A base-only policy cannot be deleted via the overlay.
+     */
+    public void removePolicyRule(String policyId, String kind, String value, String actor) {
+        String id = requirePolicyId(policyId);
+        String ruleKind = requireRuleKind(kind);
+        String ruleValue = trimToNull(value);
+        List<Map<String, Object>> rules = effectivePolicyRules(id);
+        boolean removed = rules.removeIf(
+                r -> ruleValue != null && ruleValue.equals(String.valueOf(r.get(ruleKind))));
+        if (removed) {
+            writeOverlayPolicy(id, rules, actor);
+        }
+    }
+
+    /** The effective {@code anyOf} rule maps of a policy from the current merged config. */
+    private List<Map<String, Object>> effectivePolicyRules(String policyId) {
+        Object policies = new ManifestLoader().load(appHome).config()
+                .navigate("tesseraql.security.policies");
+        List<Map<String, Object>> out = new ArrayList<>();
+        if (policies instanceof Map<?, ?> byId && byId.get(policyId) instanceof Map<?, ?> spec
+                && spec.get("anyOf") instanceof List<?> rules) {
+            for (Object rule : rules) {
+                if (rule instanceof Map<?, ?> map) {
+                    Map<String, Object> copy = new LinkedHashMap<>();
+                    map.forEach((k, v) -> copy.put(String.valueOf(k), v));
+                    out.add(copy);
+                }
+            }
+        }
+        return out;
+    }
+
+    /** Writes {@code tesseraql.security.policies.<id>.anyOf} into overlay.yml, other keys preserved. */
+    private void writeOverlayPolicy(String policyId, List<Map<String, Object>> rules,
+            String actor) {
+        if (readOnly) {
+            throw new TqlException(READ_ONLY, "Studio is read-only; editing policies is disabled");
+        }
+        Path overlay = resolve("config/overlay.yml");
+        Map<String, Object> tree = Files.isRegularFile(overlay)
+                ? mutableCopy(parser.parseTree(overlay))
+                : new LinkedHashMap<>();
+        Map<String, Object> policies = childMap(childMap(childMap(tree, "tesseraql"),
+                "security"), "policies");
+        Map<String, Object> policy = new LinkedHashMap<>();
+        policy.put("anyOf", rules);
+        policies.put(policyId, policy);
+        try {
+            Files.createDirectories(overlay.getParent());
+            Files.writeString(overlay, parser.write(tree));
+        } catch (IOException ex) {
+            throw new UncheckedIOException(ex);
+        }
+        recordAudit(actor, "policy", "config/overlay.yml");
+    }
+
+    private static String requirePolicyId(String id) {
+        String trimmed = trimToNull(id);
+        if (trimmed == null || !POLICY_ID.matcher(trimmed).matches()) {
+            throw new TqlException(POLICY, "Invalid policy id: " + id);
+        }
+        return trimmed;
+    }
+
+    private static String requireRuleKind(String kind) {
+        String trimmed = trimToNull(kind);
+        if (!"role".equals(trimmed) && !"permission".equals(trimmed)) {
+            throw new TqlException(POLICY, "A policy rule kind must be 'role' or 'permission'");
+        }
+        return trimmed;
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Map<String, Object> mutableCopy(Map<String, Object> source) {
+        Map<String, Object> copy = new LinkedHashMap<>();
+        source.forEach((key, value) -> copy.put(key,
+                value instanceof Map ? mutableCopy((Map<String, Object>) value) : value));
+        return copy;
+    }
+
+    /** Returns {@code parent}'s child map at {@code key}, creating a mutable one when absent. */
+    @SuppressWarnings("unchecked")
+    private static Map<String, Object> childMap(Map<String, Object> parent, String key) {
+        Object child = parent.get(key);
+        if (child instanceof Map) {
+            Map<String, Object> mutable = mutableCopy((Map<String, Object>) child);
+            parent.put(key, mutable);
+            return mutable;
+        }
+        Map<String, Object> created = new LinkedHashMap<>();
+        parent.put(key, created);
+        return created;
     }
 
     /**
