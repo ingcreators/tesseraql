@@ -24,6 +24,17 @@ input:
   bearer:
     type: string
     required: false
+  useSession:
+    type: string
+    required: false
+  # Bound from the caller's own request headers/fields so the loopback can be sent as the current
+  # Studio user when "send my session" is ticked (Cookie = the session; _csrf = its CSRF token).
+  Cookie:
+    type: string
+    required: false
+  _csrf:
+    type: string
+    required: false
 
 security:
   auth: browser
@@ -38,6 +49,9 @@ sql:
     body: params.body
     contentType: params.contentType
     bearer: params.bearer
+    useSession: params.useSession
+    cookie: params.Cookie
+    csrf: params._csrf
 
 response:
   html:
