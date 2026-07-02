@@ -115,6 +115,23 @@
     <a class="hc-item" href="/_tesseraql/admin/users"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use href="/assets/_tesseraql/icons.svg#users"/></svg></span><span class="hc-item__title hc-shell__label">IAM Admin</span></a>
   </div>
 </th:block>
+<!-- The Operations console's own section navigation (sidebar IA, mirroring studio-nav): the console
+     is a multi-page monitoring app, so `ops-page(...)` mounts this sidebar instead of the bare 3-app
+     system-nav — Overview and the sub-views (Traces / Transfers / Outbox) become reachable from
+     anywhere, with the other system apps linked below. installNavCurrent marks the active link. -->
+<th:block th:fragment="ops-page(title, header, content)"
+          th:replace="~{tql/shell :: shell-impl(${title}, ~{tql/shell :: ops-nav}, ${header}, ${content}, true)}"/>
+<th:block th:fragment="ops-nav">
+  <a class="hc-item" href="/_tesseraql/ops/console"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use href="/assets/_tesseraql/icons.svg#activity"/></svg></span><span class="hc-item__title hc-shell__label">Overview</span></a>
+  <a class="hc-item" href="/_tesseraql/ops/console/traces"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use href="/assets/_tesseraql/icons.svg#waypoints"/></svg></span><span class="hc-item__title hc-shell__label">Traces</span></a>
+  <a class="hc-item" href="/_tesseraql/ops/console/transfers"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use href="/assets/_tesseraql/icons.svg#arrow-left-right"/></svg></span><span class="hc-item__title hc-shell__label">Transfers</span></a>
+  <a class="hc-item" href="/_tesseraql/ops/console/outbox"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use href="/assets/_tesseraql/icons.svg#send"/></svg></span><span class="hc-item__title hc-shell__label">Outbox</span></a>
+  <div class="tql-nav__section" role="group" aria-labelledby="ops-nav-system">
+    <p class="tql-nav__group" id="ops-nav-system">System</p>
+    <a class="hc-item" href="/_tesseraql/studio/ui"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use href="/assets/_tesseraql/icons.svg#layout-dashboard"/></svg></span><span class="hc-item__title hc-shell__label">Studio</span></a>
+    <a class="hc-item" href="/_tesseraql/admin/users"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use href="/assets/_tesseraql/icons.svg#users"/></svg></span><span class="hc-item__title hc-shell__label">IAM Admin</span></a>
+  </div>
+</th:block>
 <!-- A loading affordance for an async (htmx) action: htmx toggles the `htmx-indicator`
      element visible while the request is in flight (its injected indicator style applies
      under the `style-src 'unsafe-inline'` CSP), so a slow DB call no longer reads as a hang.

@@ -1,19 +1,27 @@
 <!DOCTYPE html>
 <html xmlns:th="http://www.thymeleaf.org"
-      th:replace="~{tql/shell :: page('TesseraQL Operations Console', ~{:: #page-header}, ~{:: #page-content})}">
+      th:replace="~{tql/shell :: ops-page('TesseraQL Operations Console', ~{:: #page-header}, ~{:: #page-content})}">
 <th:block id="page-header">
   <span class="hc-spacer"></span>
   <div class="hc-cluster">
-    <a href="/_tesseraql/ops/console/traces">traces &rarr;</a>
-    <a href="/_tesseraql/ops/console/transfers">transfers &rarr;</a>
-    <a href="/_tesseraql/ops/console/outbox">outbox &rarr;</a>
-    <a href="/_tesseraql/ops/console">refresh</a>
+    <!-- Sub-view links (Traces/Transfers/Outbox) live in the sidebar ops-nav now; the header keeps
+         only the live health status. The page auto-refreshes every 15s, so no manual refresh link. -->
     <span class="hc-badge" data-variant="success" th:if="${ops.ok}">UP</span>
     <span class="hc-badge" data-variant="warning" th:if="${ops.warning}">WARN</span>
   </div>
 </th:block>
 <div id="page-content" class="hc-stack" hx-get="/_tesseraql/ops/console" hx-trigger="every 15s"
      hx-select="#page-content" hx-target="this" hx-swap="outerHTML">
+<!-- Quick in-page nav for the long dashboard (sidebar IA): jump to a section without scrolling.
+     Anchors the always-present sections; auto-refresh re-renders these links unchanged. -->
+<nav class="hc-cluster" aria-label="Jump to section">
+  <span class="hc-field__label">Jump to</span>
+  <a class="hc-button" data-variant="ghost" data-size="sm" href="#batch">Batch</a>
+  <a class="hc-button" data-variant="ghost" data-size="sm" href="#lanes">Lanes</a>
+  <a class="hc-button" data-variant="ghost" data-size="sm" href="#traces">Traces</a>
+  <a class="hc-button" data-variant="ghost" data-size="sm" href="#slow-sql">Slow SQL</a>
+  <a class="hc-button" data-variant="ghost" data-size="sm" href="#pinning">Pinning</a>
+</nav>
 <section class="hc-card" id="alerts" th:if="${ops.hasAlerts}">
   <h2>Alerts</h2>
   <div class="hc-stack">
