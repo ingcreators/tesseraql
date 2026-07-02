@@ -8,12 +8,16 @@ import io.tesseraql.core.error.TqlDomain;
 import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
 import io.tesseraql.yaml.SimpleYamlParser;
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.attribute.FileTime;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * The application's declarative sidebar menu ({@code config/menu.yml}) with per-item role/permission
@@ -50,6 +54,12 @@ public final class MenuSpec {
 
     private static final MenuSpec EMPTY = new MenuSpec(List.of());
 
+    /** The last-seen file signature + parsed spec per app home, so {@link #live} re-parses only on change. */
+    private record Cached(FileTime modified, long size, MenuSpec spec) {
+    }
+
+    private static final ConcurrentHashMap<Path, Cached> CACHE = new ConcurrentHashMap<>();
+
     private final List<MenuItem> items;
 
     private MenuSpec(List<MenuItem> items) {
@@ -80,6 +90,37 @@ public final class MenuSpec {
             }
         }
         return new MenuSpec(items);
+    }
+
+    /**
+     * The current menu for {@code appHome}, re-reading {@code config/menu.yml} only when the file's
+     * last-modified time or size has changed since the last call — so an edit (e.g. from the Studio
+     * menu editor) takes effect on the next rendered page without a route reload or restart, while an
+     * unchanged file costs a single {@code stat}. Falls back to an uncached {@link #load} on I/O error.
+     */
+    public static MenuSpec live(Path appHome) {
+        Path file = appHome.resolve("config/menu.yml").normalize();
+        FileTime modified;
+        long size;
+        try {
+            if (Files.isRegularFile(file)) {
+                modified = Files.getLastModifiedTime(file);
+                size = Files.size(file);
+            } else {
+                modified = null;
+                size = -1L;
+            }
+        } catch (IOException ex) {
+            return load(appHome);
+        }
+        Cached cached = CACHE.get(appHome);
+        if (cached != null && Objects.equals(cached.modified(), modified)
+                && cached.size() == size) {
+            return cached.spec();
+        }
+        MenuSpec spec = load(appHome);
+        CACHE.put(appHome, new Cached(modified, size, spec));
+        return spec;
     }
 
     /**

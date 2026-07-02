@@ -42,26 +42,19 @@ public final class HtmlResponseRenderer implements Processor {
     private final Path appHome;
     private final String templateName;
     private final String defaultLocaleTag;
-    private final MenuSpec menu;
     private final Map<String, Expr> headerGuards;
     private final ObjectMapper mapper = new ObjectMapper();
 
     public HtmlResponseRenderer(HtmlResponse response, Path appHome, Path routeDir) {
-        this(response, appHome, routeDir, "en", MenuSpec.empty());
+        this(response, appHome, routeDir, "en");
     }
 
     public HtmlResponseRenderer(HtmlResponse response, Path appHome, Path routeDir,
             String defaultLocaleTag) {
-        this(response, appHome, routeDir, defaultLocaleTag, MenuSpec.empty());
-    }
-
-    public HtmlResponseRenderer(HtmlResponse response, Path appHome, Path routeDir,
-            String defaultLocaleTag, MenuSpec menu) {
         this.response = response;
         this.appHome = appHome.toAbsolutePath().normalize();
         this.templateName = resolveTemplate(this.appHome, routeDir, response.template());
         this.defaultLocaleTag = defaultLocaleTag;
-        this.menu = menu;
         // Pre-compile each header's optional guard expression so a syntax error fails the build.
         this.headerGuards = new LinkedHashMap<>();
         response.headersWhen().forEach((name, when) -> {
@@ -114,7 +107,10 @@ public final class HtmlResponseRenderer implements Processor {
         // in the nav slot in place of the app's hand-authored nav fragment. Hidden items are never
         // emitted (server-side filter). An absent/empty menu leaves `_menu` unset, so the shell falls
         // back to the passed nav fragment. Roles/permissions come via the same principal.* the
-        // execution context resolves for routes, so no extra dependency is needed here.
+        // execution context resolves for routes, so no extra dependency is needed here. The menu is
+        // read via MenuSpec.live: an edit takes effect on the next render (no reload), and an
+        // unchanged file costs a single stat.
+        MenuSpec menu = MenuSpec.live(appHome);
         if (!menu.isEmpty()) {
             List<MenuItem> visible = menu.visibleFor(
                     stringList(evaluation.resolve(List.of("principal", "roles"))),
