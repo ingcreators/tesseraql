@@ -50,6 +50,11 @@ public final class AppConfig {
         this.secrets = secrets;
     }
 
+    /** The merged, unresolved configuration tree — for inspection (e.g. the Studio config viewer). */
+    public Map<String, Object> root() {
+        return root;
+    }
+
     /** Returns the resolved string value at a dotted path, or empty if the path is absent. */
     public Optional<String> getString(String dottedPath) {
         Object raw = navigate(dottedPath);
