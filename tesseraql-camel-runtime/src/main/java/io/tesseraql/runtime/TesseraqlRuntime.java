@@ -712,6 +712,15 @@ public final class TesseraqlRuntime implements AutoCloseable {
                         name -> context.getRegistry().lookupByNameAndType(name,
                                 javax.sql.DataSource.class),
                         "main", studio, scaffoldEnabled);
+                // The Studio data browser: read-only, paginated row access over the dev datasource.
+                // Opt-in (exposes data); read-only connection + statement timeout + a scan cap.
+                boolean dataBrowserEnabled = manifest.config()
+                        .getString("tesseraql.studio.dataBrowser.enabled")
+                        .map(Boolean::parseBoolean).orElse(false);
+                StudioDataService studioData = new StudioDataService(
+                        name -> context.getRegistry().lookupByNameAndType(name,
+                                javax.sql.DataSource.class),
+                        dataBrowserEnabled, testTimeout, testMaxRows);
                 // Granular read-only (backlog D6): an optional editRoles allow-list refines the
                 // writable master switch — when set, only callers holding one of those roles may edit.
                 java.util.Set<String> editRoles = manifest.config()
@@ -1090,6 +1099,52 @@ public final class TesseraqlRuntime implements AutoCloseable {
                             studio.setConfigValue(str(params, "key"),
                                     value == null ? "" : String.valueOf(value), actorOf(params));
                             return Map.of("saved", true);
+                        })
+                        // Data browser (read-only): paginated rows of a chosen table over the dev
+                        // datasource, opt-in via tesseraql.studio.dataBrowser.enabled. The table is
+                        // validated against the live catalog (no injection); a query error surfaces as
+                        // a message rather than a 500.
+                        .register("studio.data", params -> {
+                            Map<String, Object> model = new java.util.LinkedHashMap<>();
+                            model.put("enabled", studioData.isEnabled());
+                            if (!studioData.isEnabled()) {
+                                return model;
+                            }
+                            model.put("tables", studioData.tables());
+                            String table = str(params, "table");
+                            if (table == null) {
+                                return model;
+                            }
+                            try {
+                                int page = parseIndex(params.get("page"));
+                                StudioDataService.DataPage data = studioData.browse(table,
+                                        page < 0 ? 0 : page);
+                                model.put("table", data.table());
+                                model.put("columns", data.columns());
+                                java.util.List<Map<String, Object>> rows = new java.util.ArrayList<>();
+                                for (java.util.List<String> values : data.rows()) {
+                                    java.util.List<Map<String, Object>> cells = new java.util.ArrayList<>();
+                                    for (String value : values) {
+                                        Map<String, Object> cell = new java.util.LinkedHashMap<>();
+                                        cell.put("value", value == null ? "" : value);
+                                        cell.put("isNull", value == null);
+                                        cells.add(cell);
+                                    }
+                                    Map<String, Object> row = new java.util.LinkedHashMap<>();
+                                    row.put("cells", cells);
+                                    rows.add(row);
+                                }
+                                model.put("rows", rows);
+                                model.put("rowCount", rows.size());
+                                model.put("page", data.page());
+                                model.put("hasNext", data.hasNext());
+                                model.put("hasPrev", data.page() > 0);
+                                model.put("nextPage", data.page() + 1);
+                                model.put("prevPage", data.page() - 1);
+                            } catch (RuntimeException ex) {
+                                model.put("error", ex.getMessage());
+                            }
+                            return model;
                         })
                         // i18n message editor (governance/authoring): a key × locale table over the
                         // app's messages/<locale>.yml catalogs, flagging missing translations; the set

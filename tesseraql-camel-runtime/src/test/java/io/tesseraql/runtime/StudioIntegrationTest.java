@@ -1969,6 +1969,30 @@ class StudioIntegrationTest {
     }
 
     @Test
+    void uiDataBrowserListsRowsOfATable() throws Exception {
+        // The identity schema seeds one tql_users row (login_id 'admin').
+        HttpResponse<String> response = get("/_tesseraql/studio/ui/data?table=tql_users", true);
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(response.body()).contains("Data browser").contains("login_id").contains("admin");
+    }
+
+    @Test
+    void uiDataBrowserRejectsAnUnknownTable() throws Exception {
+        // A table not in the live catalog is rejected (guards against SQL injection via the name).
+        HttpResponse<String> response = get("/_tesseraql/studio/ui/data?table="
+                + enc("nope; drop table tql_users"), true);
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(response.body()).contains("No such table");
+    }
+
+    @Test
+    void uiDataBrowserRequiresAuthentication() throws Exception {
+        assertThat(get("/_tesseraql/studio/ui/data", false).statusCode()).isEqualTo(401);
+    }
+
+    @Test
     void uiConfigEditorRejectsANonWhitelistedKey() throws Exception {
         Path overlay = appHome.resolve("config/overlay.yml");
         try {
@@ -2377,6 +2401,8 @@ class StudioIntegrationTest {
                     testRunner:
                       enabled: true
                     scaffold:
+                      enabled: true
+                    dataBrowser:
                       enabled: true
                   docs:
                     share:

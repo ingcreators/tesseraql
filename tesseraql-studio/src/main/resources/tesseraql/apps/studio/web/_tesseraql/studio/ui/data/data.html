@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{tql/shell :: studio-page('TesseraQL Studio · Data', ~{:: #page-header}, ~{:: #page-content})}">
+<th:block id="page-header">
+  <span class="hc-spacer"></span>
+  <div class="hc-cluster">
+    <a class="hc-button" data-variant="ghost" data-size="sm" href="/_tesseraql/studio/ui">&larr; explorer</a>
+  </div>
+</th:block>
+<div id="page-content" class="hc-stack">
+  <section class="hc-card">
+    <h2>Data browser</h2>
+
+    <div class="hc-empty" th:unless="${data.enabled}">
+      <p class="hc-empty__title">The data browser is disabled.</p>
+      <p class="hc-empty__body">Enable it with <code>tesseraql.studio.dataBrowser.enabled: true</code>.
+        It exposes row data, so it is opt-in.</p>
+    </div>
+
+    <th:block th:if="${data.enabled}">
+      <p class="hc-field__message">Read-only, paginated rows of a table in the <code>main</code>
+        datasource. Queries run on a read-only connection with a statement timeout and a scan cap.</p>
+      <form class="hc-cluster" method="get" action="/_tesseraql/studio/ui/data">
+        <div class="hc-field">
+          <label class="hc-field__label" for="data-table">Table</label>
+          <select class="hc-select" id="data-table" name="table">
+            <option value="" th:selected="${data.table == null}">Choose a table&hellip;</option>
+            <option th:each="t : ${data.tables}" th:value="${t}" th:text="${t}"
+                    th:selected="${t == data.table}">table</option>
+          </select>
+        </div>
+        <button type="submit" class="hc-button" data-variant="primary">Browse</button>
+      </form>
+
+      <p class="hc-alert" data-variant="error" role="alert" th:if="${data.error}"
+         th:text="${data.error}">error</p>
+
+      <th:block th:if="${data.columns != null}">
+        <div class="hc-cluster">
+          <span class="hc-badge" data-variant="neutral"
+                th:text="|${data.rowCount} row(s) on page ${data.page + 1}|">0 rows</span>
+        </div>
+        <div class="hc-datagrid">
+          <div class="hc-datagrid__scroll">
+            <table class="hc-datagrid__table">
+              <thead class="hc-datagrid__head"><tr>
+                <th class="hc-datagrid__headcell" th:each="c : ${data.columns}" th:text="${c}">col</th>
+              </tr></thead>
+              <tbody class="hc-datagrid__body">
+                <tr class="hc-datagrid__row" th:each="row : ${data.rows}">
+                  <td class="hc-datagrid__cell" th:each="cell : ${row.cells}">
+                    <span class="hc-field__message" th:if="${cell.isNull}">(null)</span>
+                    <span th:unless="${cell.isNull}" th:text="${cell.value}">value</span>
+                  </td>
+                </tr>
+                <tr th:if="${data.rowCount == 0}"><td class="hc-datagrid__cell"
+                    th:attr="colspan=${#lists.size(data.columns)}">No rows.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="hc-cluster">
+          <a class="hc-button" data-variant="ghost" data-size="sm" th:if="${data.hasPrev}"
+             th:href="|/_tesseraql/studio/ui/data?table=${data.table}&amp;page=${data.prevPage}|">&larr; Prev</a>
+          <a class="hc-button" data-variant="ghost" data-size="sm" th:if="${data.hasNext}"
+             th:href="|/_tesseraql/studio/ui/data?table=${data.table}&amp;page=${data.nextPage}|">Next &rarr;</a>
+        </div>
+      </th:block>
+    </th:block>
+  </section>
+</div>
+</html>
