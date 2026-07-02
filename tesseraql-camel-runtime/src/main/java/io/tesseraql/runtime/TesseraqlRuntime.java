@@ -833,6 +833,10 @@ public final class TesseraqlRuntime implements AutoCloseable {
                                             : params.get("principalRoles"));
                             java.util.List<io.tesseraql.yaml.menu.MenuSpec.MenuItem> items = studio
                                     .menuItems();
+                            // Known route paths back both href autocomplete and the per-item
+                            // dangling-href hint (an href that matches no served route).
+                            java.util.List<String> paths = studio.routePaths();
+                            java.util.Set<String> pathSet = new java.util.HashSet<>(paths);
                             java.util.List<Map<String, Object>> rows = new java.util.ArrayList<>();
                             for (int i = 0; i < items.size(); i++) {
                                 io.tesseraql.yaml.menu.MenuSpec.MenuItem item = items.get(i);
@@ -847,6 +851,10 @@ public final class TesseraqlRuntime implements AutoCloseable {
                                         && item.permissions().isEmpty();
                                 row.put("public", isPublic);
                                 row.put("visibility", menuVisibility(item));
+                                // An href pointing at no served route is flagged (not an error — it
+                                // may be an external link, an asset, or another mounted app).
+                                row.put("unmatched", item.href() != null && !item.href().isBlank()
+                                        && !pathSet.contains(item.href()));
                                 rows.add(row);
                             }
                             Map<String, Object> model = new java.util.LinkedHashMap<>();
@@ -854,6 +862,10 @@ public final class TesseraqlRuntime implements AutoCloseable {
                             model.put("readOnly", !canEdit);
                             model.put("items", rows);
                             model.put("hasItems", !rows.isEmpty());
+                            model.put("roleOptions", studio.knownRoles());
+                            model.put("permissionOptions", studio.knownPermissions());
+                            model.put("hrefOptions", paths);
+                            model.put("iconOptions", MENU_ICON_OPTIONS);
                             return model;
                         })
                         .register("studio.menu.add", params -> {
@@ -1511,6 +1523,12 @@ public final class TesseraqlRuntime implements AutoCloseable {
         Object actor = params.get("actor");
         return actor == null ? null : String.valueOf(actor);
     }
+
+    /** The self-hosted sprite icon ids offered in the menu editor's icon picker (see icons.svg). */
+    private static final List<String> MENU_ICON_OPTIONS = List.of(
+            "compass", "book-open", "database", "shield-check", "share-2", "blocks", "wrench",
+            "database-zap", "wand-sparkles", "file-pen", "scroll-text", "activity", "users",
+            "layout-dashboard", "waypoints", "arrow-left-right", "send", "panel-left");
 
     /** A request parameter as a trimmed string, or null when absent or blank. */
     private static String str(Map<String, Object> params, String key) {

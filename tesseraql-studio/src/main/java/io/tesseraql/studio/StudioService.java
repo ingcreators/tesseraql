@@ -1237,6 +1237,49 @@ public final class StudioService {
         return MenuSpec.load(appHome).items();
     }
 
+    /** Distinct roles named across the app's {@code tesseraql.security.policies} (menu autocomplete). */
+    public List<String> knownRoles() {
+        return policyValues("role");
+    }
+
+    /** Distinct permissions named across the app's security policies (menu autocomplete). */
+    public List<String> knownPermissions() {
+        return policyValues("permission");
+    }
+
+    /** Distinct {@code role}/{@code permission} values across every policy's {@code anyOf} rules. */
+    private List<String> policyValues(String key) {
+        Object policies = manifest.config().navigate("tesseraql.security.policies");
+        if (!(policies instanceof Map<?, ?> byId)) {
+            return List.of();
+        }
+        java.util.TreeSet<String> values = new java.util.TreeSet<>();
+        for (Object policy : byId.values()) {
+            if (policy instanceof Map<?, ?> spec && spec.get("anyOf") instanceof List<?> rules) {
+                for (Object rule : rules) {
+                    if (rule instanceof Map<?, ?> r && r.get(key) != null) {
+                        String value = String.valueOf(r.get(key)).strip();
+                        if (!value.isEmpty()) {
+                            values.add(value);
+                        }
+                    }
+                }
+            }
+        }
+        return List.copyOf(values);
+    }
+
+    /** The distinct HTTP paths the app serves — href autocomplete + the dangling-href check. */
+    public List<String> routePaths() {
+        java.util.TreeSet<String> paths = new java.util.TreeSet<>();
+        for (RouteFile route : manifest.routes()) {
+            if (route.urlPath() != null && !route.urlPath().isBlank()) {
+                paths.add(route.urlPath());
+            }
+        }
+        return List.copyOf(paths);
+    }
+
     /**
      * Appends a menu item to {@code config/menu.yml} and records it to the audit trail. {@code label}
      * and {@code href} are required; {@code icon} is an optional sprite id; {@code rolesCsv}/

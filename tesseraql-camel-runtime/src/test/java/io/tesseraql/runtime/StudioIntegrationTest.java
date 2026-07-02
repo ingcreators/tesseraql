@@ -1821,6 +1821,25 @@ class StudioIntegrationTest {
     }
 
     @Test
+    void uiMenuEditorSuggestsRoutesRolesIconsAndFlagsDanglingHrefs() throws Exception {
+        Files.createDirectories(appHome.resolve("config"));
+        Files.writeString(appHome.resolve("config/menu.yml"), """
+                menu:
+                  - {label: Users, href: /users}
+                  - {label: Ghost, href: /definitely-not-a-route}
+                """);
+        String page = get("/_tesseraql/studio/ui/menu", true).body();
+
+        // Href autocomplete lists served route paths; role autocomplete comes from the app's policies.
+        assertThat(page).contains("id=\"menu-href-options\"").contains("value=\"/users\"");
+        assertThat(page).contains("id=\"menu-role-options\"").contains("value=\"USER_WRITE\"");
+        // The icon picker lists the self-hosted sprite ids.
+        assertThat(page).contains("id=\"menu-icon-options\"").contains("value=\"panel-left\"");
+        // An href that matches no served route is flagged (a non-blocking hint).
+        assertThat(page).contains("unmatched");
+    }
+
+    @Test
     void uiMenuEditorIsReadOnlyForAViewer() throws Exception {
         assertThat(getWithCookie("/_tesseraql/studio/ui/menu", viewerCookie).body())
                 .contains("do not have permission");

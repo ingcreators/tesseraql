@@ -60,7 +60,11 @@
                 </div>
               </td>
               <td class="hc-datagrid__cell" th:text="${item.label}">Label</td>
-              <td class="hc-datagrid__cell"><code th:text="${item.href}">/path</code></td>
+              <td class="hc-datagrid__cell">
+                <code th:text="${item.href}">/path</code>
+                <span class="hc-badge" data-variant="warning" th:if="${item.unmatched}"
+                      title="No served route matches this path">unmatched</span>
+              </td>
               <td class="hc-datagrid__cell">
                 <code th:if="${item.icon}" th:text="${item.icon}">icon</code>
                 <span th:unless="${item.icon}">&mdash;</span>
@@ -94,24 +98,42 @@
           </div>
           <div class="hc-field">
             <label class="hc-field__label" for="menu-href">Href</label>
-            <input class="hc-input" id="menu-href" name="href" required placeholder="/users">
+            <input class="hc-input" id="menu-href" name="href" required placeholder="/users"
+                   list="menu-href-options" autocomplete="off">
           </div>
           <div class="hc-field">
             <label class="hc-field__label" for="menu-icon">Icon (optional sprite id)</label>
-            <input class="hc-input" id="menu-icon" name="icon" placeholder="users">
+            <input class="hc-input" id="menu-icon" name="icon" placeholder="users"
+                   list="menu-icon-options" autocomplete="off">
           </div>
         </div>
         <div class="hc-cluster">
           <div class="hc-field">
             <label class="hc-field__label" for="menu-roles">Roles (comma-separated, optional)</label>
-            <input class="hc-input" id="menu-roles" name="roles" placeholder="ADMIN, STAFF">
+            <input class="hc-input" id="menu-roles" name="roles" placeholder="ADMIN, STAFF"
+                   list="menu-role-options" autocomplete="off">
           </div>
           <div class="hc-field">
             <label class="hc-field__label" for="menu-perms">Permissions (comma-separated, optional)</label>
-            <input class="hc-input" id="menu-perms" name="permissions" placeholder="iam.admin">
+            <input class="hc-input" id="menu-perms" name="permissions" placeholder="iam.admin"
+                   list="menu-permission-options" autocomplete="off">
           </div>
         </div>
-        <p class="hc-field__message">Leave both roles and permissions empty for a public item.</p>
+        <p class="hc-field__message">Leave both roles and permissions empty for a public item.
+          Suggestions come from the app's routes and <code>tesseraql.security.policies</code>; you can
+          still type any value.</p>
+        <datalist id="menu-href-options">
+          <option th:each="p : ${menu.hrefOptions}" th:value="${p}"></option>
+        </datalist>
+        <datalist id="menu-icon-options">
+          <option th:each="ic : ${menu.iconOptions}" th:value="${ic}"></option>
+        </datalist>
+        <datalist id="menu-role-options">
+          <option th:each="r : ${menu.roleOptions}" th:value="${r}"></option>
+        </datalist>
+        <datalist id="menu-permission-options">
+          <option th:each="pm : ${menu.permissionOptions}" th:value="${pm}"></option>
+        </datalist>
         <div class="hc-cluster">
           <button type="submit" class="hc-button" data-variant="primary">Add item</button>
         </div>
