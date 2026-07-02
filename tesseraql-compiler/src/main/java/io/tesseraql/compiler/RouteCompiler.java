@@ -45,6 +45,7 @@ public final class RouteCompiler {
     private static final long DEFAULT_IDEMPOTENCY_TTL = java.time.Duration.ofHours(24).toMillis();
 
     private AppConfig config;
+    private java.nio.file.Path compiledAppHome;
     private io.tesseraql.compiler.binding.TenancySettings tenancy;
     private io.tesseraql.compiler.binding.I18nSettings i18n;
     private io.tesseraql.yaml.webhook.WebhookVerifiers webhookVerifiers;
@@ -75,6 +76,7 @@ public final class RouteCompiler {
     public RouteBuilder compile(AppManifest manifest, boolean mountRest,
             java.util.Set<String> onlyRouteIds) {
         this.config = manifest.config();
+        this.compiledAppHome = manifest.appHome();
         this.tenancy = io.tesseraql.compiler.binding.TenancySettings.from(config);
         this.i18n = io.tesseraql.compiler.binding.I18nSettings.from(config, manifest.appHome());
         this.mountRest = mountRest;
@@ -334,7 +336,8 @@ public final class RouteCompiler {
             route.process(preCommand);
         }
         ProcessorDefinition<?> step = route
-                .process(new RequestBinder(definition, pathParams(routeFile.urlPath())))
+                .process(new RequestBinder(definition, pathParams(routeFile.urlPath()),
+                        compiledAppHome))
                 .process(new io.tesseraql.compiler.binding.TransactionalCommandProcessor(
                         routeId, definition.sql(), definition.steps(), definition.validate(),
                         definition.notifications(), stepFile, DEFAULT_DATASOURCE, dialect,
@@ -446,7 +449,7 @@ public final class RouteCompiler {
         ProcessorDefinition<?> route = builder.from(direct).routeId(routeId);
         applySecurity(route, def.security());
         applyTenancy(route);
-        route.process(new RequestBinder(definition, pathParams(urlPath)))
+        route.process(new RequestBinder(definition, pathParams(urlPath), compiledAppHome))
                 .process(new io.tesseraql.compiler.binding.WorkflowDelegateProcessor(def.id(),
                         def.document().type(), DEFAULT_DATASOURCE))
                 .process(responseRenderer(definition));
@@ -577,7 +580,7 @@ public final class RouteCompiler {
         applySecurity(route, definition.security());
         applyTenancy(route);
         applyI18n(route);
-        route.process(new RequestBinder(definition, java.util.List.of()));
+        route.process(new RequestBinder(definition, java.util.List.of(), compiledAppHome));
         route.process(new io.tesseraql.compiler.binding.QueueDedupProcessor(
                 consume.channel(), consume.topic(), consume.idempotencyKey()));
         // A deduplicated redelivery stops here, before the pipeline writes a row; the consumer
@@ -637,7 +640,8 @@ public final class RouteCompiler {
         applySecurity(route, definition.security());
         applyTenancy(route);
         applyI18n(route);
-        route.process(new RequestBinder(definition, pathParams(routeFile.urlPath())))
+        route.process(
+                new RequestBinder(definition, pathParams(routeFile.urlPath()), compiledAppHome))
                 .process(new io.tesseraql.compiler.binding.QueryExportBinder(codec, writeSpec,
                         formatDeclaration(spec == null ? null : spec.locale(),
                                 "tesseraql.files.locale"),
@@ -698,7 +702,8 @@ public final class RouteCompiler {
         applyTelemetry(route, routeFile);
         applySecurity(route, definition.security());
         applyI18n(route);
-        route.process(new RequestBinder(definition, pathParams(routeFile.urlPath())))
+        route.process(
+                new RequestBinder(definition, pathParams(routeFile.urlPath()), compiledAppHome))
                 .process(new io.tesseraql.compiler.binding.FileExportStartProcessor(
                         routeId, routeFile.urlPath(), appName, spec.format(),
                         spec.toWriteSpec(template, appHome),
@@ -786,7 +791,8 @@ public final class RouteCompiler {
         applyI18n(route);
         applyIdempotencyBegin(route, definition);
         ProcessorDefinition<?> step = route
-                .process(new RequestBinder(definition, pathParams(routeFile.urlPath())));
+                .process(new RequestBinder(definition, pathParams(routeFile.urlPath()),
+                        compiledAppHome));
         // A route may have no data binding at all (the page recipe: forms, static pages).
         if (definition.sql() != null) {
             step = step.to(executionUri(routeFile, definition.sql(), "sql"));
@@ -823,7 +829,7 @@ public final class RouteCompiler {
         applyI18n(route);
         applyIdempotencyBegin(route, definition);
         ProcessorDefinition<?> step = route
-                .process(new RequestBinder(definition, java.util.List.of()));
+                .process(new RequestBinder(definition, java.util.List.of(), compiledAppHome));
 
         if (usesTransactionalCommand(definition)) {
             String dialect = datasourceDialect();
@@ -870,7 +876,7 @@ public final class RouteCompiler {
         applyTenancy(route);
         applyI18n(route);
         ProcessorDefinition<?> step = route
-                .process(new RequestBinder(definition, java.util.List.of()));
+                .process(new RequestBinder(definition, java.util.List.of(), compiledAppHome));
         if (definition.sql() != null) {
             step = step.to(executionUri(resourceDir, definition.sql(), "sql"));
         }
@@ -907,7 +913,7 @@ public final class RouteCompiler {
         applyTenancy(route);
         applyI18n(route);
         ProcessorDefinition<?> step = route
-                .process(new RequestBinder(definition, java.util.List.of()));
+                .process(new RequestBinder(definition, java.util.List.of(), compiledAppHome));
         if (definition.sql() != null) {
             step = step.to(executionUri(uiDir, definition.sql(), "sql"));
         }

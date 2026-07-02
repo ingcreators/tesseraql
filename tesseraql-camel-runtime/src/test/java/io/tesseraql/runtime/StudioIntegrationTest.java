@@ -2036,6 +2036,33 @@ class StudioIntegrationTest {
     }
 
     @Test
+    void uiFlagsEditorSetsAndRemovesAFlag() throws Exception {
+        Path flags = appHome.resolve("config/flags.yml");
+        try {
+            assertThat(postForm("/_tesseraql/studio/ui/flags/set",
+                    "name=betaBanner&type=boolean&value=true").statusCode()).isEqualTo(303);
+            // Written to config/flags.yml and audited; the editor lists it.
+            assertThat(Files.readString(flags)).contains("betaBanner").contains("true");
+            assertThat(Files.readString(appHome.resolve("work/studio/audit/audit.jsonl")))
+                    .contains("\"action\":\"flag\"");
+            assertThat(get("/_tesseraql/studio/ui/flags", true).body()).contains("betaBanner");
+
+            // Remove it.
+            assertThat(
+                    postForm("/_tesseraql/studio/ui/flags/remove", "name=betaBanner").statusCode())
+                    .isEqualTo(303);
+            assertThat(Files.readString(flags)).doesNotContain("betaBanner");
+        } finally {
+            Files.deleteIfExists(flags);
+        }
+    }
+
+    @Test
+    void uiFlagsEditorRequiresAuthentication() throws Exception {
+        assertThat(get("/_tesseraql/studio/ui/flags", false).statusCode()).isEqualTo(401);
+    }
+
+    @Test
     void uiConfigEditorRejectsANonWhitelistedKey() throws Exception {
         Path overlay = appHome.resolve("config/overlay.yml");
         try {

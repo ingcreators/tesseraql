@@ -1,0 +1,33 @@
+version: tesseraql/v1
+id: tql.studio.flags.set
+kind: route
+recipe: command-json
+
+# Sets/adds a feature flag in config/flags.yml (edit-gated). Served live on the next request.
+input:
+  name:
+    type: string
+    required: true
+  value:
+    type: string
+    required: false
+  type:
+    type: string
+    required: false
+
+security:
+  auth: browser
+  csrf: true
+
+sql:
+  service: studio.flagsSet
+  params:
+    name: params.name
+    value: params.value
+    type: params.type
+    actor: principal.loginId
+    principalRoles: principal.roles
+
+response:
+  redirect:
+    location: /_tesseraql/studio/ui/flags?saved=1

@@ -11,6 +11,7 @@ import io.tesseraql.core.sql.Sql2WayParser;
 import io.tesseraql.core.sql.SqlRenderer;
 import io.tesseraql.yaml.SimpleYamlParser;
 import io.tesseraql.yaml.config.AppConfig;
+import io.tesseraql.yaml.flags.FlagsSpec;
 import io.tesseraql.yaml.i18n.MessageCatalog;
 import io.tesseraql.yaml.lint.AppLinter;
 import io.tesseraql.yaml.lint.LintFinding;
@@ -65,6 +66,7 @@ public final class StudioService {
     private static final TqlErrorCode POLICY = new TqlErrorCode(TqlDomain.STUDIO, 4226);
     private static final TqlErrorCode MESSAGE = new TqlErrorCode(TqlDomain.STUDIO, 4227);
     private static final TqlErrorCode CONFIG = new TqlErrorCode(TqlDomain.STUDIO, 4228);
+    private static final TqlErrorCode FLAG = new TqlErrorCode(TqlDomain.STUDIO, 4229);
     private static final TqlErrorCode CONFLICT = new TqlErrorCode(TqlDomain.STUDIO, 4090);
     private static final Pattern LEADING_DIGITS = Pattern.compile("^\\d+");
     private static final Pattern POLICY_ID = Pattern.compile("[A-Za-z0-9_.-]+");
@@ -1542,6 +1544,69 @@ public final class StudioService {
                 || lower.contains("secret") || lower.contains("token")
                 || lower.contains("credential") || lower.contains("apikey")
                 || lower.contains("privatekey");
+    }
+
+    /** The app's live feature flags ({@code config/flags.yml}) — name to (typed) value. */
+    public Map<String, Object> flags() {
+        return FlagsSpec.load(appHome).values();
+    }
+
+    /**
+     * Sets (or adds) a feature flag in {@code config/flags.yml}, coercing the value by {@code type}
+     * ({@code boolean}/{@code number}/{@code string}). Edit-gated and audited; served live (the
+     * request binder reads flags live), so the change takes effect on the next request.
+     */
+    public void setFlag(String name, String value, String type, String actor) {
+        String key = requireFlagName(name);
+        Object typed = coerceFlag(type, value);
+        Map<String, Object> values = new LinkedHashMap<>(FlagsSpec.load(appHome).values());
+        values.put(key, typed);
+        writeFlags(values, actor);
+    }
+
+    /** Removes a feature flag; a no-op when it is not set. */
+    public void removeFlag(String name, String actor) {
+        Map<String, Object> values = new LinkedHashMap<>(FlagsSpec.load(appHome).values());
+        if (values.remove(name) != null) {
+            writeFlags(values, actor);
+        }
+    }
+
+    private void writeFlags(Map<String, Object> values, String actor) {
+        if (readOnly) {
+            throw new TqlException(READ_ONLY, "Studio is read-only; editing flags is disabled");
+        }
+        Path file = resolve("config/flags.yml");
+        try {
+            Files.createDirectories(file.getParent());
+            Files.writeString(file, FlagsSpec.toYaml(values));
+        } catch (IOException ex) {
+            throw new UncheckedIOException(ex);
+        }
+        recordAudit(actor, "flag", "config/flags.yml");
+    }
+
+    private static String requireFlagName(String name) {
+        String trimmed = trimToNull(name);
+        if (trimmed == null || !POLICY_ID.matcher(trimmed).matches()) {
+            throw new TqlException(FLAG, "Invalid flag name: " + name);
+        }
+        return trimmed;
+    }
+
+    private static Object coerceFlag(String type, String value) {
+        String raw = value == null ? "" : value.strip();
+        return switch (type == null ? "string" : type) {
+            case "boolean" -> Boolean.parseBoolean(raw);
+            case "number" -> {
+                try {
+                    yield raw.contains(".") ? Double.parseDouble(raw) : Long.parseLong(raw);
+                } catch (NumberFormatException ex) {
+                    throw new TqlException(FLAG, "Flag value must be a number: " + value);
+                }
+            }
+            default -> raw;
+        };
     }
 
     private static String requireLocaleTag(String locale) {

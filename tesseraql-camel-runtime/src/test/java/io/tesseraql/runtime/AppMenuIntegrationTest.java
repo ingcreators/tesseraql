@@ -108,6 +108,24 @@ class AppMenuIntegrationTest {
     }
 
     @Test
+    void aFeatureFlagIsInjectedIntoTheContextAndServedLive() throws Exception {
+        Path flags = menuAppHome.resolve("config/flags.yml");
+        try {
+            Files.writeString(flags, "flags:\n  probeFlag: LIVE-ALPHA\n");
+            assertThat(get(menuRuntime, "/menu-probe",
+                    Map.of("Authorization", "Bearer " + token())).body()).contains("LIVE-ALPHA");
+
+            // Change the flag on the running app — the next request reflects it (no restart).
+            Files.writeString(flags, "flags:\n  probeFlag: LIVE-BRAVO\n");
+            assertThat(get(menuRuntime, "/menu-probe",
+                    Map.of("Authorization", "Bearer " + token())).body())
+                    .contains("LIVE-BRAVO").doesNotContain("LIVE-ALPHA");
+        } finally {
+            Files.deleteIfExists(flags);
+        }
+    }
+
+    @Test
     void anAnonymousCallerSeesOnlyPublicMenuItems() throws Exception {
         // /users is a public page (no security), so no principal is resolved.
         HttpResponse<String> response = get(menuRuntime, "/users", Map.of());
@@ -196,6 +214,8 @@ class AppMenuIntegrationTest {
                       html:
                         status: 200
                         template: index.html
+                        model:
+                          flag: flags.probeFlag
                     """);
             Files.writeString(probe.resolve("index.html"), """
                     <!DOCTYPE html>
@@ -203,7 +223,8 @@ class AppMenuIntegrationTest {
                           th:replace="~{tql/shell :: shell('Menu Probe', \
                     ~{templates/nav.html :: app-nav}, ~{}, ~{:: #page-content})}">
                     <div id="page-content" class="hc-stack">
-                      <section class="hc-card"><h2>Menu Probe</h2></section>
+                      <section class="hc-card"><h2>Menu Probe</h2>
+                        <p th:text="${flag}">flag</p></section>
                     </div>
                     </html>
                     """);
