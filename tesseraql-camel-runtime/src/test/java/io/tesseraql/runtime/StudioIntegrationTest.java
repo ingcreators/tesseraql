@@ -1851,6 +1851,39 @@ class StudioIntegrationTest {
     }
 
     @Test
+    void uiHealthDashboardListsLintFindings() throws Exception {
+        // A parseable route with an unknown recipe is a lint error (TQL-YAML-1002) but does not break
+        // the running app (nothing recompiles it); removed in the finally so the suite stays clean.
+        String bad = "web/api/lintprobe/get.yml";
+        Files.createDirectories(appHome.resolve("web/api/lintprobe"));
+        Files.writeString(appHome.resolve(bad), """
+                version: tesseraql/v1
+                id: lint.probe
+                kind: route
+                recipe: not-a-real-recipe
+                response:
+                  json:
+                    body:
+                      ok: true
+                """);
+        try {
+            HttpResponse<String> response = get("/_tesseraql/studio/ui/health", true);
+
+            assertThat(response.statusCode()).isEqualTo(200);
+            assertThat(response.body()).contains("Health").contains("TQL-YAML-1002")
+                    .contains("web/api/lintprobe/get.yml");
+        } finally {
+            Files.deleteIfExists(appHome.resolve(bad));
+            Files.deleteIfExists(appHome.resolve("web/api/lintprobe"));
+        }
+    }
+
+    @Test
+    void uiHealthDashboardRequiresAuthentication() throws Exception {
+        assertThat(get("/_tesseraql/studio/ui/health", false).statusCode()).isEqualTo(401);
+    }
+
+    @Test
     void uiSourceMigrationOffersDryRunWhenEnabled() throws Exception {
         HttpResponse<String> response = get("/_tesseraql/studio/ui/source?path="
                 + enc("db/migration/V1__create_users.sql"), true);

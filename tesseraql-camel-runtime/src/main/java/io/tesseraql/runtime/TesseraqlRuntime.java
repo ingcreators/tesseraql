@@ -919,6 +919,50 @@ public final class TesseraqlRuntime implements AutoCloseable {
                             model.put("summary", "Showing the menu for " + who + ".");
                             return model;
                         })
+                        // Health dashboard (governance): runs the same AppLinter as the CLI/Maven lint
+                        // over the app and surfaces its findings grouped by severity, each linking to
+                        // the source editor. An app that fails to even load is shown as one blocking
+                        // finding rather than a 500, so the dashboard is usable exactly when it matters.
+                        .register("studio.health", params -> {
+                            java.util.List<io.tesseraql.yaml.lint.LintFinding> findings;
+                            try {
+                                findings = studio.health();
+                            } catch (RuntimeException ex) {
+                                findings = java.util.List.of(new io.tesseraql.yaml.lint.LintFinding(
+                                        "TQL-STUDIO-4225", "error", "app",
+                                        "The app failed to load: " + ex.getMessage()));
+                            }
+                            int errors = 0;
+                            java.util.List<Map<String, Object>> rows = new java.util.ArrayList<>();
+                            for (io.tesseraql.yaml.lint.LintFinding finding : findings) {
+                                if (finding.isError()) {
+                                    errors++;
+                                }
+                                Map<String, Object> row = new java.util.LinkedHashMap<>();
+                                row.put("code", finding.code());
+                                row.put("severity", finding.severity());
+                                row.put("error", finding.isError());
+                                row.put("source", finding.source());
+                                row.put("message", finding.message());
+                                // Link to the source editor when the finding names an app file (not a
+                                // config-level pseudo-source like "config"/"app").
+                                boolean editable = finding.source() != null
+                                        && finding.source().contains("/");
+                                row.put("sourceUrl", editable
+                                        ? "/_tesseraql/studio/ui/source?path=" + java.net.URLEncoder
+                                                .encode(finding.source(),
+                                                        java.nio.charset.StandardCharsets.UTF_8)
+                                        : null);
+                                rows.add(row);
+                            }
+                            Map<String, Object> model = new java.util.LinkedHashMap<>();
+                            model.put("findings", rows);
+                            model.put("total", findings.size());
+                            model.put("errors", errors);
+                            model.put("warnings", findings.size() - errors);
+                            model.put("clean", findings.isEmpty());
+                            return model;
+                        })
                         // New migration page (Studio backlog: migration authoring): the form shows the
                         // next versioned number for the main datasource; the create writes a Flyway
                         // migration under db/…/migration and the result links to the source editor.

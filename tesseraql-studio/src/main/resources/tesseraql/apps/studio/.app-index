@@ -54,6 +54,8 @@ web/_tesseraql/studio/ui/scaffold/apply/apply.html
 web/_tesseraql/studio/ui/new/get.yml
 web/_tesseraql/studio/ui/new/drawer.html
 web/_tesseraql/studio/ui/new/post.yml
+web/_tesseraql/studio/ui/health/get.yml
+web/_tesseraql/studio/ui/health/health.html
 web/_tesseraql/studio/ui/menu/get.yml
 web/_tesseraql/studio/ui/menu/menu.html
 web/_tesseraql/studio/ui/menu/add/post.yml
