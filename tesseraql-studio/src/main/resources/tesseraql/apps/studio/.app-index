@@ -5,6 +5,8 @@ web/_tesseraql/studio/ui/get.yml
 web/_tesseraql/studio/ui/explorer.html
 web/_tesseraql/studio/ui/drafts/get.yml
 web/_tesseraql/studio/ui/drafts/drafts.html
+web/_tesseraql/studio/ui/drafts/apply-all/post.yml
+web/_tesseraql/studio/ui/drafts/discard-all/post.yml
 web/_tesseraql/studio/ui/audit/get.yml
 web/_tesseraql/studio/ui/audit/audit.html
 web/_tesseraql/studio/ui/docs/get.yml

@@ -7,6 +7,12 @@ input:
   q:
     type: string
     required: false
+  applied:
+    type: string
+    required: false
+  discarded:
+    type: string
+    required: false
 
 security:
   auth: browser
@@ -15,6 +21,7 @@ sql:
   service: studio.drafts
   params:
     q: params.q
+    roles: principal.roles
 
 response:
   html:
@@ -22,6 +29,8 @@ response:
     template: drafts.html
     model:
       page: sql
+      applied: params.applied
+      discarded: params.discarded
     headers:
       Content-Security-Policy: "default-src 'self'; style-src 'self' 'unsafe-inline'; frame-ancestors 'none'"
       X-Content-Type-Options: nosniff

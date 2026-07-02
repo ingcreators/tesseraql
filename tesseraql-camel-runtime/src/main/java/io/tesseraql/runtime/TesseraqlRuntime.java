@@ -1036,11 +1036,30 @@ public final class TesseraqlRuntime implements AutoCloseable {
                             studio.deleteDraft(path);
                             return Map.of("discarded", path);
                         })
+                        // Studio Drafts bulk actions: apply every clean draft (conflicts skipped) or
+                        // discard them all — the batch management the Explorer drafts-in-tree can't do.
+                        // Edit-gated like studio.apply/scaffold.apply; apply reloads routes after.
+                        .register("studio.draftsApplyAll", params -> {
+                            studioAccess.requireEdit(params.get("roles"));
+                            io.tesseraql.studio.StudioService.BulkApplyResult result = studio
+                                    .applyAllDrafts(actorOf(params));
+                            reloader.reload();
+                            return Map.of("applied", result.applied(), "skipped", result.skipped(),
+                                    "needsRestart", result.needsRestart());
+                        })
+                        .register("studio.draftsDiscardAll", params -> {
+                            studioAccess.requireEdit(params.get("roles"));
+                            return Map.of("discarded", studio.discardAllDrafts());
+                        })
                         .register("studio.drafts", params -> {
                             String q = params.get("q") == null
                                     ? null
                                     : String.valueOf(params.get("q"));
-                            return io.tesseraql.studio.StudioViews.drafts(studio.drafts(), q);
+                            Map<String, Object> model = io.tesseraql.studio.StudioViews
+                                    .drafts(studio.drafts(), q);
+                            // The bulk apply/discard actions follow the caller's edit permission.
+                            model.put("editable", studioAccess.canEdit(params.get("roles")));
+                            return model;
                         })
                         .register("studio.audit", params -> {
                             // Filter the whole log, then sort + page it (H5 filter + I3 paging + I2 sort).
