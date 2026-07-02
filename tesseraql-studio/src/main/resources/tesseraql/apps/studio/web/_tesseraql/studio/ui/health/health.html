@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{tql/shell :: studio-page('TesseraQL Studio · Health', ~{:: #page-header}, ~{:: #page-content})}">
+<th:block id="page-header">
+  <span class="hc-spacer"></span>
+  <div class="hc-cluster">
+    <a class="hc-button" data-variant="ghost" data-size="sm" href="/_tesseraql/studio/ui">&larr; explorer</a>
+  </div>
+</th:block>
+<div id="page-content" class="hc-stack">
+  <section class="hc-card">
+    <h2>Health</h2>
+    <p class="hc-field__message">The app linter's findings &mdash; the same checks the
+      <code>lint</code> CLI/Maven goal runs (unknown recipes, missing SQL files, unprotected or
+      misconfigured security, dangling references, i18n gaps, and more). Fix findings before shipping;
+      each error also fails the build gate.</p>
+    <div class="hc-cluster">
+      <span class="hc-badge" th:attr="data-variant=${health.errors > 0} ? 'error' : 'neutral'"
+            th:text="|${health.errors} error(s)|">0 error(s)</span>
+      <span class="hc-badge" th:attr="data-variant=${health.warnings > 0} ? 'warning' : 'neutral'"
+            th:text="|${health.warnings} warning(s)|">0 warning(s)</span>
+    </div>
+
+    <div class="hc-empty" th:if="${health.clean}">
+      <p class="hc-empty__title">No issues found.</p>
+      <p class="hc-empty__body">The app passes every lint check.</p>
+    </div>
+
+    <div class="hc-datagrid" th:unless="${health.clean}">
+      <div class="hc-datagrid__scroll">
+        <table class="hc-datagrid__table">
+          <thead class="hc-datagrid__head"><tr>
+            <th class="hc-datagrid__headcell">Severity</th>
+            <th class="hc-datagrid__headcell">Code</th>
+            <th class="hc-datagrid__headcell">Source</th>
+            <th class="hc-datagrid__headcell">Message</th>
+          </tr></thead>
+          <tbody class="hc-datagrid__body">
+            <tr class="hc-datagrid__row" th:each="f : ${health.findings}">
+              <td class="hc-datagrid__cell">
+                <span class="hc-badge" th:attr="data-variant=${f.error} ? 'error' : 'warning'"
+                      th:text="${f.severity}">error</span>
+              </td>
+              <td class="hc-datagrid__cell"><code th:text="${f.code}">TQL-…</code></td>
+              <td class="hc-datagrid__cell">
+                <a th:if="${f.sourceUrl}" th:href="${f.sourceUrl}" th:text="${f.source}">source</a>
+                <span th:unless="${f.sourceUrl}" th:text="${f.source}">config</span>
+              </td>
+              <td class="hc-datagrid__cell" th:text="${f.message}">Message</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+</div>
+</html>

@@ -10,6 +10,8 @@ import io.tesseraql.core.sql.BoundSql;
 import io.tesseraql.core.sql.Sql2WayParser;
 import io.tesseraql.core.sql.SqlRenderer;
 import io.tesseraql.yaml.SimpleYamlParser;
+import io.tesseraql.yaml.lint.AppLinter;
+import io.tesseraql.yaml.lint.LintFinding;
 import io.tesseraql.yaml.manifest.AppManifest;
 import io.tesseraql.yaml.manifest.JobFile;
 import io.tesseraql.yaml.manifest.ManifestLoader;
@@ -1235,6 +1237,11 @@ public final class StudioService {
     /** The app's current declarative sidebar menu items ({@code config/menu.yml}); empty if none. */
     public List<MenuItem> menuItems() {
         return MenuSpec.load(appHome).items();
+    }
+
+    /** Lints the app home for the Studio health dashboard (the same engine as the CLI/Maven lint). */
+    public List<LintFinding> health() {
+        return new AppLinter().lint(appHome);
     }
 
     /** Distinct roles named across the app's {@code tesseraql.security.policies} (menu autocomplete). */
