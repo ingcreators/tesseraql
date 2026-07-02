@@ -963,6 +963,50 @@ public final class TesseraqlRuntime implements AutoCloseable {
                             model.put("clean", findings.isEmpty());
                             return model;
                         })
+                        // Security overview (governance): the route-to-policy map + the app's policies,
+                        // flagging unprotected routes (no auth), CSRF gaps (state-changing browser
+                        // routes without CSRF), and routes referencing an undefined policy. Read-only
+                        // in this slice; editing policies is a later slice.
+                        .register("studio.security", params -> {
+                            java.util.List<Map<String, Object>> policies = studio
+                                    .securityPolicies();
+                            java.util.Set<String> policyIds = new java.util.HashSet<>();
+                            for (Map<String, Object> policy : policies) {
+                                policyIds.add(String.valueOf(policy.get("id")));
+                            }
+                            java.util.List<Map<String, Object>> routes = studio.routeSecurity();
+                            int unprotected = 0;
+                            int csrfGaps = 0;
+                            int unknownPolicies = 0;
+                            for (Map<String, Object> route : routes) {
+                                if (Boolean.TRUE.equals(route.get("unprotected"))) {
+                                    unprotected++;
+                                }
+                                if (Boolean.TRUE.equals(route.get("csrfGap"))) {
+                                    csrfGaps++;
+                                }
+                                Object policy = route.get("policy");
+                                boolean unknown = policy != null
+                                        && !policyIds.contains(String.valueOf(policy));
+                                route.put("unknownPolicy", unknown);
+                                if (unknown) {
+                                    unknownPolicies++;
+                                }
+                                route.put("sourceUrl", "/_tesseraql/studio/ui/source?path="
+                                        + java.net.URLEncoder.encode(
+                                                String.valueOf(route.get("source")),
+                                                java.nio.charset.StandardCharsets.UTF_8));
+                            }
+                            Map<String, Object> model = new java.util.LinkedHashMap<>();
+                            model.put("routes", routes);
+                            model.put("policies", policies);
+                            model.put("totalRoutes", routes.size());
+                            model.put("unprotected", unprotected);
+                            model.put("csrfGaps", csrfGaps);
+                            model.put("unknownPolicies", unknownPolicies);
+                            model.put("policyCount", policies.size());
+                            return model;
+                        })
                         // API try-it console: invoke one of the app's own routes and show the raw
                         // response (status, headers, body). The run proxies a loopback HTTP call to
                         // 127.0.0.1:<port><path> — confined to app-relative paths (no host, no scheme),
