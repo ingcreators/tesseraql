@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{tql/shell :: studio-page('TesseraQL Studio · Security', ~{:: #page-header}, ~{:: #page-content})}">
+<th:block id="page-header">
+  <span class="hc-spacer"></span>
+  <div class="hc-cluster">
+    <a class="hc-button" data-variant="ghost" data-size="sm" href="/_tesseraql/studio/ui">&larr; explorer</a>
+  </div>
+</th:block>
+<div id="page-content" class="hc-stack">
+  <section class="hc-card">
+    <h2>Security</h2>
+    <p class="hc-field__message">Each route's authentication and authorization, mapped to the app's
+      policies. Watch for <strong>unprotected</strong> routes (no auth declared), <strong>CSRF
+      gaps</strong> (a state-changing browser route without CSRF), and routes pointing at an
+      <strong>undefined policy</strong>.</p>
+    <div class="hc-cluster">
+      <span class="hc-badge" data-variant="neutral" th:text="|${sec.totalRoutes} route(s)|">0 route(s)</span>
+      <span class="hc-badge" th:attr="data-variant=${sec.unprotected > 0} ? 'error' : 'neutral'"
+            th:text="|${sec.unprotected} unprotected|">0 unprotected</span>
+      <span class="hc-badge" th:attr="data-variant=${sec.csrfGaps > 0} ? 'warning' : 'neutral'"
+            th:text="|${sec.csrfGaps} CSRF gap(s)|">0 CSRF gap(s)</span>
+      <span class="hc-badge" th:attr="data-variant=${sec.unknownPolicies > 0} ? 'warning' : 'neutral'"
+            th:text="|${sec.unknownPolicies} undefined-policy|">0 undefined-policy</span>
+      <span class="hc-badge" data-variant="neutral" th:text="|${sec.policyCount} policy(ies)|">0 policy(ies)</span>
+    </div>
+  </section>
+
+  <section class="hc-card">
+    <h3>Routes</h3>
+    <div class="hc-datagrid">
+      <div class="hc-datagrid__scroll">
+        <table class="hc-datagrid__table">
+          <thead class="hc-datagrid__head"><tr>
+            <th class="hc-datagrid__headcell">Route</th>
+            <th class="hc-datagrid__headcell">Auth</th>
+            <th class="hc-datagrid__headcell">Policy</th>
+            <th class="hc-datagrid__headcell">CSRF</th>
+          </tr></thead>
+          <tbody class="hc-datagrid__body">
+            <tr class="hc-datagrid__row" th:each="r : ${sec.routes}">
+              <td class="hc-datagrid__cell">
+                <a th:href="${r.sourceUrl}"><span th:text="${r.method}">GET</span>
+                  <code th:text="${r.path}">/path</code></a>
+              </td>
+              <td class="hc-datagrid__cell">
+                <span class="hc-badge" data-variant="error" th:if="${r.unprotected}">no auth</span>
+                <span class="hc-badge" data-variant="neutral" th:unless="${r.unprotected}"
+                      th:text="${r.auth}">browser</span>
+              </td>
+              <td class="hc-datagrid__cell">
+                <span th:if="${r.policy}">
+                  <code th:text="${r.policy}">policy</code>
+                  <span class="hc-badge" data-variant="warning" th:if="${r.unknownPolicy}"
+                        title="No policy with this id is defined">undefined</span>
+                </span>
+                <span th:unless="${r.policy}">&mdash;</span>
+              </td>
+              <td class="hc-datagrid__cell">
+                <span class="hc-badge" data-variant="warning" th:if="${r.csrfGap}">gap</span>
+                <span th:unless="${r.csrfGap}">&mdash;</span>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <section class="hc-card">
+    <h3>Policies</h3>
+    <div class="hc-empty" th:if="${sec.policyCount == 0}">
+      <p class="hc-empty__title">No policies defined.</p>
+      <p class="hc-empty__body">Add them under <code>tesseraql.security.policies</code>.</p>
+    </div>
+    <div class="hc-datagrid" th:if="${sec.policyCount > 0}">
+      <div class="hc-datagrid__scroll">
+        <table class="hc-datagrid__table">
+          <thead class="hc-datagrid__head"><tr>
+            <th class="hc-datagrid__headcell">Policy</th>
+            <th class="hc-datagrid__headcell">Grants access when</th>
+          </tr></thead>
+          <tbody class="hc-datagrid__body">
+            <tr class="hc-datagrid__row" th:each="p : ${sec.policies}">
+              <td class="hc-datagrid__cell"><code th:text="${p.id}">policy.id</code></td>
+              <td class="hc-datagrid__cell" th:text="${p.summary}">role X OR permission Y</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+</div>
+</html>

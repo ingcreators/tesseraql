@@ -1288,6 +1288,69 @@ public final class StudioService {
     }
 
     /**
+     * Every route's security posture for the Studio security overview: its auth type, policy, source,
+     * and the two governance flags — {@code unprotected} (no auth declared) and {@code csrfGap} (a
+     * state-changing browser route without CSRF).
+     */
+    public List<Map<String, Object>> routeSecurity() {
+        List<Map<String, Object>> out = new ArrayList<>();
+        for (RouteFile route : manifest.routes()) {
+            io.tesseraql.yaml.model.SecuritySpec security = route.definition().security();
+            String auth = security == null ? null : security.auth();
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("id", route.definition().id());
+            row.put("method", route.httpMethod());
+            row.put("path", route.urlPath());
+            row.put("auth", auth);
+            row.put("policy", security == null ? null : security.policy());
+            row.put("source", relative(route.source()));
+            row.put("unprotected", auth == null || auth.isBlank());
+            boolean stateChanging = !"GET".equalsIgnoreCase(route.httpMethod())
+                    && !"HEAD".equalsIgnoreCase(route.httpMethod())
+                    && !"OPTIONS".equalsIgnoreCase(route.httpMethod());
+            boolean csrfOn = security != null && Boolean.TRUE.equals(security.csrf());
+            row.put("csrfGap", "browser".equals(auth) && stateChanging && !csrfOn);
+            out.add(row);
+        }
+        return out;
+    }
+
+    /**
+     * The app's authorization policies ({@code tesseraql.security.policies}), each with a readable
+     * summary of its {@code anyOf} rules (roles / permissions / claims), sorted by id.
+     */
+    public List<Map<String, Object>> securityPolicies() {
+        Object policies = manifest.config().navigate("tesseraql.security.policies");
+        List<Map<String, Object>> out = new ArrayList<>();
+        if (!(policies instanceof Map<?, ?> byId)) {
+            return out;
+        }
+        java.util.TreeMap<String, Object> sorted = new java.util.TreeMap<>();
+        byId.forEach((id, spec) -> sorted.put(String.valueOf(id), spec));
+        sorted.forEach((id, spec) -> {
+            List<String> tokens = new ArrayList<>();
+            if (spec instanceof Map<?, ?> map && map.get("anyOf") instanceof List<?> rules) {
+                for (Object rule : rules) {
+                    if (rule instanceof Map<?, ?> r) {
+                        if (r.get("role") != null) {
+                            tokens.add("role " + r.get("role"));
+                        } else if (r.get("permission") != null) {
+                            tokens.add("permission " + r.get("permission"));
+                        } else if (r.get("claimName") != null) {
+                            tokens.add("claim " + r.get("claimName") + "=" + r.get("claimValue"));
+                        }
+                    }
+                }
+            }
+            Map<String, Object> policy = new LinkedHashMap<>();
+            policy.put("id", id);
+            policy.put("summary", tokens.isEmpty() ? "(no rules)" : String.join(" OR ", tokens));
+            out.add(policy);
+        });
+        return out;
+    }
+
+    /**
      * Appends a menu item to {@code config/menu.yml} and records it to the audit trail. {@code label}
      * and {@code href} are required; {@code icon} is an optional sprite id; {@code rolesCsv}/
      * {@code permsCsv} are comma-separated visibility lists (empty ⇒ a public item).

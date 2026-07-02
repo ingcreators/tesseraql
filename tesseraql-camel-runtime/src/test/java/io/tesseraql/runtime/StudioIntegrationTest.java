@@ -1884,6 +1884,24 @@ class StudioIntegrationTest {
     }
 
     @Test
+    void uiSecurityOverviewMapsRoutesToPoliciesAndFlagsUnprotected() throws Exception {
+        HttpResponse<String> response = get("/_tesseraql/studio/ui/security", true);
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        // The route→policy map lists a secured route with its policy, and the policy catalogue shows
+        // the policy's rule summary (users.read grants a USER_READ role).
+        assertThat(response.body()).contains("Security").contains("/admin/users")
+                .contains("users.read").contains("USER_READ");
+        // /users is a public page, so an unprotected route is flagged.
+        assertThat(response.body()).contains("no auth");
+    }
+
+    @Test
+    void uiSecurityOverviewRequiresAuthentication() throws Exception {
+        assertThat(get("/_tesseraql/studio/ui/security", false).statusCode()).isEqualTo(401);
+    }
+
+    @Test
     void uiTryConsoleRendersTheFormWithRoutePathSuggestions() throws Exception {
         HttpResponse<String> response = get("/_tesseraql/studio/ui/try", true);
 
