@@ -1232,7 +1232,6 @@ public final class StudioService {
                 || entry.at().toLowerCase(java.util.Locale.ROOT).contains(lowerQuery);
     }
 
-    /** Appends one audit entry for a source-writing action (Studio backlog D6). */
     /** The app's current declarative sidebar menu items ({@code config/menu.yml}); empty if none. */
     public List<MenuItem> menuItems() {
         return MenuSpec.load(appHome).items();
@@ -1310,6 +1309,7 @@ public final class StudioService {
                 .filter(part -> !part.isEmpty()).toList();
     }
 
+    /** Appends one audit entry for a source-writing action (Studio backlog D6). */
     private void recordAudit(String actor, String action, String target) {
         Map<String, Object> entry = new LinkedHashMap<>();
         entry.put("at", Instant.now().toString());
