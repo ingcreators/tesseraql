@@ -1,0 +1,30 @@
+version: tesseraql/v1
+id: tql.studio.config.set
+kind: route
+recipe: command-json
+
+# Overrides one curated, whitelisted setting in config/overlay.yml (or removes it when blank). The
+# key is validated against StudioService's whitelist; edit-gated in the provider; restart to apply.
+input:
+  key:
+    type: string
+    required: true
+  value:
+    type: string
+    required: false
+
+security:
+  auth: browser
+  csrf: true
+
+sql:
+  service: studio.configSet
+  params:
+    key: params.key
+    value: params.value
+    actor: principal.loginId
+    principalRoles: principal.roles
+
+response:
+  redirect:
+    location: /_tesseraql/studio/ui/config?saved=1
