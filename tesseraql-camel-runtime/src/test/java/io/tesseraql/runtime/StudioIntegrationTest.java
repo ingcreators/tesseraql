@@ -1969,6 +1969,26 @@ class StudioIntegrationTest {
     }
 
     @Test
+    void uiTryConsolePrefillsMethodPathAndBodyFromADeepLink() throws Exception {
+        // Deep-linked to a POST route with a declared input → path + a JSON body skeleton are filled.
+        HttpResponse<String> response = get("/_tesseraql/studio/ui/try?path="
+                + enc("/api/users/provision") + "&method=POST", true);
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(response.body()).contains("value=\"/api/users/provision\"").contains("userName");
+    }
+
+    @Test
+    void uiDocsRouteLinksToTheApiConsole() throws Exception {
+        HttpResponse<String> response = get(
+                "/_tesseraql/studio/ui/docs/route?id=users.apiProvision", true);
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(response.body()).contains("Try in API console")
+                .contains("/_tesseraql/studio/ui/try?path=");
+    }
+
+    @Test
     void uiTryRunForwardsTheSessionForBrowserAuthedRoutes() throws Exception {
         // The Health page is browser-authenticated: a loopback with no session is rejected (401),
         // but forwarding the caller's session (useSession) authenticates it (200).

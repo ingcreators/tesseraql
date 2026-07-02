@@ -1290,6 +1290,68 @@ public final class StudioService {
     }
 
     /**
+     * Prefill values for the API console when it is deep-linked with {@code ?path=&method=} (e.g. from
+     * a route's docs page): the resolved method + path, plus a skeleton built from the matched route's
+     * declared inputs — a JSON body for a body method, or a query string for a read method.
+     */
+    public Map<String, Object> tryPrefill(String method, String path) {
+        Map<String, Object> out = new LinkedHashMap<>();
+        if (path == null || path.isBlank()) {
+            return out;
+        }
+        out.put("path", path);
+        String wanted = method == null ? null : method.strip();
+        RouteFile match = null;
+        for (RouteFile route : manifest.routes()) {
+            if (path.equals(route.urlPath())
+                    && (wanted == null || wanted.equalsIgnoreCase(route.httpMethod()))) {
+                match = route;
+                break;
+            }
+        }
+        if (match == null) {
+            if (wanted != null) {
+                out.put("method", wanted.toUpperCase(java.util.Locale.ROOT));
+            }
+            return out;
+        }
+        String httpMethod = match.httpMethod().toUpperCase(java.util.Locale.ROOT);
+        out.put("method", httpMethod);
+        java.util.LinkedHashMap<String, Object> writable = new java.util.LinkedHashMap<>();
+        match.definition().input().forEach((name, field) -> {
+            if (field.isWritable()) {
+                writable.put(name, inputExample(field.type()));
+            }
+        });
+        if (writable.isEmpty()) {
+            return out;
+        }
+        boolean bodyMethod = !("GET".equals(httpMethod) || "HEAD".equals(httpMethod)
+                || "DELETE".equals(httpMethod) || "OPTIONS".equals(httpMethod));
+        if (bodyMethod) {
+            try {
+                out.put("body", jsonMapper.writerWithDefaultPrettyPrinter()
+                        .writeValueAsString(writable));
+            } catch (com.fasterxml.jackson.core.JsonProcessingException ignored) {
+                // Skip the body skeleton if it can't be serialized (never expected for scalars).
+            }
+        } else {
+            out.put("query", writable.keySet().stream()
+                    .map(name -> name + "=").collect(java.util.stream.Collectors.joining("&")));
+        }
+        return out;
+    }
+
+    /** A placeholder example value for an input type, used in the API-console body skeleton. */
+    private static Object inputExample(String type) {
+        return switch (type == null ? "string" : type) {
+            case "integer", "number" -> 0;
+            case "boolean" -> false;
+            default -> "";
+        };
+    }
+
+    /**
      * Every route's security posture for the Studio security overview: its auth type, policy, source,
      * and the two governance flags — {@code unprotected} (no auth declared) and {@code csrfGap} (a
      * state-changing browser route without CSRF).
