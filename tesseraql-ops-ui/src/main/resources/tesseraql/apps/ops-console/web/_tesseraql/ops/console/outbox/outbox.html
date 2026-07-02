@@ -16,22 +16,36 @@
         th:attr="data-variant=${s.statusVariant}">[[${s.status}]]: [[${s.count}]]</li>
   </ul>
   <div class="hc-empty" th:unless="${outbox.hasRows}"><p class="hc-empty__title">No outbox events recorded.</p></div>
-  <table class="hc-table" th:if="${outbox.hasRows}">
-    <thead><tr><th>Event</th><th>Type</th><th>Source</th><th>App</th><th>Status</th><th>Attempts</th><th>Last error</th><th>Created</th><th>Sent</th></tr></thead>
-    <tbody>
-      <tr th:each="e : ${outbox.rows}">
-        <td th:text="${e.id}"></td>
-        <td th:text="${e.type}"></td>
-        <td th:text="${e.source}"></td>
-        <td th:text="${e.app}"></td>
-        <td class="hc-status" th:attr="data-variant=${e.statusVariant}" th:text="${e.status}"></td>
-        <td th:text="${e.attempts}"></td>
-        <td th:text="${e.lastError}"></td>
-        <td th:text="${e.createdAt}"></td>
-        <td th:text="${e.sentAt}"></td>
-      </tr>
-    </tbody>
-  </table>
+  <div class="hc-datagrid" th:if="${outbox.hasRows}">
+    <div class="hc-datagrid__scroll">
+      <table class="hc-datagrid__table">
+        <thead class="hc-datagrid__head"><tr>
+          <th class="hc-datagrid__headcell">Event</th>
+          <th class="hc-datagrid__headcell">Type</th>
+          <th class="hc-datagrid__headcell">Source</th>
+          <th class="hc-datagrid__headcell">App</th>
+          <th class="hc-datagrid__headcell">Status</th>
+          <th class="hc-datagrid__headcell">Attempts</th>
+          <th class="hc-datagrid__headcell">Last error</th>
+          <th class="hc-datagrid__headcell">Created</th>
+          <th class="hc-datagrid__headcell">Sent</th>
+        </tr></thead>
+        <tbody class="hc-datagrid__body">
+          <tr class="hc-datagrid__row" th:each="e : ${outbox.rows}">
+            <td class="hc-datagrid__cell" th:text="${e.id}"></td>
+            <td class="hc-datagrid__cell" th:text="${e.type}"></td>
+            <td class="hc-datagrid__cell" th:text="${e.source}"></td>
+            <td class="hc-datagrid__cell" th:text="${e.app}"></td>
+            <td class="hc-datagrid__cell"><span class="hc-badge" th:attr="data-variant=${e.statusVariant}" th:text="${e.status}"></span></td>
+            <td class="hc-datagrid__cell" th:text="${e.attempts}"></td>
+            <td class="hc-datagrid__cell" th:text="${e.lastError}"></td>
+            <td class="hc-datagrid__cell" th:text="${e.createdAt}"></td>
+            <td class="hc-datagrid__cell" th:text="${e.sentAt}"></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
   <p class="hc-field__message">Dead-lettered events can be requeued with
     <code>POST /_tesseraql/ops/outbox/&lt;event-id&gt;/redeliver</code>.</p>
 </section>
