@@ -1066,6 +1066,19 @@ public final class TesseraqlRuntime implements AutoCloseable {
                             return model;
                         })
                         .register("studio.tryRun", params -> tryInvoke(port, params))
+                        // Config viewer (governance): the effective merged configuration (application
+                        // .yml + tesseraql.yml + overlay.yml), flattened to dotted keys, with secret
+                        // values redacted. Read-only — a curated overlay-backed editor is a later slice.
+                        .register("studio.config", params -> {
+                            java.util.List<Map<String, Object>> rows = studio.effectiveConfig();
+                            long secrets = rows.stream()
+                                    .filter(r -> Boolean.TRUE.equals(r.get("secret"))).count();
+                            Map<String, Object> model = new java.util.LinkedHashMap<>();
+                            model.put("rows", rows);
+                            model.put("count", rows.size());
+                            model.put("secretCount", secrets);
+                            return model;
+                        })
                         // i18n message editor (governance/authoring): a key × locale table over the
                         // app's messages/<locale>.yml catalogs, flagging missing translations; the set
                         // action upserts one translation (edit-gated + audited). The message resolver

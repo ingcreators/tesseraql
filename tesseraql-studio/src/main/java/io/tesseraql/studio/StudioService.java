@@ -1400,6 +1400,49 @@ public final class StudioService {
         recordAudit(actor, "message", "messages/" + tag + ".yml");
     }
 
+    /**
+     * The app's effective (merged) configuration flattened to dotted-key rows for the Studio config
+     * viewer, sorted by key. Values are shown unresolved (so {@code ${ENV}} references stay visible,
+     * not their secret values); a value whose key names a secret is redacted unless it is such a
+     * reference.
+     */
+    public List<Map<String, Object>> effectiveConfig() {
+        Map<String, Object> root = new ManifestLoader().load(appHome).config().root();
+        java.util.TreeMap<String, Object> flat = new java.util.TreeMap<>();
+        flattenConfig("", root, flat);
+        List<Map<String, Object>> rows = new ArrayList<>();
+        flat.forEach((key, value) -> {
+            String rendered = value == null ? "" : String.valueOf(value);
+            boolean secret = isSecretKey(key) && !rendered.startsWith("${");
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("key", key);
+            row.put("value", secret ? "••••••" : rendered);
+            row.put("secret", secret);
+            rows.add(row);
+        });
+        return rows;
+    }
+
+    private static void flattenConfig(String prefix, Object node, Map<String, Object> out) {
+        if (node instanceof Map<?, ?> map) {
+            map.forEach((k, v) -> flattenConfig(
+                    prefix.isEmpty() ? String.valueOf(k) : prefix + "." + k, v, out));
+        } else if (node instanceof List<?> list) {
+            out.put(prefix, list.toString());
+        } else {
+            out.put(prefix, node);
+        }
+    }
+
+    /** Whether a dotted config key names a secret whose literal value should be redacted. */
+    private static boolean isSecretKey(String key) {
+        String lower = key.toLowerCase(java.util.Locale.ROOT);
+        return lower.contains("password") || lower.contains("passphrase")
+                || lower.contains("secret") || lower.contains("token")
+                || lower.contains("credential") || lower.contains("apikey")
+                || lower.contains("privatekey");
+    }
+
     private static String requireLocaleTag(String locale) {
         String trimmed = trimToNull(locale);
         if (trimmed == null || !LOCALE_TAG.matcher(trimmed).matches()) {

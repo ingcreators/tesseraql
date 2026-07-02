@@ -1935,6 +1935,22 @@ class StudioIntegrationTest {
     }
 
     @Test
+    void uiConfigViewerRendersEffectiveConfigAndRedactsSecrets() throws Exception {
+        HttpResponse<String> response = get("/_tesseraql/studio/ui/config", true);
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        // A known flattened key is shown; a secret's literal value (docs.share.secret) is redacted.
+        assertThat(response.body()).contains("Configuration")
+                .contains("tesseraql.studio.editRoles").contains("redacted")
+                .doesNotContain("it-docs-share-secret");
+    }
+
+    @Test
+    void uiConfigViewerRequiresAuthentication() throws Exception {
+        assertThat(get("/_tesseraql/studio/ui/config", false).statusCode()).isEqualTo(401);
+    }
+
+    @Test
     void uiSecurityPolicyEditWritesOverlayAndRebindsTheEngineLive() throws Exception {
         String policyId = "studio.it.editpolicy";
         Path overlay = appHome.resolve("config/overlay.yml");

@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{tql/shell :: studio-page('TesseraQL Studio · Config', ~{:: #page-header}, ~{:: #page-content})}">
+<th:block id="page-header">
+  <span class="hc-spacer"></span>
+  <div class="hc-cluster">
+    <a class="hc-button" data-variant="ghost" data-size="sm" href="/_tesseraql/studio/ui">&larr; explorer</a>
+  </div>
+</th:block>
+<div id="page-content" class="hc-stack">
+  <section class="hc-card">
+    <h2>Configuration</h2>
+    <p class="hc-field__message">The app's effective configuration &mdash;
+      <code>application.yml</code>, <code>tesseraql.yml</code> and <code>overlay.yml</code> merged,
+      flattened to dotted keys. Values are shown <strong>unresolved</strong>, so an
+      <code>${ENV}</code> reference stays visible rather than its value; a secret's literal value is
+      redacted. Read-only.</p>
+    <div class="hc-cluster">
+      <span class="hc-badge" data-variant="neutral" th:text="|${cfg.count} key(s)|">0 key(s)</span>
+      <span class="hc-badge" data-variant="neutral" th:text="|${cfg.secretCount} redacted|">0 redacted</span>
+    </div>
+    <div class="hc-datagrid">
+      <div class="hc-datagrid__scroll">
+        <table class="hc-datagrid__table">
+          <thead class="hc-datagrid__head"><tr>
+            <th class="hc-datagrid__headcell">Key</th>
+            <th class="hc-datagrid__headcell">Value</th>
+          </tr></thead>
+          <tbody class="hc-datagrid__body">
+            <tr class="hc-datagrid__row" th:each="r : ${cfg.rows}" th:attr="data-key=${r.key}">
+              <td class="hc-datagrid__cell"><code th:text="${r.key}">key</code></td>
+              <td class="hc-datagrid__cell">
+                <span class="hc-badge" data-variant="neutral" th:if="${r.secret}">redacted</span>
+                <span th:unless="${r.secret}" th:text="${r.value}">value</span>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+</div>
+</html>
