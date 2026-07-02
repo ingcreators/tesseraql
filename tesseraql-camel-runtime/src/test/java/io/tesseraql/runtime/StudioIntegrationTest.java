@@ -1320,7 +1320,9 @@ class StudioIntegrationTest {
         assertThat(response.body()).contains("Scaffold CRUD from a table").contains("widgets")
                 .contains("hx-post=\"/_tesseraql/studio/ui/scaffold/preview\"")
                 // table list uses hc-datagrid (table consistency pass)
-                .contains("hc-datagrid");
+                .contains("hc-datagrid")
+                // Preview CRUD opens in a drawer (remote-dialog host), not a panel below
+                .contains("data-hc-remote-dialog-root");
     }
 
     @Test
@@ -1377,7 +1379,9 @@ class StudioIntegrationTest {
 
         assertThat(response.statusCode()).isEqualTo(200);
         assertThat(response.body()).contains("Create these files")
-                .contains("hx-post=\"/_tesseraql/studio/ui/scaffold/apply\"");
+                .contains("hx-post=\"/_tesseraql/studio/ui/scaffold/apply\"")
+                // the preview is a focused hc-drawer overlay, not an inline panel
+                .contains("class=\"hc-drawer\"");
     }
 
     @Test
