@@ -1,0 +1,52 @@
+version: tesseraql/v1
+id: tql.studio.tryit.run
+kind: route
+recipe: query-html
+
+# Invokes one of the app's own routes via a loopback HTTP call and renders the raw response as a
+# fragment. Browser-authed + CSRF-protected because it can invoke a state-changing route.
+input:
+  method:
+    type: string
+    required: false
+  path:
+    type: string
+    required: true
+  query:
+    type: string
+    required: false
+  body:
+    type: string
+    required: false
+  contentType:
+    type: string
+    required: false
+  bearer:
+    type: string
+    required: false
+
+security:
+  auth: browser
+  csrf: true
+
+sql:
+  service: studio.tryRun
+  params:
+    method: params.method
+    path: params.path
+    query: params.query
+    body: params.body
+    contentType: params.contentType
+    bearer: params.bearer
+
+response:
+  html:
+    status: 200
+    template: result.html
+    model:
+      result: sql
+    headers:
+      Content-Security-Policy: "default-src 'self'; style-src 'self' 'unsafe-inline'; frame-ancestors 'none'"
+      X-Content-Type-Options: nosniff
+      X-Frame-Options: DENY
+      Referrer-Policy: no-referrer

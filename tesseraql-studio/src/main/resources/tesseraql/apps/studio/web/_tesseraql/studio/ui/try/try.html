@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{tql/shell :: studio-page('TesseraQL Studio · API console', ~{:: #page-header}, ~{:: #page-content})}">
+<th:block id="page-header">
+  <span class="hc-spacer"></span>
+  <div class="hc-cluster">
+    <a class="hc-button" data-variant="ghost" data-size="sm" href="/_tesseraql/studio/ui">&larr; explorer</a>
+  </div>
+</th:block>
+<div id="page-content" class="hc-stack">
+  <section class="hc-card">
+    <h2>API console</h2>
+    <p class="hc-field__message">Send a request to one of this app's own routes and inspect the raw
+      response (status, headers, body). The request runs against the live app, so its route enforces
+      its own security &mdash; public routes just work; for a <code>bearer</code> route paste a token.
+      A <code>POST</code>/<code>PUT</code>/<code>DELETE</code> hits the real route and can modify data.</p>
+    <form class="hc-stack" hx-post="/_tesseraql/studio/ui/try/run"
+          hx-target="#tryit-result" hx-swap="innerHTML" hx-disabled-elt="find button">
+      <input type="hidden" name="_csrf" th:value="${_csrf}">
+      <div class="hc-cluster">
+        <div class="hc-field">
+          <label class="hc-field__label" for="try-method">Method</label>
+          <select class="hc-select" id="try-method" name="method">
+            <option>GET</option><option>POST</option><option>PUT</option>
+            <option>PATCH</option><option>DELETE</option>
+          </select>
+        </div>
+        <div class="hc-field hc-field--grow">
+          <label class="hc-field__label" for="try-path">Path</label>
+          <input class="hc-input" id="try-path" name="path" required placeholder="/api/users"
+                 list="try-path-options" autocomplete="off">
+        </div>
+      </div>
+      <datalist id="try-path-options">
+        <option th:each="p : ${tryit.pathOptions}" th:value="${p}"></option>
+      </datalist>
+      <div class="hc-field">
+        <label class="hc-field__label" for="try-query">Query string (optional)</label>
+        <input class="hc-input" id="try-query" name="query" placeholder="q=sato&limit=10"
+               autocomplete="off">
+      </div>
+      <div class="hc-field">
+        <label class="hc-field__label" for="try-bearer">Bearer token (optional)</label>
+        <input class="hc-input" id="try-bearer" name="bearer" autocomplete="off"
+               placeholder="for a bearer-secured route">
+      </div>
+      <div class="hc-cluster">
+        <div class="hc-field hc-field--grow">
+          <label class="hc-field__label" for="try-body">Request body (optional)</label>
+          <textarea class="hc-input" id="try-body" name="body" rows="6"
+                    placeholder='{"userName": "sato"}'></textarea>
+        </div>
+        <div class="hc-field">
+          <label class="hc-field__label" for="try-content-type">Content-Type</label>
+          <input class="hc-input" id="try-content-type" name="contentType"
+                 placeholder="application/json" autocomplete="off">
+        </div>
+      </div>
+      <div class="hc-cluster">
+        <button type="submit" class="hc-button" data-variant="primary">Send request</button>
+        <th:block th:replace="~{tql/shell :: busy('Sending…')}"/>
+      </div>
+    </form>
+    <div id="tryit-result" class="hc-stack"></div>
+  </section>
+</div>
+</html>

@@ -1884,6 +1884,34 @@ class StudioIntegrationTest {
     }
 
     @Test
+    void uiTryConsoleRendersTheFormWithRoutePathSuggestions() throws Exception {
+        HttpResponse<String> response = get("/_tesseraql/studio/ui/try", true);
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(response.body()).contains("API console").contains("id=\"try-path-options\"")
+                .contains("value=\"/users\"");
+    }
+
+    @Test
+    void uiTryRunLoopbackInvokesAPublicRouteAndShowsTheResponse() throws Exception {
+        // /users is a public page; the console proxies a loopback GET and renders status + body.
+        HttpResponse<String> response = postForm("/_tesseraql/studio/ui/try/run",
+                "method=GET&path=" + enc("/users"));
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(response.body()).contains("200").contains("Users");
+    }
+
+    @Test
+    void uiTryRunRejectsANonAppPath() throws Exception {
+        HttpResponse<String> response = postForm("/_tesseraql/studio/ui/try/run",
+                "method=GET&path=" + enc("http://example.com/"));
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(response.body()).contains("app path beginning with");
+    }
+
+    @Test
     void uiSourceMigrationOffersDryRunWhenEnabled() throws Exception {
         HttpResponse<String> response = get("/_tesseraql/studio/ui/source?path="
                 + enc("db/migration/V1__create_users.sql"), true);

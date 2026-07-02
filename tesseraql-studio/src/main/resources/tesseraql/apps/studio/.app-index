@@ -56,6 +56,10 @@ web/_tesseraql/studio/ui/new/drawer.html
 web/_tesseraql/studio/ui/new/post.yml
 web/_tesseraql/studio/ui/health/get.yml
 web/_tesseraql/studio/ui/health/health.html
+web/_tesseraql/studio/ui/try/get.yml
+web/_tesseraql/studio/ui/try/try.html
+web/_tesseraql/studio/ui/try/run/post.yml
+web/_tesseraql/studio/ui/try/run/result.html
 web/_tesseraql/studio/ui/menu/get.yml
 web/_tesseraql/studio/ui/menu/menu.html
 web/_tesseraql/studio/ui/menu/add/post.yml

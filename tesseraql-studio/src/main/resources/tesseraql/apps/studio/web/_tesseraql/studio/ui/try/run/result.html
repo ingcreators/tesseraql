@@ -1,0 +1,32 @@
+<th:block xmlns:th="http://www.thymeleaf.org">
+  <p class="hc-alert" data-variant="error" role="alert" th:if="${result.error}"
+     th:text="${result.error}">Request failed.</p>
+  <div class="hc-stack" th:if="${result.ok}">
+    <div class="hc-cluster">
+      <span class="hc-badge"
+            th:attr="data-variant=${result.status < 400} ? 'success' : (${result.status < 500} ? 'warning' : 'error')"
+            th:text="|${result.method} · ${result.status}|">GET · 200</span>
+      <span class="hc-field__message" th:text="|${result.durationMs} ms|">0 ms</span>
+      <code th:text="${result.url}">url</code>
+    </div>
+    <details class="hc-disclosure">
+      <summary>Response headers</summary>
+      <div class="hc-datagrid">
+        <div class="hc-datagrid__scroll">
+          <table class="hc-datagrid__table">
+            <tbody class="hc-datagrid__body">
+              <tr class="hc-datagrid__row" th:each="h : ${result.headers}">
+                <td class="hc-datagrid__cell"><code th:text="${h.name}">name</code></td>
+                <td class="hc-datagrid__cell" th:text="${h.value}">value</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </details>
+    <div class="hc-field">
+      <label class="hc-field__label">Response body</label>
+      <pre class="hc-code"><code th:text="${result.body}">body</code></pre>
+    </div>
+  </div>
+</th:block>
