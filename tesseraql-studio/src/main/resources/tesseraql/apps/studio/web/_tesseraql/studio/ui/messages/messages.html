@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{tql/shell :: studio-page('TesseraQL Studio · Messages', ~{:: #page-header}, ~{:: #page-content})}">
+<th:block id="page-header">
+  <span class="hc-spacer"></span>
+  <div class="hc-cluster">
+    <a class="hc-button" data-variant="ghost" data-size="sm" href="/_tesseraql/studio/ui">&larr; explorer</a>
+  </div>
+</th:block>
+<div id="page-content" class="hc-stack">
+  <section class="hc-card">
+    <h2>Messages</h2>
+    <p class="hc-field__message">The app's i18n catalogs (<code>messages/&lt;locale&gt;.yml</code>),
+      one row per dotted key. A key present in one locale but missing in another is flagged. Edits are
+      saved to the locale file and served after the next reload or restart.</p>
+    <div class="hc-cluster">
+      <span class="hc-badge" data-variant="neutral" th:text="|${msg.localeCount} locale(s)|">0 locale(s)</span>
+      <span class="hc-badge" data-variant="neutral" th:text="|${msg.keyCount} key(s)|">0 key(s)</span>
+      <span class="hc-badge" th:attr="data-variant=${msg.missingCount > 0} ? 'warning' : 'success'"
+            th:text="|${msg.missingCount} missing|">0 missing</span>
+    </div>
+
+    <details class="hc-disclosure" th:if="${msg.editable}" th:attr="open=${msg.keyCount == 0} ? true : null">
+      <summary>Set a translation</summary>
+      <form class="hc-stack" method="post" action="/_tesseraql/studio/ui/messages/set">
+        <input type="hidden" name="_csrf" th:value="${_csrf}">
+        <div class="hc-cluster">
+          <div class="hc-field">
+            <label class="hc-field__label" for="msg-locale">Locale</label>
+            <input class="hc-input" id="msg-locale" name="locale" required list="msg-locale-options"
+                   autocomplete="off" placeholder="en">
+            <datalist id="msg-locale-options">
+              <option th:each="l : ${msg.locales}" th:value="${l}"></option>
+            </datalist>
+          </div>
+          <div class="hc-field hc-field--grow">
+            <label class="hc-field__label" for="msg-key">Key</label>
+            <input class="hc-input" id="msg-key" name="key" required list="msg-key-options"
+                   autocomplete="off" placeholder="users.list.title">
+            <datalist id="msg-key-options">
+              <option th:each="r : ${msg.rows}" th:value="${r.key}"></option>
+            </datalist>
+          </div>
+        </div>
+        <div class="hc-field">
+          <label class="hc-field__label" for="msg-value">Value</label>
+          <input class="hc-input" id="msg-value" name="value" placeholder="Users">
+        </div>
+        <div class="hc-cluster">
+          <button type="submit" class="hc-button" data-variant="primary">Save translation</button>
+        </div>
+      </form>
+    </details>
+
+    <div class="hc-empty" th:if="${msg.keyCount == 0}">
+      <p class="hc-empty__title">No messages yet.</p>
+      <p class="hc-empty__body">This app has no <code>messages/</code> catalogs.</p>
+    </div>
+
+    <div class="hc-datagrid" th:if="${msg.keyCount > 0}">
+      <div class="hc-datagrid__scroll">
+        <table class="hc-datagrid__table">
+          <thead class="hc-datagrid__head"><tr>
+            <th class="hc-datagrid__headcell">Key</th>
+            <th class="hc-datagrid__headcell" th:each="l : ${msg.locales}" th:text="${l}">en</th>
+          </tr></thead>
+          <tbody class="hc-datagrid__body">
+            <tr class="hc-datagrid__row" th:each="r : ${msg.rows}">
+              <td class="hc-datagrid__cell"><code th:text="${r.key}">key</code></td>
+              <td class="hc-datagrid__cell" th:each="c : ${r.cells}">
+                <span class="hc-badge" data-variant="warning" th:if="${c.missing}">missing</span>
+                <span th:unless="${c.missing}" th:text="${c.value}">value</span>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+</div>
+</html>
