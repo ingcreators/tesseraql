@@ -54,7 +54,10 @@
        localStorage. Gated because only icon + `.hc-shell__label` navs collapse cleanly. -->
   <nav class="hc-shell__sidebar" aria-label="Primary" data-hc-nav-current
        th:attr="data-collapsible=${collapsible} ? 'true' : null, data-persist=${collapsible} ? 'tql.sidebar' : null">
-    <th:block th:replace="${nav}"/>
+    <!-- A declarative, role-filtered app menu (config/menu.yml) is injected as the reserved `_menu`
+         model variable by HtmlResponseRenderer and takes the nav slot; apps without one keep their
+         hand-authored nav fragment. -->
+    <th:block th:replace="${_menu != null} ? ~{tql/shell :: app-menu(${_menu})} : ${nav}"/>
   </nav>
   <main class="hc-shell__main">
     <th:block th:replace="${content}"/>
@@ -131,6 +134,15 @@
     <a class="hc-item" href="/_tesseraql/studio/ui"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use href="/assets/_tesseraql/icons.svg#layout-dashboard"/></svg></span><span class="hc-item__title hc-shell__label">Studio</span></a>
     <a class="hc-item" href="/_tesseraql/admin/users"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use href="/assets/_tesseraql/icons.svg#users"/></svg></span><span class="hc-item__title hc-shell__label">IAM Admin</span></a>
   </div>
+</th:block>
+<!-- Renders the app's declarative, role-filtered menu (the `_menu` model variable = a list of
+     MenuSpec.MenuItem the caller may see). Reuses the hc-item + sprite-icon + hc-shell__label pattern;
+     the icon is optional (a text-only item when absent). href is set raw (no URL rewriting). -->
+<th:block th:fragment="app-menu(items)">
+  <a class="hc-item" th:each="item : ${items}" th:attr="href=${item.href}">
+    <span class="hc-item__media" aria-hidden="true" th:if="${item.icon}"><svg class="hc-icon"><use th:attr="href=|/assets/_tesseraql/icons.svg#${item.icon}|"/></svg></span>
+    <span class="hc-item__title hc-shell__label" th:text="${item.label}">Item</span>
+  </a>
 </th:block>
 <!-- A loading affordance for an async (htmx) action: htmx toggles the `htmx-indicator`
      element visible while the request is in flight (its injected indicator style applies
