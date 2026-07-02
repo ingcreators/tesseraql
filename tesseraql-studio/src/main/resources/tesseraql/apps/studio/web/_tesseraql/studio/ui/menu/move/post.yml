@@ -1,0 +1,30 @@
+version: tesseraql/v1
+id: tql.studio.menu.move
+kind: route
+recipe: command-json
+
+# Moves the menu item at the given index up (dir=up) or down (dir=down) in config/menu.yml.
+# Edit-gated in the provider.
+input:
+  index:
+    type: string
+    required: true
+  dir:
+    type: string
+    required: true
+
+security:
+  auth: browser
+  csrf: true
+
+sql:
+  service: studio.menu.move
+  params:
+    index: params.index
+    dir: params.dir
+    actor: principal.loginId
+    principalRoles: principal.roles
+
+response:
+  redirect:
+    location: /_tesseraql/studio/ui/menu?moved=1

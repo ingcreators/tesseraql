@@ -15,6 +15,8 @@ import io.tesseraql.yaml.manifest.JobFile;
 import io.tesseraql.yaml.manifest.ManifestLoader;
 import io.tesseraql.yaml.manifest.MigrationFile;
 import io.tesseraql.yaml.manifest.RouteFile;
+import io.tesseraql.yaml.menu.MenuSpec;
+import io.tesseraql.yaml.menu.MenuSpec.MenuItem;
 import io.tesseraql.yaml.model.ResponseSpec;
 import io.tesseraql.yaml.model.RouteDefinition;
 import io.tesseraql.yaml.scaffold.CrudScaffolder;
@@ -55,6 +57,7 @@ public final class StudioService {
     private static final TqlErrorCode INVALID_DRAFT = new TqlErrorCode(TqlDomain.STUDIO, 4221);
     private static final TqlErrorCode RENDER = new TqlErrorCode(TqlDomain.STUDIO, 4222);
     private static final TqlErrorCode NEW_ROUTE = new TqlErrorCode(TqlDomain.STUDIO, 4224);
+    private static final TqlErrorCode MENU = new TqlErrorCode(TqlDomain.STUDIO, 4225);
     private static final TqlErrorCode CONFLICT = new TqlErrorCode(TqlDomain.STUDIO, 4090);
     private static final Pattern LEADING_DIGITS = Pattern.compile("^\\d+");
     private static final Pattern IDENTIFIER = Pattern.compile("[A-Za-z0-9_-]+");
@@ -1230,6 +1233,83 @@ public final class StudioService {
     }
 
     /** Appends one audit entry for a source-writing action (Studio backlog D6). */
+    /** The app's current declarative sidebar menu items ({@code config/menu.yml}); empty if none. */
+    public List<MenuItem> menuItems() {
+        return MenuSpec.load(appHome).items();
+    }
+
+    /**
+     * Appends a menu item to {@code config/menu.yml} and records it to the audit trail. {@code label}
+     * and {@code href} are required; {@code icon} is an optional sprite id; {@code rolesCsv}/
+     * {@code permsCsv} are comma-separated visibility lists (empty ⇒ a public item).
+     */
+    public void addMenuItem(String label, String href, String icon, String rolesCsv,
+            String permsCsv, String actor) {
+        String cleanLabel = trimToNull(label);
+        String cleanHref = trimToNull(href);
+        if (cleanLabel == null || cleanHref == null) {
+            throw new TqlException(MENU, "A menu item needs a label and an href");
+        }
+        List<MenuItem> items = new ArrayList<>(menuItems());
+        items.add(new MenuItem(cleanLabel, cleanHref, trimToNull(icon), csv(rolesCsv),
+                csv(permsCsv)));
+        writeMenu(items, actor);
+    }
+
+    /** Removes the menu item at {@code index} (no-op when out of range) and records the change. */
+    public void removeMenuItem(int index, String actor) {
+        List<MenuItem> items = new ArrayList<>(menuItems());
+        if (index >= 0 && index < items.size()) {
+            items.remove(index);
+            writeMenu(items, actor);
+        }
+    }
+
+    /**
+     * Moves the menu item at {@code index} one slot up ({@code delta < 0}) or down
+     * ({@code delta > 0}); a move that would leave the list is a no-op.
+     */
+    public void moveMenuItem(int index, int delta, String actor) {
+        List<MenuItem> items = new ArrayList<>(menuItems());
+        int target = index + Integer.signum(delta);
+        if (index >= 0 && index < items.size() && target >= 0 && target < items.size()) {
+            items.add(target, items.remove(index));
+            writeMenu(items, actor);
+        }
+    }
+
+    /** Serializes the menu back to {@code config/menu.yml} (edit-gated) and records the change. */
+    private void writeMenu(List<MenuItem> items, String actor) {
+        if (readOnly) {
+            throw new TqlException(READ_ONLY, "Studio is read-only; editing the menu is disabled");
+        }
+        Path target = resolve("config/menu.yml");
+        try {
+            Files.createDirectories(target.getParent());
+            Files.writeString(target, MenuSpec.toYaml(items));
+        } catch (IOException ex) {
+            throw new UncheckedIOException(ex);
+        }
+        recordAudit(actor, "menu", "config/menu.yml");
+    }
+
+    private static String trimToNull(String value) {
+        if (value == null) {
+            return null;
+        }
+        String trimmed = value.strip();
+        return trimmed.isEmpty() ? null : trimmed;
+    }
+
+    /** Splits a comma-separated field into a trimmed, blank-free list. */
+    private static List<String> csv(String value) {
+        if (value == null || value.isBlank()) {
+            return List.of();
+        }
+        return Arrays.stream(value.split(",")).map(String::strip)
+                .filter(part -> !part.isEmpty()).toList();
+    }
+
     private void recordAudit(String actor, String action, String target) {
         Map<String, Object> entry = new LinkedHashMap<>();
         entry.put("at", Instant.now().toString());

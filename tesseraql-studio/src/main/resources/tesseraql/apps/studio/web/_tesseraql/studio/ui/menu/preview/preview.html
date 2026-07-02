@@ -1,0 +1,12 @@
+<th:block xmlns:th="http://www.thymeleaf.org">
+  <p class="hc-field__message" th:text="${preview.summary}">Showing the menu for a role.</p>
+  <div class="hc-empty" th:if="${preview.empty}">
+    <p class="hc-empty__title">No items visible for this role/permission.</p>
+  </div>
+  <nav class="hc-shell__sidebar" aria-label="Preview" th:unless="${preview.empty}">
+    <a class="hc-item" th:each="item : ${preview.items}" th:attr="href=${item.href}">
+      <span class="hc-item__media" aria-hidden="true" th:if="${item.icon}"><svg class="hc-icon"><use th:attr="href=|/assets/_tesseraql/icons.svg#${item.icon}|"/></svg></span>
+      <span class="hc-item__title" th:text="${item.label}">Item</span>
+    </a>
+  </nav>
+</th:block>

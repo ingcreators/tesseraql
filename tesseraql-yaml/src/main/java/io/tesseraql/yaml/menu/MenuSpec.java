@@ -1,9 +1,17 @@
 package io.tesseraql.yaml.menu;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
+import com.fasterxml.jackson.dataformat.yaml.YAMLGenerator;
+import io.tesseraql.core.error.TqlDomain;
+import io.tesseraql.core.error.TqlErrorCode;
+import io.tesseraql.core.error.TqlException;
 import io.tesseraql.yaml.SimpleYamlParser;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -33,6 +41,12 @@ public final class MenuSpec {
             permissions = permissions == null ? List.of() : List.copyOf(permissions);
         }
     }
+
+    private static final TqlErrorCode WRITE_ERROR = new TqlErrorCode(TqlDomain.YAML, 1010);
+
+    /** Writes clean block YAML with no leading document marker, matching hand-authored menus. */
+    private static final ObjectMapper YAML = new ObjectMapper(
+            new YAMLFactory().disable(YAMLGenerator.Feature.WRITE_DOC_START_MARKER));
 
     private static final MenuSpec EMPTY = new MenuSpec(List.of());
 
@@ -66,6 +80,39 @@ public final class MenuSpec {
             }
         }
         return new MenuSpec(items);
+    }
+
+    /**
+     * Serializes menu items to the {@code config/menu.yml} document text — the inverse of
+     * {@link #load(Path)}. {@code label} and {@code href} are always written; {@code icon},
+     * {@code roles}, and {@code permissions} only when set, so an item's on-disk form stays as
+     * terse as the hand-authored one. An empty list writes {@code menu: []}, which loads back as an
+     * empty (nav-fallback) menu.
+     */
+    public static String toYaml(List<MenuItem> items) {
+        List<Map<String, Object>> out = new ArrayList<>();
+        for (MenuItem item : items) {
+            Map<String, Object> entry = new LinkedHashMap<>();
+            entry.put("label", item.label());
+            entry.put("href", item.href());
+            if (item.icon() != null && !item.icon().isBlank()) {
+                entry.put("icon", item.icon());
+            }
+            if (!item.roles().isEmpty()) {
+                entry.put("roles", item.roles());
+            }
+            if (!item.permissions().isEmpty()) {
+                entry.put("permissions", item.permissions());
+            }
+            out.add(entry);
+        }
+        Map<String, Object> doc = new LinkedHashMap<>();
+        doc.put("menu", out);
+        try {
+            return YAML.writeValueAsString(doc);
+        } catch (JsonProcessingException ex) {
+            throw new TqlException(WRITE_ERROR, "Failed to serialize menu.yml");
+        }
     }
 
     public List<MenuItem> items() {

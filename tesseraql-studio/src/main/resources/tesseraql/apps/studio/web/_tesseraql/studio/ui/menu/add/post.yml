@@ -1,0 +1,42 @@
+version: tesseraql/v1
+id: tql.studio.menu.add
+kind: route
+recipe: command-json
+
+# Appends an item to the app's config/menu.yml (declarative, role-filtered sidebar menu). Edit-gated
+# in the provider; the running app's menu reloads after. Redirects back to the editor.
+input:
+  label:
+    type: string
+    required: true
+  href:
+    type: string
+    required: true
+  icon:
+    type: string
+    required: false
+  roles:
+    type: string
+    required: false
+  permissions:
+    type: string
+    required: false
+
+security:
+  auth: browser
+  csrf: true
+
+sql:
+  service: studio.menu.add
+  params:
+    label: params.label
+    href: params.href
+    icon: params.icon
+    roles: params.roles
+    permissions: params.permissions
+    actor: principal.loginId
+    principalRoles: principal.roles
+
+response:
+  redirect:
+    location: /_tesseraql/studio/ui/menu?added=1

@@ -1753,6 +1753,85 @@ class StudioIntegrationTest {
     }
 
     @Test
+    void uiMenuPageRendersTheEditorAndFallbackNote() throws Exception {
+        // With no config/menu.yml the editor shows the add form and the templates/nav.html fallback.
+        Files.deleteIfExists(appHome.resolve("config/menu.yml"));
+        HttpResponse<String> response = get("/_tesseraql/studio/ui/menu", true);
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(response.body()).contains("Sidebar menu").contains("Add menu item")
+                .contains("templates/nav.html");
+    }
+
+    @Test
+    void uiMenuAddWritesConfigRendersRowAndRecordsAudit() throws Exception {
+        Files.deleteIfExists(appHome.resolve("config/menu.yml"));
+        String form = "label=" + enc("Reports") + "&href=" + enc("/reports")
+                + "&icon=activity&roles=" + enc("ADMIN, STAFF");
+        assertThat(postForm("/_tesseraql/studio/ui/menu/add", form).statusCode()).isEqualTo(303);
+
+        String menu = Files.readString(appHome.resolve("config/menu.yml"));
+        assertThat(menu).contains("Reports").contains("/reports").contains("ADMIN")
+                .contains("STAFF");
+        // The editor now renders the row with its label, href, and role-based visibility.
+        String page = get("/_tesseraql/studio/ui/menu", true).body();
+        assertThat(page).contains("Reports").contains("/reports").contains("Roles: ADMIN, STAFF");
+        // The write is recorded to the audit trail (backlog D6).
+        assertThat(Files.readString(appHome.resolve("work/studio/audit/audit.jsonl")))
+                .contains("\"action\":\"menu\"").contains("config/menu.yml");
+    }
+
+    @Test
+    void uiMenuMoveReordersThenRemoveDeletes() throws Exception {
+        Files.createDirectories(appHome.resolve("config"));
+        Files.writeString(appHome.resolve("config/menu.yml"), """
+                menu:
+                  - {label: First, href: /first}
+                  - {label: Second, href: /second}
+                """);
+
+        // Move the second item up → it precedes the first on disk.
+        assertThat(postForm("/_tesseraql/studio/ui/menu/move", "index=1&dir=up").statusCode())
+                .isEqualTo(303);
+        String moved = Files.readString(appHome.resolve("config/menu.yml"));
+        assertThat(moved.indexOf("Second")).isLessThan(moved.indexOf("First"));
+
+        // Remove index 0 (now "Second") → only "First" remains.
+        assertThat(postForm("/_tesseraql/studio/ui/menu/remove", "index=0").statusCode())
+                .isEqualTo(303);
+        String removed = Files.readString(appHome.resolve("config/menu.yml"));
+        assertThat(removed).contains("First").doesNotContain("Second");
+    }
+
+    @Test
+    void uiMenuPreviewFiltersByRoleServerSide() throws Exception {
+        Files.createDirectories(appHome.resolve("config"));
+        Files.writeString(appHome.resolve("config/menu.yml"), """
+                menu:
+                  - {label: Home, href: /home}
+                  - {label: Admin, href: /admin, roles: [ADMIN]}
+                """);
+
+        // A non-matching role sees only the public item; the gated href is not emitted.
+        String anon = get("/_tesseraql/studio/ui/menu/preview?role=" + enc("NOBODY"), true).body();
+        assertThat(anon).contains("/home").doesNotContain("/admin");
+        // The ADMIN role sees both.
+        String admin = get("/_tesseraql/studio/ui/menu/preview?role=ADMIN", true).body();
+        assertThat(admin).contains("/home").contains("/admin");
+    }
+
+    @Test
+    void uiMenuEditorIsReadOnlyForAViewer() throws Exception {
+        assertThat(getWithCookie("/_tesseraql/studio/ui/menu", viewerCookie).body())
+                .contains("do not have permission");
+    }
+
+    @Test
+    void uiMenuRequiresAuthentication() throws Exception {
+        assertThat(get("/_tesseraql/studio/ui/menu", false).statusCode()).isEqualTo(401);
+    }
+
+    @Test
     void uiSourceMigrationOffersDryRunWhenEnabled() throws Exception {
         HttpResponse<String> response = get("/_tesseraql/studio/ui/source?path="
                 + enc("db/migration/V1__create_users.sql"), true);
