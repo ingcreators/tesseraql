@@ -82,6 +82,26 @@ class OpsConsoleIntegrationTest {
         assertThat(response.body()).startsWith("<!DOCTYPE html>");
         assertThat(response.body()).contains("TesseraQL Operations Console");
         assertThat(response.body()).contains("Execution lanes");
+        // Long dashboard gets an in-page "jump to section" nav (sidebar IA).
+        assertThat(response.body()).contains("Jump to").contains("href=\"#batch\"");
+    }
+
+    @Test
+    void consolePagesCarryTheOpsSidebarNav() throws Exception {
+        // The console mounts its own section nav in the shell sidebar (sidebar IA), like Studio: the
+        // sub-views are reachable from anywhere, with the other system apps linked below. Renders on
+        // the overview and a deep sub-page alike.
+        for (String path : new String[]{"/_tesseraql/ops/console",
+                "/_tesseraql/ops/console/traces"}) {
+            String body = get(path, true).body();
+            assertThat(body).contains("hc-shell__sidebar").contains("data-hc-nav-current")
+                    .contains(">Overview<").contains(">Traces<")
+                    .contains(">Transfers<").contains(">Outbox<")
+                    // the other system apps stay reachable
+                    .contains(">Studio<").contains(">IAM Admin<")
+                    // icons via the self-hosted sprite
+                    .contains("/assets/_tesseraql/icons.svg#waypoints");
+        }
     }
 
     @Test
