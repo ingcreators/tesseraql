@@ -3,11 +3,22 @@ id: tql.studio.tryit
 kind: route
 recipe: query-html
 
+input:
+  path:
+    type: string
+    required: false
+  method:
+    type: string
+    required: false
+
 security:
   auth: browser
 
 sql:
   service: studio.tryit
+  params:
+    path: params.path
+    method: params.method
 
 response:
   html:

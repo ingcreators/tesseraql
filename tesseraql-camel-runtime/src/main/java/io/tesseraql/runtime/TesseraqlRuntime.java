@@ -1056,8 +1056,15 @@ public final class TesseraqlRuntime implements AutoCloseable {
                         // security, so try-it grants nothing extra: public routes just work, bearer
                         // routes take a token the caller pastes. (Browser-session forwarding is a later
                         // slice.) view supplies the served route paths for the path autocomplete.
-                        .register("studio.tryit",
-                                params -> Map.of("pathOptions", studio.routePaths()))
+                        .register("studio.tryit", params -> {
+                            Map<String, Object> model = new java.util.LinkedHashMap<>();
+                            model.put("pathOptions", studio.routePaths());
+                            // Deep-linked ?path=&method= (e.g. from a route's docs page) prefills the
+                            // form + a request-body/query skeleton from the route's declared inputs.
+                            model.put("prefill", studio.tryPrefill(str(params, "method"),
+                                    str(params, "path")));
+                            return model;
+                        })
                         .register("studio.tryRun", params -> tryInvoke(port, params))
                         // New migration page (Studio backlog: migration authoring): the form shows the
                         // next versioned number for the main datasource; the create writes a Flyway

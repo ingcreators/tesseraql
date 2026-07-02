@@ -21,14 +21,14 @@
         <div class="hc-field">
           <label class="hc-field__label" for="try-method">Method</label>
           <select class="hc-select" id="try-method" name="method">
-            <option>GET</option><option>POST</option><option>PUT</option>
-            <option>PATCH</option><option>DELETE</option>
+            <option th:each="m : ${ {'GET','POST','PUT','PATCH','DELETE'} }" th:value="${m}"
+                    th:text="${m}" th:selected="${tryit.prefill.method == m}">GET</option>
           </select>
         </div>
         <div class="hc-field hc-field--grow">
           <label class="hc-field__label" for="try-path">Path</label>
           <input class="hc-input" id="try-path" name="path" required placeholder="/api/users"
-                 list="try-path-options" autocomplete="off">
+                 list="try-path-options" autocomplete="off" th:value="${tryit.prefill.path}">
         </div>
       </div>
       <datalist id="try-path-options">
@@ -37,7 +37,7 @@
       <div class="hc-field">
         <label class="hc-field__label" for="try-query">Query string (optional)</label>
         <input class="hc-input" id="try-query" name="query" placeholder="q=sato&limit=10"
-               autocomplete="off">
+               autocomplete="off" th:value="${tryit.prefill.query}">
       </div>
       <div class="hc-field">
         <label class="hc-field__label" for="try-bearer">Bearer token (optional)</label>
@@ -52,7 +52,7 @@
         <div class="hc-field hc-field--grow">
           <label class="hc-field__label" for="try-body">Request body (optional)</label>
           <textarea class="hc-input" id="try-body" name="body" rows="6"
-                    placeholder='{"userName": "sato"}'></textarea>
+                    placeholder='{"userName": "sato"}' th:text="${tryit.prefill.body}"></textarea>
         </div>
         <div class="hc-field">
           <label class="hc-field__label" for="try-content-type">Content-Type</label>
