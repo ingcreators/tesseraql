@@ -102,6 +102,24 @@ class MenuSpecTest {
         assertThat(yaml).doesNotStartWith("---");
     }
 
+    @Test
+    void liveReReadsOnlyWhenTheFileChanges(@TempDir Path appHome) throws Exception {
+        // An absent file loads as empty.
+        assertThat(MenuSpec.live(appHome).isEmpty()).isTrue();
+
+        writeMenu(appHome, "menu:\n  - {label: A, href: /a}\n");
+        MenuSpec first = MenuSpec.live(appHome);
+        assertThat(first.items()).hasSize(1);
+        // An unchanged file returns the cached instance (no re-parse).
+        assertThat(MenuSpec.live(appHome)).isSameAs(first);
+
+        // A changed file (different size) is re-parsed.
+        writeMenu(appHome, "menu:\n  - {label: A, href: /a}\n  - {label: B, href: /b}\n");
+        MenuSpec updated = MenuSpec.live(appHome);
+        assertThat(updated).isNotSameAs(first);
+        assertThat(updated.items()).hasSize(2);
+    }
+
     private static List<String> labels(List<MenuItem> items) {
         return items.stream().map(MenuItem::label).toList();
     }

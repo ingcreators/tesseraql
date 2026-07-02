@@ -88,6 +88,26 @@ class AppMenuIntegrationTest {
     }
 
     @Test
+    void aMenuEditIsLiveOnTheNextRenderWithoutARestart() throws Exception {
+        Path menuFile = menuAppHome.resolve("config/menu.yml");
+        String original = Files.readString(menuFile);
+        try {
+            // The item does not exist yet.
+            assertThat(get(menuRuntime, "/menu-probe", Map.of("Authorization", "Bearer " + token()))
+                    .body()).doesNotContain("/probe-live");
+
+            // Edit config/menu.yml on the running app — no reload, no restart.
+            Files.writeString(menuFile, original + "  - { label: MenuLive, href: /probe-live }\n");
+
+            // The very next render reflects it (MenuSpec.live re-reads on a size/mtime change).
+            assertThat(get(menuRuntime, "/menu-probe", Map.of("Authorization", "Bearer " + token()))
+                    .body()).contains("href=\"/probe-live\"").contains("MenuLive");
+        } finally {
+            Files.writeString(menuFile, original);
+        }
+    }
+
+    @Test
     void anAnonymousCallerSeesOnlyPublicMenuItems() throws Exception {
         // /users is a public page (no security), so no principal is resolved.
         HttpResponse<String> response = get(menuRuntime, "/users", Map.of());

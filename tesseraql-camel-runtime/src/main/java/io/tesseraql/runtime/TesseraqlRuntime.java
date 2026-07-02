@@ -823,9 +823,10 @@ public final class TesseraqlRuntime implements AutoCloseable {
                         // add/remove/move mutate the file (edit-gated + audited in StudioService).
                         // preview renders the menu exactly as a caller with a chosen role/permission
                         // would see it (server-side visibleFor). A menu edit is deliberately not tied
-                        // to a full route reload (like createMigration): the menu is compiled into the
-                        // renderers and refreshes on the next reload/restart, so editing the sidebar
-                        // can never be broken by an unrelated route that fails to recompile.
+                        // to a full route reload (like createMigration): renderers read the menu via
+                        // MenuSpec.live (a stat-cheap re-read), so an edit shows on the next rendered
+                        // page immediately, yet editing the sidebar can never be broken by an unrelated
+                        // route that fails to recompile.
                         .register("studio.menu.view", params -> {
                             boolean canEdit = studioAccess
                                     .canEdit(params.get("principalRoles") == null

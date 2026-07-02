@@ -47,7 +47,6 @@ public final class RouteCompiler {
     private AppConfig config;
     private io.tesseraql.compiler.binding.TenancySettings tenancy;
     private io.tesseraql.compiler.binding.I18nSettings i18n;
-    private io.tesseraql.yaml.menu.MenuSpec menu = io.tesseraql.yaml.menu.MenuSpec.empty();
     private io.tesseraql.yaml.webhook.WebhookVerifiers webhookVerifiers;
     private boolean mountRest = true;
     private String appName;
@@ -78,9 +77,6 @@ public final class RouteCompiler {
         this.config = manifest.config();
         this.tenancy = io.tesseraql.compiler.binding.TenancySettings.from(config);
         this.i18n = io.tesseraql.compiler.binding.I18nSettings.from(config, manifest.appHome());
-        // The app's declarative sidebar menu (config/menu.yml), if any; passed to each HTML renderer
-        // to inject the role-filtered menu. Empty (fallback to the app's nav fragment) when absent.
-        this.menu = io.tesseraql.yaml.menu.MenuSpec.load(manifest.appHome());
         this.mountRest = mountRest;
         if (this.appName == null) {
             this.appName = config.getString("tesseraql.app.name").orElse("app");
@@ -767,7 +763,7 @@ public final class RouteCompiler {
         } else {
             route.process(new HtmlResponseRenderer(
                     routeFile.definition().response().html(), appHome, routeDir,
-                    i18n.defaultTag(), menu));
+                    i18n.defaultTag()));
         }
     }
 
