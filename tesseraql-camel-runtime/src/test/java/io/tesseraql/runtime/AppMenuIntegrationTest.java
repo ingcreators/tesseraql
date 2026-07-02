@@ -126,6 +126,22 @@ class AppMenuIntegrationTest {
     }
 
     @Test
+    void aFlagGatesCommandRouteValidationLive() throws Exception {
+        Path flags = menuAppHome.resolve("config/flags.yml");
+        try {
+            // Flag on → the guarded (always-false) rule fires → 422; the command never runs.
+            Files.writeString(flags, "flags:\n  blockAll: true\n");
+            assertThat(postJson(menuRuntime, "/api/flag-gate").statusCode()).isEqualTo(422);
+
+            // Flag off (live edit) → the rule is skipped → the command runs → 200.
+            Files.writeString(flags, "flags:\n  blockAll: false\n");
+            assertThat(postJson(menuRuntime, "/api/flag-gate").statusCode()).isEqualTo(200);
+        } finally {
+            Files.deleteIfExists(flags);
+        }
+    }
+
+    @Test
     void anAnonymousCallerSeesOnlyPublicMenuItems() throws Exception {
         // /users is a public page (no security), so no principal is resolved.
         HttpResponse<String> response = get(menuRuntime, "/users", Map.of());
@@ -156,6 +172,16 @@ class AppMenuIntegrationTest {
         headers.forEach(request::header);
         return HttpClient.newHttpClient().send(request.build(),
                 HttpResponse.BodyHandlers.ofString());
+    }
+
+    private static HttpResponse<String> postJson(TesseraqlRuntime runtime, String path)
+            throws Exception {
+        HttpRequest request = HttpRequest
+                .newBuilder(URI.create("http://localhost:" + runtime.port() + path))
+                .header("Authorization", "Bearer " + token())
+                .header("Content-Type", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString("{}")).build();
+        return HttpClient.newHttpClient().send(request, HttpResponse.BodyHandlers.ofString());
     }
 
     private static String token() throws Exception {
@@ -228,6 +254,37 @@ class AppMenuIntegrationTest {
                     </div>
                     </html>
                     """);
+            // A command route whose validation is gated by a flag — proves flags reach command routes
+            // (the transactional command processor evaluates validate against the binder's context).
+            Path gate = Files.createDirectories(target.resolve("web/api/flag-gate"));
+            Files.writeString(gate.resolve("post.yml"), """
+                    version: tesseraql/v1
+                    id: tql.test.flag-gate
+                    kind: route
+                    recipe: command-json
+
+                    security:
+                      auth: bearer
+                      policy: users.write
+
+                    validate:
+                      gated:
+                        when: flags.blockAll
+                        rule: "false"
+                        field: gate
+                        code: blocked
+
+                    sql:
+                      file: flag-gate.sql
+                      mode: update
+
+                    response:
+                      json:
+                        body:
+                          ok: true
+                    """);
+            Files.writeString(gate.resolve("flag-gate.sql"),
+                    "insert into users (name, status) values ('flag-probe', 'ACTIVE')\n");
         }
         return target;
     }
