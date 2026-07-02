@@ -377,17 +377,19 @@ class StudioIntegrationTest {
         // The UI landing is browser-auth: a read-only viewer reaches it via a VIEWER session.
         String ui = getWithCookie("/_tesseraql/studio/ui", viewerCookie).body();
         assertThat(ui).contains("read-only")
-                .doesNotContain("action=\"/_tesseraql/studio/ui/new\"")
+                // no create affordance for a viewer — the New-route drawer trigger is edit-gated
+                .doesNotContain("hx-get=\"/_tesseraql/studio/ui/new")
                 // the sidebar nav renders the Studio sections (Audit among them)
                 .contains("/_tesseraql/studio/ui/audit");
     }
 
     @Test
     void editorRoleSeesTheEditChrome() throws Exception {
-        // The configured edit role (ADMIN) keeps the full edit surface.
+        // The configured edit role (ADMIN) keeps the full edit surface. The New-route drawer trigger
+        // is the create chrome now (the form itself is the hc-drawer fragment it hx-gets).
         String ui = get("/_tesseraql/studio/ui", true).body();
         assertThat(ui).contains("editable")
-                .contains("action=\"/_tesseraql/studio/ui/new\"")
+                .contains("hx-get=\"/_tesseraql/studio/ui/new\"")
                 .contains("/_tesseraql/studio/ui/audit");
     }
 
@@ -1400,19 +1402,30 @@ class StudioIntegrationTest {
 
     @Test
     void uiExplorerOffersNewRouteFormWhenWritable() throws Exception {
+        // The Explorer offers a "New route" drawer trigger + the remote-dialog host; the form itself
+        // is the hc-drawer fragment served by the trigger's hx-get (Studio sidebar IA).
         HttpResponse<String> response = get("/_tesseraql/studio/ui", true);
-
         assertThat(response.statusCode()).isEqualTo(200);
         assertThat(response.body()).contains("New route")
-                .contains("action=\"/_tesseraql/studio/ui/new\"");
+                .contains("hx-get=\"/_tesseraql/studio/ui/new\"")
+                .contains("data-hc-remote-dialog-root");
+
+        HttpResponse<String> drawer = get("/_tesseraql/studio/ui/new", true);
+        assertThat(drawer.statusCode()).isEqualTo(200);
+        assertThat(drawer.body()).contains("class=\"hc-drawer\"")
+                .contains("action=\"/_tesseraql/studio/ui/new\"").contains("Create route");
     }
 
     @Test
     void uiExplorerFolderOffersContextualNewRoute() throws Exception {
-        // Studio sidebar IA: each folder offers a "New route here" link; following it (?new=<prefix>/)
-        // opens the New-route form with its Path seeded to the browsed location.
-        assertThat(get("/_tesseraql/studio/ui", true).body()).contains("New route here");
-        assertThat(get("/_tesseraql/studio/ui?prefix=" + enc("web/api/users/"), true).body())
+        // Studio sidebar IA: each folder offers a "New route here" drawer trigger; the fragment it
+        // hx-gets seeds the New-route Path (?prefix=) so creation inherits the browsed location.
+        assertThat(get("/_tesseraql/studio/ui", true).body()).contains("New route here")
+                .contains("hx-get=\"/_tesseraql/studio/ui/new?prefix=");
+        HttpResponse<String> drawer = get(
+                "/_tesseraql/studio/ui/new?prefix=" + enc("web/api/users/"), true);
+        assertThat(drawer.statusCode()).isEqualTo(200);
+        assertThat(drawer.body()).contains("class=\"hc-drawer\"")
                 .contains("value=\"web/api/users/\"");
     }
 

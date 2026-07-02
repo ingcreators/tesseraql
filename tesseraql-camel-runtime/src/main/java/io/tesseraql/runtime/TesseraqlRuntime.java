@@ -758,11 +758,14 @@ public final class TesseraqlRuntime implements AutoCloseable {
                             model.put("scaffoldEnabled", scaffoldEnabled && canEdit);
                             // Echo the filter query (Studio backlog C4) so the input keeps its value.
                             model.put("query", q);
-                            // A folder's "new route here" link passes ?prefix=<folder>/ to open and
-                            // seed the New-route form's Path with the browsed location (sidebar IA).
-                            Object prefix = params.get("prefix");
-                            model.put("newPath", prefix == null ? "" : String.valueOf(prefix));
                             return model;
+                        })
+                        // The New-route drawer fragment (Studio sidebar IA): echoes the folder prefix a
+                        // "new route here" trigger passes so the form's Path seeds to the browsed
+                        // location. A tiny provider because response.html models resolve from `sql`.
+                        .register("studio.newForm", params -> {
+                            Object prefix = params.get("prefix");
+                            return Map.of("prefix", prefix == null ? "" : String.valueOf(prefix));
                         })
                         .register("studio.source", params -> {
                             String path = String.valueOf(params.get("path"));

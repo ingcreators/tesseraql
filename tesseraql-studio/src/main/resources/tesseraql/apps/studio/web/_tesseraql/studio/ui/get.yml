@@ -7,9 +7,6 @@ input:
   q:
     type: string
     required: false
-  prefix:
-    type: string
-    required: false
 
 security:
   auth: browser
@@ -18,7 +15,6 @@ sql:
   service: studio.explorer
   params:
     q: params.q
-    prefix: params.prefix
     roles: principal.roles
 
 response:

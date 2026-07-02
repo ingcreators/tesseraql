@@ -1,0 +1,34 @@
+version: tesseraql/v1
+id: tql.studio.newForm
+kind: route
+recipe: query-html
+
+# The New-route form, served as an hc-drawer fragment (Studio sidebar IA): the Explorer's
+# "New route" / folder "+ New route here" triggers hx-get this into the remote-dialog root, which
+# opens it as a side drawer — creation happens with the routes/jobs tree still in view. `prefix`
+# (a folder's app-relative path, passed by the "new route here" trigger) seeds the Path field so a
+# new route lands where you were browsing. The form POSTs to this same path (tql.studio.newRoute).
+input:
+  prefix:
+    type: string
+    required: false
+
+security:
+  auth: browser
+
+sql:
+  service: studio.newForm
+  params:
+    prefix: params.prefix
+
+response:
+  html:
+    status: 200
+    template: drawer.html
+    model:
+      form: sql
+    headers:
+      Content-Security-Policy: "default-src 'self'; style-src 'self' 'unsafe-inline'; frame-ancestors 'none'"
+      X-Content-Type-Options: nosniff
+      X-Frame-Options: DENY
+      Referrer-Policy: no-referrer

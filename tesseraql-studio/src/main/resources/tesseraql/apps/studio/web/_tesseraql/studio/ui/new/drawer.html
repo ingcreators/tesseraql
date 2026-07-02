@@ -1,0 +1,37 @@
+<!-- The New-route hc-drawer fragment (Studio sidebar IA). htmx swaps this into the Explorer's
+     data-hc-remote-dialog-root host, and the kit's installRemoteDialog opens the <dialog> with
+     showModal() — installDrawer (auto-installed) adds backdrop-click + drag-to-dismiss, and native
+     <dialog> gives Escape + focus-trap. Close buttons use <form method="dialog"> — no JS. The Create
+     button submits the POST form via its `form` attribute (so the close forms need not nest in it).
+     Rendered by tql.studio.newForm; `prefix` seeds the Path from the browsed folder. -->
+<th:block xmlns:th="http://www.thymeleaf.org">
+<dialog id="new-route-drawer" class="hc-drawer" data-side="right" aria-label="New route">
+  <header class="hc-drawer__header">
+    <h2 class="hc-drawer__title">New route</h2>
+    <form method="dialog"><button class="hc-button" data-variant="ghost" aria-label="Close">&times;</button></form>
+  </header>
+  <div class="hc-drawer__body">
+    <form id="new-route-form" class="hc-stack" method="post" action="/_tesseraql/studio/ui/new">
+      <input type="hidden" name="_csrf" th:value="${_csrf}">
+      <p class="hc-field__message">Creates a starter route as a draft and opens it in the editor to finish. A new route needs a restart to be served.</p>
+      <div class="hc-field">
+        <label class="hc-field__label" for="new-route-path">Path</label>
+        <input class="hc-input" id="new-route-path" type="text" name="path" required autofocus
+               th:value="${form.prefix}" placeholder="web/api/widgets/get.yml">
+      </div>
+      <div class="hc-field">
+        <label class="hc-field__label" for="new-route-recipe">Recipe</label>
+        <select class="hc-select" id="new-route-recipe" name="recipe">
+          <option value="query-json">query-json</option>
+          <option value="query-html">query-html</option>
+          <option value="command-json">command-json</option>
+        </select>
+      </div>
+    </form>
+  </div>
+  <footer class="hc-drawer__footer">
+    <form method="dialog"><button class="hc-button" data-variant="ghost">Cancel</button></form>
+    <button type="submit" form="new-route-form" class="hc-button" data-variant="primary">Create route</button>
+  </footer>
+</dialog>
+</th:block>

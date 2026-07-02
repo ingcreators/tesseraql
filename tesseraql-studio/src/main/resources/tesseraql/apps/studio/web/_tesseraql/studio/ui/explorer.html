@@ -12,38 +12,22 @@
 </th:block>
 <div id="page-content" class="hc-stack">
 <!-- Create actions (Studio sidebar IA): the Explorer's job is to browse/open existing routes, so
-     the New-route form is collapsed into a disclosure rather than a permanent panel above the tree,
-     and the sibling creation flows (Scaffold / Migration / Wizards) are surfaced here too — not only
-     in the sidebar — so "start something new" is discoverable from where you browse. -->
+     "New route" is a drawer trigger, not a permanent form above the tree. It hx-gets the New-route
+     hc-drawer fragment into the remote-dialog root below, which the kit opens as a side panel — the
+     tree stays in view while you create. The sibling creation flows (Scaffold / Migration / Wizards)
+     are surfaced here too, not only in the sidebar. -->
 <section class="hc-card" th:if="${studio.editable}">
-  <!-- Opened and its Path seeded when a folder's "New route here" link passes ?new=<prefix>/, so
-       creating a route inherits the browsed location instead of a hand-typed path. -->
-  <details class="hc-disclosure" th:attr="open=${!#strings.isEmpty(studio.newPath)} ? '' : null">
-    <summary>New route</summary>
-    <p class="hc-field__message">Creates a starter route as a draft and opens it in the editor to finish. A new route needs a restart to be served.</p>
-    <form class="hc-stack" method="post" action="/_tesseraql/studio/ui/new">
-      <input type="hidden" name="_csrf" th:value="${_csrf}">
-      <div class="hc-field">
-        <label class="hc-field__label" for="new-route-path">Path</label>
-        <input class="hc-input" id="new-route-path" type="text" name="path" required
-               th:value="${studio.newPath}" placeholder="web/api/widgets/get.yml">
-      </div>
-      <div class="hc-field">
-        <label class="hc-field__label" for="new-route-recipe">Recipe</label>
-        <select class="hc-select" id="new-route-recipe" name="recipe">
-          <option value="query-json">query-json</option>
-          <option value="query-html">query-html</option>
-          <option value="command-json">command-json</option>
-        </select>
-      </div>
-      <div class="hc-cluster"><button type="submit" class="hc-button" data-variant="primary">Create route</button></div>
-    </form>
-  </details>
-  <p class="hc-field__message">Or create with
-    <a href="/_tesseraql/studio/ui/scaffold">Scaffold</a> ·
-    <a href="/_tesseraql/studio/ui/migration">Migration</a> ·
-    <a href="/_tesseraql/studio/ui/wizard">Wizards</a>.
-  </p>
+  <div class="hc-cluster">
+    <button type="button" class="hc-button" data-variant="primary"
+            hx-get="/_tesseraql/studio/ui/new" hx-target="#new-route-dialog" hx-swap="innerHTML">New route</button>
+    <span class="hc-field__message">or create with
+      <a href="/_tesseraql/studio/ui/scaffold">Scaffold</a> ·
+      <a href="/_tesseraql/studio/ui/migration">Migration</a> ·
+      <a href="/_tesseraql/studio/ui/wizard">Wizards</a>
+    </span>
+  </div>
+  <!-- installRemoteDialog opens the first <dialog> swapped in here with showModal() (the drawer). -->
+  <div id="new-route-dialog" data-hc-remote-dialog-root></div>
 </section>
 <section class="hc-card">
   <h2>Routes &amp; jobs</h2>
@@ -73,10 +57,13 @@
   <details class="hc-disclosure" open>
     <summary th:text="${folder.name}"></summary>
     <div class="hc-stack tql-tree__children">
-      <!-- Contextual create (Studio sidebar IA): seeds the New-route form's Path with this folder's
-           prefix so a new route lands where you are browsing, not a path typed from memory. -->
-      <a th:if="${studio.editable}" class="hc-field__message tql-tree__new"
-         th:href="|/_tesseraql/studio/ui?prefix=${folder.path}/|">+ New route here</a>
+      <!-- Contextual create (Studio sidebar IA): opens the New-route drawer with its Path seeded to
+           this folder's prefix, so a new route lands where you are browsing, not a path typed from
+           memory. Same remote-dialog root as the top "New route" trigger. -->
+      <button th:if="${studio.editable}" type="button" class="hc-button tql-tree__new"
+              data-variant="ghost" data-size="sm"
+              th:attr="hx-get=|/_tesseraql/studio/ui/new?prefix=${folder.path}/|"
+              hx-target="#new-route-dialog" hx-swap="innerHTML">+ New route here</button>
       <th:block th:each="child : ${folder.folders}">
         <th:block th:replace="~{:: explorerNode(${child})}"></th:block>
       </th:block>
