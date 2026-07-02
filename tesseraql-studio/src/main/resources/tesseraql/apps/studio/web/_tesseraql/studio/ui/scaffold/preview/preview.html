@@ -1,36 +1,50 @@
-<div class="hc-stack" xmlns:th="http://www.thymeleaf.org" th:fragment="scaffoldPreview">
-  <p class="hc-alert" data-variant="info" role="status"
-     th:unless="${scaffold.enabled}" th:text="${scaffold.note}"></p>
-  <th:block th:if="${scaffold.enabled}">
-    <h3 th:text="|Scaffold preview: ${scaffold.table}|">Scaffold preview</h3>
-    <p class="hc-alert" role="status"
-       th:attr="data-variant=${scaffold.hasConflicts} ? 'warning' : 'success'"
-       th:text="|${scaffold.writeCount} of ${scaffold.total} files to write, ${scaffold.conflictCount} conflict(s)|"></p>
-    <p class="hc-field__message" th:if="${scaffold.hasConflicts}">A conflict is a file you edited or own; an apply leaves it alone unless forced.</p>
-    <ul class="hc-stack">
-      <li th:each="f : ${scaffold.files}">
-        <details class="hc-stack">
-          <summary class="hc-cluster">
-            <span class="hc-badge"
-                  th:attr="data-variant=${f.status == 'conflict'} ? 'warning' : (${f.status == 'unchanged'} ? 'neutral' : 'success')"
-                  th:text="${f.status}"></span>
-            <code th:text="${f.path}"></code>
-          </summary>
-          <pre class="hc-code"><code th:utext="${f.contentHtml}"></code></pre>
-        </details>
-      </li>
-    </ul>
-    <form class="hc-stack" hx-post="/_tesseraql/studio/ui/scaffold/apply"
-          hx-target="#scaffold-apply-result" hx-swap="innerHTML" hx-disabled-elt="find button">
-      <input type="hidden" name="table" th:value="${scaffold.table}">
-      <label class="hc-field" th:if="${scaffold.hasConflicts}">
-        <input type="checkbox" name="force" value="true">
-        Overwrite files you have edited (force)
-      </label>
-      <div class="hc-cluster">
-        <button type="submit" class="hc-button" data-variant="primary">Create these files</button><th:block th:replace="~{tql/shell :: busy('Writing…')}"/>
-      </div>
-    </form>
-    <div id="scaffold-apply-result" class="hc-stack" aria-live="polite"></div>
-  </th:block>
-</div>
+<!-- The scaffold preview as an hc-drawer (Studio sidebar IA): htmx swaps this into the scaffold page's
+     data-hc-remote-dialog-root and installRemoteDialog opens it, so the generated slice is reviewed and
+     applied in a focused overlay with the table list still in view. Close via <form method="dialog">
+     (no JS). Widened for the file content. -->
+<dialog class="hc-drawer" data-side="right" aria-label="Scaffold preview"
+        style="--hc-drawer-side-max-width: min(92vw, 60rem)"
+        xmlns:th="http://www.thymeleaf.org" th:fragment="scaffoldPreview">
+  <header class="hc-drawer__header">
+    <h2 class="hc-drawer__title" th:text="${scaffold.enabled} ? |Scaffold preview: ${scaffold.table}| : 'Scaffold preview'">Scaffold preview</h2>
+    <form method="dialog"><button class="hc-button" data-variant="ghost" aria-label="Close">&times;</button></form>
+  </header>
+  <div class="hc-drawer__body hc-stack">
+    <p class="hc-alert" data-variant="info" role="status"
+       th:unless="${scaffold.enabled}" th:text="${scaffold.note}"></p>
+    <th:block th:if="${scaffold.enabled}">
+      <p class="hc-alert" role="status"
+         th:attr="data-variant=${scaffold.hasConflicts} ? 'warning' : 'success'"
+         th:text="|${scaffold.writeCount} of ${scaffold.total} files to write, ${scaffold.conflictCount} conflict(s)|"></p>
+      <p class="hc-field__message" th:if="${scaffold.hasConflicts}">A conflict is a file you edited or own; an apply leaves it alone unless forced.</p>
+      <ul class="hc-stack">
+        <li th:each="f : ${scaffold.files}">
+          <details class="hc-stack">
+            <summary class="hc-cluster">
+              <span class="hc-badge"
+                    th:attr="data-variant=${f.status == 'conflict'} ? 'warning' : (${f.status == 'unchanged'} ? 'neutral' : 'success')"
+                    th:text="${f.status}"></span>
+              <code th:text="${f.path}"></code>
+            </summary>
+            <pre class="hc-code"><code th:utext="${f.contentHtml}"></code></pre>
+          </details>
+        </li>
+      </ul>
+      <form class="hc-stack" hx-post="/_tesseraql/studio/ui/scaffold/apply"
+            hx-target="#scaffold-apply-result" hx-swap="innerHTML" hx-disabled-elt="find button">
+        <input type="hidden" name="table" th:value="${scaffold.table}">
+        <label class="hc-field" th:if="${scaffold.hasConflicts}">
+          <input type="checkbox" name="force" value="true">
+          Overwrite files you have edited (force)
+        </label>
+        <div class="hc-cluster">
+          <button type="submit" class="hc-button" data-variant="primary">Create these files</button><th:block th:replace="~{tql/shell :: busy('Writing…')}"/>
+        </div>
+      </form>
+      <div id="scaffold-apply-result" class="hc-stack" aria-live="polite"></div>
+    </th:block>
+  </div>
+  <footer class="hc-drawer__footer">
+    <form method="dialog"><button class="hc-button" data-variant="ghost">Close</button></form>
+  </footer>
+</dialog>

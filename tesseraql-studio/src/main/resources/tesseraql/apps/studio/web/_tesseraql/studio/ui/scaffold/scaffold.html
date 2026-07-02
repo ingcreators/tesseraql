@@ -32,7 +32,7 @@
               <td class="hc-datagrid__cell" th:text="${t.primaryKey}"></td>
               <td class="hc-datagrid__cell">
                 <form th:if="${t.scaffoldable}" hx-post="/_tesseraql/studio/ui/scaffold/preview"
-                      hx-target="#scaffold-preview" hx-swap="innerHTML" hx-disabled-elt="find button">
+                      hx-target="#scaffold-preview-dialog" hx-swap="innerHTML" hx-disabled-elt="find button">
                   <input type="hidden" name="table" th:value="${t.name}">
                   <div class="hc-cluster"><button type="submit" class="hc-button" data-variant="primary" data-size="sm">Preview CRUD</button><th:block th:replace="~{tql/shell :: busy('Generating…')}"/></div>
                 </form>
@@ -45,8 +45,9 @@
     </div>
   </th:block>
 </section>
-<section class="hc-card" th:if="${scaffold.enabled}">
-  <div id="scaffold-preview" class="hc-stack" aria-live="polite"></div>
-</section>
+<!-- The Preview CRUD action opens the generated slice in an hc-drawer (sidebar IA): installRemoteDialog
+     opens the <dialog> the preview fragment returns, so you review + apply with the table list still in
+     view instead of scrolling to a panel below. -->
+<div id="scaffold-preview-dialog" data-hc-remote-dialog-root></div>
 </div>
 </html>
