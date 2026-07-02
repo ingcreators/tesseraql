@@ -963,6 +963,16 @@ public final class TesseraqlRuntime implements AutoCloseable {
                             model.put("clean", findings.isEmpty());
                             return model;
                         })
+                        // API try-it console: invoke one of the app's own routes and show the raw
+                        // response (status, headers, body). The run proxies a loopback HTTP call to
+                        // 127.0.0.1:<port><path> — confined to app-relative paths (no host, no scheme),
+                        // so it can never reach off-box (no SSRF). The target route enforces its own
+                        // security, so try-it grants nothing extra: public routes just work, bearer
+                        // routes take a token the caller pastes. (Browser-session forwarding is a later
+                        // slice.) view supplies the served route paths for the path autocomplete.
+                        .register("studio.tryit",
+                                params -> Map.of("pathOptions", studio.routePaths()))
+                        .register("studio.tryRun", params -> tryInvoke(port, params))
                         // New migration page (Studio backlog: migration authoring): the form shows the
                         // next versioned number for the main datasource; the create writes a Flyway
                         // migration under db/…/migration and the result links to the source editor.
@@ -1574,6 +1584,102 @@ public final class TesseraqlRuntime implements AutoCloseable {
             "compass", "book-open", "database", "shield-check", "share-2", "blocks", "wrench",
             "database-zap", "wand-sparkles", "file-pen", "scroll-text", "activity", "users",
             "layout-dashboard", "waypoints", "arrow-left-right", "send", "panel-left");
+
+    /**
+     * The API try-it console's loopback invocation: sends the requested method/path/body to the
+     * app's own server on {@code 127.0.0.1:<port>} and returns a view model of the raw response.
+     * The path must be app-relative (leading {@code /}, no {@code //} or {@code scheme://}), so the
+     * call can only reach this app — never an arbitrary host.
+     */
+    private static Map<String, Object> tryInvoke(int port, Map<String, Object> params) {
+        Map<String, Object> model = new java.util.LinkedHashMap<>();
+        String method = params.get("method") == null
+                ? "GET"
+                : String.valueOf(params.get("method")).strip().toUpperCase(java.util.Locale.ROOT);
+        if (method.isEmpty()) {
+            method = "GET";
+        }
+        String path = str(params, "path");
+        model.put("method", method);
+        model.put("path", path);
+        if (path == null || !path.startsWith("/") || path.startsWith("//")
+                || path.contains("://")) {
+            model.put("error", "Enter an app path beginning with '/' (for example /api/users).");
+            return model;
+        }
+        if (port <= 0) {
+            model.put("error", "The API console needs a fixed server.port (this app binds an "
+                    + "ephemeral port).");
+            return model;
+        }
+        String query = str(params, "query");
+        String url = "http://127.0.0.1:" + port + path;
+        if (query != null) {
+            url += (path.contains("?") ? "&" : "?") + (query.startsWith("?")
+                    ? query.substring(1)
+                    : query);
+        }
+        String body = params.get("body") == null ? null : String.valueOf(params.get("body"));
+        boolean hasBody = body != null && !body.isBlank()
+                && !("GET".equals(method) || "HEAD".equals(method) || "DELETE".equals(method));
+        String bearer = str(params, "bearer");
+        String contentType = str(params, "contentType");
+        model.put("url", url);
+        try {
+            java.net.http.HttpRequest.Builder request = java.net.http.HttpRequest
+                    .newBuilder(java.net.URI.create(url))
+                    .timeout(java.time.Duration.ofSeconds(15))
+                    .method(method, hasBody
+                            ? java.net.http.HttpRequest.BodyPublishers.ofString(body)
+                            : java.net.http.HttpRequest.BodyPublishers.noBody());
+            if (hasBody) {
+                request.header("Content-Type",
+                        contentType == null ? "application/json" : contentType);
+            }
+            if (bearer != null) {
+                request.header("Authorization", "Bearer " + bearer);
+            }
+            long startedNs = System.nanoTime();
+            java.net.http.HttpResponse<String> response = java.net.http.HttpClient.newHttpClient()
+                    .send(request.build(), java.net.http.HttpResponse.BodyHandlers.ofString());
+            model.put("ok", true);
+            model.put("status", response.statusCode());
+            model.put("durationMs", (System.nanoTime() - startedNs) / 1_000_000);
+            java.util.List<Map<String, Object>> headers = new java.util.ArrayList<>();
+            response.headers().map().forEach((name, values) -> {
+                Map<String, Object> header = new java.util.LinkedHashMap<>();
+                header.put("name", name);
+                header.put("value", String.join(", ", values));
+                headers.add(header);
+            });
+            model.put("headers", headers);
+            model.put("body", prettyBody(response.body()));
+        } catch (java.io.IOException | InterruptedException ex) {
+            if (ex instanceof InterruptedException) {
+                Thread.currentThread().interrupt();
+            }
+            model.put("error", "Request failed: " + ex.getMessage());
+        }
+        return model;
+    }
+
+    /** Pretty-prints a JSON response body for the try-it console; returns it unchanged otherwise. */
+    private static String prettyBody(String body) {
+        if (body == null || body.isBlank()) {
+            return body;
+        }
+        String trimmed = body.stripLeading();
+        if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
+            try {
+                com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+                return mapper.writerWithDefaultPrettyPrinter()
+                        .writeValueAsString(mapper.readTree(body));
+            } catch (com.fasterxml.jackson.core.JsonProcessingException ignored) {
+                // Not valid JSON after all — show the raw body.
+            }
+        }
+        return body;
+    }
 
     /** A request parameter as a trimmed string, or null when absent or blank. */
     private static String str(Map<String, Object> params, String key) {
