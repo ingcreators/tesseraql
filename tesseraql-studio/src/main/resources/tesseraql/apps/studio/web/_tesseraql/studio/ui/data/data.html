@@ -72,6 +72,10 @@
         <div class="hc-cluster">
           <span class="hc-badge" data-variant="neutral"
                 th:text="|${data.rowCount} row(s) on page ${data.page + 1}|">0 rows</span>
+          <span class="hc-spacer"></span>
+          <a class="hc-button" data-variant="ghost" data-size="sm" download
+             th:href="|/_tesseraql/studio/ui/data/export?table=${#uris.escapeQueryParam(data.table)}&amp;sort=${#uris.escapeQueryParam(data.sortColumn)}&amp;dir=${data.sortDir}&amp;filterColumn=${#uris.escapeQueryParam(data.filterColumn)}&amp;filterValue=${#uris.escapeQueryParam(data.filterValue)}|">Download CSV</a>
+          <span class="hc-field__message" th:text="|up to ${data.exportMax} rows|">up to 1000 rows</span>
         </div>
         <div class="hc-datagrid">
           <div class="hc-datagrid__scroll">
