@@ -160,6 +160,11 @@ public final class StudioService {
         if (readOnly) {
             throw new TqlException(READ_ONLY, "Studio is read-only; drafts are disabled");
         }
+        // A browser normalizes a <textarea>'s newlines to CRLF on submit, so a draft saved from the
+        // editor arrives with \r\n even when nothing was edited. Store LF so a no-op save matches the
+        // (LF) source — otherwise every line reads as changed in the diff, and applying the draft
+        // would silently rewrite the source's line endings.
+        content = content == null ? "" : content.replace("\r\n", "\n").replace('\r', '\n');
         resolve(relativePath); // validate the target path before writing the draft
         Path draft = draftPath(relativePath);
         // The first save records the source the edit is based on, so a later apply can detect that

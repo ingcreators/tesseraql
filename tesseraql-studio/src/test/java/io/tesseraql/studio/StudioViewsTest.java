@@ -438,6 +438,21 @@ class StudioViewsTest {
     }
 
     @Test
+    void sourceModelDiffIgnoresLineEndingDifferences() {
+        // A no-op save from the editor: the draft arrives CRLF (a browser normalizes a textarea's
+        // newlines on submit) but matches the LF source, so the diff is all context — no spurious
+        // added/removed (SQL-editor CRLF diff fix).
+        Map<String, Object> model = StudioViews.source("a.sql", "a\r\nb\r\nc", false, true,
+                "a\nb\nc",
+                null);
+
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> diff = (List<Map<String, Object>>) model.get("diff");
+        assertThat(diff).hasSize(3)
+                .allSatisfy(line -> assertThat(line).containsEntry("state", "context"));
+    }
+
+    @Test
     void sourceModelDiffsNewFileAsAllAdded() {
         // A draft of a not-yet-saved file (no source) diffs as every line added.
         Map<String, Object> model = StudioViews.source("new.sql", "x\ny", false, true, null, null);

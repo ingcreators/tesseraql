@@ -593,8 +593,12 @@ public final class StudioViews {
      */
     private static List<Map<String, Object>> diffLines(String path, String oldText,
             String newText) {
-        String[] a = oldText.isEmpty() ? new String[0] : oldText.split("\n", -1);
-        String[] b = newText.isEmpty() ? new String[0] : newText.split("\n", -1);
+        // Normalize line endings before splitting so a CRLF side does not read as all-changed against
+        // an LF side (a trailing \r would make every otherwise-identical line differ).
+        String normOld = oldText.replace("\r\n", "\n").replace('\r', '\n');
+        String normNew = newText.replace("\r\n", "\n").replace('\r', '\n');
+        String[] a = normOld.isEmpty() ? new String[0] : normOld.split("\n", -1);
+        String[] b = normNew.isEmpty() ? new String[0] : normNew.split("\n", -1);
         if (a.length > DIFF_MAX_LINES || b.length > DIFF_MAX_LINES) {
             return null;
         }

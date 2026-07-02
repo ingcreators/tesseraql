@@ -277,6 +277,27 @@ class StudioIntegrationTest {
     }
 
     @Test
+    void sqlEditorCrlfNoOpSaveShowsNoDiffAndApplyKeepsLf() throws Exception {
+        // A bound .sql file (not a route document) carries the draft; the source is LF.
+        String path = "web/api/crlf/q.sql";
+        Files.createDirectories(appHome.resolve("web/api/crlf"));
+        Files.writeString(appHome.resolve(path), "select 1\nselect 2\n");
+        // Save a draft with CRLF newlines — what a browser textarea submits — but no real edits.
+        assertThat(post("/_tesseraql/studio/drafts?path=" + enc(path), "select 1\r\nselect 2\r\n",
+                true).statusCode()).isEqualTo(200);
+
+        // The editor's compare panel shows no spurious changes: every line stays context.
+        String editor = get("/_tesseraql/studio/ui/source?path=" + enc(path), true).body();
+        assertThat(editor).doesNotContain("data-state=\"added\"")
+                .doesNotContain("data-state=\"removed\"");
+
+        // Applying the no-op draft leaves the source LF (no CRLF written back).
+        assertThat(post("/_tesseraql/studio/apply?path=" + enc(path), "", true).statusCode())
+                .isEqualTo(200);
+        assertThat(Files.readString(appHome.resolve(path))).isEqualTo("select 1\nselect 2\n");
+    }
+
+    @Test
     void draftsOverviewListsPendingDraftsWithConflictStatus() throws Exception {
         String path = "web/api/dlist/q.sql";
         Files.createDirectories(appHome.resolve("web/api/dlist"));
