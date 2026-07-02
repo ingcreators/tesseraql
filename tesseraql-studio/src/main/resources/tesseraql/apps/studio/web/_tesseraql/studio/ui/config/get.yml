@@ -8,6 +8,8 @@ security:
 
 sql:
   service: studio.config
+  params:
+    roles: principal.roles
 
 response:
   html:

@@ -10,6 +10,7 @@ import io.tesseraql.core.sql.BoundSql;
 import io.tesseraql.core.sql.Sql2WayParser;
 import io.tesseraql.core.sql.SqlRenderer;
 import io.tesseraql.yaml.SimpleYamlParser;
+import io.tesseraql.yaml.config.AppConfig;
 import io.tesseraql.yaml.i18n.MessageCatalog;
 import io.tesseraql.yaml.lint.AppLinter;
 import io.tesseraql.yaml.lint.LintFinding;
@@ -63,6 +64,7 @@ public final class StudioService {
     private static final TqlErrorCode MENU = new TqlErrorCode(TqlDomain.STUDIO, 4225);
     private static final TqlErrorCode POLICY = new TqlErrorCode(TqlDomain.STUDIO, 4226);
     private static final TqlErrorCode MESSAGE = new TqlErrorCode(TqlDomain.STUDIO, 4227);
+    private static final TqlErrorCode CONFIG = new TqlErrorCode(TqlDomain.STUDIO, 4228);
     private static final TqlErrorCode CONFLICT = new TqlErrorCode(TqlDomain.STUDIO, 4090);
     private static final Pattern LEADING_DIGITS = Pattern.compile("^\\d+");
     private static final Pattern POLICY_ID = Pattern.compile("[A-Za-z0-9_.-]+");
@@ -1431,6 +1433,105 @@ public final class StudioService {
             out.put(prefix, list.toString());
         } else {
             out.put(prefix, node);
+        }
+    }
+
+    /** One editable configuration setting: its dotted key, label, input type, and help text. */
+    public record ConfigSetting(String key, String label, String type, String help) {
+    }
+
+    /**
+     * The curated set of settings the Studio config editor may change. Deliberately limited to safe,
+     * scalar, restart-to-apply keys — engine-critical sections (datasources, camel, security auth)
+     * are never editable here.
+     */
+    private static final List<ConfigSetting> EDITABLE_SETTINGS = List.of(
+            new ConfigSetting("tesseraql.app.name", "App name", "string",
+                    "Shown in the app chrome."),
+            new ConfigSetting("tesseraql.i18n.defaultLocale", "Default locale", "string",
+                    "BCP-47 tag, e.g. en."),
+            new ConfigSetting("tesseraql.outbox.dispatch.fixedDelay", "Outbox dispatch delay",
+                    "string", "e.g. 5s; empty disables the dispatcher."),
+            new ConfigSetting("tesseraql.outbox.dispatch.maxAttempts", "Outbox max attempts",
+                    "integer", "Delivery attempts before an outbox row is parked."),
+            new ConfigSetting("tesseraql.retention.sweep", "Retention sweep interval", "string",
+                    "e.g. 1h; empty disables retention."),
+            new ConfigSetting("tesseraql.retention.outbox", "Outbox retention", "string",
+                    "e.g. 30d."),
+            new ConfigSetting("tesseraql.retention.jobs", "Job retention", "string", "e.g. 90d."));
+
+    /** The curated editable settings with their current effective values, for the config editor. */
+    public List<Map<String, Object>> editableSettings() {
+        AppConfig config = new ManifestLoader().load(appHome).config();
+        List<Map<String, Object>> out = new ArrayList<>();
+        for (ConfigSetting setting : EDITABLE_SETTINGS) {
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("key", setting.key());
+            row.put("label", setting.label());
+            row.put("type", setting.type());
+            row.put("help", setting.help());
+            row.put("value", config.getString(setting.key()).orElse(""));
+            out.add(row);
+        }
+        return out;
+    }
+
+    /**
+     * Overrides a curated setting in {@code config/overlay.yml} (the base config untouched), or, when
+     * {@code value} is blank, removes the override. Only whitelisted keys are accepted. Edit-gated and
+     * audited; applied on the next restart (the setting is read at startup).
+     */
+    public void setConfigValue(String key, String value, String actor) {
+        ConfigSetting setting = EDITABLE_SETTINGS.stream().filter(s -> s.key().equals(key))
+                .findFirst().orElseThrow(() -> new TqlException(CONFIG,
+                        "Not an editable setting: " + key));
+        if (readOnly) {
+            throw new TqlException(READ_ONLY, "Studio is read-only; editing config is disabled");
+        }
+        String trimmed = value == null ? "" : value.strip();
+        if ("integer".equals(setting.type()) && !trimmed.isEmpty()) {
+            try {
+                Long.parseLong(trimmed);
+            } catch (NumberFormatException ex) {
+                throw new TqlException(CONFIG, setting.label() + " must be a whole number");
+            }
+        }
+        Path overlay = resolve("config/overlay.yml");
+        Map<String, Object> tree = Files.isRegularFile(overlay)
+                ? mutableCopy(parser.parseTree(overlay))
+                : new LinkedHashMap<>();
+        String[] segments = key.split("\\.");
+        if (trimmed.isEmpty()) {
+            removePath(tree, segments, 0);
+        } else {
+            Map<String, Object> node = tree;
+            for (int i = 0; i < segments.length - 1; i++) {
+                node = childMap(node, segments[i]);
+            }
+            node.put(segments[segments.length - 1], trimmed);
+        }
+        try {
+            Files.createDirectories(overlay.getParent());
+            Files.writeString(overlay, parser.write(tree));
+        } catch (IOException ex) {
+            throw new UncheckedIOException(ex);
+        }
+        recordAudit(actor, "config", "config/overlay.yml");
+    }
+
+    /** Removes the leaf at the dotted path from {@code node}, pruning any emptied ancestor maps. */
+    @SuppressWarnings("unchecked")
+    private static void removePath(Map<String, Object> node, String[] segments, int index) {
+        if (index == segments.length - 1) {
+            node.remove(segments[index]);
+            return;
+        }
+        if (node.get(segments[index]) instanceof Map<?, ?> child) {
+            Map<String, Object> childMap = (Map<String, Object>) child;
+            removePath(childMap, segments, index + 1);
+            if (childMap.isEmpty()) {
+                node.remove(segments[index]);
+            }
         }
     }
 

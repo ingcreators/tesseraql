@@ -19,6 +19,33 @@
       <span class="hc-badge" data-variant="neutral" th:text="|${cfg.count} key(s)|">0 key(s)</span>
       <span class="hc-badge" data-variant="neutral" th:text="|${cfg.secretCount} redacted|">0 redacted</span>
     </div>
+  </section>
+
+  <section class="hc-card" th:if="${cfg.editable}">
+    <h3>Editable settings</h3>
+    <p class="hc-field__message">A curated set of safe settings. A change is written to
+      <code>config/overlay.yml</code> (the base config is left intact) and <strong>applied on the
+      next restart</strong>; clearing a value removes the override. Engine-critical settings
+      (datasources, security, Camel) are not editable here.</p>
+    <form class="hc-stack" method="post" action="/_tesseraql/studio/ui/config/set"
+          th:each="s : ${cfg.settings}">
+      <input type="hidden" name="_csrf" th:value="${_csrf}">
+      <input type="hidden" name="key" th:value="${s.key}">
+      <div class="hc-cluster">
+        <div class="hc-field hc-field--grow">
+          <label class="hc-field__label" th:for="|set-${s.key}|" th:text="${s.label}">Setting</label>
+          <input class="hc-input" th:id="|set-${s.key}|" name="value" th:value="${s.value}"
+                 th:type="${s.type == 'integer'} ? 'number' : 'text'" autocomplete="off">
+          <span class="hc-field__message"><code th:text="${s.key}">key</code> &mdash;
+            <span th:text="${s.help}">help</span></span>
+        </div>
+        <button type="submit" class="hc-button" data-variant="primary">Save</button>
+      </div>
+    </form>
+  </section>
+
+  <section class="hc-card">
+    <h3>Effective configuration</h3>
     <div class="hc-datagrid">
       <div class="hc-datagrid__scroll">
         <table class="hc-datagrid__table">

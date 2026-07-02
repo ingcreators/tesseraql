@@ -1951,6 +1951,39 @@ class StudioIntegrationTest {
     }
 
     @Test
+    void uiConfigEditorOverridesAWhitelistedSettingInOverlay() throws Exception {
+        Path overlay = appHome.resolve("config/overlay.yml");
+        try {
+            assertThat(postForm("/_tesseraql/studio/ui/config/set",
+                    "key=" + enc("tesseraql.app.name") + "&value=StudioITApp").statusCode())
+                    .isEqualTo(303);
+            // Written to overlay.yml (base untouched) and audited.
+            assertThat(Files.readString(overlay)).contains("StudioITApp");
+            assertThat(Files.readString(appHome.resolve("work/studio/audit/audit.jsonl")))
+                    .contains("\"action\":\"config\"");
+            // The effective config (base + overlay) reflects the override.
+            assertThat(get("/_tesseraql/studio/ui/config", true).body()).contains("StudioITApp");
+        } finally {
+            Files.deleteIfExists(overlay);
+        }
+    }
+
+    @Test
+    void uiConfigEditorRejectsANonWhitelistedKey() throws Exception {
+        Path overlay = appHome.resolve("config/overlay.yml");
+        try {
+            // A key outside the curated whitelist is rejected — nothing is written.
+            assertThat(postForm("/_tesseraql/studio/ui/config/set",
+                    "key=" + enc("tesseraql.datasources.main.password") + "&value=pwned")
+                    .statusCode()).isNotEqualTo(303);
+            assertThat(!Files.exists(overlay) || !Files.readString(overlay).contains("pwned"))
+                    .isTrue();
+        } finally {
+            Files.deleteIfExists(overlay);
+        }
+    }
+
+    @Test
     void uiSecurityPolicyEditWritesOverlayAndRebindsTheEngineLive() throws Exception {
         String policyId = "studio.it.editpolicy";
         Path overlay = appHome.resolve("config/overlay.yml");

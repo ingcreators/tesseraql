@@ -1077,7 +1077,19 @@ public final class TesseraqlRuntime implements AutoCloseable {
                             model.put("rows", rows);
                             model.put("count", rows.size());
                             model.put("secretCount", secrets);
+                            model.put("settings", studio.editableSettings());
+                            model.put("editable", studioAccess.canEdit(params.get("roles")));
                             return model;
+                        })
+                        // Config editor (curated): override one whitelisted, restart-to-apply setting
+                        // in config/overlay.yml (base untouched), or remove it when blank. Edit-gated +
+                        // audited; only StudioService's whitelist of safe scalar keys is accepted.
+                        .register("studio.configSet", params -> {
+                            studioAccess.requireEdit(params.get("principalRoles"));
+                            Object value = params.get("value");
+                            studio.setConfigValue(str(params, "key"),
+                                    value == null ? "" : String.valueOf(value), actorOf(params));
+                            return Map.of("saved", true);
                         })
                         // i18n message editor (governance/authoring): a key × locale table over the
                         // app's messages/<locale>.yml catalogs, flagging missing translations; the set
