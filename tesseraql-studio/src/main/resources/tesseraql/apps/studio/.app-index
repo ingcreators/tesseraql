@@ -59,6 +59,8 @@ web/_tesseraql/studio/ui/health/health.html
 web/_tesseraql/studio/ui/config/get.yml
 web/_tesseraql/studio/ui/config/config.html
 web/_tesseraql/studio/ui/config/set/post.yml
+web/_tesseraql/studio/ui/data/get.yml
+web/_tesseraql/studio/ui/data/data.html
 web/_tesseraql/studio/ui/security/get.yml
 web/_tesseraql/studio/ui/security/security.html
 web/_tesseraql/studio/ui/security/policy/add-rule/post.yml
