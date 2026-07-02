@@ -1722,6 +1722,13 @@ public final class TesseraqlRuntime implements AutoCloseable {
                 && !("GET".equals(method) || "HEAD".equals(method) || "DELETE".equals(method));
         String bearer = str(params, "bearer");
         String contentType = str(params, "contentType");
+        // "Send my session": forward the caller's own session cookie (and its CSRF token) so the
+        // loopback runs as the current Studio user — this is how browser-authenticated routes are
+        // exercised. The cookie/csrf are bound from the caller's own request, used server-side only,
+        // and never rendered. No escalation: the target route still enforces its own policy.
+        boolean useSession = "true".equals(String.valueOf(params.get("useSession")));
+        String cookie = str(params, "cookie");
+        String sessionCsrf = str(params, "csrf");
         model.put("url", url);
         try {
             java.net.http.HttpRequest.Builder request = java.net.http.HttpRequest
@@ -1736,6 +1743,12 @@ public final class TesseraqlRuntime implements AutoCloseable {
             }
             if (bearer != null) {
                 request.header("Authorization", "Bearer " + bearer);
+            }
+            if (useSession && cookie != null) {
+                request.header("Cookie", cookie);
+                if (sessionCsrf != null) {
+                    request.header("X-CSRF-Token", sessionCsrf);
+                }
             }
             long startedNs = System.nanoTime();
             java.net.http.HttpResponse<String> response = java.net.http.HttpClient.newHttpClient()

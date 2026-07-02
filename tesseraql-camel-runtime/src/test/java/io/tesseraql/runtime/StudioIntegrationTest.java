@@ -1969,6 +1969,17 @@ class StudioIntegrationTest {
     }
 
     @Test
+    void uiTryRunForwardsTheSessionForBrowserAuthedRoutes() throws Exception {
+        // The Health page is browser-authenticated: a loopback with no session is rejected (401),
+        // but forwarding the caller's session (useSession) authenticates it (200).
+        String target = enc("/_tesseraql/studio/ui/health");
+        assertThat(postForm("/_tesseraql/studio/ui/try/run", "method=GET&path=" + target).body())
+                .contains("401");
+        assertThat(postForm("/_tesseraql/studio/ui/try/run",
+                "method=GET&path=" + target + "&useSession=true").body()).contains("200");
+    }
+
+    @Test
     void uiSourceMigrationOffersDryRunWhenEnabled() throws Exception {
         HttpResponse<String> response = get("/_tesseraql/studio/ui/source?path="
                 + enc("db/migration/V1__create_users.sql"), true);
