@@ -12,23 +12,38 @@
 <section class="hc-card">
   <h2>File transfers</h2>
   <div class="hc-empty" th:unless="${transfers.hasRows}"><p class="hc-empty__title">No file transfers recorded.</p></div>
-  <table class="hc-table" th:if="${transfers.hasRows}">
-    <thead><tr><th>Transfer</th><th>Route</th><th>App</th><th>Direction</th><th>Format</th><th>Status</th><th>Rows</th><th>File</th><th>Downloaded</th><th>Started</th></tr></thead>
-    <tbody>
-      <tr th:each="t : ${transfers.rows}">
-        <td th:text="${t.id}"></td>
-        <td th:text="${t.route}"></td>
-        <td th:text="${t.app}"></td>
-        <td th:text="${t.direction}"></td>
-        <td th:text="${t.format}"></td>
-        <td class="hc-status" th:attr="data-variant=${t.statusVariant}" th:text="${t.status}"></td>
-        <td th:text="${t.rows}"></td>
-        <td th:text="${t.filename}"></td>
-        <td th:text="${t.downloaded}"></td>
-        <td th:text="${t.createdAt}"></td>
-      </tr>
-    </tbody>
-  </table>
+  <div class="hc-datagrid" th:if="${transfers.hasRows}">
+    <div class="hc-datagrid__scroll">
+      <table class="hc-datagrid__table">
+        <thead class="hc-datagrid__head"><tr>
+          <th class="hc-datagrid__headcell">Transfer</th>
+          <th class="hc-datagrid__headcell">Route</th>
+          <th class="hc-datagrid__headcell">App</th>
+          <th class="hc-datagrid__headcell">Direction</th>
+          <th class="hc-datagrid__headcell">Format</th>
+          <th class="hc-datagrid__headcell">Status</th>
+          <th class="hc-datagrid__headcell">Rows</th>
+          <th class="hc-datagrid__headcell">File</th>
+          <th class="hc-datagrid__headcell">Downloaded</th>
+          <th class="hc-datagrid__headcell">Started</th>
+        </tr></thead>
+        <tbody class="hc-datagrid__body">
+          <tr class="hc-datagrid__row" th:each="t : ${transfers.rows}">
+            <td class="hc-datagrid__cell" th:text="${t.id}"></td>
+            <td class="hc-datagrid__cell" th:text="${t.route}"></td>
+            <td class="hc-datagrid__cell" th:text="${t.app}"></td>
+            <td class="hc-datagrid__cell" th:text="${t.direction}"></td>
+            <td class="hc-datagrid__cell" th:text="${t.format}"></td>
+            <td class="hc-datagrid__cell"><span class="hc-badge" th:attr="data-variant=${t.statusVariant}" th:text="${t.status}"></span></td>
+            <td class="hc-datagrid__cell" th:text="${t.rows}"></td>
+            <td class="hc-datagrid__cell" th:text="${t.filename}"></td>
+            <td class="hc-datagrid__cell" th:text="${t.downloaded}"></td>
+            <td class="hc-datagrid__cell" th:text="${t.createdAt}"></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
 </section>
 </div>
 </html>

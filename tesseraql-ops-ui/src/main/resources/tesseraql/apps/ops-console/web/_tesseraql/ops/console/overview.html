@@ -37,33 +37,62 @@
         th:attr="data-variant=${s.statusVariant}">[[${s.status}]]: [[${s.count}]]</li>
   </ul>
   <div class="hc-empty" th:unless="${ops.hasRecent}"><p class="hc-empty__title">No batch executions recorded.</p></div>
-  <table class="hc-table" th:if="${ops.hasRecent}">
-    <thead><tr><th>Execution</th><th>Job</th><th>App</th><th>Status</th><th>Trigger</th><th>Started</th><th>Duration (ms)</th></tr></thead>
-    <tbody>
-      <tr th:each="e : ${ops.recent}">
-        <td><a th:href="|/_tesseraql/ops/console/executions/${e.id}|" th:text="${e.id}"></a></td>
-        <td th:text="${e.jobId}"></td>
-        <td th:text="${e.app}"></td>
-        <td class="hc-status" th:attr="data-variant=${e.statusVariant}" th:text="${e.status}"></td>
-        <td th:text="${e.trigger}"></td>
-        <td th:text="${e.startTime}"></td>
-        <td th:text="${e.durationMs}"></td>
-      </tr>
-    </tbody>
-  </table>
+  <div class="hc-datagrid" th:if="${ops.hasRecent}">
+    <div class="hc-datagrid__scroll">
+      <table class="hc-datagrid__table">
+        <thead class="hc-datagrid__head"><tr>
+          <th class="hc-datagrid__headcell">Execution</th>
+          <th class="hc-datagrid__headcell">Job</th>
+          <th class="hc-datagrid__headcell">App</th>
+          <th class="hc-datagrid__headcell">Status</th>
+          <th class="hc-datagrid__headcell">Trigger</th>
+          <th class="hc-datagrid__headcell">Started</th>
+          <th class="hc-datagrid__headcell">Duration (ms)</th>
+        </tr></thead>
+        <tbody class="hc-datagrid__body">
+          <tr class="hc-datagrid__row" th:each="e : ${ops.recent}">
+            <td class="hc-datagrid__cell"><a th:href="|/_tesseraql/ops/console/executions/${e.id}|" th:text="${e.id}"></a></td>
+            <td class="hc-datagrid__cell" th:text="${e.jobId}"></td>
+            <td class="hc-datagrid__cell" th:text="${e.app}"></td>
+            <td class="hc-datagrid__cell"><span class="hc-badge" th:attr="data-variant=${e.statusVariant}" th:text="${e.status}"></span></td>
+            <td class="hc-datagrid__cell" th:text="${e.trigger}"></td>
+            <td class="hc-datagrid__cell" th:text="${e.startTime}"></td>
+            <td class="hc-datagrid__cell" th:text="${e.durationMs}"></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
 </section>
 <section class="hc-card" id="lanes">
   <h2>Execution lanes</h2>
   <div class="hc-empty" th:unless="${ops.hasLanes}"><p class="hc-empty__title">No execution lanes registered.</p></div>
-  <table class="hc-table" th:if="${ops.hasLanes}">
-    <thead><tr><th>Lane</th><th>Type</th><th>In use</th><th>Max</th><th>Admitted</th><th>Rejected</th></tr></thead>
-    <tbody>
-      <tr th:each="l : ${ops.lanes}" th:classappend="${l.warn} ? 'hc-status'"
-          th:attr="data-variant=${l.warn ? 'error' : null},data-fill=${l.warn ? '' : null}">
-        <td th:text="${l.name}"></td><td th:text="${l.type}"></td><td th:text="${l.inUse}"></td><td th:text="${l.max}"></td><td th:text="${l.admitted}"></td><td th:text="${l.rejected}"></td>
-      </tr>
-    </tbody>
-  </table>
+  <div class="hc-datagrid" th:if="${ops.hasLanes}">
+    <div class="hc-datagrid__scroll">
+      <table class="hc-datagrid__table">
+        <thead class="hc-datagrid__head"><tr>
+          <th class="hc-datagrid__headcell">Lane</th>
+          <th class="hc-datagrid__headcell">Type</th>
+          <th class="hc-datagrid__headcell">In use</th>
+          <th class="hc-datagrid__headcell">Max</th>
+          <th class="hc-datagrid__headcell">Admitted</th>
+          <th class="hc-datagrid__headcell">Rejected</th>
+          <th class="hc-datagrid__headcell">Status</th>
+        </tr></thead>
+        <tbody class="hc-datagrid__body">
+          <tr class="hc-datagrid__row" th:each="l : ${ops.lanes}">
+            <td class="hc-datagrid__cell" th:text="${l.name}"></td>
+            <td class="hc-datagrid__cell" th:text="${l.type}"></td>
+            <td class="hc-datagrid__cell" th:text="${l.inUse}"></td>
+            <td class="hc-datagrid__cell" th:text="${l.max}"></td>
+            <td class="hc-datagrid__cell" th:text="${l.admitted}"></td>
+            <td class="hc-datagrid__cell" th:text="${l.rejected}"></td>
+            <td class="hc-datagrid__cell"><span class="hc-badge" th:attr="data-variant=${l.warn ? 'error' : 'success'}" th:text="${l.warn ? 'warn' : 'ok'}"></span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
 </section>
 <section class="hc-card" id="traces">
   <h2>Trace metrics</h2>
@@ -78,14 +107,26 @@
 <section class="hc-card" id="slow-sql">
   <h2>Slow SQL</h2>
   <div class="hc-empty" th:unless="${ops.hasSlowSql}"><p class="hc-empty__title">No slow SQL recorded.</p></div>
-  <table class="hc-table" th:if="${ops.hasSlowSql}">
-    <thead><tr><th>SQL id</th><th>Mode</th><th>Duration (ms)</th><th>Rows</th></tr></thead>
-    <tbody>
-      <tr th:each="q : ${ops.slowSql}">
-        <td th:text="${q.sqlId}"></td><td th:text="${q.mode}"></td><td th:text="${q.durationMs}"></td><td th:text="${q.rowCount}"></td>
-      </tr>
-    </tbody>
-  </table>
+  <div class="hc-datagrid" th:if="${ops.hasSlowSql}">
+    <div class="hc-datagrid__scroll">
+      <table class="hc-datagrid__table">
+        <thead class="hc-datagrid__head"><tr>
+          <th class="hc-datagrid__headcell">SQL id</th>
+          <th class="hc-datagrid__headcell">Mode</th>
+          <th class="hc-datagrid__headcell">Duration (ms)</th>
+          <th class="hc-datagrid__headcell">Rows</th>
+        </tr></thead>
+        <tbody class="hc-datagrid__body">
+          <tr class="hc-datagrid__row" th:each="q : ${ops.slowSql}">
+            <td class="hc-datagrid__cell" th:text="${q.sqlId}"></td>
+            <td class="hc-datagrid__cell" th:text="${q.mode}"></td>
+            <td class="hc-datagrid__cell" th:text="${q.durationMs}"></td>
+            <td class="hc-datagrid__cell" th:text="${q.rowCount}"></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
 </section>
 <section class="hc-card" id="pinning">
   <h2>Virtual-thread pinning</h2>

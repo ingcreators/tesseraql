@@ -10,19 +10,29 @@
 <div id="page-content" class="hc-stack">
 <section class="hc-card">
   <div class="hc-empty" th:unless="${traces.hasSpans}"><p class="hc-empty__title">No traces retained.</p></div>
-  <table class="hc-table" th:if="${traces.hasSpans}">
-    <thead><tr><th>Span</th><th>App</th><th>Total (ms)</th><th>Self (ms)</th><th></th></tr></thead>
-    <tbody>
-      <tr th:each="s : ${traces.spans}">
-        <td th:style="'padding-left:' + ${s.indentPx} + 'px'"><strong th:classappend="${s.slow} ? 'hc-status'"
-            th:attr="data-variant=${s.slow ? 'error' : null}" th:text="${s.name}"></strong></td>
-        <td th:text="${s.app}"></td>
-        <td th:text="${s.totalMs}"></td>
-        <td th:text="${s.selfMs}"></td>
-        <td><span class="hc-badge" data-variant="error" th:if="${s.error}">error</span></td>
-      </tr>
-    </tbody>
-  </table>
+  <div class="hc-datagrid" th:if="${traces.hasSpans}">
+    <div class="hc-datagrid__scroll">
+      <table class="hc-datagrid__table">
+        <thead class="hc-datagrid__head"><tr>
+          <th class="hc-datagrid__headcell">Span</th>
+          <th class="hc-datagrid__headcell">App</th>
+          <th class="hc-datagrid__headcell">Total (ms)</th>
+          <th class="hc-datagrid__headcell">Self (ms)</th>
+          <th class="hc-datagrid__headcell"></th>
+        </tr></thead>
+        <tbody class="hc-datagrid__body">
+          <tr class="hc-datagrid__row" th:each="s : ${traces.spans}">
+            <td class="hc-datagrid__cell" th:style="'padding-left:' + ${s.indentPx} + 'px'"><strong th:classappend="${s.slow} ? 'hc-status'"
+                th:attr="data-variant=${s.slow ? 'error' : null}" th:text="${s.name}"></strong></td>
+            <td class="hc-datagrid__cell" th:text="${s.app}"></td>
+            <td class="hc-datagrid__cell" th:text="${s.totalMs}"></td>
+            <td class="hc-datagrid__cell" th:text="${s.selfMs}"></td>
+            <td class="hc-datagrid__cell"><span class="hc-badge" data-variant="error" th:if="${s.error}">error</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
 </section>
 </div>
 </html>

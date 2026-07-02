@@ -28,19 +28,28 @@
 <section class="hc-card" id="steps">
   <h2>Steps</h2>
   <div class="hc-empty" th:unless="${execution.hasSteps}"><p class="hc-empty__title">No steps recorded.</p></div>
-  <table class="hc-table" th:if="${execution.hasSteps}">
-    <thead><tr><th>Step</th><th>Status</th><th>Rows</th><th>Duration (ms)</th><th>Error</th></tr></thead>
-    <tbody>
-      <tr th:each="s : ${execution.steps}" th:classappend="${s.failed} ? 'hc-status'"
-          th:attr="data-variant=${s.failed ? 'error' : null},data-fill=${s.failed ? '' : null}">
-        <td th:text="${s.stepId}"></td>
-        <td class="hc-status" th:attr="data-variant=${s.statusVariant}" th:text="${s.status}"></td>
-        <td th:text="${s.affectedRows}"></td>
-        <td th:text="${s.durationMs}"></td>
-        <td th:text="${s.errorMessage}"></td>
-      </tr>
-    </tbody>
-  </table>
+  <div class="hc-datagrid" th:if="${execution.hasSteps}">
+    <div class="hc-datagrid__scroll">
+      <table class="hc-datagrid__table">
+        <thead class="hc-datagrid__head"><tr>
+          <th class="hc-datagrid__headcell">Step</th>
+          <th class="hc-datagrid__headcell">Status</th>
+          <th class="hc-datagrid__headcell">Rows</th>
+          <th class="hc-datagrid__headcell">Duration (ms)</th>
+          <th class="hc-datagrid__headcell">Error</th>
+        </tr></thead>
+        <tbody class="hc-datagrid__body">
+          <tr class="hc-datagrid__row" th:each="s : ${execution.steps}">
+            <td class="hc-datagrid__cell" th:text="${s.stepId}"></td>
+            <td class="hc-datagrid__cell"><span class="hc-badge" th:attr="data-variant=${s.statusVariant}" th:text="${s.status}"></span></td>
+            <td class="hc-datagrid__cell" th:text="${s.affectedRows}"></td>
+            <td class="hc-datagrid__cell" th:text="${s.durationMs}"></td>
+            <td class="hc-datagrid__cell" th:text="${s.errorMessage}"></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
 </section>
 </th:block>
 </div>
