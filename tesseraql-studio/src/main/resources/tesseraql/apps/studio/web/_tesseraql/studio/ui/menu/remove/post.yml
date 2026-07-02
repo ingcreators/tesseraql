@@ -1,0 +1,25 @@
+version: tesseraql/v1
+id: tql.studio.menu.remove
+kind: route
+recipe: command-json
+
+# Removes the menu item at the given index from config/menu.yml. Edit-gated in the provider.
+input:
+  index:
+    type: string
+    required: true
+
+security:
+  auth: browser
+  csrf: true
+
+sql:
+  service: studio.menu.remove
+  params:
+    index: params.index
+    actor: principal.loginId
+    principalRoles: principal.roles
+
+response:
+  redirect:
+    location: /_tesseraql/studio/ui/menu?removed=1

@@ -818,6 +818,94 @@ public final class TesseraqlRuntime implements AutoCloseable {
                                     recipe == null ? "query-json" : String.valueOf(recipe));
                             return Map.of("created", path);
                         })
+                        // Menu editor (app sidebar menu, Slice 2): read/write the app's declarative,
+                        // role-filtered config/menu.yml. view renders the current items + add form;
+                        // add/remove/move mutate the file (edit-gated + audited in StudioService).
+                        // preview renders the menu exactly as a caller with a chosen role/permission
+                        // would see it (server-side visibleFor). A menu edit is deliberately not tied
+                        // to a full route reload (like createMigration): the menu is compiled into the
+                        // renderers and refreshes on the next reload/restart, so editing the sidebar
+                        // can never be broken by an unrelated route that fails to recompile.
+                        .register("studio.menu.view", params -> {
+                            boolean canEdit = studioAccess
+                                    .canEdit(params.get("principalRoles") == null
+                                            ? params.get("roles")
+                                            : params.get("principalRoles"));
+                            java.util.List<io.tesseraql.yaml.menu.MenuSpec.MenuItem> items = studio
+                                    .menuItems();
+                            java.util.List<Map<String, Object>> rows = new java.util.ArrayList<>();
+                            for (int i = 0; i < items.size(); i++) {
+                                io.tesseraql.yaml.menu.MenuSpec.MenuItem item = items.get(i);
+                                Map<String, Object> row = new java.util.LinkedHashMap<>();
+                                row.put("index", i);
+                                row.put("first", i == 0);
+                                row.put("last", i == items.size() - 1);
+                                row.put("label", item.label());
+                                row.put("href", item.href());
+                                row.put("icon", item.icon());
+                                boolean isPublic = item.roles().isEmpty()
+                                        && item.permissions().isEmpty();
+                                row.put("public", isPublic);
+                                row.put("visibility", menuVisibility(item));
+                                rows.add(row);
+                            }
+                            Map<String, Object> model = new java.util.LinkedHashMap<>();
+                            model.put("editable", canEdit);
+                            model.put("readOnly", !canEdit);
+                            model.put("items", rows);
+                            model.put("hasItems", !rows.isEmpty());
+                            return model;
+                        })
+                        .register("studio.menu.add", params -> {
+                            studioAccess.requireEdit(params.get("principalRoles"));
+                            studio.addMenuItem(str(params, "label"), str(params, "href"),
+                                    str(params, "icon"), str(params, "roles"),
+                                    str(params, "permissions"), actorOf(params));
+                            return Map.of("added", true);
+                        })
+                        .register("studio.menu.remove", params -> {
+                            studioAccess.requireEdit(params.get("principalRoles"));
+                            studio.removeMenuItem(parseIndex(params.get("index")), actorOf(params));
+                            return Map.of("removed", true);
+                        })
+                        .register("studio.menu.move", params -> {
+                            studioAccess.requireEdit(params.get("principalRoles"));
+                            int delta = "up".equals(String.valueOf(params.get("dir"))) ? -1 : 1;
+                            studio.moveMenuItem(parseIndex(params.get("index")), delta,
+                                    actorOf(params));
+                            return Map.of("moved", true);
+                        })
+                        .register("studio.menu.preview", params -> {
+                            String role = str(params, "role");
+                            String permission = str(params, "permission");
+                            java.util.List<String> roles = role == null
+                                    ? java.util.List.of()
+                                    : java.util.List.of(role);
+                            java.util.List<String> perms = permission == null
+                                    ? java.util.List.of()
+                                    : java.util.List.of(permission);
+                            java.util.List<Map<String, Object>> visible = new java.util.ArrayList<>();
+                            for (io.tesseraql.yaml.menu.MenuSpec.MenuItem item : io.tesseraql.yaml.menu.MenuSpec
+                                    .load(manifest.appHome()).visibleFor(roles, perms)) {
+                                Map<String, Object> row = new java.util.LinkedHashMap<>();
+                                row.put("label", item.label());
+                                row.put("href", item.href());
+                                row.put("icon", item.icon());
+                                visible.add(row);
+                            }
+                            String who = role == null && permission == null
+                                    ? "an anonymous caller"
+                                    : java.util.stream.Stream.of(
+                                            role == null ? null : "role " + role,
+                                            permission == null ? null : "permission " + permission)
+                                            .filter(java.util.Objects::nonNull)
+                                            .collect(java.util.stream.Collectors.joining(" + "));
+                            Map<String, Object> model = new java.util.LinkedHashMap<>();
+                            model.put("items", visible);
+                            model.put("empty", visible.isEmpty());
+                            model.put("summary", "Showing the menu for " + who + ".");
+                            return model;
+                        })
                         // New migration page (Studio backlog: migration authoring): the form shows the
                         // next versioned number for the main datasource; the create writes a Flyway
                         // migration under db/…/migration and the result links to the source editor.
@@ -1422,6 +1510,43 @@ public final class TesseraqlRuntime implements AutoCloseable {
     private static String actorOf(Map<String, Object> params) {
         Object actor = params.get("actor");
         return actor == null ? null : String.valueOf(actor);
+    }
+
+    /** A request parameter as a trimmed string, or null when absent or blank. */
+    private static String str(Map<String, Object> params, String key) {
+        Object value = params.get(key);
+        if (value == null) {
+            return null;
+        }
+        String trimmed = String.valueOf(value).strip();
+        return trimmed.isEmpty() ? null : trimmed;
+    }
+
+    /** Parses a menu-item index parameter, yielding -1 (a no-op index) when malformed. */
+    private static int parseIndex(Object value) {
+        try {
+            return Integer.parseInt(String.valueOf(value).strip());
+        } catch (NumberFormatException ex) {
+            return -1;
+        }
+    }
+
+    /** A human-readable visibility summary for a menu item's editor row. */
+    private static String menuVisibility(io.tesseraql.yaml.menu.MenuSpec.MenuItem item) {
+        if (item.roles().isEmpty() && item.permissions().isEmpty()) {
+            return "Public";
+        }
+        StringBuilder summary = new StringBuilder();
+        if (!item.roles().isEmpty()) {
+            summary.append("Roles: ").append(String.join(", ", item.roles()));
+        }
+        if (!item.permissions().isEmpty()) {
+            if (summary.length() > 0) {
+                summary.append("; ");
+            }
+            summary.append("Permissions: ").append(String.join(", ", item.permissions()));
+        }
+        return summary.toString();
     }
 
     /**

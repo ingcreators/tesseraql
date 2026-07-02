@@ -76,6 +76,32 @@ class MenuSpecTest {
         assertThat(MenuSpec.load(appHome).isEmpty()).isTrue();
     }
 
+    @Test
+    void toYamlRoundTripsThroughLoad(@TempDir Path appHome) throws Exception {
+        List<MenuItem> items = List.of(
+                new MenuItem("Home", "/", "home", List.of(), List.of()),
+                new MenuItem("Users", "/users", null, List.of("ADMIN", "STAFF"), List.of()),
+                new MenuItem("Admin", "/admin", null, List.of(), List.of("iam.admin")));
+        Files.createDirectories(appHome.resolve("config"));
+        Files.writeString(appHome.resolve("config/menu.yml"), MenuSpec.toYaml(items));
+
+        MenuSpec reloaded = MenuSpec.load(appHome);
+        assertThat(reloaded.items()).hasSize(3);
+        assertThat(reloaded.items().get(0).icon()).isEqualTo("home");
+        assertThat(reloaded.items().get(1).roles()).containsExactly("ADMIN", "STAFF");
+        assertThat(reloaded.items().get(2).permissions()).containsExactly("iam.admin");
+    }
+
+    @Test
+    void toYamlOmitsEmptyFieldsAndTheDocumentMarker() {
+        String yaml = MenuSpec.toYaml(
+                List.of(new MenuItem("Solo", "/solo", null, List.of(), List.of())));
+
+        assertThat(yaml).contains("Solo").doesNotContain("icon")
+                .doesNotContain("roles").doesNotContain("permissions");
+        assertThat(yaml).doesNotStartWith("---");
+    }
+
     private static List<String> labels(List<MenuItem> items) {
         return items.stream().map(MenuItem::label).toList();
     }

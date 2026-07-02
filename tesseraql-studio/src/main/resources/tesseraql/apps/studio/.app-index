@@ -54,6 +54,13 @@ web/_tesseraql/studio/ui/scaffold/apply/apply.html
 web/_tesseraql/studio/ui/new/get.yml
 web/_tesseraql/studio/ui/new/drawer.html
 web/_tesseraql/studio/ui/new/post.yml
+web/_tesseraql/studio/ui/menu/get.yml
+web/_tesseraql/studio/ui/menu/menu.html
+web/_tesseraql/studio/ui/menu/add/post.yml
+web/_tesseraql/studio/ui/menu/remove/post.yml
+web/_tesseraql/studio/ui/menu/move/post.yml
+web/_tesseraql/studio/ui/menu/preview/get.yml
+web/_tesseraql/studio/ui/menu/preview/preview.html
 web/_tesseraql/studio/ui/migration/get.yml
 web/_tesseraql/studio/ui/migration/migration.html
 web/_tesseraql/studio/ui/migration/post.yml

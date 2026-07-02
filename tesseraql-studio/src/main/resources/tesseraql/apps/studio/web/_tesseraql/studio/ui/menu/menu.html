@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{tql/shell :: studio-page('TesseraQL Studio · Menu', ~{:: #page-header}, ~{:: #page-content})}">
+<th:block id="page-header">
+  <span class="hc-spacer"></span>
+  <div class="hc-cluster">
+    <a class="hc-button" data-variant="ghost" data-size="sm" href="/_tesseraql/studio/ui">&larr; explorer</a>
+    <span class="hc-badge" data-variant="warning" th:if="${menu.readOnly}">read-only</span>
+  </div>
+</th:block>
+<div id="page-content" class="hc-stack">
+  <section class="hc-card" th:unless="${menu.editable}">
+    <div class="hc-empty">
+      <p class="hc-empty__title">You do not have permission to edit the menu.</p>
+    </div>
+  </section>
+  <section class="hc-card" th:if="${menu.editable}">
+    <h2>Sidebar menu</h2>
+    <p class="hc-field__message">The app's declarative sidebar (<code>config/menu.yml</code>), rendered
+      into the shell and filtered per item by the caller's roles/permissions. An item with no roles and
+      no permissions is public; otherwise it shows when the caller holds one of the listed roles or
+      permissions. Edits are saved to <code>config/menu.yml</code> and take effect on the next reload or
+      restart. With no items the app falls back to its hand-authored <code>templates/nav.html</code>.</p>
+
+    <div class="hc-empty" th:unless="${menu.hasItems}">
+      <p class="hc-empty__title">No menu items yet.</p>
+      <p class="hc-empty__body">This app has no <code>config/menu.yml</code> — it currently uses
+        <code>templates/nav.html</code>. Add an item below to create the declarative menu.</p>
+    </div>
+
+    <div class="hc-datagrid" th:if="${menu.hasItems}">
+      <div class="hc-datagrid__scroll">
+        <table class="hc-datagrid__table">
+          <thead class="hc-datagrid__head"><tr>
+            <th class="hc-datagrid__headcell">Order</th>
+            <th class="hc-datagrid__headcell">Label</th>
+            <th class="hc-datagrid__headcell">Href</th>
+            <th class="hc-datagrid__headcell">Icon</th>
+            <th class="hc-datagrid__headcell">Visibility</th>
+            <th class="hc-datagrid__headcell">Actions</th>
+          </tr></thead>
+          <tbody class="hc-datagrid__body">
+            <tr class="hc-datagrid__row" th:each="item : ${menu.items}">
+              <td class="hc-datagrid__cell">
+                <div class="hc-cluster">
+                  <form method="post" action="/_tesseraql/studio/ui/menu/move">
+                    <input type="hidden" name="_csrf" th:value="${_csrf}">
+                    <input type="hidden" name="index" th:value="${item.index}">
+                    <input type="hidden" name="dir" value="up">
+                    <button type="submit" class="hc-button" data-variant="ghost" data-size="sm"
+                            th:disabled="${item.first}" aria-label="Move up">&uarr;</button>
+                  </form>
+                  <form method="post" action="/_tesseraql/studio/ui/menu/move">
+                    <input type="hidden" name="_csrf" th:value="${_csrf}">
+                    <input type="hidden" name="index" th:value="${item.index}">
+                    <input type="hidden" name="dir" value="down">
+                    <button type="submit" class="hc-button" data-variant="ghost" data-size="sm"
+                            th:disabled="${item.last}" aria-label="Move down">&darr;</button>
+                  </form>
+                </div>
+              </td>
+              <td class="hc-datagrid__cell" th:text="${item.label}">Label</td>
+              <td class="hc-datagrid__cell"><code th:text="${item.href}">/path</code></td>
+              <td class="hc-datagrid__cell">
+                <code th:if="${item.icon}" th:text="${item.icon}">icon</code>
+                <span th:unless="${item.icon}">&mdash;</span>
+              </td>
+              <td class="hc-datagrid__cell">
+                <span class="hc-badge" th:attr="data-variant=${item.public} ? 'success' : 'info'"
+                      th:text="${item.visibility}">Public</span>
+              </td>
+              <td class="hc-datagrid__cell">
+                <button type="button" class="hc-button" data-variant="ghost" data-size="sm"
+                        hx-post="/_tesseraql/studio/ui/menu/remove" hx-trigger="hc:confirmed"
+                        th:attr="hx-vals=|{&quot;index&quot;: &quot;${item.index}&quot;}|"
+                        data-hc-confirm="Remove this menu item?"
+                        data-hc-confirm-title="Remove menu item" data-hc-confirm-label="Remove"
+                        data-hc-confirm-variant="error">Remove</button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <details class="hc-disclosure" th:attr="open=${menu.hasItems} ? null : true">
+      <summary>Add menu item</summary>
+      <form class="hc-stack" method="post" action="/_tesseraql/studio/ui/menu/add">
+        <input type="hidden" name="_csrf" th:value="${_csrf}">
+        <div class="hc-cluster">
+          <div class="hc-field">
+            <label class="hc-field__label" for="menu-label">Label</label>
+            <input class="hc-input" id="menu-label" name="label" required placeholder="Users">
+          </div>
+          <div class="hc-field">
+            <label class="hc-field__label" for="menu-href">Href</label>
+            <input class="hc-input" id="menu-href" name="href" required placeholder="/users">
+          </div>
+          <div class="hc-field">
+            <label class="hc-field__label" for="menu-icon">Icon (optional sprite id)</label>
+            <input class="hc-input" id="menu-icon" name="icon" placeholder="users">
+          </div>
+        </div>
+        <div class="hc-cluster">
+          <div class="hc-field">
+            <label class="hc-field__label" for="menu-roles">Roles (comma-separated, optional)</label>
+            <input class="hc-input" id="menu-roles" name="roles" placeholder="ADMIN, STAFF">
+          </div>
+          <div class="hc-field">
+            <label class="hc-field__label" for="menu-perms">Permissions (comma-separated, optional)</label>
+            <input class="hc-input" id="menu-perms" name="permissions" placeholder="iam.admin">
+          </div>
+        </div>
+        <p class="hc-field__message">Leave both roles and permissions empty for a public item.</p>
+        <div class="hc-cluster">
+          <button type="submit" class="hc-button" data-variant="primary">Add item</button>
+        </div>
+      </form>
+    </details>
+
+    <details class="hc-disclosure" th:if="${menu.hasItems}">
+      <summary>Preview as role</summary>
+      <p class="hc-field__message">See exactly which items a caller holding a given role or permission
+        would see — the same server-side filter the app applies.</p>
+      <form class="hc-stack" hx-get="/_tesseraql/studio/ui/menu/preview"
+            hx-target="#menu-preview" hx-swap="innerHTML" hx-trigger="submit, change delay:250ms">
+        <div class="hc-cluster">
+          <div class="hc-field">
+            <label class="hc-field__label" for="preview-role">Role</label>
+            <input class="hc-input" id="preview-role" name="role" placeholder="ADMIN">
+          </div>
+          <div class="hc-field">
+            <label class="hc-field__label" for="preview-perm">Permission</label>
+            <input class="hc-input" id="preview-perm" name="permission" placeholder="iam.admin">
+          </div>
+          <button type="submit" class="hc-button" data-variant="ghost">Preview</button>
+          <th:block th:replace="~{tql/shell :: busy('Previewing…')}"/>
+        </div>
+      </form>
+      <div id="menu-preview" class="hc-stack"></div>
+    </details>
+  </section>
+</div>
+</html>
