@@ -1,0 +1,62 @@
+version: tesseraql/v1
+id: tql.studio.validationBuilder.build
+kind: route
+recipe: query-html
+
+# Generates the validate: YAML for one rule from the form inputs (pure text; copy into the route).
+input:
+  operation:
+    type: string
+    required: true
+  source:
+    type: string
+    required: false
+  field:
+    type: string
+    required: false
+  value:
+    type: string
+    required: false
+  value2:
+    type: string
+    required: false
+  id:
+    type: string
+    required: false
+  code:
+    type: string
+    required: false
+  message:
+    type: string
+    required: false
+  when:
+    type: string
+    required: false
+
+security:
+  auth: browser
+
+sql:
+  service: studio.validationBuilder.build
+  params:
+    operation: params.operation
+    source: params.source
+    field: params.field
+    value: params.value
+    value2: params.value2
+    id: params.id
+    code: params.code
+    message: params.message
+    when: params.when
+
+response:
+  html:
+    status: 200
+    template: build.html
+    model:
+      vb: sql
+    headers:
+      Content-Security-Policy: "default-src 'self'; style-src 'self' 'unsafe-inline'; frame-ancestors 'none'"
+      X-Content-Type-Options: nosniff
+      X-Frame-Options: DENY
+      Referrer-Policy: no-referrer

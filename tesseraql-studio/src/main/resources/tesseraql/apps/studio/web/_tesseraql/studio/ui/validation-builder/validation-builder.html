@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{tql/shell :: studio-page('TesseraQL Studio · Validation builder', ~{:: #page-header}, ~{:: #page-content})}">
+<th:block id="page-header">
+  <span class="hc-spacer"></span>
+  <div class="hc-cluster">
+    <a class="hc-button" data-variant="ghost" data-size="sm" href="/_tesseraql/studio/ui">&larr; explorer</a>
+  </div>
+</th:block>
+<div id="page-content" class="hc-stack">
+  <section class="hc-card">
+    <h2>Validation builder</h2>
+    <p class="hc-field__message">Generate a route's <code>validate:</code> block for one rule, then
+      copy it into a command route. Expression rules use the core expression language
+      (<code>&amp;&amp; || == != &lt; &gt; &lt;= &gt;=</code>); a SQL rule points at a validation SQL
+      file whose returned rows are the violations.</p>
+    <form class="hc-stack" hx-post="/_tesseraql/studio/ui/validation-builder/build"
+          hx-target="#vb-result" hx-swap="innerHTML" hx-trigger="submit, change delay:300ms"
+          hx-disabled-elt="find button">
+      <div class="hc-cluster">
+        <div class="hc-field">
+          <label class="hc-field__label" for="vb-id">Rule id</label>
+          <input class="hc-input" id="vb-id" name="id" required placeholder="ageAtLeast18"
+                 autocomplete="off">
+        </div>
+        <div class="hc-field">
+          <label class="hc-field__label" for="vb-source">Source</label>
+          <select class="hc-select" id="vb-source" name="source">
+            <option>body</option><option>params</option><option>path</option>
+          </select>
+        </div>
+        <div class="hc-field">
+          <label class="hc-field__label" for="vb-field">Field</label>
+          <input class="hc-input" id="vb-field" name="field" required placeholder="age"
+                 autocomplete="off">
+        </div>
+      </div>
+      <div class="hc-cluster">
+        <div class="hc-field">
+          <label class="hc-field__label" for="vb-op">Rule</label>
+          <select class="hc-select" id="vb-op" name="operation">
+            <option value="required">required (not null)</option>
+            <option value="not-empty">not empty (string)</option>
+            <option value="min">min (&gt;= value)</option>
+            <option value="max">max (&lt;= value)</option>
+            <option value="range">range (value &hellip; value 2)</option>
+            <option value="equals">equals value</option>
+            <option value="not-equals">not equals value</option>
+            <option value="one-of">one of (comma list)</option>
+            <option value="expression">custom expression</option>
+            <option value="sql">SQL rule (file)</option>
+          </select>
+        </div>
+        <div class="hc-field hc-field--grow">
+          <label class="hc-field__label" for="vb-value">Value / expression / SQL file</label>
+          <input class="hc-input" id="vb-value" name="value" autocomplete="off"
+                 placeholder="18 · 'ACTIVE' · a,b,c · body.a == body.b · validate-x.sql">
+        </div>
+        <div class="hc-field">
+          <label class="hc-field__label" for="vb-value2">Value 2 (range)</label>
+          <input class="hc-input" id="vb-value2" name="value2" autocomplete="off" placeholder="65">
+        </div>
+      </div>
+      <div class="hc-cluster">
+        <div class="hc-field">
+          <label class="hc-field__label" for="vb-code">Code (optional)</label>
+          <input class="hc-input" id="vb-code" name="code" autocomplete="off"
+                 placeholder="defaults to the id">
+        </div>
+        <div class="hc-field">
+          <label class="hc-field__label" for="vb-message">Message key (optional)</label>
+          <input class="hc-input" id="vb-message" name="message" autocomplete="off"
+                 placeholder="users.age.too-young">
+        </div>
+        <div class="hc-field hc-field--grow">
+          <label class="hc-field__label" for="vb-when">When guard (optional)</label>
+          <input class="hc-input" id="vb-when" name="when" autocomplete="off"
+                 placeholder="body.status == 'ADULT'">
+        </div>
+      </div>
+      <div class="hc-cluster">
+        <button type="submit" class="hc-button" data-variant="primary">Generate</button>
+        <th:block th:replace="~{tql/shell :: busy('Generating…')}"/>
+      </div>
+    </form>
+    <div id="vb-result" class="hc-stack"></div>
+  </section>
+</div>
+</html>

@@ -72,6 +72,10 @@ web/_tesseraql/studio/ui/try/run/result.html
 web/_tesseraql/studio/ui/messages/get.yml
 web/_tesseraql/studio/ui/messages/messages.html
 web/_tesseraql/studio/ui/messages/set/post.yml
+web/_tesseraql/studio/ui/validation-builder/get.yml
+web/_tesseraql/studio/ui/validation-builder/validation-builder.html
+web/_tesseraql/studio/ui/validation-builder/build/post.yml
+web/_tesseraql/studio/ui/validation-builder/build/build.html
 web/_tesseraql/studio/ui/menu/get.yml
 web/_tesseraql/studio/ui/menu/menu.html
 web/_tesseraql/studio/ui/menu/add/post.yml
