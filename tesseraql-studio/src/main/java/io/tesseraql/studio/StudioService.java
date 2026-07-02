@@ -1087,6 +1087,50 @@ public final class StudioService {
         }
     }
 
+    /** The outcome of applying every clean pending draft at once (Studio Drafts bulk actions). */
+    public record BulkApplyResult(int applied, int skipped, boolean needsRestart) {
+    }
+
+    /**
+     * Applies every pending draft that does not conflict, recording each to the audit trail as
+     * {@code actor} (Studio Drafts bulk actions). Conflicting drafts are left untouched (skipped) —
+     * they need a manual diff review in the editor — and counted. {@code needsRestart} is true when
+     * any applied draft created a not-yet-served route file. Callers reload routes afterwards.
+     */
+    public BulkApplyResult applyAllDrafts(String actor) {
+        int applied = 0;
+        int skipped = 0;
+        boolean needsRestart = false;
+        for (DraftSummary draft : drafts()) {
+            if (draft.conflict()) {
+                skipped++;
+                continue;
+            }
+            boolean isNew = draft.isNew();
+            try {
+                applyDraft(draft.path(), false, actor);
+                applied++;
+                needsRestart = needsRestart || isNew;
+            } catch (RuntimeException ex) {
+                // Best-effort: a draft that will not apply cleanly (e.g. a conflict that appeared
+                // between the snapshot and here) is left for manual review, not fatal to the batch.
+                skipped++;
+            }
+        }
+        return new BulkApplyResult(applied, skipped, needsRestart);
+    }
+
+    /** Discards every pending draft, returning how many were removed (Studio Drafts bulk actions). */
+    public int discardAllDrafts() {
+        int discarded = 0;
+        for (DraftSummary draft : drafts()) {
+            if (deleteDraft(draft.path())) {
+                discarded++;
+            }
+        }
+        return discarded;
+    }
+
     /**
      * The audit trail (Studio backlog D6): who applied or scaffolded what, when — newest first, up to
      * {@code limit} entries. The trail is the append-only {@code work/studio/audit/audit.jsonl} log

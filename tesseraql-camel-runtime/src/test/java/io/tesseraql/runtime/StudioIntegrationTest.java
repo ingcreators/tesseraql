@@ -307,6 +307,54 @@ class StudioIntegrationTest {
                 .contains("hc-datagrid");
         assertThat(get("/_tesseraql/studio/ui", true).body())
                 .contains("/_tesseraql/studio/ui/drafts");
+        // The page offers bulk apply/discard actions (Drafts differentiation vs the Explorer tree).
+        assertThat(get("/_tesseraql/studio/ui/drafts", true).body())
+                .contains("hx-post=\"/_tesseraql/studio/ui/drafts/apply-all\"")
+                .contains("hx-post=\"/_tesseraql/studio/ui/drafts/discard-all\"")
+                .contains("data-hc-confirm");
+    }
+
+    @Test
+    void draftsBulkApplyAppliesCleanDraftsAndSkipsConflicts() throws Exception {
+        // A clean draft (source unchanged) and a conflicting one (source changed underneath it).
+        String clean = "web/api/bulkclean/q.sql";
+        Files.createDirectories(appHome.resolve("web/api/bulkclean"));
+        Files.writeString(appHome.resolve(clean), "select 1\n");
+        assertThat(post("/_tesseraql/studio/drafts?path=" + enc(clean), "select 2 as done\n", true)
+                .statusCode()).isEqualTo(200);
+
+        String conflict = "web/api/bulkconflict/q.sql";
+        Files.createDirectories(appHome.resolve("web/api/bulkconflict"));
+        Files.writeString(appHome.resolve(conflict), "select 1\n");
+        assertThat(
+                post("/_tesseraql/studio/drafts?path=" + enc(conflict), "select 2 as edit\n", true)
+                        .statusCode())
+                .isEqualTo(200);
+        Files.writeString(appHome.resolve(conflict), "select 9 as changed\n");
+
+        // Bulk apply-all lands the clean draft and skips the conflicting one (source untouched).
+        assertThat(postForm("/_tesseraql/studio/ui/drafts/apply-all", "").statusCode())
+                .isEqualTo(303);
+        assertThat(Files.readString(appHome.resolve(clean))).contains("done");
+        assertThat(Files.readString(appHome.resolve(conflict))).contains("changed");
+        // The clean draft is gone (applied); the conflicting one remains for review.
+        String draftsJson = get("/_tesseraql/studio/drafts", true).body();
+        assertThat(draftsJson).contains(conflict).doesNotContain(clean);
+    }
+
+    @Test
+    void draftsBulkDiscardRemovesEveryDraft() throws Exception {
+        String path = "web/api/bulkdiscard/q.sql";
+        Files.createDirectories(appHome.resolve("web/api/bulkdiscard"));
+        Files.writeString(appHome.resolve(path), "select 1\n");
+        assertThat(post("/_tesseraql/studio/drafts?path=" + enc(path), "select 2\n", true)
+                .statusCode()).isEqualTo(200);
+
+        // Discard-all clears the whole pending set (the source file is left as-is).
+        assertThat(postForm("/_tesseraql/studio/ui/drafts/discard-all", "").statusCode())
+                .isEqualTo(303);
+        assertThat(MAPPER.readTree(get("/_tesseraql/studio/drafts", true).body())).isEmpty();
+        assertThat(Files.readString(appHome.resolve(path))).isEqualTo("select 1\n");
     }
 
     @Test
