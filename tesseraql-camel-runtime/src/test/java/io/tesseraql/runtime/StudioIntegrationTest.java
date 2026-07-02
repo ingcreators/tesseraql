@@ -1904,6 +1904,37 @@ class StudioIntegrationTest {
     }
 
     @Test
+    void uiMessagesEditorRendersTheCatalogAcrossLocales() throws Exception {
+        HttpResponse<String> response = get("/_tesseraql/studio/ui/messages", true);
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        // The user-admin app ships en + ja catalogs sharing keys like users.list.title.
+        assertThat(response.body()).contains("Messages").contains("users.list.title")
+                .contains("Set a translation");
+    }
+
+    @Test
+    void uiMessagesSetUpsertsATranslationAndRecordsAudit() throws Exception {
+        String key = "studio.it.greeting";
+        String form = "locale=en&key=" + enc(key) + "&value=" + enc("Hello from IT");
+        assertThat(postForm("/_tesseraql/studio/ui/messages/set", form).statusCode())
+                .isEqualTo(303);
+
+        // The nested key was written into messages/en.yml, and the write was audited.
+        String catalog = Files.readString(appHome.resolve("messages/en.yml"));
+        assertThat(catalog).contains("greeting").contains("Hello from IT");
+        assertThat(Files.readString(appHome.resolve("work/studio/audit/audit.jsonl")))
+                .contains("\"action\":\"message\"");
+        // The editor now lists the new key.
+        assertThat(get("/_tesseraql/studio/ui/messages", true).body()).contains(key);
+    }
+
+    @Test
+    void uiMessagesEditorRequiresAuthentication() throws Exception {
+        assertThat(get("/_tesseraql/studio/ui/messages", false).statusCode()).isEqualTo(401);
+    }
+
+    @Test
     void uiSecurityPolicyEditWritesOverlayAndRebindsTheEngineLive() throws Exception {
         String policyId = "studio.it.editpolicy";
         Path overlay = appHome.resolve("config/overlay.yml");

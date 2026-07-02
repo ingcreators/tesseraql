@@ -1,0 +1,34 @@
+version: tesseraql/v1
+id: tql.studio.messages.set
+kind: route
+recipe: command-json
+
+# Upserts one translation into messages/<locale>.yml (creating the locale if new). Edit-gated in the
+# provider; served after the next reload/restart.
+input:
+  locale:
+    type: string
+    required: true
+  key:
+    type: string
+    required: true
+  value:
+    type: string
+    required: false
+
+security:
+  auth: browser
+  csrf: true
+
+sql:
+  service: studio.messageSet
+  params:
+    locale: params.locale
+    key: params.key
+    value: params.value
+    actor: principal.loginId
+    principalRoles: principal.roles
+
+response:
+  redirect:
+    location: /_tesseraql/studio/ui/messages?saved=1

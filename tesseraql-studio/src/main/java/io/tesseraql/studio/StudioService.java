@@ -10,6 +10,7 @@ import io.tesseraql.core.sql.BoundSql;
 import io.tesseraql.core.sql.Sql2WayParser;
 import io.tesseraql.core.sql.SqlRenderer;
 import io.tesseraql.yaml.SimpleYamlParser;
+import io.tesseraql.yaml.i18n.MessageCatalog;
 import io.tesseraql.yaml.lint.AppLinter;
 import io.tesseraql.yaml.lint.LintFinding;
 import io.tesseraql.yaml.manifest.AppManifest;
@@ -61,9 +62,12 @@ public final class StudioService {
     private static final TqlErrorCode NEW_ROUTE = new TqlErrorCode(TqlDomain.STUDIO, 4224);
     private static final TqlErrorCode MENU = new TqlErrorCode(TqlDomain.STUDIO, 4225);
     private static final TqlErrorCode POLICY = new TqlErrorCode(TqlDomain.STUDIO, 4226);
+    private static final TqlErrorCode MESSAGE = new TqlErrorCode(TqlDomain.STUDIO, 4227);
     private static final TqlErrorCode CONFLICT = new TqlErrorCode(TqlDomain.STUDIO, 4090);
     private static final Pattern LEADING_DIGITS = Pattern.compile("^\\d+");
     private static final Pattern POLICY_ID = Pattern.compile("[A-Za-z0-9_.-]+");
+    private static final Pattern LOCALE_TAG = Pattern.compile("[A-Za-z0-9-]+");
+    private static final Pattern MESSAGE_KEY = Pattern.compile("[A-Za-z0-9._-]+");
     private static final Pattern IDENTIFIER = Pattern.compile("[A-Za-z0-9_-]+");
     private static final Pattern MIGRATION_PATH = Pattern
             .compile("db/(?:[^/]+/)?migration(?:-[^/]+)?/[^/]+\\.sql");
@@ -1349,6 +1353,68 @@ public final class StudioService {
             case "boolean" -> false;
             default -> "";
         };
+    }
+
+    /** The app's message-catalog locale tags ({@code messages/<tag>.yml}), tag-sorted. */
+    public List<String> messageLocales() {
+        return new ArrayList<>(MessageCatalog.load(appHome.resolve("messages")).tags());
+    }
+
+    /** Each locale's flat key→value message entries (dotted keys), for the i18n editor table. */
+    public Map<String, Map<String, String>> messageCatalogs() {
+        MessageCatalog catalog = MessageCatalog.load(appHome.resolve("messages"));
+        Map<String, Map<String, String>> out = new LinkedHashMap<>();
+        for (String tag : catalog.tags()) {
+            out.put(tag, catalog.entries(tag));
+        }
+        return out;
+    }
+
+    /**
+     * Upserts a translation into {@code messages/<locale>.yml} — the dotted {@code key} is written
+     * into the nested map, other keys preserved, creating the file/locale if new. Edit-gated and
+     * audited; the change is served after the next reload/restart (the catalog is compiled in).
+     */
+    public void setMessage(String locale, String key, String value, String actor) {
+        String tag = requireLocaleTag(locale);
+        String messageKey = requireMessageKey(key);
+        if (readOnly) {
+            throw new TqlException(READ_ONLY, "Studio is read-only; editing messages is disabled");
+        }
+        Path file = resolve("messages/" + tag + ".yml");
+        Map<String, Object> tree = Files.isRegularFile(file)
+                ? mutableCopy(parser.parseTree(file))
+                : new LinkedHashMap<>();
+        String[] segments = messageKey.split("\\.");
+        Map<String, Object> node = tree;
+        for (int i = 0; i < segments.length - 1; i++) {
+            node = childMap(node, segments[i]);
+        }
+        node.put(segments[segments.length - 1], value == null ? "" : value);
+        try {
+            Files.createDirectories(file.getParent());
+            Files.writeString(file, parser.write(tree));
+        } catch (IOException ex) {
+            throw new UncheckedIOException(ex);
+        }
+        recordAudit(actor, "message", "messages/" + tag + ".yml");
+    }
+
+    private static String requireLocaleTag(String locale) {
+        String trimmed = trimToNull(locale);
+        if (trimmed == null || !LOCALE_TAG.matcher(trimmed).matches()) {
+            throw new TqlException(MESSAGE, "Invalid locale tag: " + locale);
+        }
+        return trimmed;
+    }
+
+    private static String requireMessageKey(String key) {
+        String trimmed = trimToNull(key);
+        if (trimmed == null || !MESSAGE_KEY.matcher(trimmed).matches()
+                || trimmed.startsWith(".") || trimmed.endsWith(".")) {
+            throw new TqlException(MESSAGE, "Invalid message key: " + key);
+        }
+        return trimmed;
     }
 
     /**

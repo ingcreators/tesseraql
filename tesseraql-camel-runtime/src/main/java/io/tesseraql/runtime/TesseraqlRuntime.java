@@ -1066,6 +1066,53 @@ public final class TesseraqlRuntime implements AutoCloseable {
                             return model;
                         })
                         .register("studio.tryRun", params -> tryInvoke(port, params))
+                        // i18n message editor (governance/authoring): a key × locale table over the
+                        // app's messages/<locale>.yml catalogs, flagging missing translations; the set
+                        // action upserts one translation (edit-gated + audited). The catalog is
+                        // compiled in, so an edit is served after the next reload/restart.
+                        .register("studio.messages", params -> {
+                            Map<String, Map<String, String>> catalogs = studio.messageCatalogs();
+                            java.util.List<String> locales = new java.util.ArrayList<>(
+                                    catalogs.keySet());
+                            java.util.TreeSet<String> keys = new java.util.TreeSet<>();
+                            catalogs.values().forEach(entries -> keys.addAll(entries.keySet()));
+                            java.util.List<Map<String, Object>> rows = new java.util.ArrayList<>();
+                            int missing = 0;
+                            for (String key : keys) {
+                                java.util.List<Map<String, Object>> cells = new java.util.ArrayList<>();
+                                for (String locale : locales) {
+                                    String value = catalogs.get(locale).get(key);
+                                    boolean isMissing = value == null || value.isBlank();
+                                    if (isMissing) {
+                                        missing++;
+                                    }
+                                    Map<String, Object> cell = new java.util.LinkedHashMap<>();
+                                    cell.put("locale", locale);
+                                    cell.put("value", value == null ? "" : value);
+                                    cell.put("missing", isMissing);
+                                    cells.add(cell);
+                                }
+                                Map<String, Object> row = new java.util.LinkedHashMap<>();
+                                row.put("key", key);
+                                row.put("cells", cells);
+                                rows.add(row);
+                            }
+                            Map<String, Object> model = new java.util.LinkedHashMap<>();
+                            model.put("locales", locales);
+                            model.put("rows", rows);
+                            model.put("keyCount", keys.size());
+                            model.put("localeCount", locales.size());
+                            model.put("missingCount", missing);
+                            model.put("editable", studioAccess.canEdit(params.get("roles")));
+                            return model;
+                        })
+                        .register("studio.messageSet", params -> {
+                            studioAccess.requireEdit(params.get("principalRoles"));
+                            Object value = params.get("value");
+                            studio.setMessage(str(params, "locale"), str(params, "key"),
+                                    value == null ? "" : String.valueOf(value), actorOf(params));
+                            return Map.of("saved", true);
+                        })
                         // New migration page (Studio backlog: migration authoring): the form shows the
                         // next versioned number for the main datasource; the create writes a Flyway
                         // migration under db/…/migration and the result links to the source editor.
