@@ -16,10 +16,12 @@ import org.thymeleaf.messageresolver.IMessageResolver;
  */
 final class CatalogMessageResolver implements IMessageResolver {
 
-    private final MessageCatalog catalog;
+    private final java.nio.file.Path messagesDir;
+    private final MessageCatalog fallback;
 
-    CatalogMessageResolver(MessageCatalog catalog) {
-        this.catalog = catalog;
+    CatalogMessageResolver(java.nio.file.Path messagesDir, MessageCatalog fallback) {
+        this.messagesDir = messagesDir;
+        this.fallback = fallback;
     }
 
     @Override
@@ -39,7 +41,9 @@ final class CatalogMessageResolver implements IMessageResolver {
         String tag = locale == null || locale.getLanguage().isEmpty()
                 ? "en"
                 : locale.toLanguageTag();
-        String message = catalog.resolve(tag, key);
+        // Read the app catalog live (re-parsed only when messages/ changes) so a Studio message edit
+        // is served on the next render without a restart; the framework built-ins are the fallback.
+        String message = MessageCatalog.live(messagesDir).withFallback(fallback).resolve(tag, key);
         if (message == null) {
             return null;
         }

@@ -1068,8 +1068,8 @@ public final class TesseraqlRuntime implements AutoCloseable {
                         .register("studio.tryRun", params -> tryInvoke(port, params))
                         // i18n message editor (governance/authoring): a key × locale table over the
                         // app's messages/<locale>.yml catalogs, flagging missing translations; the set
-                        // action upserts one translation (edit-gated + audited). The catalog is
-                        // compiled in, so an edit is served after the next reload/restart.
+                        // action upserts one translation (edit-gated + audited). The message resolver
+                        // and client catalog read messages/ live, so an edit is served immediately.
                         .register("studio.messages", params -> {
                             Map<String, Map<String, String>> catalogs = studio.messageCatalogs();
                             java.util.List<String> locales = new java.util.ArrayList<>(

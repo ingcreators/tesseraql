@@ -72,8 +72,7 @@ public final class Templates {
             engine.addTemplateResolver(html);
             engine.addTemplateResolver(text);
             engine.setMessageResolver(new CatalogMessageResolver(
-                    io.tesseraql.yaml.i18n.MessageCatalog.load(key.resolve("messages"))
-                            .withFallback(I18nSettings.builtinCatalog())));
+                    key.resolve("messages"), I18nSettings.builtinCatalog()));
             return engine;
         });
     }
