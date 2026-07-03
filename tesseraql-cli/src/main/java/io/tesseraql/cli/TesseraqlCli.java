@@ -71,6 +71,14 @@ public final class TesseraqlCli implements Runnable {
         @Option(names = {"--app"}, required = true, description = "Path to the external app home.")
         Path app;
 
+        @Option(names = {
+                "--log-format"}, paramLabel = "<text|json>", description = "Log line format (default text; json for structured logs).")
+        String logFormat;
+
+        @Option(names = {
+                "--log-level"}, paramLabel = "<level>", description = "Log threshold: trace|debug|info|warn|error (default info).")
+        String logLevel;
+
         @Option(names = {"--port"}, description = "Override the configured HTTP port.")
         Integer port;
 
@@ -92,6 +100,13 @@ public final class TesseraqlCli implements Runnable {
 
         @Override
         public Integer call() throws InterruptedException {
+            // The structured log provider reads these per line (roadmap Phase 45).
+            if (logFormat != null) {
+                System.setProperty("tesseraql.logging.format", logFormat);
+            }
+            if (logLevel != null) {
+                System.setProperty("tesseraql.logging.level", logLevel);
+            }
             // Load any opt-in plugin modules (file-format codecs, drivers, ...) so route compilation
             // and the runtime discover them via the ServiceLoader SPIs (which use this classloader).
             // The declared tesseraql.modules set is resolved into work/modules (lock-verified) and

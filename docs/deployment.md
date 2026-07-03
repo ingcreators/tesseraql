@@ -78,6 +78,18 @@ expand/contract (backward compatible) - the same discipline the canary flow alre
   Cloudflare, or plug a shared TempStore implementation behind the SPI.
 - Framework and app migrations take Flyway's lock, so concurrent node startups serialize.
 
+## Logging
+
+The CLI distribution ships a JDK-only SLF4J provider (roadmap Phase 45): one line per event on
+stderr, plain text by default, `--log-format json` (or `-Dtesseraql.logging.format=json`) for
+structured lines, `--log-level` for the threshold. Every line carries the MDC — the runtime
+puts the request's `traceId`/`spanId` there and Camel bridges them across async steps — so a
+log aggregator correlates each line with the request that produced it. The Spring distribution
+keeps Boot's Logback (add `logstash-logback-encoder` there if you want JSON).
+
+An **opt-in HTTP access log** rides the same correlation: `tesseraql.logging.accessLog: true`
+emits one line per request on the `tesseraql.access` logger —
+`GET /api/users 200 12ms route=users.search user=alice`.
 ## Safety valves and multi-node semantics
 
 **SQL statement timeout.** Every route SQL statement is bounded by default: 30 seconds, the

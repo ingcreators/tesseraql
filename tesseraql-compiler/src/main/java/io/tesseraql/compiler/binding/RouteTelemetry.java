@@ -22,12 +22,21 @@ public final class RouteTelemetry implements Processor {
     private final String method;
     private final String path;
     private final String appName;
+    private final boolean accessLog;
+    private static final org.slf4j.Logger ACCESS = org.slf4j.LoggerFactory
+            .getLogger("tesseraql.access");
 
     public RouteTelemetry(String routeId, String method, String path, String appName) {
+        this(routeId, method, path, appName, false);
+    }
+
+    public RouteTelemetry(String routeId, String method, String path, String appName,
+            boolean accessLog) {
         this.routeId = routeId;
         this.method = method;
         this.path = path;
         this.appName = appName;
+        this.accessLog = accessLog;
     }
 
     @Override
@@ -48,6 +57,11 @@ public final class RouteTelemetry implements Processor {
         io.tesseraql.core.telemetry.SpanContext spanContext = span.context();
         if (spanContext != null) {
             exchange.setProperty(TesseraqlProperties.TRACE_CONTEXT, spanContext);
+            // Trace-id correlation for structured logs (roadmap Phase 45): every line the
+            // request produces on this thread carries the ids; Camel's MDC bridging (enabled
+            // by the runtime) carries them across async steps.
+            org.slf4j.MDC.put("traceId", spanContext.traceId());
+            org.slf4j.MDC.put("spanId", spanContext.spanId());
         }
         exchange.getExchangeExtension().addOnCompletion(new Synchronization() {
             @Override
@@ -83,6 +97,34 @@ public final class RouteTelemetry implements Processor {
         if (outcome.equals("5xx") || outcome.equals("4xx")) {
             meter(exchange).counter("tesseraql.route.errors").increment(labels);
         }
+        if (accessLog) {
+            // The opt-in HTTP access log (roadmap Phase 45): one line per request on the
+            // completion thread, correlated by the same ids as every other log line.
+            Object context = exchange.getProperty(TesseraqlProperties.TRACE_CONTEXT);
+            if (context instanceof io.tesseraql.core.telemetry.SpanContext ids) {
+                org.slf4j.MDC.put("traceId", ids.traceId());
+                org.slf4j.MDC.put("spanId", ids.spanId());
+            }
+            ACCESS.info(accessLine(exchange, status, durationMillis));
+        }
+        org.slf4j.MDC.remove("traceId");
+        org.slf4j.MDC.remove("spanId");
+    }
+
+    /** {@code GET /api/users 200 12ms route=users.search user=alice} — the access-log line. */
+    String accessLine(Exchange exchange, Object status, long durationMillis) {
+        StringBuilder line = new StringBuilder();
+        line.append(method).append(' ').append(path).append(' ')
+                .append(status == null ? "-" : status).append(' ')
+                .append(durationMillis).append("ms route=").append(routeId);
+        Object principal = exchange.getProperty(TesseraqlProperties.PRINCIPAL);
+        if (principal instanceof io.tesseraql.security.Principal who) {
+            String user = who.loginId() != null ? who.loginId() : who.subject();
+            if (user != null) {
+                line.append(" user=").append(user);
+            }
+        }
+        return line.toString();
     }
 
     private static String outcomeClass(Object status, boolean failed) {
