@@ -1768,6 +1768,37 @@ class StudioIntegrationTest {
     }
 
     @Test
+    void migrationLoopCreatesMigratesScaffoldsAndServesWithoutRestart() throws Exception {
+        // The M7 "ten minutes to first screen" loop closed end-to-end (roadmap Phase 42) with no
+        // restart anywhere: author a migration in Studio -> Migrate now applies it to the dev
+        // datasource -> scaffold CRUD from the new table -> the routes mount and serve.
+        String form = "kind=versioned&datasource=main&description=" + enc("studio loop items")
+                + "&ddl=" + enc("create table studio_loop_items ("
+                        + "id bigint generated always as identity primary key, "
+                        + "name varchar(120) not null);");
+        HttpResponse<String> created = postForm("/_tesseraql/studio/ui/migration", form);
+        assertThat(created.statusCode()).isEqualTo(200);
+        assertThat(created.body()).contains("Migration created").contains("Migrate now");
+
+        HttpResponse<String> migrated = postForm("/_tesseraql/studio/ui/migration/migrate",
+                "confirm=true");
+        if (migrated.statusCode() != 200) {
+            System.out.println("DBG migrate403=" + migrated.body());
+        }
+        assertThat(migrated.statusCode()).isEqualTo(200);
+        assertThat(migrated.body()).contains("Pending migrations were applied");
+
+        // The new table is introspectable right away; scaffolding applies and auto-reloads.
+        HttpResponse<String> scaffolded = post(
+                "/_tesseraql/studio/scaffold/apply?table=studio_loop_items&force=false", "",
+                true);
+        assertThat(scaffolded.statusCode()).isEqualTo(200);
+
+        // The instant loop end-to-end: the scaffolded list page serves without a restart.
+        assertThat(get("/studio_loop_items", true).statusCode()).isEqualTo(200);
+    }
+
+    @Test
     void uiMenuPageRendersTheEditorAndFallbackNote() throws Exception {
         // With no config/menu.yml the editor shows the add form and the templates/nav.html fallback.
         Files.deleteIfExists(appHome.resolve("config/menu.yml"));

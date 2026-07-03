@@ -49,22 +49,24 @@ final class AppMigrations {
 
     /**
      * Applies {@code appHome}'s migrations: the main set to the main datasource and every tenant
-     * pool, and each {@code db/<datasource>/migration} set to its named datasource.
+     * pool, and each {@code db/<datasource>/migration} set to its named datasource. Returns the
+     * total number of migrations executed (Studio's "Migrate now" reports it).
      */
-    static void migrate(String appName, Path appHome, AppConfig config,
+    static int migrate(String appName, Path appHome, AppConfig config,
             DataSource mainDataSource, TenantDataSources tenantDataSources,
             Function<String, DataSource> namedDataSources) {
         if (!config.getString("tesseraql.migrations.enabled")
                 .map(Boolean::parseBoolean).orElse(true)) {
             LOG.info("Migrations disabled; skipping db/migration for app {}", appName);
-            return;
+            return 0;
         }
+        int total = 0;
         Path main = appHome.resolve("db/migration");
         if (Files.isDirectory(main)) {
             String historyTable = historyTable(appName);
-            run(main, historyTable, mainDataSource, appName, "main");
+            total += run(main, historyTable, mainDataSource, appName, "main");
             for (String tenantId : tenantDataSources.tenantIds()) {
-                run(main, historyTable,
+                total += run(main, historyTable,
                         tenantDataSources.dataSourceFor(tenantId, mainDataSource),
                         appName, tenantId);
             }
@@ -76,12 +78,13 @@ final class AppMigrations {
                 throw new TqlException(UNKNOWN_DATASOURCE, "db/" + datasource
                         + "/migration has no matching tesseraql.datasources." + datasource);
             }
-            run(migrations, historyTable(appName) + "__" + sanitize(datasource),
+            total += run(migrations, historyTable(appName) + "__" + sanitize(datasource),
                     dataSource, appName, datasource);
         }
+        return total;
     }
 
-    private static void run(Path migrations, String historyTable, DataSource dataSource,
+    private static int run(Path migrations, String historyTable, DataSource dataSource,
             String appName, String target) {
         int applied = Flyway.configure()
                 .dataSource(dataSource)
@@ -97,6 +100,7 @@ final class AppMigrations {
         if (applied > 0) {
             LOG.info("Applied {} migration(s) for app {} on {}", applied, appName, target);
         }
+        return applied;
     }
 
     /** The common directory plus the connected vendor's sibling ({@code migration-<vendor>}). */

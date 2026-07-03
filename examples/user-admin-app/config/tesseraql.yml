@@ -106,6 +106,19 @@ tesseraql:
       tenantClaim: tenant_id
 
     policies:
+      # The starter policies every scaffolded route references (tesseraql new ships the same
+      # block): defining them here keeps "scaffold CRUD from a table" servable out of the box.
+      # The example's ADMIN operator may browse scaffolded slices too.
+      app.read:
+        anyOf:
+          - role: APP_READ
+          - role: ADMIN
+          - permission: app:read
+      app.write:
+        anyOf:
+          - role: APP_WRITE
+          - role: ADMIN
+          - permission: app:write
       users.read:
         anyOf:
           - role: USER_READ

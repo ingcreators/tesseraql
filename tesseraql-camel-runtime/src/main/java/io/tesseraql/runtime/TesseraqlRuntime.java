@@ -1417,6 +1417,23 @@ public final class TesseraqlRuntime implements AutoCloseable {
                                             java.nio.charset.StandardCharsets.UTF_8));
                             return model;
                         })
+                        // Migrate now (roadmap Phase 42): applies the app's pending migrations to
+                        // the dev datasource on demand, closing the schema -> scaffold -> serve
+                        // loop without a process bounce. Same Flyway path as startup (main set +
+                        // tenant pools + named per-datasource sets); edit-gated, confirm-gated
+                        // like apply, and recorded to the audit trail.
+                        .register("studio.migration.migrate", params -> {
+                            studioAccess.requireEdit(params.get("roles"));
+                            studioAccess.requireConfirm(
+                                    "true".equals(String.valueOf(params.get("confirm"))));
+                            int applied = AppMigrations.migrate(appName, appHome,
+                                    manifest.config(), dataSource, tenantDataSources,
+                                    dataSources::get);
+                            studio.recordMigrationRun(actorOf(params), "db/migration");
+                            Map<String, Object> model = new java.util.LinkedHashMap<>();
+                            model.put("applied", applied);
+                            return model;
+                        })
                         // Dry-run a migration's DDL against the sandbox (auto-rollback) before it
                         // lands — gated like the test runner (opt-in enabled); Postgres only.
                         .register("studio.migration.dryRun", params -> {
