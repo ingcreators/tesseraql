@@ -10,7 +10,7 @@
 <div id="page-content" class="hc-stack">
 <section class="hc-card">
   <h2>Scaffold CRUD from a table</h2>
-  <p class="hc-field__message">Generates a table's CRUD slice &mdash; list, detail, and edit pages, 2-way SQL, and a declarative test suite &mdash; from its introspected schema, exactly as the <code>scaffold crud</code> CLI command does. New routes need a restart to be served.</p>
+  <p class="hc-field__message">Generates a table's CRUD slice &mdash; list, detail, and edit pages, 2-way SQL, and a declarative test suite &mdash; from its introspected schema, exactly as the <code>scaffold crud</code> CLI command does. Applying reloads the routes, so the new pages serve immediately.</p>
   <p class="hc-alert" data-variant="info" role="status" th:unless="${scaffold.enabled}" th:text="${scaffold.note}"></p>
   <th:block th:if="${scaffold.enabled}">
     <div class="hc-empty" th:unless="${scaffold.hasTables}"><p class="hc-empty__title">No tables found in the dev datasource.</p></div>

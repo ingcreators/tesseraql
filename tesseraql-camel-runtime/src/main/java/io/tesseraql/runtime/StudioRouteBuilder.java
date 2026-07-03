@@ -128,8 +128,12 @@ final class StudioRouteBuilder extends RouteBuilder {
         from("direct:studio.scaffold.apply").routeId("studio.scaffold.apply")
                 .to(AUTH).process(json(exchange -> {
                     studioAccess.requireEdit(roles(exchange));
-                    return io.tesseraql.studio.StudioViews.scaffoldResult(studioScaffold.apply(
-                            requireTable(exchange), flag(exchange, "force"), actor(exchange)));
+                    Map<String, Object> result = io.tesseraql.studio.StudioViews.scaffoldResult(
+                            studioScaffold.apply(requireTable(exchange), flag(exchange, "force"),
+                                    actor(exchange)));
+                    // The instant loop (roadmap Phase 42): the scaffolded routes mount right away.
+                    reloader.reload();
+                    return result;
                 }));
 
         // The audit trail (backlog D6): who applied or scaffolded what, when (newest first).
@@ -143,8 +147,15 @@ final class StudioRouteBuilder extends RouteBuilder {
                     // force=true overwrites a source that changed under the draft (backlog D5); the
                     // caller is recorded to the audit trail (backlog D6).
                     studio.applyDraft(path, flag(exchange, "force"), actor(exchange));
+                    // The instant loop (roadmap Phase 42): applying serves immediately — the
+                    // reload mounts new routes and rebuilds kept ones, so no restart follows.
+                    RouteReloader.Result reload = reloader.reload();
                     Map<String, Object> result = new LinkedHashMap<>();
                     result.put("applied", path);
+                    result.put("added", reload.added());
+                    result.put("reloaded", reload.reloaded());
+                    result.put("removed", reload.removed());
+                    result.put("failed", reload.failed());
                     return result;
                 }));
 

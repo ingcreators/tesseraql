@@ -42,12 +42,26 @@ public final class ManifestLoader {
 
     /** Loads the manifest rooted at {@code appHome}. */
     public AppManifest load(Path appHome) {
+        return load(appHome, null);
+    }
+
+    /** One route document that failed to parse during a tolerant load (the hot reloader). */
+    public record BrokenRoute(Path source, String error) {
+    }
+
+    /**
+     * Loads the app, tolerating unparseable route documents when {@code brokenSink} is non-null:
+     * each one is reported to the sink (source file and root message) and left out of the manifest
+     * instead of aborting the load. The hot reloader (roadmap Phase 42) uses this so one broken
+     * document on disk cannot take the whole apply-and-reload loop down; startup stays strict.
+     */
+    public AppManifest load(Path appHome, List<BrokenRoute> brokenSink) {
         Path home = appHome.toAbsolutePath().normalize();
         if (!Files.isDirectory(home)) {
             throw new TqlException(LOAD_ERROR, "App home is not a directory: " + home);
         }
         AppConfig config = loadConfig(home);
-        List<RouteFile> routes = loadRoutes(home);
+        List<RouteFile> routes = loadRoutes(home, brokenSink);
         List<JobFile> jobs = loadJobs(home);
         List<ToolFile> tools = new ArrayList<>();
         List<ResourceFile> resources = new ArrayList<>();
@@ -277,7 +291,7 @@ public final class ManifestLoader {
         }
     }
 
-    private List<RouteFile> loadRoutes(Path home) {
+    private List<RouteFile> loadRoutes(Path home, List<BrokenRoute> brokenSink) {
         Path webRoot = home.resolve("web");
         if (!Files.isDirectory(webRoot)) {
             return List.of();
@@ -288,11 +302,29 @@ public final class ManifestLoader {
                     .filter(p -> p.getFileName().toString().endsWith(".yml"))
                     .filter(p -> isMethodFile(p.getFileName().toString()))
                     .sorted()
-                    .forEach(file -> routes.add(toRouteFile(home, webRoot, file)));
+                    .forEach(file -> {
+                        if (brokenSink == null) {
+                            routes.add(toRouteFile(home, webRoot, file));
+                            return;
+                        }
+                        try {
+                            routes.add(toRouteFile(home, webRoot, file));
+                        } catch (RuntimeException ex) {
+                            brokenSink.add(new BrokenRoute(file, rootMessage(ex)));
+                        }
+                    });
         } catch (IOException ex) {
             throw new UncheckedIOException(ex);
         }
         return routes;
+    }
+
+    private static String rootMessage(Throwable ex) {
+        Throwable root = ex;
+        while (root.getCause() != null) {
+            root = root.getCause();
+        }
+        return root.getMessage() == null ? root.toString() : root.getMessage();
     }
 
     private List<JobFile> loadJobs(Path home) {

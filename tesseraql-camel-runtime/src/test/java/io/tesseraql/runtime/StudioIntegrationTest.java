@@ -219,15 +219,30 @@ class StudioIntegrationTest {
         assertThat(preview.statusCode()).isEqualTo(200);
         assertThat(MAPPER.readTree(preview.body()).get("valid").asBoolean()).isTrue();
 
+        // The bound SQL goes in first so the route compiles the moment its document lands.
+        String sqlPath = "web/api/extra/extra.sql";
+        assertThat(post("/_tesseraql/studio/drafts?path=" + enc(sqlPath),
+                "select 1 as value\n", true).statusCode()).isEqualTo(200);
+        assertThat(post("/_tesseraql/studio/apply?path=" + enc(sqlPath), "", true)
+                .statusCode()).isEqualTo(200);
+
         assertThat(post("/_tesseraql/studio/drafts?path=" + enc(path), newRoute, true)
                 .statusCode()).isEqualTo(200);
 
+        // The instant loop (roadmap Phase 42): apply reloads, and the reload now MOUNTS the
+        // brand-new route, so the endpoint serves immediately — no restart.
         HttpResponse<String> apply = post("/_tesseraql/studio/apply?path=" + enc(path), "", true);
         assertThat(apply.statusCode()).isEqualTo(200);
+        assertThat(MAPPER.readTree(apply.body()).get("added"))
+                .anySatisfy(id -> assertThat(id.asText()).isEqualTo("extra.list"));
+        assertThat(get("/api/extra", true).statusCode()).isEqualTo(200);
 
         HttpResponse<String> reload = post("/_tesseraql/studio/reload", "", true);
         assertThat(reload.statusCode()).isEqualTo(200);
-        assertThat(MAPPER.readTree(reload.body()).get("routes"))
+        // Already mounted by the apply above, so this pass rebuilds it as a kept route.
+        assertThat(MAPPER.readTree(reload.body()).get("reloaded"))
+                .anySatisfy(id -> assertThat(id.asText()).isEqualTo("extra.list"));
+        assertThat(MAPPER.readTree(reload.body()).get("explorer").get("routes"))
                 .anySatisfy(route -> assertThat(route.get("id").asText()).isEqualTo("extra.list"));
     }
 

@@ -11,7 +11,7 @@
 <section class="hc-card">
   <h2>Pending drafts</h2>
   <p class="hc-field__message">Unsaved edits held under <code>work/studio/drafts</code>. Open one to review it in the editor, or apply/discard them in bulk here.</p>
-  <p class="hc-alert" data-variant="success" role="status" th:if="${!#strings.isEmpty(applied)}">Applied all clean drafts. New route files need a restart to be served; any conflicting drafts were left below for review.</p>
+  <p class="hc-alert" data-variant="success" role="status" th:if="${!#strings.isEmpty(applied)}">Applied all clean drafts and reloaded &mdash; new routes are serving now; any conflicting drafts were left below for review.</p>
   <p class="hc-alert" data-variant="success" role="status" th:if="${!#strings.isEmpty(discarded)}">Discarded all pending drafts.</p>
   <p class="hc-alert" data-variant="warning" role="status" th:if="${page.hasConflicts}"
      th:text="|${page.conflictCount} draft(s) conflict with a source that changed underneath them — apply-all skips these; open each to review.|"></p>
@@ -21,7 +21,7 @@
   <div class="hc-cluster" th:if="${page.editable and page.hasDrafts}">
     <button type="button" class="hc-button" data-variant="primary"
             hx-post="/_tesseraql/studio/ui/drafts/apply-all" hx-trigger="hc:confirmed"
-            data-hc-confirm="Apply every clean draft? New route files will need a restart to be served."
+            data-hc-confirm="Apply every clean draft? Routes reload and new ones serve immediately."
             data-hc-confirm-title="Apply all clean drafts" data-hc-confirm-label="Apply all">Apply all clean</button>
     <button type="button" class="hc-button" data-variant="ghost"
             hx-post="/_tesseraql/studio/ui/drafts/discard-all" hx-trigger="hc:confirmed"

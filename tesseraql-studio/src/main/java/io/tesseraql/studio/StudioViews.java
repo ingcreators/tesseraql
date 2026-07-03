@@ -202,8 +202,8 @@ public final class StudioViews {
      * The route/job source paths as a nested folder tree (Studio backlog C4), enriched with draft
      * state (Studio sidebar IA): a served route/job whose source has a pending draft is marked
      * {@code edited} (and {@code conflict} when the source moved underneath it), and every new
-     * (not-yet-served) draft is folded in as its own pending node so it is visible before a restart
-     * serves it — closing the gap where a just-created route vanished until applied and restarted.
+     * (not-yet-served) draft is folded in as its own pending node so it is visible before apply
+     * serves it (routes hot-reload since Phase 42).
      */
     private static Map<String, Object> tree(Explorer explorer) {
         Map<String, DraftSummary> draftByPath = new LinkedHashMap<>();
@@ -346,7 +346,7 @@ public final class StudioViews {
         // A route SQL file (web/**/*.sql) can have a generated 2-way SQL snippet inserted (SQL builder).
         model.put("isRouteSql", path != null && path.startsWith("web/") && path.endsWith(".sql"));
         // New vs served (Studio sidebar IA): a draft whose on-disk source does not exist yet is a
-        // not-yet-served route — applying writes the file and a restart serves it, where editing an
+        // not-yet-served route — applying writes the file and serves it (Phase 42), where editing an
         // existing route reloads live on apply. The editor states which, so the consequence is clear.
         model.put("isNew", hasDraft && sourceContent == null);
         // The hc-code data-lang grammar for live-highlighting the editable field (Studio backlog E).

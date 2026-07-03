@@ -13,7 +13,7 @@
   <div class="hc-drawer__body">
     <form id="new-route-form" class="hc-stack" method="post" action="/_tesseraql/studio/ui/new">
       <input type="hidden" name="_csrf" th:value="${_csrf}">
-      <p class="hc-field__message">Creates a starter route as a draft and opens it in the editor to finish. A new route needs a restart to be served.</p>
+      <p class="hc-field__message">Creates a starter route as a draft and opens it in the editor to finish. Applying serves it immediately (routes hot-reload).</p>
       <div class="hc-field">
         <label class="hc-field__label" for="new-route-path">Path</label>
         <input class="hc-input" id="new-route-path" type="text" name="path" required autofocus

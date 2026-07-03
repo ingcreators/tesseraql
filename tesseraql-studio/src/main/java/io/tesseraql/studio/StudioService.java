@@ -637,7 +637,7 @@ public final class StudioService {
      * <p>Generation is the same pure {@link CrudScaffolder} the preview and the CLI use, so the
      * written files are byte-identical across all three. Newly written route documents
      * ({@code web/**}/{@code <method>.yml} the manifest did not already declare) are reported
-     * separately: the hot reloader only swaps existing routes, so serving a new route needs a restart
+     * separately: since Phase 42 the hot reloader also mounts new routes, so applying serves immediately
      * (design ch. 16.8).
      */
     public ScaffoldResult scaffoldApply(TableSchema table, boolean force) {
@@ -672,7 +672,7 @@ public final class StudioService {
      * Creates a new route from a starter skeleton for the given {@code recipe} (Studio backlog B3):
      * it saves the skeleton as a draft at {@code path} — a {@code web/**}/{@code <method>.yml} file
      * that must not already exist — so the source editor's validate → apply flow then finishes
-     * creating it (the new route needs a restart to be served, like any newly added route). Rejected
+     * creating it (applying serves it immediately — routes hot-reload since Phase 42). Rejected
      * in read-only mode. Returns the draft path.
      */
     public Path newRouteDraft(String path, String recipe) {
@@ -1079,7 +1079,9 @@ public final class StudioService {
      * (design ch. 16.8). Returns the refreshed explorer.
      */
     public Explorer reload() {
-        this.manifest = new ManifestLoader().load(appHome);
+        // Tolerant of unparseable route documents (they surface through the hot reloader's
+        // failure report; the explorer keeps showing everything that still parses).
+        this.manifest = new ManifestLoader().load(appHome, new java.util.ArrayList<>());
         this.appHome = manifest.appHome();
         return explorer();
     }
