@@ -8,6 +8,15 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **Marketplace admission profile** (roadmap Phase 47, first slice — realizing the Phase 37
+  admission gate): `tesseraql admission --app .` and the `tesseraql:admission` Maven goal run
+  the machine-checkable bar a shared app must clear — declarative-only (no plugin jars, no
+  service bindings, no unauthenticated writes), deny-by-default policies actually defined
+  (the `TQL-SEC-4030` warning is promoted to a failure), bounded egress (no bare `*`),
+  CSP on every HTML page (documented `/fragments/` convention exempt), governance approvals
+  current, and zero lint errors (`TQL-ADM-4701..4706`; see `docs/admission.md`). Dogfooded:
+  the shipped example apps are held to the bar in CI — which immediately caught and fixed a
+  real gap (the user-admin example's admin page served HTML without CSP headers).
 - **Release diff — "what does this deploy change"** (roadmap Phase 46, final slice — the
   phase is complete; the promotion recipe is documented in
   [docs/promotion.md](docs/promotion.md)): `ReleaseDiff` compares

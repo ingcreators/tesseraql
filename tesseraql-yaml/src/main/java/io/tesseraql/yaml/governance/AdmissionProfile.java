@@ -1,0 +1,141 @@
+package io.tesseraql.yaml.governance;
+
+import io.tesseraql.yaml.lint.AppLinter;
+import io.tesseraql.yaml.lint.LintFinding;
+import io.tesseraql.yaml.manifest.AppManifest;
+import io.tesseraql.yaml.manifest.ManifestLoader;
+import io.tesseraql.yaml.manifest.RouteFile;
+import io.tesseraql.yaml.model.ResponseSpec;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.stream.Stream;
+
+/**
+ * The marketplace admission profile (roadmap Phase 47, realizing Phase 37's admission gate):
+ * the machine-checkable bar a shared app must clear before anyone else runs it. It composes
+ * the primitives that already exist — {@link AppLinter} and {@link GovernanceGate} — and adds
+ * the marketplace-specific constraints the roadmap names: declarative-only (the framework is
+ * the sandbox), deny-by-default policies actually defined, egress bounded, and CSP intact on
+ * every HTML surface. Pure file reads; deterministic; fit for CI and the publish pipeline.
+ */
+public final class AdmissionProfile {
+
+    private AdmissionProfile() {
+    }
+
+    /** One admission failure: a {@code TQL-ADM-47xx} code, the subject, and the reason. */
+    public record Finding(String code, String subject, String reason) {
+    }
+
+    /** The full admission outcome; {@code admitted()} is true only with zero failures. */
+    public record Report(List<Finding> failures, List<LintFinding> lintErrors,
+            List<GovernanceGate.Violation> governanceViolations) {
+
+        public boolean admitted() {
+            return failures.isEmpty();
+        }
+    }
+
+    /** Runs the profile over an app tree. */
+    public static Report check(Path appHome) {
+        List<Finding> failures = new ArrayList<>();
+
+        // 1. The linter's errors are admission failures wholesale (TQL-ADM-4706), and the
+        // deny-by-default warning — a route referencing a policy the config does not define
+        // (TQL-SEC-4030) — is PROMOTED to a failure: "another environment defines it" is an
+        // acceptable answer inside one team, not for an app strangers will run.
+        List<LintFinding> findings = new AppLinter().lint(appHome);
+        List<LintFinding> lintErrors = findings.stream().filter(LintFinding::isError).toList();
+        for (LintFinding finding : lintErrors) {
+            failures.add(new Finding("TQL-ADM-4706", finding.location(),
+                    finding.code() + ": " + finding.message()));
+        }
+        findings.stream()
+                .filter(finding -> "TQL-SEC-4030".equals(finding.code()))
+                .forEach(finding -> failures.add(new Finding("TQL-ADM-4702",
+                        finding.location(),
+                        "deny-by-default requires the policy to be DEFINED here: "
+                                + finding.message())));
+
+        AppManifest manifest = new ManifestLoader().load(appHome);
+
+        // 2. Governance: unapproved review-worthy surfaces fail; beyond the gate, any
+        // 'advanced' (unauthenticated write) or 'extended' (Java service binding) mode fails
+        // the declarative-only constraint outright — the framework is the sandbox only when
+        // every behavior is interpreted from the documents.
+        GovernanceGate.Report governance = new GovernanceGate(manifest).check(manifest);
+        for (GovernanceGate.Violation violation : governance.violations()) {
+            failures.add(new Finding("TQL-ADM-4705", violation.routeId(), violation.reason()));
+        }
+        for (RouteGovernance.Assessment assessment : governance.assessments()) {
+            if ("advanced".equals(assessment.mode())) {
+                failures.add(new Finding("TQL-ADM-4701", assessment.routeId(),
+                        "unauthenticated write surface (mode advanced): "
+                                + String.join(", ", assessment.riskFactors())));
+            } else if ("extended".equals(assessment.mode())) {
+                failures.add(new Finding("TQL-ADM-4701", assessment.routeId(),
+                        "binds a runtime service provider (mode extended); marketplace apps"
+                                + " are declarative-only"));
+            }
+        }
+
+        // 3. Declarative-only, jar edition: no plugin jars may ride along.
+        Path plugins = appHome.resolve(
+                manifest.config().getString("tesseraql.plugins.dir").orElse("plugins"));
+        if (Files.isDirectory(plugins)) {
+            try (Stream<Path> jars = Files.list(plugins)) {
+                if (jars.anyMatch(jar -> jar.getFileName().toString().endsWith(".jar"))) {
+                    failures.add(new Finding("TQL-ADM-4701", relative(appHome, plugins),
+                            "plugin jars are not admissible; marketplace apps are"
+                                    + " declarative-only"));
+                }
+            } catch (IOException ignored) {
+                // an unreadable plugins dir cannot prove jars absent
+                failures.add(new Finding("TQL-ADM-4701", relative(appHome, plugins),
+                        "plugins directory is unreadable"));
+            }
+        }
+
+        // 4. Egress must be bounded: a lone "*" is not an allow-list.
+        for (String key : new String[]{"tesseraql.http.outbound.allowedHosts",
+                "tesseraql.connectors.poll.allowedHosts"}) {
+            Object hosts = manifest.config().navigate(key);
+            if (hosts instanceof List<?> list && list.stream()
+                    .anyMatch(host -> "*".equals(String.valueOf(host).trim()))) {
+                failures.add(new Finding("TQL-ADM-4703", key,
+                        "a bare '*' egress entry is unbounded; list hosts or *.domain"
+                                + " wildcards"));
+            }
+        }
+
+        // 5. CSP intact on every HTML PAGE the app serves. Fragment routes (the documented
+        // /fragments/ URL convention, design ch. 4.2) are exempt: a fragment swaps into a
+        // page whose own CSP already governs the document.
+        for (RouteFile route : manifest.routes()) {
+            ResponseSpec response = route.definition().response();
+            ResponseSpec.HtmlResponse html = response == null ? null : response.html();
+            if (html == null || route.urlPath().contains("/fragments/")) {
+                continue;
+            }
+            boolean hasCsp = html.headers() != null && html.headers().keySet().stream()
+                    .anyMatch("Content-Security-Policy"::equalsIgnoreCase);
+            if (!hasCsp) {
+                failures.add(new Finding("TQL-ADM-4704",
+                        relative(appHome, route.source()),
+                        "HTML response without a Content-Security-Policy header"));
+            }
+        }
+
+        failures.sort(java.util.Comparator.comparing(Finding::code)
+                .thenComparing(Finding::subject));
+        return new Report(failures, lintErrors, governance.violations());
+    }
+
+    private static String relative(Path appHome, Path path) {
+        return appHome.toAbsolutePath().normalize()
+                .relativize(path.toAbsolutePath().normalize()).toString().replace('\\', '/');
+    }
+}

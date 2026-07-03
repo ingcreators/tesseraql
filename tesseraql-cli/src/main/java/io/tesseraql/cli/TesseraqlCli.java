@@ -33,6 +33,7 @@ import picocli.CommandLine.Option;
         SchemaCommand.class,
         ReleaseDiffCommand.class,
         GovernanceCommand.class,
+        AdmissionCommand.class,
         MigrateCommand.class,
         IdentitySchemaCommand.class,
         PackageCommand.class,
