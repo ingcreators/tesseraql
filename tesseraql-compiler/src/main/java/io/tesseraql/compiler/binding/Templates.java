@@ -40,6 +40,20 @@ public final class Templates {
 
     private static TemplateEngine engineFor(Path root) {
         return ENGINES.computeIfAbsent(root, key -> {
+            // The view-pattern override chain (docs/declarative-views.md, customization ladder
+            // L2): an app shadows a framework view pattern by dropping the same-named file under
+            // its templates/ directory (templates/tql/view/form.html restyles every form). Checked
+            // ahead of the classpath resolver, falling through when the app ships no override.
+            FileTemplateResolver viewOverrides = new FileTemplateResolver();
+            viewOverrides.setPrefix(key.resolve("templates") + java.io.File.separator);
+            viewOverrides.setSuffix(".html");
+            viewOverrides.setTemplateMode(TemplateMode.HTML);
+            viewOverrides.setResolvablePatterns(java.util.Set.of("tql/view/*"));
+            viewOverrides.setCharacterEncoding("UTF-8");
+            viewOverrides.setCacheable(true);
+            viewOverrides.setCheckExistence(true);
+            viewOverrides.setOrder(0);
+
             // Framework-shared fragments (the tql/* namespace, e.g. the hc-shell page layout)
             // resolve from the classpath so every app can th:replace them without copying.
             org.thymeleaf.templateresolver.ClassLoaderTemplateResolver shared = new org.thymeleaf.templateresolver.ClassLoaderTemplateResolver(
@@ -50,7 +64,7 @@ public final class Templates {
             shared.setResolvablePatterns(java.util.Set.of("tql/*"));
             shared.setCharacterEncoding("UTF-8");
             shared.setCacheable(true);
-            shared.setOrder(0);
+            shared.setOrder(1);
 
             FileTemplateResolver html = new FileTemplateResolver();
             html.setPrefix(key.toString() + java.io.File.separator);
@@ -58,16 +72,17 @@ public final class Templates {
             html.setResolvablePatterns(java.util.Set.of("*.html"));
             html.setCharacterEncoding("UTF-8");
             html.setCacheable(true);
-            html.setOrder(1);
+            html.setOrder(2);
 
             FileTemplateResolver text = new FileTemplateResolver();
             text.setPrefix(key.toString() + java.io.File.separator);
             text.setTemplateMode(TemplateMode.TEXT);
             text.setCharacterEncoding("UTF-8");
             text.setCacheable(true);
-            text.setOrder(2);
+            text.setOrder(3);
 
             TemplateEngine engine = new TemplateEngine();
+            engine.addTemplateResolver(viewOverrides);
             engine.addTemplateResolver(shared);
             engine.addTemplateResolver(html);
             engine.addTemplateResolver(text);

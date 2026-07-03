@@ -42,6 +42,7 @@ public final class HtmlResponseRenderer implements Processor {
     private final Path appHome;
     private final String templateName;
     private final String defaultLocaleTag;
+    private final ViewBinding viewBinding;
     private final Map<String, Expr> headerGuards;
     private final ObjectMapper mapper = new ObjectMapper();
 
@@ -51,9 +52,25 @@ public final class HtmlResponseRenderer implements Processor {
 
     public HtmlResponseRenderer(HtmlResponse response, Path appHome, Path routeDir,
             String defaultLocaleTag) {
+        this(response, appHome, routeDir, defaultLocaleTag, null);
+    }
+
+    /**
+     * @param viewBinding the compiled {@code response.html.view} reference (roadmap Phase 39), or
+     *                    null when the route renders a hand-written {@code template:}
+     */
+    public HtmlResponseRenderer(HtmlResponse response, Path appHome, Path routeDir,
+            String defaultLocaleTag, ViewBinding viewBinding) {
         this.response = response;
         this.appHome = appHome.toAbsolutePath().normalize();
-        this.templateName = resolveTemplate(this.appHome, routeDir, response.template());
+        this.viewBinding = viewBinding;
+        if (viewBinding != null && response.template() != null) {
+            throw new TqlException(new TqlErrorCode(TqlDomain.VIEW, 3302),
+                    "response.html declares both template: and view: — they are mutually exclusive");
+        }
+        this.templateName = viewBinding != null
+                ? viewBinding.entryTemplate()
+                : resolveTemplate(this.appHome, routeDir, response.template());
         this.defaultLocaleTag = defaultLocaleTag;
         // Pre-compile each header's optional guard expression so a syntax error fails the build.
         this.headerGuards = new LinkedHashMap<>();
@@ -90,9 +107,20 @@ public final class HtmlResponseRenderer implements Processor {
                 TesseraqlProperties.CONTEXT, Map.of(), Map.class);
         EvaluationContext evaluation = new EvaluationContext(context);
 
+        // The negotiated request locale (roadmap Phase 22) drives #{key} lookups, #locale, and
+        // the view model's resolved labels.
+        String tag = exchange.getProperty(TesseraqlProperties.LOCALE, defaultLocaleTag,
+                String.class);
+
         Map<String, Object> model = new LinkedHashMap<>();
-        response.model().forEach((key, expr) -> model.put(key,
-                evaluation.resolve(Arrays.asList(String.valueOf(expr).split("\\.")))));
+        if (viewBinding != null) {
+            // A declarative view (roadmap Phase 39): the reserved `v` model is the whole contract
+            // between the route and the tql/view/* pattern fragments.
+            model.put("v", viewBinding.model(context, java.util.Locale.forLanguageTag(tag)));
+        } else {
+            response.model().forEach((key, expr) -> model.put(key,
+                    evaluation.resolve(Arrays.asList(String.valueOf(expr).split("\\.")))));
+        }
 
         // Publish the browser session's CSRF token (stashed on authentication) as the reserved
         // model variable `_csrf`, so the shell can emit <meta name="csrf-token"> for the
@@ -130,9 +158,6 @@ public final class HtmlResponseRenderer implements Processor {
             }
         }
 
-        // The negotiated request locale (roadmap Phase 22) drives #{key} lookups and #locale.
-        String tag = exchange.getProperty(TesseraqlProperties.LOCALE, defaultLocaleTag,
-                String.class);
         String html = Templates.render(appHome, templateName, model,
                 java.util.Locale.forLanguageTag(tag));
 
@@ -189,7 +214,7 @@ public final class HtmlResponseRenderer implements Processor {
         return value;
     }
 
-    private static String interpolateString(String template, EvaluationContext evaluation) {
+    static String interpolateString(String template, EvaluationContext evaluation) {
         Matcher matcher = PLACEHOLDER.matcher(template);
         StringBuilder out = new StringBuilder();
         while (matcher.find()) {

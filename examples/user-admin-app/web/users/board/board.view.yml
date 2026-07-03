@@ -1,0 +1,13 @@
+# A declarative view (roadmap Phase 39, docs/declarative-views.md): the page renders
+# through the framework's tql/view/list pattern — no hand-written template. Columns
+# select and label the query's result set; omit columns: to render them all.
+version: tesseraql/v1
+id: users.board
+kind: view
+view: list
+title: Users board
+columns:
+  - name: name
+    label: Name
+  - name: status
+    label: Status

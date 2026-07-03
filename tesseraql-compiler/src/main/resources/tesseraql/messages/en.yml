@@ -22,6 +22,9 @@ tql:
     stale: >-
       The record may have been changed or deleted by another user; reload it and retry
       the operation.
+  view:
+    submit: Save
+    empty: No rows
   http:
     "400": Bad Request
     "401": Unauthorized

@@ -137,7 +137,7 @@ public record ResponseSpec(JsonResponse json, HtmlResponse html, StreamResponse 
      *                 response
      */
     @JsonIgnoreProperties(ignoreUnknown = true)
-    public record HtmlResponse(Integer status, String template,
+    public record HtmlResponse(Integer status, String template, String view,
             java.util.Map<String, Object> model, java.util.Map<String, Object> headers,
             java.util.Map<String, String> headersWhen) {
 

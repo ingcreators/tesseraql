@@ -45,6 +45,7 @@ public final class RouteCompiler {
     private static final long DEFAULT_IDEMPOTENCY_TTL = java.time.Duration.ofHours(24).toMillis();
 
     private AppConfig config;
+    private AppManifest manifest;
     private java.nio.file.Path compiledAppHome;
     private io.tesseraql.compiler.binding.TenancySettings tenancy;
     private io.tesseraql.compiler.binding.I18nSettings i18n;
@@ -76,6 +77,7 @@ public final class RouteCompiler {
     public RouteBuilder compile(AppManifest manifest, boolean mountRest,
             java.util.Set<String> onlyRouteIds) {
         this.config = manifest.config();
+        this.manifest = manifest;
         this.compiledAppHome = manifest.appHome();
         this.tenancy = io.tesseraql.compiler.binding.TenancySettings.from(config);
         this.i18n = io.tesseraql.compiler.binding.I18nSettings.from(config, manifest.appHome());
@@ -766,10 +768,29 @@ public final class RouteCompiler {
             route.process(new io.tesseraql.compiler.binding.FileResponseRenderer(
                     routeFile.definition().response().file(), appHome, routeDir));
         } else {
-            route.process(new HtmlResponseRenderer(
-                    routeFile.definition().response().html(), appHome, routeDir,
-                    i18n.defaultTag()));
+            var html = routeFile.definition().response().html();
+            // A declarative view (roadmap Phase 39): compile the response.html.view reference —
+            // parse + validate the document and derive a form's fields from its action route's
+            // input: block — so a bad view fails the build, not the request.
+            io.tesseraql.compiler.binding.ViewBinding viewBinding = html != null
+                    && html.view() != null
+                            ? io.tesseraql.compiler.binding.ViewBinding.of(appHome, routeDir,
+                                    html.view(), this::postRouteByPath)
+                            : null;
+            route.process(new HtmlResponseRenderer(html, appHome, routeDir,
+                    i18n.defaultTag(), viewBinding));
         }
+    }
+
+    /** The POST route serving a path — a form view's {@code action:} target. */
+    private RouteDefinition postRouteByPath(String path) {
+        for (RouteFile candidate : manifest.routes()) {
+            if ("POST".equalsIgnoreCase(candidate.httpMethod())
+                    && candidate.urlPath().equals(path)) {
+                return candidate.definition();
+            }
+        }
+        return null;
     }
 
     /** Builds the common route head: REST endpoint, security, request binding, SQL execution. */

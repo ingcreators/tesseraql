@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<!-- The framework list-view pattern (roadmap Phase 39, docs/declarative-views.md): renders a
+     declarative `view: list` document as an hc-datagrid — columns × rows with per-row links,
+     scrolling horizontally with a sticky header, no JS. The `v` model shape and this markup are
+     the public rendering contract; an app overrides the pattern by shipping
+     templates/tql/view/list.html (customization ladder L2). -->
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{tql/shell :: shell(${v.title}, ~{}, ~{}, ~{:: #page-content})}">
+<div id="page-content" class="hc-stack">
+<section class="hc-card" th:fragment="view(v)">
+  <h2 th:text="${v.title}">List</h2>
+  <div th:id="|${v.id}-table|" class="hc-datagrid">
+    <div class="hc-datagrid__scroll">
+      <table class="hc-datagrid__table">
+        <thead class="hc-datagrid__head">
+          <tr>
+            <th class="hc-datagrid__headcell" th:each="c : ${v.columns}"
+                th:text="${c.label}">Column</th>
+          </tr>
+        </thead>
+        <tbody class="hc-datagrid__body">
+          <tr class="hc-datagrid__row" th:each="r : ${v.rows}">
+            <td class="hc-datagrid__cell" th:each="cell : ${r}">
+              <a th:if="${cell.href != null}" th:href="${cell.href}"
+                 th:text="${cell.text}">value</a>
+              <span th:if="${cell.href == null}" th:text="${cell.text}">value</span>
+            </td>
+          </tr>
+          <tr th:if="${#lists.isEmpty(v.rows)}">
+            <td class="hc-datagrid__cell"
+                th:attr="colspan=${#lists.isEmpty(v.columns) ? 1 : #lists.size(v.columns)}"
+                th:text="#{tql.view.empty}">No rows</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+</div>
+</html>

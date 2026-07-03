@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<!-- The framework form-view pattern (roadmap Phase 39, docs/declarative-views.md): renders a
+     declarative `view: form` document through the blessed mutating-form recipe
+     (docs/hypermedia-ui.md) — htmx post with inline field errors and a no-JS fallback. The `v`
+     model shape and this file's markup are the public rendering contract; an app overrides the
+     whole pattern by shipping templates/tql/view/form.html (customization ladder L2). -->
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{tql/shell :: shell(${v.title}, ~{}, ~{}, ~{:: #page-content})}">
+<div id="page-content" class="hc-stack">
+<section class="hc-card">
+  <h2 th:text="${v.title}">Form</h2>
+  <form th:id="${v.formId}" method="post" th:action="${v.action}" th:fragment="view(v)"
+        th:attr="hx-post=${v.action},hx-target=|#${v.formId}-errors|"
+        hx-swap="innerHTML"
+        hx-disabled-elt="find button[type=submit]" hx-indicator="find .hc-spinner">
+    <input type="hidden" name="_csrf" th:if="${_csrf != null}" th:value="${_csrf}">
+    <div th:id="|${v.formId}-errors|"></div>
+    <div class="hc-stack">
+      <th:block th:each="f : ${v.fields}">
+        <th:block th:replace="~{tql/view/field :: field(${f})}"/>
+      </th:block>
+      <span class="hc-action">
+        <button type="submit" class="hc-button" data-variant="primary"
+                th:text="#{tql.view.submit}">Save</button>
+        <span class="hc-spinner htmx-indicator" aria-hidden="true"></span>
+      </span>
+    </div>
+  </form>
+</section>
+</div>
+</html>

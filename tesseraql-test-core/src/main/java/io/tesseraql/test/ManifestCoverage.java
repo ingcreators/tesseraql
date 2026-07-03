@@ -86,6 +86,17 @@ public final class ManifestCoverage {
     }
 
     /**
+     * View coverage (roadmap Phase 39): routes rendering a declarative view
+     * ({@code response.html.view}) — declared and covered like routes, so a suite must exercise
+     * every view-backed route. Gated via {@code coverage.thresholds.view}.
+     */
+    public static ItemCoverage view(AppManifest manifest, List<TestSuite> suites) {
+        return routeKind("view", manifest, suites, definition -> definition.response() != null
+                && definition.response().html() != null
+                && definition.response().html().view() != null);
+    }
+
+    /**
      * Queue-consume coverage (roadmap Phase 27): every {@code queue-consume} route under
      * {@code consume/} is declared, and one counts as covered when a suite exercises its SQL — the
      * same SQL-file basis as route coverage, since a consumer is a command pipeline triggered by a
