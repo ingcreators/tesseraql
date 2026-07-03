@@ -83,12 +83,14 @@ public final class InputBinder {
 
     private static Object validate(String name, InputField field, Object value) {
         if (value instanceof Number number) {
-            long asLong = number.longValue();
-            if (field.min() != null && asLong < field.min()) {
+            // Decimal-exact bounds (roadmap Phase 40): 5.9 violates max: 5, and fractional
+            // bounds like min: 0.5 are declarable — no long truncation.
+            java.math.BigDecimal decimal = new java.math.BigDecimal(number.toString());
+            if (field.min() != null && decimal.compareTo(field.min()) < 0) {
                 throw reject(name, "min", Map.of("min", field.min()),
                         "Input '" + name + "' below minimum " + field.min());
             }
-            if (field.max() != null && asLong > field.max()) {
+            if (field.max() != null && decimal.compareTo(field.max()) > 0) {
                 throw reject(name, "max", Map.of("max", field.max()),
                         "Input '" + name + "' above maximum " + field.max());
             }
@@ -97,6 +99,18 @@ public final class InputBinder {
             if (field.maxLength() != null && string.length() > field.maxLength()) {
                 throw reject(name, "maxLength", Map.of("maxLength", field.maxLength()),
                         "Input '" + name + "' exceeds maxLength " + field.maxLength());
+            }
+            if (field.minLength() != null && string.length() < field.minLength()) {
+                throw reject(name, "minLength", Map.of("minLength", field.minLength()),
+                        "Input '" + name + "' is shorter than minLength " + field.minLength());
+            }
+            if (field.pattern() != null && !compiled(field.pattern()).matcher(string).matches()) {
+                throw reject(name, "pattern", Map.of("pattern", field.pattern()),
+                        "Input '" + name + "' does not match the declared pattern");
+            }
+            if (field.hasStringFormat() && !matchesFormat(field.format(), string)) {
+                throw reject(name, field.format(), Map.of(),
+                        "Input '" + name + "' is not a valid " + field.format());
             }
             if (field.enumValues() != null && !field.enumValues().isEmpty()
                     && !field.enumValues().contains(string)) {
@@ -139,6 +153,47 @@ public final class InputBinder {
             throw reject(name, type, params,
                     "Input '" + name + "' is not a valid " + type + ": " + raw);
         }
+    }
+
+    private static final java.util.concurrent.ConcurrentHashMap<String, java.util.regex.Pattern> PATTERNS = new java.util.concurrent.ConcurrentHashMap<>();
+
+    /** Compiles (and caches) a declared {@code pattern:}; the lint pre-checks the syntax. */
+    private static java.util.regex.Pattern compiled(String pattern) {
+        return PATTERNS.computeIfAbsent(pattern, java.util.regex.Pattern::compile);
+    }
+
+    /**
+     * Pragmatic, JDK-only semantic formats (roadmap Phase 40): {@code email} is
+     * local@domain.tld shaped, {@code uuid} parses via {@link java.util.UUID}, {@code url}
+     * needs an absolute http(s) URI with a host.
+     */
+    static boolean matchesFormat(String format, String value) {
+        return switch (format) {
+            case "email" -> value.matches("[^@\\s]+@[^@\\s]+\\.[^@\\s]+");
+            case "uuid" -> {
+                try {
+                    java.util.UUID.fromString(value);
+                    yield true;
+                } catch (IllegalArgumentException ex) {
+                    yield false;
+                }
+            }
+            case "url" -> {
+                try {
+                    java.net.URI uri = java.net.URI.create(value);
+                    yield ("http".equals(uri.getScheme()) || "https".equals(uri.getScheme()))
+                            && uri.getHost() != null;
+                } catch (IllegalArgumentException ex) {
+                    yield false;
+                }
+            }
+            default -> true;
+        };
+    }
+
+    /** The conditional-required rejection ({@code requiredWhen}, roadmap Phase 40). */
+    static TqlException missingRequired(String name) {
+        return reject(name, "required", Map.of(), "Missing required input '" + name + "'");
     }
 
     /** A field-scoped rejection: stable code, localizable message key, constraint params. */

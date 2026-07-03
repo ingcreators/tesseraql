@@ -88,7 +88,57 @@ public final class AppLinter {
         lintAttachments(appHome, manifest, findings);
         lintObjectStorageEgress(appHome, manifest, findings);
         lintViews(appHome, manifest, findings);
+        for (RouteFile route : manifest.routes()) {
+            lintInputs(appHome, route, findings);
+        }
         return findings;
+    }
+
+    /**
+     * Validates the declared-input vocabulary (roadmap Phase 40): a {@code head.yml}/
+     * {@code options.yml} route is rejected here with a clear code instead of failing deep in
+     * the route compiler ({@code TQL-YAML-1011}); a {@code pattern:} must compile
+     * ({@code TQL-YAML-1012}); a string field's {@code format:} must be a known semantic
+     * validator ({@code TQL-YAML-1013}); and a {@code requiredWhen:} must parse in the core
+     * expression language ({@code TQL-YAML-1014}).
+     */
+    private void lintInputs(Path appHome, RouteFile route, List<LintFinding> findings) {
+        String source = appHome.relativize(route.source()).toString().replace('\\', '/');
+        String method = route.httpMethod();
+        if ("HEAD".equalsIgnoreCase(method) || "OPTIONS".equalsIgnoreCase(method)) {
+            findings.add(new LintFinding("TQL-YAML-1011", "error", source,
+                    "HEAD/OPTIONS route files are not servable — remove " + source));
+        }
+        if (route.definition().input() == null) {
+            return;
+        }
+        route.definition().input().forEach((name, field) -> {
+            if (field.pattern() != null) {
+                try {
+                    java.util.regex.Pattern.compile(field.pattern());
+                } catch (java.util.regex.PatternSyntaxException ex) {
+                    findings.add(new LintFinding("TQL-YAML-1012", "error", source,
+                            "input " + name + ": pattern does not compile: " + ex.getMessage()));
+                }
+            }
+            if ((field.type() == null || "string".equals(field.type())) && field.format() != null
+                    && !io.tesseraql.yaml.model.InputField.STRING_FORMATS
+                            .contains(field.format())) {
+                findings.add(new LintFinding("TQL-YAML-1013", "error", source,
+                        "input " + name + ": unknown string format " + field.format()
+                                + " (known: "
+                                + io.tesseraql.yaml.model.InputField.STRING_FORMATS + ")"));
+            }
+            if (field.requiredWhen() != null && !field.requiredWhen().isBlank()) {
+                try {
+                    io.tesseraql.core.expr.ExpressionParser.parse(field.requiredWhen());
+                } catch (RuntimeException ex) {
+                    findings.add(new LintFinding("TQL-YAML-1014", "error", source,
+                            "input " + name + ": requiredWhen does not parse: "
+                                    + ex.getMessage()));
+                }
+            }
+        });
     }
 
     /**

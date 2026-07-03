@@ -55,7 +55,8 @@ public record RouteSpec(
      * @param format       the parse/format pattern (date/number inputs), or {@code null}
      */
     public record Input(String name, String type, boolean required, Object defaultValue,
-            Integer min, Integer max, Integer maxLength, List<String> enumValues, String format) {
+            java.math.BigDecimal min, java.math.BigDecimal max, Integer maxLength,
+            List<String> enumValues, String format) {
 
         public Input {
             enumValues = enumValues == null ? List.of() : List.copyOf(enumValues);

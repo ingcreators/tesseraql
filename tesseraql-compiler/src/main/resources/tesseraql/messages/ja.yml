@@ -6,6 +6,11 @@ tql:
     max: "{max} 以下で入力してください。"
     maxLength: "{maxLength} 文字以内で入力してください。"
     enum: "次のいずれかを指定してください: {options}"
+    pattern: 形式が正しくありません。
+    minLength: "{minLength} 文字以上で入力してください。"
+    email: メールアドレスの形式が正しくありません。
+    uuid: UUIDの形式が正しくありません。
+    url: http(s) URLの形式が正しくありません。
     integer: 整数で入力してください。
     number: 数値で入力してください。
     date: 日付の形式が正しくありません。

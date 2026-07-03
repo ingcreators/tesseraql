@@ -17,7 +17,9 @@ import org.junit.jupiter.api.Test;
 class DocViewsTest {
 
     private static RouteEntry searchRoute() {
-        RouteSpec.Input limit = new RouteSpec.Input("limit", "integer", false, 50, 1, 200, null,
+        RouteSpec.Input limit = new RouteSpec.Input("limit", "integer", false, 50,
+                new java.math.BigDecimal(1),
+                new java.math.BigDecimal(200), null,
                 List.of(), null);
         RouteSpec.SqlStatement sql = new RouteSpec.SqlStatement("sql", "search.sql", null, null,
                 "query", "select 1", List.of("q", "limit"),

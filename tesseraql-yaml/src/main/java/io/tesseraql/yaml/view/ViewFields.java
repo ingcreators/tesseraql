@@ -28,7 +28,8 @@ public final class ViewFields {
 
     /** A form field ready to render: the derived input constraints plus presentation. */
     public record FieldDef(String name, String labelKey, String labelFallback, String widget,
-            boolean required, Integer maxLength, Integer min, Integer max, List<String> options,
+            boolean required, Integer maxLength, java.math.BigDecimal min,
+            java.math.BigDecimal max, List<String> options,
             String column, String step) {
 
         /** The result-set column the prefill reads: explicit, else the input name, else its

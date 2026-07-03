@@ -8,6 +8,26 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **Input, validation, and path-parameter depth** (roadmap Phase 40, first slice; see
+  [docs/declarative-validation.md](docs/declarative-validation.md)): declared inputs gain
+  `pattern` (anchored regex, pre-compiled by lint `TQL-YAML-1012`), `minLength`, semantic string
+  `format:` validators (`email`/`uuid`/`url`; unknown values are `TQL-YAML-1013` — for
+  date/datetime/number fields `format:` remains the parse pattern), and `requiredWhen`
+  (conditional requiredness in the core expression language, compiled at build,
+  `TQL-YAML-1014`), each rejecting with a stable field-scoped code and localized en/ja message.
+  A path parameter declared under `input:` now publishes its coerced, typed value in the
+  `path.*` namespace. The declared constraints ride into the generated OpenAPI (`pattern`,
+  length/value bounds, `format`, enums) on parameters, bodies, and typed path parameters.
+
+### Fixed
+
+- **`min`/`max` bounds are decimal-exact.** The bound check compared `number.longValue()`, so
+  `max: 5` admitted `5.9` and `min: 0` admitted `-0.9`; bounds are now `BigDecimal`-compared and
+  fractional bounds (`min: 0.5`) are declarable. (`spec.json` and OpenAPI emit the same numbers
+  as before for integer bounds.)
+- **`head.yml`/`options.yml` route files fail lint with a clear code** (`TQL-YAML-1011`) instead
+  of exploding deep in the route compiler with `Unsupported HTTP method`.
+
 - **Declarative dashboards** (roadmap Phase 39, slice 4 — the phase is complete; see
   [docs/declarative-views.md](docs/declarative-views.md)): a `view: dashboard` document renders
   query-backed panels on the kit's `hc-grid` — a `stat` (single value), a `sparkline`, a `chart`

@@ -125,6 +125,27 @@ class DeclarativeViewIntegrationTest {
         assertThat(response.statusCode()).isEqualTo(401);
     }
 
+    @Test
+    void theInputVocabularyGatesRequestsEndToEnd() throws Exception {
+        // A malformed pattern value is a field-scoped rejection before any SQL runs.
+        assertThat(postForm("/board/probe", "code=ab-1").statusCode()).isEqualTo(400);
+        // kind=noted makes note required (requiredWhen); absent -> rejected, present -> 200.
+        assertThat(postForm("/board/probe", "code=AB-1&kind=noted").statusCode())
+                .isEqualTo(400);
+        assertThat(postForm("/board/probe", "code=AB-1&kind=noted&note=x").statusCode())
+                .isEqualTo(200);
+        assertThat(postForm("/board/probe", "code=AB-1").statusCode()).isEqualTo(200);
+    }
+
+    private static HttpResponse<String> postForm(String path, String form) throws Exception {
+        return HttpClient.newHttpClient().send(
+                HttpRequest.newBuilder(URI.create("http://localhost:" + runtime.port() + path))
+                        .header("Content-Type", "application/x-www-form-urlencoded")
+                        .POST(HttpRequest.BodyPublishers.ofString(form))
+                        .build(),
+                HttpResponse.BodyHandlers.ofString());
+    }
+
     private static HttpResponse<String> get(String path) throws Exception {
         return HttpClient.newHttpClient().send(
                 HttpRequest.newBuilder(URI.create("http://localhost:" + runtime.port() + path))
@@ -225,6 +246,43 @@ class DeclarativeViewIntegrationTest {
                 slots:
                   header: board-frags.html::backLink
                 """);
+
+        // A public probe for the Phase 40 input vocabulary: pattern + conditional requiredness.
+        Path validate = target.resolve("web/board/probe");
+        Files.createDirectories(validate);
+        Files.writeString(validate.resolve("post.yml"), """
+                version: tesseraql/v1
+                id: board.probe
+                kind: route
+                recipe: command-json
+                security:
+                  auth: public
+                input:
+                  code:
+                    type: string
+                    required: true
+                    pattern: "[A-Z]{2}-[0-9]+"
+                  kind:
+                    type: string
+                    required: false
+                    enum: [plain, noted]
+                  note:
+                    type: string
+                    required: false
+                    requiredWhen: params.kind == 'noted'
+                sql:
+                  file: probe.sql
+                  mode: query
+                  params:
+                    code: params.code
+                response:
+                  json:
+                    status: 200
+                    body:
+                      echo: sql.rows
+                """);
+        Files.writeString(validate.resolve("probe.sql"),
+                "select /* code */ 'AB-1' as code\n");
 
         // A public dashboard view: stat + chart + sparkline + table panels over the seed data.
         Path boardStats = target.resolve("web/board/stats");

@@ -40,6 +40,8 @@ public final class RequestBinder implements Processor {
     private final java.util.List<String> pathParams;
     private final java.nio.file.Path appHome;
     private final ObjectMapper mapper = new ObjectMapper();
+    /** Pre-compiled {@code requiredWhen} conditions (roadmap Phase 40) — bad syntax fails the build. */
+    private final Map<String, io.tesseraql.core.expr.Expr> requiredWhen = new LinkedHashMap<>();
 
     public RequestBinder(RouteDefinition route) {
         this(route, java.util.List.of(), null);
@@ -54,6 +56,12 @@ public final class RequestBinder implements Processor {
         this.route = route;
         this.pathParams = java.util.List.copyOf(pathParams);
         this.appHome = appHome;
+        route.input().forEach((name, field) -> {
+            if (field.requiredWhen() != null && !field.requiredWhen().isBlank()) {
+                requiredWhen.put(name,
+                        io.tesseraql.core.expr.ExpressionParser.parse(field.requiredWhen()));
+            }
+        });
     }
 
     @Override
@@ -82,9 +90,13 @@ public final class RequestBinder implements Processor {
                 name -> rawValue(name, body, exchange),
                 java.util.Locale.forLanguageTag(localeTag));
 
+        // A path parameter declared under input: publishes its coerced, validated value in the
+        // path.* namespace too (roadmap Phase 40 typed path params); undeclared ones stay raw.
         Map<String, Object> path = new LinkedHashMap<>();
         for (String name : pathParams) {
-            path.put(name, exchange.getMessage().getHeader(name, String.class));
+            path.put(name, effective.containsKey(name)
+                    ? effective.get(name)
+                    : exchange.getMessage().getHeader(name, String.class));
         }
 
         Map<String, Object> context = new HashMap<>();
@@ -104,6 +116,18 @@ public final class RequestBinder implements Processor {
         String locale = exchange.getProperty(TesseraqlProperties.LOCALE, String.class);
         if (locale != null) {
             context.put("request", Map.of("locale", locale));
+        }
+
+        // Conditional requiredness (requiredWhen): with every input coerced and the request
+        // context assembled, an absent field whose condition holds is rejected like required.
+        if (!requiredWhen.isEmpty()) {
+            EvaluationContext evaluation = new EvaluationContext(context);
+            for (Map.Entry<String, io.tesseraql.core.expr.Expr> entry : requiredWhen.entrySet()) {
+                if (!effective.containsKey(entry.getKey())
+                        && entry.getValue().evalBoolean(evaluation)) {
+                    throw InputBinder.missingRequired(entry.getKey());
+                }
+            }
         }
 
         exchange.setProperty(TesseraqlProperties.CONTEXT, context);
