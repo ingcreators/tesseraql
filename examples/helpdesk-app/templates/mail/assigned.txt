@@ -1,0 +1,3 @@
+Subject: [helpdesk] Ticket [(${ticket})] needs you
+
+Ticket [(${ticket})] was assigned. Priority: [(${priority})].

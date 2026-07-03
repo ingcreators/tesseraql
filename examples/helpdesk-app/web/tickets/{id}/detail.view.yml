@@ -1,0 +1,14 @@
+version: tesseraql/v1
+id: tickets.detail.view
+kind: view
+view: detail
+title: Ticket
+fields:
+  - { name: id, label: "#" }
+  - { name: subject, label: Subject }
+  - { name: priority, label: Priority }
+  - { name: requester, label: Requester }
+  - { name: assignee, label: Assignee }
+  - { name: status, label: Status }
+  - { name: created_at, label: Opened }
+  - { name: updated_at, label: Updated }

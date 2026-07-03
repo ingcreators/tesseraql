@@ -1,0 +1,31 @@
+version: tesseraql/v1
+id: requests.create
+kind: route
+recipe: command-json
+
+input:
+  title:
+    type: string
+    required: true
+    maxLength: 200
+  amount:
+    type: number
+    required: true
+    min: 0.01
+
+security:
+  auth: bearer
+  policy: pr.write
+
+sql:
+  file: create.sql
+  mode: update
+  params:
+    title: params.title
+    amount: params.amount
+
+response:
+  json:
+    status: 201
+    body:
+      created: sql.affectedRows

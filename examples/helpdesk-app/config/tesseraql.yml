@@ -1,0 +1,40 @@
+tesseraql:
+  app:
+    name: helpdesk
+
+  datasources:
+    main:
+      jdbcUrl: ${db.main.url}
+      username: ${db.main.username}
+      password: ${db.main.password}
+
+  security:
+    jwt:
+      secret: ${JWT_SECRET:dev-only-secret-change-me-in-production}
+      rolesClaim: roles
+    policies:
+      help.read:
+        anyOf:
+          - role: HELP_READ
+          - role: AGENT
+          - role: ADMIN
+      help.agent:
+        anyOf:
+          - role: AGENT
+          - role: ADMIN
+
+  # App-mode workflow: the ticket row itself carries the state column — contrast with
+  # purchase-request-app's managed mode (docs/approval-workflow.md).
+  workflow:
+    mode: app
+
+  # The assignment notification: point MAIL_HOST at any SMTP (Mailpit for the demo). The
+  # declarative tests assert the notify without touching SMTP (docs/notifications.md).
+  notifications:
+    channels:
+      agent-mail:
+        type: mail
+        host: ${MAIL_HOST:localhost}
+        port: ${MAIL_PORT:2525}
+        from: helpdesk@example.com
+        template: templates/mail/assigned.txt

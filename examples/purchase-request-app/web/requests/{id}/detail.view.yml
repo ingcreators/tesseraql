@@ -1,0 +1,21 @@
+version: tesseraql/v1
+id: requests.detail.view
+kind: view
+view: detail
+title: Purchase request
+fields:
+  - { name: id, label: "#" }
+  - { name: title, label: Title }
+  - { name: amount, label: Amount }
+  - { name: requested_by, label: Requested by }
+  - { name: last_action, label: Last action }
+  - { name: acted_by, label: Acted by }
+children:
+  - source: history
+    title: Approval history
+    columns:
+      - { name: transition, label: Transition }
+      - { name: from_state, label: From }
+      - { name: to_state, label: To }
+      - { name: actor, label: Actor }
+      - { name: acted_at, label: At }

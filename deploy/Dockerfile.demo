@@ -1,0 +1,33 @@
+# The five-minute demo image (roadmap Phase 47): one container that boots a browsable
+# gallery app with Studio open — embedded PostgreSQL inside the container, migrations
+# auto-seed the data, no compose and no external database.
+#
+#   docker build -f deploy/Dockerfile.demo --build-arg APP_HOME=examples/inventory-app -t tesseraql-demo .
+#   docker run --rm -p 8080:8080 tesseraql-demo
+#   open http://localhost:8080/_tesseraql/studio
+#
+# The embedded PostgreSQL binary resolves on first boot (network needed once); the pgdata
+# volume keeps the seeded data across restarts. This image is for demos and evaluation —
+# production deploys use deploy/Dockerfile with a real database (docs/deployment.md).
+
+FROM maven:3.9-eclipse-temurin-21 AS build
+WORKDIR /src
+COPY . .
+RUN ./mvnw -B -ntp -pl tesseraql-cli -am -DskipTests package \
+    && ./mvnw -B -ntp -pl tesseraql-cli dependency:copy-dependencies -DoutputDirectory=target/dependency -DskipTests
+
+FROM eclipse-temurin:21-jre
+RUN useradd --system --create-home tesseraql
+WORKDIR /home/tesseraql
+COPY --from=build /src/tesseraql-cli/target/*.jar lib/
+COPY --from=build /src/tesseraql-cli/target/dependency/*.jar lib/
+ARG APP_HOME=examples/inventory-app
+COPY ${APP_HOME} /app
+RUN mkdir -p /app/work && chown -R tesseraql /app
+USER tesseraql
+VOLUME /app/work
+EXPOSE 8080
+HEALTHCHECK --interval=15s --timeout=3s --start-period=90s \
+  CMD curl -fsS http://localhost:8080/_tesseraql/health/live || exit 1
+ENTRYPOINT ["java", "-cp", "lib/*", "io.tesseraql.cli.TesseraqlCli"]
+CMD ["serve", "--app", "/app", "--embedded-db", "/app/work/pgdata", "--port", "8080"]

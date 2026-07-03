@@ -1,0 +1,24 @@
+version: tesseraql/v1
+id: tickets.detail
+kind: route
+recipe: query-html
+
+security:
+  auth: bearer
+  policy: help.read
+
+sql:
+  file: ticket.sql
+  mode: query
+  params:
+    id: path.id
+
+response:
+  html:
+    status: 200
+    view: detail.view.yml
+    headers:
+      Content-Security-Policy: "default-src 'self'; style-src 'self' 'unsafe-inline'; frame-ancestors 'none'"
+      X-Content-Type-Options: nosniff
+      X-Frame-Options: DENY
+      Referrer-Policy: no-referrer

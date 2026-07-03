@@ -1,0 +1,24 @@
+version: tesseraql/v1
+id: purchase_request
+kind: workflow
+# Managed mode: state, tasks and history live in tql_workflow_* (docs/approval-workflow.md).
+document: { type: purchase_request, table: purchase_requests, key: id }
+http: { basePath: /api/purchase-requests }
+security: { auth: bearer, policy: pr.write }
+initial: draft
+states:
+  - { id: draft, type: initial }
+  - { id: submitted }
+  - { id: approved, type: terminal }
+  - { id: rejected, type: terminal }
+transitions:
+  # Submitting assigns the approval task (approver.sql resolves the assignee) and the guard
+  # keeps zero-amount requests out of the queue.
+  - id: submit
+    from: draft
+    to: submitted
+    guard: "document.amount > 0"
+    command: submit.sql
+    assign: { file: approver.sql }
+  - { id: approve, from: submitted, to: approved, command: approve.sql }
+  - { id: reject, from: submitted, to: rejected, command: reject.sql }

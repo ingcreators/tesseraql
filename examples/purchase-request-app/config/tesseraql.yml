@@ -1,0 +1,32 @@
+tesseraql:
+  app:
+    name: purchase-request
+
+  datasources:
+    main:
+      jdbcUrl: ${db.main.url}
+      username: ${db.main.username}
+      password: ${db.main.password}
+
+  security:
+    jwt:
+      secret: ${JWT_SECRET:dev-only-secret-change-me-in-production}
+      rolesClaim: roles
+      permissionsClaim: permissions
+    # Deny-by-default, defined HERE (the marketplace admission bar, docs/admission.md).
+    policies:
+      pr.read:
+        anyOf:
+          - role: PR_READ
+          - role: APPROVER
+          - role: ADMIN
+      pr.write:
+        anyOf:
+          - role: PR_WRITE
+          - role: APPROVER
+          - role: ADMIN
+
+  # Managed workflow state: instances/tasks/history live in the framework's tql_workflow_*
+  # tables, so the business table stays clean (docs/approval-workflow.md).
+  workflow:
+    mode: managed

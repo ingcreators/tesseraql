@@ -1,0 +1,13 @@
+version: tesseraql/v1
+id: tickets
+kind: view
+view: list
+title: Tickets
+search: q
+columns:
+  - { name: id, label: "#" }
+  - { name: subject, sortable: true }
+  - { name: priority, sortable: true }
+  - { name: requester }
+  - { name: assignee }
+  - { name: status, sortable: true }

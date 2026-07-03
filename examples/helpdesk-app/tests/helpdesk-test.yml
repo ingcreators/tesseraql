@@ -1,0 +1,43 @@
+tests:
+  - name: the ticket list serves the seeded queue
+    sql:
+      file: web/tickets/tickets.sql
+    expect:
+      rowCount: 3
+
+  - name: the search narrows by subject
+    sql:
+      file: web/tickets/tickets.sql
+    params:
+      q: vpn
+    expect:
+      rowCount: 1
+      rows:
+        - id: T-2001
+
+  - name: the detail query loads one ticket
+    sql:
+      file: web/tickets/{id}/ticket.sql
+    params:
+      id: T-2003
+    expect:
+      rowCount: 1
+      rows:
+        - status: triaged
+
+  - name: creating a ticket fires the assignment notice without touching SMTP
+    notify:
+      route: tickets.create
+    params:
+      body:
+        subject: Laptop battery swollen
+        priority: high
+      principal:
+        loginId: agent-1
+    expect:
+      rowCount: 1
+      rows:
+        - notify: assigned
+          channel: agent-mail
+          ticket: Laptop battery swollen
+          priority: high

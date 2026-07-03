@@ -1,0 +1,12 @@
+version: tesseraql/v1
+id: requests
+kind: view
+view: list
+title: Purchase requests
+search: q
+columns:
+  - { name: id, label: "#" }
+  - { name: title }
+  - { name: amount }
+  - { name: requested_by, label: Requested by }
+  - { name: last_action, label: Last action }

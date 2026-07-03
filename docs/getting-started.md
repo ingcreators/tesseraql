@@ -100,3 +100,9 @@ declared set on start.
 - [app-layout.md](app-layout.md) — the application directory and URL mapping.
 - [deployment.md](deployment.md) — container deployment.
 - [proxy.md](proxy.md) — corporate proxy / internal mirror / air-gapped networks.
+
+## See it running first
+
+Want to see a finished app before building one? The
+[five-minute demo](five-minute-demo.md) boots a seeded gallery app with Studio open in one
+command — `tesseraql serve --app examples/inventory-app --embedded-db` — or one container.

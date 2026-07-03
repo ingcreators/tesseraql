@@ -1,0 +1,33 @@
+version: tesseraql/v1
+id: products.page
+kind: route
+recipe: query-html
+
+input:
+  q: { type: string, required: false, maxLength: 100 }
+  sort: { type: string, required: false }
+  dir: { type: string, required: false, enum: [asc, desc] }
+
+security:
+  auth: bearer
+  policy: inv.read
+
+page:
+  size: 20
+  count: true
+
+sql:
+  file: products.sql
+  mode: query
+  params:
+    q: query.q
+
+response:
+  html:
+    status: 200
+    view: list.view.yml
+    headers:
+      Content-Security-Policy: "default-src 'self'; style-src 'self' 'unsafe-inline'; frame-ancestors 'none'"
+      X-Content-Type-Options: nosniff
+      X-Frame-Options: DENY
+      Referrer-Policy: no-referrer

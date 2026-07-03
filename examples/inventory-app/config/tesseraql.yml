@@ -1,0 +1,24 @@
+tesseraql:
+  app:
+    name: inventory
+
+  datasources:
+    main:
+      jdbcUrl: ${db.main.url}
+      username: ${db.main.username}
+      password: ${db.main.password}
+
+  security:
+    jwt:
+      secret: ${JWT_SECRET:dev-only-secret-change-me-in-production}
+      rolesClaim: roles
+    # Deny-by-default, defined here (the marketplace admission bar, docs/admission.md).
+    policies:
+      inv.read:
+        anyOf:
+          - role: INV_READ
+          - role: ADMIN
+      inv.write:
+        anyOf:
+          - role: INV_WRITE
+          - role: ADMIN

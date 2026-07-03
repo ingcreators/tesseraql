@@ -1,0 +1,28 @@
+version: tesseraql/v1
+id: products.dashboard
+kind: route
+recipe: query-html
+
+security:
+  auth: bearer
+  policy: inv.read
+
+sql:
+  file: totals.sql
+  mode: query
+
+queries:
+  byCategory:
+    file: by-category.sql
+  lowStock:
+    file: low-stock.sql
+
+response:
+  html:
+    status: 200
+    view: dashboard.view.yml
+    headers:
+      Content-Security-Policy: "default-src 'self'; style-src 'self' 'unsafe-inline'; frame-ancestors 'none'"
+      X-Content-Type-Options: nosniff
+      X-Frame-Options: DENY
+      Referrer-Policy: no-referrer

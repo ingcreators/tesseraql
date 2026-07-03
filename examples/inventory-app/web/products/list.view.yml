@@ -1,0 +1,12 @@
+version: tesseraql/v1
+id: products
+kind: view
+view: list
+title: Products
+search: q
+columns:
+  - { name: sku, label: SKU, sortable: true }
+  - { name: name, sortable: true }
+  - { name: category, sortable: true }
+  - { name: stock, sortable: true }
+  - { name: reorder_level, label: Reorder at }

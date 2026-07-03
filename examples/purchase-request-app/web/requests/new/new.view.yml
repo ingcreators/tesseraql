@@ -1,0 +1,9 @@
+version: tesseraql/v1
+id: requests.new.form
+kind: view
+view: form
+title: New purchase request
+action: /requests/new
+fields:
+  - { name: title }
+  - { name: amount }

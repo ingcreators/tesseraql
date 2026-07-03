@@ -1,0 +1,38 @@
+version: tesseraql/v1
+id: products.adjust
+kind: route
+recipe: command-json
+
+# Declarative validation (docs/declarative-validation.md): the rule runs inside the command
+# transaction and answers a field-scoped 422 before the UPDATE writes — stock never goes
+# negative, and the rule is data the tests can assert without HTTP.
+input:
+  sku: { type: string, required: true, maxLength: 40 }
+  delta: { type: integer, required: true, min: -10000, max: 10000 }
+
+security:
+  auth: bearer
+  policy: inv.write
+
+validate:
+  stockStaysNonNegative:
+    file: validate-stock.sql
+    params:
+      sku: params.sku
+      delta: params.delta
+    field: delta
+    code: insufficient-stock
+    message: inventory.adjust.insufficient
+
+sql:
+  file: adjust.sql
+  mode: update
+  params:
+    sku: params.sku
+    delta: params.delta
+
+response:
+  json:
+    status: 200
+    body:
+      adjusted: sql.affectedRows

@@ -1,0 +1,54 @@
+tests:
+  - name: the product list serves the seeded catalog
+    sql:
+      file: web/products/products.sql
+    expect:
+      rowCount: 4
+
+  - name: the search matches by name or exact sku
+    sql:
+      file: web/products/products.sql
+    params:
+      q: mouse
+    expect:
+      rowCount: 1
+      rows:
+        - sku: MS-230
+
+  - name: the dashboard aggregates stock by category
+    sql:
+      file: web/products/dashboard/by-category.sql
+    expect:
+      rowCount: 3
+
+  - name: low-stock lists products at or under their reorder level
+    sql:
+      file: web/products/dashboard/low-stock.sql
+    expect:
+      rowCount: 2
+
+  - name: an adjustment that would go negative is a violation
+    validate:
+      route: products.adjust
+      rule: stockStaysNonNegative
+    params:
+      params:
+        sku: DK-450
+        delta: -5
+    expect:
+      rowCount: 1
+      rows:
+        - rule: stockStaysNonNegative
+          field: delta
+          code: insufficient-stock
+
+  - name: an adjustment within stock is clean
+    validate:
+      route: products.adjust
+      rule: stockStaysNonNegative
+    params:
+      params:
+        sku: DK-450
+        delta: -3
+    expect:
+      rowCount: 0
