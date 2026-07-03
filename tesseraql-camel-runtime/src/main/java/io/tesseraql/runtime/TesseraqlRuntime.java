@@ -2278,7 +2278,6 @@ public final class TesseraqlRuntime implements AutoCloseable {
                 java.nio.charset.StandardCharsets.UTF_8);
     }
 
-    /** A request parameter as a trimmed string, or null when absent or blank. */
     /** Rejects a Track J2 mutation posted without the explicit confirm acknowledgment. */
     private static void requireExplicitConfirm(Map<String, Object> params, String what) {
         if (!"true".equals(String.valueOf(params.get("confirm")))) {
@@ -2308,6 +2307,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
         }
     }
 
+    /** A request parameter as a trimmed string, or null when absent or blank. */
     private static String str(Map<String, Object> params, String key) {
         Object value = params.get(key);
         if (value == null) {
