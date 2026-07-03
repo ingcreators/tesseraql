@@ -30,7 +30,7 @@ VOLUME /app/work
 USER tesseraql
 EXPOSE 8080
 HEALTHCHECK --interval=15s --timeout=3s --start-period=30s \
-  CMD curl -fsS http://localhost:8080/_tesseraql/health || exit 1
+  CMD curl -fsS http://localhost:8080/_tesseraql/health/live || exit 1
 
 ENTRYPOINT ["java", "-cp", "lib/*", "io.tesseraql.cli.TesseraqlCli"]
 CMD ["serve", "--app", "/app"]

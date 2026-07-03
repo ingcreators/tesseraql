@@ -444,7 +444,11 @@ public final class TesseraqlRuntime implements AutoCloseable {
                                     .map(Double::parseDouble).orElse(10.0)),
                     pinningMonitor)
                     // Dead-lettered deliveries surface as an operational alert (Phase 20).
-                    .outboxCounts(outboxStore::countByStatus);
+                    .outboxCounts(outboxStore::countByStatus)
+                    // Truthful readiness (roadmap Phase 45): every configured datasource is
+                    // probed live; any failure rolls health up to DOWN so a load balancer
+                    // actually sheds traffic.
+                    .datasourceProbe(() -> probeDatasources(dataSource, dataSources));
             // The app's db/migration runs before anything queries its schema: fresh installs,
             // upgrades and canary activations all converge here (design ch. 31, 32).
             AppMigrations.migrate(appName, appHome, manifest.config(), dataSource,
@@ -2469,6 +2473,30 @@ public final class TesseraqlRuntime implements AutoCloseable {
         String value = str(params, key);
         if (value != null && !value.isBlank()) {
             values.put(dottedKey, value.trim());
+        }
+    }
+
+    /**
+     * Live validity of every configured datasource (roadmap Phase 45): a short
+     * {@link java.sql.Connection#isValid} round-trip per pool, by datasource name.
+     */
+    private static Map<String, Boolean> probeDatasources(javax.sql.DataSource main,
+            Map<String, ? extends javax.sql.DataSource> named) {
+        Map<String, Boolean> out = new java.util.LinkedHashMap<>();
+        out.put("main", datasourceValid(main));
+        named.forEach((name, ds) -> {
+            if (!"main".equals(name)) {
+                out.put(name, datasourceValid(ds));
+            }
+        });
+        return out;
+    }
+
+    private static boolean datasourceValid(javax.sql.DataSource dataSource) {
+        try (java.sql.Connection connection = dataSource.getConnection()) {
+            return connection.isValid(2);
+        } catch (Exception ex) {
+            return false;
         }
     }
 

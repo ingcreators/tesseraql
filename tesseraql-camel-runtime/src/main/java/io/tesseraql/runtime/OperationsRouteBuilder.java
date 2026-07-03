@@ -76,13 +76,22 @@ final class OperationsRouteBuilder extends RouteBuilder {
         // The outbox delivery log and dead-letter redelivery (roadmap Phase 20).
         rest().get("/_tesseraql/ops/outbox").to("direct:ops.outbox");
         rest().post("/_tesseraql/ops/outbox/{id}/redeliver").to("direct:ops.outbox.redeliver");
-        // Liveness/readiness for load balancers and deploy tooling: unauthenticated by design,
-        // so it exposes only the status word - details stay behind the authorized ops API.
+        // Health for load balancers and deploy tooling (roadmap Phase 45): unauthenticated by
+        // design, exposing only the status word - details stay behind the authorized ops API.
+        // /health/live is pure liveness (the process answers; never touches a dependency);
+        // /health/ready and the bare /health run the full roll-up incl. the datasource probe
+        // and answer 503 on DOWN, so traffic actually sheds when the app cannot serve.
         rest().get("/_tesseraql/health").to("direct:ops.health");
+        rest().get("/_tesseraql/health/live").to("direct:ops.health.live");
+        // Its own direct: the REST consumers inline their direct bodies into one route each
+        // (the Phase 42 hot-reload shape), so two consumers must not share a route id.
+        rest().get("/_tesseraql/health/ready").to("direct:ops.health.ready");
 
-        from("direct:ops.health").routeId("ops.health")
-                .process(jsonProcessor(
-                        exchange -> java.util.Map.of("status", dashboard.health().status())));
+        from("direct:ops.health").routeId("ops.health").process(readiness());
+        from("direct:ops.health.ready").routeId("ops.health.ready").process(readiness());
+
+        from("direct:ops.health.live").routeId("ops.health.live")
+                .process(jsonProcessor(exchange -> java.util.Map.of("status", "UP")));
 
         from("direct:ops.batch.jobs").routeId("ops.batch.jobs")
                 .to(VIEW).to("tesseraql-auth:authorize?policy=ops.batch.view")
@@ -269,6 +278,19 @@ final class OperationsRouteBuilder extends RouteBuilder {
         } catch (com.fasterxml.jackson.core.JsonProcessingException ex) {
             return Map.of();
         }
+    }
+
+    /** The readiness roll-up: the status word, 503 when DOWN so a balancer sheds traffic. */
+    private Processor readiness() {
+        return exchange -> {
+            String status = dashboard.health().status();
+            exchange.getMessage().setHeader(Exchange.HTTP_RESPONSE_CODE,
+                    "DOWN".equals(status) ? 503 : 200);
+            exchange.getMessage().setHeader(Exchange.CONTENT_TYPE,
+                    "application/json; charset=utf-8");
+            exchange.getMessage().setBody(
+                    mapper.writeValueAsString(java.util.Map.of("status", status)));
+        };
     }
 
     private Processor jsonProcessor(java.util.function.Function<Exchange, Object> handler) {

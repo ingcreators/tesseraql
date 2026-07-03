@@ -86,6 +86,11 @@ public final class DataSources {
         config.getString(prefix + "maximumPoolSize")
                 .map(Integer::parseInt)
                 .ifPresent(hikari::setMaximumPoolSize);
+        // How long a borrower waits for a connection before failing (ms). Also bounds the
+        // readiness probe's detection latency when the database is down (roadmap Phase 45).
+        config.getString(prefix + "connectionTimeoutMillis")
+                .map(Long::parseLong)
+                .ifPresent(hikari::setConnectionTimeout);
         return new HikariDataSource(hikari);
     }
 }
