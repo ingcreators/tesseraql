@@ -1,0 +1,41 @@
+version: tesseraql/v1
+id: tql.studio.tryit.record
+kind: route
+recipe: command-json
+
+input:
+  method:
+    type: string
+    required: true
+  path:
+    type: string
+    required: true
+  query:
+    type: string
+    required: false
+  body:
+    type: string
+    required: false
+  name:
+    type: string
+    required: false
+
+security:
+  auth: browser
+  csrf: true
+
+sql:
+  service: studio.tryRecord
+  params:
+    method: params.method
+    path: params.path
+    query: params.query
+    body: params.body
+    name: params.name
+    roles: principal.roles
+    actor: principal.loginId
+
+response:
+  redirect:
+    status: 303
+    location: /_tesseraql/studio/ui/source?path=tests%2Fstudio-recorded-test.yml

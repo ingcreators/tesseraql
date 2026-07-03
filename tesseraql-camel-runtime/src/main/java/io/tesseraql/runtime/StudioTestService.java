@@ -281,6 +281,22 @@ final class StudioTestService {
         return results.isEmpty() ? null : results;
     }
 
+    /**
+     * Runs the route's main read binding once in the sandbox and returns its row count (the test
+     * recorder's expectation capture, Track J3) — null when the binding is not a runnable read or
+     * the sandboxed run fails (the case is then recorded without an expectation).
+     */
+    Integer sandboxRowCount(io.tesseraql.yaml.model.RouteDefinition route,
+            java.nio.file.Path routeDir, Map<String, Object> context) {
+        try {
+            Map<String, Object> result = runQuery(route.sql(), routeDir,
+                    new LinkedHashMap<>(context));
+            return result == null ? null : (Integer) result.get("rowCount");
+        } catch (RuntimeException ex) {
+            return null;
+        }
+    }
+
     /** Runs one read binding and, on success, records its {@code {rows,rowCount}} under {@code key}. */
     private void runInto(Map<String, Object> results, Map<String, Object> working, String key,
             SqlBinding binding, Path routeDir) {

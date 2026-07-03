@@ -303,8 +303,8 @@ public final class ErrorResponseRenderer implements Processor {
             case RATE -> 429;
             case LANE -> code.number() == 5031 ? 503 : 500;
             case STUDIO -> switch (code.number()) {
-                // 4230/4231: route-form / connector authoring input rejected (Phase 43 Track J)
-                case 4002, 4224, 4230, 4231 -> 400;
+                // 4230/4231/4233: route-form / connector / recorder input rejected (Track J)
+                case 4002, 4224, 4230, 4231, 4233 -> 400;
                 case 4030, 4031 -> 403; // read-only / caller lacks a Studio edit role (backlog D6)
                 case 4040 -> 404;
                 case 4090 -> 409; // a draft applied over a concurrently changed source (backlog D5)

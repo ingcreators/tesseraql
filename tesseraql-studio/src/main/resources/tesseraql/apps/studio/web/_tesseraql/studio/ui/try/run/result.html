@@ -28,5 +28,23 @@
       <label class="hc-field__label">Response body</label>
       <pre class="hc-code"><code th:text="${result.body}">body</code></pre>
     </div>
+    <!-- The test recorder (roadmap Phase 43, Track J3): a recordable invocation saves as a
+         declarative sql: test case under tests/, expectation captured from the sandbox. -->
+    <form class="hc-cluster" method="post" action="/_tesseraql/studio/ui/try/record"
+          th:if="${result.recordable != null && result.recordable && result.status < 400}">
+      <input type="hidden" name="_csrf" th:value="${_csrf}">
+      <input type="hidden" name="method" th:value="${result.method}">
+      <input type="hidden" name="path" th:value="${result.path}">
+      <input type="hidden" name="query" th:value="${result.query}">
+      <input type="hidden" name="body" th:value="${result.sentBody}">
+      <input class="hc-input" data-size="sm" name="name"
+             th:placeholder="|recorded: ${result.method} ${result.path}|">
+      <button class="hc-button" data-size="sm" type="submit">Save as test case</button>
+      <span class="hc-field__message">Writes <code>tests/studio-recorded-test.yml</code> so this
+        check runs as a regression test.</span>
+    </form>
+    <p class="hc-field__message"
+       th:if="${result.recordable != null && !result.recordable && result.reason != null}"
+       th:text="${result.reason}"></p>
   </div>
 </th:block>
