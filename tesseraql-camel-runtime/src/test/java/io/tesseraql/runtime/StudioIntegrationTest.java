@@ -2015,6 +2015,18 @@ class StudioIntegrationTest {
     }
 
     @Test
+    void uiDataBrowserFoldsFiltersUntilActive() throws Exception {
+        // The filter slots live in a disclosure: collapsed with no active condition, and
+        // opened + badged with the active count once a filter is applied.
+        assertThat(get("/_tesseraql/studio/ui/data?table=tql_users", true).body())
+                .contains("<summary>").doesNotContain("active</span>");
+        String filtered = get("/_tesseraql/studio/ui/data?table=tql_users"
+                + "&fc0=login_id&fo0=contains&fv0=a"
+                + "&fc1=status&fo1=equals&fv1=ACTIVE", true).body();
+        assertThat(filtered).contains("2 active").contains("<details class=\"hc-disclosure\" open");
+    }
+
+    @Test
     void uiDataBrowserCombinesConditionsWithOr() throws Exception {
         // status ACTIVE OR status INACTIVE → matches (the seeded admin is ACTIVE).
         assertThat(get("/_tesseraql/studio/ui/data?table=tql_users&combinator=or"
