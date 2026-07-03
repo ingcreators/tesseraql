@@ -53,15 +53,24 @@ class JsonResponseShapingTest {
                 List.of(new ResponseSpec.NestSpec("orders", "lines", "lines",
                         Map.of("id", "order_id"))));
         Exchange exchange = render(response, Map.of(
-                "sql", Map.of("rows", List.of(Map.of("id", 1), Map.of("id", 2))),
+                "sql", Map.of("rows", List.of(row("id", 1), row("id", 2))),
                 "lines", Map.of("rows", List.of(
-                        Map.of("order_id", 1, "sku", "A"),
-                        Map.of("order_id", 1, "sku", "B"),
-                        Map.of("order_id", 2, "sku", "C")))));
+                        row("order_id", 1, "sku", "A"),
+                        row("order_id", 1, "sku", "B"),
+                        row("order_id", 2, "sku", "C")))));
         String json = exchange.getMessage().getBody(String.class);
         assertThat(json).contains(
                 "{\"id\":1,\"lines\":[{\"order_id\":1,\"sku\":\"A\"},{\"order_id\":1,\"sku\":\"B\"}]}");
         assertThat(json).contains("{\"id\":2,\"lines\":[{\"order_id\":2,\"sku\":\"C\"}]}");
+    }
+
+    /** An insertion-ordered row (Map.of iteration order is randomized). */
+    private static Map<String, Object> row(Object... kv) {
+        Map<String, Object> row = new java.util.LinkedHashMap<>();
+        for (int i = 0; i < kv.length; i += 2) {
+            row.put(String.valueOf(kv[i]), kv[i + 1]);
+        }
+        return row;
     }
 
     @Test
