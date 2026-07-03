@@ -38,6 +38,9 @@ class AppTestRunnerIntegrationTest {
             statement.execute("create table users (id serial primary key, name varchar(200), "
                     + "status varchar(32), created_at timestamp default now())");
             statement.execute("insert into users (name, status) values ('sato','ACTIVE')");
+            statement.execute("create table app_groups (id serial primary key, "
+                    + "display_name varchar(200) not null)");
+            statement.execute("insert into app_groups (display_name) values ('engineers')");
             statement.execute("create table tql_users (user_id varchar(64) primary key, "
                     + "login_id varchar(200), display_name varchar(200), email varchar(320), "
                     + "status varchar(32), tenant_id varchar(64), version bigint default 0)");
@@ -64,7 +67,7 @@ class AppTestRunnerIntegrationTest {
                 .run(appHome, dataSource, RealmConfig.managed("local", "main"), reportDir);
 
         TestReport report = result.report();
-        assertThat(report.results()).hasSize(13);
+        assertThat(report.results()).hasSize(15);
         assertThat(report.allPassed()).isTrue();
         assertThat(Files.exists(reportDir.resolve("junit/TEST-tesseraql.xml"))).isTrue();
         assertThat(Files.exists(reportDir.resolve("tesseraql-result.json"))).isTrue();
@@ -75,7 +78,7 @@ class AppTestRunnerIntegrationTest {
         assertThat(Files.exists(reportDir.resolve("coverage/sonarqube.xml"))).isTrue();
         try (var allureFiles = Files.list(reportDir.resolve("allure-results"))) {
             assertThat(allureFiles.filter(f -> f.toString().endsWith("-result.json")).count())
-                    .isEqualTo(13);
+                    .isEqualTo(15);
         } catch (Exception ex) {
             throw new AssertionError(ex);
         }

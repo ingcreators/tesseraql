@@ -775,7 +775,7 @@ public final class RouteCompiler {
             io.tesseraql.compiler.binding.ViewBinding viewBinding = html != null
                     && html.view() != null
                             ? io.tesseraql.compiler.binding.ViewBinding.of(appHome, routeDir,
-                                    html.view(), this::postRouteByPath)
+                                    html.view(), routeFile.definition(), this::postRouteByPath)
                             : null;
             route.process(new HtmlResponseRenderer(html, appHome, routeDir,
                     i18n.defaultTag(), viewBinding));

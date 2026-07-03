@@ -65,6 +65,49 @@ class ScaffoldCommandsTest {
         assertThat(Files.readString(edited)).doesNotContain("customized");
     }
 
+    @Test
+    void ejectViewPinsTheTemplateAndFlipsTheRoute(@TempDir Path dir) throws Exception {
+        assertThat(execute("new", "demo", "--dir", dir.toString())).isZero();
+        Path app = dir.resolve("demo");
+        Path board = app.resolve("web/board");
+        Files.createDirectories(board);
+        Files.writeString(board.resolve("get.yml"), """
+                version: tesseraql/v1
+                id: board.page
+                kind: route
+                recipe: query-html
+                security:
+                  auth: public
+                sql:
+                  file: board.sql
+                response:
+                  html:
+                    view: board.view.yml
+                """);
+        Files.writeString(board.resolve("board.sql"), "select name from items\n");
+        Files.writeString(board.resolve("board.view.yml"), """
+                version: tesseraql/v1
+                kind: view
+                view: list
+                title: Board
+                columns:
+                  - name: name
+                """);
+
+        assertThat(execute("scaffold", "eject-view", "--app", app.toString(),
+                "--route", "web/board/get.yml")).isZero();
+        Path template = board.resolve("board.html");
+        assertThat(template).exists();
+        assertThat(Files.readString(template)).contains("tesseraql-scaffold-checksum")
+                .contains("th:each=\"row : ${sql.rows}\"");
+        assertThat(Files.readString(board.resolve("get.yml")))
+                .contains("template: board.html").doesNotContain("view: board.view.yml");
+
+        // Ejected means ejected: a rerun finds no view: left to eject.
+        assertThat(execute("scaffold", "eject-view", "--app", app.toString(),
+                "--route", "web/board/get.yml")).isEqualTo(1);
+    }
+
     private static int execute(String... args) {
         return new CommandLine(new TesseraqlCli()).execute(args);
     }

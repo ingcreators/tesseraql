@@ -44,6 +44,9 @@ class ReportGeneratorIntegrationTest {
             statement.execute("create table users (id serial primary key, name varchar(200), "
                     + "status varchar(32), created_at timestamp default now())");
             statement.execute("insert into users (name, status) values ('sato','ACTIVE')");
+            statement.execute("create table app_groups (id serial primary key, "
+                    + "display_name varchar(200) not null)");
+            statement.execute("insert into app_groups (display_name) values ('engineers')");
             statement.execute("create table tql_users (user_id varchar(64) primary key, "
                     + "login_id varchar(200), display_name varchar(200), email varchar(320), "
                     + "status varchar(32), tenant_id varchar(64), version bigint default 0)");
@@ -74,9 +77,9 @@ class ReportGeneratorIntegrationTest {
         ReportDoc doc = generator.generate(manifest, result, new CoverageThresholds(0.0, 0.0),
                 "it", "2026-06-15T12:00:00Z");
 
-        // Run-level summary mirrors the suite (13 cases, all passing) and the gate passes at 0%.
-        assertThat(doc.summary().total()).isEqualTo(13);
-        assertThat(doc.summary().passed()).isEqualTo(13);
+        // Run-level summary mirrors the suite (15 cases, all passing) and the gate passes at 0%.
+        assertThat(doc.summary().total()).isEqualTo(15);
+        assertThat(doc.summary().passed()).isEqualTo(15);
         assertThat(doc.summary().failed()).isZero();
         assertThat(doc.summary().sqlLineRatio()).isBetween(0.0, 1.0);
         assertThat(doc.gate().passed()).isTrue();

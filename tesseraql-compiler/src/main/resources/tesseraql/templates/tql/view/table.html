@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<!-- The shared datagrid table pattern (roadmap Phase 39, docs/declarative-views.md): columns ×
+     rows with per-row links, used by the list view and by a detail view's children. Override via
+     templates/tql/view/table.html (customization ladder L2); table(columns, rows) is the public
+     contract. -->
+<html xmlns:th="http://www.thymeleaf.org">
+<th:block th:fragment="table(columns, rows)">
+  <div class="hc-datagrid">
+    <div class="hc-datagrid__scroll">
+      <table class="hc-datagrid__table">
+        <thead class="hc-datagrid__head">
+          <tr>
+            <th class="hc-datagrid__headcell" th:each="c : ${columns}"
+                th:text="${c.label}">Column</th>
+          </tr>
+        </thead>
+        <tbody class="hc-datagrid__body">
+          <tr class="hc-datagrid__row" th:each="r : ${rows}">
+            <td class="hc-datagrid__cell" th:each="cell : ${r}">
+              <a th:if="${cell.href != null}" th:href="${cell.href}"
+                 th:text="${cell.text}">value</a>
+              <span th:if="${cell.href == null}" th:text="${cell.text}">value</span>
+            </td>
+          </tr>
+          <tr th:if="${#lists.isEmpty(rows)}">
+            <td class="hc-datagrid__cell"
+                th:attr="colspan=${#lists.isEmpty(columns) ? 1 : #lists.size(columns)}"
+                th:text="#{tql.view.empty}">No rows</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</th:block>
+</html>

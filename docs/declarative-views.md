@@ -1,10 +1,15 @@
 # Declarative views
 
 Design for roadmap Phase 39 (drafted 2026-07-03; resolves decision point 7). Status:
-**slice 1 shipped** — the `kind: view` document, `response.html.view`, the list + form
-patterns with the L2 override resolver, `TQL-VIEW-33xx` lint, the `view` coverage kind,
-and the example gallery's view-backed board page (`examples/user-admin-app/web/users/board`).
-Slices 2–4 (detail/relations/slots + eject, scaffold-on-views, dashboards) remain.
+**slices 1 and 2 shipped** — the `kind: view` document, `response.html.view`, the
+list + form + detail patterns (a detail composes its route's named queries as child
+lists) with the L2 override resolver and the shared `tql/view/table` pattern, named
+slots (L1: `header`/`footer`, plus `actions` on forms — a slot fills from an app
+fragment referenced as `template::fragment`, colocated-first), the eject action
+(`tesseraql scaffold eject-view`, L3), `TQL-VIEW-33xx` lint, the `view` coverage kind,
+and the example gallery's view-backed board list + detail
+(`examples/user-admin-app/web/users/board`). Slices 3–4 (scaffold-on-views, dashboards)
+remain.
 
 ## Context and goals
 
@@ -160,10 +165,12 @@ same status as a hand-written template today.
 ### The customization ladder (from the roadmap)
 
 - **L0 — view options**: keys in the view document. No HTML.
-- **L1 — slots** (slice 2): the view declares named insertion points (`header`,
-  `actions`, `after-field`) filled by app fragments — the parameterized
-  `tql/shell :: shell(...)` pattern applied to views. An unknown slot name is
-  `TQL-VIEW-3306`.
+- **L1 — slots** (shipped, slice 2): the view declares named insertion points filled by
+  app fragments — the parameterized `tql/shell :: shell(...)` pattern applied to views.
+  A list or detail offers `header`/`footer`; a form adds `actions` beside its submit
+  button. A slot value is `template::fragment` (compact, so the plain YAML scalar stays
+  legal), the template resolving colocated-first then under `templates/`. An unknown
+  slot name is `TQL-VIEW-3306`; an unresolved reference is `TQL-VIEW-3302`.
 - **L2 — pattern overrides**: `Templates` gains one app-override `FileTemplateResolver`
   ordered ahead of the shared classpath resolver, scoped to `tql/view/*`, rooted at the
   app's `templates/` directory, with existence-check fallthrough. Dropping
@@ -171,10 +178,13 @@ same status as a hand-written template today.
   `field-date.html` retargets one widget everywhere; the per-view `template:` key
   points a single view at a custom fragment. Lint checks an override file declares the
   expected `th:fragment` signature (`TQL-VIEW-3307`).
-- **L3 — eject**: render the framework fragments once into a real template file
-  (deterministic output, stamped with the scaffold checksum header so edit-detection
-  applies) and flip the route's `view:` to `template:`. A CLI/Studio action in a later
-  slice; until then ejection is "write the template by hand", exactly today's state.
+- **L3 — eject** (shipped, slice 2): `tesseraql scaffold eject-view --app . --route
+  web/…/get.yml` renders the view's pattern once into a real template (deterministic
+  output, stamped with the scaffold checksum so edit detection applies) and flips the
+  route from `view:` to `template:`. Ejecting pins the layout — a list/detail must
+  declare its `columns:`/`fields:` explicitly first — and filled slots inline as static
+  fragment inserts. The view document stays on disk for reference; a Studio surface for
+  the same action is a later extension.
 
 ## i18n, security, Studio
 
@@ -203,8 +213,9 @@ Lint family **`TQL-VIEW-33xx`** (next free block after workflow 31xx/32xx):
 | 3303 | a form's `action:` names no route, or the named route declares no `input:` |
 | 3304 | a `fields:` entry names an input the action route does not declare |
 | 3305 | unknown widget name |
-| 3306 | unknown slot name (slice 2) |
+| 3306 | unknown slot name for the view kind |
 | 3307 | an L2 override file lacks the expected `th:fragment` signature |
+| 3308 | a `children:` entry names a source the route's `queries:` do not declare |
 
 Coverage kind **`view`**: one item per view document, exercised when a declarative
 suite invokes its route. The htmx-contract and OpenAPI generators are unaffected in
@@ -217,7 +228,7 @@ slice 1 (views change how HTML is produced, not the HTTP contract).
    app-override resolver in `Templates` (day one), `TQL-VIEW-3301..3305/3307` lint, and
    the `view` coverage kind. The example gallery gains one view-backed page as the
    dogfood.
-2. **detail + relations + slots** — `view: detail` (labelled value list over one row),
+2. **detail + relations + slots** (shipped) — `view: detail` (labelled value list over one row),
    parent + child-list composition, named slots (L1, `TQL-VIEW-3306`), and the eject
    action.
 3. **scaffold on views** — `scaffold crud` emits view documents instead of raw

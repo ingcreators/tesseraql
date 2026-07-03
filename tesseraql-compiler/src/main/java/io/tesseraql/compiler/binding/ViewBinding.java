@@ -5,8 +5,8 @@ import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
 import io.tesseraql.core.expr.EvaluationContext;
 import io.tesseraql.yaml.i18n.MessageCatalog;
-import io.tesseraql.yaml.model.InputField;
 import io.tesseraql.yaml.model.RouteDefinition;
+import io.tesseraql.yaml.view.ViewFields;
 import io.tesseraql.yaml.view.ViewSpec;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -15,7 +15,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Set;
 import java.util.function.Function;
 
 /**
@@ -35,41 +34,38 @@ public final class ViewBinding {
     static final TqlErrorCode UNRESOLVED_VIEW = new TqlErrorCode(TqlDomain.VIEW, 3302);
     /** TQL-VIEW-3303: a form's action names no POST route (or one without input:). */
     static final TqlErrorCode UNKNOWN_ACTION = new TqlErrorCode(TqlDomain.VIEW, 3303);
-    /** TQL-VIEW-3304: a fields: entry names an input the action route does not declare. */
-    static final TqlErrorCode UNKNOWN_FIELD = new TqlErrorCode(TqlDomain.VIEW, 3304);
-    /** TQL-VIEW-3305: unknown widget name. */
-    static final TqlErrorCode UNKNOWN_WIDGET = new TqlErrorCode(TqlDomain.VIEW, 3305);
-
-    /** The slice-1 widget vocabulary (docs/declarative-views.md), shared with the lint. */
-    public static final Set<String> WIDGETS = ViewSpec.WIDGETS;
+    /** TQL-VIEW-3306: unknown slot name for the view kind (customization ladder L1). */
+    static final TqlErrorCode UNKNOWN_SLOT = new TqlErrorCode(TqlDomain.VIEW, 3306);
+    /** TQL-VIEW-3308: a children: entry names a source the route does not declare. */
+    static final TqlErrorCode UNKNOWN_SOURCE = new TqlErrorCode(TqlDomain.VIEW, 3308);
 
     private final ViewSpec spec;
     private final String entryTemplate;
-    private final List<FieldDef> fields;
+    private final List<ViewFields.FieldDef> fields;
+    private final Map<String, String> slots;
     private final Path appHome;
 
-    /** A form field ready to render: the derived input constraints plus presentation. */
-    record FieldDef(String name, String labelKey, String labelFallback, String widget,
-            boolean required, Integer maxLength, Integer min, Integer max, List<String> options) {
-    }
-
-    private ViewBinding(ViewSpec spec, String entryTemplate, List<FieldDef> fields, Path appHome) {
+    private ViewBinding(ViewSpec spec, String entryTemplate, List<ViewFields.FieldDef> fields,
+            Map<String, String> slots, Path appHome) {
         this.spec = spec;
         this.entryTemplate = entryTemplate;
         this.fields = fields;
+        this.slots = slots;
         this.appHome = appHome;
     }
 
     /**
-     * Resolves and validates a route's view reference at build time. {@code postRouteByPath}
-     * looks up the POST route serving a path (the form's {@code action:}).
+     * Resolves and validates a route's view reference at build time. {@code route} is the
+     * declaring route (its {@code queries:} keys anchor a detail view's {@code children:});
+     * {@code postRouteByPath} looks up the POST route serving a path (the form's
+     * {@code action:}).
      */
     public static ViewBinding of(Path appHome, Path routeDir, String viewRef,
-            Function<String, RouteDefinition> postRouteByPath) {
+            RouteDefinition route, Function<String, RouteDefinition> postRouteByPath) {
         Path home = appHome.toAbsolutePath().normalize();
         Path file = resolve(home, routeDir, viewRef);
         ViewSpec spec = ViewSpec.parse(file);
-        List<FieldDef> fields = List.of();
+        List<ViewFields.FieldDef> fields = List.of();
         if (ViewSpec.FORM.equals(spec.view())) {
             RouteDefinition action = postRouteByPath.apply(spec.action());
             if (action == null) {
@@ -80,12 +76,48 @@ public final class ViewBinding {
                 throw new TqlException(UNKNOWN_ACTION, "View " + viewRef + ": action route "
                         + action.id() + " declares no input: block to derive fields from");
             }
-            fields = deriveFields(viewRef, spec, action.input());
+            fields = ViewFields.derive(viewRef, spec, action.input());
+        }
+        for (ViewSpec.Child child : spec.children()) {
+            if (!"sql".equals(child.source())
+                    && (route == null || !route.queries().containsKey(child.source()))) {
+                throw new TqlException(UNKNOWN_SOURCE, "View " + viewRef + ": children source "
+                        + child.source() + " is not a named query of the route");
+            }
         }
         String entry = spec.template() != null
                 ? HtmlResponseRenderer.resolveTemplate(home, routeDir, spec.template())
                 : "tql/view/" + spec.view();
-        return new ViewBinding(spec, entry, fields, home);
+        return new ViewBinding(spec, entry, fields, resolveSlots(home, routeDir, spec), home);
+    }
+
+    /**
+     * Validates slot names against the view kind's offering (L1) and resolves each fragment
+     * reference ({@code <template> :: <fragment>}, the template resolved colocated-first like
+     * any other) into the engine-relative form the pattern inserts via preprocessing.
+     */
+    private static Map<String, String> resolveSlots(Path appHome, Path routeDir, ViewSpec spec) {
+        if (spec.slots().isEmpty()) {
+            return Map.of();
+        }
+        java.util.Set<String> allowed = ViewSpec.slotsFor(spec.view());
+        Map<String, String> resolved = new LinkedHashMap<>();
+        spec.slots().forEach((name, ref) -> {
+            if (!allowed.contains(name)) {
+                throw new TqlException(UNKNOWN_SLOT, "View " + spec.id() + ": unknown slot "
+                        + name + " (a " + spec.view() + " view offers " + allowed + ")");
+            }
+            int separator = ref.indexOf("::");
+            if (separator < 1) {
+                throw new TqlException(ViewSpec.INVALID_VIEW, "View " + spec.id() + ": slot "
+                        + name + " must reference '<template> :: <fragment>', got: " + ref);
+            }
+            String template = ref.substring(0, separator).trim();
+            String fragment = ref.substring(separator + 2).trim();
+            String engineName = HtmlResponseRenderer.resolveTemplate(appHome, routeDir, template);
+            resolved.put(name, engineName + " :: " + fragment);
+        });
+        return Map.copyOf(resolved);
     }
 
     /** The template name the renderer feeds to the engine (pattern or per-view retarget). */
@@ -113,70 +145,6 @@ public final class ViewBinding {
     }
 
     /**
-     * Derives the renderable fields from the action route's declared inputs: every writable
-     * input in declared order, or — when {@code fields:} is present — that selection and order,
-     * each entry merged over its derived definition.
-     */
-    private static List<FieldDef> deriveFields(String viewRef, ViewSpec spec,
-            Map<String, InputField> inputs) {
-        List<FieldDef> defs = new ArrayList<>();
-        if (spec.fields().isEmpty()) {
-            inputs.forEach((name, input) -> {
-                if (input.isWritable()) {
-                    defs.add(fieldDef(spec, name, input, null));
-                }
-            });
-            return List.copyOf(defs);
-        }
-        for (ViewSpec.Field override : spec.fields()) {
-            InputField input = inputs.get(override.name());
-            if (input == null) {
-                throw new TqlException(UNKNOWN_FIELD, "View " + viewRef + ": field "
-                        + override.name() + " is not declared by the action route's input: block");
-            }
-            defs.add(fieldDef(spec, override.name(), input, override));
-        }
-        return List.copyOf(defs);
-    }
-
-    private static FieldDef fieldDef(ViewSpec spec, String name, InputField input,
-            ViewSpec.Field override) {
-        String widget = override == null || override.widget() == null
-                ? defaultWidget(input)
-                : override.widget();
-        if (!WIDGETS.contains(widget)) {
-            throw new TqlException(UNKNOWN_WIDGET, "View " + spec.id() + ": unknown widget "
-                    + widget + " on field " + name + " (known: " + WIDGETS + ")");
-        }
-        String labelKey = override != null && override.label() != null
-                ? override.label()
-                : "view." + spec.id() + "." + name;
-        String fallback = override != null && override.label() != null
-                ? override.label()
-                : humanize(name);
-        List<String> options = input.enumValues() == null
-                ? List.of()
-                : List.copyOf(input.enumValues());
-        return new FieldDef(name, labelKey, fallback, widget, input.required(),
-                input.maxLength(), input.min(), input.max(), options);
-    }
-
-    /** The widget an input renders as when the view does not say otherwise. */
-    private static String defaultWidget(InputField input) {
-        if (input.enumValues() != null && !input.enumValues().isEmpty()) {
-            return "select";
-        }
-        String type = input.type() == null ? "string" : input.type();
-        return switch (type) {
-            case "boolean" -> "checkbox";
-            case "integer", "number" -> "number";
-            case "date" -> "date";
-            case "datetime" -> "datetime-local";
-            default -> "text";
-        };
-    }
-
-    /**
      * Assembles the render-time view model {@code v} (public API, docs/declarative-views.md)
      * against the execution context: resolved title/labels (message catalog, humanized
      * fallback), the form fields with prefill values, or the list columns and cell matrix.
@@ -189,13 +157,14 @@ public final class ViewBinding {
         v.put("kind", spec.view());
         v.put("title", message(catalog, locale, spec.title(),
                 spec.title() == null ? humanize(spec.id()) : spec.title()));
-        Map<String, Object> data = source(context);
+        v.put("slots", slots);
+        Map<String, Object> data = sourceOf(context, spec.source());
         if (ViewSpec.FORM.equals(spec.view())) {
             v.put("action", spec.action());
             v.put("formId", spec.id().replace('.', '-') + "-form");
             Map<String, Object> row = firstRow(data);
             List<Map<String, Object>> rendered = new ArrayList<>();
-            for (FieldDef field : fields) {
+            for (ViewFields.FieldDef field : fields) {
                 Map<String, Object> f = new LinkedHashMap<>();
                 f.put("name", field.name());
                 f.put("label", message(catalog, locale, field.labelKey(), field.labelFallback()));
@@ -210,45 +179,100 @@ public final class ViewBinding {
                 rendered.add(f);
             }
             v.put("fields", rendered);
+        } else if (ViewSpec.DETAIL.equals(spec.view())) {
+            v.put("fields", detailFields(catalog, locale, firstRow(data)));
+            List<Map<String, Object>> children = new ArrayList<>();
+            for (ViewSpec.Child child : spec.children()) {
+                List<Map<String, Object>> childRows = rows(sourceOf(context, child.source()));
+                List<ViewSpec.Column> columns = columnsOf(child.columns(), childRows);
+                Map<String, Object> c = new LinkedHashMap<>();
+                c.put("title", message(catalog, locale,
+                        child.title() != null
+                                ? child.title()
+                                : "view." + spec.id() + "." + child.source(),
+                        child.title() != null ? child.title() : humanize(child.source())));
+                c.put("columns", renderedColumns(catalog, locale, columns));
+                c.put("rows", cellMatrix(columns, childRows));
+                children.add(c);
+            }
+            v.put("children", children);
         } else {
             List<Map<String, Object>> rows = rows(data);
-            List<ViewSpec.Column> columns = columns(rows);
-            List<Map<String, Object>> renderedColumns = new ArrayList<>();
-            for (ViewSpec.Column column : columns) {
-                Map<String, Object> c = new LinkedHashMap<>();
-                c.put("name", column.name());
-                c.put("label", message(catalog, locale,
-                        column.label() != null
-                                ? column.label()
-                                : "view." + spec.id() + "." + column.name(),
-                        column.label() != null ? column.label() : humanize(column.name())));
-                renderedColumns.add(c);
-            }
-            v.put("columns", renderedColumns);
-            List<List<Map<String, Object>>> cells = new ArrayList<>();
-            for (Map<String, Object> row : rows) {
-                EvaluationContext rowContext = new EvaluationContext(row);
-                List<Map<String, Object>> line = new ArrayList<>();
-                for (ViewSpec.Column column : columns) {
-                    Map<String, Object> cell = new LinkedHashMap<>();
-                    Object value = row.get(column.name());
-                    cell.put("text", value == null ? "" : String.valueOf(value));
-                    cell.put("href", column.link() == null
-                            ? null
-                            : HtmlResponseRenderer.interpolateString(column.link(), rowContext));
-                    line.add(cell);
-                }
-                cells.add(line);
-            }
-            v.put("rows", cells);
+            List<ViewSpec.Column> columns = columnsOf(spec.columns(), rows);
+            v.put("columns", renderedColumns(catalog, locale, columns));
+            v.put("rows", cellMatrix(columns, rows));
         }
         return v;
     }
 
-    /** The context entry the view reads (default {@code sql}): a {@code {rows, rowCount}} map. */
+    /** A detail view's labelled values: explicit {@code fields:}, else the row's own columns. */
+    private List<Map<String, Object>> detailFields(MessageCatalog catalog, Locale locale,
+            Map<String, Object> row) {
+        List<Map<String, Object>> rendered = new ArrayList<>();
+        List<ViewSpec.Field> selection = spec.fields();
+        if (selection.isEmpty()) {
+            selection = new ArrayList<>();
+            for (String name : row.keySet()) {
+                selection.add(new ViewSpec.Field(name, null, null));
+            }
+        }
+        for (ViewSpec.Field field : selection) {
+            Map<String, Object> f = new LinkedHashMap<>();
+            f.put("name", field.name());
+            f.put("label", message(catalog, locale,
+                    field.label() != null
+                            ? field.label()
+                            : "view." + spec.id() + "." + field.name(),
+                    field.label() != null ? field.label() : humanize(field.name())));
+            Object value = row.get(field.name());
+            f.put("value", value == null ? "" : String.valueOf(value));
+            rendered.add(f);
+        }
+        return rendered;
+    }
+
+    /** The column headers, labels resolved through the catalog with humanized fallbacks. */
+    private List<Map<String, Object>> renderedColumns(MessageCatalog catalog, Locale locale,
+            List<ViewSpec.Column> columns) {
+        List<Map<String, Object>> rendered = new ArrayList<>();
+        for (ViewSpec.Column column : columns) {
+            Map<String, Object> c = new LinkedHashMap<>();
+            c.put("name", column.name());
+            c.put("label", message(catalog, locale,
+                    column.label() != null
+                            ? column.label()
+                            : "view." + spec.id() + "." + column.name(),
+                    column.label() != null ? column.label() : humanize(column.name())));
+            rendered.add(c);
+        }
+        return rendered;
+    }
+
+    /** The cell matrix: text per column per row, links resolved against the row's values. */
+    private static List<List<Map<String, Object>>> cellMatrix(List<ViewSpec.Column> columns,
+            List<Map<String, Object>> rows) {
+        List<List<Map<String, Object>>> cells = new ArrayList<>();
+        for (Map<String, Object> row : rows) {
+            EvaluationContext rowContext = new EvaluationContext(row);
+            List<Map<String, Object>> line = new ArrayList<>();
+            for (ViewSpec.Column column : columns) {
+                Map<String, Object> cell = new LinkedHashMap<>();
+                Object value = row.get(column.name());
+                cell.put("text", value == null ? "" : String.valueOf(value));
+                cell.put("href", column.link() == null
+                        ? null
+                        : HtmlResponseRenderer.interpolateString(column.link(), rowContext));
+                line.add(cell);
+            }
+            cells.add(line);
+        }
+        return cells;
+    }
+
+    /** A context entry carrying a {@code {rows, rowCount}} result (main {@code sql} or named). */
     @SuppressWarnings("unchecked")
-    private Map<String, Object> source(Map<String, Object> context) {
-        Object raw = context.get(spec.source());
+    private static Map<String, Object> sourceOf(Map<String, Object> context, String name) {
+        Object raw = context.get(name);
         return raw instanceof Map ? (Map<String, Object>) raw : Map.of();
     }
 
@@ -273,9 +297,10 @@ public final class ViewBinding {
     }
 
     /** Explicit columns, else the result set's own columns in authored SQL order. */
-    private List<ViewSpec.Column> columns(List<Map<String, Object>> rows) {
-        if (!spec.columns().isEmpty()) {
-            return spec.columns();
+    private static List<ViewSpec.Column> columnsOf(List<ViewSpec.Column> explicit,
+            List<Map<String, Object>> rows) {
+        if (!explicit.isEmpty()) {
+            return explicit;
         }
         if (rows.isEmpty()) {
             return List.of();
@@ -301,12 +326,7 @@ public final class ViewBinding {
         return language != null ? language : fallback;
     }
 
-    /** {@code login_id} / {@code unitPrice} &rarr; {@code Login id} / {@code Unit price}. */
-    static String humanize(String name) {
-        String spaced = name.replaceAll("[_\\-]+", " ")
-                .replaceAll("([a-z0-9])([A-Z])", "$1 $2").trim().toLowerCase(Locale.ROOT);
-        return spaced.isEmpty()
-                ? name
-                : Character.toUpperCase(spaced.charAt(0)) + spaced.substring(1);
+    private static String humanize(String name) {
+        return ViewFields.humanize(name);
     }
 }

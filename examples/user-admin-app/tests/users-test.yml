@@ -8,6 +8,25 @@ tests:
       rows:
         - name: sato
 
+  - name: the board detail resolves a user by name
+    sql:
+      file: web/users/board/{name}/detail.sql
+    params:
+      name: sato
+    expect:
+      rowCount: 1
+      rows:
+        - status: ACTIVE
+
+  - name: the board detail lists the groups child
+    sql:
+      file: web/users/board/{name}/groups.sql
+    params: {}
+    expect:
+      rowCount: 1
+      rows:
+        - display_name: engineers
+
   - name: search finds sato by name
     sql:
       file: web/api/users/search.sql

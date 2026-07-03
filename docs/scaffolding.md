@@ -111,6 +111,26 @@ field carries the token (the framework's `csrf` step accepts either, and treats 
 reserved field so it never trips the mass-assignment guard). See
 [docs/hypermedia-ui.md](hypermedia-ui.md) for the full recipe markup and the convention.
 
+## `tesseraql scaffold eject-view --route <web/…/get.yml>`
+
+The customization ladder's L3 ([docs/declarative-views.md](declarative-views.md)): renders a
+route's declarative view (`response.html.view`) once into a real, hand-owned Thymeleaf
+template and flips the route to `template:`. The generated file is checksum-stamped like
+every scaffold artifact, so the edit-detection contract below applies; rerunning against an
+edited template is refused without `--force`.
+
+Ejecting pins the layout: a `list`/`detail` view must declare its `columns:`/`fields:`
+explicitly before ejecting (render-time derivation has no static equivalent), a form's
+fields are unrolled from the `action:` route's `input:` block, and filled slots inline as
+static `th:insert` fragments. The view document stays on disk for reference — delete it when
+done; it no longer drives rendering.
+
+```bash
+tesseraql scaffold eject-view --app . --route web/items/get.yml
+#   wrote     web/items/items.html
+#   flipped   web/items/get.yml (view: -> template: items.html)
+```
+
 ## Regeneration and edit detection (design ch. 22.20)
 
 Every `scaffold crud` file carries one checksum comment over the rest of its own content:

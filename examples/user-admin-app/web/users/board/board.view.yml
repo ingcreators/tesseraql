@@ -1,6 +1,8 @@
 # A declarative view (roadmap Phase 39, docs/declarative-views.md): the page renders
 # through the framework's tql/view/list pattern — no hand-written template. Columns
-# select and label the query's result set; omit columns: to render them all.
+# select and label the query's result set; omit columns: to render them all. The name
+# column links to the row's board detail; the header slot pulls an app fragment in
+# (customization ladder L1).
 version: tesseraql/v1
 id: users.board
 kind: view
@@ -9,5 +11,8 @@ title: Users board
 columns:
   - name: name
     label: Name
+    link: /users/board/{name}
   - name: status
     label: Status
+slots:
+  header: board-frags.html::backLink

@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<!-- The framework detail-view pattern (roadmap Phase 39, docs/declarative-views.md): a labelled
+     value list over one row, followed by the view's children — named-query results each rendered
+     through the shared table pattern. Override via templates/tql/view/detail.html (customization
+     ladder L2) or fill the header/footer slots (L1); the `v` model shape is the public contract. -->
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{tql/shell :: shell(${v.title}, ~{}, ~{}, ~{:: #page-content})}">
+<div id="page-content" class="hc-stack">
+<section class="hc-card" th:fragment="view(v)">
+  <div class="hc-cluster">
+    <h2 th:text="${v.title}">Detail</h2>
+    <span class="hc-spacer"></span>
+    <th:block th:if="${v.slots['header'] != null}">
+      <th:block th:insert="~{__${v.slots['header']}__}"/>
+    </th:block>
+  </div>
+  <div class="hc-stack">
+    <div class="hc-field" th:each="f : ${v.fields}">
+      <span class="hc-field__label" th:text="${f.label}">Label</span>
+      <span th:text="${f.value}">value</span>
+    </div>
+  </div>
+  <section th:each="c : ${v.children}">
+    <h3 th:text="${c.title}">Child</h3>
+    <th:block th:insert="~{tql/view/table :: table(${c.columns}, ${c.rows})}"/>
+  </section>
+  <th:block th:if="${v.slots['footer'] != null}">
+    <th:block th:insert="~{__${v.slots['footer']}__}"/>
+  </th:block>
+</section>
+</div>
+</html>
