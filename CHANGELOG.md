@@ -8,6 +8,12 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **Environment profiles** (roadmap Phase 46, first slice): one switch — `--env <profile>` on
+  `tesseraql serve`, `TESSERAQL_ENV`, or `-Dtesseraql.env` — merges
+  `config/env/<profile>.yml` between the app's base config and Studio's `overlay.yml`, so the
+  profile carries the environment's tuning while dev-time Studio edits still win on top. A
+  named profile without a file fails startup fast (a typo'd environment must never silently
+  run another environment's config); no profile keeps today's behavior exactly.
 - **Business-route audit log + custom error pages** (roadmap Phase 45, final slice — the
   phase is complete): `tesseraql.audit.routes.enabled: true` records one durable
   `tql_route_audit` row per invocation — actor, tenant, route, method, path, status,
