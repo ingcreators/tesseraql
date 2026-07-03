@@ -1,0 +1,10 @@
+{
+  "yaml.schemas": {
+    ".vscode/tesseraql-v1.schema.json": [
+      "web/**/*.yml",
+      "consume/**/*.yml",
+      "batch/**/*.yml",
+      "mcp/**/*.yml"
+    ]
+  }
+}

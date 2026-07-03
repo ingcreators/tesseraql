@@ -65,7 +65,45 @@ public final class AppScaffolder {
                 // A local PostgreSQL for development (Docker optional, native PostgreSQL works too).
                 new ScaffoldedFile("compose.yaml", COMPOSE_YAML.replace("__APP_DB__", dbName)),
                 new ScaffoldedFile("README.md",
-                        README_MD.replace("__APP_NAME__", appName).replace("__APP_DB__", dbName)));
+                        README_MD.replace("__APP_NAME__", appName).replace("__APP_DB__", dbName)),
+                // Authoring feedback outside Studio (roadmap Phase 43): the shipped JSON Schema
+                // lands in the repo and .vscode associates it, so any editor with a YAML
+                // language server validates and completes route/job/view documents offline.
+                new ScaffoldedFile(".vscode/tesseraql-v1.schema.json",
+                        absoluteResource("/schema/tesseraql-v1.schema.json")),
+                new ScaffoldedFile(".vscode/settings.json", VSCODE_SETTINGS_JSON),
+                new ScaffoldedFile(".vscode/extensions.json", VSCODE_EXTENSIONS_JSON));
+    }
+
+    private static final String VSCODE_SETTINGS_JSON = """
+            {
+              "yaml.schemas": {
+                ".vscode/tesseraql-v1.schema.json": [
+                  "web/**/*.yml",
+                  "consume/**/*.yml",
+                  "batch/**/*.yml",
+                  "mcp/**/*.yml"
+                ]
+              }
+            }
+            """;
+
+    private static final String VSCODE_EXTENSIONS_JSON = """
+            {
+              "recommendations": ["redhat.vscode-yaml"]
+            }
+            """;
+
+    /** Reads a bundled classpath resource by absolute path (the shipped JSON Schema). */
+    private static String absoluteResource(String path) {
+        try (var in = AppScaffolder.class.getResourceAsStream(path)) {
+            if (in == null) {
+                throw new IllegalStateException("Missing bundled resource: " + path);
+            }
+            return new String(in.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+        } catch (java.io.IOException ex) {
+            throw new java.io.UncheckedIOException(ex);
+        }
     }
 
     /** Reads a bundled scaffold resource (the Maven Wrapper scripts) verbatim. */

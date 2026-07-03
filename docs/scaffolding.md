@@ -184,3 +184,12 @@ After changing the generators intentionally, refresh the gallery and commit the 
 | `TQL-APP-5201` | introspection failed: unknown table or unreadable metadata |
 | `TQL-APP-5202` | a scaffolded path escapes the app home (design ch. 20.2) |
 | `TQL-APP-5203` | unsupported target: invalid app name, non-empty `new` target, or a table without a single-column primary key |
+
+## Editor feedback in scaffolded repos
+
+`tesseraql new` ships the TesseraQL JSON Schema into the app
+(`.vscode/tesseraql-v1.schema.json`) and associates it via `.vscode/settings.json`
+(`yaml.schemas` over `web/**`, `consume/**`, `batch/**`, and `mcp/**`), recommending the
+`redhat.vscode-yaml` extension. Any editor with a YAML language server then validates and
+completes route, job, and view documents offline — no Studio required. `tesseraql lint`
+findings carry `source:line` positions where the rule can locate itself.

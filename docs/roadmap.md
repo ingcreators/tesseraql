@@ -644,6 +644,11 @@ Studio closes the remaining "drops into raw YAML" edges (slices tracked as Track
 - Authoring feedback outside Studio: deepen the shipped JSON Schema and wire it into
   scaffolded repos (`.vscode` association); lint findings gain line/column.
 
+Delivered in five slices (J1 route form, J2 connector/SSO write-through, J3 test recorder,
+J4 data-browser row edit, J5 authoring feedback — see
+[docs/studio-backlog.md](studio-backlog.md) Track J for the per-slice detail).
+**Phase 43 is complete.**
+
 ### Phase 44 — Studio copilot chat
 
 The remaining half of decision point 4, now that the MCP loop has proven out (the
