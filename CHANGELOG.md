@@ -8,6 +8,15 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **Authoring feedback outside Studio** (roadmap Phase 43, Track J5 — the phase is complete):
+  the shipped JSON Schema now covers the full route/job/view document surface (recipe enum
+  kept in sync with the linter by a build-time drift test), and `tesseraql new` wires it into
+  the scaffolded repo — `.vscode/tesseraql-v1.schema.json` + a `yaml.schemas` association and
+  a `redhat.vscode-yaml` recommendation — so any editor with a YAML language server validates
+  and completes TesseraQL documents offline. **Lint findings gained positions**: `LintFinding`
+  carries optional line/column, document rules point at the first occurrence of the offending
+  key, and the CLI `lint`, Maven `tesseraql:lint`, and Studio health page render
+  `source:line`.
 - **Studio data-browser row editing** (roadmap Phase 43, Track J4): browser rows link **Edit**
   when the row editor's own opt-in (`tesseraql.studio.dataBrowser.edit.enabled`), the caller's
   `editRoles`, and a table primary key all line up. The PK-scoped single-row UPDATE validates

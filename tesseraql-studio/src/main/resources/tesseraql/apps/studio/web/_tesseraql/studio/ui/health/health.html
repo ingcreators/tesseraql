@@ -45,6 +45,8 @@
               <td class="hc-datagrid__cell">
                 <a th:if="${f.sourceUrl}" th:href="${f.sourceUrl}" th:text="${f.source}">source</a>
                 <span th:unless="${f.sourceUrl}" th:text="${f.source}">config</span>
+                <span class="hc-field__message" th:if="${f.line != null}"
+                      th:text="|line ${f.line}|">line 3</span>
               </td>
               <td class="hc-datagrid__cell" th:text="${f.message}">Message</td>
             </tr>

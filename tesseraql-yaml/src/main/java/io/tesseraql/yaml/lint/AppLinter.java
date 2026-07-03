@@ -45,6 +45,11 @@ public final class AppLinter {
 
     private static final Set<String> KNOWN_ROUTE_RECIPES = Set.of("query-json", "command-json",
             "query-html", "page", "query-export", "file-import", "file-export", "webhook");
+
+    /** The servable route recipes — exposed so the shipped JSON Schema is drift-tested. */
+    public static Set<String> knownRouteRecipes() {
+        return KNOWN_ROUTE_RECIPES;
+    }
     /** Recipes an application-declared MCP tool may use (roadmap Phase 24 follow-on). */
     private static final Set<String> KNOWN_TOOL_RECIPES = Set.of("query-json", "command-json");
     /** Recipes an MCP Apps UI resource may use - both render HTML (roadmap Phase 24). */
@@ -127,12 +132,14 @@ public final class AppLinter {
             if (!io.tesseraql.yaml.model.PageSpec.OFFSET.equals(page.effectiveStrategy())
                     && !io.tesseraql.yaml.model.PageSpec.KEYSET.equals(page.effectiveStrategy())) {
                 findings.add(new LintFinding("TQL-YAML-1016", "error", source,
-                        "page: unknown strategy " + page.strategy() + " (offset or keyset)"));
+                        "page: unknown strategy " + page.strategy() + " (offset or keyset)",
+                        lineOf(route.source(), "page:"), null));
             }
             if (page.effectiveSize() < 1
                     || (page.maxSize() != null && page.maxSize() < page.effectiveSize())) {
                 findings.add(new LintFinding("TQL-YAML-1017", "error", source,
-                        "page: size must be >= 1 and maxSize >= size"));
+                        "page: size must be >= 1 and maxSize >= size",
+                        lineOf(route.source(), "page:"), null));
             }
             if (route.definition().sql() != null && route.definition().sql().file() != null) {
                 Path sqlFile = route.source().getParent()
@@ -143,7 +150,8 @@ public final class AppLinter {
                             .matches("(?s).*\\b(limit|fetch)\\b.*")) {
                         findings.add(new LintFinding("TQL-YAML-1018", "warning", source,
                                 "page: appends the pagination clause — the authored SQL should"
-                                        + " not carry its own LIMIT/FETCH"));
+                                        + " not carry its own LIMIT/FETCH",
+                                lineOf(route.source(), "page:"), null));
                     }
                 } catch (java.io.IOException ignored) {
                     // unreadable SQL surfaces through other lint rules
@@ -163,7 +171,8 @@ public final class AppLinter {
                         || nestSpec.as() == null || nestSpec.as().isBlank()) {
                     findings.add(new LintFinding("TQL-YAML-1019", "error", source,
                             "nest: needs into: (a body key), children: (a named query), as:,"
-                                    + " and a single on: parentColumn: childColumn entry"));
+                                    + " and a single on: parentColumn: childColumn entry",
+                            lineOf(route.source(), "nest:"), null));
                 }
             }
         }
@@ -172,7 +181,8 @@ public final class AppLinter {
                 io.tesseraql.core.expr.ExpressionParser.parse(arm.when());
             } catch (RuntimeException ex) {
                 findings.add(new LintFinding("TQL-YAML-1020", "error", source,
-                        "statusWhen: condition does not parse: " + ex.getMessage()));
+                        "statusWhen: condition does not parse: " + ex.getMessage(),
+                        lineOf(route.source(), "statusWhen:"), null));
             }
             if (arm.status() < 100 || arm.status() > 599) {
                 findings.add(new LintFinding("TQL-YAML-1020", "error", source,
@@ -185,7 +195,8 @@ public final class AppLinter {
                     java.util.regex.Pattern.compile(field.pattern());
                 } catch (java.util.regex.PatternSyntaxException ex) {
                     findings.add(new LintFinding("TQL-YAML-1012", "error", source,
-                            "input " + name + ": pattern does not compile: " + ex.getMessage()));
+                            "input " + name + ": pattern does not compile: " + ex.getMessage(),
+                            lineOf(route.source(), name + ":"), null));
                 }
             }
             if ((field.type() == null || "string".equals(field.type())) && field.format() != null
@@ -907,7 +918,8 @@ public final class AppLinter {
 
         if (!KNOWN_ROUTE_RECIPES.contains(definition.recipe())) {
             findings.add(new LintFinding("TQL-YAML-1002", "error", source,
-                    "Unknown route recipe '" + definition.recipe() + "'"));
+                    "Unknown route recipe '" + definition.recipe() + "'",
+                    lineOf(route.source(), "recipe:"), null));
         }
         if (definition.sql() != null && !definition.sql().isContract()
                 && definition.sql().file() != null) {

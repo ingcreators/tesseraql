@@ -27,8 +27,8 @@ final class LintCommand implements Callable<Integer> {
         List<LintFinding> findings = new AppLinter().lint(app);
         long errors = 0;
         for (LintFinding finding : findings) {
-            String line = finding.code() + " [" + finding.severity() + "] " + finding.source()
-                    + ": " + finding.message();
+            String line = finding.code() + " [" + finding.severity() + "] "
+                    + finding.location() + ": " + finding.message();
             if (finding.isError()) {
                 errors++;
                 System.err.println(line);

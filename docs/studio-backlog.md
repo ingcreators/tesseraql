@@ -591,8 +591,20 @@ ships as its own slice once the phase opens:
   (`TQL-STUDIO-4232` → 422; other rejections `TQL-STUDIO-4234` → 400). Audited as the row
   identity plus the column names — never the values. `StudioDataService.primaryKey`/`row`/
   `updateRow`; `studio.data.editForm`/`studio.data.update` providers; `/ui/data/edit` page.
-- [ ] **J5 — authoring feedback**: deepen the shipped JSON Schema and wire it into scaffolded
-  repos (`.vscode` association); lint findings gain line/column.
+- [x] **J5 — authoring feedback** — *done*: the shipped JSON Schema
+  (`schema/tesseraql-v1.schema.json`) now covers the full document surface — the linter-synced
+  recipe enum (drift-tested by `SchemaSyncTest`, machine-checkable), `kind: route|job|view`,
+  typed `input:` fields (pattern/minLength/format/requiredWhen/…), `security`, `sql`/`steps`/
+  `queries` bindings, `page:`, the response family incl. `statusWhen`/`nest`/`view:`, and
+  publish/consume/webhook — `additionalProperties` stays true so newer keys never break older
+  editors. `tesseraql new` scaffolds the schema into `.vscode/tesseraql-v1.schema.json` with a
+  `yaml.schemas` association (`.vscode/settings.json`) and a `redhat.vscode-yaml`
+  recommendation, so any YAML language server validates and completes offline. **Lint findings
+  gained positions**: `LintFinding` carries optional `line`/`column` (the 4-arg constructor
+  keeps every existing rule source-compatible), document rules point at the first occurrence
+  of the offending key (recipe/page/pattern/nest/statusWhen wired; best-effort by design), and
+  the CLI `lint`, Maven `tesseraql:lint`, and Studio health page all render
+  `source:line`.
 
 The Studio-embedded copilot chat is roadmap **Phase 44** (an MCP client over the existing
 gated tools), a separate phase rather than a Track J slice.

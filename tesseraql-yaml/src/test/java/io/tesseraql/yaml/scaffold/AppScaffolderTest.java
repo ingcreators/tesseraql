@@ -40,7 +40,10 @@ class AppScaffolderTest {
                 "mvnw.cmd",
                 ".mvn/wrapper/maven-wrapper.properties",
                 "compose.yaml",
-                "README.md");
+                "README.md",
+                ".vscode/tesseraql-v1.schema.json",
+                ".vscode/settings.json",
+                ".vscode/extensions.json");
     }
 
     @Test

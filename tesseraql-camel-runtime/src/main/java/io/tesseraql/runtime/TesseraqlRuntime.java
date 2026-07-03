@@ -1001,6 +1001,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
                                 row.put("severity", finding.severity());
                                 row.put("error", finding.isError());
                                 row.put("source", finding.source());
+                                row.put("line", finding.line());
                                 row.put("message", finding.message());
                                 // Link to the source editor when the finding names an app file (not a
                                 // config-level pseudo-source like "config"/"app").

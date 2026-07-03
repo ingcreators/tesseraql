@@ -30,7 +30,7 @@ public class LintMojo extends AbstractMojo {
         long errors = 0;
         for (LintFinding finding : findings) {
             String line = finding.code() + " [" + finding.severity() + "] "
-                    + finding.source() + ": " + finding.message();
+                    + finding.location() + ": " + finding.message();
             if (finding.isError()) {
                 errors++;
                 getLog().error(line);
