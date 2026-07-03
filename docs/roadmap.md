@@ -676,6 +676,11 @@ probes and dashboards presuppose these signals:
 - An opt-in business-route audit log (who called what, with declared decision-relevant
   params) riding the existing per-app ops scoping; per-app custom error pages.
 
+Delivered in five slices (truthful health; Prometheus histograms + Grafana dashboard,
+resolving decision point 9; structured logging with trace-id correlation and the access
+log; the safety valves — default SQL timeout, pool knobs, per-node limiter semantics; the
+business-route audit log and custom error pages). **Phase 45 is complete.**
+
 ### Phase 46 — environments and promotion
 
 The dev → staging → prod story becomes first-class rather than implied git practice:

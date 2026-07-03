@@ -8,6 +8,15 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **Business-route audit log + custom error pages** (roadmap Phase 45, final slice — the
+  phase is complete): `tesseraql.audit.routes.enabled: true` records one durable
+  `tql_route_audit` row per invocation — actor, tenant, route, method, path, status,
+  duration, `trace_id`, and the **declared** params as JSON with `mask:`/`classification:`
+  fields excluded wholesale; a failed insert never fails the request.
+  `GET /_tesseraql/ops/audit` reads the trail, gated and narrowed to the caller's
+  `ops.app.<name>` grants. **Per-app custom error pages**: `templates/errors/<status>.html`
+  (or `errors/error.html`) renders for failed top-level browser GETs, while htmx swaps keep
+  the inline fragment and API clients keep the JSON envelope.
 - **Structured logging with trace-id correlation** (roadmap Phase 45): the CLI distribution
   ships a JDK-only SLF4J provider — before it, the standalone runtime had NO log backend at
   all (every line fell into SLF4J's NOP sink). Plain text by default, `--log-format json`

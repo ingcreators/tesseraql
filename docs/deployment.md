@@ -78,6 +78,21 @@ expand/contract (backward compatible) - the same discipline the canary flow alre
   Cloudflare, or plug a shared TempStore implementation behind the SPI.
 - Framework and app migrations take Flyway's lock, so concurrent node startups serialize.
 
+## Business-route audit log and error pages
+
+Opt in with `tesseraql.audit.routes.enabled: true`: every route invocation lands one durable
+row in `tql_route_audit` — who (`actor`, `tenant_id`), what (`route_id`, method, path,
+status, duration), when, correlated by `trace_id` — with the **declared** input params as
+JSON. Fields carrying a `mask:` or `classification:` are excluded wholesale, so sensitive
+values can never reach the trail; a failed audit insert never fails the request.
+`GET /_tesseraql/ops/audit` reads the newest rows, bearer + `ops.batch.view` gated and
+narrowed to the caller's `ops.app.<name>` grants like every other per-app ops read.
+
+**Custom error pages**: drop `templates/errors/<status>.html` (or the catch-all
+`templates/errors/error.html`) into the app and a top-level browser GET that fails renders it
+(model: `status`, `error.code`, `error.message`); htmx swaps keep the inline fragment and API
+clients keep the JSON envelope. No template — today's JSON behavior.
+
 ## Logging
 
 The CLI distribution ships a JDK-only SLF4J provider (roadmap Phase 45): one line per event on

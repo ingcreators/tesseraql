@@ -38,6 +38,7 @@ final class OperationsRouteBuilder extends RouteBuilder {
     private final io.tesseraql.opsui.OpsDashboard dashboard;
     private final io.tesseraql.operations.outbox.JdbcOutboxStore outbox;
     private final MetricsSettings metrics;
+    private final io.tesseraql.operations.audit.JdbcRouteAuditStore routeAudit;
 
     /** Runs a job by id; decouples the route builder from the runtime instance. */
     @FunctionalInterface
@@ -52,7 +53,8 @@ final class OperationsRouteBuilder extends RouteBuilder {
 
     OperationsRouteBuilder(JobRunner runner, JobRepository repository,
             Map<String, String> jobOwners, io.tesseraql.opsui.OpsDashboard dashboard,
-            io.tesseraql.operations.outbox.JdbcOutboxStore outbox, MetricsSettings metrics) {
+            io.tesseraql.operations.outbox.JdbcOutboxStore outbox, MetricsSettings metrics,
+            io.tesseraql.operations.audit.JdbcRouteAuditStore routeAudit) {
         this.runner = runner;
         this.repository = repository;
         // Job id -> owning app, insertion-ordered so the job list keeps its declaration order.
@@ -60,6 +62,7 @@ final class OperationsRouteBuilder extends RouteBuilder {
         this.dashboard = dashboard;
         this.outbox = outbox;
         this.metrics = metrics;
+        this.routeAudit = routeAudit;
     }
 
     @Override
@@ -80,6 +83,16 @@ final class OperationsRouteBuilder extends RouteBuilder {
         rest().get("/_tesseraql/ops/traces/metrics").to("direct:ops.traceMetrics");
         rest().get("/_tesseraql/ops/alerts").to("direct:ops.alerts");
         rest().get("/_tesseraql/ops/pinning").to("direct:ops.pinning");
+        // The business-route audit trail read surface (roadmap Phase 45): bearer + policy
+        // gated and narrowed to the caller's ops.app.<name> grants like every ops read.
+        if (routeAudit != null) {
+            rest().get("/_tesseraql/ops/audit").to("direct:ops.audit");
+            from("direct:ops.audit").routeId("ops.audit")
+                    .to(VIEW).to("tesseraql-auth:authorize?policy=ops.batch.view")
+                    .process(jsonProcessor(
+                            exchange -> routeAudit.recent(200, scope(exchange))));
+        }
+
         // The outbox delivery log and dead-letter redelivery (roadmap Phase 20).
         rest().get("/_tesseraql/ops/outbox").to("direct:ops.outbox");
         rest().post("/_tesseraql/ops/outbox/{id}/redeliver").to("direct:ops.outbox.redeliver");
