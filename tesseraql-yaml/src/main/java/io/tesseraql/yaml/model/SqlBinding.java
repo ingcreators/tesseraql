@@ -17,15 +17,25 @@ import java.util.Map;
  * @param keys     generated-key columns captured from an insert, published as
  *                 {@code <step>.keys.<column>} for later steps and the response
  * @param expect   declared row-count expectation turning silent lost updates into conflicts
+ * @param timeoutSeconds per-binding SQL statement timeout override (roadmap Phase 45); the
+ *                 global default is {@code tesseraql.sql.timeoutSeconds}, and {@code 0}
+ *                 disables the guard for a deliberately long-running statement
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public record SqlBinding(String file, String contract, String mode, Map<String, String> params,
         String service, Materialize materialize, String sequence, java.util.List<String> keys,
-        Expect expect) {
+        Expect expect, Integer timeoutSeconds) {
 
     public SqlBinding {
         params = params == null ? Map.of() : Map.copyOf(params);
         keys = keys == null ? java.util.List.of() : java.util.List.copyOf(keys);
+    }
+
+    /** The pre-Phase-45 shape (no per-binding statement timeout), for positional callers. */
+    public SqlBinding(String file, String contract, String mode, Map<String, String> params,
+            String service, Materialize materialize, String sequence,
+            java.util.List<String> keys, Expect expect) {
+        this(file, contract, mode, params, service, materialize, sequence, keys, expect, null);
     }
 
     /** Whether this binding executes a named Identity SQL Contract instead of a SQL file. */

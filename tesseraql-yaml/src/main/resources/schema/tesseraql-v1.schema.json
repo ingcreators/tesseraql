@@ -231,6 +231,7 @@
         "contract": { "type": "string" },
         "service": { "type": "string" },
         "mode": { "type": "string", "examples": ["query", "query-one", "update", "query-spool"] },
+        "timeoutSeconds": { "type": "integer", "minimum": 0, "description": "Per-binding SQL statement timeout override (roadmap Phase 45); 0 disables. Default: tesseraql.sql.timeoutSeconds, else 30s." },
         "params": { "type": "object", "additionalProperties": { "type": "string" } },
         "sequence": { "type": "string" },
         "keys": { "type": "array", "items": { "type": "string" } },

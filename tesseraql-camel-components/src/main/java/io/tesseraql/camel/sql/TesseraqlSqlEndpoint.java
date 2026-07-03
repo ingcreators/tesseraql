@@ -15,6 +15,7 @@ public class TesseraqlSqlEndpoint extends DefaultEndpoint {
     private String mode = "query";
     private String resultKey = "sql";
     private int maxRows = -1;
+    private int queryTimeoutSeconds = 0;
     private String onOverflow = "fail";
     private String filename = "export.csv";
     private String dialect;
@@ -72,6 +73,15 @@ public class TesseraqlSqlEndpoint extends DefaultEndpoint {
     /** Maximum rows to materialize for {@code query} mode; {@code -1} means unbounded. */
     public void setMaxRows(int maxRows) {
         this.maxRows = maxRows;
+    }
+
+    /** JDBC statement timeout in seconds; 0 leaves the statement unbounded (roadmap Phase 45). */
+    public int getQueryTimeoutSeconds() {
+        return queryTimeoutSeconds;
+    }
+
+    public void setQueryTimeoutSeconds(int queryTimeoutSeconds) {
+        this.queryTimeoutSeconds = queryTimeoutSeconds;
     }
 
     public String getOnOverflow() {

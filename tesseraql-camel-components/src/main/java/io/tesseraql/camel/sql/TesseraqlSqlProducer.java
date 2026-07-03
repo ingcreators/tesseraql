@@ -23,6 +23,7 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.ResultSetMetaData;
+import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -214,6 +215,7 @@ public class TesseraqlSqlProducer extends DefaultProducer {
             }
             try (PreparedStatement statement = connection.prepareStatement(bound.sql(),
                     ResultSet.TYPE_FORWARD_ONLY, ResultSet.CONCUR_READ_ONLY)) {
+                applyTimeout(statement);
                 statement.setFetchSize(profile.fetchSize());
                 bindParameters(statement, bound.parameters());
                 SpoolKind kind = "csv".equals(codec.format()) ? SpoolKind.CSV : SpoolKind.BINARY;
@@ -376,6 +378,7 @@ public class TesseraqlSqlProducer extends DefaultProducer {
     private Map<String, Object> executeQuery(DataSource dataSource, BoundSql bound) {
         try (Connection connection = dataSource.getConnection();
                 PreparedStatement statement = connection.prepareStatement(bound.sql())) {
+            applyTimeout(statement);
             bindParameters(statement, bound.parameters());
             try (ResultSet resultSet = statement.executeQuery()) {
                 List<Map<String, Object>> rows = readRows(resultSet);
@@ -392,6 +395,7 @@ public class TesseraqlSqlProducer extends DefaultProducer {
     private Map<String, Object> executeUpdate(DataSource dataSource, BoundSql bound) {
         try (Connection connection = dataSource.getConnection();
                 PreparedStatement statement = connection.prepareStatement(bound.sql())) {
+            applyTimeout(statement);
             bindParameters(statement, bound.parameters());
             int affected = statement.executeUpdate();
             Map<String, Object> result = new LinkedHashMap<>();
@@ -454,6 +458,18 @@ public class TesseraqlSqlProducer extends DefaultProducer {
             case SERIALIZATION_FAILURE -> SERIALIZATION_CODE;
             default -> EXECUTION_ERROR;
         };
+    }
+
+    /**
+     * Bounds the statement by the endpoint's timeout (roadmap Phase 45): the compiler passes
+     * the per-binding override or the app default, so a runaway query is cancelled by the
+     * driver instead of holding a pool connection forever. 0 = unbounded (explicit opt-out).
+     */
+    private void applyTimeout(PreparedStatement statement) throws SQLException {
+        int seconds = endpoint.getQueryTimeoutSeconds();
+        if (seconds > 0) {
+            statement.setQueryTimeout(seconds);
+        }
     }
 
     private void bindParameters(PreparedStatement statement, List<BoundParameter> parameters)
