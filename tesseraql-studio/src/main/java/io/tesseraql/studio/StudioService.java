@@ -60,6 +60,7 @@ public final class StudioService {
     private static final TqlErrorCode READ_ONLY = new TqlErrorCode(TqlDomain.STUDIO, 4030);
     private static final TqlErrorCode NOT_FOUND = new TqlErrorCode(TqlDomain.STUDIO, 4040);
     private static final TqlErrorCode INVALID_DRAFT = new TqlErrorCode(TqlDomain.STUDIO, 4221);
+    private static final TqlErrorCode ROUTE_FORM = new TqlErrorCode(TqlDomain.STUDIO, 4230);
     private static final TqlErrorCode RENDER = new TqlErrorCode(TqlDomain.STUDIO, 4222);
     private static final TqlErrorCode NEW_ROUTE = new TqlErrorCode(TqlDomain.STUDIO, 4224);
     private static final TqlErrorCode MENU = new TqlErrorCode(TqlDomain.STUDIO, 4225);
@@ -688,6 +689,180 @@ public final class StudioService {
                     + "; open it in the editor instead");
         }
         return saveDraft(path, starterRoute(path, recipe));
+    }
+
+    /** One structured input row of the form-driven route editor (Track J1). */
+    public record FormInput(String name, String type, boolean required, String min, String max,
+            String maxLength, String minLength, String pattern, String enumCsv) {
+    }
+
+    /**
+     * The form-driven route editor's read model (Track J1): the governed fields — recipe, auth,
+     * policy, CSRF, inputs — parsed from the pending draft when one exists, else the served
+     * source. {@code error} carries the parse failure when the document cannot be read as YAML
+     * (the form then points at the text editor instead of rendering fields).
+     */
+    public record RouteForm(String path, String id, String recipe, String auth, String policy,
+            boolean csrf, List<FormInput> inputs, boolean fromDraft, String error) {
+    }
+
+    /** Loads the structured form model for a route document (Track J1). */
+    public RouteForm routeForm(String relativePath) {
+        requireRouteDoc(relativePath);
+        String draft = readDraft(relativePath);
+        String text = draft != null ? draft : source(relativePath);
+        try {
+            Map<String, Object> tree = parser.parseTree(text);
+            Map<String, Object> security = anyMap(tree.get("security"));
+            List<FormInput> inputs = new ArrayList<>();
+            anyMap(tree.get("input")).forEach((name, spec) -> {
+                Map<String, Object> field = anyMap(spec);
+                inputs.add(new FormInput(String.valueOf(name), scalar(field.get("type")),
+                        Boolean.TRUE.equals(field.get("required")), scalar(field.get("min")),
+                        scalar(field.get("max")), scalar(field.get("maxLength")),
+                        scalar(field.get("minLength")), scalar(field.get("pattern")),
+                        csvOf(field.get("enum"))));
+            });
+            return new RouteForm(relativePath, scalar(tree.get("id")), scalar(tree.get("recipe")),
+                    scalar(security.get("auth")), scalar(security.get("policy")),
+                    Boolean.TRUE.equals(security.get("csrf")), inputs, draft != null, null);
+        } catch (RuntimeException ex) {
+            return new RouteForm(relativePath, null, null, null, null, false, List.of(),
+                    draft != null, rootMessage(ex));
+        }
+    }
+
+    /**
+     * Applies the structured form onto the route document and saves the result as a draft
+     * (Track J1) — the text editor stays the escape hatch, and apply/reload stays the existing
+     * draft flow. The document is re-serialized canonically: unknown keys and unmanaged field
+     * attributes are preserved through the tree, but comments and hand formatting are not.
+     * The mutated document must still parse as a route, or the save is rejected.
+     */
+    public Path routeFormSave(String relativePath, String recipe, String auth, String policy,
+            boolean csrf, List<FormInput> inputs) {
+        if (readOnly) {
+            throw new TqlException(READ_ONLY, "Studio is read-only; editing routes is disabled");
+        }
+        requireRouteDoc(relativePath);
+        String draft = readDraft(relativePath);
+        String text = draft != null ? draft : source(relativePath);
+        Map<String, Object> tree;
+        try {
+            tree = parser.parseTree(text);
+        } catch (RuntimeException ex) {
+            throw new TqlException(ROUTE_FORM, "The document does not parse as YAML; fix it in "
+                    + "the text editor first: " + rootMessage(ex));
+        }
+        if (recipe != null && !recipe.isBlank()) {
+            tree.put("recipe", recipe.trim());
+        }
+        Map<String, Object> security = childMap(tree, "security");
+        putOrRemove(security, "auth", trimToNull(auth));
+        putOrRemove(security, "policy", trimToNull(policy));
+        if (csrf) {
+            security.put("csrf", true);
+        } else {
+            security.remove("csrf");
+        }
+        if (security.isEmpty()) {
+            tree.remove("security");
+        }
+        Map<String, Object> existing = anyMap(tree.get("input"));
+        Map<String, Object> rebuilt = new LinkedHashMap<>();
+        for (FormInput row : inputs) {
+            String name = trimToNull(row.name());
+            if (name == null) {
+                continue;
+            }
+            // Surviving fields keep their unmanaged attributes (writable, mask, format, ...).
+            Map<String, Object> field = new LinkedHashMap<>(anyMap(existing.get(name)));
+            putOrRemove(field, "type", trimToNull(row.type()));
+            if (row.required()) {
+                field.put("required", true);
+            } else {
+                field.remove("required");
+            }
+            putOrRemove(field, "min", decimalOrNull(name, "min", row.min()));
+            putOrRemove(field, "max", decimalOrNull(name, "max", row.max()));
+            putOrRemove(field, "maxLength", integerOrNull(name, "maxLength", row.maxLength()));
+            putOrRemove(field, "minLength", integerOrNull(name, "minLength", row.minLength()));
+            putOrRemove(field, "pattern", trimToNull(row.pattern()));
+            List<String> options = csv(row.enumCsv());
+            putOrRemove(field, "enum", options.isEmpty() ? null : options);
+            rebuilt.put(name, field);
+        }
+        if (rebuilt.isEmpty()) {
+            tree.remove("input");
+        } else {
+            tree.put("input", rebuilt);
+        }
+        String yaml = parser.write(tree);
+        try {
+            parser.parseRoute(yaml, relativePath);
+        } catch (RuntimeException ex) {
+            throw new TqlException(ROUTE_FORM,
+                    "The change no longer parses as a route document: " + rootMessage(ex));
+        }
+        return saveDraft(relativePath, yaml);
+    }
+
+    private void requireRouteDoc(String path) {
+        if (!isRouteYaml(path)) {
+            throw new TqlException(ROUTE_FORM,
+                    "The form editor edits web/**/<method>.yml route documents only: " + path);
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Map<String, Object> anyMap(Object value) {
+        return value instanceof Map ? (Map<String, Object>) value : new LinkedHashMap<>();
+    }
+
+    private static String scalar(Object value) {
+        return value == null ? null : String.valueOf(value);
+    }
+
+    private static String csvOf(Object value) {
+        if (!(value instanceof List<?> list)) {
+            return null;
+        }
+        return list.stream().map(String::valueOf).collect(java.util.stream.Collectors
+                .joining(", "));
+    }
+
+    private static void putOrRemove(Map<String, Object> map, String key, Object value) {
+        if (value == null) {
+            map.remove(key);
+        } else {
+            map.put(key, value);
+        }
+    }
+
+    private static java.math.BigDecimal decimalOrNull(String field, String key, String raw) {
+        String value = trimToNull(raw);
+        if (value == null) {
+            return null;
+        }
+        try {
+            return new java.math.BigDecimal(value);
+        } catch (NumberFormatException ex) {
+            throw new TqlException(ROUTE_FORM, "Input " + field + " " + key
+                    + " must be a number: " + value);
+        }
+    }
+
+    private static Integer integerOrNull(String field, String key, String raw) {
+        String value = trimToNull(raw);
+        if (value == null) {
+            return null;
+        }
+        try {
+            return Integer.valueOf(value);
+        } catch (NumberFormatException ex) {
+            throw new TqlException(ROUTE_FORM, "Input " + field + " " + key
+                    + " must be an integer: " + value);
+        }
     }
 
     /** The next versioned-migration number for a datasource/vendor (the Flyway {@code V<n>} prefix). */

@@ -4,6 +4,8 @@
 <th:block id="page-header">
   <span class="hc-spacer"></span>
   <div class="hc-cluster">
+    <a class="hc-button" data-variant="ghost" data-size="sm" th:if="${src.isRouteDoc}"
+       th:href="|/_tesseraql/studio/ui/route-form?path=${#uris.escapeQueryParam(src.path)}|">Edit as form</a>
     <a class="hc-button" data-variant="ghost" data-size="sm" href="/_tesseraql/studio/ui">&larr; explorer</a>
   </div>
 </th:block>

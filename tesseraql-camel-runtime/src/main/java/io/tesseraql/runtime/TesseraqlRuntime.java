@@ -820,6 +820,49 @@ public final class TesseraqlRuntime implements AutoCloseable {
                             studio.saveDraft(path, content == null ? "" : String.valueOf(content));
                             return Map.of("saved", path);
                         })
+                        // The form-driven route editor (roadmap Phase 43, Track J1): the
+                        // governed fields — recipe, auth, policy, CSRF, inputs — as structured
+                        // form fields over the same document tree; saving lands a draft and the
+                        // text editor stays the escape hatch.
+                        .register("studio.routeForm.view", params -> {
+                            String path = String.valueOf(params.get("path"));
+                            boolean canEdit = studioAccess.canEdit(params.get("roles"));
+                            Map<String, Object> model = new java.util.LinkedHashMap<>();
+                            model.put("form", studio.routeForm(path));
+                            model.put("editable", canEdit);
+                            model.put("readOnly", !canEdit);
+                            model.put("recipes", java.util.List.of("query-json", "query-html",
+                                    "command-json", "page", "query-export", "file-import",
+                                    "file-export", "webhook"));
+                            model.put("authOptions",
+                                    java.util.List.of("bearer", "browser", "apiKey", "mtls"));
+                            java.util.List<String> policyIds = studio.securityPolicies().stream()
+                                    .map(policy -> String.valueOf(policy.get("id"))).toList();
+                            model.put("policyOptions", policyIds);
+                            model.put("slots", ROUTE_FORM_INPUT_SLOTS);
+                            return model;
+                        })
+                        .register("studio.routeForm.save", params -> {
+                            studioAccess.requireEdit(params.get("roles"));
+                            String path = String.valueOf(params.get("path"));
+                            java.util.List<io.tesseraql.studio.StudioService.FormInput> inputs = new java.util.ArrayList<>();
+                            for (int i = 0; i < ROUTE_FORM_INPUT_SLOTS; i++) {
+                                inputs.add(new io.tesseraql.studio.StudioService.FormInput(
+                                        str(params, "in" + i + "name"),
+                                        str(params, "in" + i + "type"),
+                                        params.get("in" + i + "req") != null,
+                                        str(params, "in" + i + "min"),
+                                        str(params, "in" + i + "max"),
+                                        str(params, "in" + i + "maxlen"),
+                                        str(params, "in" + i + "minlen"),
+                                        str(params, "in" + i + "pattern"),
+                                        str(params, "in" + i + "enum")));
+                            }
+                            studio.routeFormSave(path, str(params, "recipe"),
+                                    str(params, "auth"), str(params, "policy"),
+                                    params.get("csrf") != null, inputs);
+                            return Map.of("saved", path);
+                        })
                         .register("studio.newRoute", params -> {
                             studioAccess.requireEdit(params.get("roles"));
                             String path = String.valueOf(params.get("path"));
@@ -2059,6 +2102,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
 
     /** The number of filter condition slots the data browser exposes. */
     private static final int DATA_FILTER_SLOTS = 5;
+    private static final int ROUTE_FORM_INPUT_SLOTS = 10;
 
     /** Assembles the data browser's filter conditions from the indexed slot params {@code fcN/foN/fvN}. */
     private static java.util.List<StudioDataService.FilterCond> dataFilters(

@@ -141,6 +141,96 @@ class StudioServiceTest {
     }
 
     @Test
+    void routeFormParsesAndSavesGovernedFieldsPreservingUnmanagedKeys(@TempDir Path dir)
+            throws Exception {
+        Files.createDirectories(dir.resolve("config"));
+        Files.writeString(dir.resolve("config/tesseraql.yml"), "tesseraql:\n  app:\n    name: t\n");
+        Files.createDirectories(dir.resolve("web/api/x"));
+        Files.writeString(dir.resolve("web/api/x/get.yml"), """
+                version: tesseraql/v1
+                id: x
+                kind: route
+                recipe: query-json
+                input:
+                  q:
+                    type: string
+                    writable: false
+                    mask: last4
+                security:
+                  auth: bearer
+                sql:
+                  file: x.sql
+                response:
+                  json:
+                    body:
+                      data: sql.rows
+                """);
+        StudioService studio = new StudioService(new ManifestLoader().load(dir), false);
+
+        StudioService.RouteForm form = studio.routeForm("web/api/x/get.yml");
+        assertThat(form.recipe()).isEqualTo("query-json");
+        assertThat(form.auth()).isEqualTo("bearer");
+        assertThat(form.inputs()).hasSize(1);
+        assertThat(form.inputs().get(0).name()).isEqualTo("q");
+
+        // Edit q (managed attrs change, unmanaged writable/mask survive), add a second field.
+        studio.routeFormSave("web/api/x/get.yml", "query-json", "browser", "app.read", true,
+                java.util.List.of(
+                        new StudioService.FormInput("q", "string", true, null, null, "40", null,
+                                null, null),
+                        new StudioService.FormInput("age", "integer", false, "18", "130", null,
+                                null, null, null)));
+
+        String draft = studio.readDraft("web/api/x/get.yml");
+        assertThat(draft).contains("auth: \"browser\"").doesNotContain("bearer");
+        assertThat(draft).contains("policy: \"app.read\"").contains("csrf: true");
+        assertThat(draft).contains("maxLength: 40").contains("writable: false")
+                .contains("mask: \"last4\"");
+        assertThat(draft).contains("age").contains("min: 18").contains("max: 130");
+        // The mutated document still parses as a route (the save re-validates it).
+        assertThat(studio.preview("web/api/x/get.yml", draft).valid()).isTrue();
+    }
+
+    @Test
+    void routeFormSaveDropsClearedFieldsAndRejectsBadNumbers(@TempDir Path dir) throws Exception {
+        Files.createDirectories(dir.resolve("config"));
+        Files.writeString(dir.resolve("config/tesseraql.yml"), "tesseraql:\n  app:\n    name: t\n");
+        Files.createDirectories(dir.resolve("web/api/x"));
+        Files.writeString(dir.resolve("web/api/x/get.yml"), """
+                version: tesseraql/v1
+                id: x
+                kind: route
+                recipe: query-json
+                input:
+                  gone:
+                    type: string
+                sql:
+                  file: x.sql
+                response:
+                  json:
+                    body:
+                      data: sql.rows
+                """);
+        StudioService studio = new StudioService(new ManifestLoader().load(dir), false);
+
+        // A row whose name is cleared simply does not survive the rebuild.
+        studio.routeFormSave("web/api/x/get.yml", null, null, null, false, java.util.List.of(
+                new StudioService.FormInput("", "string", false, null, null, null, null, null,
+                        null)));
+        assertThat(studio.readDraft("web/api/x/get.yml")).doesNotContain("gone")
+                .doesNotContain("input:");
+
+        assertThatThrownBy(() -> studio.routeFormSave("web/api/x/get.yml", null, null, null,
+                false, java.util.List.of(new StudioService.FormInput("n", "integer", false,
+                        "not-a-number", null, null, null, null, null))))
+                .isInstanceOf(io.tesseraql.core.error.TqlException.class)
+                .hasMessageContaining("must be a number");
+        assertThatThrownBy(() -> studio.routeForm("config/tesseraql.yml"))
+                .isInstanceOf(io.tesseraql.core.error.TqlException.class)
+                .hasMessageContaining("route documents only");
+    }
+
+    @Test
     void deleteDraftRemovesDraftAndIsIdempotent(@TempDir Path dir) throws Exception {
         Files.createDirectories(dir.resolve("config"));
         Files.writeString(dir.resolve("config/tesseraql.yml"), "tesseraql:\n  app:\n    name: t\n");

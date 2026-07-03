@@ -345,6 +345,8 @@ public final class StudioViews {
         model.put("isMigration", StudioService.isMigrationPath(path));
         // A route SQL file (web/**/*.sql) can have a generated 2-way SQL snippet inserted (SQL builder).
         model.put("isRouteSql", path != null && path.startsWith("web/") && path.endsWith(".sql"));
+        // A route document offers the form-driven editor (roadmap Phase 43, Track J1).
+        model.put("isRouteDoc", path != null && path.startsWith("web/") && path.endsWith(".yml"));
         // New vs served (Studio sidebar IA): a draft whose on-disk source does not exist yet is a
         // not-yet-served route — applying writes the file and serves it (Phase 42), where editing an
         // existing route reloads live on apply. The editor states which, so the consequence is clear.

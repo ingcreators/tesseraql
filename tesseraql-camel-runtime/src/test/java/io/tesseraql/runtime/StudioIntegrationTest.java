@@ -1799,6 +1799,57 @@ class StudioIntegrationTest {
     }
 
     @Test
+    void routeFormEditorEditsGovernedFieldsThroughADraftAndServes() throws Exception {
+        // Track J1 (roadmap Phase 43): a dedicated route is created, then edited through the
+        // FORM editor — recipe/auth/policy/inputs as structured fields — landing a draft that
+        // the normal apply flow serves immediately.
+        Files.createDirectories(appHome.resolve("web/api/formed"));
+        Files.writeString(appHome.resolve("web/api/formed/formed.sql"), "select 1 as x\n");
+        Files.writeString(appHome.resolve("web/api/formed/get.yml"), """
+                version: tesseraql/v1
+                id: formed.list
+                kind: route
+                recipe: query-json
+                sql:
+                  file: formed.sql
+                  mode: query
+                response:
+                  json:
+                    body:
+                      data: sql.rows
+                """);
+        assertThat(post("/_tesseraql/studio/reload", "", true).statusCode()).isEqualTo(200);
+        assertThat(get("/api/formed", true).statusCode()).isEqualTo(200);
+
+        HttpResponse<String> page = get("/_tesseraql/studio/ui/route-form?path="
+                + enc("web/api/formed/get.yml"), true);
+        assertThat(page.statusCode()).isEqualTo(200);
+        assertThat(page.body()).contains("Route form").contains("query-json")
+                .contains("Save as draft");
+
+        String form = "path=" + enc("web/api/formed/get.yml")
+                + "&recipe=query-json&auth=bearer&policy=app.read"
+                + "&in0name=q&in0type=string&in0maxlen=40";
+        HttpResponse<String> saved = postForm("/_tesseraql/studio/ui/route-form", form);
+        assertThat(saved.statusCode()).isEqualTo(303);
+        assertThat(saved.headers().firstValue("Location").orElse(""))
+                .contains("/_tesseraql/studio/ui/source").contains("saved=1");
+
+        // The draft carries the structured change; the form now reads the draft.
+        HttpResponse<String> reread = get("/_tesseraql/studio/ui/route-form?path="
+                + enc("web/api/formed/get.yml"), true);
+        assertThat(reread.body()).contains("Editing the pending draft");
+
+        HttpResponse<String> apply = post(
+                "/_tesseraql/studio/apply?path=" + enc("web/api/formed/get.yml"), "", true);
+        assertThat(apply.statusCode()).isEqualTo(200);
+        String applied = Files.readString(appHome.resolve("web/api/formed/get.yml"));
+        assertThat(applied).contains("policy").contains("app.read").contains("maxLength: 40");
+        // Still serving after the reload, with the declared input bound.
+        assertThat(get("/api/formed?q=abc", true).statusCode()).isEqualTo(200);
+    }
+
+    @Test
     void uiMenuPageRendersTheEditorAndFallbackNote() throws Exception {
         // With no config/menu.yml the editor shows the add form and the templates/nav.html fallback.
         Files.deleteIfExists(appHome.resolve("config/menu.yml"));
