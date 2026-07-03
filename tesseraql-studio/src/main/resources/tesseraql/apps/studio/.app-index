@@ -145,3 +145,6 @@ web/_tesseraql/studio/ui/wizard/scim/apply/applied.html
 web/_tesseraql/studio/ui/wizard/identity/apply/post.yml
 web/_tesseraql/studio/ui/wizard/identity/apply/applied.html
 web/_tesseraql/studio/ui/try/record/post.yml
+web/_tesseraql/studio/ui/data/edit/get.yml
+web/_tesseraql/studio/ui/data/edit/post.yml
+web/_tesseraql/studio/ui/data/edit/edit.html

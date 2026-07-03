@@ -1,0 +1,54 @@
+version: tesseraql/v1
+id: tql.studio.data.edit
+kind: route
+recipe: query-html
+
+input:
+  table:
+    type: string
+    required: true
+  k0:
+    type: string
+    required: false
+  v0:
+    type: string
+    required: false
+  k1:
+    type: string
+    required: false
+  v1:
+    type: string
+    required: false
+  k2:
+    type: string
+    required: false
+  v2:
+    type: string
+    required: false
+
+security:
+  auth: browser
+
+sql:
+  service: studio.data.editForm
+  params:
+    table: params.table
+    k0: params.k0
+    v0: params.v0
+    k1: params.k1
+    v1: params.v1
+    k2: params.k2
+    v2: params.v2
+    roles: principal.roles
+
+response:
+  html:
+    status: 200
+    template: edit.html
+    model:
+      row: sql
+    headers:
+      Content-Security-Policy: "default-src 'self'; style-src 'self' 'unsafe-inline'; frame-ancestors 'none'"
+      X-Content-Type-Options: nosniff
+      X-Frame-Options: DENY
+      Referrer-Policy: no-referrer

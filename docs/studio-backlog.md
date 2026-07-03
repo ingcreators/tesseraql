@@ -581,8 +581,16 @@ ships as its own slice once the phase opens:
   states why it is not recordable (`TQL-STUDIO-4233` → 400).
   `StudioService.recordability`/`recordedCaseParams`/`recordedSqlFile`/`appendRecordedTest`;
   `StudioTestService.sandboxRowCount`; `studio.tryRecord` provider; `/ui/try/record` route.
-- [ ] **J4 — data-browser row edit**: PK-scoped single-row edit via a generated command,
-  under audit + `editRoles` + confirm.
+- [x] **J4 — data-browser row edit** — *done*: rows in the data browser link **Edit** when
+  three things line up — the row editor's own opt-in (`tesseraql.studio.dataBrowser.edit.enabled`,
+  default false, on top of the browser's), the caller's `editRoles`, and a primary key on the
+  table (live `getPrimaryKeys`; PK-less tables get no affordance and the form says why). The
+  edit form ticks columns to apply (a ticked empty value sets `NULL`; untouched columns stay);
+  the UPDATE is PK-scoped with validated identifiers and type-coerced bound values, must affect
+  exactly one row, never updates PK columns, and always requires the explicit confirm
+  (`TQL-STUDIO-4232` → 422; other rejections `TQL-STUDIO-4234` → 400). Audited as the row
+  identity plus the column names — never the values. `StudioDataService.primaryKey`/`row`/
+  `updateRow`; `studio.data.editForm`/`studio.data.update` providers; `/ui/data/edit` page.
 - [ ] **J5 — authoring feedback**: deepen the shipped JSON Schema and wire it into scaffolded
   repos (`.vscode` association); lint findings gain line/column.
 

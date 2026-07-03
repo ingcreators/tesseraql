@@ -718,10 +718,15 @@ public final class TesseraqlRuntime implements AutoCloseable {
                 boolean dataBrowserEnabled = manifest.config()
                         .getString("tesseraql.studio.dataBrowser.enabled")
                         .map(Boolean::parseBoolean).orElse(false);
+                // Row editing is its own opt-in on top of the browser (roadmap Phase 43, Track
+                // J4): it writes business data, so browsing alone never implies it.
+                boolean dataEditEnabled = manifest.config()
+                        .getString("tesseraql.studio.dataBrowser.edit.enabled")
+                        .map(Boolean::parseBoolean).orElse(false);
                 StudioDataService studioData = new StudioDataService(
                         name -> context.getRegistry().lookupByNameAndType(name,
                                 javax.sql.DataSource.class),
-                        dataBrowserEnabled, testTimeout, testMaxRows);
+                        dataBrowserEnabled, dataEditEnabled, testTimeout, testMaxRows);
                 // Granular read-only (backlog D6): an optional editRoles allow-list refines the
                 // writable master switch — when set, only callers holding one of those roles may edit.
                 java.util.Set<String> editRoles = manifest.config()
@@ -1451,10 +1456,117 @@ public final class TesseraqlRuntime implements AutoCloseable {
                             } catch (RuntimeException ex) {
                                 model.put("error", ex.getMessage());
                             }
+                            // Row editing (Track J4): the edit affordance appears only when
+                            // the editor opt-in, the caller's edit permission, AND a primary
+                            // key all line up; links carry the PK columns and the row's values.
+                            boolean rowEditable = studioData.isEditEnabled()
+                                    && studioAccess.canEdit(params.get("roles"));
+                            model.put("editEnabled", rowEditable);
+                            model.put("updated", params.get("updated"));
+                            Object columns = model.get("columns");
+                            Object rowMaps = model.get("rows");
+                            if (rowEditable && columns instanceof java.util.List<?> cols
+                                    && rowMaps instanceof java.util.List<?> shownRows) {
+                                java.util.List<String> pk = studioData.primaryKey(
+                                        String.valueOf(model.get("table")));
+                                java.util.List<Integer> indexes = new java.util.ArrayList<>();
+                                for (String column : pk) {
+                                    int at = -1;
+                                    for (int i = 0; i < cols.size(); i++) {
+                                        if (String.valueOf(cols.get(i))
+                                                .equalsIgnoreCase(column)) {
+                                            at = i;
+                                            break;
+                                        }
+                                    }
+                                    indexes.add(at);
+                                }
+                                boolean complete = !pk.isEmpty() && !indexes.contains(-1);
+                                java.util.List<String> editHrefs = new java.util.ArrayList<>();
+                                for (Object rowObject : shownRows) {
+                                    String href = null;
+                                    if (complete && rowObject instanceof Map<?, ?> row
+                                            && row.get(
+                                                    "cells") instanceof java.util.List<?> cells) {
+                                        StringBuilder link = new StringBuilder(
+                                                "/_tesseraql/studio/ui/data/edit?table="
+                                                        + urlEncode(String.valueOf(
+                                                                model.get("table"))));
+                                        boolean ok = true;
+                                        for (int i = 0; i < pk.size(); i++) {
+                                            Map<?, ?> cell = (Map<?, ?>) cells
+                                                    .get(indexes.get(i));
+                                            if (Boolean.TRUE.equals(cell.get("isNull"))) {
+                                                ok = false;
+                                                break;
+                                            }
+                                            link.append("&k").append(i).append('=')
+                                                    .append(urlEncode(pk.get(i)));
+                                            link.append("&v").append(i).append('=').append(
+                                                    urlEncode(String.valueOf(
+                                                            cell.get("value"))));
+                                        }
+                                        href = ok ? link.toString() : null;
+                                    }
+                                    editHrefs.add(href);
+                                }
+                                model.put("editHrefs", editHrefs);
+                            }
                             return model;
                         })
                         // Data browser CSV export: the current view (table + filter + sort) as CSV,
                         // capped at the scan limit. Served as a file download by the export route.
+                        // Row edit (Track J4): PK-scoped single-row form + UPDATE, under the
+                        // row-editor opt-in + editRoles + an explicit confirm + the audit trail.
+                        .register("studio.data.editForm", params -> {
+                            studioAccess.requireEdit(params.get("roles"));
+                            String table = String.valueOf(params.get("table"));
+                            Map<String, Object> model = new java.util.LinkedHashMap<>();
+                            model.put("table", table);
+                            try {
+                                StudioDataService.RowView row = studioData.row(table,
+                                        dataRowKey(params));
+                                model.put("pkColumns", row.pkColumns());
+                                model.put("fields", row.fields());
+                                model.put("keyPairs", dataRowKey(params).entrySet().stream()
+                                        .map(e -> Map.of("column", e.getKey(),
+                                                "value", e.getValue()))
+                                        .toList());
+                            } catch (RuntimeException ex) {
+                                model.put("error", ex.getMessage());
+                            }
+                            return model;
+                        })
+                        .register("studio.data.update", params -> {
+                            studioAccess.requireEdit(params.get("roles"));
+                            requireExplicitConfirm(params, "Row edits");
+                            String table = String.valueOf(params.get("table"));
+                            Map<String, String> changes = new java.util.LinkedHashMap<>();
+                            for (int i = 0; i < DATA_EDIT_SLOTS; i++) {
+                                String column = str(params, "cn" + i);
+                                if (column == null
+                                        || params.get("cs" + i) == null) {
+                                    continue;
+                                }
+                                Object value = params.get("cv" + i);
+                                changes.put(column, value == null ? "" : String.valueOf(value));
+                            }
+                            try {
+                                studioData.updateRow(table, dataRowKey(params), changes);
+                            } catch (IllegalArgumentException | IllegalStateException ex) {
+                                throw new io.tesseraql.core.error.TqlException(
+                                        new io.tesseraql.core.error.TqlErrorCode(
+                                                io.tesseraql.core.error.TqlDomain.STUDIO, 4234),
+                                        ex.getMessage());
+                            }
+                            // Audit the row identity and the columns touched — never the values
+                            // (the browser may hold sensitive business data).
+                            studio.recordDataEdit(actorOf(params), table + " ["
+                                    + String.join(", ", dataRowKey(params).entrySet().stream()
+                                            .map(e -> e.getKey() + "=" + e.getValue()).toList())
+                                    + "] set " + String.join(", ", changes.keySet()));
+                            return Map.of("updated", table);
+                        })
                         .register("studio.data.export", params -> {
                             if (!studioData.isEnabled()) {
                                 return Map.of("csv", "# The data browser is disabled.\r\n");
@@ -2289,6 +2401,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
     /** The number of filter condition slots the data browser exposes. */
     private static final int DATA_FILTER_SLOTS = 5;
     private static final int ROUTE_FORM_INPUT_SLOTS = 10;
+    private static final int DATA_EDIT_SLOTS = 20;
 
     /** Assembles the data browser's filter conditions from the indexed slot params {@code fcN/foN/fvN}. */
     private static java.util.List<StudioDataService.FilterCond> dataFilters(
@@ -2388,6 +2501,19 @@ public final class TesseraqlRuntime implements AutoCloseable {
         } catch (java.io.IOException ex) {
             return Map.of();
         }
+    }
+
+    /** The k0/v0..k2/v2 primary-key slots of a data-browser row-edit request (Track J4). */
+    private static Map<String, String> dataRowKey(Map<String, Object> params) {
+        Map<String, String> key = new java.util.LinkedHashMap<>();
+        for (int i = 0; i < 3; i++) {
+            String column = str(params, "k" + i);
+            String value = str(params, "v" + i);
+            if (column != null && value != null) {
+                key.put(column, value);
+            }
+        }
+        return key;
     }
 
     /** A request parameter as a trimmed string, or null when absent or blank. */

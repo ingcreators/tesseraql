@@ -1775,6 +1775,14 @@ public final class StudioService {
     }
 
     /**
+     * Records a data-browser row edit to the audit trail (Track J4): the row identity and the
+     * columns touched — never the values.
+     */
+    public void recordDataEdit(String actor, String target) {
+        recordAudit(actor, "data", target);
+    }
+
+    /**
      * The newest {@code limit} audit entries matching {@code query} (Studio platform-UX H5). The
      * filter runs over the <em>whole</em> log before the limit applies, so a search reaches older
      * actions, not just the newest window; an empty query returns the newest {@code limit} entries.
