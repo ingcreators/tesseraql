@@ -2079,6 +2079,26 @@ class StudioIntegrationTest {
     }
 
     @Test
+    void uiFlagsEditorTogglesABooleanFlag() throws Exception {
+        Path flags = appHome.resolve("config/flags.yml");
+        try {
+            Files.writeString(flags, "flags:\n  beta: false\n");
+            // The flag renders an "off" toggle whose form posts the opposite value (true).
+            String page = get("/_tesseraql/studio/ui/flags", true).body();
+            assertThat(page).contains(">off<").contains("value=\"true\"");
+
+            // Clicking the toggle (post the opposite) flips it on; the page now shows "on".
+            assertThat(postForm("/_tesseraql/studio/ui/flags/set",
+                    "name=beta&type=boolean&value=true").statusCode()).isEqualTo(303);
+            assertThat(Files.readString(flags)).contains("beta: true");
+            assertThat(get("/_tesseraql/studio/ui/flags", true).body()).contains(">on<")
+                    .contains("value=\"false\"");
+        } finally {
+            Files.deleteIfExists(flags);
+        }
+    }
+
+    @Test
     void uiFlagsEditorRequiresAuthentication() throws Exception {
         assertThat(get("/_tesseraql/studio/ui/flags", false).statusCode()).isEqualTo(401);
     }

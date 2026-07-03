@@ -1113,6 +1113,8 @@ public final class TesseraqlRuntime implements AutoCloseable {
                                 row.put("type", value instanceof Boolean
                                         ? "boolean"
                                         : value instanceof Number ? "number" : "string");
+                                // The on/off state of a boolean flag drives the one-click toggle.
+                                row.put("on", value instanceof Boolean b && b);
                                 rows.add(row);
                             });
                             Map<String, Object> model = new java.util.LinkedHashMap<>();
