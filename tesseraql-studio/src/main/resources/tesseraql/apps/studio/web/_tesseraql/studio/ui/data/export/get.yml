@@ -13,12 +13,15 @@ input:
   dir:
     type: string
     required: false
-  filterColumn:
-    type: string
-    required: false
-  filterValue:
-    type: string
-    required: false
+  fc0: { type: string, required: false }
+  fo0: { type: string, required: false }
+  fv0: { type: string, required: false }
+  fc1: { type: string, required: false }
+  fo1: { type: string, required: false }
+  fv1: { type: string, required: false }
+  fc2: { type: string, required: false }
+  fo2: { type: string, required: false }
+  fv2: { type: string, required: false }
 
 security:
   auth: browser
@@ -29,8 +32,15 @@ sql:
     table: params.table
     sort: params.sort
     dir: params.dir
-    filterColumn: params.filterColumn
-    filterValue: params.filterValue
+    fc0: params.fc0
+    fo0: params.fo0
+    fv0: params.fv0
+    fc1: params.fc1
+    fo1: params.fo1
+    fv1: params.fv1
+    fc2: params.fc2
+    fo2: params.fo2
+    fv2: params.fv2
 
 response:
   file:

@@ -1981,14 +1981,26 @@ class StudioIntegrationTest {
     void uiDataBrowserFiltersAndSortsByColumn() throws Exception {
         // Filter tql_users to the seeded 'admin' login and sort by it — validated columns, bound value.
         HttpResponse<String> response = get("/_tesseraql/studio/ui/data?table=tql_users"
-                + "&filterColumn=login_id&filterValue=admin&sort=login_id&dir=desc", true);
+                + "&fc0=login_id&fo0=contains&fv0=admin&sort=login_id&dir=desc", true);
 
         assertThat(response.statusCode()).isEqualTo(200);
         assertThat(response.body()).contains("admin");
         // A non-matching filter yields no rows.
         assertThat(get("/_tesseraql/studio/ui/data?table=tql_users"
-                + "&filterColumn=login_id&filterValue=" + enc("nobody-xyz"), true).body())
+                + "&fc0=login_id&fo0=contains&fv0=" + enc("nobody-xyz"), true).body())
                 .contains("No rows");
+    }
+
+    @Test
+    void uiDataBrowserAppliesMultipleAndConditions() throws Exception {
+        // login_id contains 'admin' AND status equals 'ACTIVE' → matches the seeded row.
+        assertThat(get("/_tesseraql/studio/ui/data?table=tql_users"
+                + "&fc0=login_id&fo0=contains&fv0=admin"
+                + "&fc1=status&fo1=equals&fv1=ACTIVE", true).body()).contains("Administrator");
+        // Same first condition but status equals 'INACTIVE' → no rows.
+        assertThat(get("/_tesseraql/studio/ui/data?table=tql_users"
+                + "&fc0=login_id&fo0=contains&fv0=admin"
+                + "&fc1=status&fo1=equals&fv1=INACTIVE", true).body()).contains("No rows");
     }
 
     @Test
@@ -2016,7 +2028,7 @@ class StudioIntegrationTest {
     void uiDataBrowserExportRespectsAFilter() throws Exception {
         // Filtering to a non-matching value exports only the header (no data rows).
         HttpResponse<String> response = get("/_tesseraql/studio/ui/data/export?table=tql_users"
-                + "&filterColumn=login_id&filterValue=" + enc("nobody-xyz"), true);
+                + "&fc0=login_id&fo0=contains&fv0=" + enc("nobody-xyz"), true);
 
         assertThat(response.statusCode()).isEqualTo(200);
         assertThat(response.body()).contains("login_id").doesNotContain("admin");

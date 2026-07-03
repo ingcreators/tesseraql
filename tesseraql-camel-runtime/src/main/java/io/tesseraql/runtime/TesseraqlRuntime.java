@@ -1152,22 +1152,41 @@ public final class TesseraqlRuntime implements AutoCloseable {
                             if (table == null) {
                                 return model;
                             }
-                            // Sort/filter state is echoed to the model so the form and prev/next links
-                            // keep it; the service validates the columns against the real table.
+                            // Sort/filter state is echoed to the model so the form + prev/next/export
+                            // links keep it; the service validates the columns against the real table.
                             String sortColumn = str(params, "sort");
                             String sortDir = "desc".equalsIgnoreCase(String.valueOf(
                                     params.get("dir"))) ? "desc" : "asc";
-                            String filterColumn = str(params, "filterColumn");
-                            String filterValue = str(params, "filterValue");
                             model.put("sortColumn", sortColumn == null ? "" : sortColumn);
                             model.put("sortDir", sortDir);
-                            model.put("filterColumn", filterColumn == null ? "" : filterColumn);
-                            model.put("filterValue", filterValue == null ? "" : filterValue);
+                            // Up to DATA_FILTER_SLOTS AND-conditions from indexed slots fcN/foN/fvN.
+                            java.util.List<StudioDataService.FilterCond> filters = new java.util.ArrayList<>();
+                            java.util.List<Map<String, Object>> filterRows = new java.util.ArrayList<>();
+                            for (int i = 0; i < DATA_FILTER_SLOTS; i++) {
+                                String column = str(params, "fc" + i);
+                                String op = str(params, "fo" + i) == null
+                                        ? "contains"
+                                        : str(params, "fo" + i);
+                                String value = params.get("fv" + i) == null
+                                        ? ""
+                                        : String.valueOf(params.get("fv" + i));
+                                Map<String, Object> row = new java.util.LinkedHashMap<>();
+                                row.put("column", column == null ? "" : column);
+                                row.put("op", op);
+                                row.put("value", value);
+                                filterRows.add(row);
+                                if (column != null) {
+                                    filters.add(
+                                            new StudioDataService.FilterCond(column, op, value));
+                                }
+                            }
+                            model.put("filterRows", filterRows);
+                            model.put("queryBase", dataQueryBase(table, sortColumn, sortDir,
+                                    filterRows));
                             try {
                                 int page = parseIndex(params.get("page"));
                                 StudioDataService.DataPage data = studioData.browse(table,
-                                        page < 0 ? 0 : page, sortColumn, sortDir, filterColumn,
-                                        filterValue);
+                                        page < 0 ? 0 : page, sortColumn, sortDir, filters);
                                 model.put("table", data.table());
                                 model.put("columns", data.columns());
                                 java.util.List<Map<String, Object>> rows = new java.util.ArrayList<>();
@@ -1207,7 +1226,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
                                         "desc".equalsIgnoreCase(String.valueOf(params.get("dir")))
                                                 ? "desc"
                                                 : "asc",
-                                        str(params, "filterColumn"), str(params, "filterValue")));
+                                        dataFilters(params)));
                             } catch (RuntimeException ex) {
                                 return Map.of("csv", "# " + ex.getMessage() + "\r\n");
                             }
@@ -2003,6 +2022,47 @@ public final class TesseraqlRuntime implements AutoCloseable {
             }
         }
         return body;
+    }
+
+    /** The number of AND-filter condition slots the data browser exposes. */
+    private static final int DATA_FILTER_SLOTS = 3;
+
+    /** Assembles the data browser's filter conditions from the indexed slot params {@code fcN/foN/fvN}. */
+    private static java.util.List<StudioDataService.FilterCond> dataFilters(
+            Map<String, Object> params) {
+        java.util.List<StudioDataService.FilterCond> filters = new java.util.ArrayList<>();
+        for (int i = 0; i < DATA_FILTER_SLOTS; i++) {
+            String column = str(params, "fc" + i);
+            if (column == null) {
+                continue;
+            }
+            String op = str(params, "fo" + i) == null ? "contains" : str(params, "fo" + i);
+            String value = params.get("fv" + i) == null ? "" : String.valueOf(params.get("fv" + i));
+            filters.add(new StudioDataService.FilterCond(column, op, value));
+        }
+        return filters;
+    }
+
+    /** The URL-encoded query string (table + filter slots + sort) prev/next/export links reuse. */
+    private static String dataQueryBase(String table, String sortColumn, String sortDir,
+            java.util.List<Map<String, Object>> filterRows) {
+        StringBuilder query = new StringBuilder("table=").append(urlEncode(table));
+        for (int i = 0; i < filterRows.size(); i++) {
+            Map<String, Object> row = filterRows.get(i);
+            query.append("&fc").append(i).append('=')
+                    .append(urlEncode(String.valueOf(row.get("column"))))
+                    .append("&fo").append(i).append('=')
+                    .append(urlEncode(String.valueOf(row.get("op"))))
+                    .append("&fv").append(i).append('=')
+                    .append(urlEncode(String.valueOf(row.get("value"))));
+        }
+        return query.append("&sort=").append(urlEncode(sortColumn == null ? "" : sortColumn))
+                .append("&dir=").append(sortDir).toString();
+    }
+
+    private static String urlEncode(String value) {
+        return java.net.URLEncoder.encode(value == null ? "" : value,
+                java.nio.charset.StandardCharsets.UTF_8);
     }
 
     /** A request parameter as a trimmed string, or null when absent or blank. */

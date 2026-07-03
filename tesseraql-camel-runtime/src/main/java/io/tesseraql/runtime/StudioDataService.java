@@ -68,15 +68,18 @@ final class StudioDataService {
         }
     }
 
+    /** One filter condition: a validated {@code column}, an {@code op}, and a bound {@code value}. */
+    record FilterCond(String column, String op, String value) {
+    }
+
     /**
-     * One page of rows of {@code table}; {@code page} is zero-based. An optional {@code filterColumn}
-     * with a {@code filterValue} keeps rows whose (text-cast) value contains it (case-insensitive);
-     * an optional {@code sortColumn} orders the results. Both columns are validated against the
-     * table's real columns before use (so they can never be an injection vector), and the filter
-     * value is a bound parameter.
+     * One page of rows of {@code table}; {@code page} is zero-based. {@code filters} are AND-combined
+     * conditions (each a validated column + operator + bound value) and {@code sortColumn} orders the
+     * results. Every column is validated against the table's real columns before use (so it can never
+     * be an injection vector) and every value is a bound parameter.
      */
-    DataPage browse(String table, int page, String sortColumn, String sortDir, String filterColumn,
-            String filterValue) {
+    DataPage browse(String table, int page, String sortColumn, String sortDir,
+            List<FilterCond> filters) {
         if (!tables().contains(table)) {
             throw new IllegalArgumentException("No such table: " + table);
         }
@@ -86,27 +89,13 @@ final class StudioDataService {
             connection.setReadOnly(true);
             String quote = connection.getMetaData().getIdentifierQuoteString();
             List<String> tableColumns = columnsOf(connection, table);
-            boolean hasFilter = tableColumns.contains(filterColumn)
-                    && filterValue != null && !filterValue.isBlank();
-            boolean hasSort = tableColumns.contains(sortColumn);
-            StringBuilder sql = new StringBuilder("SELECT * FROM ")
-                    .append(quoteId(quote, table));
-            if (hasFilter) {
-                sql.append(" WHERE LOWER(CAST(").append(quoteId(quote, filterColumn))
-                        .append(" AS VARCHAR(4000))) LIKE ?");
-            }
-            if (hasSort) {
-                sql.append(" ORDER BY ").append(quoteId(quote, sortColumn))
-                        .append("desc".equalsIgnoreCase(sortDir) ? " DESC" : " ASC");
-            }
-            try (PreparedStatement statement = connection.prepareStatement(sql.toString())) {
+            Query query = buildQuery(quote, table, tableColumns, filters, sortColumn, sortDir);
+            try (PreparedStatement statement = connection.prepareStatement(query.sql())) {
                 statement.setQueryTimeout(queryTimeoutSeconds);
                 // Cap the scan so a browse never pulls a whole large table; one extra row past the
                 // page detects whether a next page exists.
                 statement.setMaxRows(Math.min(offset + PAGE_SIZE + 1, maxScan));
-                if (hasFilter) {
-                    statement.setString(1, "%" + filterValue.toLowerCase(Locale.ROOT) + "%");
-                }
+                bindAll(statement, query.binds());
                 try (ResultSet rs = statement.executeQuery()) {
                     ResultSetMetaData meta = rs.getMetaData();
                     int columnCount = meta.getColumnCount();
@@ -141,12 +130,11 @@ final class StudioDataService {
     }
 
     /**
-     * The current view (table + optional filter/sort) as CSV, capped at the scan limit. Same column
-     * validation + bound filter value as {@link #browse}; the whole capped result is exported (no
+     * The current view (table + filters + sort) as CSV, capped at the scan limit. Same column
+     * validation + bound values as {@link #browse}; the whole capped result is exported (no
      * pagination), one row per line, RFC-4180 quoting.
      */
-    String exportCsv(String table, String sortColumn, String sortDir, String filterColumn,
-            String filterValue) {
+    String exportCsv(String table, String sortColumn, String sortDir, List<FilterCond> filters) {
         if (!tables().contains(table)) {
             throw new IllegalArgumentException("No such table: " + table);
         }
@@ -154,24 +142,11 @@ final class StudioDataService {
             connection.setReadOnly(true);
             String quote = connection.getMetaData().getIdentifierQuoteString();
             List<String> tableColumns = columnsOf(connection, table);
-            boolean hasFilter = tableColumns.contains(filterColumn)
-                    && filterValue != null && !filterValue.isBlank();
-            boolean hasSort = tableColumns.contains(sortColumn);
-            StringBuilder sql = new StringBuilder("SELECT * FROM ").append(quoteId(quote, table));
-            if (hasFilter) {
-                sql.append(" WHERE LOWER(CAST(").append(quoteId(quote, filterColumn))
-                        .append(" AS VARCHAR(4000))) LIKE ?");
-            }
-            if (hasSort) {
-                sql.append(" ORDER BY ").append(quoteId(quote, sortColumn))
-                        .append("desc".equalsIgnoreCase(sortDir) ? " DESC" : " ASC");
-            }
-            try (PreparedStatement statement = connection.prepareStatement(sql.toString())) {
+            Query query = buildQuery(quote, table, tableColumns, filters, sortColumn, sortDir);
+            try (PreparedStatement statement = connection.prepareStatement(query.sql())) {
                 statement.setQueryTimeout(queryTimeoutSeconds);
                 statement.setMaxRows(maxScan);
-                if (hasFilter) {
-                    statement.setString(1, "%" + filterValue.toLowerCase(Locale.ROOT) + "%");
-                }
+                bindAll(statement, query.binds());
                 try (ResultSet rs = statement.executeQuery()) {
                     ResultSetMetaData meta = rs.getMetaData();
                     int columnCount = meta.getColumnCount();
@@ -216,6 +191,72 @@ final class StudioDataService {
 
     private static String quoteId(String quote, String identifier) {
         return quote + identifier.replace(quote, quote + quote) + quote;
+    }
+
+    /** A prepared SQL string with the ordered bind values for its {@code ?} placeholders. */
+    private record Query(String sql, List<String> binds) {
+    }
+
+    /**
+     * Builds {@code SELECT * FROM table [WHERE cond AND …] [ORDER BY col dir]} from validated
+     * filters + sort. Unknown columns and unknown/blank ops are dropped; the comparisons run on the
+     * text representation ({@code LOWER(CAST(col AS VARCHAR))}) so they are type-agnostic, and every
+     * value is a bind parameter.
+     */
+    private static Query buildQuery(String quote, String table, List<String> columns,
+            List<FilterCond> filters, String sortColumn, String sortDir) {
+        StringBuilder sql = new StringBuilder("SELECT * FROM ").append(quoteId(quote, table));
+        List<String> where = new ArrayList<>();
+        List<String> binds = new ArrayList<>();
+        if (filters != null) {
+            for (FilterCond filter : filters) {
+                if (filter == null || !columns.contains(filter.column())) {
+                    continue;
+                }
+                String text = "LOWER(CAST(" + quoteId(quote, filter.column())
+                        + " AS VARCHAR(4000)))";
+                String raw = quoteId(quote, filter.column());
+                String value = filter.value() == null
+                        ? ""
+                        : filter.value().toLowerCase(Locale.ROOT);
+                boolean blank = value.isBlank();
+                switch (filter.op() == null ? "" : filter.op()) {
+                    case "contains" ->
+                        maybe(where, binds, !blank, text + " LIKE ?", "%" + value + "%");
+                    case "equals" -> maybe(where, binds, !blank, text + " = ?", value);
+                    case "notEquals" -> maybe(where, binds, !blank, text + " <> ?", value);
+                    case "startsWith" -> maybe(where, binds, !blank, text + " LIKE ?", value + "%");
+                    case "endsWith" -> maybe(where, binds, !blank, text + " LIKE ?", "%" + value);
+                    case "isNull" -> where.add(raw + " IS NULL");
+                    case "isNotNull" -> where.add(raw + " IS NOT NULL");
+                    default -> {
+                    }
+                }
+            }
+        }
+        if (!where.isEmpty()) {
+            sql.append(" WHERE ").append(String.join(" AND ", where));
+        }
+        if (columns.contains(sortColumn)) {
+            sql.append(" ORDER BY ").append(quoteId(quote, sortColumn))
+                    .append("desc".equalsIgnoreCase(sortDir) ? " DESC" : " ASC");
+        }
+        return new Query(sql.toString(), binds);
+    }
+
+    private static void maybe(List<String> where, List<String> binds, boolean include,
+            String clause, String bind) {
+        if (include) {
+            where.add(clause);
+            binds.add(bind);
+        }
+    }
+
+    private static void bindAll(PreparedStatement statement, List<String> binds)
+            throws SQLException {
+        for (int i = 0; i < binds.size(); i++) {
+            statement.setString(i + 1, binds.get(i));
+        }
     }
 
     private static String truncate(String value) {
