@@ -101,9 +101,46 @@ public class TesseraqlSqlProducer extends DefaultProducer {
                     TesseraqlProperties.CONTEXT, Map.class);
             long startNanos = System.nanoTime();
             long startedAt = System.currentTimeMillis();
-            Map<String, Object> result = "update".equals(mode)
-                    ? executeUpdate(dataSource, bound)
-                    : executeQuery(dataSource, bound);
+            // Declarative pagination (roadmap Phase 41): the main query of a page:-declaring
+            // route executes with the dialect's clause appended (one extra row answers hasNext),
+            // and the `page` context entry carries the metadata renderers and views read.
+            io.tesseraql.camel.PageRequest page = exchange.getProperty(TesseraqlProperties.PAGE,
+                    io.tesseraql.camel.PageRequest.class);
+            boolean paged = page != null && "query".equals(mode)
+                    && "sql".equals(endpoint.getResultKey());
+            Map<String, Object> result;
+            if (paged) {
+                result = executeQuery(dataSource, paginated(bound, page));
+                @SuppressWarnings("unchecked")
+                List<Map<String, Object>> rows = (List<Map<String, Object>>) result.get("rows");
+                boolean hasNext = rows.size() > page.size();
+                if (hasNext) {
+                    rows = new java.util.ArrayList<>(rows.subList(0, page.size()));
+                    result.put("rows", rows);
+                    result.put("rowCount", rows.size());
+                }
+                Map<String, Object> info = new java.util.LinkedHashMap<>();
+                info.put("number", page.number());
+                info.put("size", page.size());
+                info.put("hasNext", hasNext);
+                info.put("hasPrev", page.number() > 1);
+                if (page.by() != null && !rows.isEmpty()) {
+                    info.put("next", rows.get(rows.size() - 1).get(page.by()));
+                }
+                if (page.count()) {
+                    long total = countAll(dataSource, bound);
+                    info.put("totalRows", total);
+                    info.put("totalPages", Math.max(1,
+                            (total + page.size() - 1) / page.size()));
+                }
+                if (context != null) {
+                    context.put("page", info);
+                }
+            } else {
+                result = "update".equals(mode)
+                        ? executeUpdate(dataSource, bound)
+                        : executeQuery(dataSource, bound);
+            }
 
             String countKey = "update".equals(mode) ? "affectedRows" : "rowCount";
             Object count = result.get(countKey);
@@ -300,6 +337,40 @@ public class TesseraqlSqlProducer extends DefaultProducer {
                 : new FileTempStore(
                         java.nio.file.Path.of(System.getProperty("java.io.tmpdir"),
                                 "tesseraql-spool"));
+    }
+
+    /** The bound statement with the dialect's pagination clause (size+1 rows) appended. */
+    private BoundSql paginated(BoundSql bound, io.tesseraql.camel.PageRequest page) {
+        io.tesseraql.core.dialect.Dialect dialect = io.tesseraql.core.dialect.Dialect
+                .fromId(endpoint.getDialect()).orElse(io.tesseraql.core.dialect.Dialect.POSTGRES);
+        io.tesseraql.core.dialect.Pagination.Clause clause = io.tesseraql.core.dialect.Pagination
+                .clause(dialect, page.size() + 1L, page.offset());
+        List<io.tesseraql.core.sql.BoundParameter> parameters = new java.util.ArrayList<>(
+                bound.parameters());
+        for (Object value : clause.parameters()) {
+            parameters.add(new io.tesseraql.core.sql.BoundParameter("page", value, -1));
+        }
+        return new BoundSql(stripTerminator(bound.sql()) + "\n" + clause.sql(), parameters,
+                bound.sourceMap(), bound.coverageTrace(), bound.variant());
+    }
+
+    /** The rendered SQL without its optional trailing terminator, so a clause can append. */
+    private static String stripTerminator(String sql) {
+        String trimmed = sql.stripTrailing();
+        return trimmed.endsWith(";") ? trimmed.substring(0, trimmed.length() - 1) : trimmed;
+    }
+
+    /** The total row count: the rendered query wrapped in {@code select count(*)}. */
+    private long countAll(DataSource dataSource, BoundSql bound) {
+        BoundSql counting = new BoundSql(
+                "select count(*) as tql_total from (\n" + stripTerminator(bound.sql())
+                        + "\n) tql_count",
+                bound.parameters(), bound.sourceMap(), bound.coverageTrace(), bound.variant());
+        Map<String, Object> result = executeQuery(dataSource, counting);
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> rows = (List<Map<String, Object>>) result.get("rows");
+        Object total = rows.isEmpty() ? 0L : rows.get(0).values().iterator().next();
+        return total instanceof Number number ? number.longValue() : 0L;
     }
 
     private Map<String, Object> executeQuery(DataSource dataSource, BoundSql bound) {

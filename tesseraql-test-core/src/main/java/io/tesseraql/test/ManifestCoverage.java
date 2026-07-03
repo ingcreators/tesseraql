@@ -97,6 +97,16 @@ public final class ManifestCoverage {
     }
 
     /**
+     * Page coverage (roadmap Phase 41): routes declaring {@code page:} — declared and covered
+     * like routes, so a suite must exercise every paginated query. Gated via
+     * {@code coverage.thresholds.page}.
+     */
+    public static ItemCoverage page(AppManifest manifest, List<TestSuite> suites) {
+        return routeKind("page", manifest, suites,
+                definition -> definition.page() != null);
+    }
+
+    /**
      * Queue-consume coverage (roadmap Phase 27): every {@code queue-consume} route under
      * {@code consume/} is declared, and one counts as covered when a suite exercises its SQL — the
      * same SQL-file basis as route coverage, since a consumer is a command pipeline triggered by a

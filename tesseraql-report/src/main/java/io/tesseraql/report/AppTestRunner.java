@@ -96,6 +96,7 @@ public final class AppTestRunner {
             kinds.add(ManifestCoverage.webhook(manifest, suites));
             kinds.add(ManifestCoverage.queueConsume(manifest, suites));
             kinds.add(ManifestCoverage.view(manifest, suites));
+            kinds.add(ManifestCoverage.page(manifest, suites));
             kinds.add(ManifestCoverage.dataScope(manifest, suites));
             kinds.add(ManifestCoverage.workflow(manifest, suites));
             kinds.add(ManifestCoverage.document(manifest, suites));

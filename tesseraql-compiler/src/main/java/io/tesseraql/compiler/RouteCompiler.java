@@ -390,7 +390,7 @@ public final class RouteCompiler {
             RouteDefinition synthesized = new RouteDefinition("tesseraql/v1", routeId, "route",
                     "command-json", java.util.Map.of(), null, security, null, null, null, command,
                     java.util.Map.of(), java.util.Map.of(), java.util.Map.of(), java.util.Map.of(),
-                    null, null, null, null, null, null, workflowResponse());
+                    null, null, null, null, null, null, workflowResponse(), null);
             String urlPath = basePath + "/{key}/" + transition.id();
             RouteFile routeFile = new RouteFile("POST", urlPath, workflowFile.source(),
                     synthesized);
@@ -447,7 +447,7 @@ public final class RouteCompiler {
                 "command-json", java.util.Map.of(), null, def.security(), null, null, null, null,
                 java.util.Map.of(), java.util.Map.of(), java.util.Map.of(), java.util.Map.of(),
                 null,
-                null, null, null, null, null, workflowResponse());
+                null, null, null, null, null, workflowResponse(), null);
         ProcessorDefinition<?> route = builder.from(direct).routeId(routeId);
         applySecurity(route, def.security());
         applyTenancy(route);
@@ -814,6 +814,11 @@ public final class RouteCompiler {
         ProcessorDefinition<?> step = route
                 .process(new RequestBinder(definition, pathParams(routeFile.urlPath()),
                         compiledAppHome));
+        // Declarative pagination (roadmap Phase 41): compute the page window before the main
+        // query executes; the producer appends the dialect clause and publishes `page`.
+        if (definition.page() != null) {
+            step = step.process(new io.tesseraql.compiler.binding.PageBinder(definition.page()));
+        }
         // A route may have no data binding at all (the page recipe: forms, static pages).
         if (definition.sql() != null) {
             step = step.to(executionUri(routeFile, definition.sql(), "sql"));
@@ -823,6 +828,9 @@ public final class RouteCompiler {
             step = step
                     .process(new io.tesseraql.compiler.binding.NamedQueryBinder(entry.getValue()))
                     .to(executionUri(routeFile, entry.getValue(), entry.getKey()));
+        }
+        if (definition.page() != null) {
+            step = step.process(new io.tesseraql.compiler.binding.PageHeaders());
         }
         return step;
     }

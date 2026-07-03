@@ -271,6 +271,7 @@ public final class ViewBinding {
             List<ViewSpec.Column> columns = columnsOf(spec.columns(), rows);
             Map<String, Object> params = params(context);
             v.put("path", pagePath);
+            v.put("page", pager(context, params, pagePath));
             String sort = str(params.get("sort"));
             String dir = str(params.get("dir"));
             v.put("sort", sort);
@@ -331,6 +332,49 @@ public final class ViewBinding {
         return value == Math.floor(value) && !Double.isInfinite(value)
                 ? String.valueOf((long) value)
                 : String.valueOf(value);
+    }
+
+    /**
+     * The list pattern's pager model (roadmap Phase 41): the `page` context entry the SQL
+     * producer published, extended with self-rendering prev/next hrefs that keep the search
+     * and sort state. Null when the route declares no page: block.
+     */
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> pager(Map<String, Object> context, Map<String, Object> params,
+            String pagePath) {
+        Object raw = context.get("page");
+        if (!(raw instanceof Map)) {
+            return null;
+        }
+        Map<String, Object> pager = new LinkedHashMap<>((Map<String, Object>) raw);
+        long number = pager.get("number") instanceof Number n ? n.longValue() : 1;
+        StringBuilder state = new StringBuilder();
+        for (String key : List.of("sort", "dir")) {
+            String value = str(params.get(key));
+            if (!value.isEmpty()) {
+                state.append('&').append(key).append('=').append(encode(value));
+            }
+        }
+        if (spec.search() != null) {
+            String value = str(params.get(spec.search()));
+            if (!value.isEmpty()) {
+                state.append('&').append(spec.search()).append('=').append(encode(value));
+            }
+        }
+        Object next = pager.get("next");
+        if (Boolean.TRUE.equals(pager.get("hasNext"))) {
+            pager.put("nextHref", next != null
+                    ? pagePath + "?after=" + encode(String.valueOf(next)) + state
+                    : pagePath + "?page=" + (number + 1) + state);
+        }
+        if (next == null && number > 1) {
+            pager.put("prevHref", pagePath + "?page=" + (number - 1) + state);
+        }
+        return pager;
+    }
+
+    private static String encode(String value) {
+        return java.net.URLEncoder.encode(value, java.nio.charset.StandardCharsets.UTF_8);
     }
 
     /** The coerced request params ({@code sort}/{@code dir}/the search input) or empty. */

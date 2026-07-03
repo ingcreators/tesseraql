@@ -87,6 +87,28 @@ public final class OpenApiGenerator {
             parameters.add(parameter(matcher.group(1), "path", true,
                     declared != null ? fieldSchema(declared) : Map.of("type", "string")));
         }
+        // Declarative pagination (roadmap Phase 41): the framework-owned paging parameters
+        // and the automatic response headers ride into the contract.
+        if (definition.page() != null) {
+            io.tesseraql.yaml.model.PageSpec page = definition.page();
+            if (io.tesseraql.yaml.model.PageSpec.KEYSET.equals(page.effectiveStrategy())) {
+                parameters.add(parameter("after", "query", false, Map.of("type", "string")));
+            } else {
+                Map<String, Object> pageSchema = new LinkedHashMap<>();
+                pageSchema.put("type", "integer");
+                pageSchema.put("minimum", 1);
+                pageSchema.put("default", 1);
+                parameters.add(parameter("page", "query", false, pageSchema));
+            }
+            if (page.maxSize() != null) {
+                Map<String, Object> sizeSchema = new LinkedHashMap<>();
+                sizeSchema.put("type", "integer");
+                sizeSchema.put("minimum", 1);
+                sizeSchema.put("maximum", page.maxSize());
+                sizeSchema.put("default", page.effectiveSize());
+                parameters.add(parameter("size", "query", false, sizeSchema));
+            }
+        }
         // GET/DELETE inputs bind from the query string; other methods carry a JSON body
         // (except file-import, whose body is the uploaded file itself).
         boolean queryInputs = "GET".equalsIgnoreCase(route.httpMethod())

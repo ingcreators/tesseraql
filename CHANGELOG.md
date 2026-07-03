@@ -8,6 +8,21 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **Declarative pagination** (roadmap Phase 41, first slice; see
+  [docs/pagination.md](docs/pagination.md)): a `page:` block on `query-json`/`query-html`
+  routes paginates the main query by appending the dialect's clause at execution time — the
+  authored 2-way SQL stays plain-tool runnable with no hand-written `LIMIT`
+  (`TQL-YAML-1018` warns). Offset strategy owns framework `?page=`/`?size=` parameters
+  (bounded by `maxSize`); keyset (`strategy: keyset, by:`) keeps the cursor predicate in the
+  SQL while the framework derives `page.next` from the last row. One row beyond the page
+  answers `hasNext` without a count; `count: true` adds `totalRows`/`totalPages`. The `page`
+  context entry feeds bodies (`meta: page`) and templates; responses automatically carry
+  `X-Total-Count` and RFC 8288 `Link` `rel="next"`/`rel="prev"`; a paginated `view: list`
+  renders the kit's `hc-pagination` nav preserving search/sort state. Machine-checkable:
+  `TQL-YAML-1015..1018` lint, a `page` coverage kind, and the OpenAPI
+  `page`/`size`/`after` parameters. `tesseraql scaffold crud` lists paginate out of the box
+  (size 50, maxSize 200, counted; the gallery regenerated).
+
 - **Expression-language depth** (roadmap Phase 40, final slice — the phase is complete; see
   [docs/declarative-validation.md](docs/declarative-validation.md)): the core expression
   language — shared by `validate:` rules, `requiredWhen`, `headersWhen` guards, and workflow

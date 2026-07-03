@@ -112,6 +112,44 @@ public final class AppLinter {
         if (route.definition().input() == null) {
             return;
         }
+        io.tesseraql.yaml.model.PageSpec page = route.definition().page();
+        if (page != null) {
+            String recipe = route.definition().recipe();
+            if (!"query-json".equals(recipe) && !"query-html".equals(recipe)) {
+                findings.add(new LintFinding("TQL-YAML-1015", "error", source,
+                        "page: is a query-json/query-html key (recipe is " + recipe + ")"));
+            }
+            if (io.tesseraql.yaml.model.PageSpec.KEYSET.equals(page.effectiveStrategy())
+                    && (page.by() == null || page.by().isBlank())) {
+                findings.add(new LintFinding("TQL-YAML-1016", "error", source,
+                        "page: strategy keyset requires by: (the cursor column)"));
+            }
+            if (!io.tesseraql.yaml.model.PageSpec.OFFSET.equals(page.effectiveStrategy())
+                    && !io.tesseraql.yaml.model.PageSpec.KEYSET.equals(page.effectiveStrategy())) {
+                findings.add(new LintFinding("TQL-YAML-1016", "error", source,
+                        "page: unknown strategy " + page.strategy() + " (offset or keyset)"));
+            }
+            if (page.effectiveSize() < 1
+                    || (page.maxSize() != null && page.maxSize() < page.effectiveSize())) {
+                findings.add(new LintFinding("TQL-YAML-1017", "error", source,
+                        "page: size must be >= 1 and maxSize >= size"));
+            }
+            if (route.definition().sql() != null && route.definition().sql().file() != null) {
+                Path sqlFile = route.source().getParent()
+                        .resolve(route.definition().sql().file()).normalize();
+                try {
+                    if (java.nio.file.Files.isRegularFile(sqlFile) && java.nio.file.Files
+                            .readString(sqlFile).toLowerCase(java.util.Locale.ROOT)
+                            .matches("(?s).*\\b(limit|fetch)\\b.*")) {
+                        findings.add(new LintFinding("TQL-YAML-1018", "warning", source,
+                                "page: appends the pagination clause — the authored SQL should"
+                                        + " not carry its own LIMIT/FETCH"));
+                    }
+                } catch (java.io.IOException ignored) {
+                    // unreadable SQL surfaces through other lint rules
+                }
+            }
+        }
         route.definition().input().forEach((name, field) -> {
             if (field.pattern() != null) {
                 try {
