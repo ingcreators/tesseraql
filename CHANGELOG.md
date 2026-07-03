@@ -8,6 +8,17 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **Expression-language depth** (roadmap Phase 40, final slice — the phase is complete; see
+  [docs/declarative-validation.md](docs/declarative-validation.md)): the core expression
+  language — shared by `validate:` rules, `requiredWhen`, `headersWhen` guards, and workflow
+  guards — gains decimal-exact arithmetic (`+ - * / %`, `BigDecimal` semantics so
+  `qty * price <= budget` is a declarable rule with no float drift; `+` concatenates strings;
+  `null` operands propagate), unary minus, and a fixed whitelist of pure functions (`length`,
+  `lower`, `upper`, `trim`, `contains`, `startsWith`, `endsWith`, `matches`, `abs`, `round`,
+  `floor`, `ceil`, `min`, `max`, `coalesce`). Unknown function names and wrong arities fail at
+  parse — and therefore at build/lint — so evaluation still cannot reach outside the whitelist
+  (no method calls, no reflection).
+
 - **Input, validation, and path-parameter depth** (roadmap Phase 40, first slice; see
   [docs/declarative-validation.md](docs/declarative-validation.md)): declared inputs gain
   `pattern` (anchored regex, pre-compiled by lint `TQL-YAML-1012`), `minLength`, semantic string

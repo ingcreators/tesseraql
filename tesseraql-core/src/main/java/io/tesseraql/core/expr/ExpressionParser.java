@@ -11,12 +11,15 @@ import java.util.List;
  *
  * <p>Grammar, lowest to highest precedence:
  * <pre>
- *   or         : and ( '||' and )*
- *   and        : equality ( '&amp;&amp;' equality )*
- *   equality   : comparison ( ('==' | '!=') comparison )*
- *   comparison : unary ( ('&lt;' | '&gt;' | '&lt;=' | '&gt;=') unary )*
- *   unary      : '!' unary | primary
- *   primary    : literal | path | '(' or ')'
+ *   or             : and ( '||' and )*
+ *   and            : equality ( '&amp;&amp;' equality )*
+ *   equality       : comparison ( ('==' | '!=') comparison )*
+ *   comparison     : additive ( ('&lt;' | '&gt;' | '&lt;=' | '&gt;=') additive )*
+ *   additive       : multiplicative ( ('+' | '-') multiplicative )*
+ *   multiplicative : unary ( ('*' | '/' | '%') unary )*
+ *   unary          : '!' unary | '-' unary | primary
+ *   primary        : literal | call | path | '(' or ')'
+ *   call           : FUNCTION '(' or ( ',' or )* ')'
  * </pre>
  *
  * Hand-written with no external dependency to keep {@code tesseraql-core} dependency-free.
@@ -73,16 +76,44 @@ public final class ExpressionParser {
     }
 
     private Expr comparison() {
-        Expr left = unary();
+        Expr left = additive();
         while (true) {
             if (match(TokenType.LT)) {
-                left = new Expr.Comparison(Expr.Comparison.Operator.LT, left, unary());
+                left = new Expr.Comparison(Expr.Comparison.Operator.LT, left, additive());
             } else if (match(TokenType.GT)) {
-                left = new Expr.Comparison(Expr.Comparison.Operator.GT, left, unary());
+                left = new Expr.Comparison(Expr.Comparison.Operator.GT, left, additive());
             } else if (match(TokenType.LE)) {
-                left = new Expr.Comparison(Expr.Comparison.Operator.LE, left, unary());
+                left = new Expr.Comparison(Expr.Comparison.Operator.LE, left, additive());
             } else if (match(TokenType.GE)) {
-                left = new Expr.Comparison(Expr.Comparison.Operator.GE, left, unary());
+                left = new Expr.Comparison(Expr.Comparison.Operator.GE, left, additive());
+            } else {
+                return left;
+            }
+        }
+    }
+
+    private Expr additive() {
+        Expr left = multiplicative();
+        while (true) {
+            if (match(TokenType.PLUS)) {
+                left = new Expr.Arithmetic(Expr.Arithmetic.Operator.ADD, left, multiplicative());
+            } else if (match(TokenType.MINUS)) {
+                left = new Expr.Arithmetic(Expr.Arithmetic.Operator.SUB, left, multiplicative());
+            } else {
+                return left;
+            }
+        }
+    }
+
+    private Expr multiplicative() {
+        Expr left = unary();
+        while (true) {
+            if (match(TokenType.STAR)) {
+                left = new Expr.Arithmetic(Expr.Arithmetic.Operator.MUL, left, unary());
+            } else if (match(TokenType.SLASH)) {
+                left = new Expr.Arithmetic(Expr.Arithmetic.Operator.DIV, left, unary());
+            } else if (match(TokenType.PERCENT)) {
+                left = new Expr.Arithmetic(Expr.Arithmetic.Operator.MOD, left, unary());
             } else {
                 return left;
             }
@@ -92,6 +123,9 @@ public final class ExpressionParser {
     private Expr unary() {
         if (match(TokenType.NOT)) {
             return new Expr.Not(unary());
+        }
+        if (match(TokenType.MINUS)) {
+            return new Expr.Negate(unary());
         }
         return primary();
     }
@@ -123,6 +157,26 @@ public final class ExpressionParser {
                 return new Expr.Literal(Boolean.FALSE);
             }
             default -> {
+                // A whitelisted function call (roadmap Phase 40): IDENT '(' args ')'. Unknown
+                // names and wrong arities are parse errors, so lint catches them at build.
+                if (!atEnd() && peek().type() == TokenType.LPAREN
+                        && Expr.Call.FUNCTIONS.containsKey(first.text())) {
+                    advance();
+                    List<Expr> args = new ArrayList<>();
+                    if (!match(TokenType.RPAREN)) {
+                        args.add(or());
+                        while (match(TokenType.COMMA)) {
+                            args.add(or());
+                        }
+                        expect(TokenType.RPAREN, "Expected ')' after arguments");
+                    }
+                    int arity = Expr.Call.FUNCTIONS.get(first.text());
+                    if (args.size() != arity) {
+                        throw error(first.text() + "() takes " + arity + " argument"
+                                + (arity == 1 ? "" : "s") + ", got " + args.size());
+                    }
+                    return new Expr.Call(first.text(), args);
+                }
                 List<String> segments = new ArrayList<>();
                 segments.add(first.text());
                 while (match(TokenType.DOT)) {
@@ -176,7 +230,7 @@ public final class ExpressionParser {
     }
 
     private enum TokenType {
-        IDENT, STRING, NUMBER, DOT, AND, OR, NOT, EQ, NE, LT, GT, LE, GE, LPAREN, RPAREN
+        IDENT, STRING, NUMBER, DOT, AND, OR, NOT, EQ, NE, LT, GT, LE, GE, LPAREN, RPAREN, PLUS, MINUS, STAR, SLASH, PERCENT, COMMA
     }
 
     private record Token(TokenType type, String text) {
@@ -263,6 +317,30 @@ public final class ExpressionParser {
                 case ')' -> {
                     index++;
                     return new Token(TokenType.RPAREN, ")");
+                }
+                case '+' -> {
+                    index++;
+                    return new Token(TokenType.PLUS, "+");
+                }
+                case '-' -> {
+                    index++;
+                    return new Token(TokenType.MINUS, "-");
+                }
+                case '*' -> {
+                    index++;
+                    return new Token(TokenType.STAR, "*");
+                }
+                case '/' -> {
+                    index++;
+                    return new Token(TokenType.SLASH, "/");
+                }
+                case '%' -> {
+                    index++;
+                    return new Token(TokenType.PERCENT, "%");
+                }
+                case ',' -> {
+                    index++;
+                    return new Token(TokenType.COMMA, ",");
                 }
                 case '&' -> {
                     return twoChar(next, '&', TokenType.AND, "&&");

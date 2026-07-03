@@ -106,6 +106,33 @@ violation, so a form repaints once. Each rule declares exactly one of:
   may lock rows with `FOR UPDATE` for balance checks). A non-SELECT fails at route build
   time: validation must not write.
 
+## The expression language (roadmap Phase 40)
+
+`validate:` rules, `requiredWhen`, `response.html.headersWhen` guards, and workflow guards
+share one deliberately small, side-effect-free expression language. Since Phase 40 it
+covers the arithmetic and string logic LOB rules actually need:
+
+- **Operators** (by precedence): `||`, `&&`, `==`/`!=`, `<`/`>`/`<=`/`>=`, `+`/`-`,
+  `*`/`/`/`%`, unary `!`/`-`, and `(...)` grouping. Arithmetic is decimal-exact
+  (`BigDecimal` — `qty * price <= budget` carries no float drift); `+` concatenates when
+  either side is a string; a `null` operand propagates `null`.
+- **Functions** (a fixed whitelist — unknown names and wrong arities fail the build):
+  `length(s)`, `lower(s)`, `upper(s)`, `trim(s)`, `contains(s, sub)`,
+  `startsWith(s, p)`, `endsWith(s, p)`, `matches(s, regex)`, `abs(n)`, `round(n)`,
+  `floor(n)`, `ceil(n)`, `min(a, b)`, `max(a, b)`, `coalesce(a, b)`. Predicates are
+  null-safe (`false` on null), transforms propagate `null`.
+- There is still no method invocation, reflection, or assignment (guardrail ch. 20.6).
+
+```yaml
+validate:
+  - field: total
+    code: over-budget
+    rule: params.qty * params.price <= params.budget
+  - field: email
+    code: corp-mail
+    rule: matches(lower(trim(params.email)), '.+@corp[.]example')
+```
+
 ## Validation SQL: rows are violations
 
 ```sql
