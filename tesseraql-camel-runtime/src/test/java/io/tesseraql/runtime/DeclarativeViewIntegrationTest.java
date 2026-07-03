@@ -93,6 +93,25 @@ class DeclarativeViewIntegrationTest {
     }
 
     @Test
+    void aDashboardRendersItsPanelsOverLiveData() throws Exception {
+        HttpResponse<String> response = get("/board/stats");
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(response.body()).contains("class=\"hc-grid\"");
+        // The stat counts the seeded user; the chart is server-rendered SVG in the kit skin.
+        assertThat(response.body()).contains(">3</strong>");
+        assertThat(response.body()).contains("<figure class=\"hc-chart\">")
+                .contains("hc-chart__plot").contains("var(--hc-chart-series-1)");
+        assertThat(response.body()).contains("class=\"hc-sparkline\"")
+                .contains("data-values=\"1\"");
+        assertThat(response.body()).contains(">engineers</span>");
+    }
+
+    @Test
+    void theGalleryStatsDashboardMountsUnderItsBrowserSecurity() throws Exception {
+        assertThat(get("/users/board/stats").statusCode()).isEqualTo(401);
+    }
+
+    @Test
     void theGalleryBoardDetailMountsUnderItsBrowserSecurity() throws Exception {
         HttpResponse<String> response = get("/users/board/sato");
         assertThat(response.statusCode()).isEqualTo(401);
@@ -205,6 +224,52 @@ class DeclarativeViewIntegrationTest {
                         label: Group
                 slots:
                   header: board-frags.html::backLink
+                """);
+
+        // A public dashboard view: stat + chart + sparkline + table panels over the seed data.
+        Path boardStats = target.resolve("web/board/stats");
+        Files.createDirectories(boardStats);
+        Files.writeString(boardStats.resolve("get.yml"), """
+                version: tesseraql/v1
+                id: board.stats
+                kind: route
+                recipe: query-html
+                security:
+                  auth: public
+                sql:
+                  file: totals.sql
+                queries:
+                  groups:
+                    file: group-names.sql
+                response:
+                  html:
+                    view: stats.view.yml
+                """);
+        Files.writeString(boardStats.resolve("totals.sql"),
+                "select count(*) as user_count from users\n");
+        Files.writeString(boardStats.resolve("group-names.sql"),
+                "select g.display_name, 1 as n from app_groups g order by g.display_name\n");
+        Files.writeString(boardStats.resolve("stats.view.yml"), """
+                version: tesseraql/v1
+                kind: view
+                view: dashboard
+                title: Stats
+                panels:
+                  - title: Users
+                    type: stat
+                    column: user_count
+                  - title: Groups
+                    type: chart
+                    source: groups
+                    x: display_name
+                    y: n
+                  - title: Trend
+                    type: sparkline
+                    source: groups
+                    column: n
+                  - title: Names
+                    type: table
+                    source: groups
                 """);
 
         // A public form view deriving its fields from the POST action route's input: block.

@@ -8,6 +8,17 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **Declarative dashboards** (roadmap Phase 39, slice 4 — the phase is complete; see
+  [docs/declarative-views.md](docs/declarative-views.md)): a `view: dashboard` document renders
+  query-backed panels on the kit's `hc-grid` — a `stat` (single value), a `sparkline`, a `chart`
+  (bar or line, rendered server-side as deterministic inline SVG wearing the kit's `hc-chart`
+  skin: every color a `--hc-chart-*` token, the gridline group colored by the kit's
+  `[aria-label$=grid]` rule, tooltips via `<title>`, no client scripting, CSP-clean), or an
+  embedded `table` — each over the route's main `sql` or a named query (`TQL-VIEW-3308` when a
+  panel source is undeclared). The example gallery gains a stats dashboard
+  (`examples/user-admin-app/web/users/board/stats`). No upstream component brief was needed:
+  `hc-chart` and `hc-grid` already ship in Hypermedia Components as CSS-only components.
+
 - **Scaffold on views** (roadmap Phase 39, slice 3; see
   [docs/declarative-views.md](docs/declarative-views.md)): `tesseraql scaffold crud` now emits
   declarative view documents instead of hand-written templates — one list route renders through

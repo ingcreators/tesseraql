@@ -1,7 +1,7 @@
 # Declarative views
 
 Design for roadmap Phase 39 (drafted 2026-07-03; resolves decision point 7). Status:
-**slices 1–3 shipped** — the `kind: view` document, `response.html.view`, the
+**all four slices shipped — Phase 39 is complete** — the `kind: view` document, `response.html.view`, the
 list + form + detail patterns (a detail composes its route's named queries as child
 lists) with the L2 override resolver and the shared `tql/view/table` pattern, named
 slots (L1: `header`/`footer`, plus `actions` on forms — a slot fills from an app
@@ -10,8 +10,13 @@ fragment referenced as `template::fragment`, colocated-first), the eject action
 and the example gallery's view-backed board list + detail
 (`examples/user-admin-app/web/users/board`). Slice 3 moved `scaffold crud` onto views (one list route with the pattern's search box and
 server-driven sort — no fragment route; forms derive from the command routes; slots carry the
-New/back/confirmed-delete affordances) and the gallery regenerates on views. Slice 4
-(dashboards) remains, gated on the upstream hc chart brief.
+New/back/confirmed-delete affordances) and the gallery regenerates on views. Slice 4 shipped
+`view: dashboard`: query-backed panels on the kit's `hc-grid` — `stat`, `sparkline`,
+`chart` (deterministic server-rendered SVG wearing the kit's `hc-chart` skin: every color a
+`--hc-chart-*` token, the gridline group colored by `[aria-label$=grid]`, no client
+scripting), and embedded `table` panels. No upstream brief was needed: `hc-chart` and
+`hc-grid` ship in the kit as CSS-only components (the Track-I lesson — grep `hc.min.css`,
+not only the behaviors bundle).
 
 ## Context and goals
 
@@ -31,8 +36,7 @@ template.
 
 Non-goals: this is not a client-side component model (rendering stays server-side
 hypermedia, mandatory rule 11); it does not replace templates (they remain the escape
-hatch and the tool for bespoke pages); declarative pagination is Phase 41; dashboards
-wait for the upstream hc chart component (Phase 39 slice 4).
+hatch and the tool for bespoke pages); declarative pagination is Phase 41.
 
 ## Decision: interpretation, not build-time generation
 
@@ -241,8 +245,13 @@ slice 1 (views change how HTML is produced, not the HTTP contract).
    `TQL-VIEW-3309/3310` keep the wiring lint-checked; `text:`/`link:` columns render the
    per-row action button; a form's `action:` resolves `{placeholder}`s per record and
    prefills fall back from camelCase input names to snake_case columns).
-4. **dashboards** — query-backed cards and charts, gated on the upstream Hypermedia
-   Components chart brief (the kit ships only `hc-sparkline` today).
+4. **dashboards** (shipped) — `view: dashboard` with `panels:` over the route's results:
+   `stat` (one value), `sparkline` (the kit component), `chart` (bar/line as deterministic
+   server-rendered SVG in the kit's `hc-chart` skin, `ChartSvg` in `tesseraql-yaml`), and
+   `table` (the shared pattern), laid out on `hc-grid`. Panel sources validate like
+   children (`TQL-VIEW-3308`). Ejection of dashboards is not offered (the SVG is
+   data-dependent); note the `p.series` model key — OGNL resolves `values` to
+   `Map#values()`.
 
 ## Deferred / open
 

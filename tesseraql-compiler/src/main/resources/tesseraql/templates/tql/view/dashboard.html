@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<!-- The framework dashboard pattern (roadmap Phase 39 slice 4, docs/declarative-views.md):
+     query-backed panels on the kit's hc-grid — a stat value, an hc-sparkline, a server-rendered
+     SVG chart wearing the hc-chart skin (every color a kit token, no client scripting), or an
+     embedded table. Override via templates/tql/view/dashboard.html (customization ladder L2) or
+     fill the header/footer slots (L1); the `v` model shape is the public contract. -->
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{tql/shell :: shell(${v.title}, ~{}, ~{}, ~{:: #page-content})}">
+<div id="page-content" class="hc-stack">
+<div class="hc-cluster">
+  <h2 th:text="${v.title}">Dashboard</h2>
+  <span class="hc-spacer"></span>
+  <th:block th:if="${v.slots['header'] != null}">
+    <th:block th:insert="~{__${v.slots['header']}__}"/>
+  </th:block>
+</div>
+<div class="hc-grid" th:fragment="view(v)">
+  <section class="hc-card" th:each="p : ${v.panels}">
+    <h3 th:text="${p.title}">Panel</h3>
+    <th:block th:switch="${p.type}">
+      <p th:case="'stat'"><strong th:text="${p.value}">0</strong></p>
+      <th:block th:case="'sparkline'">
+        <span class="hc-sparkline"
+              th:attr="data-values=${p.series},data-min=${p.min},data-max=${p.max},aria-label=${p.title}"></span>
+      </th:block>
+      <figure th:case="'chart'" class="hc-chart">
+        <th:block th:utext="${p.svg}"/>
+      </figure>
+      <th:block th:case="'table'">
+        <th:block th:insert="~{tql/view/table :: table(|${v.id}-panel-${p.index}|, ${p.columns}, ${p.rows})}"/>
+      </th:block>
+    </th:block>
+  </section>
+</div>
+<th:block th:if="${v.slots['footer'] != null}">
+  <th:block th:insert="~{__${v.slots['footer']}__}"/>
+</th:block>
+</div>
+</html>

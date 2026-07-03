@@ -552,14 +552,18 @@ template today.
   slots (L1).
 - Slice 3: `scaffold crud` emits view documents instead of raw templates; the example
   gallery regenerates on views (dogfooded in CI).
-- Slice 4: dashboards — query-backed cards and charts, once the chart component lands
-  upstream in Hypermedia Components (file the brief first; the kit ships only
-  `hc-sparkline` today).
+- Slice 4: dashboards — `view: dashboard` panels (`stat`/`sparkline`/`chart`/`table`) on
+  the kit's `hc-grid`; charts are deterministic server-rendered SVG wearing the kit's
+  CSS-only `hc-chart` skin (no upstream brief was needed — the component already ships;
+  the earlier "only `hc-sparkline`" note repeated the Track-I mistake of grepping only
+  the behaviors bundle).
 
 Acceptance: adding a column to a table means a migration plus a view-YAML edit — zero
 HTML — and the scaffolded CRUD slice ships as views. This is also the substrate the
 form-driven editors (Phase 43) and the copilot (Phase 44) operate on: structured view
-documents are safely machine-editable where free-form Thymeleaf is not.
+documents are safely machine-editable where free-form Thymeleaf is not. All four slices
+are delivered (design + slices in [docs/declarative-views.md](declarative-views.md)).
+**Phase 39 is complete.**
 
 ### Phase 40 — input, validation, and expression depth
 

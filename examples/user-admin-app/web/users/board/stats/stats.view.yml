@@ -1,0 +1,32 @@
+# A dashboard view (roadmap Phase 39 slice 4): query-backed panels on the kit's
+# hc-grid — a stat, a server-rendered SVG bar chart wearing the hc-chart skin,
+# a sparkline, and an embedded table, each over one of the route's results.
+version: tesseraql/v1
+id: users.board.stats
+kind: view
+view: dashboard
+title: User stats
+panels:
+  - title: Users
+    type: stat
+    column: user_count
+  - title: By status
+    type: chart
+    kind: bar
+    source: byStatus
+    x: status
+    y: n
+  - title: Status trend
+    type: sparkline
+    source: byStatus
+    column: n
+  - title: Latest users
+    type: table
+    source: recent
+    columns:
+      - name: name
+        label: Name
+      - name: status
+        label: Status
+slots:
+  header: board-frags.html::backLink

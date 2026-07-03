@@ -27,6 +27,24 @@ tests:
       rows:
         - display_name: engineers
 
+  - name: the stats dashboard counts every user
+    sql:
+      file: web/users/board/stats/totals.sql
+    params: {}
+    expect:
+      rowCount: 1
+      rows:
+        - user_count: 1
+
+  - name: the stats dashboard groups users by status
+    sql:
+      file: web/users/board/stats/by-status.sql
+    params: {}
+    expect:
+      rowCount: 1
+      rows:
+        - status: ACTIVE
+
   - name: search finds sato by name
     sql:
       file: web/api/users/search.sql
