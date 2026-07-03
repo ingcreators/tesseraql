@@ -1969,6 +1969,18 @@ class StudioIntegrationTest {
     }
 
     @Test
+    void copilotPageShowsTheHonestDisabledStateWhenUnconfigured() throws Exception {
+        // Roadmap Phase 44: no model is shipped — an unconfigured app renders the setup
+        // hint, and the send endpoint refuses cleanly instead of dialing anything.
+        HttpResponse<String> page = get("/_tesseraql/studio/ui/copilot", true);
+        assertThat(page.statusCode()).isEqualTo(200);
+        assertThat(page.body()).contains("not configured")
+                .contains("tesseraql.copilot.endpoint");
+        assertThat(postForm("/_tesseraql/studio/ui/copilot/send", "message=hello")
+                .statusCode()).isEqualTo(500);
+    }
+
+    @Test
     void dataBrowserRowEditUpdatesOneRowUnderConfirmAndAudit() throws Exception {
         // Track J4 (roadmap Phase 43): PK-scoped single-row edit — the browser links Edit when
         // the row editor is on, the caller may edit, and the table has a primary key.

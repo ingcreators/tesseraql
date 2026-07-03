@@ -1,0 +1,19 @@
+version: tesseraql/v1
+id: tql.studio.copilot.reset
+kind: route
+recipe: command-json
+
+security:
+  auth: browser
+  csrf: true
+
+sql:
+  service: studio.copilot.reset
+  params:
+    roles: principal.roles
+    actor: principal.loginId
+
+response:
+  redirect:
+    status: 303
+    location: /_tesseraql/studio/ui/copilot

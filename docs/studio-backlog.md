@@ -606,5 +606,7 @@ ships as its own slice once the phase opens:
   the CLI `lint`, Maven `tesseraql:lint`, and Studio health page all render
   `source:line`.
 
-The Studio-embedded copilot chat is roadmap **Phase 44** (an MCP client over the existing
-gated tools), a separate phase rather than a Track J slice.
+The Studio-embedded copilot chat was roadmap **Phase 44**, delivered as the `/ui/copilot`
+panel over an operator-configured model endpoint (reads free, writes only as audited drafts,
+apply human-only; see [docs/copilot.md](copilot.md)) — the last net-new Studio surface on
+this backlog.

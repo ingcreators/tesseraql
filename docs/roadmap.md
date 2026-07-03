@@ -659,6 +659,11 @@ configures a model endpoint, or the panel rides a connected agent (decision poin
 and every mutation stays a separately gated, audited tool call with the human approving
 applies in the same diff-confirm UI. Describe → verified route, without leaving Studio.
 
+Delivered as the in-Studio panel over an operator-configured OpenAI-compatible endpoint
+(decision point 8 resolved; see [docs/copilot.md](copilot.md)): reads free, writes only as
+audited drafts, apply human-only. **Phase 44 is complete — Horizon 8 is now complete in
+full.**
+
 ### Phase 45 — production observability and safety
 
 What a team hits in the first production week; sequenced ahead of Phase 33, whose
@@ -723,8 +728,7 @@ each admission-held in CI), and the five-minute demo
 ([docs/five-minute-demo.md](five-minute-demo.md), `deploy/Dockerfile.demo`).
 **Phase 47 is complete**, and with it **milestone M12 is met** — every leg of the loop is
 held green by an integration test (the zero-restart M7 loop, the recorded test, the release
-diff, the Prometheus exposition). **Horizon 8 is complete** (Phase 44's Studio copilot chat
-remains open by choice, decision point 8).
+diff, the Prometheus exposition). Phase 44 followed, completing **Horizon 8 in full**.
 
 ## CLI distribution and upgrade delivery (cross-cutting)
 
@@ -840,7 +844,11 @@ None block Phase 18; flagged for the maintainer as their horizons approach.
 8. **Copilot model access** (Phase 44): an operator-configured model endpoint (credentials
    via the SecretResolver SPI) vs riding a connected MCP client's model. Invariant either
    way: TesseraQL ships no model, stores no key in app source, and every write remains a
-   separately gated, audited tool call.
+   separately gated, audited tool call. Resolved 2026-07-03 in favour of the
+   **operator-configured endpoint** (OpenAI-compatible chat completions; key resolved
+   lazily through the config placeholder chain) — riding a connected MCP client's model
+   stays available through the Phase 24 `studio_copilot` prompt, so both halves of the
+   decision are served.
 9. **Metrics transport** (Phase 45): a JDK-only Prometheus text-format endpoint (no new
    dependency, in the spirit of the JDK-only OIDC/mTLS choices) vs adopting OTel/Micrometer
    histograms inside `tesseraql-observability`. Module boundaries (principle 5) decide

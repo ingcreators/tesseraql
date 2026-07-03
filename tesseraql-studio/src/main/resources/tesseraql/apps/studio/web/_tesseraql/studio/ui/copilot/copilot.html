@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{tql/shell :: studio-page(|TesseraQL Studio · Copilot|, ~{:: #page-header}, ~{:: #page-content})}">
+<th:block id="page-header">
+  <span class="hc-spacer"></span>
+  <div class="hc-cluster">
+    <form method="post" action="/_tesseraql/studio/ui/copilot/reset" th:if="${chat.enabled}">
+      <input type="hidden" name="_csrf" th:value="${_csrf}">
+      <button class="hc-button" data-variant="ghost" data-size="sm" type="submit">New conversation</button>
+    </form>
+    <a class="hc-button" data-variant="ghost" data-size="sm" href="/_tesseraql/studio/ui">&larr; explorer</a>
+  </div>
+</th:block>
+<div id="page-content" class="hc-stack">
+  <section class="hc-card">
+    <h2>Copilot</h2>
+    <div class="hc-empty" th:unless="${chat.enabled}">
+      <p class="hc-empty__title">The copilot is not configured.</p>
+      <p class="hc-empty__body">TesseraQL ships no model. Point
+        <code>tesseraql.copilot.endpoint</code> at an OpenAI-compatible chat-completions URL,
+        name a <code>model</code>, set <code>enabled: true</code>, and keep the key a secret
+        reference (<code>apiKey: ${secret.env.COPILOT_KEY}</code>). See
+        <code>docs/copilot.md</code>.</p>
+    </div>
+    <th:block th:if="${chat.enabled}">
+      <p class="hc-field__message">The copilot drives the same gated loop you do: it reads
+        routes, sources, lint and schema, previews buffers, and — only with your edit role —
+        saves <strong>drafts</strong>. Nothing it does is served until you review and apply
+        the draft in the editor; every saved draft lands in the audit trail under your name.</p>
+      <div class="hc-stack" th:if="${!chat.entries.isEmpty()}">
+        <div th:each="entry : ${chat.entries}"
+             th:class="${entry.role == 'user'} ? 'hc-alert' : 'hc-card'"
+             th:attr="data-variant=${entry.role == 'user'} ? 'info' : null">
+          <p class="hc-field__message" th:if="${entry.tool != null}"
+             th:text="|used: ${entry.tool}|"></p>
+          <p th:if="${!entry.text.isBlank()}" th:text="${entry.text}"
+             style="white-space: pre-wrap"></p>
+        </div>
+      </div>
+      <form class="hc-cluster" method="post" action="/_tesseraql/studio/ui/copilot/send">
+        <input type="hidden" name="_csrf" th:value="${_csrf}">
+        <input class="hc-input hc-field--grow" name="message" required maxlength="4000"
+               placeholder="Describe the route, page or fix you want&hellip;" autofocus>
+        <button class="hc-button" data-variant="primary" type="submit">Send</button>
+      </form>
+      <p class="hc-field__message" th:unless="${chat.editable}">You hold no Studio edit role,
+        so the copilot answers questions but cannot save drafts in this session.</p>
+    </th:block>
+  </section>
+</div>
+</html>

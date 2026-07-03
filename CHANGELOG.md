@@ -8,6 +8,14 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **Studio copilot chat** (roadmap Phase 44 — completing Horizon 8 in full; decision point 8
+  resolved): an in-Studio panel (`/ui/copilot`) that drives the existing gated loop as tools
+  against an **operator-configured** OpenAI-compatible endpoint — TesseraQL ships no model,
+  the key stays a `${secret.*}` reference resolved lazily at call time, reads
+  (routes/sources/lint/schema/preview) are free, the **only write is an audited draft**
+  offered to the model solely when the chatting user holds an edit role, and applying stays
+  a human action in the editor's diff-confirm UI. Bounded tool turns; honest disabled state
+  when unconfigured; see `docs/copilot.md`.
 - **The five-minute demo** (roadmap Phase 47, final slice — the phase, **milestone M12**,
   and Horizon 8 are complete): one command (`tesseraql serve --app examples/inventory-app
   --embedded-db`) boots a seeded, browsable gallery app with Studio open, and one container
