@@ -8,6 +8,13 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **The instant loop — Migrate now** (roadmap Phase 42, final slice — the phase is complete):
+  the Studio migration page's created view gains a confirm-gated **Migrate now** action that
+  applies the app's pending Flyway migrations to the dev datasource on demand (same path as
+  startup: main set, tenant pools, named per-datasource sets; edit-gated and recorded to the
+  audit trail with the applied count reported). Schema &rarr; scaffold &rarr; serve now runs
+  end-to-end without a process bounce, and the example app defines the starter
+  `app.read`/`app.write` policies so scaffolded slices serve out of the box.
 - **The instant loop — dynamic route mounting** (roadmap Phase 42, first slice): applying in
   Studio now serves immediately. The hot reloader diffs the re-read manifest against the running
   routes — brand-new route documents **mount** without a restart, removed ones **un-mount**, kept

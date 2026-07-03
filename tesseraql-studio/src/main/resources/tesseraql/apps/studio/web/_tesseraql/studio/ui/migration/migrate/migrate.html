@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{tql/shell :: studio-page(|TesseraQL Studio · Migrate|, ~{:: #page-header}, ~{:: #page-content})}">
+<th:block id="page-header">
+  <span class="hc-spacer"></span>
+  <div class="hc-cluster">
+    <a href="/_tesseraql/studio/ui/migration">&larr; new migration</a>
+    <a href="/_tesseraql/studio/ui">explorer &rarr;</a>
+  </div>
+</th:block>
+<div id="page-content" class="hc-stack">
+  <section class="hc-card">
+    <h2>Migrate</h2>
+    <div class="hc-cluster">
+      <span class="hc-badge" data-variant="success"
+            th:text="${mig.applied} + ' applied'">1 applied</span>
+    </div>
+    <p class="hc-field__message" th:if="${mig.applied > 0}">Pending migrations were applied to the
+      dev datasource &mdash; the schema is live now. Scaffold a CRUD slice from the new table and
+      it serves immediately (routes hot-reload).</p>
+    <p class="hc-field__message" th:if="${mig.applied == 0}">Nothing was pending &mdash; the dev
+      datasource already has every migration.</p>
+    <div class="hc-cluster">
+      <a class="hc-button" data-variant="primary" href="/_tesseraql/studio/ui/scaffold">Scaffold
+        CRUD from a table &rarr;</a>
+      <a class="hc-button" href="/_tesseraql/studio/ui/migration">New migration</a>
+    </div>
+  </section>
+</div>
+</html>

@@ -19,9 +19,9 @@
     <p class="hc-field__message">Creates a Flyway migration under <code>db/&hellip;/migration</code>.
       A versioned migration is auto-numbered (next:
       <strong th:text="|V${mig.nextVersion}|">V1</strong> for the main datasource); a repeatable one
-      is <code>R__&lt;name&gt;</code>. The new file needs a restart + migrate to be applied &mdash;
-      the running app only lists it. Flyway has no built-in undo on the free edition: roll back by
-      writing a follow-up migration (fix-forward).</p>
+      is <code>R__&lt;name&gt;</code>. Apply it with <strong>Migrate now</strong> from the
+      created page (or the next start) &mdash; no restart needed. Flyway has no built-in undo on the
+      free edition: roll back by writing a follow-up migration (fix-forward).</p>
     <form class="hc-stack" method="post" action="/_tesseraql/studio/ui/migration">
       <input type="hidden" name="_csrf" th:value="${_csrf}">
       <div class="hc-field">

@@ -331,8 +331,9 @@ and is being adopted (see E below).
     **repeatable** `R__<name>` (views/functions). Targets a chosen datasource + optional vendor
     overlay, writes the DDL through the same gated/audited path as scaffolding (read-only switch +
     per-role `editRoles` + audit trail), refuses to overwrite unless forced, and links the result to
-    the source editor. The new file needs a restart + migrate to apply; the UI notes Flyway rollback
-    is fix-forward (free edition has no undo). `StudioService.createMigration` / `nextMigrationVersion`;
+    the source editor. (When this slice shipped the new file needed a restart + migrate; roadmap
+    Phase 42 added **Migrate now** — the created page applies pending migrations to the dev
+    datasource on demand.) The UI notes Flyway rollback is fix-forward (free edition has no undo). `StudioService.createMigration` / `nextMigrationVersion`;
     `studio.migration.new` / `studio.migration.create`; `/_tesseraql/studio/ui/migration`.
     - **Sandbox dry-run** — *done* (slice 2): a migration file's source editor offers a **Dry-run**
       action that runs the DDL (the live editor buffer) against the dev datasource in a sandboxed,

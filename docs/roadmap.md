@@ -618,6 +618,11 @@ Acceptance: Studio's scaffold-apply serves the new CRUD immediately; a deliberat
 broken route 500s alone while its neighbors keep serving; the M7 "ten minutes" flow
 never touches a terminal.
 
+Delivered in two slices (dynamic route mounting with per-route failure isolation and
+tolerant manifest loads; then Studio's **Migrate now** closing the
+migration &rarr; scaffold &rarr; serve loop, proven end-to-end by an integration test
+that never restarts the process). **Phase 42 is complete.**
+
 ### Phase 43 — Studio authoring completion
 
 Studio closes the remaining "drops into raw YAML" edges (slices tracked as Track J in

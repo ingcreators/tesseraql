@@ -99,6 +99,8 @@ web/_tesseraql/studio/ui/migration/columns/get.yml
 web/_tesseraql/studio/ui/migration/columns/columns.html
 web/_tesseraql/studio/ui/migration/diff/post.yml
 web/_tesseraql/studio/ui/migration/diff/diff.html
+web/_tesseraql/studio/ui/migration/migrate/post.yml
+web/_tesseraql/studio/ui/migration/migrate/migrate.html
 web/_tesseraql/studio/ui/sql-builder/get.yml
 web/_tesseraql/studio/ui/sql-builder/sql-builder.html
 web/_tesseraql/studio/ui/sql-builder/build/post.yml

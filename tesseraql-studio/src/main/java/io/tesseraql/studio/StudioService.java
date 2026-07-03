@@ -700,9 +700,9 @@ public final class StudioService {
      * authoring). A versioned migration ({@code repeatable == false}) is auto-numbered {@code V<n>}
      * from the existing files (plain sequential, no zero-padding — the framework orders versions
      * numerically); a repeatable one is {@code R__<slug>}. The DDL is written verbatim (a placeholder
-     * when blank). Gated by the read-only master switch and recorded to the audit trail; the new file
-     * needs a restart + migrate to be applied (the running app only lists it). Refuses to overwrite an
-     * existing file unless {@code force}.
+     * when blank). Gated by the read-only master switch and recorded to the audit trail; apply it with
+     * the migration page's Migrate now (roadmap Phase 42) or the next start's migrate. Refuses to
+     * overwrite an existing file unless {@code force}.
      */
     public MigrationResult createMigration(String datasource, String vendor, boolean repeatable,
             String description, String ddl, boolean force, String actor) {
@@ -1160,6 +1160,14 @@ public final class StudioService {
      */
     public List<AuditEntry> auditEntries(int limit) {
         return auditEntries(limit, null);
+    }
+
+    /**
+     * Records a Studio-triggered migrate run to the audit trail (roadmap Phase 42): the runtime
+     * owns the datasources and runs the migration, Studio owns the trail.
+     */
+    public void recordMigrationRun(String actor, String target) {
+        recordAudit(actor, "migrate", target);
     }
 
     /**

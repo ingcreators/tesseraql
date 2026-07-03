@@ -1,0 +1,32 @@
+version: tesseraql/v1
+id: tql.studio.migration.migrate
+kind: route
+recipe: query-html
+
+input:
+  confirm:
+    type: string
+    required: false
+
+security:
+  auth: browser
+  csrf: true
+
+sql:
+  service: studio.migration.migrate
+  params:
+    confirm: params.confirm
+    actor: principal.loginId
+    roles: principal.roles
+
+response:
+  html:
+    status: 200
+    template: migrate.html
+    model:
+      mig: sql
+    headers:
+      Content-Security-Policy: "default-src 'self'; style-src 'self' 'unsafe-inline'; frame-ancestors 'none'"
+      X-Content-Type-Options: nosniff
+      X-Frame-Options: DENY
+      Referrer-Policy: no-referrer

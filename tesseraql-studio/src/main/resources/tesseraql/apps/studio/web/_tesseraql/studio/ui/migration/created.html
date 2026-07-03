@@ -15,10 +15,17 @@
       <span class="hc-badge" data-variant="success" th:text="${mig.repeatable} ? 'repeatable' : |V${mig.version}|"></span>
       <code th:text="${mig.path}"></code>
     </div>
-    <p class="hc-field__message">It needs a restart + migrate to be applied &mdash; the running app
-      only lists it for now. Edit the DDL in the source editor before the next migrate.</p>
+    <p class="hc-field__message">Edit the DDL in the source editor, then apply it right here
+      &mdash; Migrate now runs the pending migrations against the dev datasource, no restart.</p>
     <div class="hc-cluster">
       <a class="hc-button" data-variant="primary" th:href="${mig.editorUrl}">Open in editor &rarr;</a>
+      <form method="post" action="/_tesseraql/studio/ui/migration/migrate">
+        <input type="hidden" name="_csrf" th:value="${_csrf}">
+        <input type="hidden" name="confirm" value="true">
+        <button class="hc-button" type="submit"
+                data-hc-confirm="Apply all pending migrations to the dev datasource? Flyway has no undo; roll back by writing a follow-up migration."
+                data-hc-confirm-title="Migrate now" data-hc-confirm-label="Migrate">Migrate now</button>
+      </form>
     </div>
   </section>
 </div>
