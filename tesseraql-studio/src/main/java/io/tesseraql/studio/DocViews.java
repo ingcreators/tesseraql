@@ -488,8 +488,11 @@ public final class DocViews {
         return model;
     }
 
-    /** Adds the API-changelog facts (baseline presence, counts, per-operation rows) to the model. */
-    private static void applyApiChangelog(Map<String, Object> model,
+    /**
+     * Adds the API-changelog facts (baseline presence, counts, per-operation rows) to a docs
+     * view model — the export and release-diff pages share it.
+     */
+    public static void applyApiChangelog(Map<String, Object> model,
             OpenApiDiff.ApiChangelog changelog) {
         model.put("hasBaseline", changelog != null);
         model.put("baselinePath", DocService.OPENAPI_BASELINE_PATH);

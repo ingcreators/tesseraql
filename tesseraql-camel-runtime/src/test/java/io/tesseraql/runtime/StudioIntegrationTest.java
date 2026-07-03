@@ -1958,6 +1958,17 @@ class StudioIntegrationTest {
     }
 
     @Test
+    void docsReleaseDiffPageConsolidatesBaselineDiffsAndMigrations() throws Exception {
+        // Roadmap Phase 46: the release-diff page consolidates the captured-baseline diffs
+        // (API changelog, schema DDL) and the migration list, with honest empty-states when
+        // no baseline is captured yet.
+        HttpResponse<String> page = get("/_tesseraql/studio/ui/docs/release-diff", true);
+        assertThat(page.statusCode()).isEqualTo(200);
+        assertThat(page.body()).contains("Release diff")
+                .contains("Migrations the app carries");
+    }
+
+    @Test
     void dataBrowserRowEditUpdatesOneRowUnderConfirmAndAudit() throws Exception {
         // Track J4 (roadmap Phase 43): PK-scoped single-row edit — the browser links Edit when
         // the row editor is on, the caller may edit, and the table has a primary key.

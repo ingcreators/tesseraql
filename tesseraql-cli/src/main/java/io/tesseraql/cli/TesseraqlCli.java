@@ -31,6 +31,7 @@ import picocli.CommandLine.Option;
         CoverageCommand.class,
         GenerateCommand.class,
         SchemaCommand.class,
+        ReleaseDiffCommand.class,
         GovernanceCommand.class,
         MigrateCommand.class,
         IdentitySchemaCommand.class,

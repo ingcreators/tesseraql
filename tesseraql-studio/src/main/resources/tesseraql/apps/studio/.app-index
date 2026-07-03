@@ -29,6 +29,8 @@ web/_tesseraql/studio/ui/docs/export/htmx/get.yml
 web/_tesseraql/studio/ui/docs/export/htmx/htmx-contract.json.tpl
 web/_tesseraql/studio/ui/docs/export/pdf/get.yml
 web/_tesseraql/studio/ui/docs/export/pdf/pdf.html
+web/_tesseraql/studio/ui/docs/release-diff/get.yml
+web/_tesseraql/studio/ui/docs/release-diff/release-diff.html
 web/_tesseraql/docs/share/route/get.yml
 web/_tesseraql/docs/share/route/share.html
 web/_tesseraql/docs/share/table/get.yml

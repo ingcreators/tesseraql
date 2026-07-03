@@ -584,3 +584,13 @@ one connection — rejected for that reason).
 - Build-file / mojo / reproducibility changes are made deliberately (not auto-accepted).
 - Run `spotless:apply` before the final `mvn -B -ntp verify`; confirm `BUILD SUCCESS`.
 - Land each slice through a PR with CI green (rule 9); never push to `main`.
+
+## Release diff (roadmap Phase 46)
+
+The portal's **Release diff** page consolidates what a promotion changes from the captured
+baselines: the API changelog against `.tesseraql/docs/openapi.baseline.json`, the schema DDL
+delta against `schema.baseline.json`, and the migration set the app carries. The full
+two-tree diff — routes, API, migrations, policies, schema tables — is the
+`tesseraql release-diff --app <candidate> --baseline <deployed-tree>` CLI report (Markdown or
+`--json`) and the `tesseraql:release-diff` Maven goal, which writes `release-diff.md`/`.json`
+beside the other release evidence for the CI governance gate.
