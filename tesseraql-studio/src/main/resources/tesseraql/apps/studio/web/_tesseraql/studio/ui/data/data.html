@@ -95,6 +95,8 @@
               </select>
             </div>
             <button type="submit" class="hc-button" data-variant="primary">Apply</button>
+            <a th:if="${data.hasFilters}" class="hc-button" data-variant="ghost"
+               th:href="|/_tesseraql/studio/ui/data?table=${#uris.escapeQueryParam(data.table)}|">Clear filters</a>
           </div>
         </form>
         <div class="hc-cluster">

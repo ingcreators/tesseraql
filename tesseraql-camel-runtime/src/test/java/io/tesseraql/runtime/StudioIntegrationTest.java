@@ -2004,6 +2004,17 @@ class StudioIntegrationTest {
     }
 
     @Test
+    void uiDataBrowserShowsClearFiltersOnlyWhenFiltered() throws Exception {
+        // With a filter active, the Clear-filters reset link (back to the bare table) is offered.
+        assertThat(get("/_tesseraql/studio/ui/data?table=tql_users&fc0=login_id&fo0=contains&fv0=a",
+                true).body()).contains("Clear filters")
+                .contains("/_tesseraql/studio/ui/data?table=tql_users\"");
+        // With no filter/sort, it is not shown.
+        assertThat(get("/_tesseraql/studio/ui/data?table=tql_users", true).body())
+                .doesNotContain("Clear filters");
+    }
+
+    @Test
     void uiDataBrowserCombinesConditionsWithOr() throws Exception {
         // status ACTIVE OR status INACTIVE → matches (the seeded admin is ACTIVE).
         assertThat(get("/_tesseraql/studio/ui/data?table=tql_users&combinator=or"

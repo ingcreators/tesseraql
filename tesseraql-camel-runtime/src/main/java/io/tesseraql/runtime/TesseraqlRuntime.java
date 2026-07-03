@@ -1185,6 +1185,8 @@ public final class TesseraqlRuntime implements AutoCloseable {
                                 }
                             }
                             model.put("filterRows", filterRows);
+                            // Whether any filter/sort is active — drives the "Clear filters" control.
+                            model.put("hasFilters", !filters.isEmpty() || sortColumn != null);
                             model.put("queryBase", dataQueryBase(table, combinator, sortColumn,
                                     sortDir, filterRows));
                             try {
