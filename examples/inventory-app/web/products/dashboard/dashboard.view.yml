@@ -1,0 +1,22 @@
+version: tesseraql/v1
+id: products.dashboard.view
+kind: view
+view: dashboard
+title: Inventory dashboard
+panels:
+  - { type: stat, source: sql, column: products, label: Products }
+  - { type: stat, source: sql, column: units, label: Units in stock }
+  - type: chart
+    kind: bar
+    source: byCategory
+    title: Stock by category
+    x: label
+    y: value
+  - type: table
+    source: lowStock
+    title: Below reorder level
+    columns:
+      - { name: sku, label: SKU }
+      - { name: name }
+      - { name: stock }
+      - { name: reorder_level, label: Reorder at }

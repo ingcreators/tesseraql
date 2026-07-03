@@ -1,0 +1,9 @@
+version: tesseraql/v1
+id: tickets.new.form
+kind: view
+view: form
+title: New ticket
+action: /tickets/new
+fields:
+  - { name: subject }
+  - { name: priority }

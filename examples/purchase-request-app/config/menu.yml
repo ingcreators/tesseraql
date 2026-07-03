@@ -1,0 +1,5 @@
+items:
+  - label: Requests
+    href: /requests
+  - label: New request
+    href: /requests/new

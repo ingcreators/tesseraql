@@ -1,0 +1,34 @@
+version: tesseraql/v1
+id: tickets.create
+kind: route
+recipe: command-json
+
+input:
+  subject: { type: string, required: true, maxLength: 200 }
+  priority: { type: string, required: false, enum: [low, normal, high], default: normal }
+
+security:
+  auth: bearer
+  policy: help.read
+
+sql:
+  file: create.sql
+  mode: update
+  params:
+    subject: params.subject
+    priority: params.priority
+
+# The assignment notice rides the command's own transaction via the outbox: at-least-once,
+# asserted by the declarative suite without any SMTP (docs/notifications.md).
+notify:
+  assigned:
+    channel: agent-mail
+    payload:
+      ticket: body.subject
+      priority: body.priority
+
+response:
+  json:
+    status: 201
+    body:
+      created: sql.affectedRows

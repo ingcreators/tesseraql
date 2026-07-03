@@ -1,0 +1,27 @@
+tests:
+  - name: the request list finds seeded rows and the search narrows
+    sql:
+      file: web/requests/requests.sql
+    expect:
+      rowCount: 2
+
+  - name: the search branch matches by title
+    sql:
+      file: web/requests/requests.sql
+    params:
+      q: desk
+    expect:
+      rowCount: 1
+      rows:
+        - id: PR-1001
+
+  - name: the detail query loads one request
+    sql:
+      file: web/requests/{id}/request.sql
+    params:
+      id: PR-1002
+    expect:
+      rowCount: 1
+      rows:
+        - title: Conference tickets (2x)
+

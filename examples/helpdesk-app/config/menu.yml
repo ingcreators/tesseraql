@@ -1,0 +1,5 @@
+items:
+  - label: Tickets
+    href: /tickets
+  - label: New ticket
+    href: /tickets/new

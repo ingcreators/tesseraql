@@ -1,0 +1,12 @@
+version: tesseraql/v1
+id: products.new.form
+kind: view
+view: form
+title: New product
+action: /products/new
+fields:
+  - { name: sku, label: SKU }
+  - { name: name }
+  - { name: category }
+  - { name: stock }
+  - { name: reorder_level, label: Reorder at }

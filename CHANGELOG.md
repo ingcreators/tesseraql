@@ -8,6 +8,16 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **Template gallery** (roadmap Phase 47): three complete, declarative-only starter apps join
+  `examples/` — **`purchase-request-app`** (the approval workflow: a `kind: workflow` document
+  drives draft → submitted → approved/rejected in managed mode, with synthesized transition
+  endpoints, a guard, task assignment, and the history on a declarative detail view),
+  **`inventory-app`** (declarative views end to end: searchable/paginated list, a dashboard
+  with stats/bar chart/low-stock table, forms, and a stock adjustment guarded by a
+  declarative validation rule), and **`helpdesk-app`** (an app-mode workflow over the
+  ticket's own `status` column plus a transactional `notify:` the suite asserts without
+  SMTP). Each app is held to the marketplace admission profile, lints clean, and passes its
+  own declarative suites against a real database in CI (`GalleryAppsIntegrationTest`).
 - **Marketplace admission profile** (roadmap Phase 47, first slice — realizing the Phase 37
   admission gate): `tesseraql admission --app .` and the `tesseraql:admission` Maven goal run
   the machine-checkable bar a shared app must clear — declarative-only (no plugin jars, no

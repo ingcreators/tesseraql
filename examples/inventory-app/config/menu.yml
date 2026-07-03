@@ -1,0 +1,7 @@
+items:
+  - label: Products
+    href: /products
+  - label: Dashboard
+    href: /products/dashboard
+  - label: New product
+    href: /products/new
