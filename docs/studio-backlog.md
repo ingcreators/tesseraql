@@ -535,3 +535,23 @@ Drafted and **filed upstream** as [hc-briefs.md](hc-briefs.md) → `ingcreators/
 issues #270 (`data-hc-copy`), #271 (`hc-toc` + `data-hc-spy`), #272 (`data-hc-nav-current`), each
 with the proposed markup, the CSP/a11y constraints, and the TesseraQL stand-in to retire on
 adoption.
+
+## Track J — Studio authoring completion (roadmap Phase 43)
+
+Queued from the 2026-07-03 low-code gap review ([roadmap.md](roadmap.md) Horizon 8); each item
+ships as its own slice once the phase opens:
+
+- [ ] **J1 — form-driven route editor**: recipe/auth/policy/inputs as structured fields (the
+  menu-editor pattern applied to route YAML itself); the text editor stays the escape hatch.
+- [ ] **J2 — connector/SSO authoring**: `http.outbound` / `connectors.poll` /
+  `connectors.webhooks` / OIDC / SAML through the gated overlay-write path (secret
+  *references* only, never values; egress allow-list changes behind the confirm gate); the
+  IAM wizards become write-through instead of snippet downloads.
+- [ ] **J3 — test recorder**: save an API-console invocation as a declarative test case.
+- [ ] **J4 — data-browser row edit**: PK-scoped single-row edit via a generated command,
+  under audit + `editRoles` + confirm.
+- [ ] **J5 — authoring feedback**: deepen the shipped JSON Schema and wire it into scaffolded
+  repos (`.vscode` association); lint findings gain line/column.
+
+The Studio-embedded copilot chat is roadmap **Phase 44** (an MCP client over the existing
+gated tools), a separate phase rather than a Track J slice.
