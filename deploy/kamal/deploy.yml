@@ -23,7 +23,7 @@ builder:
 proxy:
   app_port: 8080
   healthcheck:
-    path: /_tesseraql/health  # unauthenticated status word; details stay behind the ops API
+    path: /_tesseraql/health/ready  # readiness (503 on DOWN); details stay behind the ops API
   # No public TLS: cloudflared connects outbound to Cloudflare; the proxy only does
   # zero-downtime container swaps on localhost.
   ssl: false

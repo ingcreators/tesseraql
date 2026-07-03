@@ -272,4 +272,35 @@ class OpsDashboardTest {
             });
         }
     }
+
+    @Test
+    void healthRollsUpToDownWhenTheDatasourceProbeFails() {
+        OpsDashboard dashboard = new OpsDashboard(null, null, null,
+                io.tesseraql.core.telemetry.TraceLog.empty(), 200)
+                .datasourceProbe(() -> java.util.Map.of("main", false));
+
+        OpsDashboard.HealthReport report = dashboard.health();
+
+        assertThat(report.status()).isEqualTo("DOWN");
+        assertThat(report.details().get("datasources"))
+                .isEqualTo(java.util.Map.of("main", false));
+    }
+
+    @Test
+    void healthStaysUpWhenTheProbePassesAndDownWhenProbingItselfFails() {
+        OpsDashboard healthy = new OpsDashboard(null, null, null,
+                io.tesseraql.core.telemetry.TraceLog.empty(), 200)
+                .datasourceProbe(() -> java.util.Map.of("main", true, "reporting", true));
+        assertThat(healthy.health().status()).isEqualTo("UP");
+
+        OpsDashboard broken = new OpsDashboard(null, null, null,
+                io.tesseraql.core.telemetry.TraceLog.empty(), 200)
+                .datasourceProbe(() -> {
+                    throw new IllegalStateException("pool exploded");
+                });
+        OpsDashboard.HealthReport report = broken.health();
+        assertThat(report.status()).isEqualTo("DOWN");
+        assertThat(report.details().get("datasources"))
+                .isEqualTo(java.util.Map.of("probe", false));
+    }
 }

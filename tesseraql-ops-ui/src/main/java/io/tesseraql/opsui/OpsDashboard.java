@@ -29,6 +29,7 @@ public final class OpsDashboard {
     private final AlertThresholds thresholds;
     private final io.tesseraql.core.diag.PinningMonitor pinning;
     private java.util.function.Supplier<Map<String, Integer>> outboxCounts;
+    private java.util.function.Supplier<Map<String, Boolean>> datasourceProbe;
 
     public OpsDashboard(JobRepository jobs, ExecutionLanes lanes, SqlExecutionLog slowSql,
             TraceLog traces, long slowSpanThresholdMs) {
@@ -70,6 +71,16 @@ public final class OpsDashboard {
         return this;
     }
 
+    /**
+     * Wires the datasource probe (roadmap Phase 45): each configured datasource's live validity
+     * by name. Readiness degrades to {@code DOWN} when any is false — the truthful state a load
+     * balancer needs to shed traffic, where a {@code WARN} never would.
+     */
+    public OpsDashboard datasourceProbe(java.util.function.Supplier<Map<String, Boolean>> probe) {
+        this.datasourceProbe = probe;
+        return this;
+    }
+
     /** Builds the dashboard overview: batch summary, lane diagnostics, slow SQL, and recent traces. */
     public Overview overview(int recentLimit) {
         return overview(recentLimit, app -> true);
@@ -99,19 +110,47 @@ public final class OpsDashboard {
     }
 
     /**
-     * A health roll-up suitable for an actuator/health endpoint (design ch. 19.1): {@code UP} when
-     * there are no active alerts, {@code WARN} otherwise, with the key metrics as details.
+     * A health roll-up suitable for an actuator/health endpoint (design ch. 19.1, roadmap
+     * Phase 45): {@code DOWN} when the datasource probe fails (a dependency the app cannot
+     * serve without), {@code WARN} when any alert is active, {@code UP} otherwise — with the
+     * key metrics and per-datasource probe results as details.
      */
     public HealthReport health() {
-        List<Alert> alerts = alerts();
         TraceMetrics metrics = traceMetrics();
         Map<String, Object> details = new LinkedHashMap<>();
         details.put("traceErrorRate", metrics.traceErrorRate());
         details.put("spans", metrics.spans());
         details.put("lanes", lanes == null ? List.of() : laneStatuses(lanes));
         details.put("pinningEvents", pinning().count());
+        Map<String, Boolean> datasources = probeDatasources();
+        if (!datasources.isEmpty()) {
+            details.put("datasources", datasources);
+        }
+        boolean down = datasources.containsValue(Boolean.FALSE);
+        List<Alert> alerts;
+        try {
+            alerts = alerts();
+        } catch (RuntimeException ex) {
+            // A contributor that cannot reach its store is itself a DOWN signal: the health
+            // endpoint must answer a clean DOWN during an outage, never crash into a 500.
+            alerts = List.of();
+            details.put("alertsError", String.valueOf(ex.getMessage()));
+            down = true;
+        }
         details.put("alerts", alerts);
-        return new HealthReport(alerts.isEmpty() ? "UP" : "WARN", details);
+        return new HealthReport(down ? "DOWN" : alerts.isEmpty() ? "UP" : "WARN", details);
+    }
+
+    /** The probe results, or an explicit failure entry when probing itself blows up. */
+    private Map<String, Boolean> probeDatasources() {
+        if (datasourceProbe == null) {
+            return Map.of();
+        }
+        try {
+            return datasourceProbe.get();
+        } catch (RuntimeException ex) {
+            return Map.of("probe", Boolean.FALSE);
+        }
     }
 
     /** The virtual-thread pinning summary (count and recent events), empty when not monitored. */
@@ -347,7 +386,7 @@ public final class OpsDashboard {
     public record PinningSummary(long count, List<io.tesseraql.core.diag.PinningEvent> recent) {
     }
 
-    /** A health roll-up: a status ({@code UP}/{@code WARN}) and supporting detail metrics. */
+    /** A health roll-up: a status ({@code UP}/{@code WARN}/{@code DOWN}) and supporting detail metrics. */
     public record HealthReport(String status, Map<String, Object> details) {
     }
 

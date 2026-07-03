@@ -8,6 +8,17 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **Truthful health** (roadmap Phase 45, first slice): `GET /_tesseraql/health/live` is pure
+  liveness (the process answers; never touches a dependency) and
+  `GET /_tesseraql/health/ready` — also served by the bare `/_tesseraql/health` — is the
+  readiness roll-up: every configured datasource is probed live (`Connection.isValid` per
+  pool) and the status degrades to **`DOWN` with HTTP 503** when one fails, so load balancers
+  actually shed traffic; `WARN` stays a 200 with active alerts. A contributor that cannot
+  reach its store during an outage counts as DOWN instead of crashing the endpoint into a 500,
+  and the Spring Actuator bridge maps `DOWN` to `Health.down()`. The container HEALTHCHECK now
+  targets `/health/live` and the kamal proxy check `/health/ready`; a new
+  `tesseraql.datasources.<name>.connectionTimeoutMillis` knob bounds both borrower waits and
+  the probe's detection latency.
 - **Authoring feedback outside Studio** (roadmap Phase 43, Track J5 — the phase is complete):
   the shipped JSON Schema now covers the full route/job/view document surface (recipe enum
   kept in sync with the linter by a build-time drift test), and `tesseraql new` wires it into

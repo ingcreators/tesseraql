@@ -13,7 +13,12 @@ host: cloudflared → kamal-proxy → tesseraql runtime (:8080)
 managed PostgreSQL (sessions, jobs, outbox, file transfers all multi-node safe)
 ```
 
-- `GET /_tesseraql/health` is the unauthenticated liveness endpoint (status word only); the
+- `GET /_tesseraql/health/live` is the unauthenticated liveness endpoint (the process answers;
+it never touches a dependency), and `GET /_tesseraql/health/ready` — also what the bare
+`/_tesseraql/health` serves — is the readiness roll-up: it probes every configured datasource
+live and answers `503 {"status":"DOWN"}` when one fails, `WARN` on active alerts, `UP`
+otherwise (status word only, roadmap Phase 45). Point container health checks at
+`/health/live` and load-balancer/proxy checks at `/health/ready`; the
   detailed health/metrics stay behind the authorized ops API.
 - Put a Cloudflare Access policy on `/_tesseraql/*` so the system consoles sit behind both the
   Cloudflare login and the app's own authentication.
