@@ -33,7 +33,26 @@
           <tbody class="hc-datagrid__body">
             <tr class="hc-datagrid__row" th:each="flag : ${f.flags}">
               <td class="hc-datagrid__cell"><code th:text="${flag.name}">name</code></td>
-              <td class="hc-datagrid__cell" th:text="${flag.value}">value</td>
+              <td class="hc-datagrid__cell">
+                <!-- A boolean flag renders a one-click toggle (posts the opposite value); other
+                     types show their value. No JS: the toggle is a submit button. -->
+                <th:block th:if="${flag.type == 'boolean'}">
+                  <form th:if="${f.editable}" method="post" action="/_tesseraql/studio/ui/flags/set">
+                    <input type="hidden" name="_csrf" th:value="${_csrf}">
+                    <input type="hidden" name="name" th:value="${flag.name}">
+                    <input type="hidden" name="type" value="boolean">
+                    <input type="hidden" name="value" th:value="${flag.on} ? 'false' : 'true'">
+                    <button type="submit" class="hc-button" data-size="sm"
+                            th:attr="data-variant=${flag.on} ? 'success' : 'ghost',
+                                     aria-label=${flag.on} ? 'Turn off' : 'Turn on'"
+                            th:text="${flag.on} ? 'on' : 'off'">on</button>
+                  </form>
+                  <span th:unless="${f.editable}" class="hc-badge"
+                        th:attr="data-variant=${flag.on} ? 'success' : 'neutral'"
+                        th:text="${flag.on} ? 'on' : 'off'">on</span>
+                </th:block>
+                <span th:unless="${flag.type == 'boolean'}" th:text="${flag.value}">value</span>
+              </td>
               <td class="hc-datagrid__cell">
                 <span class="hc-badge" data-variant="neutral" th:text="${flag.type}">type</span>
               </td>
