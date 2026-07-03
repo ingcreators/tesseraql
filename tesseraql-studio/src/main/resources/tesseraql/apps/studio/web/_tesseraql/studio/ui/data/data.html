@@ -40,6 +40,15 @@
              values are bound params; comparisons run on the text representation of each column. -->
         <form class="hc-stack" method="get" action="/_tesseraql/studio/ui/data">
           <input type="hidden" name="table" th:value="${data.table}">
+          <!-- The condition slots are folded behind a disclosure so the initial view is just
+               sort + Apply. It opens automatically when a filter is active, and the summary
+               badges the active-condition count. Collapsed selects still submit (native form). -->
+          <details class="hc-disclosure" th:attr="open=${data.hasFilters} ? true : null">
+          <summary>
+            <span>Filters</span>
+            <span class="hc-badge" data-variant="info" th:if="${data.filterCount > 0}"
+                  th:text="|${data.filterCount} active|">1 active</span>
+          </summary>
           <div class="hc-field">
             <label class="hc-field__label" for="data-combinator">Match</label>
             <select class="hc-select" id="data-combinator" name="combinator">
@@ -78,6 +87,7 @@
                      autocomplete="off">
             </div>
           </div>
+          </details>
           <div class="hc-cluster">
             <div class="hc-field">
               <label class="hc-field__label" for="data-sort-col">Sort by</label>
