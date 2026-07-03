@@ -1159,7 +1159,11 @@ public final class TesseraqlRuntime implements AutoCloseable {
                                     params.get("dir"))) ? "desc" : "asc";
                             model.put("sortColumn", sortColumn == null ? "" : sortColumn);
                             model.put("sortDir", sortDir);
-                            // Up to DATA_FILTER_SLOTS AND-conditions from indexed slots fcN/foN/fvN.
+                            String combinator = "or".equalsIgnoreCase(String.valueOf(
+                                    params.get("combinator"))) ? "or" : "and";
+                            model.put("combinator", combinator);
+                            // Up to DATA_FILTER_SLOTS conditions from indexed slots fcN/foN/fvN,
+                            // combined by the combinator (AND/OR).
                             java.util.List<StudioDataService.FilterCond> filters = new java.util.ArrayList<>();
                             java.util.List<Map<String, Object>> filterRows = new java.util.ArrayList<>();
                             for (int i = 0; i < DATA_FILTER_SLOTS; i++) {
@@ -1181,12 +1185,13 @@ public final class TesseraqlRuntime implements AutoCloseable {
                                 }
                             }
                             model.put("filterRows", filterRows);
-                            model.put("queryBase", dataQueryBase(table, sortColumn, sortDir,
-                                    filterRows));
+                            model.put("queryBase", dataQueryBase(table, combinator, sortColumn,
+                                    sortDir, filterRows));
                             try {
                                 int page = parseIndex(params.get("page"));
                                 StudioDataService.DataPage data = studioData.browse(table,
-                                        page < 0 ? 0 : page, sortColumn, sortDir, filters);
+                                        page < 0 ? 0 : page, sortColumn, sortDir, combinator,
+                                        filters);
                                 model.put("table", data.table());
                                 model.put("columns", data.columns());
                                 java.util.List<Map<String, Object>> rows = new java.util.ArrayList<>();
@@ -1226,6 +1231,8 @@ public final class TesseraqlRuntime implements AutoCloseable {
                                         "desc".equalsIgnoreCase(String.valueOf(params.get("dir")))
                                                 ? "desc"
                                                 : "asc",
+                                        "or".equalsIgnoreCase(String.valueOf(
+                                                params.get("combinator"))) ? "or" : "and",
                                         dataFilters(params)));
                             } catch (RuntimeException ex) {
                                 return Map.of("csv", "# " + ex.getMessage() + "\r\n");
@@ -2024,8 +2031,8 @@ public final class TesseraqlRuntime implements AutoCloseable {
         return body;
     }
 
-    /** The number of AND-filter condition slots the data browser exposes. */
-    private static final int DATA_FILTER_SLOTS = 3;
+    /** The number of filter condition slots the data browser exposes. */
+    private static final int DATA_FILTER_SLOTS = 5;
 
     /** Assembles the data browser's filter conditions from the indexed slot params {@code fcN/foN/fvN}. */
     private static java.util.List<StudioDataService.FilterCond> dataFilters(
@@ -2043,10 +2050,11 @@ public final class TesseraqlRuntime implements AutoCloseable {
         return filters;
     }
 
-    /** The URL-encoded query string (table + filter slots + sort) prev/next/export links reuse. */
-    private static String dataQueryBase(String table, String sortColumn, String sortDir,
-            java.util.List<Map<String, Object>> filterRows) {
-        StringBuilder query = new StringBuilder("table=").append(urlEncode(table));
+    /** The URL-encoded query string (table + combinator + filter slots + sort) reused by the links. */
+    private static String dataQueryBase(String table, String combinator, String sortColumn,
+            String sortDir, java.util.List<Map<String, Object>> filterRows) {
+        StringBuilder query = new StringBuilder("table=").append(urlEncode(table))
+                .append("&combinator=").append(urlEncode(combinator));
         for (int i = 0; i < filterRows.size(); i++) {
             Map<String, Object> row = filterRows.get(i);
             query.append("&fc").append(i).append('=')

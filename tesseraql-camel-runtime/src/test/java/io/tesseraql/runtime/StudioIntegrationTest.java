@@ -2004,6 +2004,41 @@ class StudioIntegrationTest {
     }
 
     @Test
+    void uiDataBrowserCombinesConditionsWithOr() throws Exception {
+        // status ACTIVE OR status INACTIVE → matches (the seeded admin is ACTIVE).
+        assertThat(get("/_tesseraql/studio/ui/data?table=tql_users&combinator=or"
+                + "&fc0=status&fo0=equals&fv0=ACTIVE"
+                + "&fc1=status&fo1=equals&fv1=INACTIVE", true).body()).contains("Administrator");
+        // The same two as AND can't both hold → no rows.
+        assertThat(get("/_tesseraql/studio/ui/data?table=tql_users&combinator=and"
+                + "&fc0=status&fo0=equals&fv0=ACTIVE"
+                + "&fc1=status&fo1=equals&fv1=INACTIVE", true).body()).contains("No rows");
+    }
+
+    @Test
+    void uiDataBrowserOrdersNumericColumnsTyped() throws Exception {
+        try (java.sql.Connection c = java.sql.DriverManager.getConnection(POSTGRES.getJdbcUrl(),
+                POSTGRES.getUsername(), POSTGRES.getPassword());
+                java.sql.Statement s = c.createStatement()) {
+            s.execute("drop table if exists num_probe");
+            s.execute("create table num_probe (id int primary key, qty int)");
+            s.execute("insert into num_probe values (1, 9), (2, 100)");
+        }
+        try {
+            // qty > 50 → numeric compare returns only the qty=100 row; a text compare would keep
+            // '9' too (2 rows), so a single row proves the value was bound as a number.
+            assertThat(get("/_tesseraql/studio/ui/data?table=num_probe&fc0=qty&fo0=gt&fv0=50", true)
+                    .body()).contains("1 row(s)").contains("100");
+        } finally {
+            try (java.sql.Connection c = java.sql.DriverManager.getConnection(POSTGRES.getJdbcUrl(),
+                    POSTGRES.getUsername(), POSTGRES.getPassword());
+                    java.sql.Statement s = c.createStatement()) {
+                s.execute("drop table if exists num_probe");
+            }
+        }
+    }
+
+    @Test
     void uiDocsTableLinksToTheDataBrowser() throws Exception {
         HttpResponse<String> response = get(
                 "/_tesseraql/studio/ui/docs/schema/table?ds=main&name=customers", true);
