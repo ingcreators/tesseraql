@@ -8,6 +8,14 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **Structured logging with trace-id correlation** (roadmap Phase 45): the CLI distribution
+  ships a JDK-only SLF4J provider — before it, the standalone runtime had NO log backend at
+  all (every line fell into SLF4J's NOP sink). Plain text by default, `--log-format json`
+  for structured lines, `--log-level` for the threshold; every line carries the MDC, the
+  runtime puts the request's `traceId`/`spanId` there, and Camel bridges the keys across
+  async steps. An **opt-in HTTP access log** (`tesseraql.logging.accessLog: true`) emits one
+  correlated line per request on the `tesseraql.access` logger, including the authenticated
+  user. The Spring distribution keeps Boot's Logback untouched.
 - **Safety valves** (roadmap Phase 45): every route SQL statement is now bounded **by
   default** — 30 seconds, the app-wide `tesseraql.sql.timeoutSeconds`, or a per-binding
   `sql.timeoutSeconds` override (`0` opts a deliberately long-running statement out;

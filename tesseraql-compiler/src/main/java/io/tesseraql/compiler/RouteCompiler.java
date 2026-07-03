@@ -1031,7 +1031,14 @@ public final class RouteCompiler {
     /** Inserts the route telemetry step (span + invocation counter) at the route head (ch. 25). */
     private void applyTelemetry(ProcessorDefinition<?> route, RouteFile routeFile) {
         route.process(new io.tesseraql.compiler.binding.RouteTelemetry(
-                routeFile.definition().id(), routeFile.httpMethod(), routeFile.urlPath(), appName));
+                routeFile.definition().id(), routeFile.httpMethod(), routeFile.urlPath(), appName,
+                accessLogEnabled()));
+    }
+
+    /** The opt-in HTTP access log (roadmap Phase 45): one correlated line per request. */
+    private boolean accessLogEnabled() {
+        return config.getString("tesseraql.logging.accessLog")
+                .map(Boolean::parseBoolean).orElse(false);
     }
 
     /**

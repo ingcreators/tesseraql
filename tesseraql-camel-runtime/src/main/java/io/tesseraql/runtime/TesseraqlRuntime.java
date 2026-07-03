@@ -185,6 +185,10 @@ public final class TesseraqlRuntime implements AutoCloseable {
                     : new io.tesseraql.core.telemetry.CompositeMeter(aggregatingMeter, meter,
                             new io.tesseraql.observability.OpenTelemetryMeter(sdk));
         }
+        // MDC bridging (roadmap Phase 45): Camel copies the trace-correlation keys across
+        // its async boundaries so lane-dispatched steps keep logging with the request's ids.
+        context.setUseMDCLogging(true);
+        context.setMDCLoggingKeysPattern("traceId,spanId");
         context.getRegistry().bind(TesseraqlProperties.TRACER_BEAN, effectiveTracer);
         context.getRegistry().bind(TesseraqlProperties.METER_BEAN, effectiveMeter);
 
