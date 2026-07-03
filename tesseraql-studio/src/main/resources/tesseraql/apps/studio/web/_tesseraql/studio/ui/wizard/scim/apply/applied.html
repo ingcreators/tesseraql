@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{tql/shell :: studio-page(|TesseraQL Studio · SCIM settings written|, ~{:: #page-header}, ~{:: #page-content})}">
+<th:block id="page-header">
+  <span class="hc-spacer"></span>
+  <div class="hc-cluster">
+    <a th:href="|/_tesseraql/studio/ui/wizard/scim|">&larr; wizard</a>
+    <a href="/_tesseraql/studio/ui/wizard">wizards</a>
+  </div>
+</th:block>
+<div id="page-content" class="hc-stack">
+  <section class="hc-card">
+    <h2>SCIM settings written</h2>
+    <p class="hc-alert" data-variant="success" role="status">Written to
+      <code>config/overlay.yml</code> &mdash; only secret <em>references</em> were stored.</p>
+    <p class="hc-field__message">These settings load at startup, so they apply on the
+      <strong>next start</strong>. Review the merged result in the
+      <a href="/_tesseraql/studio/ui/config">config viewer</a>; the write is in the
+      <a href="/_tesseraql/studio/ui/audit">audit trail</a>.</p>
+  </section>
+</div>
+</html>

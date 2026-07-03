@@ -303,11 +303,13 @@ public final class ErrorResponseRenderer implements Processor {
             case RATE -> 429;
             case LANE -> code.number() == 5031 ? 503 : 500;
             case STUDIO -> switch (code.number()) {
-                case 4002, 4224 -> 400; // missing parameter / invalid new-route request
+                // 4230/4231: route-form / connector authoring input rejected (Phase 43 Track J)
+                case 4002, 4224, 4230, 4231 -> 400;
                 case 4030, 4031 -> 403; // read-only / caller lacks a Studio edit role (backlog D6)
                 case 4040 -> 404;
                 case 4090 -> 409; // a draft applied over a concurrently changed source (backlog D5)
-                case 4221, 4223 -> 422; // invalid draft / apply not confirmed (confirm-before-apply)
+                // 4221: invalid draft; 4223: apply not confirmed; 4232: egress change not confirmed
+                case 4221, 4223, 4232 -> 422;
                 default -> 500;
             };
             case IDEM -> code.number() == 4090 ? 409 : 500;

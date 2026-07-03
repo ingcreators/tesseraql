@@ -13,6 +13,7 @@
   The client secret is referenced through the secret provider, never pasted here; the generated file
   shows how to add it for a confidential client.</p>
   <form method="post" action="/_tesseraql/studio/ui/wizard/oidc">
+    <input type="hidden" name="_csrf" th:value="${_csrf}">
     <div class="hc-field">
       <label class="hc-field__label" for="discovery-uri">Discovery URL</label>
       <input class="hc-input" id="discovery-uri" type="text" name="discoveryUri" required placeholder="https://idp.example.com/.well-known/openid-configuration">
@@ -39,6 +40,13 @@
       <select class="hc-select" id="provision" name="provision"><option value="false">false</option><option value="true">true</option></select>
     </div>
     <div class="hc-cluster"><button type="submit" class="hc-button" data-variant="primary">Generate &amp; download config</button></div>
+  
+    <div class="hc-cluster">
+      <button class="hc-button" type="submit"
+              formaction="/_tesseraql/studio/ui/wizard/oidc/apply"
+              data-hc-confirm="Write these OIDC settings to config/overlay.yml? Only secret references are stored; they apply on the next start."
+              data-hc-confirm-title="Write to overlay" data-hc-confirm-label="Write">Write to config overlay</button>
+    </div>
   </form>
 </section>
 </div>

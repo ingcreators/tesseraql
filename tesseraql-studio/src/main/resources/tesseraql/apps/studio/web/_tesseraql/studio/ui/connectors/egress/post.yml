@@ -1,0 +1,37 @@
+version: tesseraql/v1
+id: tql.studio.connectors.egress
+kind: route
+recipe: command-json
+
+input:
+  scope:
+    type: string
+    required: true
+  host:
+    type: string
+    required: true
+  remove:
+    type: string
+    required: false
+  confirm:
+    type: string
+    required: false
+
+security:
+  auth: browser
+  csrf: true
+
+sql:
+  service: studio.connectors.egress
+  params:
+    scope: params.scope
+    host: params.host
+    remove: params.remove
+    confirm: params.confirm
+    roles: principal.roles
+    actor: principal.loginId
+
+response:
+  redirect:
+    status: 303
+    location: /_tesseraql/studio/ui/connectors?saved=1

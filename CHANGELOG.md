@@ -8,6 +8,15 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **Studio connector & SSO authoring** (roadmap Phase 43, Track J2): a **Connectors** page
+  edits the managed connector config through the same gated overlay-write path as policies —
+  egress allow-lists for `http.outbound` and `connectors.poll` (always behind an explicit
+  confirm), outbound/poll credentials, and inbound webhook verifiers — with secret
+  **references** only (`${secret.env.NAME}`): a literal secret value is rejected before it can
+  reach a config file, and displayed values are redacted. The OIDC/SAML/SCIM/identity wizards
+  became write-through: **Write to config overlay** lands the settings in `config/overlay.yml`
+  beside the existing snippet download. Everything is edit-gated, audited, and honestly
+  restart-bound (these sections load at boot; the pages say so).
 - **Studio form-driven route editor** (roadmap Phase 43, Track J1 — first slice): a **Route
   form** page edits a route document's governed fields as structured form fields — recipe,
   auth, policy (suggested from the app's declared policies), CSRF, and the `input:` block as

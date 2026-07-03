@@ -131,3 +131,16 @@ web/_tesseraql/studio/ui/wizard/identity/wizard-identity.yml.tpl
 web/_tesseraql/studio/ui/route-form/get.yml
 web/_tesseraql/studio/ui/route-form/post.yml
 web/_tesseraql/studio/ui/route-form/route-form.html
+web/_tesseraql/studio/ui/connectors/get.yml
+web/_tesseraql/studio/ui/connectors/connectors.html
+web/_tesseraql/studio/ui/connectors/egress/post.yml
+web/_tesseraql/studio/ui/connectors/webhook/post.yml
+web/_tesseraql/studio/ui/connectors/credential/post.yml
+web/_tesseraql/studio/ui/wizard/oidc/apply/post.yml
+web/_tesseraql/studio/ui/wizard/oidc/apply/applied.html
+web/_tesseraql/studio/ui/wizard/saml/apply/post.yml
+web/_tesseraql/studio/ui/wizard/saml/apply/applied.html
+web/_tesseraql/studio/ui/wizard/scim/apply/post.yml
+web/_tesseraql/studio/ui/wizard/scim/apply/applied.html
+web/_tesseraql/studio/ui/wizard/identity/apply/post.yml
+web/_tesseraql/studio/ui/wizard/identity/apply/applied.html

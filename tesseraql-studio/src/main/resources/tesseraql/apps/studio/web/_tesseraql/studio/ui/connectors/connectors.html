@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{tql/shell :: studio-page(|TesseraQL Studio · Connectors|, ~{:: #page-header}, ~{:: #page-content})}">
+<th:block id="page-header">
+  <span class="hc-spacer"></span>
+  <div class="hc-cluster">
+    <a href="/_tesseraql/studio/ui/wizard">wizards</a>
+    <a href="/_tesseraql/studio/ui/config">config</a>
+    <a href="/_tesseraql/studio/ui">explorer &rarr;</a>
+  </div>
+</th:block>
+<div id="page-content" class="hc-stack">
+  <p class="hc-alert" data-variant="success" role="status" th:if="${cx.saved != null}">
+    Saved to <code>config/overlay.yml</code> &mdash; connector settings apply on the next start.</p>
+  <section class="hc-card">
+    <h2>Egress allow-lists</h2>
+    <p class="hc-field__message">Outbound calls are deny-by-default: a host must be allow-listed
+      (exact or <code>*.wildcard</code>) before <code>http-call</code> steps or poll triggers may
+      reach it. Changes write <code>config/overlay.yml</code> (the full effective list) and apply
+      on the next start.</p>
+    <div class="hc-grid" style="--hc-grid-min: 22rem">
+      <div class="hc-stack" th:each="scope : ${ {'outbound','poll'} }">
+        <h3 th:text="${scope == 'outbound'} ? 'HTTP outbound (http-call)' : 'File poll (SFTP/FTPS)'"></h3>
+        <ul class="hc-stack" th:with="hosts=${scope == 'outbound' ? cx.outboundHosts : cx.pollHosts}">
+          <li class="hc-cluster" th:each="h : ${hosts}">
+            <code th:text="${h}"></code>
+            <form method="post" action="/_tesseraql/studio/ui/connectors/egress" th:if="${cx.editable}">
+              <input type="hidden" name="_csrf" th:value="${_csrf}">
+              <input type="hidden" name="scope" th:value="${scope}">
+              <input type="hidden" name="host" th:value="${h}">
+              <input type="hidden" name="remove" value="true">
+              <input type="hidden" name="confirm" value="true">
+              <button class="hc-button" data-variant="ghost" data-size="sm" type="submit"
+                      data-hc-confirm="Remove this host from the egress allow-list? Calls to it will be denied after the next start."
+                      data-hc-confirm-title="Remove egress host" data-hc-confirm-label="Remove">Remove</button>
+            </form>
+          </li>
+          <li th:if="${hosts.isEmpty()}" class="hc-field__message">No hosts allow-listed.</li>
+        </ul>
+        <form class="hc-cluster" method="post" action="/_tesseraql/studio/ui/connectors/egress"
+              th:if="${cx.editable}">
+          <input type="hidden" name="_csrf" th:value="${_csrf}">
+          <input type="hidden" name="scope" th:value="${scope}">
+          <input type="hidden" name="confirm" value="true">
+          <input class="hc-input" data-size="sm" name="host" placeholder="api.example.com or *.example.com">
+          <button class="hc-button" data-size="sm" type="submit"
+                  data-hc-confirm="Allow outbound calls to this host? Egress changes widen the app&#39;s reach and apply on the next start."
+                  data-hc-confirm-title="Allow egress host" data-hc-confirm-label="Allow">Allow host</button>
+        </form>
+      </div>
+    </div>
+  </section>
+  <section class="hc-card">
+    <h2>Connector credentials</h2>
+    <p class="hc-field__message">Credentials hold secret <strong>references</strong>
+      (<code>${secret.env.NAME}</code>) resolved at call time through the SecretResolver &mdash;
+      Studio never writes a literal secret value.</p>
+    <div class="hc-grid" style="--hc-grid-min: 22rem">
+      <div class="hc-stack" th:each="scope : ${ {'outbound','poll'} }">
+        <h3 th:text="${scope == 'outbound'} ? 'HTTP outbound' : 'File poll'"></h3>
+        <table class="hc-table" th:with="creds=${scope == 'outbound' ? cx.outboundCredentials : cx.pollCredentials}">
+          <thead><tr><th>Name</th><th>Type</th><th>Target</th><th>Secret</th></tr></thead>
+          <tbody>
+          <tr th:each="c : ${creds}">
+            <td th:text="${c.name}"></td><td th:text="${c.type}"></td>
+            <td th:text="${c.target}"></td><td><code th:text="${c.secret}"></code></td>
+          </tr>
+          <tr th:if="${creds.isEmpty()}"><td colspan="4" class="hc-field__message">None configured.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <details class="hc-disclosure" th:if="${cx.editable}">
+      <summary>Add or replace a credential</summary>
+      <form class="hc-stack" method="post" action="/_tesseraql/studio/ui/connectors/credential">
+        <input type="hidden" name="_csrf" th:value="${_csrf}">
+        <div class="hc-cluster">
+          <label class="hc-field"><span class="hc-field__label">Scope</span>
+            <select class="hc-select" name="scope"><option value="outbound">outbound</option>
+              <option value="poll">poll</option></select></label>
+          <label class="hc-field"><span class="hc-field__label">Name</span>
+            <input class="hc-input" name="name" placeholder="directory" required></label>
+          <label class="hc-field"><span class="hc-field__label">Type</span>
+            <select class="hc-select" name="type"><option value="bearer">bearer</option>
+              <option value="basic">basic</option><option value="header">header</option></select></label>
+        </div>
+        <div class="hc-cluster">
+          <label class="hc-field"><span class="hc-field__label">Bearer token ref</span>
+            <input class="hc-input" name="token" placeholder="${secret.env.PARTNER_TOKEN}"></label>
+          <label class="hc-field"><span class="hc-field__label">Basic username</span>
+            <input class="hc-input" name="username"></label>
+          <label class="hc-field"><span class="hc-field__label">Basic password ref</span>
+            <input class="hc-input" name="password" placeholder="${secret.env.LEGACY_PASS}"></label>
+          <label class="hc-field"><span class="hc-field__label">Header name</span>
+            <input class="hc-input" name="header" placeholder="X-API-Key"></label>
+          <label class="hc-field"><span class="hc-field__label">Header value ref</span>
+            <input class="hc-input" name="value" placeholder="${secret.env.DIRECTORY_API_KEY}"></label>
+        </div>
+        <p class="hc-field__message">Fill the fields for the chosen type; secret fields must be
+          <code>${secret.&hellip;}</code> references.</p>
+        <button class="hc-button" data-variant="primary" type="submit">Save credential</button>
+      </form>
+    </details>
+  </section>
+  <section class="hc-card">
+    <h2>Inbound webhook verifiers</h2>
+    <p class="hc-field__message">A <code>recipe: webhook</code> route only serves when its
+      provider is configured here (deny-by-default). The HMAC secret is a reference; timestamp
+      tolerance is ISO-8601 (<code>PT5M</code>).</p>
+    <table class="hc-table">
+      <thead><tr><th>Provider</th><th>Secret</th><th>Signature header</th>
+        <th>Timestamp header</th><th>Id header</th><th>Tolerance</th></tr></thead>
+      <tbody>
+      <tr th:each="w : ${cx.webhooks}">
+        <td th:text="${w.name}"></td><td><code th:text="${w.secret}"></code></td>
+        <td th:text="${w.signatureHeader}"></td><td th:text="${w.timestampHeader}"></td>
+        <td th:text="${w.idHeader}"></td><td th:text="${w.tolerance}"></td>
+      </tr>
+      <tr th:if="${cx.webhooks.isEmpty()}"><td colspan="6" class="hc-field__message">None configured.</td></tr>
+      </tbody>
+    </table>
+    <details class="hc-disclosure" th:if="${cx.editable}">
+      <summary>Add or replace a verifier</summary>
+      <form class="hc-stack" method="post" action="/_tesseraql/studio/ui/connectors/webhook">
+        <input type="hidden" name="_csrf" th:value="${_csrf}">
+        <div class="hc-cluster">
+          <label class="hc-field"><span class="hc-field__label">Provider name</span>
+            <input class="hc-input" name="name" placeholder="partner" required></label>
+          <label class="hc-field"><span class="hc-field__label">Secret ref</span>
+            <input class="hc-input" name="secret" placeholder="${secret.env.PARTNER_WEBHOOK_SECRET}" required></label>
+          <label class="hc-field"><span class="hc-field__label">Signature header</span>
+            <input class="hc-input" name="signatureHeader" placeholder="X-Signature"></label>
+          <label class="hc-field"><span class="hc-field__label">Timestamp header</span>
+            <input class="hc-input" name="timestampHeader" placeholder="X-Timestamp"></label>
+          <label class="hc-field"><span class="hc-field__label">Id header</span>
+            <input class="hc-input" name="idHeader" placeholder="X-Delivery-Id"></label>
+          <label class="hc-field"><span class="hc-field__label">Tolerance</span>
+            <input class="hc-input" name="tolerance" placeholder="PT5M"></label>
+        </div>
+        <button class="hc-button" data-variant="primary" type="submit">Save verifier</button>
+      </form>
+    </details>
+  </section>
+</div>
+</html>

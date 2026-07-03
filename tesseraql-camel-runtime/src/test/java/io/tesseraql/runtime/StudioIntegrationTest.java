@@ -1850,6 +1850,76 @@ class StudioIntegrationTest {
     }
 
     @Test
+    void connectorsPageEditsEgressCredentialsAndWebhooksThroughTheOverlay() throws Exception {
+        // Track J2 (roadmap Phase 43): the connectors page shows the managed connector config
+        // and writes overlay changes — egress confirm-gated, secrets as references only.
+        HttpResponse<String> page = get("/_tesseraql/studio/ui/connectors", true);
+        assertThat(page.statusCode()).isEqualTo(200);
+        assertThat(page.body()).contains("Egress allow-lists").contains("api.directory.example")
+                .contains("Inbound webhook verifiers");
+
+        // An egress change without the explicit confirm acknowledgment is rejected.
+        HttpResponse<String> unconfirmed = postForm("/_tesseraql/studio/ui/connectors/egress",
+                "scope=outbound&host=api.next.example");
+        assertThat(unconfirmed.statusCode()).isEqualTo(422);
+
+        HttpResponse<String> confirmed = postForm("/_tesseraql/studio/ui/connectors/egress",
+                "scope=outbound&host=api.next.example&confirm=true");
+        assertThat(confirmed.statusCode()).isEqualTo(303);
+        String overlay = Files.readString(appHome.resolve("config/overlay.yml"));
+        assertThat(overlay).contains("api.next.example").contains("api.directory.example");
+        assertThat(get("/_tesseraql/studio/ui/connectors", true).body())
+                .contains("api.next.example");
+
+        // A webhook verifier never stores a literal secret — references only.
+        HttpResponse<String> raw = postForm("/_tesseraql/studio/ui/connectors/webhook",
+                "name=partner&secret=raw-literal-secret");
+        assertThat(raw.statusCode()).isEqualTo(400);
+        HttpResponse<String> reference = postForm("/_tesseraql/studio/ui/connectors/webhook",
+                "name=partner&secret=" + enc("${secret.env.PARTNER_WEBHOOK}")
+                        + "&signatureHeader=X-Sig&tolerance=PT5M");
+        assertThat(reference.statusCode()).isEqualTo(303);
+        assertThat(Files.readString(appHome.resolve("config/overlay.yml")))
+                .contains("${secret.env.PARTNER_WEBHOOK}");
+
+        // Credentials follow the same rule (bearer token must be a reference).
+        assertThat(postForm("/_tesseraql/studio/ui/connectors/credential",
+                "scope=outbound&name=svc&type=bearer&token=plain").statusCode()).isEqualTo(400);
+        assertThat(postForm("/_tesseraql/studio/ui/connectors/credential",
+                "scope=outbound&name=svc&type=bearer&token="
+                        + enc("${secret.env.SVC_TOKEN}"))
+                .statusCode()).isEqualTo(303);
+    }
+
+    @Test
+    void wizardWriteThroughLandsSsoSettingsInTheOverlay() throws Exception {
+        // Track J2: the IAM wizards write config/overlay.yml (references only) instead of only
+        // producing a snippet download; the result page states restart-to-apply.
+        String form = "discoveryUri=" + enc("https://idp.example/.well-known/openid-configuration")
+                + "&clientId=my-app&redirectUri="
+                + enc("https://app.example/_tesseraql/oidc/callback")
+                + "&scopes=" + enc("openid profile email") + "&provision=true"
+                + "&clientSecret=" + enc("${secret.env.OIDC_CLIENT_SECRET}");
+        HttpResponse<String> applied = postForm("/_tesseraql/studio/ui/wizard/oidc/apply", form);
+        assertThat(applied.statusCode()).isEqualTo(200);
+        assertThat(applied.body()).contains("OIDC settings written").contains("next start");
+
+        String overlay = Files.readString(appHome.resolve("config/overlay.yml"));
+        assertThat(overlay).contains("discoveryUri").contains("my-app")
+                .contains("${secret.env.OIDC_CLIENT_SECRET}");
+
+        // A literal client secret is rejected before anything is written.
+        assertThat(postForm("/_tesseraql/studio/ui/wizard/oidc/apply",
+                "discoveryUri=https%3A%2F%2Fidp.example&clientId=x&redirectUri=y"
+                        + "&clientSecret=raw-secret")
+                .statusCode()).isEqualTo(400);
+
+        // The wizard page itself now offers the write-through beside the download.
+        assertThat(get("/_tesseraql/studio/ui/wizard/oidc", true).body())
+                .contains("Write to config overlay");
+    }
+
+    @Test
     void uiMenuPageRendersTheEditorAndFallbackNote() throws Exception {
         // With no config/menu.yml the editor shows the add form and the templates/nav.html fallback.
         Files.deleteIfExists(appHome.resolve("config/menu.yml"));

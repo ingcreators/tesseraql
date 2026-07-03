@@ -1,0 +1,68 @@
+version: tesseraql/v1
+id: tql.studio.wizard.saml.apply
+kind: route
+recipe: query-html
+
+input:
+  spAudience:
+    type: string
+    required: true
+  acsUrl:
+    type: string
+    required: true
+  nameIdFormat:
+    type: string
+    required: false
+  ssoUrl:
+    type: string
+    required: true
+  sloUrl:
+    type: string
+    required: false
+  idpMetadataPath:
+    type: string
+    required: false
+  publicKeyPath:
+    type: string
+    required: false
+  loginIdAttribute:
+    type: string
+    required: true
+  emailAttribute:
+    type: string
+    required: false
+  provision:
+    type: string
+    required: false
+
+security:
+  auth: browser
+  csrf: true
+
+sql:
+  service: studio.wizard.saml.apply
+  params:
+    spAudience: params.spAudience
+    acsUrl: params.acsUrl
+    nameIdFormat: params.nameIdFormat
+    ssoUrl: params.ssoUrl
+    sloUrl: params.sloUrl
+    idpMetadataPath: params.idpMetadataPath
+    publicKeyPath: params.publicKeyPath
+    loginIdAttribute: params.loginIdAttribute
+    emailAttribute: params.emailAttribute
+    provision: params.provision
+    roles: principal.roles
+    actor: principal.loginId
+
+response:
+  html:
+    status: 200
+    template: applied.html
+    model:
+      result: sql
+    headers:
+      Content-Security-Policy: "default-src 'self'; style-src 'self' 'unsafe-inline'; frame-ancestors 'none'"
+      X-Content-Type-Options: nosniff
+      X-Frame-Options: DENY
+      Referrer-Policy: no-referrer
