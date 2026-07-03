@@ -1,0 +1,26 @@
+version: tesseraql/v1
+id: users.board.detail
+kind: route
+recipe: query-html
+
+security:
+  auth: browser
+  policy: users.read
+
+sql:
+  file: detail.sql
+  params:
+    name: path.name
+
+queries:
+  groups:
+    file: groups.sql
+
+response:
+  html:
+    view: detail.view.yml
+    headers:
+      Content-Security-Policy: "default-src 'self'; style-src 'self' 'unsafe-inline'; frame-ancestors 'none'"
+      X-Content-Type-Options: nosniff
+      X-Frame-Options: DENY
+      Referrer-Policy: no-referrer

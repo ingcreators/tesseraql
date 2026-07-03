@@ -42,8 +42,13 @@ class HtmlResponseRendererViewTest {
     }
 
     private static HtmlResponseRenderer renderer(Path dir, String viewYaml) throws Exception {
+        return renderer(dir, viewYaml, null);
+    }
+
+    private static HtmlResponseRenderer renderer(Path dir, String viewYaml,
+            RouteDefinition route) throws Exception {
         Files.writeString(dir.resolve("page.view.yml"), viewYaml);
-        ViewBinding binding = ViewBinding.of(dir, dir, "page.view.yml",
+        ViewBinding binding = ViewBinding.of(dir, dir, "page.view.yml", route,
                 path -> "/items/create".equals(path) ? actionRoute() : null);
         return new HtmlResponseRenderer(new HtmlResponse(200, null, "page.view.yml",
                 Map.of(), Map.of(), Map.of()), dir, dir, "en", binding);
@@ -152,7 +157,7 @@ class HtmlResponseRendererViewTest {
     void viewAndTemplateTogetherFailTheBuild(@TempDir Path dir) throws Exception {
         Files.writeString(dir.resolve("page.view.yml"), "kind: view\nview: list\n");
         Files.writeString(dir.resolve("index.html"), "<p>x</p>");
-        ViewBinding binding = ViewBinding.of(dir, dir, "page.view.yml", path -> null);
+        ViewBinding binding = ViewBinding.of(dir, dir, "page.view.yml", null, path -> null);
         assertThatThrownBy(() -> new HtmlResponseRenderer(
                 new HtmlResponse(200, "index.html", "page.view.yml", Map.of(), Map.of(), Map.of()),
                 dir, dir, "en", binding))
@@ -163,7 +168,101 @@ class HtmlResponseRendererViewTest {
     void aFormActionMatchingNoPostRouteFailsTheBuild(@TempDir Path dir) throws Exception {
         Files.writeString(dir.resolve("page.view.yml"),
                 "kind: view\nview: form\naction: /nowhere\n");
-        assertThatThrownBy(() -> ViewBinding.of(dir, dir, "page.view.yml", path -> null))
+        assertThatThrownBy(() -> ViewBinding.of(dir, dir, "page.view.yml", null, path -> null))
                 .isInstanceOf(TqlException.class).hasMessageContaining("matches no POST route");
+    }
+
+    @Test
+    void aDetailViewRendersLabelledValuesAndChildren(@TempDir Path dir) throws Exception {
+        // The declaring route carries a named query the child composes under the parent row.
+        RouteDefinition route = MAPPER.convertValue(Map.of(
+                "id", "items.detail",
+                "kind", "route",
+                "recipe", "query-html",
+                "queries", Map.of("orders", Map.of("file", "orders.sql"))),
+                RouteDefinition.class);
+        HtmlResponseRenderer renderer = renderer(dir, """
+                kind: view
+                view: detail
+                title: Item
+                fields:
+                  - name: name
+                  - name: status
+                    label: State
+                children:
+                  - source: orders
+                    title: Orders
+                    columns:
+                      - name: qty
+                """, route);
+        String html = render(renderer, Map.of(
+                "sql", Map.of("rows", List.of(Map.of("name", "Bolt", "status", "OPEN"))),
+                "orders", Map.of("rows", List.of(Map.of("qty", 3), Map.of("qty", 5)))));
+        assertThat(html).contains(">Name</span>").contains(">Bolt</span>");
+        assertThat(html).contains(">State</span>").contains(">OPEN</span>");
+        assertThat(html).contains(">Orders</h3>").contains(">3</span>").contains(">5</span>");
+    }
+
+    @Test
+    void aChildSourceTheRouteDoesNotDeclareFailsTheBuild(@TempDir Path dir) throws Exception {
+        Files.writeString(dir.resolve("page.view.yml"), """
+                kind: view
+                view: detail
+                children:
+                  - source: ghost
+                """);
+        assertThatThrownBy(() -> ViewBinding.of(dir, dir, "page.view.yml", null, path -> null))
+                .isInstanceOf(TqlException.class).hasMessageContaining("ghost");
+    }
+
+    @Test
+    void aSlotFillsFromTheAppFragment(@TempDir Path dir) throws Exception {
+        Files.createDirectories(dir.resolve("templates"));
+        Files.writeString(dir.resolve("templates/frags.html"),
+                "<a th:fragment=\"newLink\" href=\"/items/new\">New item</a>");
+        HtmlResponseRenderer renderer = renderer(dir, """
+                kind: view
+                view: list
+                title: Items
+                slots:
+                  header: frags.html::newLink
+                """);
+        String html = render(renderer, Map.of());
+        assertThat(html).contains("href=\"/items/new\"").contains(">New item</a>");
+    }
+
+    @Test
+    void anUnknownSlotNameFailsTheBuild(@TempDir Path dir) throws Exception {
+        Files.writeString(dir.resolve("page.view.yml"), """
+                kind: view
+                view: list
+                slots:
+                  sidebar: frags.html::x
+                """);
+        assertThatThrownBy(() -> ViewBinding.of(dir, dir, "page.view.yml", null, path -> null))
+                .isInstanceOf(TqlException.class).hasMessageContaining("unknown slot");
+    }
+
+    @Test
+    void anEjectedListTemplateRendersTheSameRows(@TempDir Path dir) throws Exception {
+        // L3: the generated template is real Thymeleaf that renders without the view machinery.
+        Files.writeString(dir.resolve("page.view.yml"), """
+                kind: view
+                view: list
+                title: Items
+                columns:
+                  - name: name
+                    link: /items/{id}
+                """);
+        io.tesseraql.yaml.view.ViewSpec spec = io.tesseraql.yaml.view.ViewSpec
+                .parse(dir.resolve("page.view.yml"));
+        io.tesseraql.yaml.scaffold.ScaffoldedFile ejected = io.tesseraql.yaml.view.ViewEjector
+                .eject(dir, dir, "page.view.yml", spec, List.of(), "page.html");
+        Files.writeString(dir.resolve("page.html"), ejected.content());
+        String html = Templates.render(dir, "page.html", Map.of(
+                "sql", Map.of("rows", List.of(Map.of("id", 7, "name", "Bolt")))),
+                java.util.Locale.ENGLISH);
+        assertThat(html).contains("href=\"/items/7\"").contains(">Bolt</a>");
+        assertThat(html).contains("hc-datagrid__table");
     }
 }

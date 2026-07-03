@@ -80,6 +80,25 @@ class DeclarativeViewIntegrationTest {
     }
 
     @Test
+    void aDetailViewComposesParentChildrenAndSlot() throws Exception {
+        HttpResponse<String> response = get("/board/sato");
+        assertThat(response.statusCode()).isEqualTo(200);
+        // Labelled values over the parent row.
+        assertThat(response.body()).contains(">Name</span>").contains(">sato</span>");
+        assertThat(response.body()).contains(">Status</span>").contains(">ACTIVE</span>");
+        // The named `groups` query composes as a child table.
+        assertThat(response.body()).contains(">Groups</h3>").contains(">engineers</span>");
+        // The header slot pulled the app fragment in.
+        assertThat(response.body()).contains("href=\"/users\"");
+    }
+
+    @Test
+    void theGalleryBoardDetailMountsUnderItsBrowserSecurity() throws Exception {
+        HttpResponse<String> response = get("/users/board/sato");
+        assertThat(response.statusCode()).isEqualTo(401);
+    }
+
+    @Test
     void theGalleryBoardPageMountsUnderItsBrowserSecurity() throws Exception {
         // The example's view-backed page (web/users/board) compiled and mounted, and stays
         // gated: an unauthenticated call is refused rather than rendered.
@@ -141,6 +160,51 @@ class DeclarativeViewIntegrationTest {
                     link: /users?sel={name}
                   - name: status
                     label: Status
+                """);
+
+        // A public detail view composing the parent row, a named-query child, and a slot.
+        Path boardDetail = target.resolve("web/board/{name}");
+        Files.createDirectories(boardDetail);
+        Files.writeString(boardDetail.resolve("get.yml"), """
+                version: tesseraql/v1
+                id: board.detail
+                kind: route
+                recipe: query-html
+                security:
+                  auth: public
+                sql:
+                  file: detail.sql
+                  params:
+                    name: path.name
+                queries:
+                  groups:
+                    file: groups.sql
+                response:
+                  html:
+                    view: detail.view.yml
+                """);
+        Files.writeString(boardDetail.resolve("detail.sql"),
+                "select u.name, u.status from users u where u.name = /* name */ 'sato'\n");
+        Files.writeString(boardDetail.resolve("groups.sql"),
+                "select g.display_name from app_groups g order by g.display_name\n");
+        Files.writeString(boardDetail.resolve("detail.view.yml"), """
+                version: tesseraql/v1
+                kind: view
+                view: detail
+                title: User
+                fields:
+                  - name: name
+                    label: Name
+                  - name: status
+                    label: Status
+                children:
+                  - source: groups
+                    title: Groups
+                    columns:
+                      - name: display_name
+                        label: Group
+                slots:
+                  header: board-frags.html::backLink
                 """);
 
         // A public form view deriving its fields from the POST action route's input: block.

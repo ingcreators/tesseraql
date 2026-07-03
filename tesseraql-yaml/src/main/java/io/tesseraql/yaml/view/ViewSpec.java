@@ -22,17 +22,30 @@ import java.util.Map;
  * own columns in authored SQL order.
  */
 public record ViewSpec(String id, String view, String title, String action, String source,
-        List<Field> fields, List<Column> columns, String template) {
+        List<Field> fields, List<Column> columns, List<Child> children,
+        Map<String, String> slots, String template) {
 
     /** Structurally invalid view document (docs/declarative-views.md, TQL-VIEW-3301). */
     public static final TqlErrorCode INVALID_VIEW = new TqlErrorCode(TqlDomain.VIEW, 3301);
 
     public static final String LIST = "list";
     public static final String FORM = "form";
+    public static final String DETAIL = "detail";
 
     /** The slice-1 widget vocabulary (docs/declarative-views.md, TQL-VIEW-3305). */
     public static final java.util.Set<String> WIDGETS = java.util.Set.of("text", "textarea",
             "number", "date", "datetime-local", "checkbox", "select", "hidden");
+
+    /**
+     * The slot names each view kind offers (customization ladder L1, TQL-VIEW-3306): list and
+     * detail pages take {@code header}/{@code footer}; a form additionally takes {@code actions}
+     * beside its submit button.
+     */
+    public static java.util.Set<String> slotsFor(String view) {
+        return FORM.equals(view)
+                ? java.util.Set.of("header", "footer", "actions")
+                : java.util.Set.of("header", "footer");
+    }
 
     /** Presentation override for a form field derived from the action route's input block. */
     public record Field(String name, String label, String widget) {
@@ -42,10 +55,19 @@ public record ViewSpec(String id, String view, String title, String action, Stri
     public record Column(String name, String label, String link) {
     }
 
+    /** A detail view's child list: a named query composed under the parent record. */
+    public record Child(String source, String title, List<Column> columns) {
+        public Child {
+            columns = columns == null ? List.of() : List.copyOf(columns);
+        }
+    }
+
     public ViewSpec {
         source = source == null || source.isBlank() ? "sql" : source;
         fields = fields == null ? List.of() : List.copyOf(fields);
         columns = columns == null ? List.of() : List.copyOf(columns);
+        children = children == null ? List.of() : List.copyOf(children);
+        slots = slots == null ? Map.of() : Map.copyOf(slots);
     }
 
     /**
@@ -60,8 +82,12 @@ public record ViewSpec(String id, String view, String title, String action, Stri
             throw invalid(name, "kind must be 'view'");
         }
         String view = str(tree.get("view"));
-        if (!LIST.equals(view) && !FORM.equals(view)) {
-            throw invalid(name, "view must be '" + LIST + "' or '" + FORM + "', got: " + view);
+        if (!LIST.equals(view) && !FORM.equals(view) && !DETAIL.equals(view)) {
+            throw invalid(name, "view must be '" + LIST + "', '" + FORM + "' or '" + DETAIL
+                    + "', got: " + view);
+        }
+        if (!DETAIL.equals(view) && tree.get("children") != null) {
+            throw invalid(name, "children: is a detail-view key");
         }
         String action = str(tree.get("action"));
         if (FORM.equals(view) && (action == null || action.isBlank())) {
@@ -75,7 +101,39 @@ public record ViewSpec(String id, String view, String title, String action, Stri
         }
         return new ViewSpec(id, view, str(tree.get("title")), action, str(tree.get("source")),
                 parseFields(name, tree.get("fields")), parseColumns(name, tree.get("columns")),
+                parseChildren(name, tree.get("children")), parseSlots(name, tree.get("slots")),
                 str(tree.get("template")));
+    }
+
+    private static List<Child> parseChildren(String source, Object raw) {
+        List<Child> children = new ArrayList<>();
+        for (Map<String, Object> entry : entries(source, raw, "children")) {
+            String childSource = str(entry.get("source"));
+            if (childSource == null || childSource.isBlank()) {
+                throw invalid(source, "a children: entry requires source: (a named query key)");
+            }
+            children.add(new Child(childSource, str(entry.get("title")),
+                    parseColumns(source, entry.get("columns"))));
+        }
+        return children;
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Map<String, String> parseSlots(String source, Object raw) {
+        if (raw == null) {
+            return Map.of();
+        }
+        if (!(raw instanceof Map<?, ?> map)) {
+            throw invalid(source, "slots: must be a mapping of slot name to fragment reference");
+        }
+        Map<String, String> slots = new java.util.LinkedHashMap<>();
+        ((Map<String, Object>) map).forEach((key, value) -> {
+            if (value == null || str(value).isBlank()) {
+                throw invalid(source, "slot " + key + " requires a fragment reference");
+            }
+            slots.put(key, str(value));
+        });
+        return slots;
     }
 
     private static List<Field> parseFields(String source, Object raw) {

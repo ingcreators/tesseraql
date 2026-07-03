@@ -58,6 +58,53 @@ class ViewSpecTest {
     }
 
     @Test
+    void parsesADetailViewWithChildrenAndSlots(@TempDir Path dir) throws Exception {
+        ViewSpec spec = ViewSpec.parse(write(dir, "item.view.yml", """
+                version: tesseraql/v1
+                kind: view
+                view: detail
+                fields:
+                  - name: name
+                children:
+                  - source: orders
+                    title: Orders
+                    columns:
+                      - name: qty
+                slots:
+                  header: frags.html::actions
+                """));
+        assertThat(spec.view()).isEqualTo(ViewSpec.DETAIL);
+        assertThat(spec.children()).hasSize(1);
+        assertThat(spec.children().get(0).source()).isEqualTo("orders");
+        assertThat(spec.children().get(0).columns()).hasSize(1);
+        assertThat(spec.slots()).containsEntry("header", "frags.html::actions");
+    }
+
+    @Test
+    void rejectsChildrenOnANonDetailView(@TempDir Path dir) throws Exception {
+        Path file = write(dir, "x.view.yml", """
+                kind: view
+                view: list
+                children:
+                  - source: orders
+                """);
+        assertThatThrownBy(() -> ViewSpec.parse(file))
+                .isInstanceOf(TqlException.class).hasMessageContaining("detail-view key");
+    }
+
+    @Test
+    void rejectsAChildWithoutSource(@TempDir Path dir) throws Exception {
+        Path file = write(dir, "x.view.yml", """
+                kind: view
+                view: detail
+                children:
+                  - title: Orders
+                """);
+        assertThatThrownBy(() -> ViewSpec.parse(file))
+                .isInstanceOf(TqlException.class).hasMessageContaining("requires source");
+    }
+
+    @Test
     void rejectsAWrongKind(@TempDir Path dir) throws Exception {
         Path file = write(dir, "x.view.yml", "kind: route\nview: list\n");
         assertThatThrownBy(() -> ViewSpec.parse(file))

@@ -8,7 +8,13 @@
       th:replace="~{tql/shell :: shell(${v.title}, ~{}, ~{}, ~{:: #page-content})}">
 <div id="page-content" class="hc-stack">
 <section class="hc-card">
-  <h2 th:text="${v.title}">Form</h2>
+  <div class="hc-cluster">
+    <h2 th:text="${v.title}">Form</h2>
+    <span class="hc-spacer"></span>
+    <th:block th:if="${v.slots['header'] != null}">
+      <th:block th:insert="~{__${v.slots['header']}__}"/>
+    </th:block>
+  </div>
   <form th:id="${v.formId}" method="post" th:action="${v.action}" th:fragment="view(v)"
         th:attr="hx-post=${v.action},hx-target=|#${v.formId}-errors|"
         hx-swap="innerHTML"
@@ -23,9 +29,15 @@
         <button type="submit" class="hc-button" data-variant="primary"
                 th:text="#{tql.view.submit}">Save</button>
         <span class="hc-spinner htmx-indicator" aria-hidden="true"></span>
+        <th:block th:if="${v.slots['actions'] != null}">
+          <th:block th:insert="~{__${v.slots['actions']}__}"/>
+        </th:block>
       </span>
     </div>
   </form>
+  <th:block th:if="${v.slots['footer'] != null}">
+    <th:block th:insert="~{__${v.slots['footer']}__}"/>
+  </th:block>
 </section>
 </div>
 </html>

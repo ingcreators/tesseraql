@@ -133,6 +133,53 @@ class AppLinterViewTest {
     }
 
     @Test
+    void anUnknownSlotNameIsAnError(@TempDir Path dir) throws Exception {
+        writeApp(dir, """
+                kind: view
+                view: list
+                slots:
+                  sidebar: frags.html::x
+                """);
+        assertThat(viewCodes(new AppLinter().lint(dir))).contains("TQL-VIEW-3306");
+    }
+
+    @Test
+    void anUnresolvedSlotReferenceIsAnError(@TempDir Path dir) throws Exception {
+        writeApp(dir, """
+                kind: view
+                view: list
+                slots:
+                  header: missing.html::x
+                """);
+        assertThat(viewCodes(new AppLinter().lint(dir))).contains("TQL-VIEW-3302");
+    }
+
+    @Test
+    void aResolvedSlotIsClean(@TempDir Path dir) throws Exception {
+        writeApp(dir, """
+                kind: view
+                view: list
+                slots:
+                  header: frags.html::newLink
+                """);
+        Files.createDirectories(dir.resolve("templates"));
+        Files.writeString(dir.resolve("templates/frags.html"),
+                "<a th:fragment=\"newLink\" href=\"/x\">x</a>");
+        assertThat(viewCodes(new AppLinter().lint(dir))).isEmpty();
+    }
+
+    @Test
+    void aChildSourceTheRouteDoesNotDeclareIsAnError(@TempDir Path dir) throws Exception {
+        writeApp(dir, """
+                kind: view
+                view: detail
+                children:
+                  - source: ghost
+                """);
+        assertThat(viewCodes(new AppLinter().lint(dir))).contains("TQL-VIEW-3308");
+    }
+
+    @Test
     void anOverrideWithoutTheFragmentSignatureIsAWarning(@TempDir Path dir) throws Exception {
         writeApp(dir, "kind: view\nview: list\n");
         Files.createDirectories(dir.resolve("templates/tql/view"));

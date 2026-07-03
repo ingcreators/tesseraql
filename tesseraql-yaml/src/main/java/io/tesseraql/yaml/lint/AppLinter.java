@@ -133,6 +133,37 @@ public final class AppLinter {
             if (io.tesseraql.yaml.view.ViewSpec.FORM.equals(spec.view())) {
                 lintFormView(manifest, source, spec, findings);
             }
+            for (String slotName : spec.slots().keySet()) {
+                java.util.Set<String> allowed = io.tesseraql.yaml.view.ViewSpec
+                        .slotsFor(spec.view());
+                if (!allowed.contains(slotName)) {
+                    findings.add(new LintFinding("TQL-VIEW-3306", "error", source,
+                            "view " + spec.id() + ": unknown slot " + slotName + " (a "
+                                    + spec.view() + " view offers " + allowed + ")"));
+                    continue;
+                }
+                String ref = spec.slots().get(slotName);
+                int separator = ref.indexOf("::");
+                String template = separator < 1 ? ref : ref.substring(0, separator).trim();
+                Path slotColocated = routeDir.resolve(template).normalize();
+                Path slotFile = java.nio.file.Files.isRegularFile(slotColocated)
+                        ? slotColocated
+                        : appHome.resolve("templates").resolve(template).normalize();
+                if (separator < 1 || !java.nio.file.Files.isRegularFile(slotFile)) {
+                    findings.add(new LintFinding("TQL-VIEW-3302", "error", source,
+                            "view " + spec.id() + ": slot " + slotName + " reference " + ref
+                                    + " does not resolve ('<template> :: <fragment>')"));
+                }
+            }
+            for (io.tesseraql.yaml.view.ViewSpec.Child child : spec.children()) {
+                var queries = route.definition().queries();
+                if (!"sql".equals(child.source())
+                        && (queries == null || !queries.containsKey(child.source()))) {
+                    findings.add(new LintFinding("TQL-VIEW-3308", "error", source,
+                            "view " + spec.id() + ": children source " + child.source()
+                                    + " is not a named query of the route"));
+                }
+            }
         }
         lintViewOverrides(appHome, findings);
     }

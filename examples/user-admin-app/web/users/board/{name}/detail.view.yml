@@ -1,0 +1,22 @@
+# A detail view (roadmap Phase 39 slice 2): a labelled value list over the parent row,
+# with the route's named `groups` query composed underneath as a child list.
+version: tesseraql/v1
+id: users.board.detail
+kind: view
+view: detail
+title: User
+fields:
+  - name: name
+    label: Name
+  - name: status
+    label: Status
+  - name: created_at
+    label: Created
+children:
+  - source: groups
+    title: Groups
+    columns:
+      - name: display_name
+        label: Group
+slots:
+  header: board-frags.html::backLink

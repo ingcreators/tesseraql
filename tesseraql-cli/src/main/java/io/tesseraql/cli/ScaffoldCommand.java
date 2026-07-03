@@ -24,7 +24,8 @@ import picocli.CommandLine.Option;
  * unless {@code --force} is given — the checksum contract of design ch. 22.20.
  */
 @Command(name = "scaffold", description = "Generate code into an existing app.", subcommands = {
-        ScaffoldCommand.CrudCommand.class
+        ScaffoldCommand.CrudCommand.class,
+        ScaffoldCommand.EjectViewCommand.class
 })
 final class ScaffoldCommand implements Runnable {
 
@@ -115,6 +116,94 @@ final class ScaffoldCommand implements Runnable {
                         + " ~{templates/nav.html :: app-nav}; create templates/nav.html"
                         + " (tesseraql new generates one).");
             }
+        }
+    }
+
+    /**
+     * {@code tesseraql scaffold eject-view --app <dir> --route web/…/get.yml}: the customization
+     * ladder's L3 (docs/declarative-views.md) — render the route's declarative view into a real,
+     * hand-owned template (checksum-stamped like every scaffold artifact) and flip the route from
+     * {@code view:} to {@code template:}. The view document stays on disk for reference; delete
+     * it when done.
+     */
+    @Command(name = "eject-view", description = "Eject a route's declarative view into a"
+            + " hand-owned template and flip the route to template:.")
+    static final class EjectViewCommand implements Callable<Integer> {
+
+        @Option(names = {"--app"}, required = true, description = "Path to the app home.")
+        Path app;
+
+        @Option(names = {
+                "--route"}, required = true, description = "App-relative route file (e.g. web/items/get.yml).")
+        String route;
+
+        @Option(names = {"--force"}, description = "Overwrite an edited or user-owned template.")
+        boolean force;
+
+        @Override
+        public Integer call() throws Exception {
+            var manifest = new ManifestLoader().load(app);
+            String normalized = route.replace('\\', '/');
+            io.tesseraql.yaml.manifest.RouteFile routeFile = manifest.routes().stream()
+                    .filter(candidate -> app.toAbsolutePath().normalize()
+                            .relativize(candidate.source()).toString().replace('\\', '/')
+                            .equals(normalized))
+                    .findFirst()
+                    .orElseThrow(() -> new IllegalArgumentException(
+                            "No route at " + normalized));
+            var html = routeFile.definition().response() == null
+                    ? null
+                    : routeFile.definition().response().html();
+            if (html == null || html.view() == null) {
+                System.out.println("Route " + normalized + " declares no response.html.view —"
+                        + " nothing to eject.");
+                return 1;
+            }
+            Path routeDir = routeFile.source().getParent();
+            Path viewFile = routeDir.resolve(html.view()).normalize();
+            if (!Files.isRegularFile(viewFile)) {
+                viewFile = app.resolve("templates").resolve(html.view()).normalize();
+            }
+            io.tesseraql.yaml.view.ViewSpec spec = io.tesseraql.yaml.view.ViewSpec
+                    .parse(viewFile);
+            List<io.tesseraql.yaml.view.ViewFields.FieldDef> fields = List.of();
+            if (io.tesseraql.yaml.view.ViewSpec.FORM.equals(spec.view())) {
+                var action = manifest.routes().stream()
+                        .filter(candidate -> "POST".equalsIgnoreCase(candidate.httpMethod())
+                                && candidate.urlPath().equals(spec.action()))
+                        .findFirst()
+                        .orElseThrow(() -> new IllegalArgumentException("The view's action "
+                                + spec.action() + " matches no POST route"));
+                fields = io.tesseraql.yaml.view.ViewFields.derive(html.view(), spec,
+                        action.definition().input());
+            }
+            String templateName = html.view().endsWith(".view.yml")
+                    ? html.view().substring(0, html.view().length() - ".view.yml".length())
+                            + ".html"
+                    : html.view() + ".html";
+            Path home = app.toAbsolutePath().normalize();
+            String targetPath = home.relativize(routeDir.resolve(templateName).normalize())
+                    .toString().replace('\\', '/');
+            var ejected = io.tesseraql.yaml.view.ViewEjector.eject(home, routeDir, html.view(),
+                    spec, fields, targetPath);
+            ScaffoldWriter.Report report = new ScaffoldWriter().apply(app, List.of(ejected),
+                    force);
+            report.written().forEach(path -> System.out.println("  wrote     " + path));
+            report.skipped().forEach(path -> System.out.println("  skipped   " + path));
+            if (report.blocked()) {
+                System.out.println("The target template exists with hand edits."
+                        + " Rerun with --force to overwrite it.");
+                return 1;
+            }
+            Path routePath = routeFile.source();
+            String flipped = io.tesseraql.yaml.view.ViewEjector.flipRoute(
+                    Files.readString(routePath), html.view(), templateName);
+            Files.writeString(routePath, flipped);
+            System.out.println("  flipped   " + normalized + " (view: -> template: "
+                    + templateName + ")");
+            System.out.println("The view document " + html.view() + " no longer drives"
+                    + " rendering; delete it when you are done.");
+            return 0;
         }
     }
 }

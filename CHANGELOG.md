@@ -8,6 +8,19 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **Declarative views: detail, relations, slots, and eject** (roadmap Phase 39, slice 2; see
+  [docs/declarative-views.md](docs/declarative-views.md)). A `view: detail` renders a labelled
+  value list over the route's row and composes the route's named `queries:` underneath as child
+  tables (`children:`, each with the list column model; `TQL-VIEW-3308` when a source is not a
+  named query). Views gain **named slots** (customization ladder L1): `header`/`footer` on every
+  kind plus `actions` beside a form's submit button, each filled by an app fragment referenced as
+  `template::fragment` (`TQL-VIEW-3306` for an unknown slot name). The datagrid markup moved into
+  a shared overridable `tql/view/table` pattern used by lists and detail children. And the
+  ladder's L3 shipped: `tesseraql scaffold eject-view --route web/…/get.yml` renders the view's
+  pattern once into a checksum-stamped, hand-owned template and flips the route from `view:` to
+  `template:` (a list/detail must pin explicit `columns:`/`fields:` first). The example gallery's
+  board gains a header slot, per-row links, and a detail page with a groups child
+  (`examples/user-admin-app/web/users/board/{name}`).
 - **Declarative views** (roadmap Phase 39, slice 1; see
   [docs/declarative-views.md](docs/declarative-views.md)): a `kind: view` document colocated
   with its route (`*.view.yml`) and referenced by `response.html.view` renders the page through
