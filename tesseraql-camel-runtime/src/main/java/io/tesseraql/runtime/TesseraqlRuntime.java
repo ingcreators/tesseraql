@@ -187,6 +187,11 @@ public final class TesseraqlRuntime implements AutoCloseable {
         }
         // MDC bridging (roadmap Phase 45): Camel copies the trace-correlation keys across
         // its async boundaries so lane-dispatched steps keep logging with the request's ids.
+        String activeProfile = io.tesseraql.yaml.manifest.ManifestLoader.activeProfile();
+        if (activeProfile != null) {
+            LOG.info("Environment profile active: {} (config/env/{}.yml)", activeProfile,
+                    activeProfile);
+        }
         context.setUseMDCLogging(true);
         context.setMDCLoggingKeysPattern("traceId,spanId");
         context.getRegistry().bind(TesseraqlProperties.TRACER_BEAN, effectiveTracer);

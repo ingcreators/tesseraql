@@ -45,6 +45,25 @@ public final class ManifestLoader {
         return load(appHome, null);
     }
 
+    /**
+     * The active environment profile (roadmap Phase 46): the {@code tesseraql.env} system
+     * property (the serve command's {@code --env} sets it) wins over the {@code TESSERAQL_ENV}
+     * environment variable; blank means no profile layer. The name is constrained to a simple
+     * token so the profile can never escape {@code config/env/}.
+     */
+    public static String activeProfile() {
+        String profile = System.getProperty("tesseraql.env", System.getenv("TESSERAQL_ENV"));
+        if (profile == null || profile.isBlank()) {
+            return null;
+        }
+        String clean = profile.trim();
+        if (!clean.matches("[A-Za-z0-9][A-Za-z0-9._-]*")) {
+            throw new TqlException(LOAD_ERROR,
+                    "Invalid environment profile name: " + profile);
+        }
+        return clean;
+    }
+
     /** One route document that failed to parse during a tolerant load (the hot reloader). */
     public record BrokenRoute(Path source, String error) {
     }
@@ -254,9 +273,22 @@ public final class ManifestLoader {
     private AppConfig loadConfig(Path home) {
         // Sources are deep-merged in precedence order so an install overlay can override nested
         // keys (for example a single datasource) without replacing whole config sub-trees (ch. 32.6).
+        // The environment profile layer (roadmap Phase 46) sits between the app's base config and
+        // Studio's overlay: the profile is the environment's tuning, and dev-time Studio edits
+        // still win on top of it.
         Map<String, Object> merged = new HashMap<>();
         deepMerge(merged, parseTreeIfPresent(home.resolve("config/application.yml")));
         deepMerge(merged, parseTreeIfPresent(home.resolve("config/tesseraql.yml")));
+        String profile = activeProfile();
+        if (profile != null) {
+            Path profileFile = home.resolve("config/env/" + profile + ".yml");
+            if (!Files.isRegularFile(profileFile)) {
+                // Fail fast: a typo'd environment must never silently run another env's config.
+                throw new TqlException(LOAD_ERROR, "Environment profile '" + profile
+                        + "' is active but config/env/" + profile + ".yml does not exist");
+            }
+            deepMerge(merged, parseTreeIfPresent(profileFile));
+        }
         deepMerge(merged, parseTreeIfPresent(home.resolve("config/overlay.yml")));
 
         // Provide the app home for ${TESSERAQL_APP_HOME} placeholders, deferring to real env vars.

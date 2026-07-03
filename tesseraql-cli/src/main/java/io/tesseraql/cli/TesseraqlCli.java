@@ -71,6 +71,11 @@ public final class TesseraqlCli implements Runnable {
         @Option(names = {"--app"}, required = true, description = "Path to the external app home.")
         Path app;
 
+        @Option(names = {"--env"}, paramLabel = "<profile>", description = "Environment "
+                + "profile: merges config/env/<profile>.yml between the base config and "
+                + "the Studio overlay (also TESSERAQL_ENV).")
+        String envProfile;
+
         @Option(names = {
                 "--log-format"}, paramLabel = "<text|json>", description = "Log line format (default text; json for structured logs).")
         String logFormat;
@@ -100,6 +105,9 @@ public final class TesseraqlCli implements Runnable {
 
         @Override
         public Integer call() throws InterruptedException {
+            if (envProfile != null) {
+                System.setProperty("tesseraql.env", envProfile);
+            }
             // The structured log provider reads these per line (roadmap Phase 45).
             if (logFormat != null) {
                 System.setProperty("tesseraql.logging.format", logFormat);

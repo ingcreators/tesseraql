@@ -78,6 +78,20 @@ expand/contract (backward compatible) - the same discipline the canary flow alre
   Cloudflare, or plug a shared TempStore implementation behind the SPI.
 - Framework and app migrations take Flyway's lock, so concurrent node startups serialize.
 
+## Environment profiles
+
+One switch selects a per-environment overlay layer (roadmap Phase 46):
+`--env staging` on `tesseraql serve` (or `TESSERAQL_ENV=staging`, or
+`-Dtesseraql.env=staging`) merges `config/env/staging.yml` **between** the app's base config
+(`application.yml` → `tesseraql.yml`) and Studio's `overlay.yml` — the profile is the
+environment's tuning, and dev-time Studio edits still win on top. A named profile whose file
+does not exist fails startup fast: a typo'd environment must never silently run another
+environment's config. No profile means no layer — existing apps are unchanged.
+
+This replaces ad-hoc `${...}` indirection for the common cases: put the per-environment
+datasource, pool sizing, metrics/audit switches and timeouts in `config/env/<profile>.yml`
+and keep secrets in real environment variables or the secret provider as before.
+
 ## Business-route audit log and error pages
 
 Opt in with `tesseraql.audit.routes.enabled: true`: every route invocation lands one durable
