@@ -93,14 +93,42 @@ public record ResponseSpec(JsonResponse json, HtmlResponse html, StreamResponse 
      */
     @JsonIgnoreProperties(ignoreUnknown = true)
     public record JsonResponse(Integer status, Object body,
-            java.util.Map<String, FieldPolicy> fields) {
+            java.util.Map<String, FieldPolicy> fields,
+            java.util.List<StatusWhen> statusWhen, java.util.List<NestSpec> nest) {
 
         public JsonResponse {
             fields = fields == null ? java.util.Map.of() : java.util.Map.copyOf(fields);
+            statusWhen = statusWhen == null
+                    ? java.util.List.of()
+                    : java.util.List.copyOf(statusWhen);
+            nest = nest == null ? java.util.List.of() : java.util.List.copyOf(nest);
         }
 
         public int effectiveStatus() {
             return status == null ? 200 : status;
+        }
+    }
+
+    /**
+     * A declarative business-condition &rarr; HTTP status mapping (roadmap Phase 41,
+     * generalizing {@code expect.onMismatch}): the first truthy {@code when} wins.
+     */
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public record StatusWhen(String when, int status) {
+    }
+
+    /**
+     * Nested composition (roadmap Phase 41): groups a named query's child rows under each
+     * parent row of a body key — {@code into} names the body key holding the parent rows,
+     * {@code children} the context result whose rows attach, {@code as} the field added to
+     * each parent, and {@code on} the single {@code parentColumn: childColumn} join key.
+     */
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public record NestSpec(String into, String children, String as,
+            java.util.Map<String, String> on) {
+
+        public NestSpec {
+            on = on == null ? java.util.Map.of() : java.util.Map.copyOf(on);
         }
     }
 
@@ -139,9 +167,13 @@ public record ResponseSpec(JsonResponse json, HtmlResponse html, StreamResponse 
     @JsonIgnoreProperties(ignoreUnknown = true)
     public record HtmlResponse(Integer status, String template, String view,
             java.util.Map<String, Object> model, java.util.Map<String, Object> headers,
-            java.util.Map<String, String> headersWhen) {
+            java.util.Map<String, String> headersWhen,
+            java.util.List<StatusWhen> statusWhen) {
 
         public HtmlResponse {
+            statusWhen = statusWhen == null
+                    ? java.util.List.of()
+                    : java.util.List.copyOf(statusWhen);
             model = model == null ? java.util.Map.of() : java.util.Map.copyOf(model);
             headers = headers == null ? java.util.Map.of() : java.util.Map.copyOf(headers);
             headersWhen = headersWhen == null

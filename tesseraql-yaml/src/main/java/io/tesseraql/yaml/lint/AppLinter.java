@@ -150,6 +150,35 @@ public final class AppLinter {
                 }
             }
         }
+        var response = route.definition().response();
+        var json = response == null ? null : response.json();
+        if (json != null) {
+            for (io.tesseraql.yaml.model.ResponseSpec.NestSpec nestSpec : json.nest()) {
+                boolean bodyHasKey = json.body() instanceof java.util.Map<?, ?> bodyMap
+                        && bodyMap.containsKey(nestSpec.into());
+                var queries = route.definition().queries();
+                boolean childDeclared = queries != null
+                        && queries.containsKey(nestSpec.children());
+                if (!bodyHasKey || !childDeclared || nestSpec.on().size() != 1
+                        || nestSpec.as() == null || nestSpec.as().isBlank()) {
+                    findings.add(new LintFinding("TQL-YAML-1019", "error", source,
+                            "nest: needs into: (a body key), children: (a named query), as:,"
+                                    + " and a single on: parentColumn: childColumn entry"));
+                }
+            }
+        }
+        for (io.tesseraql.yaml.model.ResponseSpec.StatusWhen arm : statusArms(response)) {
+            try {
+                io.tesseraql.core.expr.ExpressionParser.parse(arm.when());
+            } catch (RuntimeException ex) {
+                findings.add(new LintFinding("TQL-YAML-1020", "error", source,
+                        "statusWhen: condition does not parse: " + ex.getMessage()));
+            }
+            if (arm.status() < 100 || arm.status() > 599) {
+                findings.add(new LintFinding("TQL-YAML-1020", "error", source,
+                        "statusWhen: status " + arm.status() + " is not an HTTP status"));
+            }
+        }
         route.definition().input().forEach((name, field) -> {
             if (field.pattern() != null) {
                 try {
@@ -177,6 +206,19 @@ public final class AppLinter {
                 }
             }
         });
+    }
+
+    /** Both renderers' statusWhen arms (json + html), empty when absent. */
+    private static java.util.List<io.tesseraql.yaml.model.ResponseSpec.StatusWhen> statusArms(
+            io.tesseraql.yaml.model.ResponseSpec response) {
+        java.util.List<io.tesseraql.yaml.model.ResponseSpec.StatusWhen> arms = new ArrayList<>();
+        if (response != null && response.json() != null) {
+            arms.addAll(response.json().statusWhen());
+        }
+        if (response != null && response.html() != null) {
+            arms.addAll(response.html().statusWhen());
+        }
+        return arms;
     }
 
     /**

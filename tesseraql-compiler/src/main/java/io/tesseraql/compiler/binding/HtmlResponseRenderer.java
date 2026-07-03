@@ -44,6 +44,8 @@ public final class HtmlResponseRenderer implements Processor {
     private final String defaultLocaleTag;
     private final ViewBinding viewBinding;
     private final Map<String, Expr> headerGuards;
+    private final Map<String, Expr> compiledModel = new LinkedHashMap<>();
+    private final java.util.List<JsonResponseRenderer.CompiledStatus> statusWhen;
     private final ObjectMapper mapper = new ObjectMapper();
 
     public HtmlResponseRenderer(HtmlResponse response, Path appHome, Path routeDir) {
@@ -72,6 +74,23 @@ public final class HtmlResponseRenderer implements Processor {
                 ? viewBinding.entryTemplate()
                 : resolveTemplate(this.appHome, routeDir, response.template());
         this.defaultLocaleTag = defaultLocaleTag;
+        // Model values compile in the core expression language (roadmap Phase 41) — a plain
+        // dotted path is unchanged, a computed leaf comes for free, and an unparsable legacy
+        // value falls back to dotted-path resolution.
+        response.model().forEach((key, expr) -> {
+            String source = String.valueOf(expr);
+            Expr compiled;
+            try {
+                compiled = ExpressionParser.parse(source);
+            } catch (RuntimeException ex) {
+                compiled = new Expr.Path(Arrays.asList(source.split("\\.")));
+            }
+            compiledModel.put(key, compiled);
+        });
+        this.statusWhen = response.statusWhen().stream()
+                .map(arm -> new JsonResponseRenderer.CompiledStatus(
+                        ExpressionParser.parse(arm.when()), arm.status()))
+                .toList();
         // Pre-compile each header's optional guard expression so a syntax error fails the build.
         this.headerGuards = new LinkedHashMap<>();
         response.headersWhen().forEach((name, when) -> {
@@ -124,8 +143,7 @@ public final class HtmlResponseRenderer implements Processor {
             model.put("v", viewBinding.model(context, java.util.Locale.forLanguageTag(tag),
                     pagePath));
         } else {
-            response.model().forEach((key, expr) -> model.put(key,
-                    evaluation.resolve(Arrays.asList(String.valueOf(expr).split("\\.")))));
+            compiledModel.forEach((key, expr) -> model.put(key, expr.eval(evaluation)));
         }
 
         // Publish the browser session's CSRF token (stashed on authentication) as the reserved
@@ -167,7 +185,14 @@ public final class HtmlResponseRenderer implements Processor {
         String html = Templates.render(appHome, templateName, model,
                 java.util.Locale.forLanguageTag(tag));
 
-        exchange.getMessage().setHeader(Exchange.HTTP_RESPONSE_CODE, response.effectiveStatus());
+        int status = response.effectiveStatus();
+        for (JsonResponseRenderer.CompiledStatus arm : statusWhen) {
+            if (arm.when().evalBoolean(evaluation)) {
+                status = arm.status();
+                break;
+            }
+        }
+        exchange.getMessage().setHeader(Exchange.HTTP_RESPONSE_CODE, status);
         exchange.getMessage().setHeader(Exchange.CONTENT_TYPE, "text/html; charset=utf-8");
         applyHeaders(exchange, evaluation);
         exchange.getMessage().setBody(html);

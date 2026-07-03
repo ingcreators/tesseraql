@@ -8,6 +8,16 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **Response shaping** (roadmap Phase 41, final slice — the phase is complete; see
+  [docs/response-shaping.md](docs/response-shaping.md)): every `response.json.body` leaf and
+  `response.html.model` value is now a core-language **expression** compiled at build time —
+  dotted paths behave exactly as before (with a legacy fallback for unparsable leaves), and
+  computed fields (`params.qty * params.price`, `upper(trim(...))`) come for free. **`nest:`**
+  composes a named child query's rows under each parent row of a body key (grouped by a declared
+  `on:` join key, canonical-text key matching, parents copied — `TQL-YAML-1019`). And
+  **`statusWhen:`** maps business conditions to HTTP statuses declaratively on both JSON and
+  HTML responses (first truthy arm wins; pre-compiled, `TQL-YAML-1020`; each arm's status rides
+  into the generated OpenAPI).
 - **Declarative pagination** (roadmap Phase 41, first slice; see
   [docs/pagination.md](docs/pagination.md)): a `page:` block on `query-json`/`query-html`
   routes paginates the main query by appending the dialect's clause at execution time — the

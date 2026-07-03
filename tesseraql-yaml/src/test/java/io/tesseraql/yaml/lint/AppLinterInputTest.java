@@ -31,7 +31,7 @@ class AppLinterInputTest {
 
     private static List<String> codes(List<LintFinding> findings) {
         return findings.stream().map(LintFinding::code)
-                .filter(c -> c.startsWith("TQL-YAML-101")).toList();
+                .filter(c -> c.startsWith("TQL-YAML-101") || c.startsWith("TQL-YAML-102")).toList();
     }
 
     @Test
@@ -82,6 +82,51 @@ class AppLinterInputTest {
                     requiredWhen: "params.kind =="
                 """);
         assertThat(codes(new AppLinter().lint(dir))).contains("TQL-YAML-1014");
+    }
+
+    @Test
+    void aDanglingNestIsAnError(@TempDir Path dir) throws Exception {
+        Files.createDirectories(dir.resolve("web/items"));
+        Files.writeString(dir.resolve("web/items/list.sql"), "select 1 as one\n");
+        Files.writeString(dir.resolve("web/items/get.yml"), """
+                version: tesseraql/v1
+                id: items.probe
+                kind: route
+                recipe: query-json
+                sql:
+                  file: list.sql
+                response:
+                  json:
+                    body:
+                      orders: sql.rows
+                    nest:
+                      - into: orders
+                        children: ghost
+                        as: lines
+                        on: { id: order_id }
+                """);
+        assertThat(codes(new AppLinter().lint(dir))).contains("TQL-YAML-1019");
+    }
+
+    @Test
+    void aBrokenStatusWhenIsAnError(@TempDir Path dir) throws Exception {
+        writeRoute(dir, "get", "");
+        Files.writeString(dir.resolve("web/items/get.yml"), """
+                version: tesseraql/v1
+                id: items.probe
+                kind: route
+                recipe: query-json
+                sql:
+                  file: list.sql
+                response:
+                  json:
+                    body:
+                      data: sql.rows
+                    statusWhen:
+                      - when: "sql.rowCount =="
+                        status: 404
+                """);
+        assertThat(codes(new AppLinter().lint(dir))).contains("TQL-YAML-1020");
     }
 
     @Test
