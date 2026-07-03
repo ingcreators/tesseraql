@@ -1,7 +1,10 @@
 # Declarative views
 
 Design for roadmap Phase 39 (drafted 2026-07-03; resolves decision point 7). Status:
-design accepted, slice 1 in progress.
+**slice 1 shipped** — the `kind: view` document, `response.html.view`, the list + form
+patterns with the L2 override resolver, `TQL-VIEW-33xx` lint, the `view` coverage kind,
+and the example gallery's view-backed board page (`examples/user-admin-app/web/users/board`).
+Slices 2–4 (detail/relations/slots + eject, scaffold-on-views, dashboards) remain.
 
 ## Context and goals
 

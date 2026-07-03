@@ -87,7 +87,124 @@ public final class AppLinter {
         lintWorkflowConfig(manifest.config(), findings);
         lintAttachments(appHome, manifest, findings);
         lintObjectStorageEgress(appHome, manifest, findings);
+        lintViews(appHome, manifest, findings);
         return findings;
+    }
+
+    /**
+     * Validates declarative views (roadmap Phase 39, docs/declarative-views.md): the
+     * {@code response.html.view} reference resolves and parses ({@code TQL-VIEW-3301/3302}), is
+     * not combined with {@code template:} ({@code TQL-VIEW-3302}), a form's {@code action:} names
+     * a POST route with an {@code input:} block ({@code TQL-VIEW-3303}) whose fields the view's
+     * {@code fields:} entries actually declare ({@code TQL-VIEW-3304}) with known widgets
+     * ({@code TQL-VIEW-3305}); and an app's {@code templates/tql/view/*.html} pattern override
+     * carries the expected fragment signature ({@code TQL-VIEW-3307}, warning).
+     */
+    private void lintViews(Path appHome, AppManifest manifest, List<LintFinding> findings) {
+        for (RouteFile route : manifest.routes()) {
+            var response = route.definition().response();
+            var html = response == null ? null : response.html();
+            if (html == null || html.view() == null) {
+                continue;
+            }
+            String source = appHome.relativize(route.source()).toString().replace('\\', '/');
+            if (html.template() != null) {
+                findings.add(new LintFinding("TQL-VIEW-3302", "error", source,
+                        "response.html declares both template: and view: — they are mutually"
+                                + " exclusive"));
+            }
+            Path routeDir = route.source().getParent();
+            Path colocated = routeDir.resolve(html.view()).normalize();
+            Path file = java.nio.file.Files.isRegularFile(colocated)
+                    ? colocated
+                    : appHome.resolve("templates").resolve(html.view()).normalize();
+            if (!java.nio.file.Files.isRegularFile(file)) {
+                findings.add(new LintFinding("TQL-VIEW-3302", "error", source,
+                        "view: " + html.view() + " does not resolve (colocated or templates/)"));
+                continue;
+            }
+            io.tesseraql.yaml.view.ViewSpec spec;
+            try {
+                spec = io.tesseraql.yaml.view.ViewSpec.parse(file);
+            } catch (io.tesseraql.core.error.TqlException ex) {
+                findings.add(new LintFinding("TQL-VIEW-3301", "error", source, ex.getMessage()));
+                continue;
+            }
+            if (io.tesseraql.yaml.view.ViewSpec.FORM.equals(spec.view())) {
+                lintFormView(manifest, source, spec, findings);
+            }
+        }
+        lintViewOverrides(appHome, findings);
+    }
+
+    /** A form view's action route exists, declares inputs, and covers every fields: entry. */
+    private void lintFormView(AppManifest manifest, String source,
+            io.tesseraql.yaml.view.ViewSpec spec, List<LintFinding> findings) {
+        RouteFile action = null;
+        for (RouteFile candidate : manifest.routes()) {
+            if ("POST".equalsIgnoreCase(candidate.httpMethod())
+                    && candidate.urlPath().equals(spec.action())) {
+                action = candidate;
+                break;
+            }
+        }
+        if (action == null) {
+            findings.add(new LintFinding("TQL-VIEW-3303", "error", source,
+                    "view " + spec.id() + ": action " + spec.action()
+                            + " matches no POST route"));
+            return;
+        }
+        var inputs = action.definition().input();
+        if (inputs == null || inputs.isEmpty()) {
+            findings.add(new LintFinding("TQL-VIEW-3303", "error", source,
+                    "view " + spec.id() + ": action route " + action.definition().id()
+                            + " declares no input: block to derive fields from"));
+            return;
+        }
+        for (io.tesseraql.yaml.view.ViewSpec.Field field : spec.fields()) {
+            if (!inputs.containsKey(field.name())) {
+                findings.add(new LintFinding("TQL-VIEW-3304", "error", source,
+                        "view " + spec.id() + ": field " + field.name()
+                                + " is not declared by the action route's input: block"));
+            }
+            if (field.widget() != null
+                    && !io.tesseraql.yaml.view.ViewSpec.WIDGETS.contains(field.widget())) {
+                findings.add(new LintFinding("TQL-VIEW-3305", "error", source,
+                        "view " + spec.id() + ": unknown widget " + field.widget()
+                                + " (known: " + io.tesseraql.yaml.view.ViewSpec.WIDGETS + ")"));
+            }
+        }
+    }
+
+    /**
+     * An L2 pattern override must carry the pattern's fragment signature so it stays compatible
+     * with fragment-level composition (docs/declarative-views.md; warning, not error — the whole
+     * file still renders today).
+     */
+    private void lintViewOverrides(Path appHome, List<LintFinding> findings) {
+        Path overrides = appHome.resolve("templates").resolve("tql").resolve("view");
+        if (!java.nio.file.Files.isDirectory(overrides)) {
+            return;
+        }
+        try (var files = java.nio.file.Files.list(overrides)) {
+            for (Path file : files.filter(f -> f.getFileName().toString().endsWith(".html"))
+                    .sorted().toList()) {
+                String name = file.getFileName().toString();
+                String expected = name.startsWith("field")
+                        ? "th:fragment=\"field(f)\""
+                        : "th:fragment=\"view(v)\"";
+                String content = java.nio.file.Files.readString(file);
+                if (!content.contains(expected)) {
+                    findings.add(new LintFinding("TQL-VIEW-3307", "warning",
+                            appHome.relativize(file).toString().replace('\\', '/'),
+                            "view pattern override lacks the expected " + expected
+                                    + " signature (docs/declarative-views.md)"));
+                }
+            }
+        } catch (java.io.IOException ex) {
+            findings.add(new LintFinding("TQL-VIEW-3307", "warning", "templates/tql/view",
+                    "view pattern overrides could not be read: " + ex.getMessage()));
+        }
     }
 
     /** Validates approval-workflow configuration (roadmap Phase 28): a known {@code mode}. */

@@ -64,7 +64,7 @@ class AppTestRunnerIntegrationTest {
                 .run(appHome, dataSource, RealmConfig.managed("local", "main"), reportDir);
 
         TestReport report = result.report();
-        assertThat(report.results()).hasSize(12);
+        assertThat(report.results()).hasSize(13);
         assertThat(report.allPassed()).isTrue();
         assertThat(Files.exists(reportDir.resolve("junit/TEST-tesseraql.xml"))).isTrue();
         assertThat(Files.exists(reportDir.resolve("tesseraql-result.json"))).isTrue();
@@ -75,7 +75,7 @@ class AppTestRunnerIntegrationTest {
         assertThat(Files.exists(reportDir.resolve("coverage/sonarqube.xml"))).isTrue();
         try (var allureFiles = Files.list(reportDir.resolve("allure-results"))) {
             assertThat(allureFiles.filter(f -> f.toString().endsWith("-result.json")).count())
-                    .isEqualTo(12);
+                    .isEqualTo(13);
         } catch (Exception ex) {
             throw new AssertionError(ex);
         }

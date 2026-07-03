@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<!-- The framework field pattern (roadmap Phase 39, docs/declarative-views.md): one labelled form
+     field, switched on the widget derived from the action route's input: declaration — so the
+     rendered constraints (required, maxlength, min/max, options) are the same declaration the
+     server enforces. Override the whole pattern via templates/tql/view/field.html (customization
+     ladder L2); the field(f) signature and the `f` shape are the public contract. -->
+<html xmlns:th="http://www.thymeleaf.org">
+<th:block th:fragment="field(f)">
+  <input th:if="${f.widget == 'hidden'}" type="hidden" th:name="${f.name}" th:value="${f.value}">
+  <div class="hc-field" th:unless="${f.widget == 'hidden'}" th:switch="${f.widget}">
+    <label class="hc-field__label" th:for="|field-${f.name}|" th:text="${f.label}">Label</label>
+    <th:block th:case="'checkbox'">
+      <input type="hidden" th:name="${f.name}" value="false">
+      <input class="hc-checkbox" th:id="|field-${f.name}|" type="checkbox" th:name="${f.name}"
+             value="true" th:checked="${f.value == 'true'}">
+    </th:block>
+    <th:block th:case="'select'">
+      <select class="hc-select" th:id="|field-${f.name}|" th:name="${f.name}"
+              th:required="${f.required}">
+        <option th:each="o : ${f.options}" th:value="${o}" th:text="${o}"
+                th:selected="${o == f.value}">option</option>
+      </select>
+    </th:block>
+    <th:block th:case="'textarea'">
+      <textarea class="hc-input" th:id="|field-${f.name}|" th:name="${f.name}" rows="4"
+                th:required="${f.required}" th:attr="maxlength=${f.maxLength}"
+                th:text="${f.value}"></textarea>
+    </th:block>
+    <th:block th:case="*">
+      <input th:class="${f.widget == 'date' or f.widget == 'datetime-local'} ? 'hc-datepicker' : 'hc-input'"
+             th:id="|field-${f.name}|" th:type="${f.widget}" th:name="${f.name}"
+             th:value="${f.value}" th:required="${f.required}"
+             th:attr="maxlength=${f.maxLength},min=${f.min},max=${f.max}">
+    </th:block>
+  </div>
+</th:block>
+</html>

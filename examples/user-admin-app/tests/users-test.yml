@@ -1,4 +1,13 @@
 tests:
+  - name: the board view lists every user
+    sql:
+      file: web/users/board/board.sql
+    params: {}
+    expect:
+      rowCount: 1
+      rows:
+        - name: sato
+
   - name: search finds sato by name
     sql:
       file: web/api/users/search.sql

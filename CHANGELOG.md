@@ -6,6 +6,24 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ## Unreleased
 
+### Added
+
+- **Declarative views** (roadmap Phase 39, slice 1; see
+  [docs/declarative-views.md](docs/declarative-views.md)): a `kind: view` document colocated
+  with its route (`*.view.yml`) and referenced by `response.html.view` renders the page through
+  framework-shipped Hypermedia Components patterns — no hand-written template. A `view: list`
+  renders an `hc-datagrid` over the route's rows (columns derived from the result set when
+  `columns:` is omitted; per-row `link:` templates); a `view: form` derives its fields from the
+  `action:` route's `input:` block, so the rendered HTML constraints (`required`, `maxlength`,
+  `min`/`max`, enum options) are the same declarations the server enforces. Customization is a
+  ladder: view-document keys (L0), pattern overrides — an app shadows `tql/view/{list,form,field}.html`
+  by shipping the same-named file under `templates/` (L2, resolved app-home-first) or retargets one
+  view via `template:` — and ejecting to a hand-owned template (L3). Machine-checkable:
+  the `TQL-VIEW-33xx` lint family (unresolved/duplicated references, unknown view kind, action
+  route without inputs, undeclared fields, unknown widgets, override fragment signatures) and a
+  `view` coverage kind (`coverage.thresholds.view`). The example gallery gains a view-backed
+  board page (`examples/user-admin-app/web/users/board`).
+
 ## 0.4.1 - 2026-06-20
 
 ### Fixed
