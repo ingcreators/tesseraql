@@ -1,0 +1,45 @@
+version: tesseraql/v1
+id: tql.studio.connectors.webhook
+kind: route
+recipe: command-json
+
+input:
+  name:
+    type: string
+    required: true
+  secret:
+    type: string
+    required: true
+  signatureHeader:
+    type: string
+    required: false
+  timestampHeader:
+    type: string
+    required: false
+  idHeader:
+    type: string
+    required: false
+  tolerance:
+    type: string
+    required: false
+
+security:
+  auth: browser
+  csrf: true
+
+sql:
+  service: studio.connectors.webhook
+  params:
+    name: params.name
+    secret: params.secret
+    signatureHeader: params.signatureHeader
+    timestampHeader: params.timestampHeader
+    idHeader: params.idHeader
+    tolerance: params.tolerance
+    roles: principal.roles
+    actor: principal.loginId
+
+response:
+  redirect:
+    status: 303
+    location: /_tesseraql/studio/ui/connectors?saved=1

@@ -1,0 +1,30 @@
+version: tesseraql/v1
+id: tql.studio.connectors
+kind: route
+recipe: query-html
+
+input:
+  saved:
+    type: string
+    required: false
+
+security:
+  auth: browser
+
+sql:
+  service: studio.connectors.view
+  params:
+    saved: params.saved
+    roles: principal.roles
+
+response:
+  html:
+    status: 200
+    template: connectors.html
+    model:
+      cx: sql
+    headers:
+      Content-Security-Policy: "default-src 'self'; style-src 'self' 'unsafe-inline'; frame-ancestors 'none'"
+      X-Content-Type-Options: nosniff
+      X-Frame-Options: DENY
+      Referrer-Policy: no-referrer

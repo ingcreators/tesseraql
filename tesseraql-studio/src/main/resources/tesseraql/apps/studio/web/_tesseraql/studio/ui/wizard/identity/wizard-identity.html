@@ -11,6 +11,7 @@
 <section class="hc-card">
   <p class="hc-field__message">Generates a tesseraql-identity.yml fragment to merge into config/tesseraql.yml.</p>
   <form method="post" action="/_tesseraql/studio/ui/wizard/identity">
+    <input type="hidden" name="_csrf" th:value="${_csrf}">
     <div class="hc-field">
       <label class="hc-field__label" for="realm-id">Realm id</label>
       <input class="hc-input" id="realm-id" type="text" name="realmId" required placeholder="local">
@@ -33,6 +34,13 @@
       <select class="hc-select" id="user-management" name="userManagement"><option value="">-</option><option value="readOnly">readOnly</option><option value="readWrite">readWrite</option></select>
     </div>
     <div class="hc-cluster"><button type="submit" class="hc-button" data-variant="primary">Generate &amp; download config</button></div>
+  
+    <div class="hc-cluster">
+      <button class="hc-button" type="submit"
+              formaction="/_tesseraql/studio/ui/wizard/identity/apply"
+              data-hc-confirm="Write these identity realm settings to config/overlay.yml? Only secret references are stored; they apply on the next start."
+              data-hc-confirm-title="Write to overlay" data-hc-confirm-label="Write">Write to config overlay</button>
+    </div>
   </form>
 </section>
 </div>

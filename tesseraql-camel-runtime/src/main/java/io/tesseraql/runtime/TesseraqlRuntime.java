@@ -1122,6 +1122,141 @@ public final class TesseraqlRuntime implements AutoCloseable {
                         // Config viewer (governance): the effective merged configuration (application
                         // .yml + tesseraql.yml + overlay.yml), flattened to dotted keys, with secret
                         // values redacted. Read-only — a curated overlay-backed editor is a later slice.
+                        // Connector & SSO authoring (roadmap Phase 43, Track J2): the managed
+                        // connector config — egress allow-lists, outbound/poll credentials,
+                        // webhook verifiers — and the IAM wizards write config/overlay.yml
+                        // through the same gated path as policies. Secret REFERENCES only;
+                        // egress changes are always confirm-gated; all of it restart-bound
+                        // (these sections load at boot), which the pages state.
+                        .register("studio.connectors.view", params -> {
+                            boolean canEdit = studioAccess.canEdit(params.get("roles"));
+                            Map<String, Object> model = new java.util.LinkedHashMap<>(
+                                    studio.connectorsView());
+                            model.put("saved", params.get("saved"));
+                            model.put("editable", canEdit);
+                            model.put("readOnly", !canEdit);
+                            return model;
+                        })
+                        .register("studio.connectors.egress", params -> {
+                            studioAccess.requireEdit(params.get("roles"));
+                            requireExplicitConfirm(params, "Egress allow-list changes");
+                            studio.updateEgressHosts(str(params, "scope"), str(params, "host"),
+                                    "true".equals(String.valueOf(params.get("remove"))),
+                                    actorOf(params));
+                            return Map.of("saved", true);
+                        })
+                        .register("studio.connectors.webhook", params -> {
+                            studioAccess.requireEdit(params.get("roles"));
+                            studio.writeWebhookVerifier(str(params, "name"),
+                                    str(params, "secret"), str(params, "signatureHeader"),
+                                    str(params, "timestampHeader"), str(params, "idHeader"),
+                                    str(params, "tolerance"), actorOf(params));
+                            return Map.of("saved", true);
+                        })
+                        .register("studio.connectors.credential", params -> {
+                            studioAccess.requireEdit(params.get("roles"));
+                            studio.writeConnectorCredential(str(params, "scope"),
+                                    str(params, "name"), str(params, "type"),
+                                    str(params, "token"), str(params, "username"),
+                                    str(params, "password"), str(params, "header"),
+                                    str(params, "value"), actorOf(params));
+                            return Map.of("saved", true);
+                        })
+                        .register("studio.wizard.oidc.apply", params -> {
+                            studioAccess.requireEdit(params.get("roles"));
+                            Map<String, Object> values = new java.util.LinkedHashMap<>();
+                            values.put("tesseraql.oidc.enabled", true);
+                            values.put("tesseraql.oidc.discoveryUri",
+                                    requiredParam(params, "discoveryUri"));
+                            values.put("tesseraql.oidc.clientId",
+                                    requiredParam(params, "clientId"));
+                            values.put("tesseraql.oidc.redirectUri",
+                                    requiredParam(params, "redirectUri"));
+                            putIfPresent(values, "tesseraql.oidc.scopes", params, "scopes");
+                            putIfPresent(values, "tesseraql.oidc.postLoginUrl", params,
+                                    "postLoginUrl");
+                            String clientSecret = io.tesseraql.studio.StudioService
+                                    .secretReferenceOrNull("The OIDC client secret",
+                                            str(params, "clientSecret"));
+                            if (clientSecret != null) {
+                                values.put("tesseraql.oidc.clientSecret", clientSecret);
+                            }
+                            values.put("tesseraql.oidc.link.enabled", true);
+                            values.put("tesseraql.oidc.link.provision",
+                                    "true".equals(str(params, "provision")));
+                            studio.writeOverlaySection(values, "sso", actorOf(params));
+                            return Map.of("applied", "oidc");
+                        })
+                        .register("studio.wizard.saml.apply", params -> {
+                            studioAccess.requireEdit(params.get("roles"));
+                            Map<String, Object> values = new java.util.LinkedHashMap<>();
+                            values.put("tesseraql.saml.enabled", true);
+                            values.put("tesseraql.saml.sp.audience",
+                                    requiredParam(params, "spAudience"));
+                            values.put("tesseraql.saml.sp.acsUrl",
+                                    requiredParam(params, "acsUrl"));
+                            putIfPresent(values, "tesseraql.saml.sp.nameIdFormat", params,
+                                    "nameIdFormat");
+                            values.put("tesseraql.saml.idp.ssoUrl",
+                                    requiredParam(params, "ssoUrl"));
+                            putIfPresent(values, "tesseraql.saml.idp.sloUrl", params, "sloUrl");
+                            putIfPresent(values, "tesseraql.saml.idp.metadata", params,
+                                    "idpMetadataPath");
+                            putIfPresent(values, "tesseraql.saml.idp.publicKey", params,
+                                    "publicKeyPath");
+                            values.put("tesseraql.saml.attributes.loginId",
+                                    requiredParam(params, "loginIdAttribute"));
+                            putIfPresent(values, "tesseraql.saml.attributes.email", params,
+                                    "emailAttribute");
+                            values.put("tesseraql.saml.link.enabled", true);
+                            values.put("tesseraql.saml.link.provision",
+                                    "true".equals(str(params, "provision")));
+                            studio.writeOverlaySection(values, "sso", actorOf(params));
+                            return Map.of("applied", "saml");
+                        })
+                        .register("studio.wizard.scim.apply", params -> {
+                            studioAccess.requireEdit(params.get("roles"));
+                            Map<String, Object> values = new java.util.LinkedHashMap<>();
+                            values.put("tesseraql.scim.enabled", true);
+                            values.put("tesseraql.scim.groups.enabled",
+                                    "true".equals(str(params, "groups")));
+                            boolean outbound = "true".equals(str(params, "outbound"));
+                            values.put("tesseraql.scim.outbound.enabled", outbound);
+                            String outboundUrl = str(params, "outboundUrl");
+                            if (outbound && outboundUrl != null && !outboundUrl.isBlank()) {
+                                values.put("tesseraql.scim.outbound.target.url",
+                                        outboundUrl.trim());
+                                String token = io.tesseraql.studio.StudioService
+                                        .secretReferenceOrNull("The SCIM outbound token",
+                                                str(params, "tokenRef"));
+                                if (token == null) {
+                                    throw new io.tesseraql.core.error.TqlException(
+                                            new io.tesseraql.core.error.TqlErrorCode(
+                                                    io.tesseraql.core.error.TqlDomain.STUDIO,
+                                                    4231),
+                                            "An outbound SCIM target needs a token secret "
+                                                    + "reference like ${secret.env.SCIM_TOKEN}");
+                                }
+                                values.put("tesseraql.scim.outbound.target.token", token);
+                            }
+                            studio.writeOverlaySection(values, "sso", actorOf(params));
+                            return Map.of("applied", "scim");
+                        })
+                        .register("studio.wizard.identity.apply", params -> {
+                            studioAccess.requireEdit(params.get("roles"));
+                            String realmId = requiredParam(params, "realmId");
+                            String prefix = "tesseraql.identity.realms." + realmId + ".";
+                            Map<String, Object> values = new java.util.LinkedHashMap<>();
+                            values.put("tesseraql.identity.defaultRealm", realmId);
+                            values.put(prefix + "type", requiredParam(params, "type"));
+                            values.put(prefix + "datasource",
+                                    requiredParam(params, "datasource"));
+                            putIfPresent(values, prefix + "sqlRoot", params, "sqlRoot");
+                            putIfPresent(values, prefix + "capabilities.userManagement", params,
+                                    "userManagement");
+                            studio.writeOverlaySection(values, "sso", actorOf(params));
+                            return Map.of("applied", "identity");
+                        })
                         .register("studio.config", params -> {
                             java.util.List<Map<String, Object>> rows = studio.effectiveConfig();
                             long secrets = rows.stream()
@@ -2141,6 +2276,35 @@ public final class TesseraqlRuntime implements AutoCloseable {
     private static String urlEncode(String value) {
         return java.net.URLEncoder.encode(value == null ? "" : value,
                 java.nio.charset.StandardCharsets.UTF_8);
+    }
+
+    /** Rejects a Track J2 mutation posted without the explicit confirm acknowledgment. */
+    private static void requireExplicitConfirm(Map<String, Object> params, String what) {
+        if (!"true".equals(String.valueOf(params.get("confirm")))) {
+            throw new io.tesseraql.core.error.TqlException(
+                    new io.tesseraql.core.error.TqlErrorCode(
+                            io.tesseraql.core.error.TqlDomain.STUDIO, 4232),
+                    what + " need explicit confirmation");
+        }
+    }
+
+    private static String requiredParam(Map<String, Object> params, String key) {
+        String value = str(params, key);
+        if (value == null || value.isBlank()) {
+            throw new io.tesseraql.core.error.TqlException(
+                    new io.tesseraql.core.error.TqlErrorCode(
+                            io.tesseraql.core.error.TqlDomain.STUDIO, 4231),
+                    "Missing required field: " + key);
+        }
+        return value.trim();
+    }
+
+    private static void putIfPresent(Map<String, Object> values, String dottedKey,
+            Map<String, Object> params, String key) {
+        String value = str(params, key);
+        if (value != null && !value.isBlank()) {
+            values.put(dottedKey, value.trim());
+        }
     }
 
     /** A request parameter as a trimmed string, or null when absent or blank. */

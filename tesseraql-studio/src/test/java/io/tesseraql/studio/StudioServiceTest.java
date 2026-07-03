@@ -231,6 +231,78 @@ class StudioServiceTest {
     }
 
     @Test
+    void secretReferencesAreValidatedAndRedactedForDisplay() {
+        assertThat(StudioService.isSecretReference("${secret.env.API_KEY}")).isTrue();
+        assertThat(StudioService.isSecretReference("${secret.vault.db-pass}")).isTrue();
+        assertThat(StudioService.isSecretReference("raw-secret-value")).isFalse();
+        assertThat(StudioService.isSecretReference("${secret.env.KEY:fallback}")).isFalse();
+        assertThat(StudioService.isSecretReference("${OTHER_VAR}")).isFalse();
+
+        assertThat(StudioService.redactedReference("${secret.env.KEY}"))
+                .isEqualTo("${secret.env.KEY}");
+        assertThat(StudioService.redactedReference("${secret.env.KEY:dev-fallback}"))
+                .isEqualTo("${secret.env.KEY:\u2026}");
+        assertThat(StudioService.redactedReference("literal-secret"))
+                .isEqualTo("\u2022\u2022\u2022");
+    }
+
+    @Test
+    void connectorAuthoringWritesOverlayWithReferencesOnly(@TempDir Path dir) throws Exception {
+        Files.createDirectories(dir.resolve("config"));
+        Files.writeString(dir.resolve("config/tesseraql.yml"), """
+                tesseraql:
+                  app:
+                    name: t
+                  http:
+                    outbound:
+                      allowedHosts:
+                        - api.base.example
+                """);
+        StudioService studio = new StudioService(new ManifestLoader().load(dir), false);
+
+        // Egress add carries the FULL effective list into the overlay (lists replace on merge).
+        studio.updateEgressHosts("outbound", "api.new.example", false, "it");
+        assertThat(studio.effectiveStringList("tesseraql.http.outbound.allowedHosts"))
+                .containsExactly("api.base.example", "api.new.example");
+        String overlay = Files.readString(dir.resolve("config/overlay.yml"));
+        assertThat(overlay).contains("api.base.example").contains("api.new.example");
+
+        // Removing a base-config host also works through the full-list overlay.
+        studio.updateEgressHosts("outbound", "api.base.example", true, "it");
+        assertThat(studio.effectiveStringList("tesseraql.http.outbound.allowedHosts"))
+                .containsExactly("api.new.example");
+
+        // A webhook verifier only ever stores a secret REFERENCE.
+        assertThatThrownBy(() -> studio.writeWebhookVerifier("partner", "raw-secret", null,
+                null, null, null, "it"))
+                .isInstanceOf(io.tesseraql.core.error.TqlException.class)
+                .hasMessageContaining("secret reference");
+        studio.writeWebhookVerifier("partner", "${secret.env.PARTNER_SECRET}", "X-Sig", null,
+                null, "PT5M", "it");
+        assertThat(Files.readString(dir.resolve("config/overlay.yml")))
+                .contains("${secret.env.PARTNER_SECRET}").contains("X-Sig")
+                .contains("PT5M");
+        assertThatThrownBy(() -> studio.writeWebhookVerifier("partner",
+                "${secret.env.X}", null, null, null, "5 minutes", "it"))
+                .hasMessageContaining("ISO-8601");
+
+        // Credentials: the secret-carrying field per type must be a reference.
+        assertThatThrownBy(() -> studio.writeConnectorCredential("outbound", "svc", "bearer",
+                "plain-token", null, null, null, null, "it"))
+                .hasMessageContaining("secret reference");
+        studio.writeConnectorCredential("poll", "sftp-drop", "basic", null, "exchange",
+                "${secret.env.SFTP_PASS}", null, null, "it");
+        assertThat(Files.readString(dir.resolve("config/overlay.yml")))
+                .contains("sftp-drop").contains("exchange")
+                .contains("${secret.env.SFTP_PASS}");
+
+        // The read model redacts and never echoes a literal.
+        Map<String, Object> view = studio.connectorsView();
+        assertThat(view.get("outboundHosts")).isEqualTo(java.util.List.of("api.new.example"));
+        assertThat(String.valueOf(view.get("webhooks"))).contains("${secret.env.PARTNER_SECRET}");
+    }
+
+    @Test
     void deleteDraftRemovesDraftAndIsIdempotent(@TempDir Path dir) throws Exception {
         Files.createDirectories(dir.resolve("config"));
         Files.writeString(dir.resolve("config/tesseraql.yml"), "tesseraql:\n  app:\n    name: t\n");

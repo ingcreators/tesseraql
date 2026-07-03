@@ -61,6 +61,13 @@ public final class StudioService {
     private static final TqlErrorCode NOT_FOUND = new TqlErrorCode(TqlDomain.STUDIO, 4040);
     private static final TqlErrorCode INVALID_DRAFT = new TqlErrorCode(TqlDomain.STUDIO, 4221);
     private static final TqlErrorCode ROUTE_FORM = new TqlErrorCode(TqlDomain.STUDIO, 4230);
+    private static final TqlErrorCode CONNECTORS = new TqlErrorCode(TqlDomain.STUDIO, 4231);
+    private static final java.util.regex.Pattern SECRET_REF = java.util.regex.Pattern
+            .compile("\\$\\{secret\\.[A-Za-z0-9_.-]+\\}");
+    private static final java.util.regex.Pattern EGRESS_HOST = java.util.regex.Pattern
+            .compile("(\\*\\.)?[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?");
+    private static final java.util.regex.Pattern CONNECTOR_NAME = java.util.regex.Pattern
+            .compile("[a-z][a-z0-9-]*");
     private static final TqlErrorCode RENDER = new TqlErrorCode(TqlDomain.STUDIO, 4222);
     private static final TqlErrorCode NEW_ROUTE = new TqlErrorCode(TqlDomain.STUDIO, 4224);
     private static final TqlErrorCode MENU = new TqlErrorCode(TqlDomain.STUDIO, 4225);
@@ -863,6 +870,278 @@ public final class StudioService {
             throw new TqlException(ROUTE_FORM, "Input " + field + " " + key
                     + " must be an integer: " + value);
         }
+    }
+
+    /**
+     * True when {@code value} is a pure secret <i>reference</i> ({@code ${secret.<provider>.<key>}},
+     * no literal default fallback). Studio's connector/SSO authoring (Track J2) only ever writes
+     * references — a literal secret value is rejected before it can reach a config file.
+     */
+    public static boolean isSecretReference(String value) {
+        return value != null && SECRET_REF.matcher(value.trim()).matches();
+    }
+
+    /** Blank stays {@code null}; anything else must be a valid secret reference (Track J2). */
+    public static String secretReferenceOrNull(String field, String value) {
+        String clean = trimToNull(value);
+        return clean == null ? null : requireSecretReference(field, clean);
+    }
+
+    private static String requireSecretReference(String field, String value) {
+        if (!isSecretReference(value)) {
+            throw new TqlException(CONNECTORS, field + " must be a secret reference like "
+                    + "${secret.env.NAME} — literal secret values are never written from Studio");
+        }
+        return value.trim();
+    }
+
+    /**
+     * Sets one dotted-path key in {@code config/overlay.yml} (Track J2 write-through), other keys
+     * preserved; a {@code null} value removes the leaf. Restart-bound settings stay honest at the
+     * call site — this method only makes the write durable and audited.
+     */
+    public void setOverlayPath(String dottedKey, Object value, String action, String actor) {
+        writeOverlaySection(Map.of(dottedKey, value == null ? REMOVE : value), action, actor);
+    }
+
+    /** Sentinel accepted by {@link #writeOverlaySection}: remove the leaf instead of setting it. */
+    public static final Object REMOVE = new Object();
+
+    /**
+     * Applies several dotted-path writes to {@code config/overlay.yml} in one save (Track J2):
+     * the wizard write-through and connector editors compose their sections from this. Values are
+     * scalars, lists, or maps; {@link #REMOVE} deletes the leaf.
+     */
+    public void writeOverlaySection(Map<String, Object> values, String action, String actor) {
+        if (readOnly) {
+            throw new TqlException(READ_ONLY, "Studio is read-only; editing config is disabled");
+        }
+        Path overlay = resolve("config/overlay.yml");
+        Map<String, Object> tree = Files.isRegularFile(overlay)
+                ? mutableCopy(parser.parseTree(overlay))
+                : new LinkedHashMap<>();
+        values.forEach((dottedKey, value) -> {
+            String[] segments = dottedKey.split("\\.");
+            Map<String, Object> parent = tree;
+            for (int i = 0; i < segments.length - 1; i++) {
+                parent = childMap(parent, segments[i]);
+            }
+            if (value == REMOVE) {
+                parent.remove(segments[segments.length - 1]);
+            } else {
+                parent.put(segments[segments.length - 1], value);
+            }
+        });
+        try {
+            Files.createDirectories(overlay.getParent());
+            Files.writeString(overlay, parser.write(tree));
+        } catch (IOException ex) {
+            throw new UncheckedIOException(ex);
+        }
+        recordAudit(actor, action, "config/overlay.yml");
+    }
+
+    /** The effective (merged, overlay-included) string list at {@code dottedKey}; empty when absent. */
+    public List<String> effectiveStringList(String dottedKey) {
+        // A fresh load so a just-written overlay value is visible without a full Studio reload.
+        Object value = new ManifestLoader().load(appHome).config().navigate(dottedKey);
+        if (!(value instanceof List<?> list)) {
+            return List.of();
+        }
+        return list.stream().map(String::valueOf).toList();
+    }
+
+    /**
+     * Adds or removes one egress allow-list host (Track J2). Deep-merge replaces lists, so the
+     * overlay carries the FULL effective list after the change — base-config hosts included.
+     * The caller gates this behind the confirm dialog (egress changes widen the app's reach).
+     */
+    public void updateEgressHosts(String scope, String host, boolean remove, String actor) {
+        String key = egressKey(scope);
+        String clean = trimToNull(host);
+        if (clean == null || !EGRESS_HOST.matcher(clean).matches()) {
+            throw new TqlException(CONNECTORS,
+                    "An egress host is a hostname or *.wildcard: " + host);
+        }
+        List<String> full = new ArrayList<>(effectiveStringList(key));
+        if (remove) {
+            full.remove(clean);
+        } else if (!full.contains(clean)) {
+            full.add(clean);
+        }
+        writeOverlaySection(Map.of(key, full), "egress", actor);
+    }
+
+    private static String egressKey(String scope) {
+        return switch (String.valueOf(scope)) {
+            case "outbound" -> "tesseraql.http.outbound.allowedHosts";
+            case "poll" -> "tesseraql.connectors.poll.allowedHosts";
+            default -> throw new TqlException(CONNECTORS,
+                    "Unknown egress scope (outbound|poll): " + scope);
+        };
+    }
+
+    /**
+     * Adds or replaces an inbound-webhook verifier (Track J2): the HMAC secret is a validated
+     * secret <i>reference</i>, never a value. Applies on the next start (verifiers load at boot).
+     */
+    public void writeWebhookVerifier(String name, String secretRef, String signatureHeader,
+            String timestampHeader, String idHeader, String tolerance, String actor) {
+        String clean = requireConnectorName(name);
+        Map<String, Object> verifier = new LinkedHashMap<>();
+        verifier.put("secret", requireSecretReference("The webhook secret", secretRef));
+        putOrRemove(verifier, "signatureHeader", trimToNull(signatureHeader));
+        putOrRemove(verifier, "timestampHeader", trimToNull(timestampHeader));
+        putOrRemove(verifier, "idHeader", trimToNull(idHeader));
+        String cleanTolerance = trimToNull(tolerance);
+        if (cleanTolerance != null) {
+            try {
+                java.time.Duration.parse(cleanTolerance);
+            } catch (java.time.format.DateTimeParseException ex) {
+                throw new TqlException(CONNECTORS,
+                        "tolerance must be an ISO-8601 duration like PT5M: " + tolerance);
+            }
+            verifier.put("tolerance", cleanTolerance);
+        }
+        writeOverlaySection(Map.of("tesseraql.connectors.webhooks." + clean, verifier),
+                "connectors", actor);
+    }
+
+    /**
+     * Adds or replaces an outbound/poll connector credential (Track J2). Secret-carrying fields
+     * (bearer token, basic password, header value) must be secret references; the username and
+     * header name ride plain. Applies on the next start.
+     */
+    public void writeConnectorCredential(String scope, String name, String type, String token,
+            String username, String password, String header, String value, String actor) {
+        String prefix = switch (String.valueOf(scope)) {
+            case "outbound" -> "tesseraql.http.outbound.credentials.";
+            case "poll" -> "tesseraql.connectors.poll.credentials.";
+            default -> throw new TqlException(CONNECTORS,
+                    "Unknown credential scope (outbound|poll): " + scope);
+        };
+        String clean = requireConnectorName(name);
+        Map<String, Object> credential = new LinkedHashMap<>();
+        switch (String.valueOf(type)) {
+            case "bearer" -> {
+                credential.put("type", "bearer");
+                credential.put("token", requireSecretReference("The bearer token", token));
+            }
+            case "basic" -> {
+                credential.put("type", "basic");
+                String user = trimToNull(username);
+                if (user == null) {
+                    throw new TqlException(CONNECTORS, "A basic credential needs a username");
+                }
+                credential.put("username", user);
+                credential.put("password", requireSecretReference("The password", password));
+            }
+            case "header" -> {
+                credential.put("type", "header");
+                String headerName = trimToNull(header);
+                if (headerName == null) {
+                    throw new TqlException(CONNECTORS, "A header credential needs a header name");
+                }
+                credential.put("header", headerName);
+                credential.put("value", requireSecretReference("The header value", value));
+            }
+            default -> throw new TqlException(CONNECTORS,
+                    "Unknown credential type (bearer|basic|header): " + type);
+        }
+        writeOverlaySection(Map.of(prefix + clean, credential), "connectors", actor);
+    }
+
+    private static String requireConnectorName(String name) {
+        String clean = trimToNull(name);
+        if (clean == null || !CONNECTOR_NAME.matcher(clean).matches()) {
+            throw new TqlException(CONNECTORS,
+                    "A connector name is lowercase letters, digits and dashes: " + name);
+        }
+        return clean;
+    }
+
+    /**
+     * The connectors read model (Track J2): egress allow-lists, outbound/poll credentials and
+     * webhook verifiers from the FRESH merged config (a just-saved overlay write shows without a
+     * Studio reload). Secret-ish values are shown as their reference with any literal fallback
+     * elided; a non-reference literal is never echoed.
+     */
+    public Map<String, Object> connectorsView() {
+        var config = new ManifestLoader().load(appHome).config();
+        Map<String, Object> model = new LinkedHashMap<>();
+        model.put("outboundHosts", stringList(config.navigate(
+                "tesseraql.http.outbound.allowedHosts")));
+        model.put("pollHosts", stringList(config.navigate(
+                "tesseraql.connectors.poll.allowedHosts")));
+        model.put("outboundCredentials", credentialRows(config.navigate(
+                "tesseraql.http.outbound.credentials")));
+        model.put("pollCredentials", credentialRows(config.navigate(
+                "tesseraql.connectors.poll.credentials")));
+        model.put("webhooks", webhookRows(config.navigate("tesseraql.connectors.webhooks")));
+        return model;
+    }
+
+    private static List<String> stringList(Object value) {
+        return value instanceof List<?> list
+                ? list.stream().map(String::valueOf).toList()
+                : List.of();
+    }
+
+    private static List<Map<String, Object>> credentialRows(Object value) {
+        List<Map<String, Object>> rows = new ArrayList<>();
+        anyMap(value).forEach((name, spec) -> {
+            Map<String, Object> credential = anyMap(spec);
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("name", name);
+            row.put("type", scalar(credential.get("type")));
+            row.put("target", credential.get("header") != null
+                    ? scalar(credential.get("header"))
+                    : scalar(credential.get("username")));
+            Object secret = credential.get("token") != null
+                    ? credential.get("token")
+                    : credential.get("password") != null
+                            ? credential.get("password")
+                            : credential.get("value");
+            row.put("secret", redactedReference(scalar(secret)));
+            rows.add(row);
+        });
+        return rows;
+    }
+
+    private static List<Map<String, Object>> webhookRows(Object value) {
+        List<Map<String, Object>> rows = new ArrayList<>();
+        anyMap(value).forEach((name, spec) -> {
+            Map<String, Object> verifier = anyMap(spec);
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("name", name);
+            row.put("secret", redactedReference(scalar(verifier.get("secret"))));
+            row.put("signatureHeader", scalar(verifier.get("signatureHeader")));
+            row.put("timestampHeader", scalar(verifier.get("timestampHeader")));
+            row.put("idHeader", scalar(verifier.get("idHeader")));
+            row.put("tolerance", scalar(verifier.get("tolerance")));
+            rows.add(row);
+        });
+        return rows;
+    }
+
+    /**
+     * A displayable form of a secret-carrying config value: a pure reference shows as-is, a
+     * reference with a literal fallback elides the fallback, anything else is masked entirely.
+     */
+    static String redactedReference(String value) {
+        if (value == null) {
+            return null;
+        }
+        if (isSecretReference(value)) {
+            return value;
+        }
+        java.util.regex.Matcher withDefault = java.util.regex.Pattern
+                .compile("\\$\\{(secret\\.[A-Za-z0-9_.-]+):.*\\}")
+                .matcher(value.trim());
+        if (withDefault.matches()) {
+            return "${" + withDefault.group(1) + ":\u2026}";
+        }
+        return "\u2022\u2022\u2022";
     }
 
     /** The next versioned-migration number for a datasource/vendor (the Flyway {@code V<n>} prefix). */

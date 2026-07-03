@@ -12,6 +12,7 @@
   <p class="hc-field__message">Generates a tesseraql-scim.yml fragment to merge into config/tesseraql.yml.
   The outbound token stays an environment-variable reference; never paste the literal secret.</p>
   <form method="post" action="/_tesseraql/studio/ui/wizard/scim">
+    <input type="hidden" name="_csrf" th:value="${_csrf}">
     <div class="hc-field">
       <label class="hc-field__label" for="scim-groups">Enable group provisioning</label>
       <select class="hc-select" id="scim-groups" name="groups"><option value="false">false</option><option value="true">true</option></select>
@@ -31,6 +32,13 @@
       <p class="hc-field__message">A placeholder resolved from an environment variable at runtime, so the bearer token stays out of the config file.</p>
     </div>
     <div class="hc-cluster"><button type="submit" class="hc-button" data-variant="primary">Generate &amp; download config</button></div>
+  
+    <div class="hc-cluster">
+      <button class="hc-button" type="submit"
+              formaction="/_tesseraql/studio/ui/wizard/scim/apply"
+              data-hc-confirm="Write these SCIM settings to config/overlay.yml? Only secret references are stored; they apply on the next start."
+              data-hc-confirm-title="Write to overlay" data-hc-confirm-label="Write">Write to config overlay</button>
+    </div>
   </form>
 </section>
 </div>

@@ -12,6 +12,7 @@
   <p class="hc-field__message">Generates a tesseraql-saml.yml fragment to merge into config/tesseraql.yml.
   Key material is referenced by file path under the app home; never paste certificate contents here.</p>
   <form method="post" action="/_tesseraql/studio/ui/wizard/saml">
+    <input type="hidden" name="_csrf" th:value="${_csrf}">
     <div class="hc-field">
       <label class="hc-field__label" for="sp-audience">SP entity ID / audience</label>
       <input class="hc-input" id="sp-audience" type="text" name="spAudience" required placeholder="https://app.example.com/saml">
@@ -56,6 +57,13 @@
       <select class="hc-select" id="provision" name="provision"><option value="false">false</option><option value="true">true</option></select>
     </div>
     <div class="hc-cluster"><button type="submit" class="hc-button" data-variant="primary">Generate &amp; download config</button></div>
+  
+    <div class="hc-cluster">
+      <button class="hc-button" type="submit"
+              formaction="/_tesseraql/studio/ui/wizard/saml/apply"
+              data-hc-confirm="Write these SAML settings to config/overlay.yml? Only secret references are stored; they apply on the next start."
+              data-hc-confirm-title="Write to overlay" data-hc-confirm-label="Write">Write to config overlay</button>
+    </div>
   </form>
 </section>
 </div>

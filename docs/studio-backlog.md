@@ -555,10 +555,21 @@ ships as its own slice once the phase opens:
   immediately (Phase 42). `StudioService.routeForm`/`routeFormSave` (rejects documents that no
   longer parse as a route; `TQL-STUDIO-4230`); `studio.routeForm.view`/`.save` providers;
   `/ui/route-form` page.
-- [ ] **J2 — connector/SSO authoring**: `http.outbound` / `connectors.poll` /
-  `connectors.webhooks` / OIDC / SAML through the gated overlay-write path (secret
-  *references* only, never values; egress allow-list changes behind the confirm gate); the
-  IAM wizards become write-through instead of snippet downloads.
+- [x] **J2 — connector/SSO authoring** — *done*: a **Connectors** page (explorer chrome) shows
+  and edits the managed connector config through the gated overlay-write path — egress
+  allow-lists for `http.outbound`/`connectors.poll` (adds/removes write the FULL effective
+  list, since deep-merge replaces lists; always behind an explicit confirm, `TQL-STUDIO-4232`
+  → 422 without it), outbound/poll credentials (bearer/basic/header) and inbound webhook
+  verifiers — where every secret-carrying field must be a secret *reference*
+  (`${secret.env.NAME}`, no literal fallback; `TQL-STUDIO-4231` → 400 otherwise) and displayed
+  values are redacted (`redactedReference`). The four IAM wizards (OIDC/SAML/SCIM/identity)
+  gained **Write to config overlay** beside the snippet download (`formaction` to
+  `wizard/<x>/apply`), landing `tesseraql.oidc.*`/`saml.*`/`scim.*`/`identity.*` in
+  `config/overlay.yml` with the same reference-only rule. All of it edit-gated, audited, and
+  honestly restart-bound (these sections load at boot; the pages say so).
+  `StudioService.writeOverlaySection`/`updateEgressHosts`/`writeWebhookVerifier`/
+  `writeConnectorCredential`/`connectorsView`; `studio.connectors.*` + `studio.wizard.*.apply`
+  providers; `/ui/connectors` page.
 - [ ] **J3 — test recorder**: save an API-console invocation as a declarative test case.
 - [ ] **J4 — data-browser row edit**: PK-scoped single-row edit via a generated command,
   under audit + `editRoles` + confirm.
