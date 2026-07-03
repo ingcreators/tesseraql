@@ -164,6 +164,18 @@ public final class AppLinter {
                                     + " is not a named query of the route"));
                 }
             }
+            for (io.tesseraql.yaml.view.ViewSpec.Panel panel : spec.panels()) {
+                String panelSource = panel.source() == null || panel.source().isBlank()
+                        ? "sql"
+                        : panel.source();
+                var queries = route.definition().queries();
+                if (!"sql".equals(panelSource)
+                        && (queries == null || !queries.containsKey(panelSource))) {
+                    findings.add(new LintFinding("TQL-VIEW-3308", "error", source,
+                            "view " + spec.id() + ": panel source " + panelSource
+                                    + " is not a named query of the route"));
+                }
+            }
             if (io.tesseraql.yaml.view.ViewSpec.LIST.equals(spec.view())) {
                 var inputs = route.definition().input();
                 if (spec.search() != null

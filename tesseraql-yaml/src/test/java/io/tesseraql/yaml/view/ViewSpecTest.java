@@ -105,6 +105,86 @@ class ViewSpecTest {
     }
 
     @Test
+    void parsesADashboardWithPanels(@TempDir Path dir) throws Exception {
+        ViewSpec spec = ViewSpec.parse(write(dir, "stats.view.yml", """
+                version: tesseraql/v1
+                kind: view
+                view: dashboard
+                title: Stats
+                panels:
+                  - title: Users
+                    type: stat
+                    source: totals
+                    column: user_count
+                  - title: Signups
+                    type: chart
+                    kind: bar
+                    source: signups
+                    x: day
+                    y: n
+                  - type: sparkline
+                    source: signups
+                    column: n
+                  - type: table
+                    source: recent
+                """));
+        assertThat(spec.view()).isEqualTo(ViewSpec.DASHBOARD);
+        assertThat(spec.panels()).hasSize(4);
+        assertThat(spec.panels().get(1).x()).isEqualTo("day");
+        assertThat(spec.panels().get(2).column()).isEqualTo("n");
+    }
+
+    @Test
+    void rejectsAPanelWithoutAKnownType(@TempDir Path dir) throws Exception {
+        Path file = write(dir, "x.view.yml", """
+                kind: view
+                view: dashboard
+                panels:
+                  - title: Broken
+                """);
+        assertThatThrownBy(() -> ViewSpec.parse(file))
+                .isInstanceOf(TqlException.class).hasMessageContaining("type:");
+    }
+
+    @Test
+    void rejectsAStatPanelWithoutAColumn(@TempDir Path dir) throws Exception {
+        Path file = write(dir, "x.view.yml", """
+                kind: view
+                view: dashboard
+                panels:
+                  - type: stat
+                """);
+        assertThatThrownBy(() -> ViewSpec.parse(file))
+                .isInstanceOf(TqlException.class).hasMessageContaining("requires column");
+    }
+
+    @Test
+    void rejectsAChartPanelWithoutItsAxes(@TempDir Path dir) throws Exception {
+        Path file = write(dir, "x.view.yml", """
+                kind: view
+                view: dashboard
+                panels:
+                  - type: chart
+                    y: n
+                """);
+        assertThatThrownBy(() -> ViewSpec.parse(file))
+                .isInstanceOf(TqlException.class).hasMessageContaining("x: and y:");
+    }
+
+    @Test
+    void rejectsPanelsOnANonDashboardView(@TempDir Path dir) throws Exception {
+        Path file = write(dir, "x.view.yml", """
+                kind: view
+                view: list
+                panels:
+                  - type: stat
+                    column: c
+                """);
+        assertThatThrownBy(() -> ViewSpec.parse(file))
+                .isInstanceOf(TqlException.class).hasMessageContaining("dashboard-view key");
+    }
+
+    @Test
     void rejectsAWrongKind(@TempDir Path dir) throws Exception {
         Path file = write(dir, "x.view.yml", "kind: route\nview: list\n");
         assertThatThrownBy(() -> ViewSpec.parse(file))

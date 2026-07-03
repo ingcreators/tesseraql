@@ -23,7 +23,7 @@ import java.util.Map;
  */
 public record ViewSpec(String id, String view, String title, String action, String source,
         String search, List<Field> fields, List<Column> columns, List<Child> children,
-        Map<String, String> slots, String template) {
+        List<Panel> panels, Map<String, String> slots, String template) {
 
     /** Structurally invalid view document (docs/declarative-views.md, TQL-VIEW-3301). */
     public static final TqlErrorCode INVALID_VIEW = new TqlErrorCode(TqlDomain.VIEW, 3301);
@@ -31,6 +31,11 @@ public record ViewSpec(String id, String view, String title, String action, Stri
     public static final String LIST = "list";
     public static final String FORM = "form";
     public static final String DETAIL = "detail";
+    public static final String DASHBOARD = "dashboard";
+
+    /** The dashboard panel types (docs/declarative-views.md, slice 4). */
+    public static final java.util.Set<String> PANEL_TYPES = java.util.Set.of("stat",
+            "sparkline", "chart", "table");
 
     /** The slice-1 widget vocabulary (docs/declarative-views.md, TQL-VIEW-3305). */
     public static final java.util.Set<String> WIDGETS = java.util.Set.of("text", "textarea",
@@ -76,11 +81,24 @@ public record ViewSpec(String id, String view, String title, String action, Stri
         }
     }
 
+    /**
+     * A dashboard panel over one of the route's results: a {@code stat} (one value), a
+     * {@code sparkline}/{@code chart} over a series ({@code column} or {@code x}/{@code y};
+     * chart {@code kind} is {@code bar} or {@code line}), or an embedded {@code table}.
+     */
+    public record Panel(String title, String type, String source, String column, String x,
+            String y, String kind, List<Column> columns) {
+        public Panel {
+            columns = columns == null ? List.of() : List.copyOf(columns);
+        }
+    }
+
     public ViewSpec {
         source = source == null || source.isBlank() ? "sql" : source;
         fields = fields == null ? List.of() : List.copyOf(fields);
         columns = columns == null ? List.of() : List.copyOf(columns);
         children = children == null ? List.of() : List.copyOf(children);
+        panels = panels == null ? List.of() : List.copyOf(panels);
         slots = slots == null ? Map.of() : Map.copyOf(slots);
     }
 
@@ -96,12 +114,19 @@ public record ViewSpec(String id, String view, String title, String action, Stri
             throw invalid(name, "kind must be 'view'");
         }
         String view = str(tree.get("view"));
-        if (!LIST.equals(view) && !FORM.equals(view) && !DETAIL.equals(view)) {
-            throw invalid(name, "view must be '" + LIST + "', '" + FORM + "' or '" + DETAIL
-                    + "', got: " + view);
+        if (!LIST.equals(view) && !FORM.equals(view) && !DETAIL.equals(view)
+                && !DASHBOARD.equals(view)) {
+            throw invalid(name, "view must be '" + LIST + "', '" + FORM + "', '" + DETAIL
+                    + "' or '" + DASHBOARD + "', got: " + view);
         }
         if (!DETAIL.equals(view) && tree.get("children") != null) {
             throw invalid(name, "children: is a detail-view key");
+        }
+        if (!DASHBOARD.equals(view) && tree.get("panels") != null) {
+            throw invalid(name, "panels: is a dashboard-view key");
+        }
+        if (DASHBOARD.equals(view) && tree.get("panels") == null) {
+            throw invalid(name, "a dashboard view must declare panels:");
         }
         String action = str(tree.get("action"));
         if (FORM.equals(view) && (action == null || action.isBlank())) {
@@ -116,8 +141,36 @@ public record ViewSpec(String id, String view, String title, String action, Stri
         return new ViewSpec(id, view, str(tree.get("title")), action, str(tree.get("source")),
                 str(tree.get("search")),
                 parseFields(name, tree.get("fields")), parseColumns(name, tree.get("columns")),
-                parseChildren(name, tree.get("children")), parseSlots(name, tree.get("slots")),
-                str(tree.get("template")));
+                parseChildren(name, tree.get("children")), parsePanels(name, tree.get("panels")),
+                parseSlots(name, tree.get("slots")), str(tree.get("template")));
+    }
+
+    private static List<Panel> parsePanels(String source, Object raw) {
+        List<Panel> panels = new ArrayList<>();
+        for (Map<String, Object> entry : entries(source, raw, "panels")) {
+            String type = str(entry.get("type"));
+            if (type == null || !PANEL_TYPES.contains(type)) {
+                throw invalid(source, "a panels: entry requires type: one of " + PANEL_TYPES);
+            }
+            String column = str(entry.get("column"));
+            if (("stat".equals(type) || "sparkline".equals(type))
+                    && (column == null || column.isBlank())) {
+                throw invalid(source, "a " + type + " panel requires column:");
+            }
+            String kind = str(entry.get("kind"));
+            if ("chart".equals(type)) {
+                if (str(entry.get("x")) == null || str(entry.get("y")) == null) {
+                    throw invalid(source, "a chart panel requires x: and y: columns");
+                }
+                if (kind != null && !"bar".equals(kind) && !"line".equals(kind)) {
+                    throw invalid(source, "chart kind: must be bar or line, got: " + kind);
+                }
+            }
+            panels.add(new Panel(str(entry.get("title")), type, str(entry.get("source")),
+                    column, str(entry.get("x")), str(entry.get("y")), kind,
+                    parseColumns(source, entry.get("columns"))));
+        }
+        return panels;
     }
 
     private static List<Child> parseChildren(String source, Object raw) {

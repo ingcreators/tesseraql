@@ -85,6 +85,14 @@ public final class ViewBinding {
                         + child.source() + " is not a named query of the route");
             }
         }
+        for (ViewSpec.Panel panel : spec.panels()) {
+            String panelSource = panelSource(panel);
+            if (!"sql".equals(panelSource)
+                    && (route == null || !route.queries().containsKey(panelSource))) {
+                throw new TqlException(UNKNOWN_SOURCE, "View " + viewRef + ": panel source "
+                        + panelSource + " is not a named query of the route");
+            }
+        }
         String entry = spec.template() != null
                 ? HtmlResponseRenderer.resolveTemplate(home, routeDir, spec.template())
                 : "tql/view/" + spec.view();
@@ -210,6 +218,54 @@ public final class ViewBinding {
                 children.add(c);
             }
             v.put("children", children);
+        } else if (ViewSpec.DASHBOARD.equals(spec.view())) {
+            List<Map<String, Object>> panels = new ArrayList<>();
+            for (int index = 0; index < spec.panels().size(); index++) {
+                ViewSpec.Panel panel = spec.panels().get(index);
+                List<Map<String, Object>> rows = rows(sourceOf(context, panelSource(panel)));
+                Map<String, Object> m = new LinkedHashMap<>();
+                m.put("index", index);
+                m.put("type", panel.type());
+                String title = message(catalog, locale,
+                        panel.title() != null
+                                ? panel.title()
+                                : "view." + spec.id() + ".panel" + (index + 1),
+                        panel.title() != null ? panel.title() : humanize(panelSource(panel)));
+                m.put("title", title);
+                switch (panel.type()) {
+                    case "stat" -> {
+                        Object value = rows.isEmpty() ? null : rows.get(0).get(panel.column());
+                        m.put("value", value == null ? "\u2014" : String.valueOf(value));
+                    }
+                    case "sparkline" -> {
+                        List<Double> values = numbers(rows, panel.column());
+                        // Not "values": OGNL resolves map.values to Map#values(), not the key.
+                        m.put("series", values.stream().map(ViewBinding::plain)
+                                .reduce((a, c) -> a + "," + c).orElse(""));
+                        m.put("min", "0");
+                        m.put("max", plain(values.stream().mapToDouble(Double::doubleValue)
+                                .max().orElse(1)));
+                    }
+                    case "chart" -> {
+                        List<String> labels = new ArrayList<>();
+                        for (Map<String, Object> row : rows) {
+                            Object label = row.get(panel.x());
+                            labels.add(label == null ? "" : String.valueOf(label));
+                        }
+                        m.put("svg", io.tesseraql.yaml.view.ChartSvg.render(
+                                panel.kind() == null ? "bar" : panel.kind(), labels,
+                                numbers(rows, panel.y()), title));
+                    }
+                    case "table" -> {
+                        List<ViewSpec.Column> columns = columnsOf(panel.columns(), rows);
+                        m.put("columns", renderedColumns(catalog, locale, columns));
+                        m.put("rows", cellMatrix(columns, rows));
+                    }
+                    default -> throw new IllegalStateException(panel.type());
+                }
+                panels.add(m);
+            }
+            v.put("panels", panels);
         } else {
             List<Map<String, Object>> rows = rows(data);
             List<ViewSpec.Column> columns = columnsOf(spec.columns(), rows);
@@ -243,6 +299,38 @@ public final class ViewBinding {
             v.put("rows", cellMatrix(columns, rows));
         }
         return v;
+    }
+
+    /** A panel's context source: its {@code source:} or the main {@code sql} result. */
+    private static String panelSource(ViewSpec.Panel panel) {
+        return panel.source() == null || panel.source().isBlank() ? "sql" : panel.source();
+    }
+
+    /** A numeric series: the column's values over the rows (non-numbers parse or drop to 0). */
+    private static List<Double> numbers(List<Map<String, Object>> rows, String column) {
+        List<Double> values = new ArrayList<>();
+        for (Map<String, Object> row : rows) {
+            Object raw = row.get(column);
+            if (raw instanceof Number number) {
+                values.add(number.doubleValue());
+            } else if (raw != null) {
+                try {
+                    values.add(Double.parseDouble(String.valueOf(raw)));
+                } catch (NumberFormatException ex) {
+                    values.add(0.0);
+                }
+            } else {
+                values.add(0.0);
+            }
+        }
+        return values;
+    }
+
+    /** {@code 3.0} renders {@code 3}; fractions keep their point. */
+    private static String plain(double value) {
+        return value == Math.floor(value) && !Double.isInfinite(value)
+                ? String.valueOf((long) value)
+                : String.valueOf(value);
     }
 
     /** The coerced request params ({@code sort}/{@code dir}/the search input) or empty. */

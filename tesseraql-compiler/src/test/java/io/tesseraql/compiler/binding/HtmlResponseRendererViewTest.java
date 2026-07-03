@@ -244,6 +244,67 @@ class HtmlResponseRendererViewTest {
     }
 
     @Test
+    void aDashboardRendersStatSparklineChartAndTablePanels(@TempDir Path dir) throws Exception {
+        RouteDefinition route = MAPPER.convertValue(Map.of(
+                "id", "stats",
+                "kind", "route",
+                "recipe", "query-html",
+                "queries", Map.of(
+                        "totals", Map.of("file", "totals.sql"),
+                        "signups", Map.of("file", "signups.sql"))),
+                RouteDefinition.class);
+        HtmlResponseRenderer renderer = renderer(dir, """
+                kind: view
+                view: dashboard
+                title: Stats
+                panels:
+                  - title: Users
+                    type: stat
+                    source: totals
+                    column: user_count
+                  - title: Signups
+                    type: chart
+                    source: signups
+                    x: day
+                    y: n
+                  - title: Trend
+                    type: sparkline
+                    source: signups
+                    column: n
+                  - title: Latest
+                    type: table
+                    source: signups
+                """, route);
+        String html = render(renderer, Map.of(
+                "totals", Map.of("rows", List.of(Map.of("user_count", 42))),
+                "signups", Map.of("rows", List.of(
+                        Map.of("day", "Mon", "n", 2),
+                        Map.of("day", "Tue", "n", 5)))));
+        assertThat(html).contains("class=\"hc-grid\"");
+        assertThat(html).contains(">42</strong>");
+        assertThat(html).contains("class=\"hc-sparkline\"").contains("data-values=\"2,5\"")
+                .contains("data-max=\"5\"");
+        assertThat(html).contains("<figure class=\"hc-chart\">")
+                .contains("hc-chart__plot").contains("fill=\"var(--hc-chart-series-1)\"");
+        assertThat(html).contains("hc-datagrid__table").contains(">Tue</span>");
+    }
+
+    @Test
+    void aDashboardPanelSourceTheRouteDoesNotDeclareFailsTheBuild(@TempDir Path dir)
+            throws Exception {
+        Files.writeString(dir.resolve("page.view.yml"), """
+                kind: view
+                view: dashboard
+                panels:
+                  - type: stat
+                    source: ghost
+                    column: c
+                """);
+        assertThatThrownBy(() -> ViewBinding.of(dir, dir, "page.view.yml", null, path -> null))
+                .isInstanceOf(TqlException.class).hasMessageContaining("panel source ghost");
+    }
+
+    @Test
     void anEjectedListTemplateRendersTheSameRows(@TempDir Path dir) throws Exception {
         // L3: the generated template is real Thymeleaf that renders without the view machinery.
         Files.writeString(dir.resolve("page.view.yml"), """
