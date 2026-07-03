@@ -493,7 +493,7 @@ public final class RouteCompiler {
     private static io.tesseraql.yaml.model.ResponseSpec workflowResponse() {
         return new io.tesseraql.yaml.model.ResponseSpec(
                 new io.tesseraql.yaml.model.ResponseSpec.JsonResponse(200,
-                        java.util.Map.of("ok", Boolean.TRUE), null),
+                        java.util.Map.of("ok", Boolean.TRUE), null, null, null),
                 null, null, null, null, null);
     }
 

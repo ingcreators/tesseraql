@@ -83,7 +83,7 @@ class HtmlResponseRendererTest {
         headers.put("HX-Trigger", Map.of("hc:toast", toast));
         headers.put("Content-Security-Policy", "default-src 'self'");
         HtmlResponseRenderer renderer = new HtmlResponseRenderer(
-                new HtmlResponse(200, "ok.html", null, Map.of(), headers, null), dir, dir);
+                new HtmlResponse(200, "ok.html", null, Map.of(), headers, null, null), dir, dir);
 
         Exchange exchange = new DefaultExchange(new DefaultCamelContext());
         exchange.setProperty(TesseraqlProperties.CONTEXT,
@@ -104,7 +104,7 @@ class HtmlResponseRendererTest {
                 Map.of("hc:toast", Map.of("message", "ok")));
         Map<String, String> guards = Map.of("HX-Trigger", "result.ok");
         HtmlResponseRenderer renderer = new HtmlResponseRenderer(
-                new HtmlResponse(200, "ok.html", null, Map.of(), headers, guards), dir, dir);
+                new HtmlResponse(200, "ok.html", null, Map.of(), headers, guards, null), dir, dir);
 
         // Condition true: the header is emitted.
         Exchange ok = exchange(dir, Map.of("result", Map.of("ok", true)), renderer);

@@ -51,7 +51,7 @@ class HtmlResponseRendererViewTest {
         ViewBinding binding = ViewBinding.of(dir, dir, "page.view.yml", route,
                 path -> "/items/create".equals(path) ? actionRoute() : null);
         return new HtmlResponseRenderer(new HtmlResponse(200, null, "page.view.yml",
-                Map.of(), Map.of(), Map.of()), dir, dir, "en", binding);
+                Map.of(), Map.of(), Map.of(), null), dir, dir, "en", binding);
     }
 
     private static String render(HtmlResponseRenderer renderer, Map<String, Object> context)
@@ -159,7 +159,8 @@ class HtmlResponseRendererViewTest {
         Files.writeString(dir.resolve("index.html"), "<p>x</p>");
         ViewBinding binding = ViewBinding.of(dir, dir, "page.view.yml", null, path -> null);
         assertThatThrownBy(() -> new HtmlResponseRenderer(
-                new HtmlResponse(200, "index.html", "page.view.yml", Map.of(), Map.of(), Map.of()),
+                new HtmlResponse(200, "index.html", "page.view.yml", Map.of(), Map.of(), Map.of(),
+                        null),
                 dir, dir, "en", binding))
                 .isInstanceOf(TqlException.class).hasMessageContaining("mutually exclusive");
     }

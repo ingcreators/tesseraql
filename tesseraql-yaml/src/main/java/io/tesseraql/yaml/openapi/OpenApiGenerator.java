@@ -144,6 +144,19 @@ public final class OpenApiGenerator {
             default -> responses.put("200", withContent("OK", "application/json",
                     responseSchema(definition)));
         }
+        // Declarative statusWhen arms (roadmap Phase 41) ride into the contract.
+        var spec = definition.response();
+        List<io.tesseraql.yaml.model.ResponseSpec.StatusWhen> arms = new ArrayList<>();
+        if (spec != null && spec.json() != null) {
+            arms.addAll(spec.json().statusWhen());
+        }
+        if (spec != null && spec.html() != null) {
+            arms.addAll(spec.html().statusWhen());
+        }
+        for (io.tesseraql.yaml.model.ResponseSpec.StatusWhen arm : arms) {
+            responses.putIfAbsent(String.valueOf(arm.status()),
+                    Map.of("description", "Conditional status (statusWhen)"));
+        }
         return responses;
     }
 

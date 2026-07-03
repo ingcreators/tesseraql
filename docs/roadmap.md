@@ -597,6 +597,9 @@ corrections; then the expression depth) — see
   mapping of business conditions to HTTP statuses (generalizing `expect.onMismatch`).
 - Lint and coverage kinds per surface; the OpenAPI generator learns both.
 
+Delivered in two slices (pagination — [docs/pagination.md](pagination.md); then response
+shaping — [docs/response-shaping.md](response-shaping.md)). **Phase 41 is complete.**
+
 ### Phase 42 — the instant loop (hot-reload completeness)
 
 "Save and it is serving" becomes true for creation, not only edits:
