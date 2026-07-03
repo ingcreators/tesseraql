@@ -2047,6 +2047,35 @@ public final class TesseraqlRuntime implements AutoCloseable {
                         // provider's raw JSON string verbatim).
                         .register("docs.export", params -> io.tesseraql.studio.DocViews
                                 .export(doc.appName(), doc.apiChangelog()))
+                        // The release-diff page (roadmap Phase 46): one view consolidating
+                        // what a promotion changes from the captured baselines — the API
+                        // changelog (openapi.baseline.json), the schema DDL delta
+                        // (schema.baseline.json), and the app's full migration list. The
+                        // two-tree diff (routes/policies) is the CLI/Maven report; this page
+                        // shows what the running app's baselines can prove.
+                        .register("docs.releaseDiff", params -> {
+                            Map<String, Object> model = new java.util.LinkedHashMap<>();
+                            model.put("appName", doc.appName());
+                            model.put("hasApiBaseline", doc.hasApiBaseline());
+                            io.tesseraql.studio.DocViews.applyApiChangelog(model,
+                                    doc.apiChangelog());
+                            model.put("hasSchemaBaseline", doc.hasSchemaBaseline());
+                            String ddl = doc.hasSchemaBaseline() ? doc.schemaDiffDdl() : null;
+                            model.put("schemaDiff",
+                                    ddl == null || ddl.isBlank() ? null : ddl);
+                            java.util.List<Map<String, Object>> migrations = new java.util.ArrayList<>();
+                            for (io.tesseraql.yaml.manifest.MigrationFile migration : manifest
+                                    .migrations()) {
+                                Map<String, Object> row = new java.util.LinkedHashMap<>();
+                                row.put("datasource", migration.datasource());
+                                row.put("vendor", migration.vendor());
+                                row.put("file", String.valueOf(
+                                        migration.path().getFileName()));
+                                migrations.add(row);
+                            }
+                            model.put("migrations", migrations);
+                            return model;
+                        })
                         .register("docs.openapi", params -> doc.openApiJson())
                         .register("docs.htmx", params -> doc.htmxContractJson())
                         // Printable route catalog (F8, slice 2): render the route rows to a PDF

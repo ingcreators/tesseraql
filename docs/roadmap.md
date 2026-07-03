@@ -696,6 +696,11 @@ The dev → staging → prod story becomes first-class rather than implied git p
   gate → tagged `.tqlapp`/image), aligning the read-only-prod-Studio posture with an
   explicit path for how an edit gets there.
 
+Delivered as environment profiles (`config/env/<profile>.yml`, one `--env` switch), the
+release diff (`ReleaseDiff` engine; CLI `release-diff`, Maven `tesseraql:release-diff`, and
+the docs-portal page), and the promotion recipe in
+[docs/promotion.md](promotion.md). **Phase 46 is complete.**
+
 ### Phase 47 — adoption surface
 
 Discovery has fallen behind capability. Complements Phase 35 (docs site, Maven Central)

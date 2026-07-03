@@ -8,6 +8,17 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **Release diff — "what does this deploy change"** (roadmap Phase 46, final slice — the
+  phase is complete; the promotion recipe is documented in
+  [docs/promotion.md](docs/promotion.md)): `ReleaseDiff` compares
+  two app trees deterministically — routes added/removed/changed, the OpenAPI contract diff,
+  the migration list the deploy will run, security-policy changes, and the table-level schema
+  delta when both trees carry the introspection sidecar. Surfaced three ways: the
+  `tesseraql release-diff --app <candidate> --baseline <tree>` CLI command (Markdown or
+  `--json`, `--out` to write a file), the `tesseraql:release-diff` Maven goal (writes
+  `release-diff.md`/`.json` beside the release evidence), and a docs-portal **Release diff**
+  page consolidating the captured-baseline diffs (API changelog, schema DDL) with the app's
+  migration set.
 - **Environment profiles** (roadmap Phase 46, first slice): one switch — `--env <profile>` on
   `tesseraql serve`, `TESSERAQL_ENV`, or `-Dtesseraql.env` — merges
   `config/env/<profile>.yml` between the app's base config and Studio's `overlay.yml`, so the
