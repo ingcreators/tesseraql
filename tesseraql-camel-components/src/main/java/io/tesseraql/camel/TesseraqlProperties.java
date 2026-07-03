@@ -10,6 +10,8 @@ package io.tesseraql.camel;
 public final class TesseraqlProperties {
 
     public static final String CONTEXT = "TesseraqlContext";
+    /** The computed page request a paginated query executes under (roadmap Phase 41). */
+    public static final String PAGE = "TesseraqlPage";
     public static final String SQL_PARAMS = "TesseraqlSqlParams";
     public static final String PRINCIPAL = "TesseraqlPrincipal";
     /**

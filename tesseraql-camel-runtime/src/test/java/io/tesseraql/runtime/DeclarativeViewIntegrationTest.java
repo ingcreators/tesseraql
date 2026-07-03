@@ -137,6 +137,40 @@ class DeclarativeViewIntegrationTest {
         assertThat(postForm("/board/probe", "code=AB-1").statusCode()).isEqualTo(200);
     }
 
+    @Test
+    void offsetPaginationCountsAndLinks() throws Exception {
+        HttpResponse<String> first = get("/board/paged");
+        assertThat(first.statusCode()).isEqualTo(200);
+        assertThat(first.headers().firstValue("X-Total-Count")).contains("3");
+        assertThat(first.headers().firstValue("Link").orElse(""))
+                .contains("page=2>; rel=\"next\"");
+        assertThat(first.body()).contains("\"hasNext\":true").contains("\"totalRows\":3")
+                .contains("\"totalPages\":2");
+
+        HttpResponse<String> second = get("/board/paged?page=2");
+        assertThat(second.body()).contains("\"number\":2").contains("\"hasNext\":false");
+        assertThat(second.headers().firstValue("Link").orElse(""))
+                .contains("rel=\"prev\"").doesNotContain("rel=\"next\"");
+
+        // size caps at maxSize; garbage pages are field-scoped rejections.
+        assertThat(get("/board/paged?page=0").statusCode()).isEqualTo(400);
+        assertThat(get("/board/paged?page=x").statusCode()).isEqualTo(400);
+    }
+
+    @Test
+    void keysetPaginationDerivesTheCursor() throws Exception {
+        HttpResponse<String> first = get("/board/cursor");
+        assertThat(first.statusCode()).isEqualTo(200);
+        assertThat(first.body()).contains("\"hasNext\":true").contains("\"next\":2");
+        String link = first.headers().firstValue("Link").orElse("");
+        assertThat(link).contains("after=2>; rel=\"next\"");
+
+        HttpResponse<String> second = get("/board/cursor?after=2");
+        assertThat(second.statusCode()).isEqualTo(200);
+        assertThat(second.body()).contains("\"id\":3").doesNotContain("\"id\":1")
+                .contains("\"hasNext\":false");
+    }
+
     private static HttpResponse<String> postForm(String path, String form) throws Exception {
         return HttpClient.newHttpClient().send(
                 HttpRequest.newBuilder(URI.create("http://localhost:" + runtime.port() + path))
@@ -245,6 +279,68 @@ class DeclarativeViewIntegrationTest {
                         label: Group
                 slots:
                   header: board-frags.html::backLink
+                """);
+
+        // Paginated probes (Phase 41): offset with count over users, keyset by id.
+        Path paged = target.resolve("web/board/paged");
+        Files.createDirectories(paged);
+        Files.writeString(paged.resolve("get.yml"), """
+                version: tesseraql/v1
+                id: board.paged
+                kind: route
+                recipe: query-json
+                security:
+                  auth: public
+                sql:
+                  file: users.sql
+                page:
+                  size: 2
+                  maxSize: 10
+                  count: true
+                response:
+                  json:
+                    status: 200
+                    body:
+                      data: sql.rows
+                      meta: page
+                """);
+        Files.writeString(paged.resolve("users.sql"),
+                "select u.id, u.name from users u order by u.id\n");
+        Path cursor = target.resolve("web/board/cursor");
+        Files.createDirectories(cursor);
+        Files.writeString(cursor.resolve("get.yml"), """
+                version: tesseraql/v1
+                id: board.cursor
+                kind: route
+                recipe: query-json
+                security:
+                  auth: public
+                input:
+                  after:
+                    type: integer
+                    required: false
+                sql:
+                  file: users.sql
+                  params:
+                    after: params.after
+                page:
+                  strategy: keyset
+                  by: id
+                  size: 2
+                response:
+                  json:
+                    status: 200
+                    body:
+                      data: sql.rows
+                      meta: page
+                """);
+        Files.writeString(cursor.resolve("users.sql"), """
+                select u.id, u.name from users u
+                where 1 = 1
+                /*%if after != null */
+                  and u.id > /* after */ 0
+                /*%end*/
+                order by u.id
                 """);
 
         // A public probe for the Phase 40 input vocabulary: pattern + conditional requiredness.

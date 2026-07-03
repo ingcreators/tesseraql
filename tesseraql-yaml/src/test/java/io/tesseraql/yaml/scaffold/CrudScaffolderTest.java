@@ -140,6 +140,9 @@ class CrudScaffolderTest {
         assertThat(content(files, "web/items/get.yml"))
                 .contains("recipe: query-html")
                 .contains("view: list.view.yml")
+                // Declarative pagination (Phase 41): the framework appends the clause.
+                .contains("page:")
+                .contains("maxSize: 200")
                 .contains("sort: query.sort")
                 .contains("enum: [id, name, quantity, unit_price, due_date, active, note]")
                 .contains("enum: [asc, desc]");
@@ -154,6 +157,7 @@ class CrudScaffolderTest {
         // interpolating the enum-checked sort/dir with a primary-key tiebreaker.
         assertThat(content(files, "web/items/search.sql"))
                 .contains("/*# order by t.{sort} {dir}, t.id */")
+                .doesNotContain("limit")
                 .doesNotContain("/*%if sort");
         // The edit view derives its fields from the update route; version rides hidden and the
         // confirmed delete mounts in the footer slot.

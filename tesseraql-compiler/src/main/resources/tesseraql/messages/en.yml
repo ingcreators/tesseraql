@@ -13,6 +13,7 @@ tql:
     email: Not a valid email address.
     uuid: Not a valid UUID.
     url: Not a valid http(s) URL.
+    page: Invalid page number.
     integer: Must be a whole number.
     number: Must be a number.
     date: Not a valid date.
@@ -30,6 +31,8 @@ tql:
   view:
     submit: Save
     empty: No rows
+    prev: "\u2039 Prev"
+    next: "Next \u203a"
     search: "Search…"
     notFound: Not found.
   http:

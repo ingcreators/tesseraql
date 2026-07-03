@@ -120,6 +120,12 @@ class ScaffoldedCrudIntegrationTest {
 
         // The live search narrows through the same route.
         assertThat(get("/items?q=no-such-row", cookie).body()).doesNotContain("First item");
+
+        // Declarative pagination (Phase 41): the scaffold's page block counts and renders the
+        // kit pager; the automatic X-Total-Count header rides along.
+        HttpResponse<String> paged = get("/items", cookie);
+        assertThat(paged.body()).contains("hc-pagination");
+        assertThat(paged.headers().firstValue("X-Total-Count")).isPresent();
     }
 
     @Test

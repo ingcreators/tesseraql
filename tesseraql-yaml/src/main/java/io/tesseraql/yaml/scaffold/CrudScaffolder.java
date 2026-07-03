@@ -188,6 +188,11 @@ public final class CrudScaffolder {
                 %s    sort: query.sort
                     dir: query.dir
 
+                page:
+                  size: 50
+                  maxSize: 200
+                  count: true
+
                 response:
                   html:
                     view: list.view.yml
@@ -269,7 +274,7 @@ public final class CrudScaffolder {
         // route allowlists them), interpolated into the SQL text at render time; the primary key is
         // a stable tiebreaker so equal-keyed rows page deterministically.
         sql.append("/*# order by t.{sort} {dir}, t.").append(names.pkColumn()).append(" */\n");
-        sql.append("limit 50\n;\n");
+        sql.append(";\n");
         return sql.toString();
     }
 

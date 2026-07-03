@@ -28,6 +28,20 @@
     <input type="hidden" name="dir" th:if="${v.dir != ''}" th:value="${v.dir}">
     <th:block th:insert="~{tql/view/table :: table(|${v.id}-table|, ${v.columns}, ${v.rows})}"/>
   </div>
+  <nav class="hc-pagination" aria-label="Pagination" th:if="${v.page != null}">
+    <a th:if="${v.page['prevHref'] != null}" class="hc-pagination__item"
+       th:href="${v.page['prevHref']}" th:text="#{tql.view.prev}">&lsaquo; Prev</a>
+    <span th:if="${v.page['prevHref'] == null}" class="hc-pagination__item"
+          aria-disabled="true" th:text="#{tql.view.prev}">&lsaquo; Prev</span>
+    <span class="hc-pagination__item" aria-current="page"
+          th:text="${v.page['totalPages'] != null}
+                   ? |${v.page['number']} / ${v.page['totalPages']}|
+                   : ${v.page['number']}">1</span>
+    <a th:if="${v.page['nextHref'] != null}" class="hc-pagination__item"
+       th:href="${v.page['nextHref']}" th:text="#{tql.view.next}">Next &rsaquo;</a>
+    <span th:if="${v.page['nextHref'] == null}" class="hc-pagination__item"
+          aria-disabled="true" th:text="#{tql.view.next}">Next &rsaquo;</span>
+  </nav>
   <th:block th:if="${v.slots['footer'] != null}">
     <th:block th:insert="~{__${v.slots['footer']}__}"/>
   </th:block>

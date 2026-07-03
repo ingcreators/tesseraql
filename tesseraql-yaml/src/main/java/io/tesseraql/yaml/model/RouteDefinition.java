@@ -58,7 +58,8 @@ public record RouteDefinition(
         WebhookSpec webhook,
         PublishSpec publish,
         ConsumeSpec consume,
-        ResponseSpec response) {
+        ResponseSpec response,
+        PageSpec page) {
 
     public RouteDefinition {
         input = input == null ? Map.of() : Map.copyOf(input);
