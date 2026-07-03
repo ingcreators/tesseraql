@@ -2308,6 +2308,35 @@ public final class TesseraqlRuntime implements AutoCloseable {
     }
 
     /** A request parameter as a trimmed string, or null when absent or blank. */
+    /** Rejects a Track J2 mutation posted without the explicit confirm acknowledgment. */
+    private static void requireExplicitConfirm(Map<String, Object> params, String what) {
+        if (!"true".equals(String.valueOf(params.get("confirm")))) {
+            throw new io.tesseraql.core.error.TqlException(
+                    new io.tesseraql.core.error.TqlErrorCode(
+                            io.tesseraql.core.error.TqlDomain.STUDIO, 4232),
+                    what + " need explicit confirmation");
+        }
+    }
+
+    private static String requiredParam(Map<String, Object> params, String key) {
+        String value = str(params, key);
+        if (value == null || value.isBlank()) {
+            throw new io.tesseraql.core.error.TqlException(
+                    new io.tesseraql.core.error.TqlErrorCode(
+                            io.tesseraql.core.error.TqlDomain.STUDIO, 4231),
+                    "Missing required field: " + key);
+        }
+        return value.trim();
+    }
+
+    private static void putIfPresent(Map<String, Object> values, String dottedKey,
+            Map<String, Object> params, String key) {
+        String value = str(params, key);
+        if (value != null && !value.isBlank()) {
+            values.put(dottedKey, value.trim());
+        }
+    }
+
     private static String str(Map<String, Object> params, String key) {
         Object value = params.get(key);
         if (value == null) {
