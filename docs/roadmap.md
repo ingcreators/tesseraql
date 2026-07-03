@@ -717,6 +717,15 @@ and its screen behavior entirely in Studio — migration, view, recorded test �
 no HTML and never restarting; the change promotes through a release diff; and the
 route's latency shows up on a scraped dashboard.
 
+Delivered as the marketplace admission profile (`tesseraql admission`, realizing the
+Phase 37 gate), the three-app template gallery (purchase-request / inventory / helpdesk,
+each admission-held in CI), and the five-minute demo
+([docs/five-minute-demo.md](five-minute-demo.md), `deploy/Dockerfile.demo`).
+**Phase 47 is complete**, and with it **milestone M12 is met** — every leg of the loop is
+held green by an integration test (the zero-restart M7 loop, the recorded test, the release
+diff, the Prometheus exposition). **Horizon 8 is complete** (Phase 44's Studio copilot chat
+remains open by choice, decision point 8).
+
 ## CLI distribution and upgrade delivery (cross-cutting)
 
 ### Phase 38 — CLI distribution and upgrade delivery

@@ -8,6 +8,12 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **The five-minute demo** (roadmap Phase 47, final slice — the phase, **milestone M12**,
+  and Horizon 8 are complete): one command (`tesseraql serve --app examples/inventory-app
+  --embedded-db`) boots a seeded, browsable gallery app with Studio open, and one container
+  image (`deploy/Dockerfile.demo`) does the same with embedded PostgreSQL inside — no
+  compose, no external database. `docs/five-minute-demo.md` is the Studio tour that walks
+  the closed low-code loop end to end.
 - **Template gallery** (roadmap Phase 47): three complete, declarative-only starter apps join
   `examples/` — **`purchase-request-app`** (the approval workflow: a `kind: workflow` document
   drives draft → submitted → approved/rejected in managed mode, with synthesized transition
