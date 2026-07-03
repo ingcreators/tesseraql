@@ -155,9 +155,18 @@ public final class TesseraqlRuntime implements AutoCloseable {
         dataSources.forEach((name, pool) -> context.getRegistry().bind(name, pool));
 
         // OTLP export (design ch. 25.7): when an endpoint is configured, fan spans out to OTLP
-        // alongside the in-process ring and export metrics via OpenTelemetry.
+        // alongside the in-process ring and export metrics via OpenTelemetry. Independent of
+        // the push path, a JDK-only aggregating meter always collects per-route counters and
+        // latency histograms for the pull-based /_tesseraql/metrics exposition (roadmap
+        // Phase 45, decision point 9 resolved: no new dependency for the scrape path).
+        io.tesseraql.core.telemetry.AggregatingMeter aggregatingMeter = new io.tesseraql.core.telemetry.AggregatingMeter();
         io.tesseraql.core.telemetry.Tracer effectiveTracer = tracer;
-        io.tesseraql.core.telemetry.Meter effectiveMeter = meter;
+        // The provided meter (tests inject a recording one) keeps receiving everything the
+        // aggregator sees; a no-op provided meter needs no fan-out.
+        io.tesseraql.core.telemetry.Meter effectiveMeter = meter == io.tesseraql.core.telemetry.NoopMeter.INSTANCE
+                ? aggregatingMeter
+                : new io.tesseraql.core.telemetry.CompositeMeter(aggregatingMeter,
+                        meter);
         AutoCloseable otelSdk = null;
         String otlpEndpoint = manifest.config().getString("tesseraql.otel.otlp.endpoint")
                 .orElse(null);
@@ -170,7 +179,11 @@ public final class TesseraqlRuntime implements AutoCloseable {
             otelSdk = sdk;
             effectiveTracer = new io.tesseraql.core.telemetry.CompositeTracer(
                     tracer, new io.tesseraql.observability.OpenTelemetryTracer(sdk));
-            effectiveMeter = new io.tesseraql.observability.OpenTelemetryMeter(sdk);
+            effectiveMeter = meter == io.tesseraql.core.telemetry.NoopMeter.INSTANCE
+                    ? new io.tesseraql.core.telemetry.CompositeMeter(aggregatingMeter,
+                            new io.tesseraql.observability.OpenTelemetryMeter(sdk))
+                    : new io.tesseraql.core.telemetry.CompositeMeter(aggregatingMeter, meter,
+                            new io.tesseraql.observability.OpenTelemetryMeter(sdk));
         }
         context.getRegistry().bind(TesseraqlProperties.TRACER_BEAN, effectiveTracer);
         context.getRegistry().bind(TesseraqlProperties.METER_BEAN, effectiveMeter);
@@ -522,8 +535,17 @@ public final class TesseraqlRuntime implements AutoCloseable {
             // The ops API needs each job's owning app so per-app scope can gate listing and runs.
             Map<String, String> ownedJobs = new LinkedHashMap<>();
             jobs.keySet().forEach(id -> ownedJobs.put(id, jobOwners.getOrDefault(id, appName)));
+            // The Prometheus scrape endpoint is opt-in and bearer-gated by default; a
+            // cluster-internal scraper may opt out of auth explicitly (roadmap Phase 45).
+            OperationsRouteBuilder.MetricsSettings metricsSettings = new OperationsRouteBuilder.MetricsSettings(
+                    manifest.config().getString("tesseraql.metrics.enabled")
+                            .map(Boolean::parseBoolean).orElse(false),
+                    manifest.config().getString("tesseraql.metrics.unauthenticated")
+                            .map(Boolean::parseBoolean).orElse(false),
+                    aggregatingMeter);
             context.addRoutes(new OperationsRouteBuilder(
-                    jobRunner, jobRepository, ownedJobs, opsDashboard, outboxStore));
+                    jobRunner, jobRepository, ownedJobs, opsDashboard, outboxStore,
+                    metricsSettings));
             // Service providers expose non-SQL runtime state to mounted yaml/template apps
             // (the bundled ops-console and studio apps render these, design ch. 26.11, 16, 47).
             io.tesseraql.opsui.OpsDashboard dashboardRef = opsDashboard;

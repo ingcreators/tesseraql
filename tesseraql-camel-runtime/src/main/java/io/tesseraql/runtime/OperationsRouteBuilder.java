@@ -37,6 +37,7 @@ final class OperationsRouteBuilder extends RouteBuilder {
     private final Map<String, String> jobOwners;
     private final io.tesseraql.opsui.OpsDashboard dashboard;
     private final io.tesseraql.operations.outbox.JdbcOutboxStore outbox;
+    private final MetricsSettings metrics;
 
     /** Runs a job by id; decouples the route builder from the runtime instance. */
     @FunctionalInterface
@@ -44,15 +45,21 @@ final class OperationsRouteBuilder extends RouteBuilder {
         JobExecution run(String jobId, Map<String, Object> params);
     }
 
+    /** The Prometheus exposition settings (roadmap Phase 45): opt-in, bearer-gated default. */
+    record MetricsSettings(boolean enabled, boolean unauthenticated,
+            io.tesseraql.core.telemetry.AggregatingMeter meter) {
+    }
+
     OperationsRouteBuilder(JobRunner runner, JobRepository repository,
             Map<String, String> jobOwners, io.tesseraql.opsui.OpsDashboard dashboard,
-            io.tesseraql.operations.outbox.JdbcOutboxStore outbox) {
+            io.tesseraql.operations.outbox.JdbcOutboxStore outbox, MetricsSettings metrics) {
         this.runner = runner;
         this.repository = repository;
         // Job id -> owning app, insertion-ordered so the job list keeps its declaration order.
         this.jobOwners = java.util.Collections.unmodifiableMap(new LinkedHashMap<>(jobOwners));
         this.dashboard = dashboard;
         this.outbox = outbox;
+        this.metrics = metrics;
     }
 
     @Override
@@ -92,6 +99,26 @@ final class OperationsRouteBuilder extends RouteBuilder {
 
         from("direct:ops.health.live").routeId("ops.health.live")
                 .process(jsonProcessor(exchange -> java.util.Map.of("status", "UP")));
+
+        // The Prometheus text exposition (roadmap Phase 45, decision point 9): opt-in, and
+        // bearer + ops.metrics.view policy by default — metric labels reveal route ids, so
+        // the scrape is authorized like the rest of the ops API unless the operator
+        // explicitly opts a cluster-internal scraper out of auth.
+        if (metrics != null && metrics.enabled()) {
+            rest().get("/_tesseraql/metrics").to("direct:ops.metrics");
+            var metricsRoute = from("direct:ops.metrics").routeId("ops.metrics");
+            if (!metrics.unauthenticated()) {
+                metricsRoute = metricsRoute.to(VIEW)
+                        .to("tesseraql-auth:authorize?policy=ops.metrics.view");
+            }
+            metricsRoute.process(exchange -> {
+                exchange.getMessage().setHeader(Exchange.HTTP_RESPONSE_CODE, 200);
+                exchange.getMessage().setHeader(Exchange.CONTENT_TYPE,
+                        io.tesseraql.core.telemetry.PrometheusTextFormat.CONTENT_TYPE);
+                exchange.getMessage().setBody(io.tesseraql.core.telemetry.PrometheusTextFormat
+                        .render(metrics.meter()));
+            });
+        }
 
         from("direct:ops.batch.jobs").routeId("ops.batch.jobs")
                 .to(VIEW).to("tesseraql-auth:authorize?policy=ops.batch.view")
