@@ -14,6 +14,7 @@ feature-complete against its design" and "teams build and operate real line-of-b
 Phase numbers continue the original implementation plan (which ended at Phase 17). The
 further out a phase sits, the more it is direction rather than commitment; revisit this
 document at every minor release. Release trains per horizon are indicative, not promised.
+Horizon 8 (Phases 39–47) was added 2026-07-03 from a low-code gap review at 0.4.1.
 
 ## Gap analysis
 
@@ -377,12 +378,12 @@ objects outside the database and addressed from SQL. The full design is in
   policy) — driven by the sweep rather than provider lifecycle rules, which vary across compatible
   stores.
 
-Three slices, all planned: (1) **attachment core** — the `BlobStore`/`FileBlobStore` SPI, the
+Three slices, all delivered: (1) **attachment core** — the `BlobStore`/`FileBlobStore` SPI, the
 `kind: attachment` recipe and metadata duality, the `TQL-YAML-12xx` lint, and the `attachment`
 coverage kind, on local storage alone; (2) **`tesseraql-s3`** — the S3/S3-compatible implementation
 with deny-by-default egress and Adobe S3Mock compatibility ITs; (3) **scanning and retention**,
 completing the phase. Machine-checkable throughout: lint (`TQL-YAML-12xx`, `TQL-SEC-411x`, next free
-in each family) and an `attachment` coverage kind.
+in each family) and an `attachment` coverage kind. **Phase 30 is complete.**
 
 ### Phase 31 — search
 
@@ -471,6 +472,189 @@ building on existing seams:
    reach, atop tenancy + scopes); resource/query budgets (a declarative app can still write expensive
    SQL); and multi-app Studio scope. Keeps extension principles 2 (declarative, governed), 3
    (deny-by-default), 4 (machine-checkable), and 5 (module boundaries / SPI).
+
+## Horizon 8 — the low-code completion (0.5.x–0.7.x, interleaving Horizons 5–6)
+
+Added 2026-07-03 from a low-code gap review at 0.4.1 (the DSL surface, the runtime and
+operations story, and the end-to-end authoring experience were each inventoried against
+what a low-code platform owes its authors). Phases 18–30 closed the *capability* gaps;
+what remains is structural:
+
+1. **The screen is the only layer that is not declarative.** Routes, validation,
+   workflows, scopes, menus, and MCP surfaces are YAML; pages are hand-written
+   Thymeleaf + htmx (~50 lines per form), and `input:` constraints are duplicated into
+   HTML attributes by hand.
+2. **"Save and it is live" breaks exactly at creation.** The hot reloader swaps existing
+   route ids only; a scaffolded or newly created route needs a restart.
+3. **The declarative floor sits below everyday needs** — no declarative pagination, no
+   regex/length/format validators, an expression language without arithmetic, untyped
+   path parameters.
+4. **A semi-technical author still drops into raw YAML and ops territory** for
+   connectors, SSO, secret references, and everything production.
+
+Phases 39–44 close those gaps in DSL-then-Studio order; Phases 45–47 harden the
+production and adoption story they feed into. By value this horizon interleaves with
+Horizons 5–6: Phase 45 should land *before* Phase 33 (Kubernetes probes presuppose a
+truthful health surface), and Phase 47 rides Phase 35's release train.
+
+**Corrections shipped ahead of any phase** (ordinary fixes, no phase ceremony): the
+`min`/`max` bound check truncates decimals (`InputBinder` compares via
+`number.longValue()`, so `max: 5` admits 5.9 and `min: 0` admits -0.9 — compare as
+decimals); and a `head.yml`/`options.yml` route file is accepted by the manifest loader
+but fails deep in the route compiler (`Unsupported HTTP method`) — reject it at lint
+time with a clear code.
+
+### Phase 39 — declarative views
+
+The UI layer joins the declarative surface: a `kind: view` document declares a list,
+form, or detail page over a table/route, and the compiler renders it through the
+existing template pipeline into Hypermedia Components markup (the same emitted-markup
+contract the route compiler already owns, mandatory rule 11). Fields derive from schema
+introspection plus the route's `input:` constraints — one source of truth, ending the
+`required`/`maxLength` duplication into HTML — with explicit per-field overrides
+(label, widget, order, visibility). Ejecting to a hand-owned template stays the escape
+hatch (the scaffolder's checksum/edit-detection contract already models "generated
+until you touch it").
+
+- Slice 1: `list` and `form` views (the CRUD 80%), rendered onto the hc datagrid and
+  mutating-form recipes; a `TQL-VIEW-*` lint family (unknown column/field, widget/type
+  mismatch) and a `view` coverage kind.
+- Slice 2: `detail` views and relations (parent + child-list composition).
+- Slice 3: `scaffold crud` emits view documents instead of raw templates; the example
+  gallery regenerates on views (dogfooded in CI).
+- Slice 4: dashboards — query-backed cards and charts, once the chart component lands
+  upstream in Hypermedia Components (file the brief first; the kit ships only
+  `hc-sparkline` today).
+
+Acceptance: adding a column to a table means a migration plus a view-YAML edit — zero
+HTML — and the scaffolded CRUD slice ships as views. This is also the substrate the
+form-driven editors (Phase 43) and the copilot (Phase 44) operate on: structured view
+documents are safely machine-editable where free-form Thymeleaf is not.
+
+### Phase 40 — input, validation, and expression depth
+
+The declared-input vocabulary grows to what LOB forms actually need, so rules stop
+leaking into hand-written SQL:
+
+- `pattern` (anchored regex), `minLength`, and `format: email|uuid|url` validators;
+  decimal-typed `min`/`max`; conditional requiredness (`requiredWhen`, the same
+  expression language as `validate:` rules).
+- Typed path parameters: `path.*` values bind through `input:` (coercion + constraints)
+  instead of arriving as raw strings.
+- The core expression language gains arithmetic, string functions, and a whitelisted
+  function set (still no method calls, no reflection), so `qty * price <= budget` is a
+  declarable rule rather than a SQL contract.
+- Every addition extends the existing machinery: `TQL-FIELD-*` codes, localized
+  messages, the `validation` coverage kind, and OpenAPI schema emission.
+
+### Phase 41 — declarative pagination and response shaping
+
+- A `page:` block on `query-json`/`query-html`: offset or keyset strategy, declared
+  page-size bounds, optional total count, and the response metadata/headers emitted
+  automatically (htmx-aware for table fragments). The 2-way SQL stays
+  plain-tool-runnable — the block appends the dialect's pagination clause the way
+  scaffolded SQL hand-writes it today.
+- Response shaping: computed/formatted fields over the row source, nested composition
+  (a parent row with named child queries keyed into one document), and declarative
+  mapping of business conditions to HTTP statuses (generalizing `expect.onMismatch`).
+- Lint and coverage kinds per surface; the OpenAPI generator learns both.
+
+### Phase 42 — the instant loop (hot-reload completeness)
+
+"Save and it is serving" becomes true for creation, not only edits:
+
+- Dynamic route addition and removal: a newly applied route (scaffold, new-route,
+  Studio apply) compiles and mounts without a restart; removal un-mounts. The startup
+  route-conflict guard runs incrementally.
+- Per-route failure isolation on reload: one broken definition takes only itself out
+  (a clear 500 carrying the compile error) instead of poisoning whole-manifest
+  recompiles — which also lets the menu editor and config edits stop avoiding route
+  reloads.
+- Migrations: a migration created in Studio can be applied to the dev datasource from
+  Studio, so schema → scaffold → serve needs no process bounce.
+
+Acceptance: Studio's scaffold-apply serves the new CRUD immediately; a deliberately
+broken route 500s alone while its neighbors keep serving; the M7 "ten minutes" flow
+never touches a terminal.
+
+### Phase 43 — Studio authoring completion
+
+Studio closes the remaining "drops into raw YAML" edges (slices tracked as Track J in
+[docs/studio-backlog.md](studio-backlog.md)):
+
+- A form-driven route editor: recipe/auth/policy/inputs as structured fields (the
+  menu-editor pattern applied to route YAML itself); the text editor stays the escape
+  hatch.
+- Connector and SSO authoring: `http.outbound`, `connectors.poll`,
+  `connectors.webhooks`, OIDC, and SAML through the same gated overlay-write path as
+  policies — editing secret *references* (`${secret.env.*}`), never values, with
+  egress allow-list changes behind the confirm gate. The IAM wizards become
+  write-through instead of snippet downloads.
+- A test recorder: an API-console invocation saves as a declarative test case, so a
+  citizen developer's manual check becomes a regression test.
+- Data-browser row editing: PK-scoped single-row edit via a generated command, under
+  audit + `editRoles` + confirm — the master-data maintenance screen nobody has to
+  build.
+- Authoring feedback outside Studio: deepen the shipped JSON Schema and wire it into
+  scaffolded repos (`.vscode` association); lint findings gain line/column.
+
+### Phase 44 — Studio copilot chat
+
+The remaining half of decision point 4, now that the MCP loop has proven out (the
+`studio_copilot` prompt, the app-declared MCP surface): an in-Studio chat panel that
+drives the *existing* gated tools (draft → preview → lint/test → apply) as an MCP
+client. TesseraQL still ships no model and stores no key in app source — the operator
+configures a model endpoint, or the panel rides a connected agent (decision point 8) —
+and every mutation stays a separately gated, audited tool call with the human approving
+applies in the same diff-confirm UI. Describe → verified route, without leaving Studio.
+
+### Phase 45 — production observability and safety
+
+What a team hits in the first production week; sequenced ahead of Phase 33, whose
+probes and dashboards presuppose these signals:
+
+- Metrics a pull-based stack can consume: per-route latency/error histograms (today the
+  `Meter` is counter-only and OTLP-push-only). Transport is decision point 9; ship a
+  Grafana dashboard definition alongside.
+- Truthful health: a liveness/readiness split, a real datasource probe, and a `DOWN`
+  state (today the roll-up never degrades past `WARN`).
+- Structured JSON logging with trace-id correlation, and an opt-in HTTP access log.
+- Safety valves: a default per-route SQL statement timeout (today a runaway query is
+  unbounded), surfaced connection-pool tuning knobs, and documented — or shared-state —
+  semantics for the per-node rate/concurrency limiters on multi-node deployments.
+- An opt-in business-route audit log (who called what, with declared decision-relevant
+  params) riding the existing per-app ops scoping; per-app custom error pages.
+
+### Phase 46 — environments and promotion
+
+The dev → staging → prod story becomes first-class rather than implied git practice:
+
+- Config profiles: a per-environment overlay layer resolved by one switch, replacing
+  ad-hoc `${...}` indirection for the common cases; Studio's overlay writes compose
+  with it.
+- A release diff — "what does this deploy change": routes added/removed/changed, the
+  API diff (`OpenApiDiff`), the schema diff (`SchemaDiff`), the migration list, and
+  policy changes, as a CLI/Maven report and a docs-portal page, generated from two app
+  trees or a captured baseline.
+- A documented promotion recipe (git-native: Studio edits in dev → PR → CI governance
+  gate → tagged `.tqlapp`/image), aligning the read-only-prod-Studio posture with an
+  explicit path for how an edit gets there.
+
+### Phase 47 — adoption surface
+
+Discovery has fallen behind capability. Complements Phase 35 (docs site, Maven Central)
+and the deferred Phase 38 tiers, on Phase 35's release train:
+
+- A template gallery: complete starter applications (approval workflow, inventory,
+  helpdesk) as declarative-only `.tqlapp` packages — each one also dogfoods the
+  Phase 37 marketplace admission profile.
+- The five-minute demo: one command (`serve --embedded-db` plus seeded data and a
+  Studio tour) and one container image that boots a browsable example with Studio open.
+
+**Milestone M12** — the low-code loop, closed: a semi-technical author adds a column
+and its screen behavior entirely in Studio — migration, view, recorded test — writing
+no HTML and never restarting; the change promotes through a release diff; and the
+route's latency shows up on a scraped dashboard.
 
 ## CLI distribution and upgrade delivery (cross-cutting)
 
@@ -570,3 +754,16 @@ None block Phase 18; flagged for the maintainer as their horizons approach.
    2025), so — though a separate-process test container would not propagate AGPL — the
    compatibility ITs use Adobe S3Mock (Apache-2.0), keeping the supply chain permissive. See
    [docs/attachments.md](attachments.md).
+7. **View rendering strategy** (Phase 39): compile `kind: view` into the existing template
+   pipeline at build time (a deterministic, diffable generated artifact) vs interpret the
+   view model at render time (one live source, no regeneration step). A design document
+   precedes code, like approval-workflow.md; either way the emitted hc markup stays the
+   public contract (mandatory rule 11).
+8. **Copilot model access** (Phase 44): an operator-configured model endpoint (credentials
+   via the SecretResolver SPI) vs riding a connected MCP client's model. Invariant either
+   way: TesseraQL ships no model, stores no key in app source, and every write remains a
+   separately gated, audited tool call.
+9. **Metrics transport** (Phase 45): a JDK-only Prometheus text-format endpoint (no new
+   dependency, in the spirit of the JDK-only OIDC/mTLS choices) vs adopting OTel/Micrometer
+   histograms inside `tesseraql-observability`. Module boundaries (principle 5) decide
+   where it lives; both keep the in-process ring tracer.
