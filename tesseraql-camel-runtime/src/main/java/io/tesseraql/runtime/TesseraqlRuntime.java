@@ -2358,7 +2358,6 @@ public final class TesseraqlRuntime implements AutoCloseable {
         }
     }
 
-    /** A request parameter as a trimmed string, or null when absent or blank. */
     private static Map<String, String> parseQueryString(String query) {
         Map<String, String> out = new java.util.LinkedHashMap<>();
         if (query == null || query.isBlank()) {
@@ -2420,6 +2419,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
         }
     }
 
+    /** A request parameter as a trimmed string, or null when absent or blank. */
     private static String str(Map<String, Object> params, String key) {
         Object value = params.get(key);
         if (value == null) {
