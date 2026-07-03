@@ -8,6 +8,17 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **The instant loop — dynamic route mounting** (roadmap Phase 42, first slice): applying in
+  Studio now serves immediately. The hot reloader diffs the re-read manifest against the running
+  routes — brand-new route documents **mount** without a restart, removed ones **un-mount**, kept
+  ones rebuild in place — and the apply endpoints (draft apply, bulk apply, scaffold apply; JSON
+  API and UI alike) reload as part of the request, so "needs a restart to be served" is gone from
+  the route-authoring flow. Every route compiles individually: one broken definition takes only
+  itself out, serving a clear 500 (`TQL-CAMEL-3103`) that carries its compile error while every
+  neighbor keeps serving; an unparseable route document on disk degrades the same way (the reload
+  loads the manifest tolerantly and reports the parse failure per-route) instead of failing the
+  whole reload. Each reload re-runs the cross-app route-conflict guard and reports
+  `{reloaded, added, removed, failed}` (the `/_tesseraql/studio/reload` endpoint and apply responses carry it).
 - **Response shaping** (roadmap Phase 41, final slice — the phase is complete; see
   [docs/response-shaping.md](docs/response-shaping.md)): every `response.json.body` leaf and
   `response.html.model` value is now a core-language **expression** compiled at build time —

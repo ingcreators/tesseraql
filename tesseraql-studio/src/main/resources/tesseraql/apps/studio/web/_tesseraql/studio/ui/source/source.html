@@ -34,7 +34,7 @@
       <span class="hc-badge" data-variant="neutral" th:unless="${src.isNew}">served route</span>
       <span class="hc-badge" data-variant="warning" th:if="${src.hasDraft}">unsaved draft</span>
     </div>
-    <p class="hc-field__message" th:if="${src.isNew}">This route does not exist yet: saving keeps a draft, applying writes the file, and a restart serves it. An existing route reloads live on apply.</p>
+    <p class="hc-field__message" th:if="${src.isNew}">This route does not exist yet: saving keeps a draft, and applying writes the file and serves it immediately (routes hot-reload). A broken definition answers 500 with its compile error until fixed.</p>
     <form method="post" action="/_tesseraql/studio/ui/save">
       <input type="hidden" name="_csrf" th:value="${_csrf}">
       <input type="hidden" id="src-path" name="path" th:value="${src.path}">

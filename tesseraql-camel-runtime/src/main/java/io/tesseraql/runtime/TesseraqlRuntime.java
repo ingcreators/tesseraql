@@ -684,7 +684,8 @@ public final class TesseraqlRuntime implements AutoCloseable {
                         .map(Boolean::parseBoolean).orElse(true);
                 io.tesseraql.studio.StudioService studio = new io.tesseraql.studio.StudioService(
                         manifest, readOnly);
-                RouteReloader reloader = new RouteReloader(context, appHome, manifest, studio);
+                RouteReloader reloader = new RouteReloader(context, appHome, manifest, studio,
+                        appName, mountedApps);
                 // The Studio test runner (backlog A2): run a route's read-only sql cases against the
                 // dev datasource. Gated on writable Studio + an explicit opt-in, sandboxed per run
                 // (read-only connection, statement timeout, row cap, rollback on close).
@@ -1509,10 +1510,14 @@ public final class TesseraqlRuntime implements AutoCloseable {
                                                 String.valueOf(params.get("table")))))
                         .register("studio.scaffold.apply", params -> {
                             studioAccess.requireEdit(params.get("roles"));
-                            return io.tesseraql.studio.StudioViews.scaffoldResult(
+                            Object result = io.tesseraql.studio.StudioViews.scaffoldResult(
                                     studioScaffold.apply(String.valueOf(params.get("table")),
                                             "true".equals(String.valueOf(params.get("force"))),
                                             actorOf(params)));
+                            // The instant loop (roadmap Phase 42): the scaffolded routes mount
+                            // right away — no restart between apply and serving.
+                            reloader.reload();
+                            return result;
                         })
                         .register("studio.discard", params -> {
                             studioAccess.requireEdit(params.get("roles"));

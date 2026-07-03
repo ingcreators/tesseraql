@@ -76,28 +76,81 @@ class LiveRouteReloadIntegrationTest {
     }
 
     @Test
-    void brokenEditRollsBackAndTheEndpointKeepsServing() throws Exception {
+    void aBrokenDefinitionIsolatesToItsOwnRouteAsA500() throws Exception {
         String before = pingVersion();
         String original = Files.readString(appHome.resolve("web/api/ping/get.yml"));
         String broken = original.replace("recipe: query-json", "recipe: no-such-recipe");
 
-        // Applying a definition that fails to compile must not take the endpoint down.
+        // Per-route isolation (roadmap Phase 42): the reload succeeds, the broken route serves
+        // a clear 500 carrying its compile error, and every other route keeps serving.
         assertThat(studioPost("/_tesseraql/studio/drafts?path=" + enc("web/api/ping/get.yml"),
                 broken).statusCode()).isEqualTo(200);
         assertThat(studioPost("/_tesseraql/studio/apply?path=" + enc("web/api/ping/get.yml"),
                 "").statusCode()).isEqualTo(200);
         HttpResponse<String> reload = studioPost("/_tesseraql/studio/reload", "");
-        assertThat(reload.statusCode()).isGreaterThanOrEqualTo(400);
-        // The previous route was restored (design ch. 22.19 reload safety).
-        assertThat(pingVersion()).isEqualTo(before);
+        assertThat(reload.statusCode()).isEqualTo(200);
+        assertThat(reload.body()).contains("\"failed\"").contains("no-such-recipe");
 
-        // Restoring the definition reloads cleanly again.
+        HttpResponse<String> stub = HttpClient.newHttpClient().send(
+                HttpRequest.newBuilder(URI.create(
+                        "http://localhost:" + runtime.port() + "/api/ping")).build(),
+                HttpResponse.BodyHandlers.ofString());
+        assertThat(stub.statusCode()).isEqualTo(500);
+        assertThat(stub.body()).contains("TQL-CAMEL-3103").contains("no-such-recipe");
+        // A neighbor route is untouched by the failure.
+        assertThat(get("/users?q=sato").statusCode()).isNotEqualTo(500);
+
+        // Fixing the definition brings the route back on the next reload.
         assertThat(studioPost("/_tesseraql/studio/drafts?path=" + enc("web/api/ping/get.yml"),
                 original).statusCode()).isEqualTo(200);
         assertThat(studioPost("/_tesseraql/studio/apply?path=" + enc("web/api/ping/get.yml"),
                 "").statusCode()).isEqualTo(200);
         assertThat(studioPost("/_tesseraql/studio/reload", "").statusCode()).isEqualTo(200);
         assertThat(pingVersion()).isEqualTo(before);
+    }
+
+    @Test
+    void aNewRouteMountsAndARemovedRouteUnmountsWithoutARestart() throws Exception {
+        // The instant loop (roadmap Phase 42): a brand-new route file serves after a reload.
+        Path dir = appHome.resolve("web/api/pong");
+        Files.createDirectories(dir);
+        Files.writeString(dir.resolve("pong.sql"), "select 'pong' as answer\n");
+        Files.writeString(dir.resolve("get.yml"), """
+                version: tesseraql/v1
+                id: pong
+                kind: route
+                recipe: query-json
+                security:
+                  auth: public
+                sql:
+                  file: pong.sql
+                  mode: query
+                response:
+                  json:
+                    status: 200
+                    body:
+                      data: sql.rows
+                """);
+        HttpResponse<String> reload = studioPost("/_tesseraql/studio/reload", "");
+        assertThat(reload.statusCode()).isEqualTo(200);
+        assertThat(reload.body()).contains("\"added\":[\"pong\"]");
+        assertThat(get("/api/pong").statusCode()).isEqualTo(200);
+        assertThat(get("/api/pong").body()).contains("pong");
+
+        // Removing the file un-mounts the endpoint on the next reload.
+        Files.delete(dir.resolve("get.yml"));
+        Files.delete(dir.resolve("pong.sql"));
+        HttpResponse<String> second = studioPost("/_tesseraql/studio/reload", "");
+        assertThat(second.statusCode()).isEqualTo(200);
+        assertThat(second.body()).contains("\"removed\":[\"pong\"]");
+        assertThat(get("/api/pong").statusCode()).isEqualTo(404);
+    }
+
+    private static HttpResponse<String> get(String path) throws Exception {
+        return HttpClient.newHttpClient().send(
+                HttpRequest.newBuilder(URI.create(
+                        "http://localhost:" + runtime.port() + path)).build(),
+                HttpResponse.BodyHandlers.ofString());
     }
 
     private static String pingVersion() throws Exception {

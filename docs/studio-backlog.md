@@ -66,7 +66,7 @@ Studio editor + docs work (2026-06):
   are byte-identical to `scaffold crud`. Each generated file is shown highlighted with the apply
   disposition (`new`/`unchanged`/`regenerate`/`conflict`); **Create these files** then writes the
   slice via `ScaffoldWriter` (edit detection + optional `force`), reporting written/unchanged/skipped
-  and which new routes need a restart to be served. Database-free `StudioService.scaffoldPreview`/
+  files (new routes serve immediately since roadmap Phase 42's hot-reload completion). Database-free `StudioService.scaffoldPreview`/
   `scaffoldApply`; runtime `StudioScaffoldService` owns the introspection. Gated on writable Studio +
   `tesseraql.studio.scaffold.enabled`. `studio.scaffold.tables`/`studio.scaffold.preview`/
   `studio.scaffold.apply` providers, `GET /scaffold/tables` + `POST /scaffold/preview` + `POST
@@ -154,8 +154,9 @@ and is being adopted (see E below).
 
 3. **New route / file creation and CRUD scaffold from the explorer** — *done* (slices 1–3): Studio
    was single-file *edit* only; it now also **creates**. "Scaffold CRUD from table" (preview + apply)
-   and "new route" both ship, wired to the v3 schema introspection. The hot-reload limit stands:
-   newly created routes need a restart to be served, surfaced in the UI.
+   and "new route" both ship, wired to the v3 schema introspection. The hot-reload limit noted here
+   was lifted by roadmap Phase 42: the reloader now mounts newly created routes (and un-mounts
+   removed ones), so applying serves immediately.
    - **Scaffold CRUD — preview** — *done* (slice 1): a **scaffold** page (linked from the explorer
      chrome when enabled) lists the dev datasource's tables introspected live (`CatalogIntrospector`)
      and previews the CRUD slice the generator would produce for a chosen table, reusing the CLI's
@@ -169,8 +170,9 @@ and is being adopted (see E below).
      into the app home via `ScaffoldWriter`, honoring the checksum/edit-detection contract — a
      pristine generated file is regenerated, a file the user edited or owns is skipped and reported
      unless `force` overrides it. The result lists written/unchanged/skipped files (written ones link
-     to the source editor) and flags newly written routes the manifest did not declare, which need a
-     restart to be served (the hot reloader only swaps existing routes). Database-free
+     to the source editor) and flags newly written routes the manifest did not declare. (When this slice
+     shipped the hot reloader only swapped existing routes, so those needed a restart; roadmap
+     Phase 42 lifted that — scaffold apply now reloads and the new routes serve immediately.) Database-free
      `StudioService.scaffoldApply`; `studio.scaffold.apply` provider; `POST /scaffold/apply` endpoint.
    - **New blank route** — *done* (slice 3): a **New route** form on the explorer (when writable)
      takes a `web/**/<method>.yml` path and a recipe (`query-json`/`query-html`/`command-json`) and

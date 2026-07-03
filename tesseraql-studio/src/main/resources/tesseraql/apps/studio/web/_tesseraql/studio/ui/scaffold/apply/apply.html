@@ -6,7 +6,7 @@
        th:attr="data-variant=${scaffold.blocked} ? 'warning' : 'success'"
        th:text="|Wrote ${scaffold.writtenCount}, unchanged ${scaffold.unchangedCount}, skipped ${scaffold.skippedCount}.|"></p>
     <p class="hc-alert" data-variant="warning" role="status" th:if="${scaffold.needsRestart}"
-       th:text="|${scaffold.newRouteCount} new route file(s) written &mdash; restart the app to serve them.|"></p>
+       th:text="|${scaffold.newRouteCount} new route file(s) written &mdash; reloaded and serving now.|"></p>
     <ul class="hc-stack" th:if="${scaffold.writtenCount > 0}">
       <li th:each="f : ${scaffold.written}"><a th:href="${f.sourceUrl}" th:text="${f.path}"></a></li>
     </ul>
