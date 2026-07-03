@@ -1783,6 +1783,14 @@ public final class StudioService {
     }
 
     /**
+     * Records a copilot-saved draft to the audit trail (roadmap Phase 44): the model proposes,
+     * the trail names the chatting user, and the draft still needs that human's apply.
+     */
+    public void recordCopilotDraft(String actor, String target) {
+        recordAudit(actor, "copilot", target);
+    }
+
+    /**
      * The newest {@code limit} audit entries matching {@code query} (Studio platform-UX H5). The
      * filter runs over the <em>whole</em> log before the limit applies, so a search reaches older
      * actions, not just the newest window; an empty query returns the newest {@code limit} entries.

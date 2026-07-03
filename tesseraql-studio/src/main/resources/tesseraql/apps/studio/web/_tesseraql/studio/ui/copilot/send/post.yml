@@ -1,0 +1,26 @@
+version: tesseraql/v1
+id: tql.studio.copilot.send
+kind: route
+recipe: command-json
+
+input:
+  message:
+    type: string
+    required: true
+    maxLength: 4000
+
+security:
+  auth: browser
+  csrf: true
+
+sql:
+  service: studio.copilot.send
+  params:
+    message: params.message
+    roles: principal.roles
+    actor: principal.loginId
+
+response:
+  redirect:
+    status: 303
+    location: /_tesseraql/studio/ui/copilot

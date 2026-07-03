@@ -150,3 +150,7 @@ web/_tesseraql/studio/ui/try/record/post.yml
 web/_tesseraql/studio/ui/data/edit/get.yml
 web/_tesseraql/studio/ui/data/edit/post.yml
 web/_tesseraql/studio/ui/data/edit/edit.html
+web/_tesseraql/studio/ui/copilot/get.yml
+web/_tesseraql/studio/ui/copilot/copilot.html
+web/_tesseraql/studio/ui/copilot/send/post.yml
+web/_tesseraql/studio/ui/copilot/reset/post.yml

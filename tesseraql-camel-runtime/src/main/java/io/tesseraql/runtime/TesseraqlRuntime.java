@@ -768,6 +768,24 @@ public final class TesseraqlRuntime implements AutoCloseable {
                 boolean dataEditEnabled = manifest.config()
                         .getString("tesseraql.studio.dataBrowser.edit.enabled")
                         .map(Boolean::parseBoolean).orElse(false);
+                // Copilot (roadmap Phase 44): entirely absent unless the operator opts in
+                // and names an endpoint + model; the api key stays a lazy config read so a
+                // ${secret.*} reference resolves at call time, never at startup.
+                final io.tesseraql.studio.CopilotService copilotService = manifest.config()
+                        .getString("tesseraql.copilot.enabled")
+                        .map(Boolean::parseBoolean).orElse(false)
+                                ? new io.tesseraql.studio.CopilotService(studio, manifest,
+                                        manifest.config()
+                                                .requireString("tesseraql.copilot.endpoint"),
+                                        manifest.config()
+                                                .requireString("tesseraql.copilot.model"),
+                                        () -> manifest.config()
+                                                .getString("tesseraql.copilot.apiKey")
+                                                .orElse(null),
+                                        manifest.config()
+                                                .getString("tesseraql.copilot.maxTurns")
+                                                .map(Integer::parseInt).orElse(6))
+                                : null;
                 StudioDataService studioData = new StudioDataService(
                         name -> context.getRegistry().lookupByNameAndType(name,
                                 javax.sql.DataSource.class),
@@ -874,6 +892,33 @@ public final class TesseraqlRuntime implements AutoCloseable {
                         // governed fields — recipe, auth, policy, CSRF, inputs — as structured
                         // form fields over the same document tree; saving lands a draft and the
                         // text editor stays the escape hatch.
+                        // The Studio copilot (roadmap Phase 44, decision point 8): a chat
+                        // loop against an OPERATOR-CONFIGURED model endpoint — no model
+                        // shipped, no key in app source (the credential resolves lazily
+                        // through the config placeholder chain), reads free, writes only as
+                        // audited DRAFTS a human applies in the editor.
+                        .register("studio.copilot.view", params -> {
+                            Map<String, Object> model = new java.util.LinkedHashMap<>();
+                            model.put("enabled", copilotService != null);
+                            boolean canEdit = studioAccess.canEdit(params.get("roles"));
+                            model.put("editable", canEdit);
+                            model.put("entries", copilotService == null
+                                    ? java.util.List.of()
+                                    : copilotService.transcript(actorOf(params)));
+                            return model;
+                        })
+                        .register("studio.copilot.send", params -> {
+                            requireCopilot(copilotService);
+                            String message = requiredParam(params, "message");
+                            boolean canEdit = studioAccess.canEdit(params.get("roles"));
+                            return Map.of("entries", copilotService.send(actorOf(params),
+                                    message, canEdit));
+                        })
+                        .register("studio.copilot.reset", params -> {
+                            requireCopilot(copilotService);
+                            copilotService.reset(actorOf(params));
+                            return Map.of("reset", true);
+                        })
                         .register("studio.routeForm.view", params -> {
                             String path = String.valueOf(params.get("path"));
                             boolean canEdit = studioAccess.canEdit(params.get("roles"));
@@ -2524,6 +2569,17 @@ public final class TesseraqlRuntime implements AutoCloseable {
                     new io.tesseraql.core.error.TqlErrorCode(
                             io.tesseraql.core.error.TqlDomain.STUDIO, 4232),
                     what + " need explicit confirmation");
+        }
+    }
+
+    /** Rejects a copilot call when the operator has not configured the panel. */
+    private static void requireCopilot(io.tesseraql.studio.CopilotService copilot) {
+        if (copilot == null) {
+            throw new io.tesseraql.core.error.TqlException(
+                    new io.tesseraql.core.error.TqlErrorCode(
+                            io.tesseraql.core.error.TqlDomain.STUDIO, 4235),
+                    "The copilot is not configured (tesseraql.copilot.enabled/endpoint/"
+                            + "model)");
         }
     }
 
