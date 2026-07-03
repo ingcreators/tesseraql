@@ -1,0 +1,41 @@
+version: tesseraql/v1
+id: tql.studio.data.export
+kind: route
+recipe: query-html
+
+input:
+  table:
+    type: string
+    required: true
+  sort:
+    type: string
+    required: false
+  dir:
+    type: string
+    required: false
+  filterColumn:
+    type: string
+    required: false
+  filterValue:
+    type: string
+    required: false
+
+security:
+  auth: browser
+
+sql:
+  service: studio.data.export
+  params:
+    table: params.table
+    sort: params.sort
+    dir: params.dir
+    filterColumn: params.filterColumn
+    filterValue: params.filterValue
+
+response:
+  file:
+    template: data.csv.tpl
+    contentType: "text/csv; charset=utf-8"
+    filename: data.csv
+    model:
+      csv: sql

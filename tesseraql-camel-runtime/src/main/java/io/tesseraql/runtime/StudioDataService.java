@@ -1,5 +1,7 @@
 package io.tesseraql.runtime;
 
+import java.io.IOException;
+import java.io.StringWriter;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -11,6 +13,8 @@ import java.util.List;
 import java.util.Locale;
 import java.util.function.Function;
 import javax.sql.DataSource;
+import org.apache.commons.csv.CSVFormat;
+import org.apache.commons.csv.CSVPrinter;
 
 /**
  * The Studio data browser: read-only, paginated row access over the app's {@code main} datasource
@@ -39,6 +43,11 @@ final class StudioDataService {
 
     boolean isEnabled() {
         return enabled;
+    }
+
+    /** The maximum rows a CSV export includes (the scan cap) — surfaced so the cap is not silent. */
+    int exportLimit() {
+        return maxScan;
     }
 
     /** The user tables in the {@code main} datasource's catalog, sorted. */
@@ -128,6 +137,68 @@ final class StudioDataService {
             }
         } catch (SQLException ex) {
             throw new IllegalStateException("Query failed: " + ex.getMessage(), ex);
+        }
+    }
+
+    /**
+     * The current view (table + optional filter/sort) as CSV, capped at the scan limit. Same column
+     * validation + bound filter value as {@link #browse}; the whole capped result is exported (no
+     * pagination), one row per line, RFC-4180 quoting.
+     */
+    String exportCsv(String table, String sortColumn, String sortDir, String filterColumn,
+            String filterValue) {
+        if (!tables().contains(table)) {
+            throw new IllegalArgumentException("No such table: " + table);
+        }
+        try (Connection connection = datasources.apply("main").getConnection()) {
+            connection.setReadOnly(true);
+            String quote = connection.getMetaData().getIdentifierQuoteString();
+            List<String> tableColumns = columnsOf(connection, table);
+            boolean hasFilter = tableColumns.contains(filterColumn)
+                    && filterValue != null && !filterValue.isBlank();
+            boolean hasSort = tableColumns.contains(sortColumn);
+            StringBuilder sql = new StringBuilder("SELECT * FROM ").append(quoteId(quote, table));
+            if (hasFilter) {
+                sql.append(" WHERE LOWER(CAST(").append(quoteId(quote, filterColumn))
+                        .append(" AS VARCHAR(4000))) LIKE ?");
+            }
+            if (hasSort) {
+                sql.append(" ORDER BY ").append(quoteId(quote, sortColumn))
+                        .append("desc".equalsIgnoreCase(sortDir) ? " DESC" : " ASC");
+            }
+            try (PreparedStatement statement = connection.prepareStatement(sql.toString())) {
+                statement.setQueryTimeout(queryTimeoutSeconds);
+                statement.setMaxRows(maxScan);
+                if (hasFilter) {
+                    statement.setString(1, "%" + filterValue.toLowerCase(Locale.ROOT) + "%");
+                }
+                try (ResultSet rs = statement.executeQuery()) {
+                    ResultSetMetaData meta = rs.getMetaData();
+                    int columnCount = meta.getColumnCount();
+                    // RFC 4180 via Apache Commons CSV — the same writer the framework's CSV file
+                    // codec uses (comma delimiter, double-quote quoting, doubled inner quotes, CRLF),
+                    // so a browser export is byte-for-byte consistent with query-export.
+                    StringWriter out = new StringWriter();
+                    try (CSVPrinter printer = new CSVPrinter(out, CSVFormat.RFC4180)) {
+                        List<String> header = new ArrayList<>(columnCount);
+                        for (int i = 1; i <= columnCount; i++) {
+                            header.add(meta.getColumnLabel(i));
+                        }
+                        printer.printRecord(header);
+                        while (rs.next()) {
+                            List<String> cells = new ArrayList<>(columnCount);
+                            for (int i = 1; i <= columnCount; i++) {
+                                Object value = rs.getObject(i);
+                                cells.add(value == null ? "" : String.valueOf(value));
+                            }
+                            printer.printRecord(cells);
+                        }
+                    }
+                    return out.toString();
+                }
+            }
+        } catch (SQLException | IOException ex) {
+            throw new IllegalStateException("Export failed: " + ex.getMessage(), ex);
         }
     }
 

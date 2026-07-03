@@ -61,6 +61,8 @@ web/_tesseraql/studio/ui/config/config.html
 web/_tesseraql/studio/ui/config/set/post.yml
 web/_tesseraql/studio/ui/data/get.yml
 web/_tesseraql/studio/ui/data/data.html
+web/_tesseraql/studio/ui/data/export/get.yml
+web/_tesseraql/studio/ui/data/export/data.csv.tpl
 web/_tesseraql/studio/ui/flags/get.yml
 web/_tesseraql/studio/ui/flags/flags.html
 web/_tesseraql/studio/ui/flags/set/post.yml

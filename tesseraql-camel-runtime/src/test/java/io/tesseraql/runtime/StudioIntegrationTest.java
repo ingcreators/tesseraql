@@ -2002,6 +2002,27 @@ class StudioIntegrationTest {
     }
 
     @Test
+    void uiDataBrowserExportsTheViewAsCsv() throws Exception {
+        HttpResponse<String> response = get(
+                "/_tesseraql/studio/ui/data/export?table=tql_users", true);
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(response.headers().firstValue("Content-Type").orElse("")).contains("text/csv");
+        // RFC-4180 CSV: a header row + the seeded admin row.
+        assertThat(response.body()).contains("login_id").contains("admin").contains("\r\n");
+    }
+
+    @Test
+    void uiDataBrowserExportRespectsAFilter() throws Exception {
+        // Filtering to a non-matching value exports only the header (no data rows).
+        HttpResponse<String> response = get("/_tesseraql/studio/ui/data/export?table=tql_users"
+                + "&filterColumn=login_id&filterValue=" + enc("nobody-xyz"), true);
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(response.body()).contains("login_id").doesNotContain("admin");
+    }
+
+    @Test
     void uiDataBrowserRejectsAnUnknownTable() throws Exception {
         // A table not in the live catalog is rejected (guards against SQL injection via the name).
         HttpResponse<String> response = get("/_tesseraql/studio/ui/data?table="

@@ -1145,6 +1145,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
                                 return model;
                             }
                             model.put("tables", studioData.tables());
+                            model.put("exportMax", studioData.exportLimit());
                             String table = str(params, "table");
                             if (table == null) {
                                 return model;
@@ -1191,6 +1192,23 @@ public final class TesseraqlRuntime implements AutoCloseable {
                                 model.put("error", ex.getMessage());
                             }
                             return model;
+                        })
+                        // Data browser CSV export: the current view (table + filter + sort) as CSV,
+                        // capped at the scan limit. Served as a file download by the export route.
+                        .register("studio.data.export", params -> {
+                            if (!studioData.isEnabled()) {
+                                return Map.of("csv", "# The data browser is disabled.\r\n");
+                            }
+                            try {
+                                return Map.of("csv", studioData.exportCsv(str(params, "table"),
+                                        str(params, "sort"),
+                                        "desc".equalsIgnoreCase(String.valueOf(params.get("dir")))
+                                                ? "desc"
+                                                : "asc",
+                                        str(params, "filterColumn"), str(params, "filterValue")));
+                            } catch (RuntimeException ex) {
+                                return Map.of("csv", "# " + ex.getMessage() + "\r\n");
+                            }
                         })
                         // i18n message editor (governance/authoring): a key × locale table over the
                         // app's messages/<locale>.yml catalogs, flagging missing translations; the set
