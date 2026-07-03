@@ -284,7 +284,6 @@ final class StudioDataService {
         };
     }
 
-    /** Coerces a string to the column's JDBC type for an ordering comparison; null if it won't parse. */
     /** The table's primary-key columns (live JDBC, key-sequence order); empty when none. */
     List<String> primaryKey(String table) {
         if (!tables().contains(table)) {
@@ -458,6 +457,7 @@ final class StudioDataService {
         return coerced;
     }
 
+    /** Coerces a string to the column's JDBC type; null if it won't parse. */
     private static Object coerce(int jdbcType, String value) {
         try {
             return switch (jdbcType) {
