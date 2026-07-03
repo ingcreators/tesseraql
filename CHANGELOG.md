@@ -8,6 +8,12 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **Studio test recorder** (roadmap Phase 43, Track J3): a successful API-console invocation
+  of a query route can be saved as a declarative test case — the sent parameters reverse-map
+  onto the route's `sql.params`, the sandbox captures the row count as the expectation (the
+  case passes by construction), and the `sql:` case lands in `tests/studio-recorded-test.yml`,
+  runnable from the route's test runner and in CI like any hand-written case. A citizen
+  developer's manual check becomes a regression test in one click.
 - **Studio connector & SSO authoring** (roadmap Phase 43, Track J2): a **Connectors** page
   edits the managed connector config through the same gated overlay-write path as policies —
   egress allow-lists for `http.outbound` and `connectors.poll` (always behind an explicit

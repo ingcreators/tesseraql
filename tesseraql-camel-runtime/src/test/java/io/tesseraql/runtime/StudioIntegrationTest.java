@@ -1920,6 +1920,44 @@ class StudioIntegrationTest {
     }
 
     @Test
+    void tryConsoleRecordsAnInvocationAsARegressionTestCase() throws Exception {
+        // Track J3 (roadmap Phase 43): a console invocation of a query route offers "Save as
+        // test case"; recording reverse-maps the sent params onto sql.params, captures the
+        // sandbox row count as the expectation, and appends a declarative sql: case.
+        String runForm = "method=GET&path=" + enc("/api/users") + "&query=" + enc("q=sato")
+                + "&bearer=" + enc(token(List.of("USER_READ")));
+        HttpResponse<String> run = postForm("/_tesseraql/studio/ui/try/run", runForm);
+        assertThat(run.statusCode()).isEqualTo(200);
+        assertThat(run.body()).contains("Save as test case");
+
+        HttpResponse<String> recorded = postForm("/_tesseraql/studio/ui/try/record",
+                "method=GET&path=" + enc("/api/users") + "&query=" + enc("q=sato")
+                        + "&name=" + enc("search finds sato"));
+        assertThat(recorded.statusCode()).isEqualTo(303);
+        String suite = Files.readString(appHome.resolve("tests/studio-recorded-test.yml"));
+        assertThat(suite).contains("search finds sato").contains("web/api/users/search.sql")
+                .contains("sato").contains("rowCount");
+
+        // The recorded case runs through the route's test runner like a hand-written one.
+        HttpResponse<String> tests = postForm("/_tesseraql/studio/ui/run-tests",
+                "path=" + enc("web/api/users/get.yml"));
+        assertThat(tests.statusCode()).isEqualTo(200);
+        assertThat(tests.body()).contains("search finds sato");
+
+        // Re-recording the same name gets a suffix instead of clobbering the first case.
+        assertThat(postForm("/_tesseraql/studio/ui/try/record",
+                "method=GET&path=" + enc("/api/users") + "&query=" + enc("q=sato")
+                        + "&name=" + enc("search finds sato"))
+                .statusCode()).isEqualTo(303);
+        assertThat(Files.readString(appHome.resolve("tests/studio-recorded-test.yml")))
+                .contains("search finds sato (2)");
+
+        // A command route is not recordable (v1) and says why.
+        assertThat(postForm("/_tesseraql/studio/ui/try/record",
+                "method=POST&path=" + enc("/api/users/provision")).statusCode()).isEqualTo(400);
+    }
+
+    @Test
     void uiMenuPageRendersTheEditorAndFallbackNote() throws Exception {
         // With no config/menu.yml the editor shows the add form and the templates/nav.html fallback.
         Files.deleteIfExists(appHome.resolve("config/menu.yml"));

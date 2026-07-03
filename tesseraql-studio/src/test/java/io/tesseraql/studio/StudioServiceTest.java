@@ -303,6 +303,69 @@ class StudioServiceTest {
     }
 
     @Test
+    void recorderMapsInvocationsOntoSqlParamsAndAppendsSuffixedCases(@TempDir Path dir)
+            throws Exception {
+        Files.createDirectories(dir.resolve("config"));
+        Files.writeString(dir.resolve("config/tesseraql.yml"), "tesseraql:\n  app:\n    name: t\n");
+        Files.createDirectories(dir.resolve("web/api/things"));
+        Files.writeString(dir.resolve("web/api/things/search.sql"), "select 1 as x\n");
+        Files.writeString(dir.resolve("web/api/things/get.yml"), """
+                version: tesseraql/v1
+                id: things.search
+                kind: route
+                recipe: query-json
+                sql:
+                  file: search.sql
+                  mode: query
+                  params:
+                    q: query.q
+                    owner: params.owner
+                response:
+                  json:
+                    body:
+                      data: sql.rows
+                """);
+        Files.writeString(dir.resolve("web/api/things/post.yml"), """
+                version: tesseraql/v1
+                id: things.create
+                kind: route
+                recipe: command-json
+                sql:
+                  file: create.sql
+                  mode: update
+                response:
+                  json:
+                    body:
+                      affected: sql.affectedRows
+                """);
+        StudioService studio = new StudioService(new ManifestLoader().load(dir), false);
+
+        assertThat(studio.recordability("GET", "/api/things"))
+                .containsEntry("recordable", true);
+        assertThat(studio.recordability("POST", "/api/things"))
+                .containsEntry("recordable", false);
+        assertThat(String.valueOf(studio.recordability("GET", "/nope").get("reason")))
+                .contains("No served route");
+        assertThat(studio.recordedSqlFile("GET", "/api/things"))
+                .isEqualTo("web/api/things/search.sql");
+
+        Map<String, Object> params = studio.recordedCaseParams("GET", "/api/things",
+                Map.of("q", "sato", "unrelated", "x"), Map.of("owner", "ops"));
+        assertThat(params).containsEntry("q", "sato").containsEntry("owner", "ops")
+                .doesNotContainKey("unrelated");
+
+        String first = studio.appendRecordedTest("finds sato", "web/api/things/search.sql",
+                params, 2, "it");
+        String second = studio.appendRecordedTest("finds sato", "web/api/things/search.sql",
+                params, 2, "it");
+        assertThat(first).isEqualTo("finds sato");
+        assertThat(second).isEqualTo("finds sato (2)");
+        String suite = Files.readString(dir.resolve("tests/studio-recorded-test.yml"));
+        assertThat(suite).contains("finds sato").contains("finds sato (2)")
+                .contains("rowCount: 2").contains("web/api/things/search.sql");
+    }
+
+    @Test
     void deleteDraftRemovesDraftAndIsIdempotent(@TempDir Path dir) throws Exception {
         Files.createDirectories(dir.resolve("config"));
         Files.writeString(dir.resolve("config/tesseraql.yml"), "tesseraql:\n  app:\n    name: t\n");

@@ -24,6 +24,7 @@ import io.tesseraql.yaml.menu.MenuSpec;
 import io.tesseraql.yaml.menu.MenuSpec.MenuItem;
 import io.tesseraql.yaml.model.ResponseSpec;
 import io.tesseraql.yaml.model.RouteDefinition;
+import io.tesseraql.yaml.model.SqlBinding;
 import io.tesseraql.yaml.scaffold.CrudScaffolder;
 import io.tesseraql.yaml.scaffold.ScaffoldChecksum;
 import io.tesseraql.yaml.scaffold.ScaffoldWriter;
@@ -62,6 +63,7 @@ public final class StudioService {
     private static final TqlErrorCode INVALID_DRAFT = new TqlErrorCode(TqlDomain.STUDIO, 4221);
     private static final TqlErrorCode ROUTE_FORM = new TqlErrorCode(TqlDomain.STUDIO, 4230);
     private static final TqlErrorCode CONNECTORS = new TqlErrorCode(TqlDomain.STUDIO, 4231);
+    private static final TqlErrorCode RECORDER = new TqlErrorCode(TqlDomain.STUDIO, 4233);
     private static final java.util.regex.Pattern SECRET_REF = java.util.regex.Pattern
             .compile("\\$\\{secret\\.[A-Za-z0-9_.-]+\\}");
     private static final java.util.regex.Pattern EGRESS_HOST = java.util.regex.Pattern
@@ -879,6 +881,154 @@ public final class StudioService {
      */
     public static boolean isSecretReference(String value) {
         return value != null && SECRET_REF.matcher(value.trim()).matches();
+    }
+
+    /**
+     * Whether an API-console invocation of {@code method path} can be saved as a declarative
+     * test case (Track J3). v1 records query routes whose main binding is a plain SQL file read
+     * with no path parameters — the recorded case is a {@code sql:} case, so it runs in CI's
+     * sandboxed runner exactly like a hand-written one.
+     */
+    public Map<String, Object> recordability(String method, String path) {
+        Map<String, Object> out = new LinkedHashMap<>();
+        RouteFile match = routeFor(method, path);
+        if (match == null) {
+            out.put("recordable", false);
+            out.put("reason", "No served route matches " + method + " " + path);
+            return out;
+        }
+        out.put("routeId", match.definition().id());
+        SqlBinding sql = match.definition().sql();
+        if (sql == null || sql.file() == null
+                || (sql.mode() != null && !"query".equals(sql.mode()))) {
+            out.put("recordable", false);
+            out.put("reason", "Only a query route with a bound SQL file records as a test case");
+            return out;
+        }
+        if (path.contains("{")) {
+            out.put("recordable", false);
+            out.put("reason", "Routes with path parameters are not recordable yet");
+            return out;
+        }
+        out.put("recordable", true);
+        return out;
+    }
+
+    private RouteFile routeFor(String method, String path) {
+        if (method == null || path == null) {
+            return null;
+        }
+        for (RouteFile route : manifest.routes()) {
+            if (path.equals(route.urlPath()) && method.equalsIgnoreCase(route.httpMethod())) {
+                return route;
+            }
+        }
+        return null;
+    }
+
+    /** The matched route's main SQL file as an app-relative path (Track J3), else null. */
+    public String recordedSqlFile(String method, String path) {
+        RouteFile match = routeFor(method, path);
+        if (match == null || match.definition().sql() == null
+                || match.definition().sql().file() == null) {
+            return null;
+        }
+        Path routeDir = match.source().getParent();
+        return appHome.relativize(routeDir.resolve(match.definition().sql().file()))
+                .toString().replace('\\', '/');
+    }
+
+    /**
+     * Reverse-maps a console invocation onto the route's {@code sql.params} (Track J3): each SQL
+     * parameter's source expression ({@code query.x} / {@code params.x}) resolves from the sent
+     * query string and JSON body; unresolved parameters are simply omitted (the 2-way SQL's
+     * conditional blocks then skip them, exactly as the live request did).
+     */
+    public Map<String, Object> recordedCaseParams(String method, String path,
+            Map<String, String> query, Map<String, Object> body) {
+        RouteFile match = routeFor(method, path);
+        if (match == null || match.definition().sql() == null) {
+            return Map.of();
+        }
+        Map<String, Object> out = new LinkedHashMap<>();
+        Map<String, String> mapping = match.definition().sql().params();
+        if (mapping == null) {
+            return out;
+        }
+        mapping.forEach((sqlParam, expr) -> {
+            Object value = null;
+            if (expr != null && expr.startsWith("query.")) {
+                value = query.get(expr.substring("query.".length()));
+            } else if (expr != null && expr.startsWith("params.")) {
+                String name = expr.substring("params.".length());
+                value = body.containsKey(name) ? body.get(name) : query.get(name);
+            }
+            if (value != null && !String.valueOf(value).isBlank()) {
+                out.put(sqlParam, value);
+            }
+        });
+        return out;
+    }
+
+    /**
+     * Appends a recorded test case to {@code tests/studio-recorded-test.yml} (Track J3): the
+     * console invocation becomes a {@code sql:} case with the reverse-mapped params and — when
+     * the sandbox captured one — an {@code expect.rowCount}, so the manual check runs as a
+     * regression test from then on. Duplicate names get a numeric suffix. Audited.
+     */
+    public String appendRecordedTest(String name, String sqlFile, Map<String, Object> params,
+            Integer rowCount, String actor) {
+        if (readOnly) {
+            throw new TqlException(READ_ONLY, "Studio is read-only; recording tests is disabled");
+        }
+        if (sqlFile == null) {
+            throw new TqlException(RECORDER, "This invocation is not recordable as a test case");
+        }
+        Path file = resolve("tests/studio-recorded-test.yml");
+        Map<String, Object> tree;
+        if (Files.isRegularFile(file)) {
+            tree = mutableCopy(parser.parseTree(file));
+        } else {
+            tree = new LinkedHashMap<>();
+        }
+        Object existing = tree.get("tests");
+        List<Object> tests = existing instanceof List<?> list
+                ? new ArrayList<>(list)
+                : new ArrayList<>();
+        String base = trimToNull(name) == null ? "recorded " + sqlFile : name.trim();
+        String unique = base;
+        int suffix = 2;
+        while (hasCaseNamed(tests, unique)) {
+            unique = base + " (" + suffix++ + ")";
+        }
+        Map<String, Object> testCase = new LinkedHashMap<>();
+        testCase.put("name", unique);
+        testCase.put("sql", Map.of("file", sqlFile));
+        if (!params.isEmpty()) {
+            testCase.put("params", params);
+        }
+        if (rowCount != null) {
+            testCase.put("expect", Map.of("rowCount", rowCount));
+        }
+        tests.add(testCase);
+        tree.put("tests", tests);
+        try {
+            Files.createDirectories(file.getParent());
+            Files.writeString(file, parser.write(tree));
+        } catch (IOException ex) {
+            throw new UncheckedIOException(ex);
+        }
+        recordAudit(actor, "test", "tests/studio-recorded-test.yml");
+        return unique;
+    }
+
+    private static boolean hasCaseNamed(List<Object> tests, String name) {
+        for (Object test : tests) {
+            if (test instanceof Map<?, ?> map && name.equals(map.get("name"))) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /** Blank stays {@code null}; anything else must be a valid secret reference (Track J2). */

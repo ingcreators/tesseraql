@@ -1118,7 +1118,58 @@ public final class TesseraqlRuntime implements AutoCloseable {
                                     str(params, "path")));
                             return model;
                         })
-                        .register("studio.tryRun", params -> tryInvoke(port, params))
+                        .register("studio.tryRun", params -> {
+                            Map<String, Object> result = tryInvoke(port, params);
+                            // The test recorder (Track J3): a recordable invocation offers "Save
+                            // as test case" on the result fragment, echoing what was sent.
+                            result.putAll(studio.recordability(
+                                    String.valueOf(result.get("method")), str(params, "path")));
+                            result.put("query", str(params, "query"));
+                            result.put("sentBody", str(params, "body"));
+                            return result;
+                        })
+                        .register("studio.tryRecord", params -> {
+                            studioAccess.requireEdit(params.get("roles"));
+                            String method = String.valueOf(params.get("method"));
+                            String path = String.valueOf(params.get("path"));
+                            Map<String, Object> recordable = studio.recordability(method, path);
+                            if (!Boolean.TRUE.equals(recordable.get("recordable"))) {
+                                throw new io.tesseraql.core.error.TqlException(
+                                        new io.tesseraql.core.error.TqlErrorCode(
+                                                io.tesseraql.core.error.TqlDomain.STUDIO, 4233),
+                                        String.valueOf(recordable.get("reason")));
+                            }
+                            Map<String, String> query = parseQueryString(str(params, "query"));
+                            Map<String, Object> body = parseJsonObject(str(params, "body"));
+                            Map<String, Object> caseParams = studio.recordedCaseParams(method,
+                                    path, query, body);
+                            // The sandbox captures the expectation so the recorded case is a
+                            // real data regression, passing by construction. Optional: without
+                            // the test runner the case still records (no expectation).
+                            Integer rowCount = null;
+                            if (studioTests.isEnabled()) {
+                                io.tesseraql.yaml.manifest.RouteFile match = null;
+                                for (io.tesseraql.yaml.manifest.RouteFile route : manifest
+                                        .routes()) {
+                                    if (path.equals(route.urlPath())
+                                            && method.equalsIgnoreCase(route.httpMethod())) {
+                                        match = route;
+                                        break;
+                                    }
+                                }
+                                if (match != null) {
+                                    Map<String, Object> recordContext = new java.util.LinkedHashMap<>();
+                                    recordContext.put("query", query);
+                                    recordContext.put("params", body.isEmpty() ? query : body);
+                                    rowCount = studioTests.sandboxRowCount(match.definition(),
+                                            match.source().getParent(), recordContext);
+                                }
+                            }
+                            String name = studio.appendRecordedTest(str(params, "name"),
+                                    studio.recordedSqlFile(method, path), caseParams, rowCount,
+                                    actorOf(params));
+                            return Map.of("recorded", name);
+                        })
                         // Config viewer (governance): the effective merged configuration (application
                         // .yml + tesseraql.yml + overlay.yml), flattened to dotted keys, with secret
                         // values redacted. Read-only — a curated overlay-backed editor is a later slice.
@@ -2304,6 +2355,38 @@ public final class TesseraqlRuntime implements AutoCloseable {
         String value = str(params, key);
         if (value != null && !value.isBlank()) {
             values.put(dottedKey, value.trim());
+        }
+    }
+
+    private static Map<String, String> parseQueryString(String query) {
+        Map<String, String> out = new java.util.LinkedHashMap<>();
+        if (query == null || query.isBlank()) {
+            return out;
+        }
+        for (String pair : query.split("&")) {
+            int eq = pair.indexOf('=');
+            if (eq <= 0) {
+                continue;
+            }
+            out.put(java.net.URLDecoder.decode(pair.substring(0, eq),
+                    java.nio.charset.StandardCharsets.UTF_8),
+                    java.net.URLDecoder.decode(pair.substring(eq + 1),
+                            java.nio.charset.StandardCharsets.UTF_8));
+        }
+        return out;
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Map<String, Object> parseJsonObject(String body) {
+        if (body == null || body.isBlank()) {
+            return Map.of();
+        }
+        try {
+            Object parsed = new com.fasterxml.jackson.databind.ObjectMapper().readValue(body,
+                    Map.class);
+            return parsed instanceof Map ? (Map<String, Object>) parsed : Map.of();
+        } catch (java.io.IOException ex) {
+            return Map.of();
         }
     }
 

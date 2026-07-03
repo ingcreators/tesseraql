@@ -570,7 +570,17 @@ ships as its own slice once the phase opens:
   `StudioService.writeOverlaySection`/`updateEgressHosts`/`writeWebhookVerifier`/
   `writeConnectorCredential`/`connectorsView`; `studio.connectors.*` + `studio.wizard.*.apply`
   providers; `/ui/connectors` page.
-- [ ] **J3 — test recorder**: save an API-console invocation as a declarative test case.
+- [x] **J3 — test recorder** — *done*: a successful API-console invocation of a query route
+  offers **Save as test case** on the result fragment. Recording reverse-maps the sent query/
+  body onto the route's `sql.params` (unresolved params are omitted, matching the live
+  request's conditional SQL), captures the sandbox row count as `expect.rowCount` when the
+  test runner is enabled (the case passes by construction), and appends the `sql:` case to
+  `tests/studio-recorded-test.yml` (duplicate names get a numeric suffix; audited). The
+  recorded case runs in Studio's per-route test runner and in CI exactly like a hand-written
+  one. v1 scope: query routes with a bound SQL file and no path parameters — anything else
+  states why it is not recordable (`TQL-STUDIO-4233` → 400).
+  `StudioService.recordability`/`recordedCaseParams`/`recordedSqlFile`/`appendRecordedTest`;
+  `StudioTestService.sandboxRowCount`; `studio.tryRecord` provider; `/ui/try/record` route.
 - [ ] **J4 — data-browser row edit**: PK-scoped single-row edit via a generated command,
   under audit + `editRoles` + confirm.
 - [ ] **J5 — authoring feedback**: deepen the shipped JSON Schema and wire it into scaffolded
