@@ -1954,4 +1954,24 @@ public final class AppLinter {
             return "";
         }
     }
+
+    /**
+     * The 1-based line of {@code token}'s first occurrence in {@code source} (authoring
+     * feedback, roadmap Phase 43) — a best-effort position for document rules, so editors can
+     * jump near the offending key; null when the file is unreadable or the token is absent.
+     */
+    private static Integer lineOf(Path source, String token) {
+        String text = readQuietly(source);
+        int at = text.indexOf(token);
+        if (at < 0) {
+            return null;
+        }
+        int line = 1;
+        for (int i = 0; i < at; i++) {
+            if (text.charAt(i) == '\n') {
+                line++;
+            }
+        }
+        return line;
+    }
 }
