@@ -348,7 +348,7 @@ public final class ViewEjector {
         return "row == null ? '' : row['" + column + "']";
     }
 
-    private static String attr(String name, Integer value) {
+    private static String attr(String name, Object value) {
         return value == null ? "" : " " + name + "=\"" + value + "\"";
     }
 

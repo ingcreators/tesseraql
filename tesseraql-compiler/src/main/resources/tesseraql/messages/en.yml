@@ -8,6 +8,11 @@ tql:
     max: "Must be at most {max}."
     maxLength: "Must be {maxLength} characters or fewer."
     enum: "Must be one of {options}."
+    pattern: Does not match the required pattern.
+    minLength: "Must be at least {minLength} characters."
+    email: Not a valid email address.
+    uuid: Not a valid UUID.
+    url: Not a valid http(s) URL.
     integer: Must be a whole number.
     number: Must be a number.
     date: Not a valid date.

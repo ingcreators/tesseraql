@@ -51,8 +51,9 @@ class RouteSpecGeneratorTest {
                         RouteSpec.Input::required, RouteSpec.Input::min, RouteSpec.Input::max,
                         RouteSpec.Input::maxLength)
                 .containsExactly(
-                        tuple("limit", "integer", false, 1, 200, null),
-                        tuple("offset", "integer", false, 0, null, null),
+                        tuple("limit", "integer", false, new java.math.BigDecimal(1),
+                                new java.math.BigDecimal(200), null),
+                        tuple("offset", "integer", false, new java.math.BigDecimal(0), null, null),
                         tuple("q", "string", false, null, null, 200));
         assertThat(search.security())
                 .isEqualTo(new RouteSpec.Security("bearer", "app.read", null, false));

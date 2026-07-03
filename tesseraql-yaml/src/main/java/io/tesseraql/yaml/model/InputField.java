@@ -21,15 +21,28 @@ public record InputField(
         String type,
         boolean required,
         @JsonProperty("default") Object defaultValue,
-        Integer min,
-        Integer max,
+        java.math.BigDecimal min,
+        java.math.BigDecimal max,
         Integer maxLength,
         @JsonProperty("enum") List<String> enumValues,
         Boolean writable,
         String classification,
         String mask,
         String format,
-        InputItems items) {
+        InputItems items,
+        String pattern,
+        Integer minLength,
+        String requiredWhen) {
+
+    /** The semantic string formats {@code format:} validates (roadmap Phase 40). */
+    public static final java.util.Set<String> STRING_FORMATS = java.util.Set.of("email", "uuid",
+            "url");
+
+    /** Whether this field's {@code format:} is a semantic string validator (vs a parse pattern). */
+    public boolean hasStringFormat() {
+        return (type == null || "string".equals(type)) && format != null
+                && STRING_FORMATS.contains(format);
+    }
 
     /** Whether this field may be supplied by the request (design ch. 33.2). Defaults to true. */
     public boolean isWritable() {

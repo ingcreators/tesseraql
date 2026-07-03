@@ -10,6 +10,46 @@ message keys, localized at render time through the app's message catalogs
 required, range, enum) still reject malformed requests with `400` at bind time; `validate:`
 is the business-rule layer behind them.
 
+## Input constraints (roadmap Phase 40)
+
+The declared-input vocabulary covers what LOB forms actually need, so simple rules never
+leak into SQL. On any `input:` field:
+
+```yaml
+input:
+  email:
+    type: string
+    format: email          # email | uuid | url — semantic validators for string fields
+    pattern: ".+@corp[.]example"   # anchored regex (full match); lint pre-compiles it
+    minLength: 6
+    maxLength: 320
+  price:
+    type: number
+    min: 0.5               # decimal-exact bounds: 5.9 violates max: 5, min: 0.5 is legal
+    max: 9999.99
+  note:
+    type: string
+    requiredWhen: params.kind == 'noted'   # conditional requiredness, the core
+                                           # expression language over the request context
+```
+
+- For `date`/`datetime`/`number` fields, `format:` remains the locale-aware **parse
+  pattern**; for string fields it is one of the semantic validators above.
+- `requiredWhen` is pre-compiled at build (bad syntax fails the build; `TQL-YAML-1014` in
+  lint) and evaluated after every input is coerced, against the same `params.*`/`path.*`/
+  `body.*` namespaces expressions use elsewhere. An absent field whose condition holds is
+  rejected exactly like `required: true`.
+- **Typed path parameters**: a path segment declared under `input:` (the scaffold's
+  `{id}` routes do this) is coerced and validated like any input, and the `path.*`
+  namespace carries the typed value; an undeclared path parameter stays a raw string.
+- Every rejection is the field-scoped `TQL-FIELD-2001` shape with a stable code
+  (`pattern`, `minLength`, `email`, `uuid`, `url`, …) and a localizable
+  `tql.input.<code>` message (en/ja built-ins included), rendered inline on the htmx
+  path like every other field error.
+- The constraints ride into the generated OpenAPI (`pattern`, `minLength`/`maxLength`,
+  `minimum`/`maximum`, `format: email|uuid|uri`, enums) — the contract and the
+  enforcement are one declaration.
+
 ## The validate block
 
 ```yaml

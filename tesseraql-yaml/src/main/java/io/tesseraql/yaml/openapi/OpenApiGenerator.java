@@ -82,7 +82,10 @@ public final class OpenApiGenerator {
         List<Object> parameters = new ArrayList<>();
         Matcher matcher = PATH_PARAM.matcher(route.urlPath());
         while (matcher.find()) {
-            parameters.add(parameter(matcher.group(1), "path", true, "string"));
+            // A path parameter declared under input: carries its typed schema (Phase 40).
+            InputField declared = definition.input().get(matcher.group(1));
+            parameters.add(parameter(matcher.group(1), "path", true,
+                    declared != null ? fieldSchema(declared) : Map.of("type", "string")));
         }
         // GET/DELETE inputs bind from the query string; other methods carry a JSON body
         // (except file-import, whose body is the uploaded file itself).
@@ -90,7 +93,7 @@ public final class OpenApiGenerator {
                 || "DELETE".equalsIgnoreCase(route.httpMethod());
         if (queryInputs) {
             new TreeMap<>(definition.input()).forEach((name, field) -> parameters
-                    .add(parameter(name, "query", field.required(), schemaType(field))));
+                    .add(parameter(name, "query", field.required(), fieldSchema(field))));
         }
         if (!parameters.isEmpty()) {
             operation.put("parameters", parameters);
@@ -181,7 +184,8 @@ public final class OpenApiGenerator {
         }
         Map<String, Object> status = new LinkedHashMap<>();
         status.put("operationId", definition.id() + ".status");
-        status.put("parameters", List.of(parameter("transferId", "path", true, "string")));
+        status.put("parameters",
+                List.of(parameter("transferId", "path", true, Map.of("type", "string"))));
         security(definition).ifPresent(value -> status.put("security", value));
         Map<String, Object> statusResponses = new TreeMap<>();
         statusResponses.put("200", withContent("Transfer state", "application/json",
@@ -193,7 +197,8 @@ public final class OpenApiGenerator {
         if ("file-export".equals(recipe)) {
             Map<String, Object> file = new LinkedHashMap<>();
             file.put("operationId", definition.id() + ".file");
-            file.put("parameters", List.of(parameter("transferId", "path", true, "string")));
+            file.put("parameters",
+                    List.of(parameter("transferId", "path", true, Map.of("type", "string"))));
             security(definition).ifPresent(value -> file.put("security", value));
             Map<String, Object> fileResponses = new TreeMap<>();
             fileResponses.put("200", withContent("The exported file",
@@ -228,7 +233,7 @@ public final class OpenApiGenerator {
         Map<String, Object> properties = new TreeMap<>();
         List<String> required = new ArrayList<>();
         new TreeMap<>(definition.input()).forEach((name, field) -> {
-            properties.put(name, Map.of("type", schemaType(field)));
+            properties.put(name, fieldSchema(field));
             if (field.required()) {
                 required.add(name);
             }
@@ -279,13 +284,46 @@ public final class OpenApiGenerator {
     }
 
     private static Map<String, Object> parameter(String name, String in, boolean required,
-            String type) {
+            Map<String, Object> schema) {
         Map<String, Object> parameter = new LinkedHashMap<>();
         parameter.put("name", name);
         parameter.put("in", in);
         parameter.put("required", required);
-        parameter.put("schema", Map.of("type", type));
+        parameter.put("schema", schema);
         return parameter;
+    }
+
+    /**
+     * An input's full parameter/property schema (roadmap Phase 40): the declared constraints
+     * ride into the contract — enum, length and value bounds, the regex pattern, and the
+     * semantic string formats ({@code url} maps to OpenAPI's {@code uri}). Deterministic key
+     * order.
+     */
+    private static Map<String, Object> fieldSchema(InputField field) {
+        Map<String, Object> schema = new LinkedHashMap<>();
+        schema.put("type", schemaType(field));
+        if (field.enumValues() != null && !field.enumValues().isEmpty()) {
+            schema.put("enum", field.enumValues());
+        }
+        if (field.hasStringFormat()) {
+            schema.put("format", "url".equals(field.format()) ? "uri" : field.format());
+        }
+        if (field.pattern() != null) {
+            schema.put("pattern", field.pattern());
+        }
+        if (field.minLength() != null) {
+            schema.put("minLength", field.minLength());
+        }
+        if (field.maxLength() != null) {
+            schema.put("maxLength", field.maxLength());
+        }
+        if (field.min() != null) {
+            schema.put("minimum", field.min());
+        }
+        if (field.max() != null) {
+            schema.put("maximum", field.max());
+        }
+        return schema;
     }
 
     private static String schemaType(InputField field) {
