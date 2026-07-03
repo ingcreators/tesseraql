@@ -77,3 +77,18 @@ expand/contract (backward compatible) - the same discipline the canary flow alre
 - Generated export files live on the node that produced them: keep session affinity at
   Cloudflare, or plug a shared TempStore implementation behind the SPI.
 - Framework and app migrations take Flyway's lock, so concurrent node startups serialize.
+
+## Metrics (Prometheus)
+
+Opt in with `tesseraql.metrics.enabled: true` and scrape `GET /_tesseraql/metrics`
+(text format 0.0.4). The exposition is fed by a JDK-only in-process aggregator that is always
+recording — per-route invocation counters (`tesseraql_route_invocations_total`), an
+outcome-classed error counter (`tesseraql_route_errors_total`), and latency histograms in
+seconds (`tesseraql_route_duration_seconds_*`) labelled `routeId`/`method`/`outcome`.
+
+The scrape is **bearer + `ops.metrics.view` policy** by default (labels reveal route ids);
+give the scraper a token via `bearer_token_file`, or set
+`tesseraql.metrics.unauthenticated: true` for a cluster-internal scrape the network already
+guards. OTLP push (`tesseraql.otel.otlp.endpoint`) is independent and now carries the same
+histograms. A ready-made Grafana dashboard ships at
+[deploy/grafana/tesseraql-dashboard.json](../deploy/grafana/tesseraql-dashboard.json).

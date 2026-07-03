@@ -1,0 +1,125 @@
+{
+  "title": "TesseraQL \u2014 Routes",
+  "uid": "tesseraql-routes",
+  "schemaVersion": 39,
+  "tags": [
+    "tesseraql"
+  ],
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
+  "templating": {
+    "list": [
+      {
+        "name": "route",
+        "type": "query",
+        "datasource": null,
+        "includeAll": true,
+        "multi": true,
+        "query": "label_values(tesseraql_route_duration_seconds_count, routeId)"
+      }
+    ]
+  },
+  "panels": [
+    {
+      "title": "Request rate by route",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 0
+      },
+      "targets": [
+        {
+          "expr": "sum by (routeId) (rate(tesseraql_route_invocations_total{routeId=~\"$route\"}[5m]))",
+          "legendFormat": "{{routeId}}"
+        }
+      ]
+    },
+    {
+      "title": "Error rate (4xx+5xx share)",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 0
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit"
+        }
+      },
+      "targets": [
+        {
+          "expr": "sum by (routeId) (rate(tesseraql_route_errors_total{routeId=~\"$route\"}[5m])) / sum by (routeId) (rate(tesseraql_route_duration_seconds_count{routeId=~\"$route\"}[5m]))",
+          "legendFormat": "{{routeId}}"
+        }
+      ]
+    },
+    {
+      "title": "Latency p95 by route",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        }
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum by (routeId, le) (rate(tesseraql_route_duration_seconds_bucket{routeId=~\"$route\"}[5m])))",
+          "legendFormat": "{{routeId}}"
+        }
+      ]
+    },
+    {
+      "title": "Latency p50 / p99 (all routes)",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        }
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.50, sum by (le) (rate(tesseraql_route_duration_seconds_bucket[5m])))",
+          "legendFormat": "p50"
+        },
+        {
+          "expr": "histogram_quantile(0.99, sum by (le) (rate(tesseraql_route_duration_seconds_bucket[5m])))",
+          "legendFormat": "p99"
+        }
+      ]
+    },
+    {
+      "title": "5xx by route",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 16
+      },
+      "targets": [
+        {
+          "expr": "sum by (routeId) (rate(tesseraql_route_errors_total{outcome=\"5xx\",routeId=~\"$route\"}[5m]))",
+          "legendFormat": "{{routeId}}"
+        }
+      ]
+    }
+  ]
+}

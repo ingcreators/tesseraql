@@ -32,6 +32,7 @@ public final class RouteTelemetry implements Processor {
 
     @Override
     public void process(Exchange exchange) {
+        long startedNanos = System.nanoTime();
         meter(exchange).counter("tesseraql.route.invocations")
                 .increment(Map.of("routeId", routeId, "method", method));
 
@@ -51,7 +52,7 @@ public final class RouteTelemetry implements Processor {
         exchange.getExchangeExtension().addOnCompletion(new Synchronization() {
             @Override
             public void onComplete(Exchange completed) {
-                finish(completed, span);
+                finish(completed, span, startedNanos);
             }
 
             @Override
@@ -59,17 +60,39 @@ public final class RouteTelemetry implements Processor {
                 if (failed.getException() != null) {
                     span.recordError(failed.getException());
                 }
-                finish(failed, span);
+                finish(failed, span, startedNanos);
             }
         });
     }
 
-    private static void finish(Exchange exchange, Span span) {
+    private void finish(Exchange exchange, Span span, long startedNanos) {
         Object status = exchange.getMessage().getHeader(Exchange.HTTP_RESPONSE_CODE);
         if (status != null) {
             span.attribute("status", status);
         }
         span.end();
+        // Per-route latency and error signals a pull-based stack can consume (roadmap
+        // Phase 45): duration histogram plus an outcome-classed counter. The status class
+        // (2xx..5xx) keeps label cardinality bounded; an unset status after a failure
+        // counts as 5xx, matching what the error renderer will have sent.
+        long durationMillis = (System.nanoTime() - startedNanos) / 1_000_000;
+        String outcome = outcomeClass(status, exchange.getException() != null);
+        Map<String, String> labels = Map.of("routeId", routeId, "method", method,
+                "outcome", outcome);
+        meter(exchange).histogram("tesseraql.route.duration").record(durationMillis, labels);
+        if (outcome.equals("5xx") || outcome.equals("4xx")) {
+            meter(exchange).counter("tesseraql.route.errors").increment(labels);
+        }
+    }
+
+    private static String outcomeClass(Object status, boolean failed) {
+        if (status instanceof Number number) {
+            int code = number.intValue();
+            if (code >= 100 && code <= 599) {
+                return (code / 100) + "xx";
+            }
+        }
+        return failed ? "5xx" : "2xx";
     }
 
     private static Tracer tracer(Exchange exchange) {

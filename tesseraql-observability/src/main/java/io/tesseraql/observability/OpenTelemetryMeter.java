@@ -28,6 +28,13 @@ public final class OpenTelemetryMeter implements Meter {
         return (delta, attributes) -> counter.add(delta, toAttributes(attributes));
     }
 
+    @Override
+    public Histogram histogram(String name) {
+        io.opentelemetry.api.metrics.LongHistogram histogram = meter.histogramBuilder(name)
+                .ofLongs().setUnit("ms").build();
+        return (value, attributes) -> histogram.record(value, toAttributes(attributes));
+    }
+
     private static io.opentelemetry.api.common.Attributes toAttributes(
             Map<String, String> attributes) {
         AttributesBuilder builder = io.opentelemetry.api.common.Attributes.builder();

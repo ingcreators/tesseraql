@@ -825,4 +825,8 @@ None block Phase 18; flagged for the maintainer as their horizons approach.
 9. **Metrics transport** (Phase 45): a JDK-only Prometheus text-format endpoint (no new
    dependency, in the spirit of the JDK-only OIDC/mTLS choices) vs adopting OTel/Micrometer
    histograms inside `tesseraql-observability`. Module boundaries (principle 5) decide
-   where it lives; both keep the in-process ring tracer.
+   where it lives; both keep the in-process ring tracer. Resolved 2026-07-03 in favour of
+   **both, split by module boundary**: the `Meter` abstraction gained a histogram, a JDK-only
+   `AggregatingMeter` + Prometheus text exposition live in `tesseraql-core`/the runtime (no
+   new dependency on the scrape path), and `tesseraql-observability` maps the same histograms
+   onto OTLP — the ring tracer stays. The scrape endpoint is opt-in and policy-gated.
