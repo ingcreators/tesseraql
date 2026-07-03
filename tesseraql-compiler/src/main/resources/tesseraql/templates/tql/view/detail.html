@@ -14,15 +14,17 @@
       <th:block th:insert="~{__${v.slots['header']}__}"/>
     </th:block>
   </div>
-  <div class="hc-stack">
+  <div class="hc-empty" th:if="${v.notFound}"><p class="hc-empty__title"
+      th:text="#{tql.view.notFound}">Not found.</p></div>
+  <div class="hc-stack" th:unless="${v.notFound}">
     <div class="hc-field" th:each="f : ${v.fields}">
       <span class="hc-field__label" th:text="${f.label}">Label</span>
       <span th:text="${f.value}">value</span>
     </div>
   </div>
-  <section th:each="c : ${v.children}">
+  <section th:each="c,cs : ${v.children}">
     <h3 th:text="${c.title}">Child</h3>
-    <th:block th:insert="~{tql/view/table :: table(${c.columns}, ${c.rows})}"/>
+    <th:block th:insert="~{tql/view/table :: table(|${v.id}-child-${cs.index}|, ${c.columns}, ${c.rows})}"/>
   </section>
   <th:block th:if="${v.slots['footer'] != null}">
     <th:block th:insert="~{__${v.slots['footer']}__}"/>

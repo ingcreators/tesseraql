@@ -15,7 +15,9 @@
       <th:block th:insert="~{__${v.slots['header']}__}"/>
     </th:block>
   </div>
-  <form th:id="${v.formId}" method="post" th:action="${v.action}" th:fragment="view(v)"
+  <div class="hc-empty" th:if="${v.notFound}"><p class="hc-empty__title"
+      th:text="#{tql.view.notFound}">Not found.</p></div>
+  <form th:unless="${v.notFound}" th:id="${v.formId}" method="post" th:action="${v.action}" th:fragment="view(v)"
         th:attr="hx-post=${v.action},hx-target=|#${v.formId}-errors|"
         hx-swap="innerHTML"
         hx-disabled-elt="find button[type=submit]" hx-indicator="find .hc-spinner">

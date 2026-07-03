@@ -8,6 +8,28 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **Scaffold on views** (roadmap Phase 39, slice 3; see
+  [docs/declarative-views.md](docs/declarative-views.md)): `tesseraql scaffold crud` now emits
+  declarative view documents instead of hand-written templates — one list route renders through
+  the `tql/view/list` pattern (live search box, server-driven sortable headers re-rendered over
+  htmx via `hx-select` on the route itself — the separate `fragments/table` route is gone), the
+  create/edit forms derive their fields from the command routes' `input:` blocks, and a shared
+  `frags.html` carries the slot fragments (New button, back link, and the confirmed delete the
+  edit view mounts in its footer slot). The list pattern grew the composition to make that
+  possible: `search:` (the filter box, `TQL-VIEW-3309` when the input is undeclared),
+  `sortable: true` columns (`?sort=&dir=` header links + `aria-sort`, applied by the route's
+  enum-gated inputs, `TQL-VIEW-3310`), `text:`/`link:` action columns, per-record form `action:`
+  placeholder resolution, camelCase→snake_case prefill fallback (plus per-field `column:`),
+  number-input `step`, and not-found empty states. `tesseraql new` now also generates
+  `config/menu.yml`, so scaffolded pages navigate through the server-rendered app menu. The
+  example gallery regenerated on views (byte-identical dogfood check unchanged).
+
+### Changed
+
+- The `tql/view/table` pattern's contract is now `table(tableId, columns, rows)` (the id anchors
+  the htmx sort/search swap region), and non-sortable header labels render inside a `<span>`.
+
+
 - **Declarative views: detail, relations, slots, and eject** (roadmap Phase 39, slice 2; see
   [docs/declarative-views.md](docs/declarative-views.md)). A `view: detail` renders a labelled
   value list over the route's row and composes the route's named `queries:` underneath as child

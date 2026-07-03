@@ -48,15 +48,23 @@ The table's shape is read through plain JDBC metadata (columns in ordinal order,
 key, single-column unique indexes) and drives the generated slice:
 
 ```
-web/items/                       list page (live htmx search over a table fragment)
-web/items/fragments/table/       query-html fragment + search.sql + table.html (hc-datagrid)
-web/items/new/                   create form page
+web/items/                       list route + list.view.yml + search.sql + frags.html (slots)
+web/items/new/                   create form route + new.view.yml
 web/items/create/                command-json insert (one transaction, audit binds)
-web/items/{id}/                  detail/edit page + select.sql
+web/items/{id}/                  edit route + select.sql + edit.view.yml
 web/items/{id}/update/           command-json update (optimistic locking)
 web/items/{id}/delete/           command-json delete (confirmed, version-checked)
 tests/items-crud-test.yml        data-independent suite over the generated queries
 ```
+
+Since roadmap Phase 39 slice 3 the pages are **declarative views**
+([docs/declarative-views.md](declarative-views.md)), not hand-written templates: one list
+route renders through the `tql/view/list` pattern (search box, server-driven sort, per-row
+Open action — no separate fragment route), the create/edit forms derive their fields from
+the command routes' `input:` blocks, and the shared `frags.html` carries the slot fragments
+(the list's New button, the forms' back link, and the confirmed delete the edit view mounts
+in its footer slot). Customize per the ladder: view keys (L0), the slots (L1), a pattern
+override under `templates/tql/view/` (L2), or `tesseraql scaffold eject-view` (L3).
 
 Conventions are applied when the table opts in:
 
@@ -78,12 +86,14 @@ Conventions are applied when the table opts in:
 - **Command SQL carries no trailing semicolon** (like the transactional-writes examples):
   drivers append `RETURNING` for generated-key capture, which a terminator would break.
 
-The pages compose the framework `tql/shell` layout with `templates/nav.html :: app-nav`. The
-list page renders its rows as a Hypermedia Components **`hc-datagrid`** — a scroll container that
-keeps wide tables horizontally scrollable with the header in view, degrading to a plain styled grid
-with no JavaScript. Its **column headers sort server-side**: each header is a link to
-`fragments/table?sort=<col>&dir=<asc|desc>`, swapped in over htmx (search term and sort state ride
-along via `hx-include`), and `aria-sort` drives the kit's sort arrow — CSP-clean, no inline JS. The
+The pages compose the framework `tql/shell` layout; navigation comes from the skeleton's
+`config/menu.yml` (`tesseraql new` generates it), rendered server-side into the shell. The
+list renders as a Hypermedia Components **`hc-datagrid`** — a scroll container that keeps wide
+tables horizontally scrollable with the header in view, degrading to a plain styled grid with
+no JavaScript. Its **column headers sort server-side**: each header links to
+`?sort=<col>&dir=<asc|desc>` on the list route itself, re-rendered over htmx (`hx-select` on
+the table region; the search term rides along via `hx-include`), and `aria-sort` drives the
+kit's sort arrow — CSP-clean, no inline JS. The
 `search.sql` `ORDER BY` is an [embedded variable](transactional-writes.md#embedded-variables-dynamic-identifiers)
 — `/*# order by t.{sort} {dir}, t.<pk> */` — so the whole clause lives in a comment and the file
 stays runnable in a plain SQL tool, with the primary key as a stable pagination tiebreaker. The

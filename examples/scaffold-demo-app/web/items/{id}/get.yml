@@ -1,4 +1,4 @@
-# tesseraql-scaffold-checksum: sha256:4dbd8c11925e4a13c9b909a6897ac82f4cb78824e8a898b23d0eb27b57ebf51c
+# tesseraql-scaffold-checksum: sha256:0a0d178e66f527e12947c7f235a6c3821120a551f59e4515173b80149b2e0c55
 # Scaffolded detail and edit page for the items table.
 version: tesseraql/v1
 id: items.detail
@@ -22,10 +22,7 @@ sql:
 
 response:
   html:
-    status: 200
-    template: edit.html
-    model:
-      rows: sql.rows
+    view: edit.view.yml
     headers:
       Content-Security-Policy: "default-src 'self'; style-src 'self' 'unsafe-inline'; frame-ancestors 'none'"
       X-Content-Type-Options: nosniff

@@ -25,6 +25,8 @@ tql:
   view:
     submit: Save
     empty: No rows
+    search: "Search…"
+    notFound: Not found.
   http:
     "400": Bad Request
     "401": Unauthorized

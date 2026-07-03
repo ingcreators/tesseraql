@@ -126,13 +126,16 @@ class ScaffoldDogfoodIntegrationTest {
         // only branch is the q filter (the embedded ORDER BY adds none).
         assertThat(result.coverage().report("web/api/items/search.sql").branchRatio())
                 .isEqualTo(1.0);
-        assertThat(result.coverage().report("web/items/fragments/table/search.sql")
+        assertThat(result.coverage().report("web/items/search.sql")
                 .branchRatio()).isEqualTo(1.0);
-        // The suites prove the SQL-bound generated routes.
+        // The suites prove the SQL-bound generated routes — the list is one view-backed route
+        // now (no fragment route), so it also counts into the view coverage kind.
         assertThat(result.kind("route").covered())
-                .contains("items.search", "items.table", "items.detail");
+                .contains("items.search", "items.page", "items.detail");
         assertThat(result.kind("security").covered())
-                .contains("items.search", "items.table", "items.detail");
+                .contains("items.search", "items.page", "items.detail");
+        assertThat(result.kind("view").declared())
+                .contains("items.page", "items.detail", "items.new");
     }
 
     /** Rewrites the gallery from the current generators (then commit the diff). */

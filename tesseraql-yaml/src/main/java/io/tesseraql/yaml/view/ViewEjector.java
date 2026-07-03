@@ -162,7 +162,9 @@ public final class ViewEjector {
                 "a form view ejects from its derived fields — the action route declares none");
         String formId = spec.id().replace('.', '-') + "-form";
         StringBuilder html = pageOpen(spec);
-        html.append("<section class=\"hc-card\">\n");
+        html.append("<section class=\"hc-card\" th:with=\"row=${#lists.isEmpty(")
+                .append(spec.source()).append(".rows) ? null : ")
+                .append(spec.source()).append(".rows[0]}\">\n");
         titleCluster(html, appHome, routeDir, spec);
         html.append("  <form id=\"").append(formId).append("\" method=\"post\" action=\"")
                 .append(spec.action()).append("\"\n"
@@ -198,7 +200,7 @@ public final class ViewEjector {
         String label = escape(field.labelFallback());
         if ("hidden".equals(field.widget())) {
             html.append("      <input type=\"hidden\" name=\"").append(field.name())
-                    .append("\">\n");
+                    .append("\" th:value=\"${").append(prefill(field)).append("}\">\n");
             return;
         }
         html.append("      <div class=\"hc-field\">\n"
@@ -217,14 +219,18 @@ public final class ViewEjector {
                         .append(field.required() ? " required" : "").append(">\n");
                 for (String option : field.options()) {
                     html.append("          <option value=\"").append(escape(option))
-                            .append("\">").append(escape(option)).append("</option>\n");
+                            .append("\" th:selected=\"${").append(prefill(field))
+                            .append(" == '").append(escape(option)).append("'}\">")
+                            .append(escape(option)).append("</option>\n");
                 }
                 html.append("        </select>\n");
             }
             case "textarea" -> html.append("        <textarea class=\"hc-input\" id=\"")
                     .append(id).append("\" name=\"").append(field.name()).append("\" rows=\"4\"")
                     .append(field.required() ? " required" : "")
-                    .append(attr("maxlength", field.maxLength())).append("></textarea>\n");
+                    .append(attr("maxlength", field.maxLength()))
+                    .append(" th:text=\"${").append(prefill(field)).append("}\">")
+                    .append("</textarea>\n");
             default -> html.append("        <input class=\"")
                     .append("date".equals(field.widget())
                             || "datetime-local".equals(field.widget())
@@ -235,7 +241,8 @@ public final class ViewEjector {
                     .append(field.required() ? " required" : "")
                     .append(attr("maxlength", field.maxLength()))
                     .append(attr("min", field.min())).append(attr("max", field.max()))
-                    .append(">\n");
+                    .append(field.step() == null ? "" : " step=\"" + field.step() + "\"")
+                    .append(" th:value=\"${").append(prefill(field)).append("}\">\n");
         }
         html.append("      </div>\n");
     }
@@ -333,6 +340,12 @@ public final class ViewEjector {
 
     private static String label(ViewSpec.Column column) {
         return column.label() != null ? column.label() : ViewFields.humanize(column.name());
+    }
+
+    /** The null-safe prefill expression an ejected field reads its current value from. */
+    private static String prefill(ViewFields.FieldDef field) {
+        String column = field.column() != null ? field.column() : ViewFields.snake(field.name());
+        return "row == null ? '' : row['" + column + "']";
     }
 
     private static String attr(String name, Integer value) {

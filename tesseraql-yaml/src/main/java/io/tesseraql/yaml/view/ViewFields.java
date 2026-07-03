@@ -28,7 +28,23 @@ public final class ViewFields {
 
     /** A form field ready to render: the derived input constraints plus presentation. */
     public record FieldDef(String name, String labelKey, String labelFallback, String widget,
-            boolean required, Integer maxLength, Integer min, Integer max, List<String> options) {
+            boolean required, Integer maxLength, Integer min, Integer max, List<String> options,
+            String column, String step) {
+
+        /** The result-set column the prefill reads: explicit, else the input name, else its
+         * snake_case form ({@code unitPrice} → {@code unit_price}). */
+        public Object valueFrom(Map<String, Object> row) {
+            if (column != null) {
+                return row.get(column);
+            }
+            Object direct = row.get(name);
+            return direct != null ? direct : row.get(snake(name));
+        }
+    }
+
+    /** {@code unitPrice} → {@code unit_price}. */
+    public static String snake(String name) {
+        return name.replaceAll("([a-z0-9])([A-Z])", "$1_$2").toLowerCase(Locale.ROOT);
     }
 
     /** Derives the field definitions for a form view (see class doc). */
@@ -73,7 +89,9 @@ public final class ViewFields {
                 ? List.of()
                 : List.copyOf(input.enumValues());
         return new FieldDef(name, labelKey, fallback, widget, input.required(),
-                input.maxLength(), input.min(), input.max(), options);
+                input.maxLength(), input.min(), input.max(), options,
+                override == null ? null : override.column(),
+                "number".equals(input.type()) ? "any" : null);
     }
 
     /** The widget an input renders as when the view does not say otherwise. */

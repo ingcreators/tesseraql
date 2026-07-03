@@ -1,23 +1,33 @@
 <!DOCTYPE html>
 <!-- The shared datagrid table pattern (roadmap Phase 39, docs/declarative-views.md): columns ×
-     rows with per-row links, used by the list view and by a detail view's children. Override via
-     templates/tql/view/table.html (customization ladder L2); table(columns, rows) is the public
-     contract. -->
+     rows with per-row links, used by the list view and by a detail view's children. A sortable
+     column renders a server-driven sort link (aria-sort drives the kit's arrow; the link swaps
+     the wrapping #tableId region over htmx, keeping the typed search text). Override via
+     templates/tql/view/table.html (customization ladder L2); table(tableId, columns, rows) is
+     the public contract. -->
 <html xmlns:th="http://www.thymeleaf.org">
-<th:block th:fragment="table(columns, rows)">
+<th:block th:fragment="table(tableId, columns, rows)">
   <div class="hc-datagrid">
     <div class="hc-datagrid__scroll">
       <table class="hc-datagrid__table">
         <thead class="hc-datagrid__head">
           <tr>
             <th class="hc-datagrid__headcell" th:each="c : ${columns}"
-                th:text="${c.label}">Column</th>
+                th:attr="data-sortable=${c.sortable != null ? 'true' : null},data-col=${c.sortable != null ? c.name : null},aria-sort=${c.ariaSort}">
+              <a th:if="${c.sortable != null}" th:href="${c.sortHref}"
+                 th:attr="hx-get=${c.sortHref},hx-target=|#${tableId}|,hx-select=|#${tableId}|"
+                 hx-swap="outerHTML" hx-include="[type='search']"
+                 th:text="${c.label}">Column</a>
+              <span th:if="${c.sortable == null}" th:text="${c.label}">Column</span>
+            </th>
           </tr>
         </thead>
         <tbody class="hc-datagrid__body">
           <tr class="hc-datagrid__row" th:each="r : ${rows}">
             <td class="hc-datagrid__cell" th:each="cell : ${r}">
               <a th:if="${cell.href != null}" th:href="${cell.href}"
+                 th:class="${cell.button} ? 'hc-button' : null"
+                 th:attr="data-size=${cell.button} ? 'sm' : null"
                  th:text="${cell.text}">value</a>
               <span th:if="${cell.href == null}" th:text="${cell.text}">value</span>
             </td>

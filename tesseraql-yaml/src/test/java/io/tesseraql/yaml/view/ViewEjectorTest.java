@@ -88,15 +88,16 @@ class ViewEjectorTest {
                 """);
         List<ViewFields.FieldDef> fields = List.of(
                 new ViewFields.FieldDef("name", "k", "Name", "text", true, 200, null, null,
-                        List.of()),
+                        List.of(), null, null),
                 new ViewFields.FieldDef("status", "k", "Status", "select", false, null, null,
-                        null, List.of("OPEN", "CLOSED")));
+                        null, List.of("OPEN", "CLOSED"), null, null));
         ScaffoldedFile file = ViewEjector.eject(dir, dir, "page.view.yml", spec, fields,
                 "web/items/new/page.html");
         assertThat(file.content()).contains("hx-post=\"/items/create\"");
         assertThat(file.content()).contains("id=\"items-new-form\"");
         assertThat(file.content()).contains("name=\"name\" required maxlength=\"200\"");
-        assertThat(file.content()).contains("<option value=\"OPEN\">OPEN</option>");
+        assertThat(file.content()).contains("<option value=\"OPEN\"")
+                .contains(">OPEN</option>");
         assertThat(file.content()).contains("th:text=\"#{tql.view.submit}\"");
     }
 

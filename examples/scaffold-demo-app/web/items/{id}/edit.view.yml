@@ -1,0 +1,22 @@
+# tesseraql-scaffold-checksum: sha256:ab65122e113c03a2c48df28cf6fcf838f1c26a86abeb72106759705bb99831e3
+# Scaffolded edit view for the items table: renders through the tql/view/form
+# pattern (docs/declarative-views.md). Fields derive from the update route's
+# input: block; the footer slot carries the confirmed delete.
+version: tesseraql/v1
+id: items.edit
+kind: view
+view: form
+title: Edit
+action: /items/{id}/update
+fields:
+  - name: name
+  - name: quantity
+  - name: unitPrice
+  - name: dueDate
+  - name: active
+  - name: note
+  - name: version
+    widget: hidden
+slots:
+  header: ../frags.html::back-link
+  footer: ../frags.html::confirm-delete

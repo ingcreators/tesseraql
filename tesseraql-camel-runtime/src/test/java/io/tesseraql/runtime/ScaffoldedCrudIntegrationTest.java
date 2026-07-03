@@ -87,7 +87,11 @@ class ScaffoldedCrudIntegrationTest {
 
         HttpResponse<String> list = get("/items", cookie);
         assertThat(list.statusCode()).isEqualTo(200);
-        assertThat(list.body()).contains("hx-get=\"/items/fragments/table\"")
+        // The single list route renders rows, search box, and sortable headers inline
+        // (the tql/view/list pattern re-renders itself over htmx — no fragment route).
+        assertThat(list.body()).contains("First item")
+                .contains("type=\"search\"")
+                .contains("data-sortable")
                 // The shell publishes the session CSRF token for installCsrfHeader.
                 .contains("<meta name=\"csrf-token\" content=\"" + csrf + "\">");
 
@@ -100,21 +104,22 @@ class ScaffoldedCrudIntegrationTest {
 
     @Test
     @Order(2)
-    void fragmentRequiresASessionAndRendersTheSeededRow() throws Exception {
-        assertThat(get("/items/fragments/table", null).statusCode()).isEqualTo(401);
-
-        HttpResponse<String> fragment = get("/items/fragments/table", cookie);
-        assertThat(fragment.statusCode()).isEqualTo(200);
-        assertThat(fragment.body()).contains("First item")
-                // The datagrid headers render the kit's sort affordances; unsorted, all are "none".
-                .contains("data-sortable data-col=\"name\"")
+    void theListSortsServerSideThroughItsOwnRoute() throws Exception {
+        // Unsorted (the pk default): the name header offers the kit's sort affordance.
+        HttpResponse<String> unsorted = get("/items", cookie);
+        assertThat(unsorted.statusCode()).isEqualTo(200);
+        assertThat(unsorted.body()).contains("First item")
+                .contains("data-col=\"name\"")
                 .contains("aria-sort=\"none\"");
 
         // Sorting by a column renders the active aria-sort the kit draws its arrow from, and the
         // server-side ORDER BY (a per-column allowlist) keeps the seeded row in the result.
-        HttpResponse<String> sorted = get("/items/fragments/table?sort=name&dir=asc", cookie);
+        HttpResponse<String> sorted = get("/items?sort=name&dir=asc", cookie);
         assertThat(sorted.statusCode()).isEqualTo(200);
         assertThat(sorted.body()).contains("aria-sort=\"ascending\"").contains("First item");
+
+        // The live search narrows through the same route.
+        assertThat(get("/items?q=no-such-row", cookie).body()).doesNotContain("First item");
     }
 
     @Test
@@ -178,8 +183,7 @@ class ScaffoldedCrudIntegrationTest {
                 Map.of("version", "2"));
         assertThat(deleted.statusCode()).as(deleted::body).isEqualTo(204);
         assertThat(deleted.headers().firstValue("HX-Redirect")).contains("/items");
-        assertThat(get("/items/fragments/table", cookie).body())
-                .doesNotContain("Second item");
+        assertThat(get("/items", cookie).body()).doesNotContain("Second item");
     }
 
     private static HttpResponse<String> get(String path, String sessionCookie) throws Exception {

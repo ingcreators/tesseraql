@@ -30,7 +30,7 @@
       <input th:class="${f.widget == 'date' or f.widget == 'datetime-local'} ? 'hc-datepicker' : 'hc-input'"
              th:id="|field-${f.name}|" th:type="${f.widget}" th:name="${f.name}"
              th:value="${f.value}" th:required="${f.required}"
-             th:attr="maxlength=${f.maxLength},min=${f.min},max=${f.max}">
+             th:attr="maxlength=${f.maxLength},min=${f.min},max=${f.max},step=${f.step}">
     </th:block>
   </div>
 </th:block>

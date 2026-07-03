@@ -44,6 +44,7 @@ public final class AppScaffolder {
                         TESSERAQL_YML.replace("__APP_NAME__", appName)),
                 new ScaffoldedFile("db/migration/V1__create_items.sql", MIGRATION_SQL),
                 new ScaffoldedFile("templates/nav.html", NAV_HTML),
+                new ScaffoldedFile("config/menu.yml", MENU_YML),
                 new ScaffoldedFile("web/get.yml", HOME_ROUTE_YML),
                 new ScaffoldedFile("web/index.html",
                         HOME_PAGE_HTML.replace("__APP_NAME__", appName)),
@@ -244,6 +245,16 @@ public final class AppScaffolder {
                                created_by, created_at, updated_by, updated_at)
             values ('First item', 1, 9.99, date '2026-01-01', true, 'Seeded by tesseraql new', 1,
                     'system', current_timestamp, 'system', current_timestamp);
+            """;
+
+    private static final String MENU_YML = """
+            # The app's sidebar menu (config/menu.yml): rendered server-side into the shell nav
+            # slot and editable in Studio. Declarative view pages navigate through it.
+            menu:
+              - label: Home
+                href: /
+              - label: Items
+                href: /items
             """;
 
     private static final String NAV_HTML = """

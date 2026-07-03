@@ -65,17 +65,16 @@ class CrudScaffolderTest {
 
         assertThat(files).extracting(ScaffoldedFile::path).containsExactly(
                 "web/items/get.yml",
-                "web/items/index.html",
-                "web/items/fragments/table/get.yml",
-                "web/items/fragments/table/search.sql",
-                "web/items/fragments/table/table.html",
+                "web/items/list.view.yml",
+                "web/items/search.sql",
+                "web/items/frags.html",
                 "web/items/new/get.yml",
-                "web/items/new/new.html",
+                "web/items/new/new.view.yml",
                 "web/items/create/post.yml",
                 "web/items/create/insert.sql",
                 "web/items/{id}/get.yml",
                 "web/items/{id}/select.sql",
-                "web/items/{id}/edit.html",
+                "web/items/{id}/edit.view.yml",
                 "web/items/{id}/update/post.yml",
                 "web/items/{id}/update/update.sql",
                 "web/items/{id}/delete/post.yml",
@@ -83,6 +82,7 @@ class CrudScaffolderTest {
                 "tests/items-crud-test.yml");
         files.stream().filter(file -> file.path().endsWith(".yml"))
                 .filter(file -> !file.path().startsWith("tests/"))
+                .filter(file -> !file.path().endsWith(".view.yml"))
                 .forEach(file -> parser.parseRoute(file.content(), file.path()));
     }
 
@@ -135,67 +135,57 @@ class CrudScaffolderTest {
     void pagesUseTheBlessedHypermediaComponentsPatterns() {
         List<ScaffoldedFile> files = scaffolder.scaffold(items());
 
-        assertThat(content(files, "web/items/index.html"))
-                .contains("~{tql/shell :: shell(")
-                .contains("hx-get=\"/items/fragments/table\"")
-                .contains("hx-trigger=\"input changed delay:300ms, search\"");
-        assertThat(content(files, "web/items/fragments/table/table.html"))
-                .contains("class=\"hc-datagrid\"")
-                .contains("class=\"hc-datagrid__table\"")
-                .contains("<td class=\"hc-datagrid__cell\"")
-                // Server-driven sort: sortable headers, aria-sort, hidden state, and the htmx swap.
-                .contains("data-sortable data-col=\"name\"")
-                .contains("aria-sort=${sort == 'name'")
-                .contains("<input type=\"hidden\" name=\"sort\"")
-                .contains("hx-include=\"[name='q']\"")
-                .doesNotContain("<html");
-        // The fragment route declares enum-constrained sort/dir inputs (the embedded-ORDER-BY
-        // allowlist) and echoes them to the model.
-        assertThat(content(files, "web/items/fragments/table/get.yml"))
+        // One route serves the list: enum-constrained sort/dir + the live search input feed
+        // the SQL, and the tql/view/list pattern renders (docs/declarative-views.md).
+        assertThat(content(files, "web/items/get.yml"))
+                .contains("recipe: query-html")
+                .contains("view: list.view.yml")
                 .contains("sort: query.sort")
-                .contains("sort: params.sort")
                 .contains("enum: [id, name, quantity, unit_price, due_date, active, note]")
                 .contains("enum: [asc, desc]");
+        assertThat(content(files, "web/items/list.view.yml"))
+                .contains("view: list")
+                .contains("search: q")
+                .contains("sortable: true")
+                .contains("text: Open")
+                .contains("link: /items/{id}")
+                .contains("header: frags.html::new-link");
         // The ORDER BY is a single embedded variable (whole clause in the comment → plain-runnable),
         // interpolating the enum-checked sort/dir with a primary-key tiebreaker.
-        assertThat(content(files, "web/items/fragments/table/search.sql"))
+        assertThat(content(files, "web/items/search.sql"))
                 .contains("/*# order by t.{sort} {dir}, t.id */")
                 .doesNotContain("/*%if sort");
-        String edit = content(files, "web/items/{id}/edit.html");
-        assertThat(edit)
-                .contains("class=\"hc-datepicker\" id=\"field-due-date\" type=\"date\"")
-                .contains("<input type=\"hidden\" name=\"version\" th:value=\"${r.version}\">")
-                .contains("class=\"hc-checkbox\"");
-        // The unchecked-checkbox fallback: the hidden false is overridden by the checked value.
-        assertThat(edit).contains("type=\"hidden\" name=\"active\" value=\"false\"");
+        // The edit view derives its fields from the update route; version rides hidden and the
+        // confirmed delete mounts in the footer slot.
+        assertThat(content(files, "web/items/{id}/edit.view.yml"))
+                .contains("view: form")
+                .contains("action: /items/{id}/update")
+                .contains("- name: version\n    widget: hidden")
+                .contains("footer: ../frags.html::confirm-delete");
     }
 
     @Test
     void formsFollowTheMutatingFormRecipe() {
         List<ScaffoldedFile> files = scaffolder.scaffold(items());
 
-        String create = content(files, "web/items/new/new.html");
-        // htmx post + an in-form error container + the double-submit guard, keeping method/action
-        // for the no-JS fallback, with the hidden CSRF field.
-        assertThat(create)
-                .contains("method=\"post\" action=\"/items/create\"")
-                .contains("hx-post=\"/items/create\"")
-                .contains("hx-target=\"#items-create-form-errors\"")
-                .contains("hx-disabled-elt=\"find button[type=submit]\"")
-                .contains("hx-indicator=\"find .hc-spinner\"")
-                .contains("<div id=\"items-create-form-errors\"></div>")
-                .contains("<input type=\"hidden\" name=\"_csrf\" th:value=\"${_csrf}\">")
-                .contains("<span class=\"hc-spinner htmx-indicator\"");
+        // The create view derives every field from the create route (the tql/view/form
+        // pattern renders the blessed mutating-form recipe).
+        assertThat(content(files, "web/items/new/new.view.yml"))
+                .contains("view: form")
+                .contains("action: /items/create")
+                .contains("header: ../frags.html::back-link");
 
-        String edit = content(files, "web/items/{id}/edit.html");
-        // The update form posts via a dynamic hx-post; the delete form fires on the confirm event.
-        assertThat(edit)
-                .contains("th:attr=\"hx-post=|/items/${r.id}/update|\"")
-                .contains("hx-target=\"#items-update-form-errors\"")
-                .contains("th:attr=\"hx-post=|/items/${r.id}/delete|\"")
+        // The confirmed delete lives in the shared frags file, mounted by the edit view's
+        // footer slot; it posts the current row's id/version off the view model.
+        assertThat(content(files, "web/items/frags.html"))
+                .contains("th:fragment=\"confirm-delete\"")
+                .contains("hx-post=|/items/${v.row['id']}/delete|")
                 .contains("hx-trigger=\"hc:confirmed\"")
                 .contains("data-hc-confirm=\"Delete this record?\"")
-                .contains("<input type=\"hidden\" name=\"_csrf\" th:value=\"${_csrf}\">");
+                .contains("name=\"version\" th:value=\"${v.row['version']}\"")
+                .contains("<input type=\"hidden\" name=\"_csrf\" th:value=\"${_csrf}\">")
+                .contains("th:fragment=\"new-link\"")
+                .contains("th:fragment=\"back-link\"");
     }
 
     @Test
@@ -221,7 +211,7 @@ class CrudScaffolderTest {
         List<ScaffoldedFile> files = scaffolder.scaffold(items());
 
         String suite = content(files, "tests/items-crud-test.yml");
-        assertThat(suite).contains("web/items/fragments/table/search.sql")
+        assertThat(suite).contains("web/items/search.sql")
                 .contains("q: no-such-row")
                 .contains("web/items/{id}/select.sql")
                 .contains("id: -1");
@@ -238,7 +228,7 @@ class CrudScaffolderTest {
 
         assertThat(report.blocked()).isFalse();
         AppManifest manifest = new ManifestLoader().load(home);
-        assertThat(manifest.routes()).hasSize(9);
+        assertThat(manifest.routes()).hasSize(8);
     }
 
     @Test
@@ -259,12 +249,13 @@ class CrudScaffolderTest {
         assertThat(content(files, "web/codes/{code}/update/update.sql"))
                 .doesNotContain("version");
 
-        // No character data column: the list page has no live-search filter (no q branch),
+        // No character data column: no live-search filter (no q input, no search: key),
         // though the headers still sort (the ORDER BY allowlists the data columns).
-        String bareSearch = content(files, "web/codes/fragments/table/search.sql");
+        String bareSearch = content(files, "web/codes/search.sql");
         assertThat(bareSearch).doesNotContain("like").doesNotContain("q != null");
         assertThat(bareSearch).contains("/*# order by t.{sort} {dir}, t.code */");
-        assertThat(content(files, "web/codes/new/new.html")).doesNotContain("hc-datepicker");
+        assertThat(content(files, "web/codes/get.yml")).doesNotContain("q:");
+        assertThat(content(files, "web/codes/list.view.yml")).doesNotContain("search:");
     }
 
     @Test

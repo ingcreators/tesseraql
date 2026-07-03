@@ -60,7 +60,7 @@ class McpDevToolsAcceptanceTest {
 
         // The new routes are now visible over MCP without any filesystem access.
         JsonNode afterScaffold = callJson(server, "manifest_summary", Map.of());
-        assertThat(routeIds(afterScaffold)).contains("items.search", "items.table", "items.detail");
+        assertThat(routeIds(afterScaffold)).contains("items.search", "items.page", "items.detail");
 
         // It lints: no errors.
         JsonNode lint = callJson(server, "lint", Map.of());
