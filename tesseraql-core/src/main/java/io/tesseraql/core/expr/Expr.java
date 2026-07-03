@@ -7,8 +7,10 @@ import java.util.Objects;
  * Abstract syntax tree for 2-way SQL directive expressions (design ch. 8.1).
  *
  * <p>Expressions are deliberately small: literals, dotted property paths, comparison, equality,
- * logical {@code &&}/{@code ||}/{@code !}, and grouping. There is no method invocation or
- * assignment, so evaluation cannot trigger side effects (guardrail design ch. 20.6).
+ * logical {@code &&}/{@code ||}/{@code !}, grouping, and — since roadmap Phase 40 — arithmetic
+ * ({@code + - * / %}, decimal-exact), string concatenation via {@code +}, and a fixed whitelist
+ * of pure functions ({@link Call#FUNCTIONS}). There is still no method invocation, reflection,
+ * or assignment, so evaluation cannot trigger side effects (guardrail design ch. 20.6).
  */
 public sealed interface Expr {
 
@@ -72,6 +74,125 @@ public sealed interface Expr {
                 return leftValue && right.evalBoolean(context);
             }
             return leftValue || right.evalBoolean(context);
+        }
+    }
+
+    /**
+     * Arithmetic over decimals (roadmap Phase 40): {@code +} concatenates when either side is a
+     * string; otherwise both sides must be numbers ({@link java.math.BigDecimal}-exact, so
+     * {@code qty * price <= budget} carries no float drift). A {@code null} operand propagates
+     * {@code null}, the SQL-friendly reading for optional inputs.
+     */
+    record Arithmetic(Operator operator, Expr left, Expr right) implements Expr {
+        public enum Operator {
+            ADD, SUB, MUL, DIV, MOD
+        }
+
+        @Override
+        public Object eval(EvaluationContext context) {
+            Object l = left.eval(context);
+            Object r = right.eval(context);
+            if (operator == Operator.ADD && (l instanceof String || r instanceof String)) {
+                return String.valueOf(l) + String.valueOf(r);
+            }
+            if (l == null || r == null) {
+                return null;
+            }
+            java.math.BigDecimal a = decimal(l);
+            java.math.BigDecimal b = decimal(r);
+            return switch (operator) {
+                case ADD -> a.add(b);
+                case SUB -> a.subtract(b);
+                case MUL -> a.multiply(b);
+                case DIV -> a.divide(b, java.math.MathContext.DECIMAL64);
+                case MOD -> a.remainder(b);
+            };
+        }
+
+        static java.math.BigDecimal decimal(Object value) {
+            if (value instanceof java.math.BigDecimal bd) {
+                return bd;
+            }
+            if (value instanceof Number number) {
+                return new java.math.BigDecimal(number.toString());
+            }
+            throw new IllegalArgumentException("Not a number: " + value);
+        }
+    }
+
+    /** Arithmetic negation ({@code -x}). */
+    record Negate(Expr operand) implements Expr {
+        @Override
+        public Object eval(EvaluationContext context) {
+            Object value = operand.eval(context);
+            return value == null ? null : Arithmetic.decimal(value).negate();
+        }
+    }
+
+    /**
+     * A whitelisted pure function (roadmap Phase 40). The set is fixed — parse rejects unknown
+     * names and wrong arities, so an expression can never reach outside these:
+     * {@code length lower upper trim contains startsWith endsWith matches abs round floor ceil
+     * min max coalesce}.
+     */
+    record Call(String name, List<Expr> args) implements Expr {
+
+        /** function name → arity. */
+        public static final java.util.Map<String, Integer> FUNCTIONS = java.util.Map.ofEntries(
+                java.util.Map.entry("length", 1), java.util.Map.entry("lower", 1),
+                java.util.Map.entry("upper", 1), java.util.Map.entry("trim", 1),
+                java.util.Map.entry("contains", 2), java.util.Map.entry("startsWith", 2),
+                java.util.Map.entry("endsWith", 2), java.util.Map.entry("matches", 2),
+                java.util.Map.entry("abs", 1), java.util.Map.entry("round", 1),
+                java.util.Map.entry("floor", 1), java.util.Map.entry("ceil", 1),
+                java.util.Map.entry("min", 2), java.util.Map.entry("max", 2),
+                java.util.Map.entry("coalesce", 2));
+
+        private static final java.util.concurrent.ConcurrentHashMap<String, java.util.regex.Pattern> PATTERNS = new java.util.concurrent.ConcurrentHashMap<>();
+
+        public Call {
+            args = List.copyOf(args);
+        }
+
+        @Override
+        public Object eval(EvaluationContext context) {
+            Object a = args.get(0).eval(context);
+            Object b = args.size() > 1 ? args.get(1).eval(context) : null;
+            return switch (name) {
+                case "length" -> a == null ? null : String.valueOf(a).length();
+                case "lower" ->
+                    a == null ? null : String.valueOf(a).toLowerCase(java.util.Locale.ROOT);
+                case "upper" ->
+                    a == null ? null : String.valueOf(a).toUpperCase(java.util.Locale.ROOT);
+                case "trim" -> a == null ? null : String.valueOf(a).trim();
+                case "contains" -> a != null && b != null
+                        && String.valueOf(a).contains(String.valueOf(b));
+                case "startsWith" -> a != null && b != null
+                        && String.valueOf(a).startsWith(String.valueOf(b));
+                case "endsWith" -> a != null && b != null
+                        && String.valueOf(a).endsWith(String.valueOf(b));
+                case "matches" -> a != null && b != null && PATTERNS
+                        .computeIfAbsent(String.valueOf(b), java.util.regex.Pattern::compile)
+                        .matcher(String.valueOf(a)).matches();
+                case "abs" -> a == null ? null : Arithmetic.decimal(a).abs();
+                case "round" -> a == null
+                        ? null
+                        : Arithmetic.decimal(a).setScale(0, java.math.RoundingMode.HALF_UP);
+                case "floor" -> a == null
+                        ? null
+                        : Arithmetic.decimal(a).setScale(0, java.math.RoundingMode.FLOOR);
+                case "ceil" -> a == null
+                        ? null
+                        : Arithmetic.decimal(a).setScale(0, java.math.RoundingMode.CEILING);
+                case "min" -> a == null || b == null
+                        ? null
+                        : Arithmetic.decimal(a).min(Arithmetic.decimal(b));
+                case "max" -> a == null || b == null
+                        ? null
+                        : Arithmetic.decimal(a).max(Arithmetic.decimal(b));
+                case "coalesce" -> a != null ? a : b;
+                default -> throw new IllegalStateException(name);
+            };
         }
     }
 

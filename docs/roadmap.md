@@ -581,6 +581,10 @@ leaking into hand-written SQL:
 - Every addition extends the existing machinery: `TQL-FIELD-*` codes, localized
   messages, the `validation` coverage kind, and OpenAPI schema emission.
 
+Delivered in two slices (the input vocabulary + typed path params + the pre-phase
+corrections; then the expression depth) — see
+[docs/declarative-validation.md](declarative-validation.md). **Phase 40 is complete.**
+
 ### Phase 41 — declarative pagination and response shaping
 
 - A `page:` block on `query-json`/`query-html`: offset or keyset strategy, declared
