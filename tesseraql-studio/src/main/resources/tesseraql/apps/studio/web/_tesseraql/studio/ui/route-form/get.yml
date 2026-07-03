@@ -1,0 +1,30 @@
+version: tesseraql/v1
+id: tql.studio.routeForm
+kind: route
+recipe: query-html
+
+input:
+  path:
+    type: string
+    required: true
+
+security:
+  auth: browser
+
+sql:
+  service: studio.routeForm.view
+  params:
+    path: params.path
+    roles: principal.roles
+
+response:
+  html:
+    status: 200
+    template: route-form.html
+    model:
+      rf: sql
+    headers:
+      Content-Security-Policy: "default-src 'self'; style-src 'self' 'unsafe-inline'; frame-ancestors 'none'"
+      X-Content-Type-Options: nosniff
+      X-Frame-Options: DENY
+      Referrer-Policy: no-referrer

@@ -8,6 +8,14 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **Studio form-driven route editor** (roadmap Phase 43, Track J1 — first slice): a **Route
+  form** page edits a route document's governed fields as structured form fields — recipe,
+  auth, policy (suggested from the app's declared policies), CSRF, and the `input:` block as
+  rows (name, type, required, min/max, lengths, pattern, enum). The form parses the pending
+  draft when one exists (else the served source), mutates the document tree — unknown keys and
+  unmanaged attributes survive; comments are not preserved and the page says so — and saves a
+  **draft** through the existing preview/diff/apply flow, so the text editor stays the escape
+  hatch and applying serves immediately via the Phase 42 hot reload.
 - **The instant loop — Migrate now** (roadmap Phase 42, final slice — the phase is complete):
   the Studio migration page's created view gains a confirm-gated **Migrate now** action that
   applies the app's pending Flyway migrations to the dev datasource on demand (same path as

@@ -128,3 +128,6 @@ web/_tesseraql/studio/ui/wizard/identity/get.yml
 web/_tesseraql/studio/ui/wizard/identity/wizard-identity.html
 web/_tesseraql/studio/ui/wizard/identity/post.yml
 web/_tesseraql/studio/ui/wizard/identity/wizard-identity.yml.tpl
+web/_tesseraql/studio/ui/route-form/get.yml
+web/_tesseraql/studio/ui/route-form/post.yml
+web/_tesseraql/studio/ui/route-form/route-form.html

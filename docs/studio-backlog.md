@@ -544,8 +544,17 @@ adoption.
 Queued from the 2026-07-03 low-code gap review ([roadmap.md](roadmap.md) Horizon 8); each item
 ships as its own slice once the phase opens:
 
-- [ ] **J1 — form-driven route editor**: recipe/auth/policy/inputs as structured fields (the
-  menu-editor pattern applied to route YAML itself); the text editor stays the escape hatch.
+- [x] **J1 — form-driven route editor** — *done*: a **Route form** page (linked from the source
+  editor on any `web/**/<method>.yml`) renders the governed fields — recipe, `security.auth`,
+  `security.policy` (datalist from the app's policies), CSRF, and the `input:` block as
+  structured rows (name/type/required/min/max/maxLength/minLength/pattern/enum) — parsed from
+  the pending draft when one exists, else the served source. Saving mutates the document
+  **tree** (unknown keys and unmanaged field attributes like `writable`/`mask` survive; comments
+  and hand formatting do not — the page says so) and lands a **draft** through the normal
+  preview/diff/apply flow, so the text editor stays the escape hatch and apply serves
+  immediately (Phase 42). `StudioService.routeForm`/`routeFormSave` (rejects documents that no
+  longer parse as a route; `TQL-STUDIO-4230`); `studio.routeForm.view`/`.save` providers;
+  `/ui/route-form` page.
 - [ ] **J2 — connector/SSO authoring**: `http.outbound` / `connectors.poll` /
   `connectors.webhooks` / OIDC / SAML through the gated overlay-write path (secret
   *references* only, never values; egress allow-list changes behind the confirm gate); the

@@ -1,0 +1,220 @@
+version: tesseraql/v1
+id: tql.studio.routeForm.save
+kind: route
+recipe: command-json
+
+input:
+  path:
+    type: string
+    required: true
+  recipe:
+    type: string
+    required: false
+  auth:
+    type: string
+    required: false
+  policy:
+    type: string
+    required: false
+  csrf:
+    type: string
+    required: false
+  in0name: { type: string, required: false }
+  in0type: { type: string, required: false }
+  in0req: { type: string, required: false }
+  in0min: { type: string, required: false }
+  in0max: { type: string, required: false }
+  in0maxlen: { type: string, required: false }
+  in0minlen: { type: string, required: false }
+  in0pattern: { type: string, required: false }
+  in0enum: { type: string, required: false }
+  in1name: { type: string, required: false }
+  in1type: { type: string, required: false }
+  in1req: { type: string, required: false }
+  in1min: { type: string, required: false }
+  in1max: { type: string, required: false }
+  in1maxlen: { type: string, required: false }
+  in1minlen: { type: string, required: false }
+  in1pattern: { type: string, required: false }
+  in1enum: { type: string, required: false }
+  in2name: { type: string, required: false }
+  in2type: { type: string, required: false }
+  in2req: { type: string, required: false }
+  in2min: { type: string, required: false }
+  in2max: { type: string, required: false }
+  in2maxlen: { type: string, required: false }
+  in2minlen: { type: string, required: false }
+  in2pattern: { type: string, required: false }
+  in2enum: { type: string, required: false }
+  in3name: { type: string, required: false }
+  in3type: { type: string, required: false }
+  in3req: { type: string, required: false }
+  in3min: { type: string, required: false }
+  in3max: { type: string, required: false }
+  in3maxlen: { type: string, required: false }
+  in3minlen: { type: string, required: false }
+  in3pattern: { type: string, required: false }
+  in3enum: { type: string, required: false }
+  in4name: { type: string, required: false }
+  in4type: { type: string, required: false }
+  in4req: { type: string, required: false }
+  in4min: { type: string, required: false }
+  in4max: { type: string, required: false }
+  in4maxlen: { type: string, required: false }
+  in4minlen: { type: string, required: false }
+  in4pattern: { type: string, required: false }
+  in4enum: { type: string, required: false }
+  in5name: { type: string, required: false }
+  in5type: { type: string, required: false }
+  in5req: { type: string, required: false }
+  in5min: { type: string, required: false }
+  in5max: { type: string, required: false }
+  in5maxlen: { type: string, required: false }
+  in5minlen: { type: string, required: false }
+  in5pattern: { type: string, required: false }
+  in5enum: { type: string, required: false }
+  in6name: { type: string, required: false }
+  in6type: { type: string, required: false }
+  in6req: { type: string, required: false }
+  in6min: { type: string, required: false }
+  in6max: { type: string, required: false }
+  in6maxlen: { type: string, required: false }
+  in6minlen: { type: string, required: false }
+  in6pattern: { type: string, required: false }
+  in6enum: { type: string, required: false }
+  in7name: { type: string, required: false }
+  in7type: { type: string, required: false }
+  in7req: { type: string, required: false }
+  in7min: { type: string, required: false }
+  in7max: { type: string, required: false }
+  in7maxlen: { type: string, required: false }
+  in7minlen: { type: string, required: false }
+  in7pattern: { type: string, required: false }
+  in7enum: { type: string, required: false }
+  in8name: { type: string, required: false }
+  in8type: { type: string, required: false }
+  in8req: { type: string, required: false }
+  in8min: { type: string, required: false }
+  in8max: { type: string, required: false }
+  in8maxlen: { type: string, required: false }
+  in8minlen: { type: string, required: false }
+  in8pattern: { type: string, required: false }
+  in8enum: { type: string, required: false }
+  in9name: { type: string, required: false }
+  in9type: { type: string, required: false }
+  in9req: { type: string, required: false }
+  in9min: { type: string, required: false }
+  in9max: { type: string, required: false }
+  in9maxlen: { type: string, required: false }
+  in9minlen: { type: string, required: false }
+  in9pattern: { type: string, required: false }
+  in9enum: { type: string, required: false }
+
+security:
+  auth: browser
+  csrf: true
+
+sql:
+  service: studio.routeForm.save
+  params:
+    path: params.path
+    recipe: params.recipe
+    auth: params.auth
+    policy: params.policy
+    csrf: params.csrf
+    in0name: params.in0name
+    in0type: params.in0type
+    in0req: params.in0req
+    in0min: params.in0min
+    in0max: params.in0max
+    in0maxlen: params.in0maxlen
+    in0minlen: params.in0minlen
+    in0pattern: params.in0pattern
+    in0enum: params.in0enum
+    in1name: params.in1name
+    in1type: params.in1type
+    in1req: params.in1req
+    in1min: params.in1min
+    in1max: params.in1max
+    in1maxlen: params.in1maxlen
+    in1minlen: params.in1minlen
+    in1pattern: params.in1pattern
+    in1enum: params.in1enum
+    in2name: params.in2name
+    in2type: params.in2type
+    in2req: params.in2req
+    in2min: params.in2min
+    in2max: params.in2max
+    in2maxlen: params.in2maxlen
+    in2minlen: params.in2minlen
+    in2pattern: params.in2pattern
+    in2enum: params.in2enum
+    in3name: params.in3name
+    in3type: params.in3type
+    in3req: params.in3req
+    in3min: params.in3min
+    in3max: params.in3max
+    in3maxlen: params.in3maxlen
+    in3minlen: params.in3minlen
+    in3pattern: params.in3pattern
+    in3enum: params.in3enum
+    in4name: params.in4name
+    in4type: params.in4type
+    in4req: params.in4req
+    in4min: params.in4min
+    in4max: params.in4max
+    in4maxlen: params.in4maxlen
+    in4minlen: params.in4minlen
+    in4pattern: params.in4pattern
+    in4enum: params.in4enum
+    in5name: params.in5name
+    in5type: params.in5type
+    in5req: params.in5req
+    in5min: params.in5min
+    in5max: params.in5max
+    in5maxlen: params.in5maxlen
+    in5minlen: params.in5minlen
+    in5pattern: params.in5pattern
+    in5enum: params.in5enum
+    in6name: params.in6name
+    in6type: params.in6type
+    in6req: params.in6req
+    in6min: params.in6min
+    in6max: params.in6max
+    in6maxlen: params.in6maxlen
+    in6minlen: params.in6minlen
+    in6pattern: params.in6pattern
+    in6enum: params.in6enum
+    in7name: params.in7name
+    in7type: params.in7type
+    in7req: params.in7req
+    in7min: params.in7min
+    in7max: params.in7max
+    in7maxlen: params.in7maxlen
+    in7minlen: params.in7minlen
+    in7pattern: params.in7pattern
+    in7enum: params.in7enum
+    in8name: params.in8name
+    in8type: params.in8type
+    in8req: params.in8req
+    in8min: params.in8min
+    in8max: params.in8max
+    in8maxlen: params.in8maxlen
+    in8minlen: params.in8minlen
+    in8pattern: params.in8pattern
+    in8enum: params.in8enum
+    in9name: params.in9name
+    in9type: params.in9type
+    in9req: params.in9req
+    in9min: params.in9min
+    in9max: params.in9max
+    in9maxlen: params.in9maxlen
+    in9minlen: params.in9minlen
+    in9pattern: params.in9pattern
+    in9enum: params.in9enum
+    roles: principal.roles
+
+response:
+  redirect:
+    status: 303
+    location: /_tesseraql/studio/ui/source?path={params.path}&saved=1

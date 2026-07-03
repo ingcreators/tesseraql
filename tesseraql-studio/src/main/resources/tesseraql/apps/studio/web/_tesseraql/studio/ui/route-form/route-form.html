@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{tql/shell :: studio-page(|TesseraQL Studio · Route form|, ~{:: #page-header}, ~{:: #page-content})}">
+<th:block id="page-header">
+  <span class="hc-spacer"></span>
+  <div class="hc-cluster">
+    <a class="hc-button" data-variant="ghost" data-size="sm"
+       th:href="|/_tesseraql/studio/ui/source?path=${#uris.escapeQueryParam(rf.form.path)}|">Text editor</a>
+    <a class="hc-button" data-variant="ghost" data-size="sm" href="/_tesseraql/studio/ui">&larr; explorer</a>
+  </div>
+</th:block>
+<div id="page-content" class="hc-stack">
+  <section class="hc-card">
+    <h2>Route form <code th:text="${rf.form.path}"></code></h2>
+    <p class="hc-alert" data-variant="warning" role="status" th:if="${rf.form.fromDraft}">
+      Editing the pending draft (not the served source).</p>
+    <th:block th:if="${rf.form.error}">
+      <p class="hc-alert" data-variant="error" role="alert"
+         th:text="|The document does not parse as YAML: ${rf.form.error}|"></p>
+      <p class="hc-field__message">Fix it in the
+        <a th:href="|/_tesseraql/studio/ui/source?path=${#uris.escapeQueryParam(rf.form.path)}|">text editor</a>
+        first &mdash; the form needs a parseable document.</p>
+    </th:block>
+    <th:block th:if="${rf.form.error == null}">
+      <p class="hc-field__message">The governed fields as a form &mdash; recipe, auth, policy and
+        inputs edit the same document the text editor shows. Saving lands a <strong>draft</strong>
+        in canonical formatting (comments and hand formatting are not preserved); review and apply
+        it from the text editor, which stays the escape hatch for everything else.</p>
+      <p class="hc-field__message" th:unless="${rf.editable}">You do not have permission to edit
+        routes; the fields below are read-only.</p>
+      <form class="hc-stack" method="post" action="/_tesseraql/studio/ui/route-form"
+            th:attr="data-readonly=${rf.readOnly}">
+        <input type="hidden" name="_csrf" th:value="${_csrf}">
+        <input type="hidden" name="path" th:value="${rf.form.path}">
+        <div class="hc-cluster">
+          <label class="hc-field">
+            <span class="hc-field__label">Recipe</span>
+            <select class="hc-select" name="recipe">
+              <option th:each="r : ${rf.recipes}" th:value="${r}" th:text="${r}"
+                      th:selected="${r == rf.form.recipe}"></option>
+              <option th:if="${rf.form.recipe != null && !rf.recipes.contains(rf.form.recipe)}"
+                      th:value="${rf.form.recipe}" th:text="|${rf.form.recipe} (current)|"
+                      selected></option>
+            </select>
+          </label>
+          <label class="hc-field">
+            <span class="hc-field__label">Auth</span>
+            <select class="hc-select" name="auth">
+              <option value="">(none)</option>
+              <option th:each="a : ${rf.authOptions}" th:value="${a}" th:text="${a}"
+                      th:selected="${a == rf.form.auth}"></option>
+            </select>
+          </label>
+          <label class="hc-field">
+            <span class="hc-field__label">Policy</span>
+            <input class="hc-input" name="policy" list="rf-policies" th:value="${rf.form.policy}"
+                   placeholder="app.read">
+            <datalist id="rf-policies">
+              <option th:each="p : ${rf.policyOptions}" th:value="${p}"></option>
+            </datalist>
+          </label>
+          <label class="hc-field">
+            <span class="hc-field__label">CSRF</span>
+            <input type="checkbox" name="csrf" value="true" th:checked="${rf.form.csrf}">
+          </label>
+        </div>
+        <h3>Inputs</h3>
+        <p class="hc-field__message">Declared inputs gate binding (undeclared body fields are
+          rejected) and drive validation and the generated OpenAPI. Clear a name to drop the
+          field.</p>
+        <div style="overflow-x: auto">
+          <table class="hc-table">
+            <thead>
+            <tr><th>Name</th><th>Type</th><th>Required</th><th>Min</th><th>Max</th>
+              <th>Max len</th><th>Min len</th><th>Pattern</th><th>Enum (csv)</th></tr>
+            </thead>
+            <tbody>
+            <tr th:each="i : ${#numbers.sequence(0, rf.slots - 1)}"
+                th:with="row=${i < rf.form.inputs.size() ? rf.form.inputs[i] : null}">
+              <td><input class="hc-input" data-size="sm" th:name="|in${i}name|"
+                         th:value="${row == null ? null : row.name}"></td>
+              <td>
+                <select class="hc-select" data-size="sm" th:name="|in${i}type|">
+                  <option value="">(default)</option>
+                  <option th:each="t : ${ {'string','integer','number','boolean','date','array'} }"
+                          th:value="${t}" th:text="${t}" th:selected="${row != null && t == row.type}"></option>
+                </select>
+              </td>
+              <td><input type="checkbox" th:name="|in${i}req|" value="true"
+                         th:checked="${row != null && row.required}"></td>
+              <td><input class="hc-input" data-size="sm" th:name="|in${i}min|"
+                         th:value="${row == null ? null : row.min}"></td>
+              <td><input class="hc-input" data-size="sm" th:name="|in${i}max|"
+                         th:value="${row == null ? null : row.max}"></td>
+              <td><input class="hc-input" data-size="sm" th:name="|in${i}maxlen|"
+                         th:value="${row == null ? null : row.maxLength}"></td>
+              <td><input class="hc-input" data-size="sm" th:name="|in${i}minlen|"
+                         th:value="${row == null ? null : row.minLength}"></td>
+              <td><input class="hc-input" data-size="sm" th:name="|in${i}pattern|"
+                         th:value="${row == null ? null : row.pattern}"></td>
+              <td><input class="hc-input" data-size="sm" th:name="|in${i}enum|"
+                         th:value="${row == null ? null : row.enumCsv}"></td>
+            </tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="hc-cluster" th:if="${rf.editable}">
+          <button class="hc-button" data-variant="primary" type="submit">Save as draft</button>
+          <span class="hc-field__message">Then review the diff and apply from the text editor
+            (applying serves immediately &mdash; routes hot-reload).</span>
+        </div>
+      </form>
+    </th:block>
+  </section>
+</div>
+</html>
