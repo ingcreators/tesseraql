@@ -512,7 +512,8 @@ existing template pipeline into Hypermedia Components markup (the same emitted-m
 contract the route compiler already owns, mandatory rule 11). Fields derive from schema
 introspection plus the route's `input:` constraints — one source of truth, ending the
 `required`/`maxLength` duplication into HTML — with explicit per-field overrides
-(label, widget, order, visibility).
+(label, widget, order, visibility). The full design — resolving decision point 7 in
+favour of interpretation — is in [docs/declarative-views.md](declarative-views.md).
 
 Declarative does not mean locked-in HTML (recorded 2026-07-03): the
 freedom-vs-declarativeness trade-off is resolved as a **customization ladder**, every
@@ -790,7 +791,12 @@ None block Phase 18; flagged for the maintainer as their horizons approach.
    template-chain resolution at render time — the resolver order in `Templates` already
    models it — where the build-time variant needs a regeneration step after every
    override edit. A design document precedes code, like approval-workflow.md; either way
-   the emitted hc markup stays the public contract (mandatory rule 11).
+   the emitted hc markup stays the public contract (mandatory rule 11). Resolved
+   2026-07-03 in favour of **interpretation** (see
+   [docs/declarative-views.md](declarative-views.md)): pattern overrides stay pure
+   resolver-chain lookups, derived list columns need the live row shape, and rendering
+   is a pure function of (document, fragments, model) so reproducibility needs no
+   generated artifact — while parsing, reference checks, and lint stay at build time.
 8. **Copilot model access** (Phase 44): an operator-configured model endpoint (credentials
    via the SecretResolver SPI) vs riding a connected MCP client's model. Invariant either
    way: TesseraQL ships no model, stores no key in app source, and every write remains a
