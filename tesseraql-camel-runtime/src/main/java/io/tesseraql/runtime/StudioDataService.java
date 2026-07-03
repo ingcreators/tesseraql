@@ -38,17 +38,24 @@ final class StudioDataService {
     private final boolean enabled;
     private final int queryTimeoutSeconds;
     private final int maxScan;
+    private final boolean editEnabled;
 
     StudioDataService(Function<String, DataSource> datasources, boolean enabled,
-            int queryTimeoutSeconds, int maxScan) {
+            boolean editEnabled, int queryTimeoutSeconds, int maxScan) {
         this.datasources = datasources;
         this.enabled = enabled;
+        this.editEnabled = editEnabled;
         this.queryTimeoutSeconds = queryTimeoutSeconds;
         this.maxScan = Math.max(maxScan, PAGE_SIZE + 1);
     }
 
     boolean isEnabled() {
         return enabled;
+    }
+
+    /** Whether PK-scoped row editing is switched on (its own opt-in beside the browser's). */
+    boolean isEditEnabled() {
+        return enabled && editEnabled;
     }
 
     /** The maximum rows a CSV export includes (the scan cap) — surfaced so the cap is not silent. */
@@ -278,6 +285,179 @@ final class StudioDataService {
     }
 
     /** Coerces a string to the column's JDBC type for an ordering comparison; null if it won't parse. */
+    /** The table's primary-key columns (live JDBC, key-sequence order); empty when none. */
+    List<String> primaryKey(String table) {
+        if (!tables().contains(table)) {
+            return List.of();
+        }
+        try (Connection connection = datasources.apply("main").getConnection()) {
+            return primaryKey(connection, table);
+        } catch (SQLException ex) {
+            return List.of();
+        }
+    }
+
+    private static List<String> primaryKey(Connection connection, String table)
+            throws SQLException {
+        java.util.TreeMap<Short, String> bySeq = new java.util.TreeMap<>();
+        try (ResultSet rs = connection.getMetaData().getPrimaryKeys(connection.getCatalog(),
+                null, table)) {
+            while (rs.next()) {
+                bySeq.put(rs.getShort("KEY_SEQ"), rs.getString("COLUMN_NAME"));
+            }
+        }
+        return new ArrayList<>(bySeq.values());
+    }
+
+    /** One editable row (Track J4): every column with its current value, PK fields flagged. */
+    record RowView(String table, List<String> pkColumns, List<Map<String, Object>> fields) {
+    }
+
+    /** Loads the single row identified by the full primary key, for the edit form (Track J4). */
+    RowView row(String table, Map<String, String> pk) {
+        if (!isEditEnabled()) {
+            throw new IllegalStateException("The data browser row editor is not enabled");
+        }
+        if (!tables().contains(table)) {
+            throw new IllegalArgumentException("No such table: " + table);
+        }
+        try (Connection connection = datasources.apply("main").getConnection()) {
+            connection.setReadOnly(true);
+            String quote = connection.getMetaData().getIdentifierQuoteString();
+            Map<String, Integer> columnTypes = columnTypes(connection, table);
+            List<String> pkColumns = requireFullKey(connection, table, pk, columnTypes);
+            StringBuilder sql = new StringBuilder("select * from ")
+                    .append(quoteId(quote, table)).append(" where ");
+            List<Object> binds = new ArrayList<>();
+            appendKeyPredicate(sql, binds, quote, pkColumns, columnTypes, pk);
+            try (PreparedStatement statement = connection.prepareStatement(sql.toString())) {
+                statement.setQueryTimeout(queryTimeoutSeconds);
+                statement.setMaxRows(2);
+                bindAll(statement, binds);
+                try (ResultSet rs = statement.executeQuery()) {
+                    if (!rs.next()) {
+                        throw new IllegalArgumentException("No row matches that key");
+                    }
+                    ResultSetMetaData meta = rs.getMetaData();
+                    List<Map<String, Object>> fields = new ArrayList<>();
+                    for (int i = 1; i <= meta.getColumnCount(); i++) {
+                        Map<String, Object> field = new java.util.LinkedHashMap<>();
+                        String name = meta.getColumnLabel(i);
+                        Object value = rs.getObject(i);
+                        field.put("name", name);
+                        field.put("value", value == null ? null : String.valueOf(value));
+                        field.put("pk", containsIgnoreCase(pkColumns, name));
+                        fields.add(field);
+                    }
+                    return new RowView(table, pkColumns, fields);
+                }
+            }
+        } catch (SQLException ex) {
+            throw new IllegalStateException("Row load failed: " + ex.getMessage(), ex);
+        }
+    }
+
+    /**
+     * Applies a PK-scoped single-row UPDATE (Track J4): changed columns are validated against
+     * the live catalog, values bind coerced to the column's JDBC type (empty string sets NULL),
+     * primary-key columns are never updatable, and exactly one row must be affected. The caller
+     * gates this behind editRoles + an explicit confirm and records the audit entry.
+     */
+    int updateRow(String table, Map<String, String> pk, Map<String, String> changes) {
+        if (!isEditEnabled()) {
+            throw new IllegalStateException("The data browser row editor is not enabled");
+        }
+        if (!tables().contains(table)) {
+            throw new IllegalArgumentException("No such table: " + table);
+        }
+        try (Connection connection = datasources.apply("main").getConnection()) {
+            String quote = connection.getMetaData().getIdentifierQuoteString();
+            Map<String, Integer> columnTypes = columnTypes(connection, table);
+            List<String> pkColumns = requireFullKey(connection, table, pk, columnTypes);
+            List<String> setColumns = new ArrayList<>();
+            List<Object> binds = new ArrayList<>();
+            for (Map.Entry<String, String> change : changes.entrySet()) {
+                String column = change.getKey();
+                if (!columnTypes.containsKey(column) || containsIgnoreCase(pkColumns, column)) {
+                    continue;
+                }
+                setColumns.add(column);
+                String raw = change.getValue();
+                binds.add(raw == null || raw.isEmpty()
+                        ? null
+                        : coerceStrict(columnTypes.get(column), raw));
+            }
+            if (setColumns.isEmpty()) {
+                throw new IllegalArgumentException("No editable column was selected");
+            }
+            StringBuilder sql = new StringBuilder("update ").append(quoteId(quote, table))
+                    .append(" set ");
+            for (int i = 0; i < setColumns.size(); i++) {
+                sql.append(i > 0 ? ", " : "").append(quoteId(quote, setColumns.get(i)))
+                        .append(" = ?");
+            }
+            sql.append(" where ");
+            appendKeyPredicate(sql, binds, quote, pkColumns, columnTypes, pk);
+            try (PreparedStatement statement = connection.prepareStatement(sql.toString())) {
+                statement.setQueryTimeout(queryTimeoutSeconds);
+                bindAll(statement, binds);
+                int affected = statement.executeUpdate();
+                if (affected != 1) {
+                    throw new IllegalStateException(
+                            "Expected to update exactly one row, but " + affected + " matched");
+                }
+                return affected;
+            }
+        } catch (SQLException ex) {
+            throw new IllegalStateException("Update failed: " + ex.getMessage(), ex);
+        }
+    }
+
+    /** The pk parameter must name the table's FULL primary key (a PK-less table is not editable). */
+    private static List<String> requireFullKey(Connection connection, String table,
+            Map<String, String> pk, Map<String, Integer> columnTypes) throws SQLException {
+        List<String> pkColumns = primaryKey(connection, table);
+        if (pkColumns.isEmpty()) {
+            throw new IllegalArgumentException(
+                    "Table " + table + " has no primary key; rows are not editable");
+        }
+        for (String column : pkColumns) {
+            if (pk.get(column) == null) {
+                throw new IllegalArgumentException("Missing key column: " + column);
+            }
+        }
+        for (String column : pk.keySet()) {
+            if (!containsIgnoreCase(pkColumns, column) || !columnTypes.containsKey(column)) {
+                throw new IllegalArgumentException("Not a key column: " + column);
+            }
+        }
+        return pkColumns;
+    }
+
+    private void appendKeyPredicate(StringBuilder sql, List<Object> binds, String quote,
+            List<String> pkColumns, Map<String, Integer> columnTypes, Map<String, String> pk) {
+        for (int i = 0; i < pkColumns.size(); i++) {
+            String column = pkColumns.get(i);
+            sql.append(i > 0 ? " and " : "").append(quoteId(quote, column)).append(" = ?");
+            binds.add(coerceStrict(columnTypes.getOrDefault(column, java.sql.Types.VARCHAR),
+                    pk.get(column)));
+        }
+    }
+
+    private static boolean containsIgnoreCase(List<String> list, String value) {
+        return list.stream().anyMatch(item -> item.equalsIgnoreCase(value));
+    }
+
+    /** Like {@link #coerce} but a value that will not parse is an error, not a dropped filter. */
+    private static Object coerceStrict(int jdbcType, String value) {
+        Object coerced = coerce(jdbcType, value);
+        if (coerced == null) {
+            throw new IllegalArgumentException("Value does not parse for the column type: "
+                    + value);
+        }
+        return coerced;
+    }
+
     private static Object coerce(int jdbcType, String value) {
         try {
             return switch (jdbcType) {
@@ -287,6 +467,7 @@ final class StudioDataService {
                 case Types.DATE -> Date.valueOf(value);
                 case Types.TIMESTAMP, Types.TIMESTAMP_WITH_TIMEZONE ->
                     Timestamp.valueOf(value.replace('T', ' '));
+                case Types.BOOLEAN, Types.BIT -> Boolean.valueOf(value);
                 default -> value;
             };
         } catch (IllegalArgumentException ex) {

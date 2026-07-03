@@ -1,0 +1,173 @@
+version: tesseraql/v1
+id: tql.studio.data.update
+kind: route
+recipe: command-json
+
+input:
+  table:
+    type: string
+    required: true
+  confirm:
+    type: string
+    required: false
+  k0:
+    type: string
+    required: false
+  v0:
+    type: string
+    required: false
+  k1:
+    type: string
+    required: false
+  v1:
+    type: string
+    required: false
+  k2:
+    type: string
+    required: false
+  v2:
+    type: string
+    required: false
+  cn0: { type: string, required: false }
+  cv0: { type: string, required: false }
+  cs0: { type: string, required: false }
+  cn1: { type: string, required: false }
+  cv1: { type: string, required: false }
+  cs1: { type: string, required: false }
+  cn2: { type: string, required: false }
+  cv2: { type: string, required: false }
+  cs2: { type: string, required: false }
+  cn3: { type: string, required: false }
+  cv3: { type: string, required: false }
+  cs3: { type: string, required: false }
+  cn4: { type: string, required: false }
+  cv4: { type: string, required: false }
+  cs4: { type: string, required: false }
+  cn5: { type: string, required: false }
+  cv5: { type: string, required: false }
+  cs5: { type: string, required: false }
+  cn6: { type: string, required: false }
+  cv6: { type: string, required: false }
+  cs6: { type: string, required: false }
+  cn7: { type: string, required: false }
+  cv7: { type: string, required: false }
+  cs7: { type: string, required: false }
+  cn8: { type: string, required: false }
+  cv8: { type: string, required: false }
+  cs8: { type: string, required: false }
+  cn9: { type: string, required: false }
+  cv9: { type: string, required: false }
+  cs9: { type: string, required: false }
+  cn10: { type: string, required: false }
+  cv10: { type: string, required: false }
+  cs10: { type: string, required: false }
+  cn11: { type: string, required: false }
+  cv11: { type: string, required: false }
+  cs11: { type: string, required: false }
+  cn12: { type: string, required: false }
+  cv12: { type: string, required: false }
+  cs12: { type: string, required: false }
+  cn13: { type: string, required: false }
+  cv13: { type: string, required: false }
+  cs13: { type: string, required: false }
+  cn14: { type: string, required: false }
+  cv14: { type: string, required: false }
+  cs14: { type: string, required: false }
+  cn15: { type: string, required: false }
+  cv15: { type: string, required: false }
+  cs15: { type: string, required: false }
+  cn16: { type: string, required: false }
+  cv16: { type: string, required: false }
+  cs16: { type: string, required: false }
+  cn17: { type: string, required: false }
+  cv17: { type: string, required: false }
+  cs17: { type: string, required: false }
+  cn18: { type: string, required: false }
+  cv18: { type: string, required: false }
+  cs18: { type: string, required: false }
+  cn19: { type: string, required: false }
+  cv19: { type: string, required: false }
+  cs19: { type: string, required: false }
+
+security:
+  auth: browser
+  csrf: true
+
+sql:
+  service: studio.data.update
+  params:
+    table: params.table
+    confirm: params.confirm
+    k0: params.k0
+    v0: params.v0
+    k1: params.k1
+    v1: params.v1
+    k2: params.k2
+    v2: params.v2
+    cn0: params.cn0
+    cv0: params.cv0
+    cs0: params.cs0
+    cn1: params.cn1
+    cv1: params.cv1
+    cs1: params.cs1
+    cn2: params.cn2
+    cv2: params.cv2
+    cs2: params.cs2
+    cn3: params.cn3
+    cv3: params.cv3
+    cs3: params.cs3
+    cn4: params.cn4
+    cv4: params.cv4
+    cs4: params.cs4
+    cn5: params.cn5
+    cv5: params.cv5
+    cs5: params.cs5
+    cn6: params.cn6
+    cv6: params.cv6
+    cs6: params.cs6
+    cn7: params.cn7
+    cv7: params.cv7
+    cs7: params.cs7
+    cn8: params.cn8
+    cv8: params.cv8
+    cs8: params.cs8
+    cn9: params.cn9
+    cv9: params.cv9
+    cs9: params.cs9
+    cn10: params.cn10
+    cv10: params.cv10
+    cs10: params.cs10
+    cn11: params.cn11
+    cv11: params.cv11
+    cs11: params.cs11
+    cn12: params.cn12
+    cv12: params.cv12
+    cs12: params.cs12
+    cn13: params.cn13
+    cv13: params.cv13
+    cs13: params.cs13
+    cn14: params.cn14
+    cv14: params.cv14
+    cs14: params.cs14
+    cn15: params.cn15
+    cv15: params.cv15
+    cs15: params.cs15
+    cn16: params.cn16
+    cv16: params.cv16
+    cs16: params.cs16
+    cn17: params.cn17
+    cv17: params.cv17
+    cs17: params.cs17
+    cn18: params.cn18
+    cv18: params.cv18
+    cs18: params.cs18
+    cn19: params.cn19
+    cv19: params.cv19
+    cs19: params.cs19
+    roles: principal.roles
+    actor: principal.loginId
+
+response:
+  redirect:
+    status: 303
+    location: /_tesseraql/studio/ui/data?table={params.table}&updated=1

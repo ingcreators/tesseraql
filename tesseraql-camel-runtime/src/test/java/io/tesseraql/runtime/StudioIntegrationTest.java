@@ -1958,6 +1958,61 @@ class StudioIntegrationTest {
     }
 
     @Test
+    void dataBrowserRowEditUpdatesOneRowUnderConfirmAndAudit() throws Exception {
+        // Track J4 (roadmap Phase 43): PK-scoped single-row edit — the browser links Edit when
+        // the row editor is on, the caller may edit, and the table has a primary key.
+        HttpResponse<String> browse = get("/_tesseraql/studio/ui/data?table=tql_users", true);
+        assertThat(browse.statusCode()).isEqualTo(200);
+        assertThat(browse.body()).contains("/_tesseraql/studio/ui/data/edit?table=tql_users")
+                .contains("k0=user_id").contains("v0=u1");
+
+        HttpResponse<String> form = get(
+                "/_tesseraql/studio/ui/data/edit?table=tql_users&k0=user_id&v0=u1", true);
+        assertThat(form.statusCode()).isEqualTo(200);
+        assertThat(form.body()).contains("display_name").contains("Administrator")
+                .contains("PK");
+
+        // No explicit confirm -> rejected before any SQL runs.
+        assertThat(postForm("/_tesseraql/studio/ui/data/edit",
+                "table=tql_users&k0=user_id&v0=u1&cn0=display_name&cv0=X&cs0=true")
+                .statusCode()).isEqualTo(422);
+
+        HttpResponse<String> updated = postForm("/_tesseraql/studio/ui/data/edit",
+                "table=tql_users&k0=user_id&v0=u1&confirm=true"
+                        + "&cn0=display_name&cv0=" + enc("Renamed Admin") + "&cs0=true");
+        assertThat(updated.statusCode()).isEqualTo(303);
+        assertThat(get("/_tesseraql/studio/ui/data?table=tql_users", true).body())
+                .contains("Renamed Admin");
+        // The audit trail carries the row identity and column names, never values.
+        assertThat(get("/_tesseraql/studio/audit", true).body())
+                .contains("tql_users [user_id=u1] set display_name")
+                .doesNotContain("Renamed Admin");
+
+        // Editing the PK itself is refused (PK columns are excluded from the SET clause).
+        assertThat(postForm("/_tesseraql/studio/ui/data/edit",
+                "table=tql_users&k0=user_id&v0=u1&confirm=true&cn0=user_id&cv0=u9&cs0=true")
+                .statusCode()).isEqualTo(400);
+
+        // A PK-less table gets no edit affordance and the form states why.
+        try (java.sql.Connection connection = java.sql.DriverManager.getConnection(
+                POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword());
+                java.sql.Statement statement = connection.createStatement()) {
+            statement.execute("create table if not exists pkless_notes (note varchar(40))");
+            statement.execute("insert into pkless_notes values ('only')");
+        }
+        assertThat(get("/_tesseraql/studio/ui/data?table=pkless_notes", true).body())
+                .doesNotContain("/_tesseraql/studio/ui/data/edit?table=pkless_notes");
+        assertThat(get("/_tesseraql/studio/ui/data/edit?table=pkless_notes&k0=note&v0=only",
+                true).body()).contains("no primary key");
+
+        // Restore the shared seed row (other tests assert the original display name).
+        assertThat(postForm("/_tesseraql/studio/ui/data/edit",
+                "table=tql_users&k0=user_id&v0=u1&confirm=true"
+                        + "&cn0=display_name&cv0=Administrator&cs0=true")
+                .statusCode()).isEqualTo(303);
+    }
+
+    @Test
     void uiMenuPageRendersTheEditorAndFallbackNote() throws Exception {
         // With no config/menu.yml the editor shows the add form and the templates/nav.html fallback.
         Files.deleteIfExists(appHome.resolve("config/menu.yml"));
@@ -2790,6 +2845,8 @@ class StudioIntegrationTest {
                       enabled: true
                     dataBrowser:
                       enabled: true
+                      edit:
+                        enabled: true
                   docs:
                     share:
                       secret: it-docs-share-secret-0123456789

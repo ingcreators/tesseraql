@@ -8,6 +8,13 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **Studio data-browser row editing** (roadmap Phase 43, Track J4): browser rows link **Edit**
+  when the row editor's own opt-in (`tesseraql.studio.dataBrowser.edit.enabled`), the caller's
+  `editRoles`, and a table primary key all line up. The PK-scoped single-row UPDATE validates
+  identifiers against the live catalog, binds values coerced to the column types (a ticked
+  empty value sets `NULL`), never touches PK columns, must affect exactly one row, always
+  requires an explicit confirm, and is audited as the row identity plus column names — never
+  values. The master-data maintenance screen nobody has to build.
 - **Studio test recorder** (roadmap Phase 43, Track J3): a successful API-console invocation
   of a query route can be saved as a declarative test case — the sent parameters reverse-map
   onto the route's `sql.params`, the sandbox captures the row count as the expectation (the

@@ -8,6 +8,8 @@
   </div>
 </th:block>
 <div id="page-content" class="hc-stack">
+  <p class="hc-alert" data-variant="success" role="status" th:if="${data.updated != null}">
+    Row updated.</p>
   <section class="hc-card">
     <h2>Data browser</h2>
 
@@ -121,10 +123,16 @@
           <div class="hc-datagrid__scroll">
             <table class="hc-datagrid__table">
               <thead class="hc-datagrid__head"><tr>
+                <th class="hc-datagrid__headcell" th:if="${data.editHrefs != null}"></th>
                 <th class="hc-datagrid__headcell" th:each="c : ${data.columns}" th:text="${c}">col</th>
               </tr></thead>
               <tbody class="hc-datagrid__body">
-                <tr class="hc-datagrid__row" th:each="row : ${data.rows}">
+                <tr class="hc-datagrid__row" th:each="row, rowStat : ${data.rows}">
+                  <td class="hc-datagrid__cell" th:if="${data.editHrefs != null}">
+                    <a class="hc-button" data-variant="ghost" data-size="sm"
+                       th:if="${data.editHrefs[rowStat.index] != null}"
+                       th:href="${data.editHrefs[rowStat.index]}">Edit</a>
+                  </td>
                   <td class="hc-datagrid__cell" th:each="cell : ${row.cells}">
                     <span class="hc-field__message" th:if="${cell.isNull}">(null)</span>
                     <span th:unless="${cell.isNull}" th:text="${cell.value}">value</span>

@@ -4,6 +4,9 @@ kind: route
 recipe: query-html
 
 input:
+  updated:
+    type: string
+    required: false
   table: { type: string, required: false }
   page: { type: string, required: false }
   sort: { type: string, required: false }
@@ -31,6 +34,8 @@ security:
 sql:
   service: studio.data
   params:
+    roles: principal.roles
+    updated: params.updated
     table: params.table
     page: params.page
     sort: params.sort

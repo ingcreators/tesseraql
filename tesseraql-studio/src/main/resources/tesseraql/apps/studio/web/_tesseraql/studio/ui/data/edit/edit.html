@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{tql/shell :: studio-page(|TesseraQL Studio · Edit row|, ~{:: #page-header}, ~{:: #page-content})}">
+<th:block id="page-header">
+  <span class="hc-spacer"></span>
+  <div class="hc-cluster">
+    <a th:href="|/_tesseraql/studio/ui/data?table=${#uris.escapeQueryParam(row.table)}|">&larr; data browser</a>
+  </div>
+</th:block>
+<div id="page-content" class="hc-stack">
+  <section class="hc-card">
+    <h2>Edit row <code th:text="${row.table}"></code></h2>
+    <p class="hc-alert" data-variant="error" role="alert" th:if="${row.error}"
+       th:text="${row.error}"></p>
+    <th:block th:if="${row.error == null}">
+      <p class="hc-field__message">A PK-scoped single-row update: tick the columns to apply,
+        leave the rest untouched. A ticked empty value sets <code>NULL</code>. Primary-key
+        columns are not editable. The change is audited (row identity and column names, never
+        values).</p>
+      <form class="hc-stack" method="post" action="/_tesseraql/studio/ui/data/edit">
+        <input type="hidden" name="_csrf" th:value="${_csrf}">
+        <input type="hidden" name="table" th:value="${row.table}">
+        <input type="hidden" name="confirm" value="true">
+        <th:block th:each="k, kStat : ${row.keyPairs}">
+          <input type="hidden" th:name="|k${kStat.index}|" th:value="${k.column}">
+          <input type="hidden" th:name="|v${kStat.index}|" th:value="${k.value}">
+        </th:block>
+        <div style="overflow-x: auto">
+          <table class="hc-table">
+            <thead><tr><th>Apply</th><th>Column</th><th>Value</th></tr></thead>
+            <tbody>
+            <tr th:each="f, fStat : ${row.fields}" th:if="${fStat.index < 20}">
+              <td>
+                <input type="checkbox" th:name="|cs${fStat.index}|" value="true"
+                       th:disabled="${f.pk}">
+                <input type="hidden" th:name="|cn${fStat.index}|" th:value="${f.name}">
+              </td>
+              <td><code th:text="${f.name}"></code>
+                <span class="hc-badge" data-size="sm" th:if="${f.pk}">PK</span></td>
+              <td><input class="hc-input" data-size="sm" th:name="|cv${fStat.index}|"
+                         th:value="${f.value}" th:readonly="${f.pk}"></td>
+            </tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="hc-field__message" th:if="${row.fields.size() > 20}">Only the first 20
+          columns are editable here; edit the rest through a route or migration.</p>
+        <div class="hc-cluster">
+          <button class="hc-button" data-variant="primary" type="submit"
+                  data-hc-confirm="Update this row? The change applies to the dev datasource immediately and is audited."
+                  data-hc-confirm-title="Update row" data-hc-confirm-label="Update">Update row</button>
+        </div>
+      </form>
+    </th:block>
+  </section>
+</div>
+</html>
