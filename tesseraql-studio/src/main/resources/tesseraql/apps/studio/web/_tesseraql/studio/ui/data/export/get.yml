@@ -4,15 +4,10 @@ kind: route
 recipe: query-html
 
 input:
-  table:
-    type: string
-    required: true
-  sort:
-    type: string
-    required: false
-  dir:
-    type: string
-    required: false
+  table: { type: string, required: true }
+  sort: { type: string, required: false }
+  dir: { type: string, required: false }
+  combinator: { type: string, required: false }
   fc0: { type: string, required: false }
   fo0: { type: string, required: false }
   fv0: { type: string, required: false }
@@ -22,6 +17,12 @@ input:
   fc2: { type: string, required: false }
   fo2: { type: string, required: false }
   fv2: { type: string, required: false }
+  fc3: { type: string, required: false }
+  fo3: { type: string, required: false }
+  fv3: { type: string, required: false }
+  fc4: { type: string, required: false }
+  fo4: { type: string, required: false }
+  fv4: { type: string, required: false }
 
 security:
   auth: browser
@@ -32,6 +33,7 @@ sql:
     table: params.table
     sort: params.sort
     dir: params.dir
+    combinator: params.combinator
     fc0: params.fc0
     fo0: params.fo0
     fv0: params.fv0
@@ -41,6 +43,12 @@ sql:
     fc2: params.fc2
     fo2: params.fo2
     fv2: params.fv2
+    fc3: params.fc3
+    fo3: params.fo3
+    fv3: params.fv3
+    fc4: params.fc4
+    fo4: params.fo4
+    fv4: params.fv4
 
 response:
   file:

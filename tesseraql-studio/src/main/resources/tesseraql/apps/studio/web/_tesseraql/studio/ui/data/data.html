@@ -40,6 +40,13 @@
              values are bound params; comparisons run on the text representation of each column. -->
         <form class="hc-stack" method="get" action="/_tesseraql/studio/ui/data">
           <input type="hidden" name="table" th:value="${data.table}">
+          <div class="hc-field">
+            <label class="hc-field__label" for="data-combinator">Match</label>
+            <select class="hc-select" id="data-combinator" name="combinator">
+              <option value="and" th:selected="${data.combinator == 'and'}">all conditions (AND)</option>
+              <option value="or" th:selected="${data.combinator == 'or'}">any condition (OR)</option>
+            </select>
+          </div>
           <div class="hc-cluster" th:each="f, s : ${data.filterRows}">
             <div class="hc-field">
               <label class="hc-field__label" th:text="${s.index == 0} ? 'Where' : 'and'">Where</label>
@@ -57,6 +64,10 @@
                 <option value="notEquals" th:selected="${f.op == 'notEquals'}">not equals</option>
                 <option value="startsWith" th:selected="${f.op == 'startsWith'}">starts with</option>
                 <option value="endsWith" th:selected="${f.op == 'endsWith'}">ends with</option>
+                <option value="gt" th:selected="${f.op == 'gt'}">&gt; (num/date)</option>
+                <option value="lt" th:selected="${f.op == 'lt'}">&lt; (num/date)</option>
+                <option value="ge" th:selected="${f.op == 'ge'}">&gt;= (num/date)</option>
+                <option value="le" th:selected="${f.op == 'le'}">&lt;= (num/date)</option>
                 <option value="isNull" th:selected="${f.op == 'isNull'}">is null</option>
                 <option value="isNotNull" th:selected="${f.op == 'isNotNull'}">is not null</option>
               </select>

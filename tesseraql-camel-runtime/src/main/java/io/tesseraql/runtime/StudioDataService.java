@@ -2,15 +2,21 @@ package io.tesseraql.runtime;
 
 import java.io.IOException;
 import java.io.StringWriter;
+import java.math.BigDecimal;
 import java.sql.Connection;
+import java.sql.Date;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
+import java.sql.Timestamp;
+import java.sql.Types;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.function.Function;
 import javax.sql.DataSource;
 import org.apache.commons.csv.CSVFormat;
@@ -73,12 +79,12 @@ final class StudioDataService {
     }
 
     /**
-     * One page of rows of {@code table}; {@code page} is zero-based. {@code filters} are AND-combined
-     * conditions (each a validated column + operator + bound value) and {@code sortColumn} orders the
-     * results. Every column is validated against the table's real columns before use (so it can never
-     * be an injection vector) and every value is a bound parameter.
+     * One page of rows of {@code table}; {@code page} is zero-based. {@code filters} are conditions
+     * (each a validated column + operator + bound value) joined by {@code combinator} (AND/OR), and
+     * {@code sortColumn} orders the results. Every column is validated against the table's real
+     * columns before use (so it can never be an injection vector) and every value is a bound parameter.
      */
-    DataPage browse(String table, int page, String sortColumn, String sortDir,
+    DataPage browse(String table, int page, String sortColumn, String sortDir, String combinator,
             List<FilterCond> filters) {
         if (!tables().contains(table)) {
             throw new IllegalArgumentException("No such table: " + table);
@@ -88,8 +94,9 @@ final class StudioDataService {
         try (Connection connection = datasources.apply("main").getConnection()) {
             connection.setReadOnly(true);
             String quote = connection.getMetaData().getIdentifierQuoteString();
-            List<String> tableColumns = columnsOf(connection, table);
-            Query query = buildQuery(quote, table, tableColumns, filters, sortColumn, sortDir);
+            Map<String, Integer> columnTypes = columnTypes(connection, table);
+            Query query = buildQuery(quote, table, columnTypes, filters, combinator, sortColumn,
+                    sortDir);
             try (PreparedStatement statement = connection.prepareStatement(query.sql())) {
                 statement.setQueryTimeout(queryTimeoutSeconds);
                 // Cap the scan so a browse never pulls a whole large table; one extra row past the
@@ -134,15 +141,17 @@ final class StudioDataService {
      * validation + bound values as {@link #browse}; the whole capped result is exported (no
      * pagination), one row per line, RFC-4180 quoting.
      */
-    String exportCsv(String table, String sortColumn, String sortDir, List<FilterCond> filters) {
+    String exportCsv(String table, String sortColumn, String sortDir, String combinator,
+            List<FilterCond> filters) {
         if (!tables().contains(table)) {
             throw new IllegalArgumentException("No such table: " + table);
         }
         try (Connection connection = datasources.apply("main").getConnection()) {
             connection.setReadOnly(true);
             String quote = connection.getMetaData().getIdentifierQuoteString();
-            List<String> tableColumns = columnsOf(connection, table);
-            Query query = buildQuery(quote, table, tableColumns, filters, sortColumn, sortDir);
+            Map<String, Integer> columnTypes = columnTypes(connection, table);
+            Query query = buildQuery(quote, table, columnTypes, filters, combinator, sortColumn,
+                    sortDir);
             try (PreparedStatement statement = connection.prepareStatement(query.sql())) {
                 statement.setQueryTimeout(queryTimeoutSeconds);
                 statement.setMaxRows(maxScan);
@@ -177,13 +186,14 @@ final class StudioDataService {
         }
     }
 
-    /** The column names of {@code table} in the {@code main} catalog (for sort/filter validation). */
-    private static List<String> columnsOf(Connection connection, String table) throws SQLException {
-        List<String> columns = new ArrayList<>();
+    /** The columns of {@code table} in the {@code main} catalog → their JDBC type (for validation). */
+    private static Map<String, Integer> columnTypes(Connection connection, String table)
+            throws SQLException {
+        Map<String, Integer> columns = new LinkedHashMap<>();
         try (ResultSet rs = connection.getMetaData().getColumns(connection.getCatalog(), null,
                 table, "%")) {
             while (rs.next()) {
-                columns.add(rs.getString("COLUMN_NAME"));
+                columns.put(rs.getString("COLUMN_NAME"), rs.getInt("DATA_TYPE"));
             }
         }
         return columns;
@@ -193,40 +203,51 @@ final class StudioDataService {
         return quote + identifier.replace(quote, quote + quote) + quote;
     }
 
-    /** A prepared SQL string with the ordered bind values for its {@code ?} placeholders. */
-    private record Query(String sql, List<String> binds) {
+    /** A prepared SQL string with the ordered (typed) bind values for its {@code ?} placeholders. */
+    private record Query(String sql, List<Object> binds) {
     }
 
     /**
-     * Builds {@code SELECT * FROM table [WHERE cond AND …] [ORDER BY col dir]} from validated
-     * filters + sort. Unknown columns and unknown/blank ops are dropped; the comparisons run on the
-     * text representation ({@code LOWER(CAST(col AS VARCHAR))}) so they are type-agnostic, and every
-     * value is a bind parameter.
+     * Builds {@code SELECT * FROM table [WHERE cond <combinator> …] [ORDER BY col dir]} from validated
+     * filters + sort. Unknown columns and unknown/blank ops are dropped. Text ops (contains/equals/…)
+     * compare the text representation ({@code LOWER(CAST(col AS VARCHAR))}); the ordering ops
+     * (gt/lt/ge/le) compare the raw column with the value coerced to the column's type (numeric/date/
+     * timestamp), so numbers and dates order correctly. Every value is a bound parameter.
      */
-    private static Query buildQuery(String quote, String table, List<String> columns,
-            List<FilterCond> filters, String sortColumn, String sortDir) {
+    private static Query buildQuery(String quote, String table, Map<String, Integer> columnTypes,
+            List<FilterCond> filters, String combinator, String sortColumn, String sortDir) {
         StringBuilder sql = new StringBuilder("SELECT * FROM ").append(quoteId(quote, table));
         List<String> where = new ArrayList<>();
-        List<String> binds = new ArrayList<>();
+        List<Object> binds = new ArrayList<>();
         if (filters != null) {
             for (FilterCond filter : filters) {
-                if (filter == null || !columns.contains(filter.column())) {
+                if (filter == null || !columnTypes.containsKey(filter.column())) {
                     continue;
                 }
-                String text = "LOWER(CAST(" + quoteId(quote, filter.column())
-                        + " AS VARCHAR(4000)))";
                 String raw = quoteId(quote, filter.column());
-                String value = filter.value() == null
+                String text = "LOWER(CAST(" + raw + " AS VARCHAR(4000)))";
+                String lower = filter.value() == null
                         ? ""
                         : filter.value().toLowerCase(Locale.ROOT);
-                boolean blank = value.isBlank();
+                boolean blank = lower.isBlank();
+                String orderOp = orderOperator(filter.op());
+                if (orderOp != null) {
+                    Object typed = blank
+                            ? null
+                            : coerce(columnTypes.get(filter.column()), filter.value().strip());
+                    if (typed != null) {
+                        where.add(raw + " " + orderOp + " ?");
+                        binds.add(typed);
+                    }
+                    continue;
+                }
                 switch (filter.op() == null ? "" : filter.op()) {
                     case "contains" ->
-                        maybe(where, binds, !blank, text + " LIKE ?", "%" + value + "%");
-                    case "equals" -> maybe(where, binds, !blank, text + " = ?", value);
-                    case "notEquals" -> maybe(where, binds, !blank, text + " <> ?", value);
-                    case "startsWith" -> maybe(where, binds, !blank, text + " LIKE ?", value + "%");
-                    case "endsWith" -> maybe(where, binds, !blank, text + " LIKE ?", "%" + value);
+                        maybe(where, binds, !blank, text + " LIKE ?", "%" + lower + "%");
+                    case "equals" -> maybe(where, binds, !blank, text + " = ?", lower);
+                    case "notEquals" -> maybe(where, binds, !blank, text + " <> ?", lower);
+                    case "startsWith" -> maybe(where, binds, !blank, text + " LIKE ?", lower + "%");
+                    case "endsWith" -> maybe(where, binds, !blank, text + " LIKE ?", "%" + lower);
                     case "isNull" -> where.add(raw + " IS NULL");
                     case "isNotNull" -> where.add(raw + " IS NOT NULL");
                     default -> {
@@ -235,16 +256,45 @@ final class StudioDataService {
             }
         }
         if (!where.isEmpty()) {
-            sql.append(" WHERE ").append(String.join(" AND ", where));
+            String join = "or".equalsIgnoreCase(combinator) ? " OR " : " AND ";
+            sql.append(" WHERE ").append(String.join(join, where));
         }
-        if (columns.contains(sortColumn)) {
+        if (columnTypes.containsKey(sortColumn)) {
             sql.append(" ORDER BY ").append(quoteId(quote, sortColumn))
                     .append("desc".equalsIgnoreCase(sortDir) ? " DESC" : " ASC");
         }
         return new Query(sql.toString(), binds);
     }
 
-    private static void maybe(List<String> where, List<String> binds, boolean include,
+    /** The SQL comparison for an ordering op, or null when {@code op} is not an ordering op. */
+    private static String orderOperator(String op) {
+        return switch (op == null ? "" : op) {
+            case "gt" -> ">";
+            case "lt" -> "<";
+            case "ge" -> ">=";
+            case "le" -> "<=";
+            default -> null;
+        };
+    }
+
+    /** Coerces a string to the column's JDBC type for an ordering comparison; null if it won't parse. */
+    private static Object coerce(int jdbcType, String value) {
+        try {
+            return switch (jdbcType) {
+                case Types.TINYINT, Types.SMALLINT, Types.INTEGER, Types.BIGINT, Types.DECIMAL,
+                        Types.NUMERIC, Types.REAL, Types.FLOAT, Types.DOUBLE ->
+                    new BigDecimal(value);
+                case Types.DATE -> Date.valueOf(value);
+                case Types.TIMESTAMP, Types.TIMESTAMP_WITH_TIMEZONE ->
+                    Timestamp.valueOf(value.replace('T', ' '));
+                default -> value;
+            };
+        } catch (IllegalArgumentException ex) {
+            return null;
+        }
+    }
+
+    private static void maybe(List<String> where, List<Object> binds, boolean include,
             String clause, String bind) {
         if (include) {
             where.add(clause);
@@ -252,10 +302,10 @@ final class StudioDataService {
         }
     }
 
-    private static void bindAll(PreparedStatement statement, List<String> binds)
+    private static void bindAll(PreparedStatement statement, List<Object> binds)
             throws SQLException {
         for (int i = 0; i < binds.size(); i++) {
-            statement.setString(i + 1, binds.get(i));
+            statement.setObject(i + 1, binds.get(i));
         }
     }
 
