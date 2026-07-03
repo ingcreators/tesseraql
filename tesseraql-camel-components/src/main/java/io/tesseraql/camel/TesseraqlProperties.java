@@ -78,6 +78,9 @@ public final class TesseraqlProperties {
     public static final String IDENTITY_REALM_BEAN = "tesseraqlIdentityRealm";
     public static final String TRACER_BEAN = "tesseraqlTracer";
     public static final String METER_BEAN = "tesseraqlMeter";
+
+    /** Registry bean name for the business-route audit sink (roadmap Phase 45), if enabled. */
+    public static final String ROUTE_AUDIT_SINK_BEAN = "tesseraqlRouteAuditSink";
     public static final String LANES_BEAN = "tesseraqlExecutionLanes";
     public static final String SLOW_SQL_LOG_BEAN = "tesseraqlSlowSqlLog";
 

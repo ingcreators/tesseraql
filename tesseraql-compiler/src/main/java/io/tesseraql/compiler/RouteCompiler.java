@@ -96,9 +96,11 @@ public final class RouteCompiler {
                 java.util.Map<String, io.tesseraql.yaml.model.ResponseSpec.OnError> onErrorByRoute = onErrorByRoute(
                         manifest);
                 onException(TqlException.class).handled(true)
-                        .process(new ErrorResponseRenderer(i18n, onErrorByRoute));
+                        .process(new ErrorResponseRenderer(i18n, onErrorByRoute,
+                                manifest.appHome()));
                 onException(Exception.class).handled(true)
-                        .process(new ErrorResponseRenderer(i18n, onErrorByRoute));
+                        .process(new ErrorResponseRenderer(i18n, onErrorByRoute,
+                                manifest.appHome()));
                 for (RouteFile routeFile : manifest.routes()) {
                     if (onlyRouteIds == null
                             || onlyRouteIds.contains(routeFile.definition().id())) {
@@ -328,6 +330,7 @@ public final class RouteCompiler {
 
         ProcessorDefinition<?> route = builder.from(direct).routeId(routeId);
         applyTelemetry(route, routeFile);
+        applyAudit(route, routeFile);
         applyConcurrency(route, definition);
         applyLane(route, definition);
         applySecurity(route, definition.security());
@@ -637,6 +640,7 @@ public final class RouteCompiler {
 
         ProcessorDefinition<?> route = builder.from(direct).routeId(routeId);
         applyTelemetry(route, routeFile);
+        applyAudit(route, routeFile);
         applyConcurrency(route, definition);
         applyLane(route, definition);
         applySecurity(route, definition.security());
@@ -668,6 +672,7 @@ public final class RouteCompiler {
         }
         ProcessorDefinition<?> route = builder.from(direct).routeId(routeId);
         applyTelemetry(route, routeFile);
+        applyAudit(route, routeFile);
         applySecurity(route, definition.security());
         applyI18n(route);
         route.process(new io.tesseraql.compiler.binding.FileImportProcessor(
@@ -702,6 +707,7 @@ public final class RouteCompiler {
         }
         ProcessorDefinition<?> route = builder.from(direct).routeId(routeId);
         applyTelemetry(route, routeFile);
+        applyAudit(route, routeFile);
         applySecurity(route, definition.security());
         applyI18n(route);
         route.process(
@@ -805,6 +811,7 @@ public final class RouteCompiler {
 
         ProcessorDefinition<?> route = builder.from(direct).routeId(routeId);
         applyTelemetry(route, routeFile);
+        applyAudit(route, routeFile);
         applyConcurrency(route, definition);
         applyLane(route, definition);
         applySecurity(route, definition.security());
@@ -1039,6 +1046,20 @@ public final class RouteCompiler {
     private boolean accessLogEnabled() {
         return config.getString("tesseraql.logging.accessLog")
                 .map(Boolean::parseBoolean).orElse(false);
+    }
+
+    /**
+     * The opt-in business-route audit trail (roadmap Phase 45): appended only when
+     * {@code tesseraql.audit.routes.enabled} is set, so un-audited apps pay nothing.
+     */
+    private void applyAudit(ProcessorDefinition<?> route, RouteFile routeFile) {
+        if (!config.getString("tesseraql.audit.routes.enabled")
+                .map(Boolean::parseBoolean).orElse(false)) {
+            return;
+        }
+        route.process(new io.tesseraql.compiler.binding.RouteAudit(
+                routeFile.definition().id(), routeFile.httpMethod(), routeFile.urlPath(),
+                appName, routeFile.definition().input()));
     }
 
     /**

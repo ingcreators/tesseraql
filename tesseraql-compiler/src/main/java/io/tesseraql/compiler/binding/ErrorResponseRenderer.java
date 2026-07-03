@@ -35,6 +35,7 @@ public final class ErrorResponseRenderer implements Processor {
     private final ObjectMapper mapper = new ObjectMapper();
     private final I18nSettings i18n;
     private final Map<String, OnError> onErrorByRoute;
+    private final java.nio.file.Path appHome;
 
     public ErrorResponseRenderer() {
         this(I18nSettings.defaults());
@@ -50,8 +51,20 @@ public final class ErrorResponseRenderer implements Processor {
      *                       {@link Exchange#FAILURE_ROUTE_ID} at error time.
      */
     public ErrorResponseRenderer(I18nSettings i18n, Map<String, OnError> onErrorByRoute) {
+        this(i18n, onErrorByRoute, null);
+    }
+
+    /**
+     * @param appHome the app root enabling per-app custom error pages (roadmap Phase 45):
+     *                {@code templates/errors/<status>.html}, falling back to
+     *                {@code templates/errors/error.html}, then today's JSON envelope. Null
+     *                keeps the JSON-only behavior (the framework's own endpoints).
+     */
+    public ErrorResponseRenderer(I18nSettings i18n, Map<String, OnError> onErrorByRoute,
+            java.nio.file.Path appHome) {
         this.i18n = i18n;
         this.onErrorByRoute = onErrorByRoute == null ? Map.of() : Map.copyOf(onErrorByRoute);
+        this.appHome = appHome;
     }
 
     @Override
@@ -87,6 +100,18 @@ public final class ErrorResponseRenderer implements Processor {
         if (status == 401 && wantsHtmlLoginRedirect(exchange)) {
             redirectToLogin(exchange);
             return;
+        }
+        // Per-app custom error pages (roadmap Phase 45): a top-level browser GET renders
+        // templates/errors/<status>.html (else errors/error.html) when the app provides one —
+        // htmx swaps keep the inline fragment and API clients keep the JSON envelope.
+        if (appHome != null && status != 401 && wantsHtmlLoginRedirect(exchange)) {
+            String page = errorPage(status, error, tag);
+            if (page != null) {
+                exchange.getMessage().setHeader(Exchange.CONTENT_TYPE,
+                        "text/html; charset=utf-8");
+                exchange.getMessage().setBody(page);
+                return;
+            }
         }
         if ("true".equals(exchange.getMessage().getHeader("HX-Request", String.class))) {
             exchange.getMessage().setHeader(Exchange.CONTENT_TYPE, "text/html; charset=utf-8");
@@ -224,6 +249,26 @@ public final class ErrorResponseRenderer implements Processor {
         } catch (com.fasterxml.jackson.core.JsonProcessingException ex) {
             return null;
         }
+    }
+
+    /** The rendered custom error page, or null when the app ships none for this status. */
+    private String errorPage(int status, Map<String, Object> error, String tag) {
+        for (String name : new String[]{
+                "templates/errors/" + status + ".html", "templates/errors/error.html"}) {
+            if (java.nio.file.Files.isRegularFile(appHome.resolve(name))) {
+                Map<String, Object> model = new LinkedHashMap<>();
+                model.put("status", status);
+                model.put("error", error);
+                try {
+                    return Templates.render(appHome, name, model,
+                            java.util.Locale.forLanguageTag(tag));
+                } catch (RuntimeException ex) {
+                    // A broken error template must never mask the original failure.
+                    return null;
+                }
+            }
+        }
+        return null;
     }
 
     /** The generic response message: the localized status phrase. */

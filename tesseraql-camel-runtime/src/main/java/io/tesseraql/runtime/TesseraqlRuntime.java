@@ -287,6 +287,16 @@ public final class TesseraqlRuntime implements AutoCloseable {
         JdbcOutboxStore outboxStore = new JdbcOutboxStore(dataSource);
         outboxStore.ensureSchema();
         context.getRegistry().bind(TesseraqlProperties.OUTBOX_STORE_BEAN, outboxStore);
+        // The opt-in business-route audit log (roadmap Phase 45): who called what, with the
+        // declared decision-relevant params, per-app scoped like every other ops table.
+        io.tesseraql.operations.audit.JdbcRouteAuditStore routeAuditStore = null;
+        if (manifest.config().getString("tesseraql.audit.routes.enabled")
+                .map(Boolean::parseBoolean).orElse(false)) {
+            routeAuditStore = new io.tesseraql.operations.audit.JdbcRouteAuditStore(dataSource);
+            routeAuditStore.ensureSchema();
+            context.getRegistry().bind(TesseraqlProperties.ROUTE_AUDIT_SINK_BEAN,
+                    routeAuditStore);
+        }
         // Inbound-webhook replay protection (roadmap Phase 26): a delivery is processed at most
         // once on any node sharing this database.
         io.tesseraql.operations.webhook.JdbcWebhookReplayStore webhookReplayStore = new io.tesseraql.operations.webhook.JdbcWebhookReplayStore(
@@ -549,7 +559,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
                     aggregatingMeter);
             context.addRoutes(new OperationsRouteBuilder(
                     jobRunner, jobRepository, ownedJobs, opsDashboard, outboxStore,
-                    metricsSettings));
+                    metricsSettings, routeAuditStore));
             // Service providers expose non-SQL runtime state to mounted yaml/template apps
             // (the bundled ops-console and studio apps render these, design ch. 26.11, 16, 47).
             io.tesseraql.opsui.OpsDashboard dashboardRef = opsDashboard;
