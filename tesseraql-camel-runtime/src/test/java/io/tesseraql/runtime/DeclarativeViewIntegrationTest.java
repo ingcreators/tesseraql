@@ -65,7 +65,7 @@ class DeclarativeViewIntegrationTest {
         assertThat(response.body()).contains("hc-datagrid__table");
         // The seeded user renders, its column linked per row from the view's link template.
         assertThat(response.body()).contains("href=\"/users?sel=sato\"").contains(">sato</a>");
-        assertThat(response.body()).contains(">Status</th>");
+        assertThat(response.body()).contains(">Status</span>");
     }
 
     @Test

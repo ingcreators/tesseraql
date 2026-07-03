@@ -164,6 +164,23 @@ public final class AppLinter {
                                     + " is not a named query of the route"));
                 }
             }
+            if (io.tesseraql.yaml.view.ViewSpec.LIST.equals(spec.view())) {
+                var inputs = route.definition().input();
+                if (spec.search() != null
+                        && (inputs == null || !inputs.containsKey(spec.search()))) {
+                    findings.add(new LintFinding("TQL-VIEW-3309", "error", source,
+                            "view " + spec.id() + ": search: " + spec.search()
+                                    + " is not a declared input of the route"));
+                }
+                boolean sortable = spec.columns().stream()
+                        .anyMatch(io.tesseraql.yaml.view.ViewSpec.Column::isSortable);
+                if (sortable && (inputs == null || !inputs.containsKey("sort")
+                        || !inputs.containsKey("dir"))) {
+                    findings.add(new LintFinding("TQL-VIEW-3310", "error", source,
+                            "view " + spec.id() + ": sortable columns need the route to declare"
+                                    + " sort and dir inputs its SQL applies"));
+                }
+            }
         }
         lintViewOverrides(appHome, findings);
     }

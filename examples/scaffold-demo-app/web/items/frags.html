@@ -1,0 +1,22 @@
+<!-- tesseraql-scaffold-checksum: sha256:fe78c98b8b3d6d88edeaece244b5848649bdb2aa1a705d7bdfc225e0b7bc8eb7 -->
+<!-- Scaffolded slot fragments for the items pages: the list's New button, the form
+     pages' back link, and the confirmed delete the edit view mounts in its footer
+     slot (docs/declarative-views.md, docs/hypermedia-ui.md). -->
+<html xmlns:th="http://www.thymeleaf.org">
+<a th:fragment="new-link" class="hc-button" data-variant="primary" href="/items/new">New</a>
+<a th:fragment="back-link" class="hc-button" data-variant="ghost" data-size="sm" href="/items">&larr; Items</a>
+<form th:fragment="confirm-delete" id="items-delete-form" method="post" th:action="|/items/${v.row['id']}/delete|"
+      th:attr="hx-post=|/items/${v.row['id']}/delete|" hx-trigger="hc:confirmed"
+      hx-target="#items-delete-form-errors" hx-swap="innerHTML"
+      hx-disabled-elt="find button[type=submit]" hx-indicator="find .hc-spinner">
+  <input type="hidden" name="_csrf" th:value="${_csrf}">
+  <div id="items-delete-form-errors"></div>
+  <input type="hidden" name="version" th:value="${v.row['version']}">
+  <span class="hc-action">
+    <button type="submit" class="hc-button" data-variant="error"
+            data-hc-confirm="Delete this record?" data-hc-confirm-title="Confirm delete"
+            data-hc-confirm-ok="Delete" data-hc-confirm-variant="error">Delete</button>
+    <span class="hc-spinner htmx-indicator" aria-hidden="true"></span>
+  </span>
+</form>
+</html>

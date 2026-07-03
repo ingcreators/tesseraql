@@ -28,6 +28,7 @@ class AppScaffolderTest {
                 "config/tesseraql.yml",
                 "db/migration/V1__create_items.sql",
                 "templates/nav.html",
+                "config/menu.yml",
                 "web/get.yml",
                 "web/index.html",
                 "web/api/items/get.yml",

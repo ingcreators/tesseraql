@@ -43,18 +43,18 @@ class ScaffoldCommandsTest {
         int first = execute("scaffold", "crud", "--app", app.toString(), "--table", "items",
                 "--jdbc-url", url);
         assertThat(first).isZero();
-        assertThat(app.resolve("web/items/index.html")).exists();
+        assertThat(app.resolve("web/items/list.view.yml")).exists();
         assertThat(app.resolve("web/items/{id}/update/update.sql")).exists();
         assertThat(app.resolve("tests/items-crud-test.yml")).exists();
 
         // Regeneration is idempotent: same schema, same bytes, nothing rewritten.
-        byte[] before = Files.readAllBytes(app.resolve("web/items/index.html"));
+        byte[] before = Files.readAllBytes(app.resolve("web/items/list.view.yml"));
         assertThat(execute("scaffold", "crud", "--app", app.toString(), "--table", "items",
                 "--jdbc-url", url)).isZero();
-        assertThat(Files.readAllBytes(app.resolve("web/items/index.html"))).isEqualTo(before);
+        assertThat(Files.readAllBytes(app.resolve("web/items/list.view.yml"))).isEqualTo(before);
 
         // A hand edit blocks regeneration of that file until --force.
-        Path edited = app.resolve("web/items/{id}/edit.html");
+        Path edited = app.resolve("web/items/{id}/edit.view.yml");
         Files.writeString(edited, Files.readString(edited) + "<!-- customized -->\n");
         assertThat(execute("scaffold", "crud", "--app", app.toString(), "--table", "items",
                 "--jdbc-url", url)).isEqualTo(1);

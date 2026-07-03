@@ -1,0 +1,31 @@
+# tesseraql-scaffold-checksum: sha256:bc17a4ea0748718560163c346372a8e64b6abb22cfce982267603a93ab792d98
+# Scaffolded list view for the items table: renders through the tql/view/list
+# pattern (docs/declarative-views.md) — sortable headers, a live search box,
+# and the header slot's New button.
+version: tesseraql/v1
+id: items
+kind: view
+view: list
+title: Items
+search: q
+columns:
+  - name: id
+    sortable: true
+  - name: name
+    sortable: true
+  - name: quantity
+    sortable: true
+  - name: unit_price
+    sortable: true
+  - name: due_date
+    sortable: true
+  - name: active
+    sortable: true
+  - name: note
+    sortable: true
+  - name: id
+    label: ""
+    text: Open
+    link: /items/{id}
+slots:
+  header: frags.html::new-link

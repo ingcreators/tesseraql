@@ -115,8 +115,14 @@ public final class HtmlResponseRenderer implements Processor {
         Map<String, Object> model = new LinkedHashMap<>();
         if (viewBinding != null) {
             // A declarative view (roadmap Phase 39): the reserved `v` model is the whole contract
-            // between the route and the tql/view/* pattern fragments.
-            model.put("v", viewBinding.model(context, java.util.Locale.forLanguageTag(tag)));
+            // between the route and the tql/view/* pattern fragments. The request path anchors
+            // the list pattern's self-rendering search/sort links.
+            String uri = exchange.getMessage().getHeader(Exchange.HTTP_URI, String.class);
+            String pagePath = uri == null
+                    ? ""
+                    : uri.indexOf('?') < 0 ? uri : uri.substring(0, uri.indexOf('?'));
+            model.put("v", viewBinding.model(context, java.util.Locale.forLanguageTag(tag),
+                    pagePath));
         } else {
             response.model().forEach((key, expr) -> model.put(key,
                     evaluation.resolve(Arrays.asList(String.valueOf(expr).split("\\.")))));

@@ -21,6 +21,8 @@ tql:
   view:
     submit: 保存
     empty: データがありません
+    search: "検索…"
+    notFound: 見つかりません。
   http:
     "400": リクエストが正しくありません
     "401": 認証が必要です

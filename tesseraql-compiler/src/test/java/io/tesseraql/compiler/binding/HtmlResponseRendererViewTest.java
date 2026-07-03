@@ -74,7 +74,7 @@ class HtmlResponseRendererViewTest {
                 Map.of("id", 2, "name", "Nut")))));
         assertThat(html).contains("hc-datagrid__table");
         // Derived columns render in the row's own order with humanized labels.
-        assertThat(html).contains(">Id</th>").contains(">Name</th>");
+        assertThat(html).contains(">Id</span>").contains(">Name</span>");
         assertThat(html).contains(">Bolt<").contains(">Nut<");
     }
 

@@ -1,0 +1,11 @@
+# tesseraql-scaffold-checksum: sha256:6245b6d2f11c00ce8bd929ef6c9cf6d8e3f7e012aa2c1cf9f6c5c0d7abe4521a
+# Scaffolded create view for the items table: renders through the tql/view/form
+# pattern (docs/declarative-views.md); fields derive from the create route.
+version: tesseraql/v1
+id: items.new
+kind: view
+view: form
+title: New
+action: /items/create
+slots:
+  header: ../frags.html::back-link

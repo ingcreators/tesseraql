@@ -48,23 +48,20 @@ public final class CrudScaffolder {
                         + " key to scaffold (composite or missing keys are not supported)"));
         Names names = new Names(table, pk);
         List<ScaffoldedFile> files = new ArrayList<>();
-        files.add(new ScaffoldedFile(names.dir() + "/get.yml", listRoute(names)));
-        files.add(new ScaffoldedFile(names.dir() + "/index.html", listPage(table, names)));
-        files.add(new ScaffoldedFile(names.dir() + "/fragments/table/get.yml",
-                tableRoute(table, names)));
-        files.add(new ScaffoldedFile(names.dir() + "/fragments/table/search.sql",
-                searchSql(table, names)));
-        files.add(new ScaffoldedFile(names.dir() + "/fragments/table/table.html",
-                tableFragment(table, names)));
+        files.add(new ScaffoldedFile(names.dir() + "/get.yml", listRoute(table, names)));
+        files.add(new ScaffoldedFile(names.dir() + "/list.view.yml", listView(table, names)));
+        files.add(new ScaffoldedFile(names.dir() + "/search.sql", searchSql(table, names)));
+        files.add(new ScaffoldedFile(names.dir() + "/frags.html", fragsFile(table, names)));
         files.add(new ScaffoldedFile(names.dir() + "/new/get.yml", newRoute(names)));
-        files.add(new ScaffoldedFile(names.dir() + "/new/new.html", newPage(table, names)));
+        files.add(new ScaffoldedFile(names.dir() + "/new/new.view.yml", newView(names)));
         files.add(new ScaffoldedFile(names.dir() + "/create/post.yml",
                 createRoute(table, names)));
         files.add(new ScaffoldedFile(names.dir() + "/create/insert.sql",
                 insertSql(table, names)));
         files.add(new ScaffoldedFile(names.detailDir() + "/get.yml", detailRoute(table, names)));
         files.add(new ScaffoldedFile(names.detailDir() + "/select.sql", selectSql(table, names)));
-        files.add(new ScaffoldedFile(names.detailDir() + "/edit.html", editPage(table, names)));
+        files.add(new ScaffoldedFile(names.detailDir() + "/edit.view.yml",
+                editView(table, names)));
         files.add(new ScaffoldedFile(names.detailDir() + "/update/post.yml",
                 updateRoute(table, names)));
         files.add(new ScaffoldedFile(names.detailDir() + "/update/update.sql",
@@ -158,102 +155,27 @@ public final class CrudScaffolder {
 
     // ---------------------------------------------------------------- list page
 
-    private static String listRoute(Names names) {
-        // Browser-authed so the page carries the CSRF meta tag (the htmx forms it links to need
-        // it); app.read gates viewing the list.
-        return """
-                # Scaffolded list page for the %s table (tesseraql scaffold crud --table %s).
+    private static String listRoute(TableSchema table, Names names) {
+        // One route serves the whole list: the search/sort inputs feed the SQL, and the
+        // tql/view/list pattern re-renders its own table region over htmx (no fragment route).
+        StringBuilder yml = new StringBuilder();
+        yml.append("""
+                # Scaffolded list page for the %s table (tesseraql scaffold crud --table %s):
+                # renders through the tql/view/list pattern (docs/declarative-views.md).
                 version: tesseraql/v1
                 id: %s.page
-                kind: route
-                recipe: page
-
-                security:
-                  auth: browser
-                  policy: app.read
-
-                response:
-                  html:
-                    template: index.html
-                %s""".formatted(names.table(), names.table(), names.entity(), CSP_HEADERS);
-    }
-
-    private static String listPage(TableSchema table, Names names) {
-        StringBuilder page = new StringBuilder();
-        page.append(
-                """
-                        <!DOCTYPE html>
-                        <!-- Scaffolded list page for the %s table: the hc-shell layout with live search
-                             over the server-rendered table fragment (docs/hypermedia-ui.md). -->
-                        <html xmlns:th="http://www.thymeleaf.org"
-                              th:replace="~{tql/shell :: shell('%s', ~{templates/nav.html :: app-nav}, ~{}, ~{:: #page-content})}">
-                        <div id="page-content" class="hc-stack">
-                        <section class="hc-card">
-                          <div class="hc-cluster">
-                            <h2>%s</h2>
-                            <span class="hc-spacer"></span>
-                            <a class="hc-button" data-variant="primary" href="%s/new">New</a>
-                          </div>
-                        """
-                        .formatted(names.table(), names.title(), names.title(), names.url()));
-        if (names.searchColumn().isPresent()) {
-            page.append(
-                    """
-                              <!-- Live search keeps the current sort by including the fragment's hidden
-                                   sort/dir inputs; the sort header links likewise carry the search term. -->
-                              <input class="hc-input" type="search" name="q" placeholder="Search by %s..."
-                                     hx-get="%s/fragments/table" hx-trigger="input changed delay:300ms, search"
-                                     hx-target="#%s-table-area" hx-swap="innerHTML"
-                                     hx-include="#%s-table-area input[name='sort'], #%s-table-area input[name='dir']">
-                            """
-                            .formatted(Names.label(Names.columnName(names.searchColumn().get()))
-                                    .toLowerCase(Locale.ROOT), names.url(), names.table(),
-                                    names.table(), names.table()));
-        }
-        page.append(
-                """
-                          <div id="%s-table-area" hx-get="%s/fragments/table" hx-trigger="load" hx-swap="innerHTML">
-                            <p class="hc-field__message">Loading...</p>
-                          </div>
-                        </section>
-                        </div>
-                        </html>
-                        """
-                        .formatted(names.table(), names.url()));
-        return page.toString();
-    }
-
-    private static String tableRoute(TableSchema table, Names names) {
-        StringBuilder route = new StringBuilder();
-        route.append("""
-                # Scaffolded table fragment for the %s table; the list page swaps it in via htmx.
-                version: tesseraql/v1
-                id: %s.table
                 kind: route
                 recipe: query-html
 
                 input:
-                """.formatted(names.table(), names.entity()));
-        names.searchColumn().ifPresent(search -> {
-            route.append("  q:\n    type: string\n    required: false\n");
-            if (search.size() > 0) {
-                route.append("    maxLength: ").append(search.size()).append('\n');
-            }
-        });
-        // Sort state from the datagrid header links. The sortable columns are an enum allowlist, so
-        // the SQL's embedded ORDER BY only ever interpolates a known column (no dynamic-column
-        // injection — TQL-SQL-2109), and each input defaults so the fragment is ordered on first load.
-        List<TableSchema.Column> sortable = new ArrayList<>();
-        sortable.add(names.pk());
-        sortable.addAll(table.dataColumns());
-        StringBuilder columns = new StringBuilder();
-        for (int i = 0; i < sortable.size(); i++) {
-            columns.append(i == 0 ? "" : ", ").append(Names.columnName(sortable.get(i)));
-        }
-        route.append("  sort:\n    type: string\n    enum: [").append(columns)
-                .append("]\n    default: ").append(names.pkColumn()).append('\n');
-        route.append("  dir:\n    type: string\n    enum: [asc, desc]\n    default: asc\n");
-        route.append("""
+                %s  sort:
+                    type: string
+                    enum: [%s]
+                    default: %s
+                  dir:
+                    type: string
+                    enum: [asc, desc]
+                    default: asc
 
                 security:
                   auth: browser
@@ -263,25 +185,60 @@ public final class CrudScaffolder {
                   file: search.sql
                   mode: query
                   params:
-                """);
-        if (names.searchColumn().isPresent()) {
-            route.append("    q: query.q\n");
-        }
-        route.append("""
-                    sort: query.sort
+                %s    sort: query.sort
                     dir: query.dir
 
                 response:
                   html:
-                    status: 200
-                    template: table.html
-                    model:
-                      rows: sql.rows
-                      count: sql.rowCount
-                      sort: params.sort
-                      dir: params.dir
-                """);
-        return route.toString();
+                    view: list.view.yml
+                %s""".formatted(names.table(), names.table(), names.entity(),
+                names.searchColumn().isPresent()
+                        ? "  q:\n    type: string\n    required: false\n    maxLength: 200\n"
+                        : "",
+                sortEnum(table, names), names.pkColumn(),
+                names.searchColumn().isPresent() ? "    q: query.q\n" : "", CSP_HEADERS));
+        return yml.toString();
+    }
+
+    /** The sortable-column allowlist: the primary key plus every data column. */
+    private static String sortEnum(TableSchema table, Names names) {
+        StringBuilder values = new StringBuilder(names.pkColumn());
+        for (TableSchema.Column column : table.dataColumns()) {
+            values.append(", ").append(Names.columnName(column));
+        }
+        return values.toString();
+    }
+
+    /** The list view: sortable columns, the live search box, and the per-row Open action. */
+    private static String listView(TableSchema table, Names names) {
+        StringBuilder yml = new StringBuilder();
+        yml.append("""
+                # Scaffolded list view for the %s table: renders through the tql/view/list
+                # pattern (docs/declarative-views.md) — sortable headers, a live search box,
+                # and the header slot's New button.
+                version: tesseraql/v1
+                id: %s
+                kind: view
+                view: list
+                title: %s
+                %scolumns:
+                  - name: %s
+                    sortable: true
+                """.formatted(names.table(), names.entity(), names.title(),
+                names.searchColumn().isPresent() ? "search: q\n" : "", names.pkColumn()));
+        for (TableSchema.Column column : table.dataColumns()) {
+            yml.append("  - name: ").append(Names.columnName(column))
+                    .append("\n    sortable: true\n");
+        }
+        yml.append("""
+                  - name: %s
+                    label: ""
+                    text: Open
+                    link: %s/{%s}
+                slots:
+                  header: frags.html::new-link
+                """.formatted(names.pkColumn(), names.url(), names.pkColumn()));
+        return yml.toString();
     }
 
     private static String searchSql(TableSchema table, Names names) {
@@ -316,70 +273,38 @@ public final class CrudScaffolder {
         return sql.toString();
     }
 
-    private static String tableFragment(TableSchema table, Names names) {
-        List<TableSchema.Column> listed = new ArrayList<>();
-        listed.add(names.pk());
-        listed.addAll(table.dataColumns());
-        StringBuilder html = new StringBuilder();
-        html.append(
+    /** Slot fragments the scaffolded views pull in (customization ladder L1). */
+    private static String fragsFile(TableSchema table, Names names) {
+        String deleteVersion = table.versionColumn().isPresent()
+                ? "  <input type=\"hidden\" name=\"version\" th:value=\"${v.row['version']}\">\n"
+                : "";
+        return """
+                <!-- Scaffolded slot fragments for the %s pages: the list's New button, the form
+                     pages' back link, and the confirmed delete the edit view mounts in its footer
+                     slot (docs/declarative-views.md, docs/hypermedia-ui.md). -->
+                <html xmlns:th="http://www.thymeleaf.org">
+                <a th:fragment="new-link" class="hc-button" data-variant="primary" href="%s/new">New</a>
+                <a th:fragment="back-link" class="hc-button" data-variant="ghost" data-size="sm" href="%s">&larr; %s</a>
+                <form th:fragment="confirm-delete" id="%s-delete-form" method="post" th:action="|%s/${v.row['%s']}/delete|"
+                      th:attr="hx-post=|%s/${v.row['%s']}/delete|" hx-trigger="hc:confirmed"
+                      hx-target="#%s-delete-form-errors" hx-swap="innerHTML"
+                      hx-disabled-elt="find button[type=submit]" hx-indicator="find .hc-spinner">
+                  <input type="hidden" name="_csrf" th:value="${_csrf}">
+                  <div id="%s-delete-form-errors"></div>
+                %s  <span class="hc-action">
+                    <button type="submit" class="hc-button" data-variant="error"
+                            data-hc-confirm="Delete this record?" data-hc-confirm-title="Confirm delete"
+                            data-hc-confirm-ok="Delete" data-hc-confirm-variant="error">Delete</button>
+                    <span class="hc-spinner htmx-indicator" aria-hidden="true"></span>
+                  </span>
+                </form>
+                </html>
                 """
-                        <!-- Scaffolded table fragment for the %s table: partial markup swapped into
-                             the list page (the fragments URL convention, design ch. 4). The hc-datagrid
-                             component scrolls wide tables horizontally and keeps the header in view; it
-                             degrades to a plain styled grid with no JavaScript (docs/hypermedia-ui.md).
-                             Column headers sort server-side: each is a link to ?sort=col&dir=…, swapped
-                             over htmx, and aria-sort drives the kit's sort arrow (CSP-clean, no inline JS). -->
-                        <div id="%s-table" class="hc-datagrid">
-                          <input type="hidden" name="sort" th:value="${sort}">
-                          <input type="hidden" name="dir" th:value="${dir}">
-                          <div class="hc-datagrid__scroll">
-                            <table class="hc-datagrid__table">
-                              <thead class="hc-datagrid__head">
-                                <tr>
-                        """
-                        .formatted(names.table(), names.table()));
-        for (TableSchema.Column column : listed) {
-            String col = Names.columnName(column);
-            String flip = "sort == '" + col + "' and dir != 'desc' ? 'desc' : 'asc'";
-            html.append("          <th class=\"hc-datagrid__headcell\" data-sortable data-col=\"")
-                    .append(col).append("\"\n");
-            html.append("              th:attr=\"aria-sort=${sort == '").append(col)
-                    .append("' ? (dir == 'desc' ? 'descending' : 'ascending') : 'none'}\">\n");
-            // A literal URL (|...|), not @{...}: the renderer's Thymeleaf context is not a web
-            // context, so link expressions can't resolve a context-relative path.
-            html.append("            <a th:with=\"u=|").append(names.url())
-                    .append("/fragments/table?sort=").append(col).append("&amp;dir=${").append(flip)
-                    .append("}|\"\n");
-            html.append("               th:href=\"${u}\" th:attr=\"hx-get=${u}\"\n");
-            html.append("               hx-target=\"#").append(names.table())
-                    .append("-table-area\" hx-swap=\"innerHTML\" hx-include=\"[name='q']\">")
-                    .append(Names.label(col)).append("</a>\n");
-            html.append("          </th>\n");
-        }
-        html.append("          <th class=\"hc-datagrid__headcell\"></th>\n        </tr>\n"
-                + "      </thead>\n      <tbody class=\"hc-datagrid__body\">\n");
-        html.append("        <tr class=\"hc-datagrid__row\" th:each=\"r : ${rows}\">\n");
-        for (TableSchema.Column column : listed) {
-            html.append("          <td class=\"hc-datagrid__cell\" th:text=\"${r.")
-                    .append(Names.columnName(column)).append("}\"></td>\n");
-        }
-        html.append(
-                """
-                                  <td class="hc-datagrid__cell"><a class="hc-button" data-size="sm" th:href="|%s/${r.%s}|">Open</a></td>
-                                </tr>
-                                <tr class="hc-datagrid__row" th:if="${#lists.isEmpty(rows)}">
-                                  <td class="hc-datagrid__cell" colspan="%d">No rows</td>
-                                </tr>
-                              </tbody>
-                            </table>
-                          </div>
-                        </div>
-                        """
-                        .formatted(names.url(), names.pkColumn(), listed.size() + 1));
-        return html.toString();
+                .formatted(names.table(), names.url(), names.url(), names.title(),
+                        names.entity(), names.url(), names.pkColumn(), names.url(),
+                        names.pkColumn(),
+                        names.entity(), names.entity(), deleteVersion);
     }
-
-    // ---------------------------------------------------------------- create
 
     private static String newRoute(Names names) {
         // Browser-authed so the create form's page carries the CSRF meta tag.
@@ -396,53 +321,24 @@ public final class CrudScaffolder {
 
                 response:
                   html:
-                    template: new.html
+                    view: new.view.yml
                 %s""".formatted(names.table(), names.entity(), CSP_HEADERS);
     }
 
-    private static String newPage(TableSchema table, Names names) {
-        String action = names.url() + "/create";
-        StringBuilder html = new StringBuilder();
-        html.append(
-                """
-                        <!DOCTYPE html>
-                        <!-- Scaffolded create form for the %s table: the hc mutating-form recipe —
-                             htmx post with inline field errors and a success redirect, degrading to
-                             a plain form post with no JS (docs/hypermedia-ui.md). -->
-                        <html xmlns:th="http://www.thymeleaf.org"
-                              th:replace="~{tql/shell :: shell('%s', ~{templates/nav.html :: app-nav}, ~{:: #page-header}, ~{:: #page-content})}">
-                        <th:block id="page-header">
-                          <span class="hc-spacer"></span>
-                          <div class="hc-cluster">
-                            <a class="hc-button" data-variant="ghost" data-size="sm" href="%s">&larr; %s</a>
-                          </div>
-                        </th:block>
-                        <div id="page-content" class="hc-stack">
-                        <section class="hc-card">
-                          <h2>New</h2>
-                          <form id="%s-create-form" method="post" action="%s"
-                                hx-post="%s" hx-target="#%s-create-form-errors" hx-swap="innerHTML"
-                                hx-disabled-elt="find button[type=submit]" hx-indicator="find .hc-spinner">
-                        """
-                        .formatted(names.table(), names.title(), names.url(), names.title(),
-                                names.table(), action, action, names.table()));
-        html.append(csrfField());
-        html.append(errorContainer(names.table() + "-create-form"));
-        html.append("    <div class=\"hc-stack\">\n");
-        for (TableSchema.Column column : formColumns(table, names)) {
-            html.append(formField(column, null));
-        }
-        html.append(submitCluster("Create"));
-        html.append(
-                """
-                            </div>
-                          </form>
-                        </section>
-                        </div>
-                        </html>
-                        """
-                        .stripIndent());
-        return html.toString();
+    /** The create form view: every field derives from the create route's input: block. */
+    private static String newView(Names names) {
+        return """
+                # Scaffolded create view for the %s table: renders through the tql/view/form
+                # pattern (docs/declarative-views.md); fields derive from the create route.
+                version: tesseraql/v1
+                id: %s.new
+                kind: view
+                view: form
+                title: New
+                action: %s/create
+                slots:
+                  header: ../frags.html::back-link
+                """.formatted(names.table(), names.entity(), names.url());
     }
 
     private static String createRoute(TableSchema table, Names names) {
@@ -560,10 +456,7 @@ public final class CrudScaffolder {
 
                 response:
                   html:
-                    status: 200
-                    template: edit.html
-                    model:
-                      rows: sql.rows
+                    view: edit.view.yml
                 %s""".formatted(names.table(), names.entity(),
                 inputBlock(List.of(names.pk())) + "\n", names.pkField(), names.pkField(),
                 CSP_HEADERS);
@@ -585,86 +478,34 @@ public final class CrudScaffolder {
         return sql.toString();
     }
 
-    private static String editPage(TableSchema table, Names names) {
-        boolean locked = table.versionColumn().isPresent();
-        String updateAction = "|" + names.url() + "/${r." + names.pkColumn() + "}/update|";
-        String deleteAction = "|" + names.url() + "/${r." + names.pkColumn() + "}/delete|";
-        String versionField = locked
-                ? "      <input type=\"hidden\" name=\"version\" th:value=\"${r.version}\">\n"
-                : "";
-        StringBuilder html = new StringBuilder();
-        html.append(
-                """
-                        <!DOCTYPE html>
-                        <!-- Scaffolded edit page for the %s table: the hc mutating-form recipe —
-                             htmx posts with inline field errors and a success redirect (a stale
-                             version answers 409 Conflict, Phase 18), a confirmed delete, and a no-JS
-                             plain-form fallback (docs/hypermedia-ui.md). -->
-                        <html xmlns:th="http://www.thymeleaf.org"
-                              th:replace="~{tql/shell :: shell('%s', ~{templates/nav.html :: app-nav}, ~{:: #page-header}, ~{:: #page-content})}">
-                        <th:block id="page-header">
-                          <span class="hc-spacer"></span>
-                          <div class="hc-cluster">
-                            <a class="hc-button" data-variant="ghost" data-size="sm" href="%s">&larr; %s</a>
-                          </div>
-                        </th:block>
-                        <div id="page-content" class="hc-stack">
-                        <section class="hc-card" th:if="${#lists.isEmpty(rows)}">
-                          <div class="hc-empty"><p class="hc-empty__title">Not found.</p></div>
-                        </section>
-                        <th:block th:each="r : ${rows}">
-                        <section class="hc-card">
-                          <h2>Edit</h2>
-                          <form id="%s-update-form" method="post" th:action="%s"
-                                th:attr="hx-post=%s" hx-target="#%s-update-form-errors" hx-swap="innerHTML"
-                                hx-disabled-elt="find button[type=submit]" hx-indicator="find .hc-spinner">
-                        """
-                        .formatted(names.table(), names.title(), names.url(), names.title(),
-                                names.table(), updateAction, updateAction, names.table()));
-        html.append(csrfField());
-        html.append(errorContainer(names.table() + "-update-form"));
-        html.append("    <div class=\"hc-stack\">\n");
-        for (TableSchema.Column column : formColumns(table, names)) {
-            html.append(formField(column, "r." + Names.columnName(column)));
+    /** The edit form view: fields derive from the update route, version rides hidden. */
+    private static String editView(TableSchema table, Names names) {
+        StringBuilder yml = new StringBuilder();
+        yml.append("""
+                # Scaffolded edit view for the %s table: renders through the tql/view/form
+                # pattern (docs/declarative-views.md). Fields derive from the update route's
+                # input: block; the footer slot carries the confirmed delete.
+                version: tesseraql/v1
+                id: %s.edit
+                kind: view
+                view: form
+                title: Edit
+                action: %s/{%s}/update
+                fields:
+                """.formatted(names.table(), names.entity(), names.url(), names.pkField()));
+        for (TableSchema.Column column : table.dataColumns()) {
+            yml.append("  - name: ").append(Names.field(column)).append('\n');
         }
-        html.append(versionField);
-        html.append(submitCluster("Save"));
-        html.append(
-                """
-                            </div>
-                          </form>
-                        </section>
-                        <section class="hc-card">
-                          <h2>Delete</h2>
-                          <form id="%s-delete-form" method="post" th:action="%s"
-                                th:attr="hx-post=%s" hx-trigger="hc:confirmed"
-                                hx-target="#%s-delete-form-errors" hx-swap="innerHTML"
-                                hx-disabled-elt="find button[type=submit]" hx-indicator="find .hc-spinner">
-                        """
-                        .stripIndent()
-                        .formatted(names.table(), deleteAction, deleteAction, names.table()));
-        html.append(csrfField());
-        html.append(errorContainer(names.table() + "-delete-form"));
-        html.append(versionField);
-        html.append(
-                """
-                          <span class="hc-action">
-                            <button type="submit" class="hc-button" data-variant="error"
-                                    data-hc-confirm="Delete this record?" data-hc-confirm-title="Confirm delete"
-                                    data-hc-confirm-ok="Delete" data-hc-confirm-variant="error">Delete</button>
-                            <span class="hc-spinner htmx-indicator" aria-hidden="true"></span>
-                          </span>
-                          </form>
-                        </section>
-                        </th:block>
-                        </div>
-                        </html>
-                        """
-                        .stripIndent());
-        return html.toString();
+        if (table.versionColumn().isPresent()) {
+            yml.append("  - name: version\n    widget: hidden\n");
+        }
+        yml.append("""
+                slots:
+                  header: ../frags.html::back-link
+                  footer: ../frags.html::confirm-delete
+                """);
+        return yml.toString();
     }
-
-    // ---------------------------------------------------------------- update / delete
 
     private static String updateRoute(TableSchema table, Names names) {
         boolean locked = table.versionColumn().isPresent();
@@ -833,7 +674,7 @@ public final class CrudScaffolder {
         suite.append("""
                   - name: the %s search runs without a filter
                     sql:
-                      file: %s/fragments/table/search.sql
+                      file: %s/search.sql
                     params:
                       sort: %s
                       dir: asc
@@ -842,7 +683,7 @@ public final class CrudScaffolder {
 
                   - name: the %s search filters by %s
                     sql:
-                      file: %s/fragments/table/search.sql
+                      file: %s/search.sql
                     params:
                       q: no-such-row
                       sort: %s
@@ -860,7 +701,7 @@ public final class CrudScaffolder {
 
                   - name: the %s search sorts by %s descending
                     sql:
-                      file: %s/fragments/table/search.sql
+                      file: %s/search.sql
                     params:
                       sort: %s
                       dir: desc
@@ -937,91 +778,6 @@ public final class CrudScaffolder {
                     .append(Names.camel(column.toLowerCase(Locale.ROOT))).append('\n');
         });
         return errors.toString();
-    }
-
-    /**
-     * The hidden CSRF token field every mutating form carries, so a no-JS plain form post is
-     * protected (the framework shell also publishes the token as {@code <meta name="csrf-token">}
-     * for the htmx path's {@code installCsrfHeader}).
-     */
-    private static String csrfField() {
-        return "    <input type=\"hidden\" name=\"_csrf\" th:value=\"${_csrf}\">\n";
-    }
-
-    /** The in-form container the 4xx field-errors fragment swaps into (the mutating-form recipe). */
-    private static String errorContainer(String formId) {
-        return "    <div id=\"" + formId + "-errors\"></div>\n";
-    }
-
-    /** The submit button paired with the busy spinner inside an {@code hc-action} wrapper. */
-    private static String submitCluster(String label) {
-        return """
-                      <span class="hc-action">
-                        <button type="submit" class="hc-button" data-variant="primary">%s</button>
-                        <span class="hc-spinner htmx-indicator" aria-hidden="true"></span>
-                      </span>
-                """.formatted(label);
-    }
-
-    /**
-     * One hc-field stanza (the kit's label + control + message composition). {@code valueExpr}
-     * binds the edit form's current values; {@code null} renders the empty create form. Dates ride
-     * the blessed hc-datepicker skin over the native input (hc 0.1.1, adoption issue #219).
-     */
-    private static String formField(TableSchema.Column column, String valueExpr) {
-        String field = Names.field(column);
-        String id = Names.htmlId(column);
-        String label = Names.label(Names.columnName(column));
-        StringBuilder html = new StringBuilder();
-        html.append("      <div class=\"hc-field\">\n");
-        html.append("        <label class=\"hc-field__label\" for=\"").append(id).append("\">")
-                .append(label).append("</label>\n");
-        if ("boolean".equals(column.inputType())) {
-            html.append("        <input type=\"hidden\" name=\"").append(field)
-                    .append("\" value=\"false\">\n");
-            html.append("        <input class=\"hc-checkbox\" id=\"").append(id)
-                    .append("\" type=\"checkbox\" name=\"").append(field)
-                    .append("\" value=\"true\"");
-            if (valueExpr != null) {
-                html.append(" th:checked=\"${").append(valueExpr).append("}\"");
-            }
-            html.append(">\n");
-        } else {
-            html.append("        <input class=\"").append(cssClass(column)).append("\" id=\"")
-                    .append(id).append("\" type=\"").append(htmlType(column))
-                    .append("\" name=\"").append(field).append('"');
-            if ("number".equals(column.inputType())) {
-                html.append(" step=\"any\"");
-            }
-            if (column.isCharacter() && column.size() > 0) {
-                html.append(" maxlength=\"").append(column.size()).append('"');
-            }
-            if (!column.nullable()) {
-                html.append(" required");
-            }
-            if (valueExpr != null) {
-                html.append(" th:value=\"${").append(valueExpr).append("}\"");
-            }
-            html.append(">\n");
-        }
-        html.append("      </div>\n");
-        return html.toString();
-    }
-
-    private static String cssClass(TableSchema.Column column) {
-        return switch (column.inputType()) {
-            case "date", "datetime" -> "hc-datepicker";
-            default -> "hc-input";
-        };
-    }
-
-    private static String htmlType(TableSchema.Column column) {
-        return switch (column.inputType()) {
-            case "integer", "number" -> "number";
-            case "date" -> "date";
-            case "datetime" -> "datetime-local";
-            default -> "text";
-        };
     }
 
     private static String auditBind(TableSchema.Column column) {

@@ -1,0 +1,7 @@
+# The app's sidebar menu (config/menu.yml): rendered server-side into the shell nav
+# slot and editable in Studio. Declarative view pages navigate through it.
+menu:
+  - label: Home
+    href: /
+  - label: Items
+    href: /items

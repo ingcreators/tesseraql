@@ -22,7 +22,7 @@ import java.util.Map;
  * own columns in authored SQL order.
  */
 public record ViewSpec(String id, String view, String title, String action, String source,
-        List<Field> fields, List<Column> columns, List<Child> children,
+        String search, List<Field> fields, List<Column> columns, List<Child> children,
         Map<String, String> slots, String template) {
 
     /** Structurally invalid view document (docs/declarative-views.md, TQL-VIEW-3301). */
@@ -47,12 +47,26 @@ public record ViewSpec(String id, String view, String title, String action, Stri
                 : java.util.Set.of("header", "footer");
     }
 
-    /** Presentation override for a form field derived from the action route's input block. */
-    public record Field(String name, String label, String widget) {
+    /**
+     * Presentation override for a form field derived from the action route's input block.
+     * {@code column} names the result-set column the prefill value reads when it differs from
+     * the input name (the camelCase-input over snake_case-column convention falls back
+     * automatically).
+     */
+    public record Field(String name, String label, String widget, String column) {
     }
 
-    /** A list column: selects, orders, and decorates a result-set column. */
-    public record Column(String name, String label, String link) {
+    /**
+     * A list column: selects, orders, and decorates a result-set column. {@code sortable}
+     * renders the header as a server-driven sort link (the route must declare {@code sort}/
+     * {@code dir} inputs its SQL applies); {@code text} renders that literal (styled as a small
+     * button when linked) instead of the row value — the per-row action column.
+     */
+    public record Column(String name, String label, String link, Boolean sortable, String text) {
+
+        public boolean isSortable() {
+            return Boolean.TRUE.equals(sortable);
+        }
     }
 
     /** A detail view's child list: a named query composed under the parent record. */
@@ -100,6 +114,7 @@ public record ViewSpec(String id, String view, String title, String action, Stri
                     : name;
         }
         return new ViewSpec(id, view, str(tree.get("title")), action, str(tree.get("source")),
+                str(tree.get("search")),
                 parseFields(name, tree.get("fields")), parseColumns(name, tree.get("columns")),
                 parseChildren(name, tree.get("children")), parseSlots(name, tree.get("slots")),
                 str(tree.get("template")));
@@ -143,7 +158,8 @@ public record ViewSpec(String id, String view, String title, String action, Stri
             if (name == null || name.isBlank()) {
                 throw invalid(source, "a fields: entry requires name:");
             }
-            fields.add(new Field(name, str(entry.get("label")), str(entry.get("widget"))));
+            fields.add(new Field(name, str(entry.get("label")), str(entry.get("widget")),
+                    str(entry.get("column"))));
         }
         return fields;
     }
@@ -155,7 +171,9 @@ public record ViewSpec(String id, String view, String title, String action, Stri
             if (name == null || name.isBlank()) {
                 throw invalid(source, "a columns: entry requires name:");
             }
-            columns.add(new Column(name, str(entry.get("label")), str(entry.get("link"))));
+            columns.add(new Column(name, str(entry.get("label")), str(entry.get("link")),
+                    entry.get("sortable") instanceof Boolean b ? b : null,
+                    str(entry.get("text"))));
         }
         return columns;
     }

@@ -32,7 +32,6 @@ class RouteSpecGeneratorTest {
                         tuple("GET", "/api/items"),
                         tuple("GET", "/items"),
                         tuple("POST", "/items/create"),
-                        tuple("GET", "/items/fragments/table"),
                         tuple("GET", "/items/new"),
                         tuple("GET", "/items/{id}"),
                         tuple("POST", "/items/{id}/delete"),

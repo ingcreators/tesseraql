@@ -150,6 +150,12 @@ public final class ViewBinding {
      * fallback), the form fields with prefill values, or the list columns and cell matrix.
      */
     public Map<String, Object> model(Map<String, Object> context, Locale locale) {
+        return model(context, locale, "");
+    }
+
+    /** {@code pagePath} is the request path sort/search links resolve against. */
+    public Map<String, Object> model(Map<String, Object> context, Locale locale,
+            String pagePath) {
         MessageCatalog catalog = MessageCatalog.live(appHome.resolve("messages"))
                 .withFallback(I18nSettings.builtinCatalog());
         Map<String, Object> v = new LinkedHashMap<>();
@@ -160,9 +166,13 @@ public final class ViewBinding {
         v.put("slots", slots);
         Map<String, Object> data = sourceOf(context, spec.source());
         if (ViewSpec.FORM.equals(spec.view())) {
-            v.put("action", spec.action());
+            // A per-record action (/items/{id}/update) resolves its placeholders against the
+            // request's path and coerced params, so one form view serves every record.
+            v.put("action", interpolateAction(spec.action(), context));
             v.put("formId", spec.id().replace('.', '-') + "-form");
             Map<String, Object> row = firstRow(data);
+            v.put("row", row);
+            v.put("notFound", context.containsKey(spec.source()) && rows(data).isEmpty());
             List<Map<String, Object>> rendered = new ArrayList<>();
             for (ViewFields.FieldDef field : fields) {
                 Map<String, Object> f = new LinkedHashMap<>();
@@ -174,13 +184,17 @@ public final class ViewBinding {
                 f.put("min", field.min());
                 f.put("max", field.max());
                 f.put("options", field.options());
-                Object value = row.get(field.name());
+                f.put("step", field.step());
+                Object value = field.valueFrom(row);
                 f.put("value", value == null ? "" : String.valueOf(value));
                 rendered.add(f);
             }
             v.put("fields", rendered);
         } else if (ViewSpec.DETAIL.equals(spec.view())) {
-            v.put("fields", detailFields(catalog, locale, firstRow(data)));
+            Map<String, Object> row = firstRow(data);
+            v.put("row", row);
+            v.put("notFound", context.containsKey(spec.source()) && rows(data).isEmpty());
+            v.put("fields", detailFields(catalog, locale, row));
             List<Map<String, Object>> children = new ArrayList<>();
             for (ViewSpec.Child child : spec.children()) {
                 List<Map<String, Object>> childRows = rows(sourceOf(context, child.source()));
@@ -199,10 +213,65 @@ public final class ViewBinding {
         } else {
             List<Map<String, Object>> rows = rows(data);
             List<ViewSpec.Column> columns = columnsOf(spec.columns(), rows);
-            v.put("columns", renderedColumns(catalog, locale, columns));
+            Map<String, Object> params = params(context);
+            v.put("path", pagePath);
+            String sort = str(params.get("sort"));
+            String dir = str(params.get("dir"));
+            v.put("sort", sort);
+            v.put("dir", dir);
+            if (spec.search() != null) {
+                Map<String, Object> search = new LinkedHashMap<>();
+                search.put("param", spec.search());
+                search.put("value", str(params.get(spec.search())));
+                v.put("search", search);
+            }
+            List<Map<String, Object>> rendered = renderedColumns(catalog, locale, columns);
+            for (int i = 0; i < columns.size(); i++) {
+                ViewSpec.Column column = columns.get(i);
+                if (!column.isSortable()) {
+                    continue;
+                }
+                Map<String, Object> c = rendered.get(i);
+                boolean active = column.name().equals(sort);
+                boolean descending = active && "desc".equals(dir);
+                c.put("sortable", true);
+                c.put("ariaSort", active ? (descending ? "descending" : "ascending") : "none");
+                c.put("sortHref", pagePath + "?sort=" + column.name() + "&dir="
+                        + (active && !descending ? "desc" : "asc"));
+            }
+            v.put("columns", rendered);
             v.put("rows", cellMatrix(columns, rows));
         }
         return v;
+    }
+
+    /** The coerced request params ({@code sort}/{@code dir}/the search input) or empty. */
+    @SuppressWarnings("unchecked")
+    private static Map<String, Object> params(Map<String, Object> context) {
+        Object raw = context.get("params");
+        return raw instanceof Map ? (Map<String, Object>) raw : Map.of();
+    }
+
+    private static String str(Object value) {
+        return value == null ? "" : String.valueOf(value);
+    }
+
+    /**
+     * Resolves {@code {placeholder}} segments of a form action against the request's path
+     * params first, then the coerced inputs.
+     */
+    @SuppressWarnings("unchecked")
+    private static String interpolateAction(String action, Map<String, Object> context) {
+        if (action == null || !action.contains("{")) {
+            return action;
+        }
+        Map<String, Object> merged = new LinkedHashMap<>();
+        merged.putAll(params(context));
+        Object path = context.get("path");
+        if (path instanceof Map) {
+            merged.putAll((Map<String, Object>) path);
+        }
+        return HtmlResponseRenderer.interpolateString(action, new EvaluationContext(merged));
     }
 
     /** A detail view's labelled values: explicit {@code fields:}, else the row's own columns. */
@@ -213,7 +282,7 @@ public final class ViewBinding {
         if (selection.isEmpty()) {
             selection = new ArrayList<>();
             for (String name : row.keySet()) {
-                selection.add(new ViewSpec.Field(name, null, null));
+                selection.add(new ViewSpec.Field(name, null, null, null));
             }
         }
         for (ViewSpec.Field field : selection) {
@@ -258,7 +327,10 @@ public final class ViewBinding {
             for (ViewSpec.Column column : columns) {
                 Map<String, Object> cell = new LinkedHashMap<>();
                 Object value = row.get(column.name());
-                cell.put("text", value == null ? "" : String.valueOf(value));
+                cell.put("text", column.text() != null
+                        ? column.text()
+                        : value == null ? "" : String.valueOf(value));
+                cell.put("button", column.text() != null);
                 cell.put("href", column.link() == null
                         ? null
                         : HtmlResponseRenderer.interpolateString(column.link(), rowContext));
@@ -307,7 +379,7 @@ public final class ViewBinding {
         }
         List<ViewSpec.Column> derived = new ArrayList<>();
         for (String name : rows.get(0).keySet()) {
-            derived.add(new ViewSpec.Column(name, null, null));
+            derived.add(new ViewSpec.Column(name, null, null, null, null));
         }
         return derived;
     }

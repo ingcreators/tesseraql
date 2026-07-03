@@ -1,15 +1,17 @@
 # Declarative views
 
 Design for roadmap Phase 39 (drafted 2026-07-03; resolves decision point 7). Status:
-**slices 1 and 2 shipped** — the `kind: view` document, `response.html.view`, the
+**slices 1–3 shipped** — the `kind: view` document, `response.html.view`, the
 list + form + detail patterns (a detail composes its route's named queries as child
 lists) with the L2 override resolver and the shared `tql/view/table` pattern, named
 slots (L1: `header`/`footer`, plus `actions` on forms — a slot fills from an app
 fragment referenced as `template::fragment`, colocated-first), the eject action
 (`tesseraql scaffold eject-view`, L3), `TQL-VIEW-33xx` lint, the `view` coverage kind,
 and the example gallery's view-backed board list + detail
-(`examples/user-admin-app/web/users/board`). Slices 3–4 (scaffold-on-views, dashboards)
-remain.
+(`examples/user-admin-app/web/users/board`). Slice 3 moved `scaffold crud` onto views (one list route with the pattern's search box and
+server-driven sort — no fragment route; forms derive from the command routes; slots carry the
+New/back/confirmed-delete affordances) and the gallery regenerates on views. Slice 4
+(dashboards) remains, gated on the upstream hc chart brief.
 
 ## Context and goals
 
@@ -231,9 +233,14 @@ slice 1 (views change how HTML is produced, not the HTTP contract).
 2. **detail + relations + slots** (shipped) — `view: detail` (labelled value list over one row),
    parent + child-list composition, named slots (L1, `TQL-VIEW-3306`), and the eject
    action.
-3. **scaffold on views** — `scaffold crud` emits view documents instead of raw
+3. **scaffold on views** (shipped) — `scaffold crud` emits view documents instead of raw
    templates; the gallery regenerates on views (byte-identical reproducibility check as
-   today); the live-search + server-sort list composition moves into the list pattern.
+   today); the live-search + server-sort list composition moved into the list pattern
+   (`search:` renders the filter box, `sortable: true` columns render `?sort=&dir=` header
+   links with `aria-sort`, the route's enum-gated `sort`/`dir` inputs apply them in SQL —
+   `TQL-VIEW-3309/3310` keep the wiring lint-checked; `text:`/`link:` columns render the
+   per-row action button; a form's `action:` resolves `{placeholder}`s per record and
+   prefills fall back from camelCase input names to snake_case columns).
 4. **dashboards** — query-backed cards and charts, gated on the upstream Hypermedia
    Components chart brief (the kit ships only `hc-sparkline` today).
 

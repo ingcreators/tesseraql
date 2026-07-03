@@ -1,4 +1,4 @@
-# tesseraql-scaffold-checksum: sha256:b6e4cb6aec749a9495da53fe815df0cbfa130b979c5103d53fd9e296375e2403
+# tesseraql-scaffold-checksum: sha256:f23e1a075bb0bee4f096bf469aef9d2cd4e842b7a35563697ebb19bb1db96a92
 # Scaffolded create form page for the items table.
 version: tesseraql/v1
 id: items.new
@@ -11,7 +11,7 @@ security:
 
 response:
   html:
-    template: new.html
+    view: new.view.yml
     headers:
       Content-Security-Policy: "default-src 'self'; style-src 'self' 'unsafe-inline'; frame-ancestors 'none'"
       X-Content-Type-Options: nosniff

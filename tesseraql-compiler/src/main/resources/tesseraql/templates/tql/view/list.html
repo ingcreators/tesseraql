@@ -1,8 +1,10 @@
 <!DOCTYPE html>
 <!-- The framework list-view pattern (roadmap Phase 39, docs/declarative-views.md): renders a
      declarative `view: list` document as an hc-datagrid — columns × rows with per-row links,
-     scrolling horizontally with a sticky header, no JS. The `v` model shape and this markup are
-     the public rendering contract; an app overrides the pattern by shipping
+     scrolling horizontally with a sticky header, no JS. With `search:` the page carries a live
+     filter box, and sortable columns re-render the table region through the route itself
+     (hx-select on the wrapper — no separate fragment route). The `v` model shape and this markup
+     are the public rendering contract; an app overrides the pattern by shipping
      templates/tql/view/list.html (customization ladder L2), or fills the header/footer slots
      (L1) from the view document. -->
 <html xmlns:th="http://www.thymeleaf.org"
@@ -16,8 +18,15 @@
       <th:block th:insert="~{__${v.slots['header']}__}"/>
     </th:block>
   </div>
+  <input th:if="${v.search != null}" class="hc-input" type="search"
+         th:name="${v.search.param}" th:value="${v.search.value}"
+         th:placeholder="#{tql.view.search}"
+         th:attr="hx-get=${v.path},hx-target=|#${v.id}-table|,hx-select=|#${v.id}-table|,hx-include=|#${v.id}-table input[type='hidden']|"
+         hx-trigger="input changed delay:300ms, search" hx-swap="outerHTML">
   <div th:id="|${v.id}-table|">
-    <th:block th:insert="~{tql/view/table :: table(${v.columns}, ${v.rows})}"/>
+    <input type="hidden" name="sort" th:if="${v.sort != ''}" th:value="${v.sort}">
+    <input type="hidden" name="dir" th:if="${v.dir != ''}" th:value="${v.dir}">
+    <th:block th:insert="~{tql/view/table :: table(|${v.id}-table|, ${v.columns}, ${v.rows})}"/>
   </div>
   <th:block th:if="${v.slots['footer'] != null}">
     <th:block th:insert="~{__${v.slots['footer']}__}"/>
