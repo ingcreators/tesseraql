@@ -8,6 +8,28 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **Safety valves** (roadmap Phase 45): every route SQL statement is now bounded **by
+  default** — 30 seconds, the app-wide `tesseraql.sql.timeoutSeconds`, or a per-binding
+  `sql.timeoutSeconds` override (`0` opts a deliberately long-running statement out;
+  negative values are lint error `TQL-YAML-1021`) — so a runaway query is cancelled by the
+  driver instead of holding a pool connection forever. Connection pools expose the remaining
+  HikariCP tuning knobs (`minimumIdle`, `idleTimeoutMillis`, `maxLifetimeMillis`,
+  `keepaliveTimeMillis`, `leakDetectionThresholdMillis` beside the existing
+  `maximumPoolSize`/`connectionTimeoutMillis`), and `docs/deployment.md` now states the
+  **per-node semantics** of the rate/concurrency limiters and lanes on multi-node
+  deployments (a budget of N allows N × node-count cluster-wide; size per node or enforce at
+  the balancer).
+- **Truthful health** (roadmap Phase 45, first slice): `GET /_tesseraql/health/live` is pure
+  liveness (the process answers; never touches a dependency) and
+  `GET /_tesseraql/health/ready` — also served by the bare `/_tesseraql/health` — is the
+  readiness roll-up: every configured datasource is probed live (`Connection.isValid` per
+  pool) and the status degrades to **`DOWN` with HTTP 503** when one fails, so load balancers
+  actually shed traffic; `WARN` stays a 200 with active alerts. A contributor that cannot
+  reach its store during an outage counts as DOWN instead of crashing the endpoint into a 500,
+  and the Spring Actuator bridge maps `DOWN` to `Health.down()`. The container HEALTHCHECK now
+  targets `/health/live` and the kamal proxy check `/health/ready`; a new
+  `tesseraql.datasources.<name>.connectionTimeoutMillis` knob bounds both borrower waits and
+  the probe's detection latency.
 - **Pull-based metrics** (roadmap Phase 45; decision point 9 resolved — JDK-only scrape path):
   the `Meter` abstraction gained latency **histograms**, an always-on JDK-only
   `AggregatingMeter` records per-route invocation counters, outcome-classed error counters,

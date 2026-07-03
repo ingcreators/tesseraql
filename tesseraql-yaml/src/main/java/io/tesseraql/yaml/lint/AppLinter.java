@@ -921,6 +921,12 @@ public final class AppLinter {
                     "Unknown route recipe '" + definition.recipe() + "'",
                     lineOf(route.source(), "recipe:"), null));
         }
+        if (definition.sql() != null && definition.sql().timeoutSeconds() != null
+                && definition.sql().timeoutSeconds() < 0) {
+            findings.add(new LintFinding("TQL-YAML-1021", "error", source,
+                    "sql.timeoutSeconds must be >= 0 (0 disables the statement timeout)",
+                    lineOf(route.source(), "timeoutSeconds:"), null));
+        }
         if (definition.sql() != null && !definition.sql().isContract()
                 && definition.sql().file() != null) {
             Path sqlFile = route.source().getParent().resolve(definition.sql().file());

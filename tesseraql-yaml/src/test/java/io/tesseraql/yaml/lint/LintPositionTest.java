@@ -49,6 +49,26 @@ class LintPositionTest {
                 .filter(f -> "TQL-YAML-1012".equals(f.code())).findFirst().orElseThrow();
         assertThat(pattern.line()).isEqualTo(6);
 
+        // A negative statement timeout is rejected (0 is the explicit opt-out).
+        Files.writeString(dir.resolve("web/api/x/get.yml"), """
+                version: tesseraql/v1
+                id: x
+                kind: route
+                recipe: query-json
+                sql:
+                  file: x.sql
+                  timeoutSeconds: -1
+                response:
+                  json:
+                    body:
+                      data: sql.rows
+                """);
+        assertThat(new AppLinter().lint(dir))
+                .anySatisfy(f -> {
+                    assertThat(f.code()).isEqualTo("TQL-YAML-1021");
+                    assertThat(f.line()).isEqualTo(7);
+                });
+
         // Position-less findings render the bare source (the pre-positions shape).
         assertThat(new LintFinding("X", "warning", "web/a.yml", "m").location())
                 .isEqualTo("web/a.yml");

@@ -998,7 +998,24 @@ public final class RouteCompiler {
                 + "&resultKey=" + resultKey
                 + "&dialect=" + datasourceDialect()
                 + "&maxRows=" + effectiveMaxRows(binding)
-                + "&onOverflow=" + effectiveOnOverflow(binding);
+                + "&onOverflow=" + effectiveOnOverflow(binding)
+                + "&queryTimeoutSeconds=" + effectiveTimeoutSeconds(binding);
+    }
+
+    /**
+     * The statement timeout for a binding (roadmap Phase 45): the per-binding override wins,
+     * else the app-wide {@code tesseraql.sql.timeoutSeconds}, else 30 — a runaway query is
+     * bounded BY DEFAULT. An explicit {@code 0} disables the guard for a deliberately
+     * long-running statement.
+     */
+    private int effectiveTimeoutSeconds(io.tesseraql.yaml.model.SqlBinding binding) {
+        if (binding.timeoutSeconds() != null) {
+            return Math.max(0, binding.timeoutSeconds());
+        }
+        return config.getString("tesseraql.sql.timeoutSeconds")
+                .map(Integer::parseInt)
+                .map(value -> Math.max(0, value))
+                .orElse(30);
     }
 
     /** Resolves the configured datasource dialect, inferring it from the JDBC URL when unset. */

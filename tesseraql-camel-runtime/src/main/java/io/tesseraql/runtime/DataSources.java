@@ -91,6 +91,23 @@ public final class DataSources {
         config.getString(prefix + "connectionTimeoutMillis")
                 .map(Long::parseLong)
                 .ifPresent(hikari::setConnectionTimeout);
+        // The remaining pool tuning knobs (roadmap Phase 45): every production-relevant
+        // Hikari setting is reachable from config instead of being locked to a default.
+        config.getString(prefix + "minimumIdle")
+                .map(Integer::parseInt)
+                .ifPresent(hikari::setMinimumIdle);
+        config.getString(prefix + "idleTimeoutMillis")
+                .map(Long::parseLong)
+                .ifPresent(hikari::setIdleTimeout);
+        config.getString(prefix + "maxLifetimeMillis")
+                .map(Long::parseLong)
+                .ifPresent(hikari::setMaxLifetime);
+        config.getString(prefix + "keepaliveTimeMillis")
+                .map(Long::parseLong)
+                .ifPresent(hikari::setKeepaliveTime);
+        config.getString(prefix + "leakDetectionThresholdMillis")
+                .map(Long::parseLong)
+                .ifPresent(hikari::setLeakDetectionThreshold);
         return new HikariDataSource(hikari);
     }
 }

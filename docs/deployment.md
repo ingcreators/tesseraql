@@ -78,6 +78,26 @@ expand/contract (backward compatible) - the same discipline the canary flow alre
   Cloudflare, or plug a shared TempStore implementation behind the SPI.
 - Framework and app migrations take Flyway's lock, so concurrent node startups serialize.
 
+## Safety valves and multi-node semantics
+
+**SQL statement timeout.** Every route SQL statement is bounded by default: 30 seconds, the
+app-wide `tesseraql.sql.timeoutSeconds`, or a per-binding `sql.timeoutSeconds` override —
+an explicit `0` opts a deliberately long-running statement out. A runaway query is cancelled
+by the driver instead of holding a pool connection forever (roadmap Phase 45).
+
+**Connection pools.** Each `tesseraql.datasources.<name>` block tunes its HikariCP pool:
+`maximumPoolSize`, `minimumIdle`, `connectionTimeoutMillis`, `idleTimeoutMillis`,
+`maxLifetimeMillis`, `keepaliveTimeMillis`, and `leakDetectionThresholdMillis`. Unset keys
+keep Hikari's defaults.
+
+**Rate/concurrency limiters and lanes are per-node.** The route `policy:` block's
+`rateLimit`/`concurrency` guards and the `threading.lanes` bulkheads keep their state in
+process memory (token bucket, semaphores). On a multi-node deployment each node enforces its
+own budget: a route limited to N requests/second allows up to N × node-count cluster-wide,
+and lane saturation on one node does not shed load on another. Size the budgets per node (or
+enforce a cluster-wide budget at the load balancer); shared-state limiters are a deliberate
+non-goal until a coordination store earns its place.
+
 ## Metrics (Prometheus)
 
 Opt in with `tesseraql.metrics.enabled: true` and scrape `GET /_tesseraql/metrics`
