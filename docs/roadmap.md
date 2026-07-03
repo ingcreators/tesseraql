@@ -512,14 +512,43 @@ existing template pipeline into Hypermedia Components markup (the same emitted-m
 contract the route compiler already owns, mandatory rule 11). Fields derive from schema
 introspection plus the route's `input:` constraints — one source of truth, ending the
 `required`/`maxLength` duplication into HTML — with explicit per-field overrides
-(label, widget, order, visibility). Ejecting to a hand-owned template stays the escape
-hatch (the scaffolder's checksum/edit-detection contract already models "generated
-until you touch it").
+(label, widget, order, visibility).
 
-- Slice 1: `list` and `form` views (the CRUD 80%), rendered onto the hc datagrid and
-  mutating-form recipes; a `TQL-VIEW-*` lint family (unknown column/field, widget/type
-  mismatch) and a `view` coverage kind.
-- Slice 2: `detail` views and relations (parent + child-list composition).
+Declarative does not mean locked-in HTML (recorded 2026-07-03): the
+freedom-vs-declarativeness trade-off is resolved as a **customization ladder**, every
+rung an app-author surface:
+
+- **L0 — view options**: label, widget, order, visibility, formatting — plain keys in
+  the view document. No HTML.
+- **L1 — slots**: a view declares named insertion points (`header`, `actions`,
+  `after-field`, …) the app fills with its own fragments — the
+  `tql/shell :: shell(...)` parameterized-fragment pattern applied to views.
+- **L2 — pattern overrides**: views render through framework-shipped pattern fragments
+  (`tql/view/list`, `tql/view/form`, per-widget `tql/view/field-date`, …) resolved
+  app-home-first with classpath fallback — one app-override resolver ahead of the
+  shared `tql/*` resolver in `Templates`. Dropping `templates/tql/view/form.html` into
+  the app restyles every form; a per-widget file retargets one widget everywhere; a
+  `template:` key points a single view at a custom fragment. The
+  Django-widget-template / Rails-form-builder model: fix a pattern once and every view
+  follows, where ejected copies drift.
+- **L3 — eject**: generate the full template into the app tree and own it (the
+  scaffolder's checksum/edit-detection contract already models "generated until you
+  touch it"), the view document remaining for data binding or dropped.
+
+The pattern-fragment signatures (`th:fragment="form(view, model)"`) and the view-model
+shape thereby become public API: versioned with the YAML schema, covered by the
+Phase 34 stability annotations, and linted — `TQL-VIEW-*` flags an unknown slot name or
+a signature-mismatched override. Framework-shipped patterns stay hc-conformant
+(rule 11); an override is app-owned markup with the same status as a hand-written
+template today.
+
+- Slice 1: `list` and `form` views (the CRUD 80%), rendered through the overridable
+  `tql/view/*` pattern fragments (the L2 resolver ships from day one) onto the hc
+  datagrid and mutating-form recipes; the `TQL-VIEW-*` lint family (unknown
+  column/field, widget/type mismatch, unknown slot, signature-mismatched override) and
+  a `view` coverage kind.
+- Slice 2: `detail` views and relations (parent + child-list composition), plus named
+  slots (L1).
 - Slice 3: `scaffold crud` emits view documents instead of raw templates; the example
   gallery regenerates on views (dogfooded in CI).
 - Slice 4: dashboards — query-backed cards and charts, once the chart component lands
@@ -756,9 +785,12 @@ None block Phase 18; flagged for the maintainer as their horizons approach.
    [docs/attachments.md](attachments.md).
 7. **View rendering strategy** (Phase 39): compile `kind: view` into the existing template
    pipeline at build time (a deterministic, diffable generated artifact) vs interpret the
-   view model at render time (one live source, no regeneration step). A design document
-   precedes code, like approval-workflow.md; either way the emitted hc markup stays the
-   public contract (mandatory rule 11).
+   view model at render time (one live source, no regeneration step). The customization
+   ladder weighs toward interpretation: a pattern override (L2) is then pure
+   template-chain resolution at render time — the resolver order in `Templates` already
+   models it — where the build-time variant needs a regeneration step after every
+   override edit. A design document precedes code, like approval-workflow.md; either way
+   the emitted hc markup stays the public contract (mandatory rule 11).
 8. **Copilot model access** (Phase 44): an operator-configured model endpoint (credentials
    via the SecretResolver SPI) vs riding a connected MCP client's model. Invariant either
    way: TesseraQL ships no model, stores no key in app source, and every write remains a
