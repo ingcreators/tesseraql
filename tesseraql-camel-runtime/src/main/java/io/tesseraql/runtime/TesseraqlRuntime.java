@@ -419,6 +419,8 @@ public final class TesseraqlRuntime implements AutoCloseable {
         }
         JobExecutor jobExecutor = new JobExecutor(jobRepository, tempStore, slowSqlLog, tracer)
                 .notificationOutbox(outboxStore)
+                // Recipient-aware notify steps honor per-user opt-outs (roadmap Phase 48).
+                .preferenceStore(preferences)
                 // Outbound REST for http-call pipeline steps (roadmap Phase 26): deny-by-default
                 // egress, secret-managed credentials, timeouts, and circuit breaking from config.
                 .httpCall(new io.tesseraql.operations.http.HttpCallClient(
@@ -427,6 +429,12 @@ public final class TesseraqlRuntime implements AutoCloseable {
         // Notification channels and operations alerts (roadmap Phase 20).
         io.tesseraql.yaml.notify.NotificationChannels notificationChannels = io.tesseraql.yaml.notify.NotificationChannels
                 .load(manifest.config());
+        // Channels the operator marked user-facing (roadmap Phase 48): only these appear on
+        // the account page's notification section - system/ops channels never do.
+        final List<String> optOutChannels = notificationChannels.names().stream()
+                .filter(name -> notificationChannels.require(name).setting("userOptOut")
+                        .map(Boolean::parseBoolean).orElse(false))
+                .sorted().toList();
         String alertChannel = manifest.config()
                 .getString("tesseraql.notifications.alerts.channel").orElse(null);
         if (alertChannel != null) {
@@ -642,12 +650,15 @@ public final class TesseraqlRuntime implements AutoCloseable {
                     .register("account.profile.view", AccountViews::profile)
                     .register("account.settings.view",
                             params -> AccountViews.settings(params, preferences,
-                                    accountLocales))
+                                    accountLocales, optOutChannels))
                     .register("account.language.save",
                             params -> AccountViews.saveLanguage(params, preferences,
                                     accountLocales))
                     .register("account.theme.save",
-                            params -> AccountViews.saveTheme(params, preferences));
+                            params -> AccountViews.saveTheme(params, preferences))
+                    .register("account.notify.save",
+                            params -> AccountViews.saveNotifyOptOut(params, preferences,
+                                    optOutChannels));
             context.getRegistry().bind(TesseraqlProperties.SERVICE_PROVIDERS_BEAN,
                     serviceProviders);
             Map<String, String> claimKeys = new LinkedHashMap<>();

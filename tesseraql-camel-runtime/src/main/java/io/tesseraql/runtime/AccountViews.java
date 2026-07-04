@@ -35,13 +35,22 @@ final class AccountViews {
         return profile;
     }
 
-    /** The account page model: the profile plus the language / appearance settings state. */
+    /** The account page model: profile plus language / appearance / notification state. */
     static Map<String, Object> settings(Map<String, Object> params, PreferenceStore preferences,
-            List<String> supportedTags) {
+            List<String> supportedTags, List<String> optOutChannels) {
         Map<String, Object> model = profile(params);
         Map<String, String> stored = preferences == null
                 ? Map.of()
                 : preferences.preferences(tenant(params), subject(params));
+        List<Map<String, Object>> notifyChannels = new ArrayList<>();
+        for (String channel : optOutChannels) {
+            Map<String, Object> entry = new LinkedHashMap<>();
+            entry.put("name", channel);
+            entry.put("optedOut",
+                    "true".equals(stored.get("notify." + channel + ".optOut")));
+            notifyChannels.add(entry);
+        }
+        model.put("notifyChannels", notifyChannels);
         String locale = stored.get("ui.locale");
         List<Map<String, Object>> locales = new ArrayList<>();
         for (String tag : supportedTags) {
@@ -78,6 +87,27 @@ final class AccountViews {
             throw new TqlException(INVALID_VALUE, "Unsupported theme '" + theme + "'");
         }
         preferences.put(tenant(params), subject(params), "ui.theme", theme);
+        return Map.of("ok", true);
+    }
+
+    /**
+     * Persists a channel opt-out choice; only channels the operator marked user-facing
+     * ({@code userOptOut: true}) are writable. Opting back in removes the row.
+     */
+    static Map<String, Object> saveNotifyOptOut(Map<String, Object> params,
+            PreferenceStore preferences, List<String> optOutChannels) {
+        String channel = text(params.get("channel"), "");
+        if (!optOutChannels.contains(channel)) {
+            throw new TqlException(INVALID_VALUE,
+                    "Channel '" + channel + "' does not offer a user opt-out");
+        }
+        boolean optOut = Boolean.parseBoolean(text(params.get("optOut"), "false"));
+        String key = "notify." + channel + ".optOut";
+        if (optOut) {
+            preferences.put(tenant(params), subject(params), key, "true");
+        } else {
+            preferences.remove(tenant(params), subject(params), key);
+        }
         return Map.of("ok", true);
     }
 

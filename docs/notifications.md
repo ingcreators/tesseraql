@@ -53,6 +53,7 @@ notify:
   confirmation:
     channel: user-mail
     when: body.active == true        # optional guard; a falsy guard skips the notification
+    recipient: principal.subject     # optional (roadmap Phase 48): honors that subject's opt-out
     payload:
       userName: body.userName
       givenName: body.givenName
@@ -98,6 +99,28 @@ pipeline:
 A pipeline step declares exactly one of `sql:` or `notify:`. The step reports
 `affectedRows: 1` and its `eventId` when the notification enqueued, `0` when the guard
 skipped it.
+
+## Per-user opt-out (roadmap Phase 48)
+
+A notification that names its **recipient** — an expression resolving to a subject, such as
+`principal.subject` or `body.assignee` — honors that subject's per-channel opt-out, stored
+as the `notify.<channel>.optOut` preference by the account surface
+([docs/account.md](account.md)). The decision runs **at enqueue**, in the command's
+transaction (and equally in a job's `notify:` step): an opted-out notification writes no
+outbox row — nothing to retry, nothing half-delivered — and the command's `notify` context
+reports `{optedOut: true}` in place of the event id.
+
+Two rules keep this honest:
+
+- A notification **without** `recipient:` is channel-level and always delivered — the
+  cookbook example above sends `audit` regardless of anyone's preferences.
+- Only channels the operator marks **`userOptOut: true`** appear on the account page's
+  notification section, so operational channels are never user-disableable. The marker
+  controls the *page*; the enqueue check applies to any recipient-naming notification on
+  any channel.
+
+The preference is looked up in the acting principal's tenant on command routes; job
+contexts carry no principal and check the untenanted scope.
 
 ## Mail channels
 

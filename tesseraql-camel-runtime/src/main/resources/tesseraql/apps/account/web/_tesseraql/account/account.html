@@ -63,7 +63,23 @@
       <button class="hc-button" data-variant="primary" type="submit">Save appearance</button>
     </form>
   </section>
-  <p class="hc-text-muted">Notification and session settings arrive here as the account
-    surface grows (docs/account.md).</p>
+  <section class="hc-card hc-stack" th:if="${!#lists.isEmpty(profile.notifyChannels)}">
+    <h2>Notifications</h2>
+    <p class="hc-text-muted">Notifications addressed to you personally honor these choices.
+      Channel-level announcements are not affected.</p>
+    <form th:each="channel : ${profile.notifyChannels}" method="post"
+          action="/_tesseraql/account/notifications" class="hc-cluster">
+      <input type="hidden" name="_csrf" th:value="${_csrf}">
+      <input type="hidden" name="channel" th:value="${channel.name}">
+      <label class="hc-radio-label">
+        <input class="hc-switch" type="checkbox" name="optOut" value="true"
+               th:checked="${channel.optedOut}">
+        <span>Opt out of <strong th:text="${channel.name}">channel</strong></span>
+      </label>
+      <button class="hc-button" data-variant="ghost" data-size="sm" type="submit">Save</button>
+    </form>
+  </section>
+  <p class="hc-text-muted">Session settings arrive here as the account surface grows
+    (docs/account.md).</p>
 </div>
 </html>

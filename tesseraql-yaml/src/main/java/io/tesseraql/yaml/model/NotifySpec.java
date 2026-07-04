@@ -12,18 +12,28 @@ import java.util.Map;
  * are written in the command's transaction, after the steps. In a batch pipeline, a step
  * declares {@code notify:} instead of {@code sql:} and the event is enqueued when the step runs.
  *
- * @param channel the configured channel name (required), e.g. {@code user-mail}
- * @param when    optional guard in the core expression language; a falsy guard skips the
- *                notification
- * @param payload map of payload key to source expression, resolved against the execution
- *                context; the payload rides the outbox event and feeds the channel's template
+ * @param channel   the configured channel name (required), e.g. {@code user-mail}
+ * @param when      optional guard in the core expression language; a falsy guard skips the
+ *                  notification
+ * @param recipient optional expression naming the recipient's subject (roadmap Phase 48),
+ *                  e.g. {@code principal.subject} or {@code body.assignee}; when present, the
+ *                  enqueue path honors that subject's per-channel opt-out preference. A
+ *                  notification without a recipient is channel-level and always delivered.
+ * @param payload   map of payload key to source expression, resolved against the execution
+ *                  context; the payload rides the outbox event and feeds the channel's template
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
-public record NotifySpec(String channel, String when, Map<String, String> payload) {
+public record NotifySpec(String channel, String when, String recipient,
+        Map<String, String> payload) {
 
     public NotifySpec {
         payload = payload == null
                 ? Map.of()
                 : java.util.Collections.unmodifiableMap(new java.util.LinkedHashMap<>(payload));
+    }
+
+    /** Recipient-less form (the shape before roadmap Phase 48) for positional callers. */
+    public NotifySpec(String channel, String when, Map<String, String> payload) {
+        this(channel, when, null, payload);
     }
 }
