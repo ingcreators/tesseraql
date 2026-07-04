@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<!-- The password-reset request page (roadmap Phase 50). Standalone like the login page. The
+     confirmation box renders identically whatever the login was - no enumeration oracle. -->
+<html xmlns:th="http://www.thymeleaf.org" lang="en" th:lang="${#locale.toLanguageTag()}"
+      data-theme="dark" th:attr="data-theme=${_theme != null ? _theme : 'dark'}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Reset password &middot; TesseraQL</title>
+<link rel="stylesheet" href="/assets/vendor/hypermedia-components__core/dist/hc.min.css">
+<link rel="stylesheet" href="/assets/_tesseraql/tesseraql.css">
+</head>
+<body>
+<main class="hc-stack" style="max-width: 24rem; margin: 4rem auto; padding: 0 1rem;">
+  <section class="hc-card hc-stack">
+    <h1>Reset password</h1>
+
+    <div class="hc-empty" th:unless="${methods.recovery}">
+      <p class="hc-empty__title">Password recovery is not enabled.</p>
+      <p class="hc-empty__body">Ask your operator, or see
+        <code>tesseraql.identity.recovery</code> in <code>docs/credential-lifecycle.md</code>.</p>
+    </div>
+
+    <th:block th:if="${methods.recovery}">
+      <div th:if="${sent}" class="hc-alert" data-variant="success" role="status">
+        <p class="hc-alert__title">If that account can be recovered, a link is on its way.</p>
+        <p>The link is valid for a short time and works once.</p>
+      </div>
+      <form th:unless="${sent}" class="hc-stack" method="post" action="/_tesseraql/reset">
+        <p>Enter your login and we will mail you a one-time reset link.</p>
+        <div class="hc-field">
+          <label class="hc-field__label" for="loginId">Login</label>
+          <input class="hc-input" id="loginId" name="loginId" autocomplete="username"
+                 required autofocus>
+        </div>
+        <button class="hc-button" data-variant="primary" type="submit">Send reset link</button>
+      </form>
+      <p class="hc-field__message"><a href="/_tesseraql/login">Back to sign in</a></p>
+    </th:block>
+  </section>
+</main>
+</body>
+</html>

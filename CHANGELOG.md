@@ -8,6 +8,18 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **Credential lifecycle, slice 1 — password reset** (roadmap Phase 50; design in
+  `docs/credential-lifecycle.md`): the login page grows **Forgot password?** when
+  `tesseraql.identity.recovery` is configured (enabled + a mail channel + the confirm
+  URL; anything half-set fails the boot with `TQL-SEC-4120`). The request leg answers
+  the same neutral "sent" for unknown logins, missing emails, and cooldowns — no
+  enumeration oracle; the destination comes from the new overridable
+  `find-recovery-destination-by-login` pack contract (default: the ACTIVE user's
+  `tql_users.email`) and the mail rides the outbox. Tokens live in the new managed
+  `tql_credential_token` (256-bit, **SHA-256 at rest**, purpose-bound, **single-use by
+  check-and-set**, issue cooldown, expiry prune). The confirm leg rotates through the
+  existing `update-password` contract and **invalidates every session of the subject**;
+  unknown, used, and expired links all answer the same honest dead-link page.
 - **The in-app notification center, slice 2 — the surface** (roadmap Phase 49, final
   slice — **the phase is complete and milestone M14 is met**): the shared shell grows a
   **bell** with the unread badge (the reserved `_inbox` variable; the count reads

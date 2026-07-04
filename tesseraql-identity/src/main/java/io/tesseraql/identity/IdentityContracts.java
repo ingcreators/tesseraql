@@ -23,6 +23,8 @@ public final class IdentityContracts {
     // standard contract set a sql realm must provide.
     /** Self-service credential rotation (roadmap Phase 48, the account surface). */
     public static final String UPDATE_PASSWORD = "update-password";
+    /** Where a password-reset link may be sent (roadmap Phase 50); no row = not by mail. */
+    public static final String FIND_RECOVERY_DESTINATION = "find-recovery-destination-by-login";
     public static final String SEED_ADMIN_USER = "seed-admin-user";
     public static final String ENSURE_ROLE = "ensure-role";
     public static final String ASSIGN_USER_ROLE = "assign-user-role";

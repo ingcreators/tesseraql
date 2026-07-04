@@ -1,7 +1,8 @@
 # Credential lifecycle — reset, invitations, TOTP
 
 Status: design accepted 2026-07-04 (roadmap Phase 50, Horizon 9). Three slices: password
-reset, invitations, TOTP.
+reset (**delivered**), invitations, TOTP. Misconfigured recovery fails the boot with
+`TQL-SEC-4120` — a half configuration must not produce a reset page that goes nowhere.
 
 Phase 48 gave the local realm a self-service password *change* — for users who know
 their current password. This phase finishes the lifecycle around it: a **reset** for

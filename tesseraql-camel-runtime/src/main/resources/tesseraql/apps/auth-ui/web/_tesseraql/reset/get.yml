@@ -1,0 +1,33 @@
+version: tesseraql/v1
+id: tql.auth.reset
+kind: route
+recipe: query-html
+
+# The password-reset request page (roadmap Phase 50). Public by design: a locked-out user
+# has no session. The POST (runtime-wired) always answers the same neutral "sent" - see
+# docs/credential-lifecycle.md.
+
+input:
+  sent:
+    type: string
+    required: false
+
+security:
+  auth: public
+
+sql:
+  service: auth.loginMethods
+
+response:
+  html:
+    status: 200
+    template: reset.html
+    model:
+      methods: sql
+      sent: params.sent
+    headers:
+      Content-Security-Policy: "default-src 'self'; style-src 'self' 'unsafe-inline'; frame-ancestors 'none'"
+      X-Content-Type-Options: nosniff
+      X-Frame-Options: DENY
+      Referrer-Policy: no-referrer
+      Cache-Control: "no-store"

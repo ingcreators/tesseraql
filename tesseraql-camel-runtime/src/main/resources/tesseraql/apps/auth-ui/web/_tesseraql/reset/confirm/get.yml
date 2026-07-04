@@ -1,20 +1,21 @@
 version: tesseraql/v1
-id: tql.auth.login
+id: tql.auth.reset.confirm
 kind: route
 recipe: query-html
 
-# The admin console's login page. Public by design: it must be reachable without a session.
-# Posting the form to POST /_tesseraql/login (runtime-wired) establishes the browser session and
-# redirects to `next`; the SSO buttons start the OIDC/SAML flows when those are enabled. `next` and
-# `error` ride in from the query (set by the redirect-to-login and the post/redirect/get on failure).
+# The mailed reset link's landing page (roadmap Phase 50). The token is only VALIDATED on
+# the POST (a GET stays side-effect free); unknown, used, and expired tokens all land back
+# here with the same honest invalid flag.
+
 input:
-  next:
+  token:
+    type: string
+    required: false
+    maxLength: 128
+  invalid:
     type: string
     required: false
   error:
-    type: string
-    required: false
-  reset:
     type: string
     required: false
 
@@ -27,12 +28,12 @@ sql:
 response:
   html:
     status: 200
-    template: login.html
+    template: confirm.html
     model:
       methods: sql
-      next: params.next
+      token: params.token
+      invalid: params.invalid
       error: params.error
-      reset: params.reset
     headers:
       Content-Security-Policy: "default-src 'self'; style-src 'self' 'unsafe-inline'; frame-ancestors 'none'"
       X-Content-Type-Options: nosniff

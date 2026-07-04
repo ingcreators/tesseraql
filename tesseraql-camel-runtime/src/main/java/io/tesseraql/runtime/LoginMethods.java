@@ -27,6 +27,9 @@ final class LoginMethods {
         model.put("oidc", method(oidc, "/_tesseraql/oidc/login"));
         model.put("saml", method(saml, "/_tesseraql/saml/login"));
         model.put("sso", oidc || saml);
+        // Password recovery (roadmap Phase 50): the login page shows "Forgot password?"
+        // only when the operator enabled the flow.
+        model.put("recovery", flag(config, "tesseraql.identity.recovery.enabled"));
         // First-login guidance: the seed step is documented rather than auto-run (no default admin).
         model.put("seedHint",
                 "tesseraql identity-schema --admin-login <id> --admin-password-file <file>");

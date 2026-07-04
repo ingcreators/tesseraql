@@ -784,6 +784,39 @@ public final class TesseraqlRuntime implements AutoCloseable {
             context.getRegistry().bind(TesseraqlProperties.IDENTITY_REALM_BEAN, realm);
             context.addRoutes(new LoginRouteBuilder(
                     new PasswordAuthenticator(identity), realm, sessionStore));
+            // Password recovery (roadmap Phase 50 slice 1): fail-fast validation - a half
+            // configuration must not silently produce a reset page that goes nowhere.
+            if (manifest.config().getString("tesseraql.identity.recovery.enabled")
+                    .map(Boolean::parseBoolean).orElse(false)) {
+                String recoveryChannel = manifest.config()
+                        .getString("tesseraql.identity.recovery.channel")
+                        .orElseThrow(() -> new io.tesseraql.core.error.TqlException(
+                                new io.tesseraql.core.error.TqlErrorCode(
+                                        io.tesseraql.core.error.TqlDomain.SEC, 4120),
+                                "tesseraql.identity.recovery.enabled needs a channel:"));
+                if (!io.tesseraql.yaml.notify.NotificationChannels.MAIL.equals(
+                        notificationChannels.require(recoveryChannel).type())) {
+                    throw new io.tesseraql.core.error.TqlException(
+                            new io.tesseraql.core.error.TqlErrorCode(
+                                    io.tesseraql.core.error.TqlDomain.SEC, 4120),
+                            "Recovery channel '" + recoveryChannel + "' must be type mail");
+                }
+                String recoveryUrl = manifest.config()
+                        .getString("tesseraql.identity.recovery.url")
+                        .orElseThrow(() -> new io.tesseraql.core.error.TqlException(
+                                new io.tesseraql.core.error.TqlErrorCode(
+                                        io.tesseraql.core.error.TqlDomain.SEC, 4120),
+                                "tesseraql.identity.recovery.enabled needs a url:"));
+                io.tesseraql.operations.credential.JdbcCredentialTokenStore credentialTokens = new io.tesseraql.operations.credential.JdbcCredentialTokenStore(
+                        dataSource);
+                credentialTokens.ensureSchema();
+                context.addRoutes(new RecoveryRouteBuilder(credentialTokens, identity, realm,
+                        sessionStore, outboxStore, recoveryChannel, recoveryUrl,
+                        java.time.Duration.ofMinutes(manifest.config()
+                                .getString("tesseraql.identity.recovery.ttlMinutes")
+                                .map(Long::parseLong).orElse(30L)),
+                        appName));
+            }
             // Optional feature modules (SCIM, SAML, ...) self-install via ServiceLoader, from the
             // classpath or from signature-verified plugin jars in isolated loaders (ch. 47).
             for (io.tesseraql.compiler.ext.RuntimeExtension extension : RuntimeExtensions

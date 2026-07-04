@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<!-- The reset link's landing page (roadmap Phase 50). Renders the token into a hidden field
+     only (Thymeleaf-escaped); Referrer-Policy: no-referrer keeps the tokened URL out of
+     outbound referers. -->
+<html xmlns:th="http://www.thymeleaf.org" lang="en" th:lang="${#locale.toLanguageTag()}"
+      data-theme="dark" th:attr="data-theme=${_theme != null ? _theme : 'dark'}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Choose a new password &middot; TesseraQL</title>
+<link rel="stylesheet" href="/assets/vendor/hypermedia-components__core/dist/hc.min.css">
+<link rel="stylesheet" href="/assets/_tesseraql/tesseraql.css">
+</head>
+<body>
+<main class="hc-stack" style="max-width: 24rem; margin: 4rem auto; padding: 0 1rem;">
+  <section class="hc-card hc-stack">
+    <h1>Choose a new password</h1>
+
+    <div class="hc-empty" th:if="${invalid}">
+      <p class="hc-empty__title">This link is no longer valid.</p>
+      <p class="hc-empty__body">Reset links work once and expire quickly.
+        <a href="/_tesseraql/reset">Request a new one</a>.</p>
+    </div>
+
+    <th:block th:unless="${invalid}">
+      <div th:if="${error}" class="hc-alert" data-variant="error" role="alert">
+        <p class="hc-alert__title">The new password needs at least 8 characters.</p>
+      </div>
+      <form class="hc-stack" method="post" action="/_tesseraql/reset/confirm">
+        <input type="hidden" name="token" th:value="${token}">
+        <div class="hc-field">
+          <label class="hc-field__label" for="next">New password (8+ characters)</label>
+          <input class="hc-input" id="next" name="next" type="password" minlength="8"
+                 autocomplete="new-password" required autofocus>
+        </div>
+        <button class="hc-button" data-variant="primary" type="submit">Set password</button>
+      </form>
+    </th:block>
+  </section>
+</main>
+</body>
+</html>
