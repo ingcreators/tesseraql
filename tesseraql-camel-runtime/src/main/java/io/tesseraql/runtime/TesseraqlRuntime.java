@@ -443,6 +443,24 @@ public final class TesseraqlRuntime implements AutoCloseable {
                 .filter(name -> notificationChannels.require(name).setting("userOptOut")
                         .map(Boolean::parseBoolean).orElse(false))
                 .sorted().toList();
+        // The in-app inbox (roadmap Phase 49): the store exists exactly when a channel of
+        // type inbox is declared - no channel, no table, no bell. ensureSchema is the only
+        // owner of tql_user_notification (deliberately outside the Flyway component set).
+        final io.tesseraql.core.inbox.InboxStore inboxStore;
+        if (notificationChannels.names().stream()
+                .anyMatch(name -> io.tesseraql.yaml.notify.NotificationChannels.INBOX
+                        .equals(notificationChannels.require(name).type()))) {
+            io.tesseraql.operations.inbox.JdbcInboxStore jdbcInbox = new io.tesseraql.operations.inbox.JdbcInboxStore(
+                    dataSource,
+                    java.time.Duration.ofDays(manifest.config()
+                            .getString("tesseraql.inbox.retentionDays")
+                            .map(Long::parseLong).orElse(90L)));
+            jdbcInbox.ensureSchema();
+            context.getRegistry().bind(TesseraqlProperties.INBOX_STORE_BEAN, jdbcInbox);
+            inboxStore = jdbcInbox;
+        } else {
+            inboxStore = null;
+        }
         String alertChannel = manifest.config()
                 .getString("tesseraql.notifications.alerts.channel").orElse(null);
         if (alertChannel != null) {
@@ -776,7 +794,8 @@ public final class TesseraqlRuntime implements AutoCloseable {
             io.tesseraql.core.outbox.OutboxEventSink notificationSink = notificationChannels
                     .isEmpty()
                             ? null
-                            : new NotificationSink(notificationChannels, appHome, context);
+                            : new NotificationSink(notificationChannels, appHome, context,
+                                    inboxStore);
             // The channel-publish sink relays publish: EVENT events onto messaging channels
             // (roadmap Phase 27), composed alongside the notification sink on the same outbox.
             io.tesseraql.core.outbox.OutboxEventSink channelSink = messagingChannels.isEmpty()

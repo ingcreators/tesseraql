@@ -232,7 +232,8 @@ public final class JobExecutor {
             return Map.of("affectedRows", 0, "optedOut", true);
         }
         String eventId = notificationOutbox.insert(notification.build(context,
-                appName == null ? "app" : appName));
+                appName == null ? "app" : appName,
+                notification.resolveRecipient(context), null));
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("affectedRows", 1);
         result.put("eventId", eventId);

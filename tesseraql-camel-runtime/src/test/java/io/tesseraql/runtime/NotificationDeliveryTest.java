@@ -87,7 +87,7 @@ class NotificationDeliveryTest {
         AppConfig config = new AppConfig(
                 Map.of("tesseraql", Map.of("notifications", Map.of("channels", channels))),
                 name -> null);
-        return new NotificationSink(NotificationChannels.load(config), appHome, camel);
+        return new NotificationSink(NotificationChannels.load(config), appHome, camel, null);
     }
 
     private static OutboxEvent notification(String channel, Map<String, Object> payload) {

@@ -106,7 +106,19 @@ public final class NotifyEvents {
 
         /** Builds the insertable outbox event carrying the notification envelope. */
         public OutboxEvent build(Map<String, Object> context, String appName) {
-            return event(channel, source, resolvePayload(context), appName);
+            return build(context, appName, null, null);
+        }
+
+        /**
+         * Builds the event with the addressed recipient riding the envelope (roadmap
+         * Phase 49): the caller resolves the recipient once (it already does, for the
+         * opt-out check) and supplies the acting tenant - this module stays
+         * Principal-free.
+         */
+        public OutboxEvent build(Map<String, Object> context, String appName,
+                String recipient, String tenantId) {
+            return event(channel, source, recipient, tenantId, resolvePayload(context),
+                    appName);
         }
     }
 
@@ -116,9 +128,21 @@ public final class NotifyEvents {
      */
     public static OutboxEvent event(String channel, String source, Map<String, Object> payload,
             String appName) {
+        return event(channel, source, null, null, payload, appName);
+    }
+
+    /** The full envelope builder: recipient and tenant ride along when addressed (Phase 49). */
+    public static OutboxEvent event(String channel, String source, String recipient,
+            String tenantId, Map<String, Object> payload, String appName) {
         Map<String, Object> envelope = new LinkedHashMap<>();
         envelope.put("channel", channel);
         envelope.put("source", source);
+        if (recipient != null && !recipient.isBlank()) {
+            envelope.put("recipient", recipient);
+        }
+        if (tenantId != null && !tenantId.isBlank()) {
+            envelope.put("tenant", tenantId);
+        }
         envelope.put("payload", payload == null ? Map.of() : payload);
         try {
             return OutboxEvent.toInsert(AGGREGATE_TYPE, source, EVENT_TYPE,
@@ -142,18 +166,29 @@ public final class NotifyEvents {
             if (raw.get("payload") instanceof Map<?, ?> declared) {
                 declared.forEach((key, value) -> payload.put(String.valueOf(key), value));
             }
-            return new Envelope(string(raw.get("channel")), string(raw.get("source")), payload);
+            return new Envelope(string(raw.get("channel")), string(raw.get("source")),
+                    string(raw.get("recipient")), string(raw.get("tenant")), payload);
         } catch (JsonProcessingException ex) {
             throw new TqlException(ENCODE_ERROR,
                     "Failed to decode notification envelope: " + ex.getMessage());
         }
     }
 
-    /** A decoded notification envelope. */
-    public record Envelope(String channel, String source, Map<String, Object> payload) {
+    /**
+     * A decoded notification envelope. {@code recipient}/{@code tenant} are present only on
+     * addressed notifications (roadmap Phase 49); envelopes written before then decode with
+     * both absent.
+     */
+    public record Envelope(String channel, String source, String recipient, String tenant,
+            Map<String, Object> payload) {
 
         public Envelope {
             payload = payload == null ? Map.of() : Map.copyOf(payload);
+        }
+
+        /** The pre-Phase-49 shape, for callers that never address. */
+        public Envelope(String channel, String source, Map<String, Object> payload) {
+            this(channel, source, null, null, payload);
         }
     }
 

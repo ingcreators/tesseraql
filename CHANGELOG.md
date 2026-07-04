@@ -8,6 +8,16 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **The in-app notification center, slice 1 — delivery** (roadmap Phase 49; design in
+  `docs/inbox.md`): a third channel type **`inbox`** delivers `recipient:`-addressed
+  `notify:` events into the managed `tql_user_notification` table — the resolved
+  recipient (and acting tenant) now ride the outbox envelope, `title`/`body` render as
+  the channel's inline TEXT templates, and **delivery dedupes on the outbox event id**,
+  so at-least-once redelivery never doubles a message. Read-state operations
+  (`unreadCount`/`recent`/`markRead`/`markAllRead`) land with the store; read messages
+  prune past `tesseraql.inbox.retentionDays` (default 90). An inbox notification
+  without `recipient:` fails lint (`TQL-YAML-1034`); the Phase 48 opt-out silences at
+  enqueue as before. The shell bell and `/_tesseraql/inbox` page follow in slice 2.
 - **The account surface, slice 5 — app-declared preference groups** (roadmap Phase 48,
   final slice — **the phase is complete and milestone M13 is met**): an app declares
   fields in `config/preferences.yml` (`boolean` | `choice` | `text`, message-catalog
