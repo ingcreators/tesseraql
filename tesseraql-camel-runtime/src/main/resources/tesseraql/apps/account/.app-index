@@ -7,3 +7,7 @@ web/_tesseraql/account/appearance/post.yml
 web/_tesseraql/account/notifications/post.yml
 web/_tesseraql/account/password/post.yml
 web/_tesseraql/account/app/post.yml
+web/_tesseraql/inbox/get.yml
+web/_tesseraql/inbox/inbox.html
+web/_tesseraql/inbox/read/post.yml
+web/_tesseraql/inbox/read-all/post.yml

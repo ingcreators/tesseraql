@@ -88,6 +88,8 @@ class AccountSurfaceIntegrationTest {
                 .contains("ADMIN");
         // The shared shell renders the avatar + user menu from the reserved `_account`
         // variable: initials, the settings link (the app is mounted), and sign-out.
+        // No inbox channel is declared in this app, so the shell renders no bell.
+        assertThat(page.body()).doesNotContain("tql-inbox-bell");
         assertThat(page.body()).contains("hc-avatar")
                 .contains("tql-account-menu")
                 .contains("Account settings")

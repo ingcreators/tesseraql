@@ -1,0 +1,30 @@
+version: tesseraql/v1
+id: tql.inbox.read
+kind: route
+recipe: command-json
+
+# Marks one of the caller's messages read (roadmap Phase 49). A message that is not the
+# caller's - or is unknown, or already read - answers TQL-ACCOUNT-4806 (404): the inbox
+# never confirms anything about another subject's messages.
+
+input:
+  eventId:
+    type: string
+    required: true
+    maxLength: 64
+
+security:
+  auth: browser
+  csrf: true
+
+sql:
+  service: account.inbox.read
+  params:
+    eventId: params.eventId
+    subject: principal.subject
+    tenantId: principal.tenantId
+
+response:
+  redirect:
+    status: 303
+    location: /_tesseraql/inbox

@@ -1,0 +1,30 @@
+version: tesseraql/v1
+id: tql.inbox.home
+kind: route
+recipe: query-html
+
+# The signed-in user's notification inbox (roadmap Phase 49): the page behind the shell's
+# bell. The subject is always the session principal's - the route maps principal.* into the
+# service params, so the page can only ever list the caller's messages.
+
+security:
+  auth: browser
+
+sql:
+  service: account.inbox.view
+  params:
+    subject: principal.subject
+    tenantId: principal.tenantId
+
+response:
+  html:
+    status: 200
+    template: inbox.html
+    model:
+      inbox: sql
+    headers:
+      Content-Security-Policy: "default-src 'self'; style-src 'self' 'unsafe-inline'; frame-ancestors 'none'"
+      X-Content-Type-Options: nosniff
+      X-Frame-Options: DENY
+      Referrer-Policy: no-referrer
+      Cache-Control: "no-store"

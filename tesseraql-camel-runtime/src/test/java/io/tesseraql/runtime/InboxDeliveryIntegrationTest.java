@@ -125,6 +125,57 @@ class InboxDeliveryIntegrationTest {
         }
     }
 
+    /** Slice 2: the bell badges on any shell page, the page lists, and reading clears. */
+    @Test
+    void theBellBadgesAndThePageListsAndReadingClears() throws Exception {
+        InboxStore inbox = inboxStore();
+        assertThat(postCommand("decision=approved").statusCode()).isEqualTo(200);
+        runtime.dispatchOutboxOnce();
+        String eventId = inbox.recent(null, "inbox-user", 1).get(0).eventId();
+        try {
+            // The bell renders with the unread badge on an ordinary shell page.
+            HttpResponse<String> account = get("/_tesseraql/account");
+            assertThat(account.statusCode()).isEqualTo(200);
+            assertThat(account.body()).contains("tql-inbox-bell").contains("hc-badge");
+
+            // The inbox lists the message unread; a foreign event id is a 404.
+            HttpResponse<String> page = get("/_tesseraql/inbox");
+            assertThat(page.body()).contains("Your request was approved").contains("new");
+            assertThat(postForm("/_tesseraql/inbox/read", "eventId=not-mine").statusCode())
+                    .isEqualTo(404);
+
+            // Reading clears; mark-all afterwards is an idempotent no-op.
+            assertThat(postForm("/_tesseraql/inbox/read", "eventId=" + eventId)
+                    .statusCode()).isEqualTo(303);
+            assertThat(get("/_tesseraql/inbox").body()).contains("0 unread");
+            assertThat(postForm("/_tesseraql/inbox/read-all", "").statusCode())
+                    .isEqualTo(303);
+        } finally {
+            inbox.markRead(null, "inbox-user", eventId);
+        }
+    }
+
+    private static HttpResponse<String> get(String path) throws Exception {
+        HttpRequest request = HttpRequest.newBuilder(
+                URI.create("http://localhost:" + runtime.port() + path))
+                .header("Cookie", sessionCookie)
+                .build();
+        return HttpClient.newHttpClient().send(request, HttpResponse.BodyHandlers.ofString());
+    }
+
+    private static HttpResponse<String> postForm(String path, String form) throws Exception {
+        SessionStore sessions = runtime.camelContext().getRegistry().lookupByNameAndType(
+                TesseraqlProperties.SESSION_STORE_BEAN, SessionStore.class);
+        HttpRequest request = HttpRequest.newBuilder(
+                URI.create("http://localhost:" + runtime.port() + path))
+                .header("Cookie", sessionCookie)
+                .header("X-CSRF-Token", sessions.csrfTokenFromCookie(sessionCookie))
+                .header("Content-Type", "application/x-www-form-urlencoded")
+                .POST(HttpRequest.BodyPublishers.ofString(form))
+                .build();
+        return HttpClient.newHttpClient().send(request, HttpResponse.BodyHandlers.ofString());
+    }
+
     private static InboxStore inboxStore() {
         return runtime.camelContext().getRegistry().lookupByNameAndType(
                 TesseraqlProperties.INBOX_STORE_BEAN, InboxStore.class);

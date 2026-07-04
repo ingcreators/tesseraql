@@ -803,6 +803,14 @@ store, dedupe, lint), then the surface (bell, page, docs).
 and a message in the inbox, reading clears it, opting out silences it — zero app code
 beyond those declarations.
 
+Delivered 2026-07-04 in the two designed slices: the `inbox` channel type over the
+Phase 20 outbox (recipient/tenant riding the envelope, event-id dedupe, inline TEXT
+title/body templates, read-message retention, lint `TQL-YAML-1034`), then the shell
+bell (`_inbox`, TTL-cached unread count) and `/_tesseraql/inbox` (list, mark read with
+`TQL-ACCOUNT-4806` owner-checks, mark all read, the honest no-channel empty state).
+Held green by `InboxDeliveryIntegrationTest` on real PostgreSQL end to end.
+**Phase 49 is complete and milestone M14 is met.**
+
 ### Phases 50–52 — recorded candidates (maintainer names which proceeds)
 
 Direction candidates for this horizon, recorded 2026-07-04; each gets its own design

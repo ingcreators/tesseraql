@@ -377,6 +377,7 @@ public final class ErrorResponseRenderer implements Processor {
                 case 4801, 4802, 4804 -> 400;
                 case 4803 -> 409; // password change unavailable (SSO-managed credentials)
                 case 4805 -> 404; // account surface disabled
+                case 4806 -> 404; // marking an inbox message that is not the caller's
                 default -> 500;
             };
             case SQL -> switch (code.number()) {
