@@ -839,6 +839,16 @@ mail and every old session dies; an invited user goes from nonexistent to signed
 without an operator ever knowing a password; an account carries a second factor whose
 codes cannot replay — all JDK-only, no new dependency.
 
+Delivered 2026-07-04 in the three designed slices: reset (`tql_credential_token`,
+hashed single-use tokens, anti-enumeration end to end, sessions killed on consume,
+`TQL-SEC-4120` fail-fast config); invitations (IAM-admin *Invite user*, status
+`INVITED` refused at login, polite resends, 409 against takeover); and TOTP
+(RFC 6238 over `javax.crypto` validated against the RFC's own vectors, confirm-before-
+enforce enrollment, the `last_used_step` compare-and-set replay guard, and login
+failures indistinguishable from a wrong password). Held green by
+`RecoveryIntegrationTest`, `InviteIntegrationTest`, and `TotpIntegrationTest` on real
+PostgreSQL. **Phase 50 is complete and milestone M15 is met.**
+
 ### Phases 51–52 — recorded candidates (maintainer names which proceeds)
 
 Direction candidates for this horizon, recorded 2026-07-04; each gets its own design

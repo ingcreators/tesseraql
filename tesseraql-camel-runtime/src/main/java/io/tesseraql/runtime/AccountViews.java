@@ -48,7 +48,8 @@ final class AccountViews {
     /** The account page model: profile plus every settings section's state. */
     static Map<String, Object> settings(Map<String, Object> params, PreferenceStore preferences,
             List<String> supportedTags, List<String> optOutChannels, SessionStore sessions,
-            boolean passwordEnabled, io.tesseraql.yaml.account.PreferencesSpec appSpec) {
+            boolean passwordEnabled, io.tesseraql.yaml.account.PreferencesSpec appSpec,
+            io.tesseraql.core.credential.TotpStore totp, String issuer) {
         Map<String, Object> model = profile(params);
         Map<String, String> stored = preferences == null
                 ? Map.of()
@@ -93,6 +94,24 @@ final class AccountViews {
             appPreferences.add(entry);
         }
         model.put("appPreferences", appPreferences);
+        // TOTP state (roadmap Phase 50 slice 3): confirmed = enforced at login; a pending
+        // (unconfirmed) enrollment renders its secret and otpauth URI to its owner only.
+        Map<String, Object> totpModel = new LinkedHashMap<>();
+        totpModel.put("available", totp != null && passwordEnabled);
+        totpModel.put("enrolled", false);
+        if (totp != null) {
+            totp.enrollment(tenant(params), subject(params)).ifPresent(enrollment -> {
+                totpModel.put("enrolled", enrollment.confirmed());
+                if (!enrollment.confirmed()) {
+                    totpModel.put("pendingSecret", enrollment.secret());
+                    totpModel.put("otpauth", io.tesseraql.security.totp.Totp.otpauthUri(
+                            issuer == null ? "TesseraQL" : issuer,
+                            text(params.get("loginId"), subject(params)),
+                            enrollment.secret()));
+                }
+            });
+        }
+        model.put("totp", totpModel);
         String locale = stored.get("ui.locale");
         List<Map<String, Object>> locales = new ArrayList<>();
         for (String tag : supportedTags) {
@@ -244,6 +263,54 @@ final class AccountViews {
                 ? 0
                 : inbox.markAllRead(tenant(params), subject(params));
         return Map.of("ok", true, "marked", marked);
+    }
+
+    /** Starts (or restarts) TOTP enrollment: a fresh secret, stored unconfirmed. */
+    static Map<String, Object> totpBegin(Map<String, Object> params,
+            io.tesseraql.core.credential.TotpStore totp) {
+        requireTotp(totp);
+        totp.beginEnrollment(tenant(params), subject(params),
+                io.tesseraql.security.totp.Totp.generateSecret());
+        return Map.of("ok", true);
+    }
+
+    /** Confirms the pending enrollment with a valid code - nothing enforces until this. */
+    static Map<String, Object> totpConfirm(Map<String, Object> params,
+            io.tesseraql.core.credential.TotpStore totp) {
+        requireTotp(totp);
+        var enrollment = totp.enrollment(tenant(params), subject(params))
+                .filter(e -> !e.confirmed());
+        long step = enrollment.isEmpty()
+                ? -1
+                : io.tesseraql.security.totp.Totp.matchedStep(enrollment.get().secret(),
+                        text(params.get("code"), ""));
+        if (step < 0 || !totp.markUsedStep(tenant(params), subject(params), step)
+                || !totp.confirmEnrollment(tenant(params), subject(params))) {
+            throw new TqlException(INVALID_VALUE, "That code did not match - try again");
+        }
+        return Map.of("ok", true);
+    }
+
+    /** Disables TOTP after re-verifying the password (TQL-ACCOUNT-4804 on mismatch). */
+    static Map<String, Object> totpDisable(Map<String, Object> params,
+            io.tesseraql.core.credential.TotpStore totp, IdentityService identity,
+            RealmConfig realm) {
+        requireTotp(totp);
+        if (identity == null || realm == null
+                || new PasswordAuthenticator(identity).authenticate(realm,
+                        text(params.get("loginId"), ""), text(params.get("current"), ""),
+                        tenant(params)).isEmpty()) {
+            throw new TqlException(WRONG_PASSWORD, "The current password does not match");
+        }
+        totp.remove(tenant(params), subject(params));
+        return Map.of("ok", true);
+    }
+
+    private static void requireTotp(io.tesseraql.core.credential.TotpStore totp) {
+        if (totp == null) {
+            throw new TqlException(PASSWORD_UNAVAILABLE,
+                    "Two-factor authentication needs the local identity realm");
+        }
     }
 
     private static String subject(Map<String, Object> params) {

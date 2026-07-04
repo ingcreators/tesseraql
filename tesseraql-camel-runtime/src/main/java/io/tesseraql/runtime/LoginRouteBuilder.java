@@ -39,12 +39,14 @@ final class LoginRouteBuilder extends RouteBuilder {
     private final PasswordAuthenticator authenticator;
     private final RealmConfig realm;
     private final SessionStore sessions;
+    private final io.tesseraql.core.credential.TotpStore totp;
 
     LoginRouteBuilder(PasswordAuthenticator authenticator, RealmConfig realm,
-            SessionStore sessions) {
+            SessionStore sessions, io.tesseraql.core.credential.TotpStore totp) {
         this.authenticator = authenticator;
         this.realm = realm;
         this.sessions = sessions;
+        this.totp = totp;
     }
 
     @Override
@@ -76,6 +78,22 @@ final class LoginRouteBuilder extends RouteBuilder {
 
         Optional<Principal> principal = authenticator.authenticate(realm, loginId, password,
                 tenantId);
+        // A confirmed TOTP enrollment makes the code field required (roadmap Phase 50
+        // slice 3). Missing, wrong, and REPLAYED codes all collapse into the same
+        // invalid-credentials answer as a wrong password - winning the store's
+        // last-used-step compare-and-set is what accepts a code.
+        if (principal.isPresent() && totp != null) {
+            var enrollment = totp.enrollment(principal.get().tenantId(),
+                    principal.get().subject()).filter(e -> e.confirmed());
+            if (enrollment.isPresent()) {
+                long step = io.tesseraql.security.totp.Totp.matchedStep(
+                        enrollment.get().secret(), str(body.get("otp")));
+                if (step < 0 || !totp.markUsedStep(principal.get().tenantId(),
+                        principal.get().subject(), step)) {
+                    principal = Optional.empty();
+                }
+            }
+        }
         if (principal.isEmpty()) {
             if (browserForm) {
                 // Post/redirect/get: bounce back to the login page with an error flag and the

@@ -722,7 +722,11 @@ public final class TesseraqlRuntime implements AutoCloseable {
                             params -> AccountViews.settings(params, preferences,
                                     accountLocales, optOutChannels, sessionStore,
                                     passwordLoginEnabled,
-                                    io.tesseraql.yaml.account.PreferencesSpec.live(appHome)))
+                                    io.tesseraql.yaml.account.PreferencesSpec.live(appHome),
+                                    context.getRegistry().lookupByNameAndType(
+                                            TesseraqlProperties.TOTP_STORE_BEAN,
+                                            io.tesseraql.core.credential.TotpStore.class),
+                                    appName))
                     .register("account.language.save",
                             params -> AccountViews.saveLanguage(params, preferences,
                                     accountLocales))
@@ -759,6 +763,30 @@ public final class TesseraqlRuntime implements AutoCloseable {
                                             io.tesseraql.identity.RealmConfig.class),
                                     inviteChannel, inviteUrl, inviteTtl, appName,
                                     inviteEnabled))
+                    // TOTP self-service (roadmap Phase 50 slice 3): begin/confirm/disable.
+                    // The store binds in the identity block, so resolve lazily like
+                    // identity/realm; disable re-verifies the password.
+                    .register("account.totp.begin",
+                            params -> AccountViews.totpBegin(params,
+                                    context.getRegistry().lookupByNameAndType(
+                                            TesseraqlProperties.TOTP_STORE_BEAN,
+                                            io.tesseraql.core.credential.TotpStore.class)))
+                    .register("account.totp.confirm",
+                            params -> AccountViews.totpConfirm(params,
+                                    context.getRegistry().lookupByNameAndType(
+                                            TesseraqlProperties.TOTP_STORE_BEAN,
+                                            io.tesseraql.core.credential.TotpStore.class)))
+                    .register("account.totp.disable",
+                            params -> AccountViews.totpDisable(params,
+                                    context.getRegistry().lookupByNameAndType(
+                                            TesseraqlProperties.TOTP_STORE_BEAN,
+                                            io.tesseraql.core.credential.TotpStore.class),
+                                    context.getRegistry().lookupByNameAndType(
+                                            TesseraqlProperties.IDENTITY_SERVICE_BEAN,
+                                            io.tesseraql.identity.IdentityService.class),
+                                    context.getRegistry().lookupByNameAndType(
+                                            TesseraqlProperties.IDENTITY_REALM_BEAN,
+                                            io.tesseraql.identity.RealmConfig.class)))
                     .register("account.password.change",
                             params -> AccountViews.changePassword(params,
                                     context.getRegistry().lookupByNameAndType(
@@ -838,8 +866,14 @@ public final class TesseraqlRuntime implements AutoCloseable {
             RealmConfig realm = IdentityConfigFactory.defaultRealm(manifest.config(), appHome);
             context.getRegistry().bind(TesseraqlProperties.IDENTITY_SERVICE_BEAN, identity);
             context.getRegistry().bind(TesseraqlProperties.IDENTITY_REALM_BEAN, realm);
+            // TOTP enrollments (roadmap Phase 50 slice 3): available wherever password
+            // login is - the account page enrolls, the login route enforces.
+            io.tesseraql.operations.credential.JdbcTotpStore totpStore = new io.tesseraql.operations.credential.JdbcTotpStore(
+                    dataSource);
+            totpStore.ensureSchema();
+            context.getRegistry().bind(TesseraqlProperties.TOTP_STORE_BEAN, totpStore);
             context.addRoutes(new LoginRouteBuilder(
-                    new PasswordAuthenticator(identity), realm, sessionStore));
+                    new PasswordAuthenticator(identity), realm, sessionStore, totpStore));
             // Password recovery (roadmap Phase 50 slice 1): fail-fast validation - a half
             // configuration must not silently produce a reset page that goes nowhere.
             String recoveryChannel = null;

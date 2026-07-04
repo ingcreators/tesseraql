@@ -1,0 +1,22 @@
+version: tesseraql/v1
+id: tql.account.totp.begin
+kind: route
+recipe: command-json
+
+# Starts (or restarts) TOTP enrollment (roadmap Phase 50 slice 3): a fresh secret, stored
+# unconfirmed - nothing is enforced until a valid code confirms it.
+
+security:
+  auth: browser
+  csrf: true
+
+sql:
+  service: account.totp.begin
+  params:
+    subject: principal.subject
+    tenantId: principal.tenantId
+
+response:
+  redirect:
+    status: 303
+    location: /_tesseraql/account
