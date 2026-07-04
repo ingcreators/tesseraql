@@ -132,6 +132,27 @@ class ShortcutIntegrationTest {
                 .noneMatch(pin -> pin.href().equals("/home?keep=me"));
     }
 
+    /** Slice 2: viewing records builds the bounded, bumped recent ring - detail only. */
+    @Test
+    void detailViewsCollectAsRecentsAndOtherPagesDoNot() throws Exception {
+        assertThat(get("/things/1").statusCode()).isEqualTo(200);
+        assertThat(get("/things/2").statusCode()).isEqualTo(200);
+        // A plain page render records nothing.
+        get("/home");
+
+        List<ShortcutStore.Shortcut> recents = store().list(null, "pin-user",
+                ShortcutStore.RECENT, 50);
+        assertThat(recents).hasSize(2);
+        assertThat(recents.get(0).href()).isEqualTo("/things/2");
+        assertThat(recents.get(1).href()).isEqualTo("/things/1");
+
+        // The account card lists them under Recent.
+        assertThat(get("/_tesseraql/account").body()).contains("/things/2");
+        // A rapid reload inside the dedupe window does not double-write.
+        get("/things/2");
+        assertThat(store().list(null, "pin-user", ShortcutStore.RECENT, 50)).hasSize(2);
+    }
+
     private static ShortcutStore store() {
         return runtime.camelContext().getRegistry().lookupByNameAndType(
                 TesseraqlProperties.SHORTCUT_STORE_BEAN, ShortcutStore.class);
@@ -215,6 +236,35 @@ class ShortcutIntegrationTest {
                       rows: sql.rows
                 """);
         Files.writeString(home.resolve("home.sql"), "select 1 as x\n");
+        // A detail view (Phase 39) - the recents trigger (slice 2).
+        Path thing = target.resolve("web/things/{id}");
+        Files.createDirectories(thing);
+        Files.writeString(thing.resolve("get.yml"), """
+                version: tesseraql/v1
+                id: things.detail
+                kind: route
+                recipe: query-html
+                security:
+                  auth: browser
+                sql:
+                  file: thing.sql
+                  mode: query
+                  params:
+                    id: path.id
+                response:
+                  html:
+                    status: 200
+                    view: thing.view.yml
+                """);
+        Files.writeString(thing.resolve("thing.sql"),
+                "select /* id */'T-1' as id, 'Thing ' || /* id */'T-1' as name\n");
+        Files.writeString(thing.resolve("thing.view.yml"), """
+                version: tesseraql/v1
+                id: things.detail.view
+                kind: view
+                view: detail
+                title: Thing
+                """);
         Files.writeString(home.resolve("home.html"), """
                 <!DOCTYPE html>
                 <html xmlns:th="http://www.thymeleaf.org"

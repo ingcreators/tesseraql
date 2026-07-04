@@ -1,10 +1,15 @@
 # Personal productivity — pins and recents
 
-Status: design accepted 2026-07-04 (roadmap Phase 51, Horizon 9). Two slices: pins
-(**delivered** — one refinement: the toggle lands on the account page rather than
-bouncing back, because redirect placeholders URL-encode their values and a
-redirect-to-user-input pattern is best avoided anyway; and hrefs also refuse the
-backslash protocol-relative form), then recents + the list-view hook.
+Status: design accepted 2026-07-04 (roadmap Phase 51, Horizon 9). **Both slices are
+delivered — Phase 51 is complete and milestone M17 is met.** Refinements from
+implementation, recorded honestly: the toggle lands on the account page (redirect
+placeholders URL-encode their values, and redirect-to-user-input is best avoided
+anyway); hrefs also refuse the backslash protocol-relative form; rows key on the
+href's SHA-256 (the naive key blows SQL Server's clustered index cap); rapid reloads
+of the same record dedupe inside the cache TTL instead of writing a row per render;
+and the planned in-pattern "Pin this view" button was **dropped as redundant chrome**
+— the header control already does exactly that on every page, which is the design's
+own collapse argument applied once more.
 
 Business users keep coming back to the same places: a filtered list ("open requests over
 5000"), a Studio data-browser query, a handful of records they touch daily. TesseraQL has
@@ -77,9 +82,9 @@ user's shortcuts.
 - The renderer records a recent when a route renders a **`view: detail`** page (the
   bounded, deduped ring above). Label: the view's title line — the document key the
   detail pattern already renders.
-- The list pattern (`tql/view/list.html`) gains **Pin this view** beside its search box
-  when a session is present: the same pin form, pre-labelled from the route id and the
-  active query — "saved filters" with zero app code, exactly as collapsed above.
+- ~~The list pattern gains its own Pin this view button~~ — dropped in implementation:
+  the header control already pins any page with its query, so a second button beside
+  the search box would be redundant chrome. The collapse argument, applied once more.
 
 **Milestone M17** — a user pins a filtered list view and a Studio data-browser query and
 both reappear in the sidebar of every page they open; the records they view collect in a

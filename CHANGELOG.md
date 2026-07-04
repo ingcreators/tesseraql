@@ -8,6 +8,14 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **Personal productivity, slice 2 — recents** (roadmap Phase 51, final slice — **the
+  phase is complete and milestone M17 is met, closing every phase named into
+  Horizon 9**): rendering a **`view: detail`** page records it in the user's bounded
+  recent ring (20, deduped by URL with rapid reloads coalesced inside the cache TTL,
+  bumped on revisit, labelled by the view's own title), listed and removable on the
+  account page — never in the sidebar, so the chrome stays calm. The planned in-pattern
+  *Pin this view* button was dropped as redundant: the header control already pins any
+  page with its query string.
 - **Personal productivity, slice 1 — pins** (roadmap Phase 51; design in
   `docs/productivity.md`): every shell page's header gains **Pin / Unpin** for the
   current URL — **query string included, so pinning a filtered list IS saving the

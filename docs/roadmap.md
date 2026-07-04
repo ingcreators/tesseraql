@@ -874,6 +874,13 @@ list pattern's *Pin this view*.
 and both reappear in the sidebar of every page they open; the records they view collect
 in a bounded recent list on the account page; removing and re-labelling work from there
 — per user, zero app code, and a pin can never point off-site.
+
+Delivered 2026-07-04 in the two designed slices: pins (the header toggle on every shell
+page, the Pinned sidebar group, the account card, relative-path-only hrefs down to the
+backslash form) and recents (the automatic deduped ring of `view: detail` renders,
+labelled by the view's own title). Held green by `ShortcutIntegrationTest` on real
+PostgreSQL. **Phase 51 is complete and milestone M17 is met — with it, every phase
+named into Horizon 9 (48–52) is complete.**
 - (Phase 52 was named 2026-07-04; see its section below.)
 
 ### Phase 52 — workflow delegation and absence
