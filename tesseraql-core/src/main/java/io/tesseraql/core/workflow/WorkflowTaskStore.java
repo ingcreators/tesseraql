@@ -45,13 +45,14 @@ public interface WorkflowTaskStore {
      * Reassigns the document's open tasks to a new direct assignee, keeping their deadlines (roadmap
      * Phase 28 slice 3). Delegation uses this so the delegate sees the task in their inbox.
      */
-    void reassignOpenTasks(Connection cx, String docType, String docId, String newAssignee);
+    void reassignOpenTasks(Connection cx, String docType, String docId, String newAssignee,
+            String delegatedFrom);
 
     /**
      * Escalates an overdue task to a new assignee and clears its deadline, so the cluster-safe
      * sweeper acts on it exactly once (roadmap Phase 28 slice 3).
      */
-    void escalate(Connection cx, String taskId, String newAssignee);
+    void escalate(Connection cx, String taskId, String newAssignee, String delegatedFrom);
 
     /**
      * The open tasks whose deadline has passed as of {@code asOf} (up to {@code limit}), the
@@ -72,7 +73,13 @@ public interface WorkflowTaskStore {
      * @param tenantId       the owning tenant, or {@code null} when tenancy is not used
      */
     record Task(String docType, String docId, String state, String assignee, String candidateGroup,
-            Instant dueAt, String tenantId) {
+            Instant dueAt, String tenantId, String delegatedFrom) {
+
+        /** The pre-Phase-52 shape (no absence redirect) for positional callers. */
+        public Task(String docType, String docId, String state, String assignee,
+                String candidateGroup, Instant dueAt, String tenantId) {
+            this(docType, docId, state, assignee, candidateGroup, dueAt, tenantId, null);
+        }
     }
 
     /**

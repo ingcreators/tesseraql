@@ -1,0 +1,40 @@
+version: tesseraql/v1
+id: tql.account.delegation.save
+kind: route
+recipe: command-json
+
+# Saves the caller's own out-of-office rule (roadmap Phase 52): a delegate and a window.
+# Strictly self-service - the subject is always the session principal's; validation is
+# in the provider (self-delegation, inverted or expired windows, unknown delegate: 4802).
+
+input:
+  delegate:
+    type: string
+    required: true
+    maxLength: 255
+  startsAt:
+    type: string
+    required: true
+    maxLength: 32
+  endsAt:
+    type: string
+    required: true
+    maxLength: 32
+
+security:
+  auth: browser
+  csrf: true
+
+sql:
+  service: account.delegation.save
+  params:
+    delegate: params.delegate
+    startsAt: params.startsAt
+    endsAt: params.endsAt
+    subject: principal.subject
+    tenantId: principal.tenantId
+
+response:
+  redirect:
+    status: 303
+    location: /_tesseraql/account

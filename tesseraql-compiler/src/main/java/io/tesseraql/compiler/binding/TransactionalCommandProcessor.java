@@ -573,9 +573,18 @@ public final class TransactionalCommandProcessor implements Processor {
             Object group = row.get("candidate_group");
             String candidateGroup = group == null ? null : String.valueOf(group);
             if (assignee != null || candidateGroup != null) {
+                // Absence resolution (roadmap Phase 52): one hop at assignment time; the task
+                // records who it was meant for, and the reminder targets who must act.
+                io.tesseraql.core.workflow.Delegations.Resolved resolved = io.tesseraql.core.workflow.Delegations
+                        .resolve(exchange.getContext().getRegistry().lookupByNameAndType(
+                                TesseraqlProperties.DELEGATION_STORE_BEAN,
+                                io.tesseraql.core.workflow.DelegationStore.class),
+                                wf.tenant(), assignee);
                 wf.taskStore().openTask(connection, new WorkflowTaskStore.Task(workflow.docType(),
-                        wf.docId(), workflow.to(), assignee, candidateGroup, dueAt, wf.tenant()));
-                enqueueAssignReminder(exchange, connection, context, assignee, candidateGroup);
+                        wf.docId(), workflow.to(), resolved.assignee(), candidateGroup, dueAt,
+                        wf.tenant(), resolved.delegatedFrom()));
+                enqueueAssignReminder(exchange, connection, context, resolved.assignee(),
+                        candidateGroup);
             }
         }
     }

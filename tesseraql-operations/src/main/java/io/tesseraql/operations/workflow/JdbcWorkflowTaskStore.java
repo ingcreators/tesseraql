@@ -38,6 +38,10 @@ public final class JdbcWorkflowTaskStore implements WorkflowTaskStore {
         try {
             SqlScripts.applyForVendor(dataSource, JdbcWorkflowTaskStore.class,
                     "/tesseraql/db/migration/workflow-task/V1__workflow_task.sql");
+            // Who a redirected task was MEANT for (roadmap Phase 52); tolerated-duplicate
+            // idempotency, the tql_session V2 precedent.
+            io.tesseraql.core.util.SqlScripts.applyForVendor(dataSource, getClass(),
+                    "/tesseraql/db/migration/workflow-task/V2__delegated_from.sql");
         } catch (SQLException ex) {
             throw error("Failed to create workflow task schema", ex);
         }
@@ -47,7 +51,8 @@ public final class JdbcWorkflowTaskStore implements WorkflowTaskStore {
     public void openTask(Connection cx, Task task) {
         try (PreparedStatement ps = cx.prepareStatement("insert into tql_workflow_task "
                 + "(task_id, doc_type, doc_id, state, assignee, candidate_group, status, "
-                + "created_at, due_at, tenant_id) values (?, ?, ?, ?, ?, ?, 'OPEN', ?, ?, ?)")) {
+                + "created_at, due_at, tenant_id, delegated_from) "
+                + "values (?, ?, ?, ?, ?, ?, 'OPEN', ?, ?, ?, ?)")) {
             ps.setString(1, UUID.randomUUID().toString());
             ps.setString(2, task.docType());
             ps.setString(3, task.docId());
@@ -57,6 +62,7 @@ public final class JdbcWorkflowTaskStore implements WorkflowTaskStore {
             ps.setTimestamp(7, Timestamp.from(Instant.now()));
             ps.setTimestamp(8, task.dueAt() == null ? null : Timestamp.from(task.dueAt()));
             ps.setString(9, task.tenantId());
+            ps.setString(10, task.delegatedFrom());
             ps.executeUpdate();
         } catch (SQLException ex) {
             throw error("Failed to open workflow task", ex);
@@ -64,12 +70,15 @@ public final class JdbcWorkflowTaskStore implements WorkflowTaskStore {
     }
 
     @Override
-    public void reassignOpenTasks(Connection cx, String docType, String docId, String newAssignee) {
+    public void reassignOpenTasks(Connection cx, String docType, String docId, String newAssignee,
+            String delegatedFrom) {
         try (PreparedStatement ps = cx.prepareStatement("update tql_workflow_task "
-                + "set assignee = ? where doc_type = ? and doc_id = ? and status = 'OPEN'")) {
+                + "set assignee = ?, delegated_from = ? "
+                + "where doc_type = ? and doc_id = ? and status = 'OPEN'")) {
             ps.setString(1, newAssignee);
-            ps.setString(2, docType);
-            ps.setString(3, docId);
+            ps.setString(2, delegatedFrom);
+            ps.setString(3, docType);
+            ps.setString(4, docId);
             ps.executeUpdate();
         } catch (SQLException ex) {
             throw error("Failed to reassign workflow tasks", ex);
@@ -77,12 +86,15 @@ public final class JdbcWorkflowTaskStore implements WorkflowTaskStore {
     }
 
     @Override
-    public void escalate(Connection cx, String taskId, String newAssignee) {
+    public void escalate(Connection cx, String taskId, String newAssignee,
+            String delegatedFrom) {
         // Clearing due_at makes the cluster-safe sweeper act on a breached task exactly once.
         try (PreparedStatement ps = cx.prepareStatement("update tql_workflow_task "
-                + "set assignee = ?, due_at = null where task_id = ? and status = 'OPEN'")) {
+                + "set assignee = ?, delegated_from = ?, due_at = null "
+                + "where task_id = ? and status = 'OPEN'")) {
             ps.setString(1, newAssignee);
-            ps.setString(2, taskId);
+            ps.setString(2, delegatedFrom);
+            ps.setString(3, taskId);
             ps.executeUpdate();
         } catch (SQLException ex) {
             throw error("Failed to escalate workflow task", ex);
