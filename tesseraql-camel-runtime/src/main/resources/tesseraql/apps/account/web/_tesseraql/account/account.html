@@ -30,9 +30,40 @@
               th:text="${permission}">permission</span>
       </dd>
     </dl>
-    <p class="hc-text-muted">These facts come from your sign-in. Language, appearance,
-      notification, and session settings arrive here as the account surface grows
-      (docs/account.md).</p>
+    <p class="hc-text-muted">These facts come from your sign-in.</p>
   </section>
+  <section class="hc-card hc-stack">
+    <h2>Language</h2>
+    <form method="post" action="/_tesseraql/account/language" class="hc-stack">
+      <input type="hidden" name="_csrf" th:value="${_csrf}">
+      <label class="hc-field">
+        <span class="hc-field__label">Display language</span>
+        <select class="hc-select" name="locale">
+          <option th:each="entry : ${profile.locales}" th:value="${entry.tag}"
+                  th:text="${entry.label}" th:selected="${entry.selected}">English</option>
+        </select>
+      </label>
+      <p class="hc-text-muted">Takes effect from your next page, everywhere you sign in.
+        Until you choose, the language follows your sign-in profile or browser.</p>
+      <button class="hc-button" data-variant="primary" type="submit">Save language</button>
+    </form>
+  </section>
+  <section class="hc-card hc-stack">
+    <h2>Appearance</h2>
+    <form method="post" action="/_tesseraql/account/appearance" class="hc-stack">
+      <input type="hidden" name="_csrf" th:value="${_csrf}">
+      <label class="hc-radio-label">
+        <input class="hc-radio" type="radio" name="theme" value="light"
+               th:checked="${profile.theme == 'light'}"> Light
+      </label>
+      <label class="hc-radio-label">
+        <input class="hc-radio" type="radio" name="theme" value="dark"
+               th:checked="${profile.theme != 'light'}"> Dark
+      </label>
+      <button class="hc-button" data-variant="primary" type="submit">Save appearance</button>
+    </form>
+  </section>
+  <p class="hc-text-muted">Notification and session settings arrive here as the account
+    surface grows (docs/account.md).</p>
 </div>
 </html>

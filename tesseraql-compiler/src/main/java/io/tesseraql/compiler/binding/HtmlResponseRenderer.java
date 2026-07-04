@@ -208,6 +208,42 @@ public final class HtmlResponseRenderer implements Processor {
             }
         }
 
+        // Publish the page theme (roadmap Phase 48) as the reserved `_theme` variable: the
+        // signed-in user's stored `ui.theme`, else the request's theme cookie, else the
+        // operator default the runtime binds. Values are an enum lookup — a hostile cookie
+        // value reads as absent, and nothing here is echoed as markup. When the stored choice
+        // differs from the cookie the response re-syncs the cookie, so pre-login pages (the
+        // login screen) render in the chosen theme too.
+        String cookieTheme = validTheme(cookieValue(
+                exchange.getMessage().getHeader("Cookie", String.class), "tesseraql_theme"));
+        String storedTheme = null;
+        if (csrfToken != null
+                && exchange.getProperty(
+                        TesseraqlProperties.PRINCIPAL) instanceof io.tesseraql.security.Principal principal) {
+            io.tesseraql.core.account.PreferenceStore preferences = exchange.getContext()
+                    .getRegistry().lookupByNameAndType(
+                            TesseraqlProperties.PREFERENCE_STORE_BEAN,
+                            io.tesseraql.core.account.PreferenceStore.class);
+            if (preferences != null) {
+                storedTheme = validTheme(preferences
+                        .preferences(principal.tenantId(), principal.subject())
+                        .get("ui.theme"));
+            }
+        }
+        String theme = storedTheme != null
+                ? storedTheme
+                : cookieTheme != null
+                        ? cookieTheme
+                        : validTheme(exchange.getContext().getRegistry().lookupByNameAndType(
+                                TesseraqlProperties.UI_THEME_BEAN, String.class));
+        if (theme != null) {
+            model.put("_theme", theme);
+        }
+        if (storedTheme != null && !storedTheme.equals(cookieTheme)) {
+            exchange.getMessage().setHeader("Set-Cookie", "tesseraql_theme=" + storedTheme
+                    + "; Path=/; Max-Age=31536000; SameSite=Lax");
+        }
+
         String html = Templates.render(appHome, templateName, model,
                 java.util.Locale.forLanguageTag(tag));
 
@@ -229,6 +265,25 @@ public final class HtmlResponseRenderer implements Processor {
         return value instanceof List<?> list
                 ? list.stream().map(String::valueOf).toList()
                 : List.of();
+    }
+
+    /** The theme enum: anything but the known values reads as absent (cookies are hostile). */
+    private static String validTheme(String value) {
+        return "light".equals(value) || "dark".equals(value) ? value : null;
+    }
+
+    /** A minimal request-cookie read (the session store's parser is package-private). */
+    private static String cookieValue(String cookieHeader, String name) {
+        if (cookieHeader == null) {
+            return null;
+        }
+        for (String part : cookieHeader.split(";")) {
+            int eq = part.indexOf('=');
+            if (eq > 0 && part.substring(0, eq).trim().equals(name)) {
+                return part.substring(eq + 1).trim();
+            }
+        }
+        return null;
     }
 
     /** The avatar fallback: the first letters of up to two words (one glyph for CJK names). */

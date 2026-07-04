@@ -10,8 +10,11 @@
      shells call it) and renders a non-collapsible sidebar. `shell-impl(..., collapsible)` is the real
      skeleton; the framework `page`/`studio-page` forms pass collapsible=true to opt their icon +
      `.hc-shell__label` navs into the desktop collapse-to-icon-rail control. -->
+<!-- data-theme: the reserved `_theme` variable (stored preference > theme cookie > operator
+     default, roadmap Phase 48) with the historical dark fallback when nothing chose. -->
 <html xmlns:th="http://www.thymeleaf.org" th:fragment="shell-impl(title, nav, header, content, collapsible)"
-      lang="en" th:lang="${#locale.toLanguageTag()}" data-theme="dark">
+      lang="en" th:lang="${#locale.toLanguageTag()}" data-theme="dark"
+      th:attr="data-theme=${_theme != null ? _theme : 'dark'}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">

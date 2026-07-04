@@ -39,12 +39,19 @@ tesseraql:
     locales: [en, ja]            # served locales; defaults to the catalogs found
     preference:                  # user-preference sources, highest priority first
       - query.lang               # ?lang=ja — a language toggle without sign-in
-      - principal.claim.locale   # the signed-in user's locale claim (the default source)
+      - preference.ui.locale     # the account surface's stored choice (roadmap Phase 48)
+      - principal.claim.locale   # the signed-in user's locale claim
 ```
 
 Every route resolves its locale once, right after authentication: the preference sources in
 order, then `Accept-Language` negotiation (RFC 4647 lookup, so `ja-JP` matches a supported
-`ja`), then the default. The result publishes as the `request.locale` source expression —
+`ja`), then the default. Three source kinds exist: `preference.<key>` reads the signed-in
+user's stored preference (the full key after the prefix — the account surface's language
+picker writes `ui.locale`), `principal.*` reads the authenticated principal, and
+`query.<name>` reads a request parameter. When no list is declared the default is
+`[preference.ui.locale, principal.claim.locale]` — the language a user picks in
+`/_tesseraql/account` takes effect with zero configuration, and an IdP claim still covers
+users who never chose. The result publishes as the `request.locale` source expression —
 usable anywhere format sources are (`export: { locale: request.locale }`) — and drives
 everything below. An unsupported preference falls through to the next source instead of
 serving an untranslated locale.

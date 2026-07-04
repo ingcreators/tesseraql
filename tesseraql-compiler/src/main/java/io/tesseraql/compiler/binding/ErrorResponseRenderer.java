@@ -372,6 +372,13 @@ public final class ErrorResponseRenderer implements Processor {
                 default -> 500;
             };
             case IAM -> code.number() == 4030 ? 403 : 500;
+            case ACCOUNT -> switch (code.number()) {
+                // 4801 undeclared preference key; 4802 invalid value; 4804 wrong password
+                case 4801, 4802, 4804 -> 400;
+                case 4803 -> 409; // password change unavailable (SSO-managed credentials)
+                case 4805 -> 404; // account surface disabled
+                default -> 500;
+            };
             case SQL -> switch (code.number()) {
                 case 4001, 4002 -> 400; // not-null / check violation
                 // unique / foreign-key / row-count expectation / serialization conflict

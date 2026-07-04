@@ -8,6 +8,14 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **The account surface, slice 2 — language and appearance** (roadmap Phase 48): the
+  account page grows the two settings; a saved language flows through the Phase 22 locale
+  chain via the new `preference.<key>` source kind (default order now
+  `preference.ui.locale` before `principal.claim.locale`, so the choice works with zero
+  configuration), and a saved theme re-skins the shared shell (`_theme` replaces the
+  hardcoded `data-theme`; the renderer re-syncs a `tesseraql_theme` cookie so pre-login
+  pages follow; `tesseraql.ui.theme` sets the operator default, falling back to today's
+  dark). New `TQL-ACCOUNT` error domain (48xx).
 - **The account surface, slice 1** (roadmap Phase 48 — opening Horizon 9; design in
   `docs/account.md`): the shared shell grows a signed-in **user menu** (avatar + native
   popover, rendered from the reserved `_account` variable beside `_csrf`/`_menu`), a bundled

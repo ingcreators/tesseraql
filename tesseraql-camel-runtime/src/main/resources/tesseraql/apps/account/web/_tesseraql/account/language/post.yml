@@ -1,0 +1,30 @@
+version: tesseraql/v1
+id: tql.account.language.save
+kind: route
+recipe: command-json
+
+# Persists the signed-in user's display language (roadmap Phase 48 slice 2). The provider
+# rejects a tag the app does not serve (TQL-ACCOUNT-4802); the subject is always the session
+# principal's.
+
+input:
+  locale:
+    type: string
+    required: true
+    maxLength: 35
+
+security:
+  auth: browser
+  csrf: true
+
+sql:
+  service: account.language.save
+  params:
+    locale: params.locale
+    subject: principal.subject
+    tenantId: principal.tenantId
+
+response:
+  redirect:
+    status: 303
+    location: /_tesseraql/account

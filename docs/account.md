@@ -1,9 +1,10 @@
 # The account surface — user menu, preferences, self-service settings
 
 Status: design accepted 2026-07-04 (roadmap Phase 48, opening Horizon 9). Slices land
-incrementally; each section below names the slice that delivers it. **Slice 1 is
-delivered**: the preference store, the shell user menu, and the account app's profile
-page.
+incrementally; each section below names the slice that delivers it. **Slices 1 and 2 are
+delivered**: the preference store, the shell user menu, the profile page, and the
+language + appearance settings (both sections live on the account page rather than as
+separate pages — three fields did not justify four routes).
 
 Every business application re-implements the same chrome: a user menu in the shell
 (avatar, name, sign-out), and a settings surface where end users pick their language,
@@ -131,25 +132,29 @@ they ride the existing telemetry/audit surfaces like any route. The pages, by sl
 ## Locale and theme wiring (slice 2)
 
 **Locale.** The i18n `preference:` source list (Phase 22) accepts a new source kind,
-`preference.<key>`, resolved through the `PreferenceStore` for the authenticated
-subject. A scaffolded app declares:
+`preference.<key>` — the full preference key after the prefix — resolved through the
+`PreferenceStore` for the authenticated subject. The **default** source list is now
 
 ```yaml
 tesseraql:
   i18n:
-    preference: [preference.locale, principal.claim.locale, query.lang]
+    preference: [preference.ui.locale, principal.claim.locale]
 ```
 
-Existing apps opt in by adding the source; precedence stays operator-ordered — the
-framework does not hardcode whether a stored preference beats an IdP claim. An
-unsupported stored tag falls through to the next source, exactly like every other
+so the language a user picks takes effect with zero configuration; operators reorder by
+declaring the list explicitly (precedence stays operator-ordered — the framework does
+not hardcode whether a stored preference beats an IdP claim once a list is declared).
+An unsupported stored tag falls through to the next source, exactly like every other
 source in the chain.
 
 **Theme.** The shell's hardcoded `data-theme="dark"` becomes a reserved `_theme`
 variable: the stored `ui.theme` when a session subject has one, else the
-`tesseraql_theme` cookie, else `tesseraql.ui.theme` from config (default `light`).
-Values outside `light` | `dark` are ignored (cookies are attacker-writable; the value
-is an enum, never echoed markup).
+`tesseraql_theme` cookie, else `tesseraql.ui.theme` from config — and the template
+falls back to `dark`, today's look, when nothing chose. Values outside
+`light` | `dark` are ignored (cookies are attacker-writable; the value is an enum,
+never echoed markup). When the stored choice differs from the request's cookie, the
+renderer re-syncs the cookie on the response — that is what carries a signed-in
+choice onto pre-login pages like the login screen, with no store lookup there.
 
 ## Notification opt-out (slice 3)
 

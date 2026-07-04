@@ -2,3 +2,5 @@
 # self-service settings, served at /_tesseraql/account. Session-only by design.
 web/_tesseraql/account/get.yml
 web/_tesseraql/account/account.html
+web/_tesseraql/account/language/post.yml
+web/_tesseraql/account/appearance/post.yml

@@ -88,6 +88,42 @@ class LocaleResolutionTest {
         assertThat(resolved(exchange)).isEqualTo("en");
     }
 
+    /** The stored account preference (roadmap Phase 48) beats the IdP claim in default order. */
+    @Test
+    void storedPreferenceBeatsThePrincipalClaim() {
+        camel.getRegistry().bind(TesseraqlProperties.PREFERENCE_STORE_BEAN,
+                new io.tesseraql.core.account.PreferenceStore() {
+                    @Override
+                    public Map<String, String> preferences(String tenantId, String subject) {
+                        return "u-1".equals(subject)
+                                ? Map.of("ui.locale", "ja")
+                                : Map.of();
+                    }
+
+                    @Override
+                    public void put(String tenantId, String subject, String key, String value) {
+                    }
+
+                    @Override
+                    public void remove(String tenantId, String subject, String key) {
+                    }
+                });
+        try {
+            I18nSettings settings = new I18nSettings("en", List.of("en", "ja"),
+                    List.of("preference.ui.locale", "principal.claim.locale"),
+                    MessageCatalog.empty());
+            Exchange exchange = exchange();
+            exchange.setProperty(TesseraqlProperties.PRINCIPAL, principalWithLocale("en"));
+
+            new LocaleResolution(settings).process(exchange);
+
+            assertThat(exchange.getProperty(TesseraqlProperties.LOCALE, String.class))
+                    .isEqualTo("ja");
+        } finally {
+            camel.getRegistry().unbind(TesseraqlProperties.PREFERENCE_STORE_BEAN);
+        }
+    }
+
     @Test
     void queryParameterSourceReadsTheRequest() {
         I18nSettings settings = new I18nSettings("en", List.of("en", "ja"),

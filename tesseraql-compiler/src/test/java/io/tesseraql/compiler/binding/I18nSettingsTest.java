@@ -24,7 +24,8 @@ class I18nSettingsTest {
 
         assertThat(settings.defaultTag()).isEqualTo("en");
         assertThat(settings.supportedTags()).containsExactly("en", "ja");
-        assertThat(settings.preferenceSources()).containsExactly("principal.claim.locale");
+        assertThat(settings.preferenceSources())
+                .containsExactly("preference.ui.locale", "principal.claim.locale");
         assertThat(settings.catalog().resolve("ja", "greeting")).isEqualTo("こんにちは");
     }
 

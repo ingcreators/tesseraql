@@ -1,15 +1,24 @@
 package io.tesseraql.runtime;
 
+import io.tesseraql.core.account.PreferenceStore;
+import io.tesseraql.core.error.TqlDomain;
+import io.tesseraql.core.error.TqlErrorCode;
+import io.tesseraql.core.error.TqlException;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 /**
- * Template-ready models for the bundled account surface (roadmap Phase 48). The route maps
- * the session principal's facts into the service params — the provider never resolves a
- * subject itself, so the page can only ever describe the caller.
+ * Template-ready models and settings writers for the bundled account surface (roadmap
+ * Phase 48). The routes map the session principal's facts into the service params — a
+ * provider never resolves a subject itself, so it can only ever describe, or write for,
+ * the caller.
  */
 final class AccountViews {
+
+    private static final TqlErrorCode INVALID_VALUE = new TqlErrorCode(TqlDomain.ACCOUNT, 4802);
 
     private AccountViews() {
     }
@@ -24,6 +33,61 @@ final class AccountViews {
         profile.put("roles", strings(params.get("roles")));
         profile.put("permissions", strings(params.get("permissions")));
         return profile;
+    }
+
+    /** The account page model: the profile plus the language / appearance settings state. */
+    static Map<String, Object> settings(Map<String, Object> params, PreferenceStore preferences,
+            List<String> supportedTags) {
+        Map<String, Object> model = profile(params);
+        Map<String, String> stored = preferences == null
+                ? Map.of()
+                : preferences.preferences(tenant(params), subject(params));
+        String locale = stored.get("ui.locale");
+        List<Map<String, Object>> locales = new ArrayList<>();
+        for (String tag : supportedTags) {
+            Locale asLocale = Locale.forLanguageTag(tag);
+            Map<String, Object> entry = new LinkedHashMap<>();
+            entry.put("tag", tag);
+            // The language names itself in its own locale ("日本語", not "Japanese").
+            entry.put("label", asLocale.getDisplayName(asLocale));
+            entry.put("selected", tag.equals(locale));
+            locales.add(entry);
+        }
+        model.put("locales", locales);
+        model.put("theme", stored.getOrDefault("ui.theme", ""));
+        return model;
+    }
+
+    /** Persists {@code ui.locale}; the tag must be one the app actually serves. */
+    static Map<String, Object> saveLanguage(Map<String, Object> params,
+            PreferenceStore preferences, List<String> supportedTags) {
+        String locale = text(params.get("locale"), "");
+        if (!supportedTags.contains(locale)) {
+            throw new TqlException(INVALID_VALUE,
+                    "Unsupported locale '" + locale + "' — the app serves " + supportedTags);
+        }
+        preferences.put(tenant(params), subject(params), "ui.locale", locale);
+        return Map.of("ok", true);
+    }
+
+    /** Persists {@code ui.theme}; the route's enum input already constrained the value. */
+    static Map<String, Object> saveTheme(Map<String, Object> params,
+            PreferenceStore preferences) {
+        String theme = text(params.get("theme"), "");
+        if (!"light".equals(theme) && !"dark".equals(theme)) {
+            throw new TqlException(INVALID_VALUE, "Unsupported theme '" + theme + "'");
+        }
+        preferences.put(tenant(params), subject(params), "ui.theme", theme);
+        return Map.of("ok", true);
+    }
+
+    private static String subject(Map<String, Object> params) {
+        return text(params.get("subject"), "");
+    }
+
+    private static String tenant(Map<String, Object> params) {
+        String tenant = text(params.get("tenantId"), "");
+        return tenant.isEmpty() ? null : tenant;
     }
 
     private static String text(Object value, String fallback) {

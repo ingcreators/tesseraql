@@ -11,7 +11,8 @@ import org.apache.camel.Processor;
  * negotiation, then the app default — published as {@link TesseraqlProperties#LOCALE} for
  * downstream steps (input parsing, template rendering, error rendering, export formatting).
  *
- * <p>A preference source is a {@code principal.*} path (e.g. {@code principal.claim.locale}) or a
+ * <p>A preference source is a {@code preference.<key>} stored user preference (roadmap Phase 48),
+ * a {@code principal.*} path (e.g. {@code principal.claim.locale}), or a
  * {@code query.<name>} request parameter. Every candidate must negotiate against the supported
  * locales (RFC 4647 lookup, so {@code ja-JP} matches a supported {@code ja}); an unsupported
  * preference falls through to the next source rather than serving an untranslated locale.
@@ -47,6 +48,21 @@ public final class LocaleResolution implements Processor {
             // platform-http exposes query parameters as message headers.
             return exchange.getMessage().getHeader(
                     source.substring("query.".length()), String.class);
+        }
+        if (source.startsWith("preference.")) {
+            // The stored user preference (roadmap Phase 48): resolved through the runtime's
+            // cached store for the authenticated principal. Anonymous requests, and apps
+            // without the account surface, simply fall through to the next source.
+            Object principal = exchange.getProperty(TesseraqlProperties.PRINCIPAL);
+            io.tesseraql.core.account.PreferenceStore store = exchange.getContext()
+                    .getRegistry().lookupByNameAndType(
+                            TesseraqlProperties.PREFERENCE_STORE_BEAN,
+                            io.tesseraql.core.account.PreferenceStore.class);
+            if (principal instanceof io.tesseraql.security.Principal p && store != null) {
+                return store.preferences(p.tenantId(), p.subject())
+                        .get(source.substring("preference.".length()));
+            }
+            return null;
         }
         return FormatSources.resolve(null,
                 exchange.getProperty(TesseraqlProperties.PRINCIPAL), source);

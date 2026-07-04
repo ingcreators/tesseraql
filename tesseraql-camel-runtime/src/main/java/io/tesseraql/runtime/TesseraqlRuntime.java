@@ -305,15 +305,24 @@ public final class TesseraqlRuntime implements AutoCloseable {
         // The account surface (roadmap Phase 48): the managed per-user preference store, plus
         // the marker bean the shared shell keys the settings link off. Mounted with the bundled
         // account app (the auth-ui precedent) — AccountAppProvider.enabled is the one source of
-        // truth for both the app mount and this wiring.
-        if (AccountAppProvider.enabled(manifest.config())) {
-            io.tesseraql.operations.account.JdbcPreferenceStore preferenceStore = new io.tesseraql.operations.account.JdbcPreferenceStore(
-                    dataSource);
-            preferenceStore.ensureSchema();
-            context.getRegistry().bind(TesseraqlProperties.PREFERENCE_STORE_BEAN,
-                    new io.tesseraql.core.account.CachingPreferenceStore(preferenceStore));
+        // truth for both the app mount and this wiring. One final reference, so the account
+        // service providers registered below can capture it.
+        final io.tesseraql.core.account.PreferenceStore preferences = AccountAppProvider
+                .enabled(manifest.config()) ? accountPreferenceStore(dataSource) : null;
+        if (preferences != null) {
+            context.getRegistry().bind(TesseraqlProperties.PREFERENCE_STORE_BEAN, preferences);
             context.getRegistry().bind(TesseraqlProperties.ACCOUNT_SURFACE_BEAN, Boolean.TRUE);
         }
+        // The operator's default page theme (roadmap Phase 48): the shell's fallback when the
+        // user has no stored or cookie choice. Values outside the enum are ignored.
+        String uiTheme = manifest.config().getString("tesseraql.ui.theme").orElse(null);
+        if ("light".equals(uiTheme) || "dark".equals(uiTheme)) {
+            context.getRegistry().bind(TesseraqlProperties.UI_THEME_BEAN, uiTheme);
+        }
+        // The locales the account surface's language picker offers — the same negotiated set
+        // every route resolves against (Phase 22 semantics, one source of truth).
+        final List<String> accountLocales = io.tesseraql.compiler.binding.I18nSettings
+                .from(manifest.config(), appHome).supportedTags();
         // Inbound-webhook replay protection (roadmap Phase 26): a delivery is processed at most
         // once on any node sharing this database.
         io.tesseraql.operations.webhook.JdbcWebhookReplayStore webhookReplayStore = new io.tesseraql.operations.webhook.JdbcWebhookReplayStore(
@@ -625,10 +634,20 @@ public final class TesseraqlRuntime implements AutoCloseable {
                     // The bundled login page reads which sign-in methods are available (password
                     // always; OIDC/SAML when their extension is enabled) plus the first-login hint.
                     .register("auth.loginMethods", params -> LoginMethods.of(manifest.config()))
-                    // The bundled account surface's profile page (roadmap Phase 48): the route
-                    // maps the session principal's facts into the params, so the provider can
-                    // only ever describe the caller.
-                    .register("account.profile.view", AccountViews::profile);
+                    // The bundled account surface (roadmap Phase 48): the routes map the
+                    // session principal's facts into the params, so the providers can only
+                    // ever describe — or write for — the caller. Settings write through the
+                    // cached preference store bound above; it is null only when the surface
+                    // is off, in which case the account routes are not mounted either.
+                    .register("account.profile.view", AccountViews::profile)
+                    .register("account.settings.view",
+                            params -> AccountViews.settings(params, preferences,
+                                    accountLocales))
+                    .register("account.language.save",
+                            params -> AccountViews.saveLanguage(params, preferences,
+                                    accountLocales))
+                    .register("account.theme.save",
+                            params -> AccountViews.saveTheme(params, preferences));
             context.getRegistry().bind(TesseraqlProperties.SERVICE_PROVIDERS_BEAN,
                     serviceProviders);
             Map<String, String> claimKeys = new LinkedHashMap<>();
@@ -2916,5 +2935,14 @@ public final class TesseraqlRuntime implements AutoCloseable {
         } catch (Exception ignored) {
             // best-effort shutdown of the diagnostics source
         }
+    }
+
+    /** Builds and migrates the JDBC preference store, cached for the request path (Phase 48). */
+    private static io.tesseraql.core.account.PreferenceStore accountPreferenceStore(
+            javax.sql.DataSource dataSource) {
+        io.tesseraql.operations.account.JdbcPreferenceStore store = new io.tesseraql.operations.account.JdbcPreferenceStore(
+                dataSource);
+        store.ensureSchema();
+        return new io.tesseraql.core.account.CachingPreferenceStore(store);
     }
 }
