@@ -463,6 +463,48 @@ public final class TesseraqlRuntime implements AutoCloseable {
         } else {
             inboxStore = null;
         }
+        // Invitations (roadmap Phase 50 slice 2): configured when both the accept-link base
+        // and a mail channel are named; anything half-set fails the boot (SEC 4120). The
+        // one-time token store is shared with password recovery and built when either flow
+        // is on - the iam-admin invite provider below and the identity block both use it.
+        final String inviteUrl = manifest.config()
+                .getString("tesseraql.identity.invite.url").orElse(null);
+        final String inviteChannel = manifest.config()
+                .getString("tesseraql.identity.invite.channel").orElse(null);
+        final boolean inviteEnabled;
+        if (inviteUrl != null || inviteChannel != null) {
+            if (inviteUrl == null || inviteChannel == null) {
+                throw new io.tesseraql.core.error.TqlException(
+                        new io.tesseraql.core.error.TqlErrorCode(
+                                io.tesseraql.core.error.TqlDomain.SEC, 4120),
+                        "tesseraql.identity.invite needs BOTH channel: and url:");
+            }
+            if (!io.tesseraql.yaml.notify.NotificationChannels.MAIL.equals(
+                    notificationChannels.require(inviteChannel).type())) {
+                throw new io.tesseraql.core.error.TqlException(
+                        new io.tesseraql.core.error.TqlErrorCode(
+                                io.tesseraql.core.error.TqlDomain.SEC, 4120),
+                        "Invite channel '" + inviteChannel + "' must be type mail");
+            }
+            inviteEnabled = true;
+        } else {
+            inviteEnabled = false;
+        }
+        final java.time.Duration inviteTtl = java.time.Duration.ofDays(manifest.config()
+                .getString("tesseraql.identity.invite.ttlDays")
+                .map(Long::parseLong).orElse(7L));
+        final boolean recoveryEnabled = manifest.config()
+                .getString("tesseraql.identity.recovery.enabled")
+                .map(Boolean::parseBoolean).orElse(false);
+        final io.tesseraql.core.credential.CredentialTokenStore credentialTokens;
+        if (recoveryEnabled || inviteEnabled) {
+            io.tesseraql.operations.credential.JdbcCredentialTokenStore jdbcTokens = new io.tesseraql.operations.credential.JdbcCredentialTokenStore(
+                    dataSource);
+            jdbcTokens.ensureSchema();
+            credentialTokens = jdbcTokens;
+        } else {
+            credentialTokens = null;
+        }
         String alertChannel = manifest.config()
                 .getString("tesseraql.notifications.alerts.channel").orElse(null);
         if (alertChannel != null) {
@@ -703,6 +745,20 @@ public final class TesseraqlRuntime implements AutoCloseable {
                             params -> AccountViews.markInboxRead(params, inboxStore))
                     .register("account.inbox.readAll",
                             params -> AccountViews.markAllInboxRead(params, inboxStore))
+                    // The iam-admin invite (roadmap Phase 50 slice 2): identity and realm
+                    // resolve from the registry at call time (they bind later); the token
+                    // store and channel settings are the hoisted finals above.
+                    .register("identity.invite",
+                            params -> IdentityInvites.invite(params, credentialTokens,
+                                    outboxStore,
+                                    context.getRegistry().lookupByNameAndType(
+                                            TesseraqlProperties.IDENTITY_SERVICE_BEAN,
+                                            io.tesseraql.identity.IdentityService.class),
+                                    context.getRegistry().lookupByNameAndType(
+                                            TesseraqlProperties.IDENTITY_REALM_BEAN,
+                                            io.tesseraql.identity.RealmConfig.class),
+                                    inviteChannel, inviteUrl, inviteTtl, appName,
+                                    inviteEnabled))
                     .register("account.password.change",
                             params -> AccountViews.changePassword(params,
                                     context.getRegistry().lookupByNameAndType(
@@ -786,9 +842,10 @@ public final class TesseraqlRuntime implements AutoCloseable {
                     new PasswordAuthenticator(identity), realm, sessionStore));
             // Password recovery (roadmap Phase 50 slice 1): fail-fast validation - a half
             // configuration must not silently produce a reset page that goes nowhere.
-            if (manifest.config().getString("tesseraql.identity.recovery.enabled")
-                    .map(Boolean::parseBoolean).orElse(false)) {
-                String recoveryChannel = manifest.config()
+            String recoveryChannel = null;
+            String recoveryUrl = null;
+            if (recoveryEnabled) {
+                recoveryChannel = manifest.config()
                         .getString("tesseraql.identity.recovery.channel")
                         .orElseThrow(() -> new io.tesseraql.core.error.TqlException(
                                 new io.tesseraql.core.error.TqlErrorCode(
@@ -801,21 +858,20 @@ public final class TesseraqlRuntime implements AutoCloseable {
                                     io.tesseraql.core.error.TqlDomain.SEC, 4120),
                             "Recovery channel '" + recoveryChannel + "' must be type mail");
                 }
-                String recoveryUrl = manifest.config()
+                recoveryUrl = manifest.config()
                         .getString("tesseraql.identity.recovery.url")
                         .orElseThrow(() -> new io.tesseraql.core.error.TqlException(
                                 new io.tesseraql.core.error.TqlErrorCode(
                                         io.tesseraql.core.error.TqlDomain.SEC, 4120),
                                 "tesseraql.identity.recovery.enabled needs a url:"));
-                io.tesseraql.operations.credential.JdbcCredentialTokenStore credentialTokens = new io.tesseraql.operations.credential.JdbcCredentialTokenStore(
-                        dataSource);
-                credentialTokens.ensureSchema();
+            }
+            if (recoveryEnabled || inviteEnabled) {
                 context.addRoutes(new RecoveryRouteBuilder(credentialTokens, identity, realm,
                         sessionStore, outboxStore, recoveryChannel, recoveryUrl,
                         java.time.Duration.ofMinutes(manifest.config()
                                 .getString("tesseraql.identity.recovery.ttlMinutes")
                                 .map(Long::parseLong).orElse(30L)),
-                        appName));
+                        appName, inviteEnabled));
             }
             // Optional feature modules (SCIM, SAML, ...) self-install via ServiceLoader, from the
             // classpath or from signature-verified plugin jars in isolated loaders (ch. 47).

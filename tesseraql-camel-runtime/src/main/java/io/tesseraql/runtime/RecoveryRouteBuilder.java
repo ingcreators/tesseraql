@@ -47,10 +47,12 @@ final class RecoveryRouteBuilder extends RouteBuilder {
     private final Duration timeToLive;
     private final String appName;
 
+    private final boolean inviteEnabled;
+
     RecoveryRouteBuilder(CredentialTokenStore tokens, IdentityService identity,
             RealmConfig realm, SessionStore sessions,
             io.tesseraql.operations.outbox.JdbcOutboxStore outbox, String channel,
-            String confirmUrl, Duration timeToLive, String appName) {
+            String confirmUrl, Duration timeToLive, String appName, boolean inviteEnabled) {
         this.tokens = tokens;
         this.identity = identity;
         this.realm = realm;
@@ -60,6 +62,7 @@ final class RecoveryRouteBuilder extends RouteBuilder {
         this.confirmUrl = confirmUrl;
         this.timeToLive = timeToLive;
         this.appName = appName;
+        this.inviteEnabled = inviteEnabled;
     }
 
     @Override
@@ -67,13 +70,52 @@ final class RecoveryRouteBuilder extends RouteBuilder {
         onException(TqlException.class).handled(true).process(new ErrorResponseRenderer());
         onException(Exception.class).handled(true).process(new ErrorResponseRenderer());
 
-        rest().post("/_tesseraql/reset").to("direct:tql.reset.request");
-        from("direct:tql.reset.request").routeId("system.reset.request")
-                .process(this::request);
+        if (channel != null && confirmUrl != null) {
+            rest().post("/_tesseraql/reset").to("direct:tql.reset.request");
+            from("direct:tql.reset.request").routeId("system.reset.request")
+                    .process(this::request);
 
-        rest().post("/_tesseraql/reset/confirm").to("direct:tql.reset.confirm");
-        from("direct:tql.reset.confirm").routeId("system.reset.confirm")
-                .process(this::confirm);
+            rest().post("/_tesseraql/reset/confirm").to("direct:tql.reset.confirm");
+            from("direct:tql.reset.confirm").routeId("system.reset.confirm")
+                    .process(this::confirm);
+        }
+        if (inviteEnabled) {
+            // The invite accept leg (roadmap Phase 50 slice 2): same token machinery,
+            // purpose invite, plus the enable-user flip to ACTIVE.
+            rest().post("/_tesseraql/invite").to("direct:tql.invite.accept");
+            from("direct:tql.invite.accept").routeId("system.invite.accept")
+                    .process(this::acceptInvite);
+        }
+    }
+
+    /** Consume the invite token, set the first password, flip the account ACTIVE. */
+    private void acceptInvite(Exchange exchange) throws Exception {
+        Map<String, Object> body = LoginRouteBuilder.parseBody(exchange);
+        String token = str(body.get("token"));
+        String next = str(body.get("next"));
+        if (next.length() < 8 || next.length() > 256) {
+            LoginRouteBuilder.redirect(exchange, 303, "/_tesseraql/invite?error=short&token="
+                    + URLEncoder.encode(token, StandardCharsets.UTF_8));
+            return;
+        }
+        var consumed = tokens.consume(token, CredentialTokenStore.INVITE);
+        if (consumed.isEmpty()) {
+            LoginRouteBuilder.redirect(exchange, 303, "/_tesseraql/invite?invalid=1");
+            return;
+        }
+        String loginId = consumed.get();
+        Pbkdf2PasswordEncoder encoder = new Pbkdf2PasswordEncoder();
+        identity.executeUpdate(realm, IdentityContracts.UPDATE_PASSWORD, Map.of(
+                "loginId", loginId,
+                "passwordHash", encoder.encode(next),
+                "passwordParams", encoder.defaultParams()));
+        List<Map<String, Object>> users = identity.execute(realm,
+                IdentityContracts.FIND_USER_BY_LOGIN, Map.of("loginId", loginId));
+        if (!users.isEmpty()) {
+            identity.executeUpdate(realm, IdentityContracts.ENABLE_USER,
+                    Map.of("userId", str(users.get(0).get("user_id"))));
+        }
+        LoginRouteBuilder.redirect(exchange, 303, "/_tesseraql/login?invited=1");
     }
 
     /** The neutral request leg: every outcome answers "sent". */

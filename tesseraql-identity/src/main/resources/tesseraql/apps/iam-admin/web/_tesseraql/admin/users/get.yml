@@ -7,6 +7,11 @@ security:
   auth: browser
   policy: iam.admin.view
 
+input:
+  invited:
+    type: string
+    required: false
+
 sql:
   contract: identity.list-users
 
@@ -21,6 +26,7 @@ response:
     model:
       users: sql.rows
       total: total.rows
+      invited: params.invited
     headers:
       Content-Security-Policy: "default-src 'self'; style-src 'self' 'unsafe-inline'; frame-ancestors 'none'"
       X-Content-Type-Options: nosniff

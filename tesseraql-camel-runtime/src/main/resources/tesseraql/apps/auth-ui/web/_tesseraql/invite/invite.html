@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<!-- The invitation landing page (roadmap Phase 50 slice 2). Standalone like the login page;
+     Referrer-Policy: no-referrer keeps the tokened URL out of outbound referers. -->
+<html xmlns:th="http://www.thymeleaf.org" lang="en" th:lang="${#locale.toLanguageTag()}"
+      data-theme="dark" th:attr="data-theme=${_theme != null ? _theme : 'dark'}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Accept invitation &middot; TesseraQL</title>
+<link rel="stylesheet" href="/assets/vendor/hypermedia-components__core/dist/hc.min.css">
+<link rel="stylesheet" href="/assets/_tesseraql/tesseraql.css">
+</head>
+<body>
+<main class="hc-stack" style="max-width: 24rem; margin: 4rem auto; padding: 0 1rem;">
+  <section class="hc-card hc-stack">
+    <h1>Accept your invitation</h1>
+
+    <div class="hc-empty" th:if="${invalid}">
+      <p class="hc-empty__title">This invitation is no longer valid.</p>
+      <p class="hc-empty__body">Invitations work once and expire. Ask your administrator
+        to invite you again.</p>
+    </div>
+
+    <th:block th:unless="${invalid}">
+      <div th:if="${error}" class="hc-alert" data-variant="error" role="alert">
+        <p class="hc-alert__title">The password needs at least 8 characters.</p>
+      </div>
+      <form class="hc-stack" method="post" action="/_tesseraql/invite">
+        <p>Choose the password you will sign in with.</p>
+        <input type="hidden" name="token" th:value="${token}">
+        <div class="hc-field">
+          <label class="hc-field__label" for="next">Password (8+ characters)</label>
+          <input class="hc-input" id="next" name="next" type="password" minlength="8"
+                 autocomplete="new-password" required autofocus>
+        </div>
+        <button class="hc-button" data-variant="primary" type="submit">Activate account</button>
+      </form>
+    </th:block>
+  </section>
+</main>
+</body>
+</html>

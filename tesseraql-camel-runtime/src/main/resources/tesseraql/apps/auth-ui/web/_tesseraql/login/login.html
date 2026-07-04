@@ -19,6 +19,9 @@
     <div th:if="${reset}" class="hc-alert" data-variant="success" role="status">
       <p class="hc-alert__title">Password updated. Sign in with your new password.</p>
     </div>
+    <div th:if="${invited}" class="hc-alert" data-variant="success" role="status">
+      <p class="hc-alert__title">Account activated. Sign in with your new password.</p>
+    </div>
     <div th:if="${error}" class="hc-alert" data-variant="error" role="alert">
       <p class="hc-alert__title">Invalid credentials. Please try again.</p>
     </div>

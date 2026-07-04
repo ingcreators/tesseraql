@@ -1,0 +1,41 @@
+version: tesseraql/v1
+id: tql.iamAdmin.users.invite
+kind: route
+recipe: command-json
+
+# Invites a user (roadmap Phase 50 slice 2): creates the account with status INVITED (which
+# the credential contract refuses at login) and mails the one-time accept link. The operator
+# never knows a password. Requires tesseraql.identity.invite.{channel,url}.
+
+input:
+  loginId:
+    type: string
+    required: true
+    maxLength: 255
+  displayName:
+    type: string
+    required: false
+    maxLength: 255
+  email:
+    type: string
+    required: true
+    format: email
+    maxLength: 320
+
+security:
+  auth: browser
+  csrf: true
+  policy: iam.admin.write
+
+sql:
+  service: identity.invite
+  params:
+    loginId: params.loginId
+    displayName: params.displayName
+    email: params.email
+    tenantId: principal.tenantId
+
+response:
+  redirect:
+    status: 303
+    location: /_tesseraql/admin/users?invited=1

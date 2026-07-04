@@ -17,6 +17,9 @@ input:
   reset:
     type: string
     required: false
+  invited:
+    type: string
+    required: false
 
 security:
   auth: public
@@ -33,6 +36,7 @@ response:
       next: params.next
       error: params.error
       reset: params.reset
+      invited: params.invited
     headers:
       Content-Security-Policy: "default-src 'self'; style-src 'self' 'unsafe-inline'; frame-ancestors 'none'"
       X-Content-Type-Options: nosniff
