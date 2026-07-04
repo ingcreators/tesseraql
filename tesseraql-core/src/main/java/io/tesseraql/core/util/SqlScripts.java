@@ -54,12 +54,19 @@ public final class SqlScripts {
                 try {
                     statement.execute(sql);
                 } catch (SQLException ex) {
-                    // Vendors without IF NOT EXISTS get their idempotency from tolerated
-                    // already-exists errors instead: ORA-00955 (name already used) and
-                    // ORA-01430 (column being added already exists), MySQL 1060/1061
-                    // (duplicate column/key). Everything else still fails the bootstrap.
+                    // Statements without an IF NOT EXISTS form (Oracle DDL, column/index adds
+                    // everywhere but PostgreSQL) get their idempotency from tolerated
+                    // already-exists errors instead: ORA-00955/-01430, MySQL 1060/1061
+                    // (duplicate column/key), and the duplicate-column/-index SQLStates of
+                    // PostgreSQL (42701/42P07) and H2 (42121/42111). Everything else still
+                    // fails the bootstrap.
                     int code = ex.getErrorCode();
-                    if (code != 955 && code != 1430 && code != 1060 && code != 1061) {
+                    String state = ex.getSQLState();
+                    boolean tolerated = code == 955 || code == 1430 || code == 1060
+                            || code == 1061
+                            || "42701".equals(state) || "42P07".equals(state)
+                            || "42121".equals(state) || "42111".equals(state);
+                    if (!tolerated) {
                         throw ex;
                     }
                 }
