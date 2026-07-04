@@ -55,15 +55,19 @@ public final class NotifyEvents {
         Expr when = spec.when() == null || spec.when().isBlank()
                 ? null
                 : ExpressionParser.parse(spec.when());
-        return new CompiledNotify(source + "." + id, id, spec.channel(), when, spec.payload());
+        Expr recipient = spec.recipient() == null || spec.recipient().isBlank()
+                ? null
+                : ExpressionParser.parse(spec.recipient());
+        return new CompiledNotify(source + "." + id, id, spec.channel(), when, recipient,
+                spec.payload());
     }
 
     /**
-     * A compiled notification: the guard parsed, the payload expressions kept for per-event
-     * resolution against the live execution context.
+     * A compiled notification: the guard and recipient parsed, the payload expressions kept
+     * for per-event resolution against the live execution context.
      */
     public record CompiledNotify(String source, String id, String channel, Expr when,
-            Map<String, String> payload) {
+            Expr recipient, Map<String, String> payload) {
 
         /** Whether the guard (if any) lets this notification fire for the given context. */
         public boolean fires(Map<String, Object> context) {
@@ -71,6 +75,22 @@ public final class NotifyEvents {
                     || when.evalBoolean(new EvaluationContext(context == null
                             ? Map.of()
                             : context));
+        }
+
+        /**
+         * The declared recipient's subject for this event (roadmap Phase 48), or {@code null}
+         * when the notification names none — the enqueue path checks that subject's
+         * {@code notify.<channel>.optOut} preference.
+         */
+        public String resolveRecipient(Map<String, Object> context) {
+            if (recipient == null) {
+                return null;
+            }
+            Object value = recipient.eval(new EvaluationContext(context == null
+                    ? Map.of()
+                    : context));
+            String subject = value == null ? null : String.valueOf(value);
+            return subject == null || subject.isBlank() ? null : subject;
         }
 
         /** Resolves the declared payload expressions against the execution context. */

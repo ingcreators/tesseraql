@@ -60,6 +60,7 @@ public final class JobExecutor {
     private final ObjectMapper mapper = new ObjectMapper();
     private io.tesseraql.operations.outbox.JdbcOutboxStore notificationOutbox;
     private io.tesseraql.operations.http.HttpCallClient httpCallClient;
+    private io.tesseraql.core.account.PreferenceStore preferenceStore;
     private FailureListener failureListener;
 
     public JobExecutor(JobRepository repository, TempStore tempStore) {
@@ -90,6 +91,15 @@ public final class JobExecutor {
     /** Wires the outbound HTTP client {@code http-call:} steps issue through (roadmap Phase 26). */
     public JobExecutor httpCall(io.tesseraql.operations.http.HttpCallClient client) {
         this.httpCallClient = client;
+        return this;
+    }
+
+    /**
+     * Wires the preference store recipient-aware {@code notify:} steps consult (roadmap
+     * Phase 48). Optional — without it every notification enqueues, as before.
+     */
+    public JobExecutor preferenceStore(io.tesseraql.core.account.PreferenceStore store) {
+        this.preferenceStore = store;
         return this;
     }
 
@@ -214,6 +224,12 @@ public final class JobExecutor {
                 .compile(jobFile.definition().id(), step.id(), step.notification());
         if (!notification.fires(context)) {
             return Map.of("affectedRows", 0);
+        }
+        // A recipient-naming notification honors that subject's per-channel opt-out (roadmap
+        // Phase 48). Job contexts carry no acting principal, so the untenanted scope applies.
+        if (io.tesseraql.yaml.notify.NotifyOptOut.optedOut(notification, context,
+                preferenceStore, null)) {
+            return Map.of("affectedRows", 0, "optedOut", true);
         }
         String eventId = notificationOutbox.insert(notification.build(context,
                 appName == null ? "app" : appName));

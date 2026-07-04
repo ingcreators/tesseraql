@@ -31,6 +31,40 @@ class NotifyEventsTest {
         assertThat(envelope.payload()).containsEntry("email", "a@example.com");
     }
 
+    /** Roadmap Phase 48: the recipient expression resolves against the live context. */
+    @Test
+    void theRecipientResolvesFromTheContextAndTheOptOutDecisionUsesIt() {
+        NotifyEvents.CompiledNotify addressed = NotifyEvents.compile("r", "n",
+                new NotifySpec("user-mail", null, "principal.subject", Map.of()));
+        Map<String, Object> context = Map.of("principal", Map.of("subject", "alice"));
+
+        assertThat(addressed.resolveRecipient(context)).isEqualTo("alice");
+        // Without a recipient the notification is channel-level: never consults preferences.
+        NotifyEvents.CompiledNotify channelLevel = NotifyEvents.compile("r", "n",
+                new NotifySpec("user-mail", null, Map.of()));
+        assertThat(channelLevel.resolveRecipient(context)).isNull();
+
+        io.tesseraql.core.account.PreferenceStore optedOut = new io.tesseraql.core.account.PreferenceStore() {
+            @Override
+            public Map<String, String> preferences(String tenantId, String subject) {
+                return "alice".equals(subject)
+                        ? Map.of("notify.user-mail.optOut", "true")
+                        : Map.of();
+            }
+
+            @Override
+            public void put(String tenantId, String subject, String key, String value) {
+            }
+
+            @Override
+            public void remove(String tenantId, String subject, String key) {
+            }
+        };
+        assertThat(NotifyOptOut.optedOut(addressed, context, optedOut, null)).isTrue();
+        assertThat(NotifyOptOut.optedOut(channelLevel, context, optedOut, null)).isFalse();
+        assertThat(NotifyOptOut.optedOut(addressed, context, null, null)).isFalse();
+    }
+
     @Test
     void theWhenGuardSkipsTheNotification() {
         NotifyEvents.CompiledNotify guarded = NotifyEvents.compile("r", "n",

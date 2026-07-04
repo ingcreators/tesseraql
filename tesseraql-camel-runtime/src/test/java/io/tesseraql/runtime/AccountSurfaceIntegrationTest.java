@@ -159,6 +159,61 @@ class AccountSurfaceIntegrationTest {
                 "theme=hotdog").statusCode()).isEqualTo(400);
     }
 
+    /** Slice 3: the account page offers the user-facing channel and persists the choice. */
+    @Test
+    void theNotificationOptOutTogglePersists() throws Exception {
+        try {
+            assertThat(get(runtime, sessionCookie, "/_tesseraql/account").body())
+                    .contains("Opt out of")
+                    .contains("user-mail");
+            assertThat(postForm(runtime, sessionCookie, "/_tesseraql/account/notifications",
+                    "channel=user-mail&optOut=true").statusCode()).isEqualTo(303);
+            assertThat(preferenceStore().preferences(null, "account-user"))
+                    .containsEntry("notify.user-mail.optOut", "true");
+            // Unchecking posts no optOut field - that reads as opting back in.
+            assertThat(postForm(runtime, sessionCookie, "/_tesseraql/account/notifications",
+                    "channel=user-mail").statusCode()).isEqualTo(303);
+            assertThat(preferenceStore().preferences(null, "account-user"))
+                    .doesNotContainKey("notify.user-mail.optOut");
+        } finally {
+            preferenceStore().remove(null, "account-user", "notify.user-mail.optOut");
+        }
+    }
+
+    /** Slice 3: a channel without userOptOut is not writable through the account surface. */
+    @Test
+    void anUnmarkedChannelRefusesTheOptOut() throws Exception {
+        assertThat(postForm(runtime, sessionCookie, "/_tesseraql/account/notifications",
+                "channel=ops-alerts&optOut=true").statusCode()).isEqualTo(400);
+    }
+
+    /** Slice 3: a recipient-naming notification skips enqueue for an opted-out subject. */
+    @Test
+    void aRecipientNotificationHonorsTheOptOutAtEnqueue() throws Exception {
+        io.tesseraql.operations.outbox.JdbcOutboxStore outbox = runtime.camelContext()
+                .getRegistry().lookupByNameAndType(TesseraqlProperties.OUTBOX_STORE_BEAN,
+                        io.tesseraql.operations.outbox.JdbcOutboxStore.class);
+        try {
+            preferenceStore().put(null, "account-user", "notify.user-mail.optOut", "true");
+            HttpResponse<String> optedOut = postForm(runtime, sessionCookie, "/notify-me", "");
+            assertThat(optedOut.statusCode()).isEqualTo(200);
+            // The command reports the decision and no outbox row exists for it.
+            assertThat(optedOut.body()).contains("optedOut");
+            long before = outbox.recent(100).stream()
+                    .filter(io.tesseraql.yaml.notify.NotifyEvents::isNotification).count();
+
+            preferenceStore().remove(null, "account-user", "notify.user-mail.optOut");
+            HttpResponse<String> delivered = postForm(runtime, sessionCookie, "/notify-me", "");
+            assertThat(delivered.statusCode()).isEqualTo(200);
+            assertThat(delivered.body()).contains("eventId");
+            long after = outbox.recent(100).stream()
+                    .filter(io.tesseraql.yaml.notify.NotifyEvents::isNotification).count();
+            assertThat(after).isEqualTo(before + 1);
+        } finally {
+            preferenceStore().remove(null, "account-user", "notify.user-mail.optOut");
+        }
+    }
+
     private static PreferenceStore preferenceStore() {
         return runtime.camelContext().getRegistry().lookupByNameAndType(
                 TesseraqlProperties.PREFERENCE_STORE_BEAN, PreferenceStore.class);
@@ -256,6 +311,11 @@ class AccountSurfaceIntegrationTest {
                   i18n:
                     defaultLocale: en
                     locales: [en, ja]
+                  notifications:
+                    channels:
+                      user-mail:
+                        type: mail
+                        userOptOut: "true"
                   apps:
                     account:
                       enabled: %s
@@ -282,6 +342,34 @@ class AccountSurfaceIntegrationTest {
                       rows: sql.rows
                 """);
         Files.writeString(home.resolve("home.sql"), "select 1 as x\n");
+        // A command that notifies its own caller - the recipient-aware opt-out testbed.
+        Path notifyMe = target.resolve("web/notify-me");
+        Files.createDirectories(notifyMe);
+        Files.writeString(notifyMe.resolve("post.yml"), """
+                version: tesseraql/v1
+                id: notify.me
+                kind: route
+                recipe: command-json
+                security:
+                  auth: browser
+                  csrf: true
+                sql:
+                  file: notify-me.sql
+                  mode: update
+                notify:
+                  ping:
+                    channel: user-mail
+                    recipient: principal.subject
+                    payload:
+                      login: principal.loginId
+                response:
+                  json:
+                    status: 200
+                    body:
+                      result: notify
+                """);
+        Files.writeString(notifyMe.resolve("notify-me.sql"),
+                "delete from tql_user_preference where tenant_id = '_never_'\n");
         Files.writeString(home.resolve("home.html"), """
                 <!DOCTYPE html>
                 <html xmlns:th="http://www.thymeleaf.org"

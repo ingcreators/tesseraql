@@ -389,10 +389,25 @@ public final class TransactionalCommandProcessor implements Processor {
                 }
                 if (!notifications.isEmpty()) {
                     // Notifications enqueue in the same transaction (roadmap Phase 20): a rolled
-                    // back command never notifies; a committed one notifies at-least-once.
+                    // back command never notifies; a committed one notifies at-least-once. One
+                    // naming its recipient honors that subject's per-channel opt-out (roadmap
+                    // Phase 48) — decided at enqueue, so no outbox row exists: nothing to
+                    // retry, nothing half-delivered.
+                    io.tesseraql.core.account.PreferenceStore preferences = exchange.getContext()
+                            .getRegistry().lookupByNameAndType(
+                                    TesseraqlProperties.PREFERENCE_STORE_BEAN,
+                                    io.tesseraql.core.account.PreferenceStore.class);
+                    String tenantId = context.get("principal") instanceof Principal p
+                            ? p.tenantId()
+                            : null;
                     Map<String, Object> enqueued = new LinkedHashMap<>();
                     for (var notification : notifications) {
                         if (!notification.fires(context)) {
+                            continue;
+                        }
+                        if (io.tesseraql.yaml.notify.NotifyOptOut.optedOut(notification,
+                                context, preferences, tenantId)) {
+                            enqueued.put(notification.id(), Map.of("optedOut", true));
                             continue;
                         }
                         String eventId = store.insert(connection,

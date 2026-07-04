@@ -1,0 +1,34 @@
+version: tesseraql/v1
+id: tql.account.notify.save
+kind: route
+recipe: command-json
+
+# Persists a per-channel notification opt-out (roadmap Phase 48 slice 3). Only channels the
+# operator marked user-facing (userOptOut: true) are writable (TQL-ACCOUNT-4802); an
+# unchecked box simply posts no optOut field, which reads as opting back in.
+
+input:
+  channel:
+    type: string
+    required: true
+    maxLength: 128
+  optOut:
+    type: boolean
+    required: false
+
+security:
+  auth: browser
+  csrf: true
+
+sql:
+  service: account.notify.save
+  params:
+    channel: params.channel
+    optOut: params.optOut
+    subject: principal.subject
+    tenantId: principal.tenantId
+
+response:
+  redirect:
+    status: 303
+    location: /_tesseraql/account

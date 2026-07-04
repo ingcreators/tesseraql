@@ -8,6 +8,12 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **The account surface, slice 3 — notification opt-out** (roadmap Phase 48): a `notify:`
+  declaration gains an optional **`recipient:`** expression (e.g. `principal.subject`);
+  when the resolved subject opted out of the channel, the enqueue path — command routes
+  and job `notify:` steps alike — **writes no outbox row** and reports `{optedOut: true}`
+  instead of an event id. Channels the operator marks `userOptOut: true` appear as toggles
+  on the account page; channel-level notifications (no `recipient:`) are never affected.
 - **The account surface, slice 2 — language and appearance** (roadmap Phase 48): the
   account page grows the two settings; a saved language flows through the Phase 22 locale
   chain via the new `preference.<key>` source kind (default order now
