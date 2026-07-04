@@ -45,6 +45,10 @@ public final class JdbcSessionStore implements SessionStore {
         try {
             io.tesseraql.core.util.SqlScripts.applyForVendor(dataSource, JdbcSessionStore.class,
                     "/tesseraql/db/migration/security/V1__framework_sessions.sql");
+            // The subject column powering the account surface's session list (roadmap
+            // Phase 48). Pre-upgrade rows keep a null subject: not listed, aging out at expiry.
+            io.tesseraql.core.util.SqlScripts.applyForVendor(dataSource, JdbcSessionStore.class,
+                    "/tesseraql/db/migration/security/V2__session_subject.sql");
         } catch (SQLException ex) {
             throw new IllegalStateException("Failed to create session schema", ex);
         }
@@ -62,12 +66,13 @@ public final class JdbcSessionStore implements SessionStore {
             }
             try (PreparedStatement insert = connection.prepareStatement(
                     "insert into tql_session (session_id, principal_json, csrf_token, "
-                            + "created_at, expires_at) values (?, ?, ?, ?, ?)")) {
+                            + "created_at, expires_at, subject) values (?, ?, ?, ?, ?, ?)")) {
                 insert.setString(1, id);
                 insert.setString(2, mapper.writeValueAsString(principal));
                 insert.setString(3, UUID.randomUUID().toString());
                 insert.setTimestamp(4, Timestamp.from(now));
                 insert.setTimestamp(5, Timestamp.from(now.plus(timeToLive)));
+                insert.setString(6, principal.subject());
                 insert.executeUpdate();
             }
         } catch (SQLException | com.fasterxml.jackson.core.JsonProcessingException ex) {
@@ -111,6 +116,41 @@ public final class JdbcSessionStore implements SessionStore {
             ps.executeUpdate();
         } catch (SQLException ex) {
             throw new IllegalStateException("Failed to invalidate session", ex);
+        }
+    }
+
+    @Override
+    public java.util.List<ActiveSession> sessionsFor(String subject) {
+        java.util.List<ActiveSession> active = new java.util.ArrayList<>();
+        try (Connection connection = dataSource.getConnection();
+                PreparedStatement ps = connection.prepareStatement(
+                        "select session_id, created_at, expires_at from tql_session "
+                                + "where subject = ? and expires_at >= ? "
+                                + "order by created_at desc")) {
+            ps.setString(1, subject);
+            ps.setTimestamp(2, Timestamp.from(Instant.now()));
+            try (java.sql.ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    active.add(new ActiveSession(rs.getString(1),
+                            rs.getTimestamp(2).toInstant(), rs.getTimestamp(3).toInstant()));
+                }
+            }
+        } catch (SQLException ex) {
+            throw new IllegalStateException("Failed to list sessions", ex);
+        }
+        return active;
+    }
+
+    @Override
+    public void invalidateOthersFor(String subject, String keepSessionId) {
+        try (Connection connection = dataSource.getConnection();
+                PreparedStatement ps = connection.prepareStatement(
+                        "delete from tql_session where subject = ? and session_id <> ?")) {
+            ps.setString(1, subject);
+            ps.setString(2, keepSessionId == null ? "" : keepSessionId);
+            ps.executeUpdate();
+        } catch (SQLException ex) {
+            throw new IllegalStateException("Failed to invalidate sessions", ex);
         }
     }
 

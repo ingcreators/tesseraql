@@ -54,10 +54,19 @@ public final class SqlScripts {
                 try {
                     statement.execute(sql);
                 } catch (SQLException ex) {
-                    // Oracle has no CREATE TABLE IF NOT EXISTS the tooling stack parses, so its
-                    // scripts use plain CREATE and the bootstrap tolerates ORA-00955 (name is
-                    // already used) - the idempotency the other dialects get from IF NOT EXISTS.
-                    if (ex.getErrorCode() != 955) {
+                    // Statements without an IF NOT EXISTS form (Oracle DDL, column/index adds
+                    // everywhere but PostgreSQL) get their idempotency from tolerated
+                    // already-exists errors instead: ORA-00955/-01430, MySQL 1060/1061
+                    // (duplicate column/key), and the duplicate-column/-index SQLStates of
+                    // PostgreSQL (42701/42P07) and H2 (42121/42111). Everything else still
+                    // fails the bootstrap.
+                    int code = ex.getErrorCode();
+                    String state = ex.getSQLState();
+                    boolean tolerated = code == 955 || code == 1430 || code == 1060
+                            || code == 1061
+                            || "42701".equals(state) || "42P07".equals(state)
+                            || "42121".equals(state) || "42111".equals(state);
+                    if (!tolerated) {
                         throw ex;
                     }
                 }

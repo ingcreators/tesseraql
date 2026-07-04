@@ -46,6 +46,25 @@ class AccountSurfaceIntegrationTest {
         appHome = prepareAppHome(true);
         runtime = TesseraqlRuntime.start(appHome, freePort());
         sessionCookie = establishSession(runtime);
+        // A local-realm user for the password-change loop (slice 4): the standard identity
+        // schema plus one seeded account, through the same pack contracts the CLI's
+        // identity-schema command runs, on the runtime's own datasource.
+        javax.sql.DataSource main = runtime.camelContext().getRegistry()
+                .lookupByNameAndType("main", javax.sql.DataSource.class);
+        try (java.sql.Connection connection = main.getConnection();
+                java.sql.Statement statement = connection.createStatement()) {
+            statement.execute(io.tesseraql.identity.DefaultIdentityPack.schema("postgres"));
+        }
+        io.tesseraql.identity.IdentityService identity = new io.tesseraql.identity.IdentityService(
+                name -> main);
+        io.tesseraql.security.password.Pbkdf2PasswordEncoder encoder = new io.tesseraql.security.password.Pbkdf2PasswordEncoder();
+        identity.executeUpdate(io.tesseraql.identity.RealmConfig.managed("bootstrap", "main"),
+                io.tesseraql.identity.IdentityContracts.SEED_ADMIN_USER, Map.of(
+                        "userId", "pw-user",
+                        "loginId", "pw-user",
+                        "displayName", "pw-user",
+                        "passwordHash", encoder.encode("originalPass1"),
+                        "passwordParams", encoder.defaultParams()));
     }
 
     @AfterAll
@@ -212,6 +231,107 @@ class AccountSurfaceIntegrationTest {
         } finally {
             preferenceStore().remove(null, "account-user", "notify.user-mail.optOut");
         }
+    }
+
+    /** Slice 4: the session list counts this device and sign-out-others keeps only it. */
+    @Test
+    void theSessionListCountsAndSignOutOthersKeepsOnlyThisSession() throws Exception {
+        SessionStore sessions = runtime.camelContext().getRegistry().lookupByNameAndType(
+                TesseraqlProperties.SESSION_STORE_BEAN, SessionStore.class);
+        String otherSid = sessions.create(new Principal(
+                "account-user", "account-user", "Account User", null, List.of(),
+                List.of("ADMIN"), List.of(), Map.of()));
+        try {
+            assertThat(get(runtime, sessionCookie, "/_tesseraql/account").body())
+                    .contains("2 active")
+                    .contains("Sign out other sessions");
+
+            String csrf = csrfFor(runtime, sessionCookie);
+            HttpRequest request = HttpRequest.newBuilder(
+                    URI.create("http://localhost:" + runtime.port()
+                            + "/_tesseraql/logout-others"))
+                    .header("Cookie", sessionCookie)
+                    .header("Content-Type", "application/x-www-form-urlencoded")
+                    .POST(HttpRequest.BodyPublishers.ofString("_csrf=" + csrf))
+                    .build();
+            HttpResponse<String> signedOut = HttpClient.newHttpClient()
+                    .send(request, HttpResponse.BodyHandlers.ofString());
+            assertThat(signedOut.statusCode()).isEqualTo(303);
+
+            // The other session is gone, this one survives, and the page agrees.
+            assertThat(sessions.session(otherSid)).isNull();
+            HttpResponse<String> after = get(runtime, sessionCookie, "/_tesseraql/account");
+            assertThat(after.statusCode()).isEqualTo(200);
+            assertThat(after.body()).contains("1 active");
+        } finally {
+            sessions.invalidate(otherSid);
+        }
+    }
+
+    /** Slice 4: the missing CSRF token refuses the sign-out-others post. */
+    @Test
+    void signOutOthersWithoutTheCsrfTokenIsRefused() throws Exception {
+        HttpRequest request = HttpRequest.newBuilder(
+                URI.create("http://localhost:" + runtime.port() + "/_tesseraql/logout-others"))
+                .header("Cookie", sessionCookie)
+                .header("Content-Type", "application/x-www-form-urlencoded")
+                .POST(HttpRequest.BodyPublishers.ofString(""))
+                .build();
+        assertThat(HttpClient.newHttpClient()
+                .send(request, HttpResponse.BodyHandlers.ofString()).statusCode())
+                .isIn(401, 403);
+    }
+
+    /** Slice 4: the full loop - old password in, changed, old refused, new accepted. */
+    @Test
+    void passwordChangeRotatesTheLocalCredential() throws Exception {
+        String cookie = loginCookie("pw-user", "originalPass1");
+        assertThat(cookie).isNotNull();
+        try {
+            HttpResponse<String> changed = postForm(runtime, cookie,
+                    "/_tesseraql/account/password",
+                    "current=originalPass1&next=rotatedPass2");
+            assertThat(changed.statusCode()).isEqualTo(303);
+
+            assertThat(loginCookie("pw-user", "originalPass1")).isNull();
+            String renewed = loginCookie("pw-user", "rotatedPass2");
+            assertThat(renewed).isNotNull();
+        } finally {
+            // Restore for test independence (order is not guaranteed).
+            String cookieNow = loginCookie("pw-user", "rotatedPass2");
+            if (cookieNow != null) {
+                postForm(runtime, cookieNow, "/_tesseraql/account/password",
+                        "current=rotatedPass2&next=originalPass1");
+            }
+        }
+    }
+
+    /** Slice 4: a wrong current password is refused (TQL-ACCOUNT-4804) and nothing rotates. */
+    @Test
+    void aWrongCurrentPasswordIsRefused() throws Exception {
+        String cookie = loginCookie("pw-user", "originalPass1");
+        assertThat(cookie).isNotNull();
+        assertThat(postForm(runtime, cookie, "/_tesseraql/account/password",
+                "current=not-the-password&next=whateverPass9").statusCode()).isEqualTo(400);
+        assertThat(loginCookie("pw-user", "originalPass1")).isNotNull();
+    }
+
+    /** JSON login; returns the session cookie, or null when the credentials are refused. */
+    private static String loginCookie(String loginId, String password) throws Exception {
+        HttpRequest request = HttpRequest.newBuilder(
+                URI.create("http://localhost:" + runtime.port() + "/_tesseraql/login"))
+                .header("Content-Type", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString(
+                        "{\"loginId\":\"" + loginId + "\",\"password\":\"" + password
+                                + "\"}"))
+                .build();
+        HttpResponse<String> response = HttpClient.newHttpClient()
+                .send(request, HttpResponse.BodyHandlers.ofString());
+        if (response.statusCode() != 200) {
+            return null;
+        }
+        String setCookie = response.headers().firstValue("Set-Cookie").orElse(null);
+        return setCookie == null ? null : setCookie.split(";")[0];
     }
 
     private static PreferenceStore preferenceStore() {

@@ -21,6 +21,8 @@ public final class IdentityContracts {
 
     // Bootstrap helpers (design ch. 18 identity goals); managed-pack only, not part of the
     // standard contract set a sql realm must provide.
+    /** Self-service credential rotation (roadmap Phase 48, the account surface). */
+    public static final String UPDATE_PASSWORD = "update-password";
     public static final String SEED_ADMIN_USER = "seed-admin-user";
     public static final String ENSURE_ROLE = "ensure-role";
     public static final String ASSIGN_USER_ROLE = "assign-user-role";

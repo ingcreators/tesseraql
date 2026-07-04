@@ -5,3 +5,4 @@ web/_tesseraql/account/account.html
 web/_tesseraql/account/language/post.yml
 web/_tesseraql/account/appearance/post.yml
 web/_tesseraql/account/notifications/post.yml
+web/_tesseraql/account/password/post.yml

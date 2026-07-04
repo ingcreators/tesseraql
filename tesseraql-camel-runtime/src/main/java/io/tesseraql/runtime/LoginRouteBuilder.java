@@ -57,6 +57,13 @@ final class LoginRouteBuilder extends RouteBuilder {
 
         rest().get("/_tesseraql/logout").to("direct:tql.logout");
         from("direct:tql.logout").routeId("system.logout").process(this::logout);
+
+        // Sign out every session but this one (roadmap Phase 48, the account surface). A
+        // state-changing browser POST outside the compiled route pipeline, so the CSRF check
+        // runs here explicitly - same validator, header or hidden-field token.
+        rest().post("/_tesseraql/logout-others").to("direct:tql.logoutOthers");
+        from("direct:tql.logoutOthers").routeId("system.logout.others")
+                .process(this::logoutOthers);
     }
 
     private void login(Exchange exchange) throws Exception {
@@ -99,6 +106,24 @@ final class LoginRouteBuilder extends RouteBuilder {
         setSessionCookie(exchange, sessions.cookieName()
                 + "=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0");
         redirect(exchange, 303, LOGIN_PATH);
+    }
+
+    /** Invalidates the caller's other sessions, keeping the one that made this request. */
+    private void logoutOthers(Exchange exchange) throws Exception {
+        String cookie = exchange.getMessage().getHeader("Cookie", String.class);
+        String sessionId = sessions.sessionIdFromCookie(cookie);
+        SessionStore.Session session = sessionId == null ? null : sessions.session(sessionId);
+        if (session == null) {
+            throw new TqlException(PolicyEngine.UNAUTHORIZED, "No session");
+        }
+        String token = exchange.getMessage().getHeader("X-CSRF-Token", String.class);
+        if (token == null) {
+            Object field = parseBody(exchange).get("_csrf");
+            token = field == null ? null : String.valueOf(field);
+        }
+        new io.tesseraql.security.session.CsrfValidator(sessions).validate(cookie, token);
+        sessions.invalidateOthersFor(session.principal().subject(), sessionId);
+        redirect(exchange, 303, "/_tesseraql/account");
     }
 
     private static void redirect(Exchange exchange, int status, String location) {

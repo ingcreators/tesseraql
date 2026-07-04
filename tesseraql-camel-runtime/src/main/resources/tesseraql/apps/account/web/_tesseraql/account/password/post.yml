@@ -1,0 +1,37 @@
+version: tesseraql/v1
+id: tql.account.password.change
+kind: route
+recipe: command-json
+
+# Self-service password change for the local realm (roadmap Phase 48 slice 4): the current
+# credential is verified through the same contract the login path uses, then the new hash
+# is written via the update-password identity contract. SSO-managed deployments answer
+# TQL-ACCOUNT-4803; a wrong current password is 4804.
+
+input:
+  current:
+    type: string
+    required: true
+    maxLength: 256
+  next:
+    type: string
+    required: true
+    minLength: 8
+    maxLength: 256
+
+security:
+  auth: browser
+  csrf: true
+
+sql:
+  service: account.password.change
+  params:
+    current: params.current
+    next: params.next
+    loginId: principal.loginId
+    tenantId: principal.tenantId
+
+response:
+  redirect:
+    status: 303
+    location: /_tesseraql/account?password=changed
