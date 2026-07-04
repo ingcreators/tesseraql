@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<!-- The notification inbox (roadmap Phase 49): the page behind the shell's bell. Bodies are
+     plain text rendered escaped - a notification never carries markup into the page. -->
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{tql/shell :: shell(|Inbox &middot; TesseraQL|, ~{:: #inbox-nav}, ~{}, ~{:: #page-content})}">
+<th:block id="inbox-nav">
+  <a class="hc-item" href="/_tesseraql/inbox"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use href="/assets/_tesseraql/icons.svg#bell"/></svg></span><span class="hc-item__title">Inbox</span></a>
+  <a class="hc-item" href="/_tesseraql/account"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use href="/assets/_tesseraql/icons.svg#users"/></svg></span><span class="hc-item__title">Account</span></a>
+</th:block>
+<div id="page-content" class="hc-stack">
+  <section class="hc-card hc-stack">
+    <h1>Inbox</h1>
+    <div class="hc-empty" th:unless="${inbox.enabled}">
+      <p class="hc-empty__title">No inbox channels are configured.</p>
+      <p class="hc-empty__body">Declare a notification channel with <code>type: inbox</code>
+        under <code>tesseraql.notifications.channels</code> and address a
+        <code>notify:</code> with <code>recipient:</code> — see <code>docs/inbox.md</code>.</p>
+    </div>
+    <th:block th:if="${inbox.enabled}">
+      <div class="hc-cluster">
+        <p th:text="|${inbox.unread} unread|">0 unread</p>
+        <form method="post" action="/_tesseraql/inbox/read-all"
+              th:if="${inbox.unread > 0}">
+          <input type="hidden" name="_csrf" th:value="${_csrf}">
+          <button class="hc-button" data-variant="ghost" data-size="sm" type="submit">Mark all read</button>
+        </form>
+      </div>
+      <div class="hc-empty" th:if="${#lists.isEmpty(inbox.messages)}">
+        <p class="hc-empty__title">Nothing here yet.</p>
+      </div>
+      <ul class="hc-stack" th:unless="${#lists.isEmpty(inbox.messages)}" style="list-style:none; padding:0">
+        <li th:each="message : ${inbox.messages}" class="hc-card">
+          <div class="hc-cluster">
+            <strong th:text="${message.title}">title</strong>
+            <span class="hc-badge" th:unless="${message.read}">new</span>
+            <span class="hc-spacer"></span>
+            <small class="hc-text-muted" th:text="${message.createdAt}">time</small>
+          </div>
+          <p th:if="${!#strings.isEmpty(message.body)}" th:text="${message.body}">body</p>
+          <div class="hc-cluster">
+            <small class="hc-text-muted" th:text="${message.source}">source</small>
+            <span class="hc-spacer"></span>
+            <form method="post" action="/_tesseraql/inbox/read" th:unless="${message.read}">
+              <input type="hidden" name="_csrf" th:value="${_csrf}">
+              <input type="hidden" name="eventId" th:value="${message.eventId}">
+              <button class="hc-button" data-variant="ghost" data-size="sm" type="submit">Mark read</button>
+            </form>
+          </div>
+        </li>
+      </ul>
+    </th:block>
+  </section>
+</div>
+</html>

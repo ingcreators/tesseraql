@@ -1,7 +1,8 @@
 # The in-app notification center — the shell's bell and inbox
 
-Status: design accepted 2026-07-04 (roadmap Phase 49, Horizon 9). Two slices: delivery,
-then the surface.
+Status: design accepted 2026-07-04 (roadmap Phase 49, Horizon 9). **Both slices are
+delivered — Phase 49 is complete and milestone M14 is met**: the inbox channel type and
+store (slice 1), the shell bell and `/_tesseraql/inbox` (slice 2).
 
 Business applications tell their users things: your request was approved, a document
 needs you, stock ran low. Phase 20 delivers those over mail and webhooks; Phase 48 gave

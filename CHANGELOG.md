@@ -8,6 +8,14 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **The in-app notification center, slice 2 — the surface** (roadmap Phase 49, final
+  slice — **the phase is complete and milestone M14 is met**): the shared shell grows a
+  **bell** with the unread badge (the reserved `_inbox` variable; the count reads
+  through a 15 s TTL cache, so a page render costs a map lookup and local
+  deliveries/reads refresh the badge at once), and **`/_tesseraql/inbox`** joins the
+  bundled account app: newest-first list, per-message **Mark read** (owner-checked —
+  someone else's message answers `TQL-ACCOUNT-4806`/404), **Mark all read**, and the
+  honest empty state when no inbox channel is declared (then there is no bell at all).
 - **The in-app notification center, slice 1 — delivery** (roadmap Phase 49; design in
   `docs/inbox.md`): a third channel type **`inbox`** delivers `recipient:`-addressed
   `notify:` events into the managed `tql_user_notification` table — the resolved

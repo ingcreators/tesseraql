@@ -55,6 +55,13 @@
          bundled account app is mounted (`accountHref` is set), so the shell never links a 404. -->
     <th:block th:if="${_account != null}">
       <span class="hc-spacer"></span>
+      <!-- The inbox bell (roadmap Phase 49): rendered from the reserved `_inbox` variable when
+           an inbox channel is configured; the badge shows the cached unread count. -->
+      <a th:if="${_inbox != null}" class="hc-button" data-variant="ghost" th:href="${_inbox.href}"
+         aria-label="Notifications" id="tql-inbox-bell">
+        <svg class="hc-icon"><use href="/assets/_tesseraql/icons.svg#bell"/></svg>
+        <span class="hc-badge" th:if="${_inbox.unread > 0}" th:text="${_inbox.unread}">3</span>
+      </a>
       <button class="hc-avatar" type="button" popovertarget="tql-account-menu"
               th:attr="aria-label=${_account.name}">
         <span class="hc-avatar__fallback" th:text="${_account.initials}">U</span>

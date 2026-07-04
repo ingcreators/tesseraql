@@ -456,8 +456,10 @@ public final class TesseraqlRuntime implements AutoCloseable {
                             .getString("tesseraql.inbox.retentionDays")
                             .map(Long::parseLong).orElse(90L)));
             jdbcInbox.ensureSchema();
-            context.getRegistry().bind(TesseraqlProperties.INBOX_STORE_BEAN, jdbcInbox);
-            inboxStore = jdbcInbox;
+            // Wrapped so the bell's per-page unread count is a map lookup; the sink and the
+            // page share the wrapper, so local deliveries/reads refresh the badge at once.
+            inboxStore = new io.tesseraql.core.inbox.CachingInboxStore(jdbcInbox);
+            context.getRegistry().bind(TesseraqlProperties.INBOX_STORE_BEAN, inboxStore);
         } else {
             inboxStore = null;
         }
@@ -693,6 +695,14 @@ public final class TesseraqlRuntime implements AutoCloseable {
                     // Identity and realm resolve from the registry at call time: they are
                     // bound after this chain builds, and an SSO-only deployment answers with
                     // the honest 4803 instead of failing to register.
+                    // The in-app inbox surface (roadmap Phase 49 slice 2): list, mark one
+                    // read, mark all read - the subject always the session principal's.
+                    .register("account.inbox.view",
+                            params -> AccountViews.inbox(params, inboxStore))
+                    .register("account.inbox.read",
+                            params -> AccountViews.markInboxRead(params, inboxStore))
+                    .register("account.inbox.readAll",
+                            params -> AccountViews.markAllInboxRead(params, inboxStore))
                     .register("account.password.change",
                             params -> AccountViews.changePassword(params,
                                     context.getRegistry().lookupByNameAndType(

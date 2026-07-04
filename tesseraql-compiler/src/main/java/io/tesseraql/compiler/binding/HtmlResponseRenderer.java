@@ -230,6 +230,22 @@ public final class HtmlResponseRenderer implements Processor {
                         .get("ui.theme"));
             }
         }
+        // Publish the inbox badge (roadmap Phase 49) as the reserved `_inbox` variable when a
+        // browser session rides the request AND an inbox channel is configured (the runtime
+        // binds the store then). The count is a cached read - a map lookup per page.
+        if (csrfToken != null
+                && exchange.getProperty(
+                        TesseraqlProperties.PRINCIPAL) instanceof io.tesseraql.security.Principal inboxPrincipal) {
+            io.tesseraql.core.inbox.InboxStore inbox = exchange.getContext().getRegistry()
+                    .lookupByNameAndType(TesseraqlProperties.INBOX_STORE_BEAN,
+                            io.tesseraql.core.inbox.InboxStore.class);
+            if (inbox != null) {
+                model.put("_inbox", Map.of(
+                        "unread", inbox.unreadCount(inboxPrincipal.tenantId(),
+                                inboxPrincipal.subject()),
+                        "href", "/_tesseraql/inbox"));
+            }
+        }
         String theme = storedTheme != null
                 ? storedTheme
                 : cookieTheme != null

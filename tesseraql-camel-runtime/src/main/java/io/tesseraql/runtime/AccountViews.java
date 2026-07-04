@@ -197,6 +197,55 @@ final class AccountViews {
         return Map.of("ok", true);
     }
 
+    /** The inbox page model; an app without an inbox channel renders the honest empty state. */
+    static Map<String, Object> inbox(Map<String, Object> params,
+            io.tesseraql.core.inbox.InboxStore inbox) {
+        Map<String, Object> model = new LinkedHashMap<>();
+        model.put("enabled", inbox != null);
+        List<Map<String, Object>> messages = new ArrayList<>();
+        int unread = 0;
+        if (inbox != null) {
+            String tenant = tenant(params);
+            String subject = subject(params);
+            unread = inbox.unreadCount(tenant, subject);
+            for (io.tesseraql.core.inbox.InboxStore.InboxMessage message : inbox
+                    .recent(tenant, subject, 100)) {
+                Map<String, Object> row = new LinkedHashMap<>();
+                row.put("eventId", message.eventId());
+                row.put("title", message.title());
+                row.put("body", message.body() == null ? "" : message.body());
+                row.put("source", message.source());
+                row.put("createdAt", message.createdAt().toString());
+                row.put("read", message.readAt() != null);
+                messages.add(row);
+            }
+        }
+        model.put("unread", unread);
+        model.put("messages", messages);
+        return model;
+    }
+
+    /** Marks one of the caller's messages read; not theirs (or unknown) is 4806. */
+    static Map<String, Object> markInboxRead(Map<String, Object> params,
+            io.tesseraql.core.inbox.InboxStore inbox) {
+        String eventId = text(params.get("eventId"), "");
+        if (inbox == null
+                || !inbox.markRead(tenant(params), subject(params), eventId)) {
+            throw new TqlException(new TqlErrorCode(TqlDomain.ACCOUNT, 4806),
+                    "No unread message '" + eventId + "' in your inbox");
+        }
+        return Map.of("ok", true);
+    }
+
+    /** Marks all of the caller's messages read (idempotent). */
+    static Map<String, Object> markAllInboxRead(Map<String, Object> params,
+            io.tesseraql.core.inbox.InboxStore inbox) {
+        int marked = inbox == null
+                ? 0
+                : inbox.markAllRead(tenant(params), subject(params));
+        return Map.of("ok", true, "marked", marked);
+    }
+
     private static String subject(Map<String, Object> params) {
         return text(params.get("subject"), "");
     }

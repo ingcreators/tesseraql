@@ -1,0 +1,21 @@
+version: tesseraql/v1
+id: tql.inbox.readAll
+kind: route
+recipe: command-json
+
+# Marks all of the caller's messages read (roadmap Phase 49). Idempotent by design.
+
+security:
+  auth: browser
+  csrf: true
+
+sql:
+  service: account.inbox.readAll
+  params:
+    subject: principal.subject
+    tenantId: principal.tenantId
+
+response:
+  redirect:
+    status: 303
+    location: /_tesseraql/inbox
