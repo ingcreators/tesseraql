@@ -93,6 +93,8 @@ public final class TesseraqlProperties {
     public static final String TOTP_STORE_BEAN = "tesseraqlTotpStore";
     /** Registry bean name for the absence-delegation store (roadmap Phase 52), with tasks. */
     public static final String DELEGATION_STORE_BEAN = "tesseraqlDelegationStore";
+    /** Registry bean name for the pins/recents store (roadmap Phase 51), with the account. */
+    public static final String SHORTCUT_STORE_BEAN = "tesseraqlShortcutStore";
     public static final String LANES_BEAN = "tesseraqlExecutionLanes";
     public static final String SLOW_SQL_LOG_BEAN = "tesseraqlSlowSqlLog";
 

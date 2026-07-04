@@ -80,6 +80,43 @@
       <button class="hc-button" data-variant="ghost" data-size="sm" type="submit">Save</button>
     </form>
   </section>
+  <section class="hc-card hc-stack" th:if="${profile.shortcuts.available}">
+    <h2>Pinned &amp; recent</h2>
+    <p class="hc-text-muted">Pin any page from its header - a pinned URL keeps its query,
+      so a filtered list stays filtered. Records you open collect under Recent.</p>
+    <h3>Pinned</h3>
+    <div class="hc-empty" th:if="${#lists.isEmpty(profile.shortcuts.pins)}">
+      <p class="hc-empty__title">Nothing pinned yet.</p>
+    </div>
+    <ul class="hc-stack" th:unless="${#lists.isEmpty(profile.shortcuts.pins)}" style="list-style:none; padding:0">
+      <li th:each="pin : ${profile.shortcuts.pins}" class="hc-cluster">
+        <a th:href="${pin.href}" th:text="${pin.label}">pin</a>
+        <span class="hc-spacer"></span>
+        <form method="post" action="/_tesseraql/account/shortcuts/remove">
+          <input type="hidden" name="_csrf" th:value="${_csrf}">
+          <input type="hidden" name="kind" value="pin">
+          <input type="hidden" name="href" th:value="${pin.href}">
+          <button class="hc-button" data-variant="ghost" data-size="sm" type="submit">Remove</button>
+        </form>
+      </li>
+    </ul>
+    <h3>Recent</h3>
+    <div class="hc-empty" th:if="${#lists.isEmpty(profile.shortcuts.recents)}">
+      <p class="hc-empty__title">No recently viewed records yet.</p>
+    </div>
+    <ul class="hc-stack" th:unless="${#lists.isEmpty(profile.shortcuts.recents)}" style="list-style:none; padding:0">
+      <li th:each="recent : ${profile.shortcuts.recents}" class="hc-cluster">
+        <a th:href="${recent.href}" th:text="${recent.label}">recent</a>
+        <span class="hc-spacer"></span>
+        <form method="post" action="/_tesseraql/account/shortcuts/remove">
+          <input type="hidden" name="_csrf" th:value="${_csrf}">
+          <input type="hidden" name="kind" value="recent">
+          <input type="hidden" name="href" th:value="${recent.href}">
+          <button class="hc-button" data-variant="ghost" data-size="sm" type="submit">Remove</button>
+        </form>
+      </li>
+    </ul>
+  </section>
   <section class="hc-card hc-stack" th:if="${profile.delegation.available}">
     <h2>Out of office</h2>
     <p class="hc-text-muted">While the window is open, approval tasks meant for you are

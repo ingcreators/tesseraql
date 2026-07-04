@@ -312,9 +312,19 @@ public final class TesseraqlRuntime implements AutoCloseable {
         // service providers registered below can capture it.
         final io.tesseraql.core.account.PreferenceStore preferences = AccountAppProvider
                 .enabled(manifest.config()) ? accountPreferenceStore(dataSource) : null;
+        final io.tesseraql.core.account.ShortcutStore shortcuts;
         if (preferences != null) {
             context.getRegistry().bind(TesseraqlProperties.PREFERENCE_STORE_BEAN, preferences);
             context.getRegistry().bind(TesseraqlProperties.ACCOUNT_SURFACE_BEAN, Boolean.TRUE);
+            // Pins and recents (roadmap Phase 51) ride the account surface: the sidebar's
+            // Pinned group reads through the same wrapper the mutations refresh.
+            io.tesseraql.operations.account.JdbcShortcutStore jdbcShortcuts = new io.tesseraql.operations.account.JdbcShortcutStore(
+                    dataSource);
+            jdbcShortcuts.ensureSchema();
+            shortcuts = new io.tesseraql.core.account.CachingShortcutStore(jdbcShortcuts);
+            context.getRegistry().bind(TesseraqlProperties.SHORTCUT_STORE_BEAN, shortcuts);
+        } else {
+            shortcuts = null;
         }
         // The operator's default page theme (roadmap Phase 48): the shell's fallback when the
         // user has no stored or cookie choice. Values outside the enum are ignored.
@@ -736,7 +746,8 @@ public final class TesseraqlRuntime implements AutoCloseable {
                                     appName,
                                     context.getRegistry().lookupByNameAndType(
                                             TesseraqlProperties.DELEGATION_STORE_BEAN,
-                                            io.tesseraql.core.workflow.DelegationStore.class)))
+                                            io.tesseraql.core.workflow.DelegationStore.class),
+                                    shortcuts))
                     .register("account.language.save",
                             params -> AccountViews.saveLanguage(params, preferences,
                                     accountLocales))
@@ -822,6 +833,12 @@ public final class TesseraqlRuntime implements AutoCloseable {
                         }
                         return rows;
                     })
+                    // Pins and recents (roadmap Phase 51): toggle the current page, remove
+                    // from the account card - the caller's own shortcuts only.
+                    .register("account.pins.toggle",
+                            params -> AccountViews.togglePin(params, shortcuts))
+                    .register("account.shortcuts.remove",
+                            params -> AccountViews.removeShortcut(params, shortcuts))
                     // Out-of-office self-service (roadmap Phase 52); store binds with the
                     // task inbox, identity/realm resolve lazily like the neighbours.
                     .register("account.delegation.save",

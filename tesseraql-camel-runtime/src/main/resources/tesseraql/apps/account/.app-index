@@ -16,3 +16,5 @@ web/_tesseraql/account/totp/confirm/post.yml
 web/_tesseraql/account/totp/disable/post.yml
 web/_tesseraql/account/delegation/post.yml
 web/_tesseraql/account/delegation/clear/post.yml
+web/_tesseraql/account/pins/toggle/post.yml
+web/_tesseraql/account/shortcuts/remove/post.yml

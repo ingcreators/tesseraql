@@ -1,7 +1,10 @@
 # Personal productivity — pins and recents
 
-Status: design accepted 2026-07-04 (roadmap Phase 51, Horizon 9). Two slices: pins, then
-recents + the list-view hook.
+Status: design accepted 2026-07-04 (roadmap Phase 51, Horizon 9). Two slices: pins
+(**delivered** — one refinement: the toggle lands on the account page rather than
+bouncing back, because redirect placeholders URL-encode their values and a
+redirect-to-user-input pattern is best avoided anyway; and hrefs also refuse the
+backslash protocol-relative form), then recents + the list-view hook.
 
 Business users keep coming back to the same places: a filtered list ("open requests over
 5000"), a Studio data-browser query, a handful of records they touch daily. TesseraQL has

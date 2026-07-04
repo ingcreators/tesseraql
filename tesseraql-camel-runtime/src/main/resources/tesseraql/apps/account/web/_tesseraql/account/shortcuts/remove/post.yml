@@ -1,0 +1,33 @@
+version: tesseraql/v1
+id: tql.account.shortcuts.remove
+kind: route
+recipe: command-json
+
+# Removes one pin or recent from the account card (roadmap Phase 51). Idempotent.
+
+input:
+  kind:
+    type: string
+    required: true
+    enum: [pin, recent]
+  href:
+    type: string
+    required: true
+    maxLength: 1000
+
+security:
+  auth: browser
+  csrf: true
+
+sql:
+  service: account.shortcuts.remove
+  params:
+    kind: params.kind
+    href: params.href
+    subject: principal.subject
+    tenantId: principal.tenantId
+
+response:
+  redirect:
+    status: 303
+    location: /_tesseraql/account

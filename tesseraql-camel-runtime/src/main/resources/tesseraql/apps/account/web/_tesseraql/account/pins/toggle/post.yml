@@ -1,0 +1,34 @@
+version: tesseraql/v1
+id: tql.account.pins.toggle
+kind: route
+recipe: command-json
+
+# Pins the posted page - or unpins it if it already is (roadmap Phase 51). The href must
+# be a relative path (TQL-ACCOUNT-4802 otherwise): a pin can never point off-site.
+
+input:
+  href:
+    type: string
+    required: true
+    maxLength: 1000
+  label:
+    type: string
+    required: false
+    maxLength: 200
+
+security:
+  auth: browser
+  csrf: true
+
+sql:
+  service: account.pins.toggle
+  params:
+    href: params.href
+    label: params.label
+    subject: principal.subject
+    tenantId: principal.tenantId
+
+response:
+  redirect:
+    status: 303
+    location: /_tesseraql/account
