@@ -155,8 +155,8 @@ final class LoginRouteBuilder extends RouteBuilder {
         return contentType != null && contentType.contains("application/x-www-form-urlencoded");
     }
 
-    @SuppressWarnings("unchecked")
     /** Shared with the recovery endpoints (roadmap Phase 50), same package. */
+    @SuppressWarnings("unchecked")
     static Map<String, Object> parseBody(Exchange exchange) throws Exception {
         // platform-http may pre-parse a browser form post into a Map body; use it directly.
         if (exchange.getMessage().getBody() instanceof Map<?, ?> formBody) {
