@@ -784,6 +784,44 @@ app). Every leg is held green by `AccountSurfaceIntegrationTest` (17 scenarios o
 PostgreSQL, including the honest disabled/SSO states). **Phase 48 is complete and
 milestone M13 is met.**
 
+### Phase 49 — the in-app notification center
+
+The shell's bell: business events land in a per-user inbox instead of (or beside)
+mail. A third channel type, `inbox`, delivers a `notify:` event into a managed
+`tql_user_notification` table — addressed by the Phase 48 `recipient:` expression, so
+the outbox's at-least-once retries, the per-user opt-out, and the coverage/lint
+surfaces all apply unchanged. The shell grows an unread-badge bell (a reserved
+`_inbox` variable beside `_account`/`_theme`); `/_tesseraql/inbox` lists, marks read,
+and marks all read. Deliveries dedupe on the outbox event id (a retry after a crash
+never doubles a message); retention prunes read messages by age. An inbox-channel
+notification without `recipient:` is a lint error — an inbox message must be
+addressed. Design: [docs/inbox.md](inbox.md). Two slices: delivery (channel type,
+store, dedupe, lint), then the surface (bell, page, docs).
+
+**Milestone M14** — a gallery app declares one inbox channel and one
+`recipient:`-addressed `notify:`; the event shows up as an unread badge in the shell
+and a message in the inbox, reading clears it, opting out silences it — zero app code
+beyond those declarations.
+
+### Phases 50–52 — recorded candidates (maintainer names which proceeds)
+
+Direction candidates for this horizon, recorded 2026-07-04; each gets its own design
+doc when named:
+
+- **Phase 50 — credential lifecycle completion.** What slice 4 of Phase 48 opened,
+  finished: password **reset** via a mailed one-time token (identity pack + notify
+  channels + an auth-ui page), an **invitation** flow (admin invites, the user sets
+  the first password — the entry point user-admin's CRUD lacks), and optional
+  **TOTP** second factor for the local realm (JDK-only HMAC, no new dependency).
+- **Phase 51 — personal productivity surfaces.** Saved filters for the data browser
+  and list views (the Phase 39/41 filter state, persisted per user through the
+  preference store), favorite pages pinned into the shell menu, and recently viewed
+  records.
+- **Phase 52 — workflow delegation and absence.** Approval delegation for the
+  Phase 28 workflow engine over the Phase 29 org-unit foundation: absence windows,
+  delegate resolution at assignment time, and a full audit trail of who acted for
+  whom. The heaviest candidate — a security-design-first phase like Phase 37.
+
 ## CLI distribution and upgrade delivery (cross-cutting)
 
 ### Phase 38 — CLI distribution and upgrade delivery
