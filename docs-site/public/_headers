@@ -1,0 +1,27 @@
+# Response headers for the docs site (mirrors the hypermedia-components _headers).
+#
+# Headers apply in order; later rules layer on top of earlier ones. Astro's
+# `_astro/` outputs are content-hashed, so they cache aggressively; HTML must stay
+# revalidated so navigation keeps pace with the deployed build. Rules exist for both
+# the bare and the /tesseraql-prefixed forms because the Worker strips the base path
+# before the Static Assets binding matches.
+
+/*
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+  Permissions-Policy: interest-cohort=()
+
+/_astro/*
+  Cache-Control: public, max-age=31536000, immutable
+
+/tesseraql/_astro/*
+  Cache-Control: public, max-age=31536000, immutable
+
+/pagefind/*
+  Cache-Control: public, max-age=86400
+
+/tesseraql/pagefind/*
+  Cache-Control: public, max-age=86400
+
+/*.html
+  Cache-Control: public, max-age=0, must-revalidate

@@ -1,0 +1,4 @@
+# Allow native postinstall scripts for trusted dependencies required by Astro.
+allowBuilds:
+  esbuild: true
+  sharp: true

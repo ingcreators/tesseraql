@@ -1,0 +1,45 @@
+---
+title: TesseraQL
+description: A SQL-first framework for hypermedia business applications.
+template: splash
+editUrl: false
+hero:
+  tagline: YAML routes, 2-way SQL, and server-rendered HTML on Apache Camel — business applications without a build pipeline for the front end.
+  actions:
+    - text: Get started
+      link: /tesseraql/getting-started/
+      icon: right-arrow
+      variant: primary
+    - text: The five-minute demo
+      link: /tesseraql/five-minute-demo/
+    - text: View on GitHub
+      link: https://github.com/ingcreators/tesseraql
+      icon: external
+      variant: minimal
+---
+
+import { Card, CardGrid } from '@astrojs/starlight/components';
+
+<CardGrid stagger>
+  <Card title="SQL first, twice over" icon="seti:db">
+    Every query is a 2-way SQL file: executable as-is in any SQL client, parameterized
+    by the framework at runtime. What you test in your editor is what production runs.
+    [Transactional writes](/tesseraql/transactional-writes/) and
+    [pagination](/tesseraql/pagination/) stay declarative.
+  </Card>
+  <Card title="Hypermedia UI" icon="laptop">
+    Server-rendered Thymeleaf with Hypermedia Components and htmx — no front-end build,
+    no client state to reconcile. [The UI patterns](/tesseraql/hypermedia-ui/) cover
+    tables, forms, wizards, and printable documents.
+  </Card>
+  <Card title="A browser IDE included" icon="rocket">
+    `tesseraql dev` serves Studio: route editing, a data browser, migration authoring,
+    test recording, live feature flags, and a copilot chat — against your running app.
+    [Start in five minutes](/tesseraql/five-minute-demo/).
+  </Card>
+  <Card title="Operations built in" icon="setting">
+    Health probes, Prometheus metrics, audit trails, SSO (OIDC/SAML/SCIM), workflow
+    delegation, and an [admission profile](/tesseraql/admission/) that gates releases
+    in CI.
+  </Card>
+</CardGrid>
