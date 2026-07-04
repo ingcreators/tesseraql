@@ -425,12 +425,16 @@ place), the Gradle plugin (promised "later" by the build policy), official image
 documentation site: tutorial, cookbook, and reference generated from the schemas and error
 taxonomy.
 
-> The **documentation-site leg** was named 2026-07-04 and is designed in
-> [docs/docs-site.md](docs-site.md): a build-only generator module (commonmark, already
-> in-tree), the Hypermedia Components look, curated navigation with a completeness
-> guard, reference pages generated from the JSON schema and a scan of the ~180 `TQL-*`
-> codes, and GitHub Pages publishing. Maven Central, the Gradle plugin, and official
-> images remain open.
+> The **documentation-site leg** was named and **delivered 2026-07-04** (design v2 in
+> [docs/docs-site.md](docs-site.md), #275; the Starlight app #276; the generated
+> reference in the following slice): `docs-site/` is Astro Starlight on Cloudflare
+> Workers Static Assets, mirroring the Hypermedia Components docs — Pagefind search,
+> code highlighting, link validation, `/llms.txt`, a completeness-guarded sync that
+> keeps `docs/` the canonical tree, and a Reference section (the YAML surface from the
+> JSON schema, the 300+ `TQL-*` codes from a source scan) generated as committed,
+> drift-guarded markdown by `tesseraql-docs-reference`. The one-time Cloudflare
+> dashboard setup is the runbook in `docs-site/DEPLOYMENT.md` (operator step). Maven
+> Central, the Gradle plugin, and official images remain open.
 
 ### Phase 36 — security review and support policy
 

@@ -1,0 +1,61 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <parent>
+    <groupId>io.tesseraql</groupId>
+    <artifactId>tesseraql-parent</artifactId>
+    <version>0.5.0-SNAPSHOT</version>
+    <relativePath>../pom.xml</relativePath>
+  </parent>
+
+  <artifactId>tesseraql-docs-reference</artifactId>
+  <name>Tesseraql Docs Reference</name>
+  <description>Generates the committed reference pages under docs/ (the YAML-surface
+    reference from the JSON schema, the error-code index from a source scan) and
+    drift-guards them in the build (docs/docs-site.md). Never published; refresh with
+    `mvn -q -pl tesseraql-docs-reference exec:java`.</description>
+
+  <properties>
+    <!-- A build tool, not a library: nothing to deploy. -->
+    <maven.deploy.skip>true</maven.deploy.skip>
+  </properties>
+
+  <dependencies>
+    <dependency>
+      <groupId>com.fasterxml.jackson.core</groupId>
+      <artifactId>jackson-databind</artifactId>
+    </dependency>
+
+    <dependency>
+      <groupId>org.junit.jupiter</groupId>
+      <artifactId>junit-jupiter</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.assertj</groupId>
+      <artifactId>assertj-core</artifactId>
+      <scope>test</scope>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>org.codehaus.mojo</groupId>
+        <artifactId>exec-maven-plugin</artifactId>
+        <version>3.5.0</version>
+        <!-- Deliberately not bound to a phase: the pages are committed, and the drift
+             test is what runs on every build. This configuration serves the manual
+             refresh: mvn -q -pl tesseraql-docs-reference exec:java -->
+        <configuration>
+          <mainClass>io.tesseraql.docs.ReferenceGenerator</mainClass>
+          <arguments>
+            <argument>${project.basedir}/..</argument>
+          </arguments>
+        </configuration>
+      </plugin>
+    </plugins>
+  </build>
+</project>

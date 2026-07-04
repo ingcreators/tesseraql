@@ -8,6 +8,18 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **Documentation site, slice 2 — the generated reference** (completing the
+  documentation-site leg of roadmap Phase 35; design in `docs/docs-site.md`): a
+  build-only `tesseraql-docs-reference` module generates two committed markdown pages
+  under `docs/` — the **YAML surface reference** walked from
+  `tesseraql-v1.schema.json` (every property with type, constraints, and description,
+  nested sections per object path) and the **error-code index** scanned from the
+  modules' sources (both the literal `TQL-*` form and the `TqlDomain` constructor
+  form: 316 codes across 29 domains, each with raising-file provenance and links to
+  the cookbook pages that mention it). A drift test fails the build when the
+  committed pages no longer match their sources (refresh:
+  `mvn -q -pl tesseraql-docs-reference exec:java`); the site gains a **Reference**
+  sidebar section, and the links validator checks every generated link and anchor.
 - **Documentation site, slice 1 — the Starlight app** (the documentation-site leg of
   roadmap Phase 35; design v2 in `docs/docs-site.md`): `docs-site/` is an Astro
   Starlight project mirroring the Hypermedia Components docs stack — Pagefind search,

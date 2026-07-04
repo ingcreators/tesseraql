@@ -67,6 +67,12 @@ export const SECTIONS = [
     ],
   },
   {
+    // Generated pages, committed under docs/ by tesseraql-docs-reference and
+    // drift-guarded in the Maven build (docs/docs-site.md).
+    label: 'Reference',
+    items: ['reference-yaml-surface', 'reference-error-codes'],
+  },
+  {
     label: 'Project & design',
     items: ['roadmap', 'docs-site'],
   },
