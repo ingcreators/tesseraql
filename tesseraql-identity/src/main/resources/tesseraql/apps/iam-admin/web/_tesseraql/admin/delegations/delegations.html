@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{tql/shell :: page('IAM Admin · Delegations', ~{:: #page-header}, ~{:: #page-content})}">
+<th:block id="page-header">
+  <span class="hc-spacer"></span>
+  <a class="hc-button" data-variant="ghost" data-size="sm" href="/_tesseraql/admin/users">Users</a>
+</th:block>
+<div id="page-content" class="hc-stack">
+<section class="hc-card hc-stack">
+  <h2>Active and upcoming delegations</h2>
+  <p class="hc-text-muted">Approval tasks assigned inside a window go to the delegate,
+    who acts as themselves; each task records who it was meant for.</p>
+  <div class="hc-empty" th:if="${#lists.isEmpty(delegations)}">
+    <p class="hc-empty__title">Nobody is out of office.</p>
+  </div>
+  <table class="hc-table" th:unless="${#lists.isEmpty(delegations)}">
+    <thead><tr><th>Subject</th><th>Delegate</th><th>From</th><th>Until</th><th></th></tr></thead>
+    <tbody>
+      <tr th:each="d : ${delegations}">
+        <td th:text="${d.subject}"></td>
+        <td th:text="${d.delegate}"></td>
+        <td th:text="${d.startsAt}"></td>
+        <td th:text="${d.endsAt}"></td>
+        <td><span class="hc-badge" th:if="${d.active}">active</span></td>
+      </tr>
+    </tbody>
+  </table>
+</section>
+</div>
+</html>

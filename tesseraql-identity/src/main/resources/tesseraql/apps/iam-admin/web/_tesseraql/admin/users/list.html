@@ -3,6 +3,7 @@
       th:replace="~{tql/shell :: page('IAM Admin · Users', ~{:: #page-header}, ~{:: #page-content})}">
 <th:block id="page-header">
   <span class="hc-spacer"></span>
+  <a class="hc-button" data-variant="ghost" data-size="sm" href="/_tesseraql/admin/delegations">Delegations</a>
   <span class="hc-badge" th:each="t : ${total}">[[${t.count}]] total</span>
 </th:block>
 <div id="page-content" class="hc-stack">

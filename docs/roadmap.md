@@ -883,6 +883,13 @@ marked "for" the approver; the delegate approves it as themselves and the trail 
 who acted for whom; after the window ends new requests reach the approver again — no
 permission ever borrowed, no chain ever followed.
 
+Delivered 2026-07-04 in the two designed slices: the rule + one-hop resolution at every
+assignee funnel (with the no-ghost-authority and never-a-chain invariants held by
+integration tests), then the IAM-admin **Active delegations** panel and the milestone
+loop proven against the REAL purchase-request gallery app
+(`PurchaseRequestDelegationIntegrationTest`). **Phase 52 is complete and milestone M16
+is met.**
+
 ## CLI distribution and upgrade delivery (cross-cutting)
 
 ### Phase 38 — CLI distribution and upgrade delivery
