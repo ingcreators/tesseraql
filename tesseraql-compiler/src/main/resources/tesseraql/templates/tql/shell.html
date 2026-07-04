@@ -45,6 +45,26 @@
             aria-label="Collapse navigation" type="button"><span class="hc-shell__collapse-icon" aria-hidden="true">&#171;</span></button>
     <strong th:text="${title}">TesseraQL</strong>
     <th:block th:replace="${header}"/>
+    <!-- The signed-in user's menu (roadmap Phase 48): rendered from the reserved `_account`
+         variable HtmlResponseRenderer publishes when the request rides a browser session. A
+         native popover wearing the kit's hc-popover skin, anchored per the installPopover
+         contract (data-side) — CSP-safe, no inline JS. The settings link renders only when the
+         bundled account app is mounted (`accountHref` is set), so the shell never links a 404. -->
+    <th:block th:if="${_account != null}">
+      <span class="hc-spacer"></span>
+      <button class="hc-avatar" type="button" popovertarget="tql-account-menu"
+              th:attr="aria-label=${_account.name}">
+        <span class="hc-avatar__fallback" th:text="${_account.initials}">U</span>
+      </button>
+      <div class="hc-popover" id="tql-account-menu" popover data-side="bottom" data-align="end">
+        <nav class="hc-menu" th:attr="aria-label=${_account.name}">
+          <span class="hc-menu__label" th:text="${_account.name}">User</span>
+          <a class="hc-menu__item" th:if="${_account.accountHref != null}"
+             th:href="${_account.accountHref}">Account settings</a>
+          <a class="hc-menu__item" th:href="${_account.logoutHref}">Sign out</a>
+        </nav>
+      </div>
+    </th:block>
   </header>
   <!-- data-hc-nav-current: the kit's installNavCurrent behavior marks the active link with
        aria-current="page" (longest path-segment prefix wins, re-applied after htmx history nav) — the

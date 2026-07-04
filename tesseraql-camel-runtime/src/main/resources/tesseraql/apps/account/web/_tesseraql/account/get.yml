@@ -1,0 +1,35 @@
+version: tesseraql/v1
+id: tql.account.home
+kind: route
+recipe: query-html
+
+# The signed-in user's account page (roadmap Phase 48): the profile facts, with the
+# self-service settings sections joining in later slices. The subject is always the session
+# principal's — the route maps principal.* into the service params, so the page can only
+# ever describe the caller.
+
+security:
+  auth: browser
+
+sql:
+  service: account.profile.view
+  params:
+    subject: principal.subject
+    loginId: principal.loginId
+    displayName: principal.displayName
+    tenantId: principal.tenantId
+    roles: principal.roles
+    permissions: principal.permissions
+
+response:
+  html:
+    status: 200
+    template: account.html
+    model:
+      profile: sql
+    headers:
+      Content-Security-Policy: "default-src 'self'; style-src 'self' 'unsafe-inline'; frame-ancestors 'none'"
+      X-Content-Type-Options: nosniff
+      X-Frame-Options: DENY
+      Referrer-Policy: no-referrer
+      Cache-Control: "no-store"

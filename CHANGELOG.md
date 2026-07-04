@@ -8,6 +8,14 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **The account surface, slice 1** (roadmap Phase 48 — opening Horizon 9; design in
+  `docs/account.md`): the shared shell grows a signed-in **user menu** (avatar + native
+  popover, rendered from the reserved `_account` variable beside `_csrf`/`_menu`), a bundled
+  **`/_tesseraql/account`** system app serves the session principal's profile (the `auth-ui`
+  precedent — on by default with console login, `tesseraql.apps.account.enabled: false` to
+  opt out), and a managed **per-user preference store** (`PreferenceStore` SPI, cached;
+  `tql_user_preference` with Oracle/SQL Server variants) is bound for the settings slices to
+  come. The subject is always the session principal's, by construction.
 - **Studio copilot chat** (roadmap Phase 44 — completing Horizon 8 in full; decision point 8
   resolved): an in-Studio panel (`/ui/copilot`) that drives the existing gated loop as tools
   against an **operator-configured** OpenAI-compatible endpoint — TesseraQL ships no model,
