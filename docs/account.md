@@ -1,10 +1,11 @@
 # The account surface — user menu, preferences, self-service settings
 
 Status: design accepted 2026-07-04 (roadmap Phase 48, opening Horizon 9). Slices land
-incrementally; each section below names the slice that delivers it. **Slices 1–3 are
+incrementally; each section below names the slice that delivers it. **Slices 1–4 are
 delivered**: the preference store, the shell user menu, the profile page, the
-language + appearance settings, and the notification opt-out (the settings live as
-sections on the account page rather than separate pages).
+language + appearance settings, the notification opt-out, and the session +
+local-password self-service (the settings live as sections on the account page rather
+than separate pages).
 
 Every business application re-implements the same chrome: a user menu in the shell
 (avatar, name, sign-out), and a settings surface where end users pick their language,
@@ -123,8 +124,11 @@ they ride the existing telemetry/audit surfaces like any route. The pages, by sl
   without a store lookup, and without a flash on first paint.
 - **Notifications** (slice 3): opt-out toggles for the channels the operator marked
   user-facing.
-- **Sessions** (slice 4): active-session list (created / expires / "this device") and a
-  single **Sign out other sessions** action. Session ids are never rendered.
+- **Sessions** (slice 4): the active-session count and list (signed-in / expires) and a
+  single **Sign out other sessions** action, served by the runtime-wired
+  `POST /_tesseraql/logout-others` beside login/logout (CSRF-checked there explicitly).
+  Session ids never reach the template, which is also why no row is marked "this
+  device" — the honest trade for keeping ids out of the page model.
 - **Password** (slice 4): local-realm credential change (current password verified
   first). When sign-in is SSO-only the page states honestly that credentials are
   managed by the identity provider — the copilot disabled-state pattern.

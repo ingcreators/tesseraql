@@ -79,7 +79,41 @@
       <button class="hc-button" data-variant="ghost" data-size="sm" type="submit">Save</button>
     </form>
   </section>
-  <p class="hc-text-muted">Session settings arrive here as the account surface grows
-    (docs/account.md).</p>
+  <section class="hc-card hc-stack">
+    <h2>Sessions</h2>
+    <p th:text="|${#lists.size(profile.sessions)} active ${#lists.size(profile.sessions) == 1 ? 'session' : 'sessions'}, including this one.|">1 active session, including this one.</p>
+    <table class="hc-table" th:if="${!#lists.isEmpty(profile.sessions)}">
+      <thead><tr><th>Signed in</th><th>Expires</th></tr></thead>
+      <tbody>
+        <tr th:each="session : ${profile.sessions}">
+          <td th:text="${session.createdAt}">-</td>
+          <td th:text="${#strings.isEmpty(session.expiresAt)} ? '&mdash;' : ${session.expiresAt}">-</td>
+        </tr>
+      </tbody>
+    </table>
+    <form method="post" action="/_tesseraql/logout-others">
+      <input type="hidden" name="_csrf" th:value="${_csrf}">
+      <button class="hc-button" data-variant="ghost" type="submit">Sign out other sessions</button>
+    </form>
+  </section>
+  <section class="hc-card hc-stack">
+    <h2>Password</h2>
+    <th:block th:if="${profile.passwordEnabled}">
+      <form method="post" action="/_tesseraql/account/password" class="hc-stack">
+        <input type="hidden" name="_csrf" th:value="${_csrf}">
+        <label class="hc-field">
+          <span class="hc-field__label">Current password</span>
+          <input class="hc-input" type="password" name="current" required autocomplete="current-password">
+        </label>
+        <label class="hc-field">
+          <span class="hc-field__label">New password (8+ characters)</span>
+          <input class="hc-input" type="password" name="next" required minlength="8" autocomplete="new-password">
+        </label>
+        <button class="hc-button" data-variant="primary" type="submit">Change password</button>
+      </form>
+    </th:block>
+    <p class="hc-text-muted" th:unless="${profile.passwordEnabled}">Your credentials are
+      managed by your identity provider; there is nothing to change here.</p>
+  </section>
 </div>
 </html>

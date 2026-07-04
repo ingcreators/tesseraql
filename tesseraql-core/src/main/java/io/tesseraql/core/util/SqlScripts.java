@@ -54,10 +54,12 @@ public final class SqlScripts {
                 try {
                     statement.execute(sql);
                 } catch (SQLException ex) {
-                    // Oracle has no CREATE TABLE IF NOT EXISTS the tooling stack parses, so its
-                    // scripts use plain CREATE and the bootstrap tolerates ORA-00955 (name is
-                    // already used) - the idempotency the other dialects get from IF NOT EXISTS.
-                    if (ex.getErrorCode() != 955) {
+                    // Vendors without IF NOT EXISTS get their idempotency from tolerated
+                    // already-exists errors instead: ORA-00955 (name already used) and
+                    // ORA-01430 (column being added already exists), MySQL 1060/1061
+                    // (duplicate column/key). Everything else still fails the bootstrap.
+                    int code = ex.getErrorCode();
+                    if (code != 955 && code != 1430 && code != 1060 && code != 1061) {
                         throw ex;
                     }
                 }

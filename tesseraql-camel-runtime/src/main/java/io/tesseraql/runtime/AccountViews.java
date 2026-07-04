@@ -4,6 +4,12 @@ import io.tesseraql.core.account.PreferenceStore;
 import io.tesseraql.core.error.TqlDomain;
 import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
+import io.tesseraql.identity.IdentityContracts;
+import io.tesseraql.identity.IdentityService;
+import io.tesseraql.identity.PasswordAuthenticator;
+import io.tesseraql.identity.RealmConfig;
+import io.tesseraql.security.password.Pbkdf2PasswordEncoder;
+import io.tesseraql.security.session.SessionStore;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -19,6 +25,10 @@ import java.util.Map;
 final class AccountViews {
 
     private static final TqlErrorCode INVALID_VALUE = new TqlErrorCode(TqlDomain.ACCOUNT, 4802);
+    /** Password change unavailable: SSO-managed credentials or no local identity realm. */
+    private static final TqlErrorCode PASSWORD_UNAVAILABLE = new TqlErrorCode(TqlDomain.ACCOUNT,
+            4803);
+    private static final TqlErrorCode WRONG_PASSWORD = new TqlErrorCode(TqlDomain.ACCOUNT, 4804);
 
     private AccountViews() {
     }
@@ -35,9 +45,10 @@ final class AccountViews {
         return profile;
     }
 
-    /** The account page model: profile plus language / appearance / notification state. */
+    /** The account page model: profile plus every settings section's state. */
     static Map<String, Object> settings(Map<String, Object> params, PreferenceStore preferences,
-            List<String> supportedTags, List<String> optOutChannels) {
+            List<String> supportedTags, List<String> optOutChannels, SessionStore sessions,
+            boolean passwordEnabled) {
         Map<String, Object> model = profile(params);
         Map<String, String> stored = preferences == null
                 ? Map.of()
@@ -51,6 +62,21 @@ final class AccountViews {
             notifyChannels.add(entry);
         }
         model.put("notifyChannels", notifyChannels);
+        // The self-service session list (roadmap Phase 48 slice 4): timestamps only - the
+        // session ids never reach the template. In-memory stores have no expiry to show.
+        List<Map<String, Object>> sessionRows = new ArrayList<>();
+        if (sessions != null) {
+            for (SessionStore.ActiveSession active : sessions.sessionsFor(subject(params))) {
+                Map<String, Object> row = new LinkedHashMap<>();
+                row.put("createdAt",
+                        active.createdAt() == null ? "" : active.createdAt().toString());
+                row.put("expiresAt",
+                        active.expiresAt() == null ? "" : active.expiresAt().toString());
+                sessionRows.add(row);
+            }
+        }
+        model.put("sessions", sessionRows);
+        model.put("passwordEnabled", passwordEnabled);
         String locale = stored.get("ui.locale");
         List<Map<String, Object>> locales = new ArrayList<>();
         for (String tag : supportedTags) {
@@ -108,6 +134,32 @@ final class AccountViews {
         } else {
             preferences.remove(tenant(params), subject(params), key);
         }
+        return Map.of("ok", true);
+    }
+
+    /**
+     * Rotates the caller's local-realm password: verify the current credential through the
+     * same contract the login path uses, then write the new hash. Registered lazily against
+     * the registry so SSO-only deployments answer with the honest 4803 instead of a stub.
+     */
+    static Map<String, Object> changePassword(Map<String, Object> params,
+            IdentityService identity, RealmConfig realm, boolean passwordEnabled) {
+        if (!passwordEnabled || identity == null || realm == null) {
+            throw new TqlException(PASSWORD_UNAVAILABLE,
+                    "Credentials are managed by your identity provider");
+        }
+        String loginId = text(params.get("loginId"), "");
+        String current = text(params.get("current"), "");
+        String next = text(params.get("next"), "");
+        if (new PasswordAuthenticator(identity)
+                .authenticate(realm, loginId, current, tenant(params)).isEmpty()) {
+            throw new TqlException(WRONG_PASSWORD, "The current password does not match");
+        }
+        Pbkdf2PasswordEncoder encoder = new Pbkdf2PasswordEncoder();
+        identity.executeUpdate(realm, IdentityContracts.UPDATE_PASSWORD, Map.of(
+                "loginId", loginId,
+                "passwordHash", encoder.encode(next),
+                "passwordParams", encoder.defaultParams()));
         return Map.of("ok", true);
     }
 

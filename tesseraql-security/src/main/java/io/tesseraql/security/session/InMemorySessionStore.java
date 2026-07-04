@@ -12,6 +12,8 @@ import java.util.concurrent.ConcurrentMap;
 public final class InMemorySessionStore implements SessionStore {
 
     private final ConcurrentMap<String, Session> sessions = new ConcurrentHashMap<>();
+    /** Creation instants for the account surface's session list (roadmap Phase 48). */
+    private final ConcurrentMap<String, java.time.Instant> created = new ConcurrentHashMap<>();
     private final String cookieName;
 
     public InMemorySessionStore() {
@@ -28,6 +30,7 @@ public final class InMemorySessionStore implements SessionStore {
     public String create(Principal principal) {
         String id = UUID.randomUUID().toString();
         sessions.put(id, new Session(principal, UUID.randomUUID().toString()));
+        created.put(id, java.time.Instant.now());
         return id;
     }
 
@@ -40,7 +43,28 @@ public final class InMemorySessionStore implements SessionStore {
     public void invalidate(String sessionId) {
         if (sessionId != null) {
             sessions.remove(sessionId);
+            created.remove(sessionId);
         }
+    }
+
+    @Override
+    public java.util.List<ActiveSession> sessionsFor(String subject) {
+        return sessions.entrySet().stream()
+                .filter(entry -> subject != null
+                        && subject.equals(entry.getValue().principal().subject()))
+                .map(entry -> new ActiveSession(entry.getKey(),
+                        created.get(entry.getKey()), null))
+                .sorted(java.util.Comparator.comparing(ActiveSession::createdAt,
+                        java.util.Comparator.nullsLast(java.util.Comparator.reverseOrder())))
+                .toList();
+    }
+
+    @Override
+    public void invalidateOthersFor(String subject, String keepSessionId) {
+        sessions.entrySet().removeIf(entry -> subject != null
+                && subject.equals(entry.getValue().principal().subject())
+                && !entry.getKey().equals(keepSessionId));
+        created.keySet().retainAll(sessions.keySet());
     }
 
     @Override

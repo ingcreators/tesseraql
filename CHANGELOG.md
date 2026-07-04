@@ -8,6 +8,16 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **The account surface, slice 4 — sessions and password** (roadmap Phase 48): the
+  account page lists the caller's active sessions (`tql_session` gains an indexed,
+  nullable `subject` — pre-upgrade rows age out unlisted) with a **Sign out other
+  sessions** action (`POST /_tesseraql/logout-others`, runtime-wired beside
+  login/logout, CSRF-checked); and the **local-realm password change** verifies the
+  current credential through the same contract the login path uses before writing the
+  new hash via the `update-password` identity contract — wrong current password is
+  `TQL-ACCOUNT-4804`, SSO-managed deployments answer the honest `4803` and the page
+  says so. `SqlScripts` now tolerates the vendor duplicate-column/key codes so the
+  re-runnable V2 bootstrap stays idempotent on every dialect.
 - **The account surface, slice 3 — notification opt-out** (roadmap Phase 48): a `notify:`
   declaration gains an optional **`recipient:`** expression (e.g. `principal.subject`);
   when the resolved subject opted out of the channel, the enqueue path — command routes

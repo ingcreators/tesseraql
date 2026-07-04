@@ -55,5 +55,32 @@ public interface SessionStore {
         }
     }
 
+    /** The session id carried by a {@code Cookie} header, or {@code null} when absent. */
+    default String sessionIdFromCookie(String cookieHeader) {
+        return Cookies.value(cookieHeader, cookieName());
+    }
+
+    /**
+     * An active session for the account surface's self-service list (roadmap Phase 48).
+     * Timestamps may be {@code null} where a store does not track them (in-memory); the id is
+     * for keep-checks only and must never be rendered.
+     */
+    record ActiveSession(String sessionId, java.time.Instant createdAt,
+            java.time.Instant expiresAt) {
+    }
+
+    /**
+     * The subject's active sessions, newest first. Default: empty — a custom store that never
+     * learned subjects simply renders no session list. Rows created before the store tracked
+     * subjects are not listed; they age out at their expiry.
+     */
+    default java.util.List<ActiveSession> sessionsFor(String subject) {
+        return java.util.List.of();
+    }
+
+    /** Invalidates every session of the subject except the one to keep (sign out others). */
+    default void invalidateOthersFor(String subject, String keepSessionId) {
+    }
+
     String cookieName();
 }

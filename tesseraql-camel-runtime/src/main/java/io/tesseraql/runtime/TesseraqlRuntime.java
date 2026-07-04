@@ -319,6 +319,11 @@ public final class TesseraqlRuntime implements AutoCloseable {
         if ("light".equals(uiTheme) || "dark".equals(uiTheme)) {
             context.getRegistry().bind(TesseraqlProperties.UI_THEME_BEAN, uiTheme);
         }
+        // Whether the password form (and so self-service password change) is on: the same
+        // flag the bundled login page reads (roadmap Phase 48 slice 4).
+        final boolean passwordLoginEnabled = manifest.config()
+                .getString("tesseraql.console.login.password.enabled")
+                .map(Boolean::parseBoolean).orElse(true);
         // The locales the account surface's language picker offers — the same negotiated set
         // every route resolves against (Phase 22 semantics, one source of truth).
         final List<String> accountLocales = io.tesseraql.compiler.binding.I18nSettings
@@ -650,7 +655,8 @@ public final class TesseraqlRuntime implements AutoCloseable {
                     .register("account.profile.view", AccountViews::profile)
                     .register("account.settings.view",
                             params -> AccountViews.settings(params, preferences,
-                                    accountLocales, optOutChannels))
+                                    accountLocales, optOutChannels, sessionStore,
+                                    passwordLoginEnabled))
                     .register("account.language.save",
                             params -> AccountViews.saveLanguage(params, preferences,
                                     accountLocales))
@@ -658,7 +664,19 @@ public final class TesseraqlRuntime implements AutoCloseable {
                             params -> AccountViews.saveTheme(params, preferences))
                     .register("account.notify.save",
                             params -> AccountViews.saveNotifyOptOut(params, preferences,
-                                    optOutChannels));
+                                    optOutChannels))
+                    // Identity and realm resolve from the registry at call time: they are
+                    // bound after this chain builds, and an SSO-only deployment answers with
+                    // the honest 4803 instead of failing to register.
+                    .register("account.password.change",
+                            params -> AccountViews.changePassword(params,
+                                    context.getRegistry().lookupByNameAndType(
+                                            TesseraqlProperties.IDENTITY_SERVICE_BEAN,
+                                            io.tesseraql.identity.IdentityService.class),
+                                    context.getRegistry().lookupByNameAndType(
+                                            TesseraqlProperties.IDENTITY_REALM_BEAN,
+                                            io.tesseraql.identity.RealmConfig.class),
+                                    passwordLoginEnabled));
             context.getRegistry().bind(TesseraqlProperties.SERVICE_PROVIDERS_BEAN,
                     serviceProviders);
             Map<String, String> claimKeys = new LinkedHashMap<>();
