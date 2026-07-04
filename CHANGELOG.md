@@ -8,6 +8,15 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **Credential lifecycle, slice 2 — invitations** (roadmap Phase 50): the bundled IAM
+  admin grows **Invite user** — the account is created with status `INVITED` (which the
+  credential contract already refuses at login) and the one-time accept link mails over
+  the outbox; **the operator never knows a password**. `/_tesseraql/invite` sets the
+  first password and the existing `enable-user` contract flips the account ACTIVE.
+  Re-inviting a still-INVITED account politely resends (subject to the token cooldown);
+  an already-usable login answers 409 — an invite can never take over an account.
+  Requires `tesseraql.identity.invite.{channel,url}` (half-set fails the boot,
+  `TQL-SEC-4120`); the token store is shared with slice 1's reset.
 - **Credential lifecycle, slice 1 — password reset** (roadmap Phase 50; design in
   `docs/credential-lifecycle.md`): the login page grows **Forgot password?** when
   `tesseraql.identity.recovery` is configured (enabled + a mail channel + the confirm

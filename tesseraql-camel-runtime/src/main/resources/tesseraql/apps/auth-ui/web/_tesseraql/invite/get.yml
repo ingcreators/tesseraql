@@ -1,0 +1,42 @@
+version: tesseraql/v1
+id: tql.auth.invite
+kind: route
+recipe: query-html
+
+# The mailed invitation's landing page (roadmap Phase 50 slice 2): set the first password.
+# The token is only validated on the POST; unknown, used, and expired tokens land back here
+# with the same honest invalid flag.
+
+input:
+  token:
+    type: string
+    required: false
+    maxLength: 128
+  invalid:
+    type: string
+    required: false
+  error:
+    type: string
+    required: false
+
+security:
+  auth: public
+
+sql:
+  service: auth.loginMethods
+
+response:
+  html:
+    status: 200
+    template: invite.html
+    model:
+      methods: sql
+      token: params.token
+      invalid: params.invalid
+      error: params.error
+    headers:
+      Content-Security-Policy: "default-src 'self'; style-src 'self' 'unsafe-inline'; frame-ancestors 'none'"
+      X-Content-Type-Options: nosniff
+      X-Frame-Options: DENY
+      Referrer-Policy: no-referrer
+      Cache-Control: "no-store"

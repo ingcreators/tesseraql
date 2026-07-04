@@ -6,6 +6,30 @@
   <span class="hc-badge" th:each="t : ${total}">[[${t.count}]] total</span>
 </th:block>
 <div id="page-content" class="hc-stack">
+<div th:if="${invited}" class="hc-alert" data-variant="success" role="status">
+  <p class="hc-alert__title">Invitation sent. The account stays INVITED until it is accepted.</p>
+</div>
+<!-- Invite a user (roadmap Phase 50 slice 2): created INVITED - unable to sign in - and
+     mailed a one-time accept link; the operator never knows a password. -->
+<section class="hc-card hc-stack">
+  <h2>Invite user</h2>
+  <form method="post" action="/_tesseraql/admin/users/invite" class="hc-cluster">
+    <input type="hidden" name="_csrf" th:value="${_csrf}">
+    <label class="hc-field">
+      <span class="hc-field__label">Login</span>
+      <input class="hc-input" name="loginId" required>
+    </label>
+    <label class="hc-field">
+      <span class="hc-field__label">Display name</span>
+      <input class="hc-input" name="displayName">
+    </label>
+    <label class="hc-field">
+      <span class="hc-field__label">Email</span>
+      <input class="hc-input" name="email" type="email" required>
+    </label>
+    <button class="hc-button" data-variant="primary" type="submit">Invite</button>
+  </form>
+</section>
 <section class="hc-card">
   <div class="hc-empty" th:if="${#lists.isEmpty(users)}"><p class="hc-empty__title">No users found.</p></div>
   <table class="hc-table">

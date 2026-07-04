@@ -6,3 +6,5 @@ web/_tesseraql/reset/get.yml
 web/_tesseraql/reset/reset.html
 web/_tesseraql/reset/confirm/get.yml
 web/_tesseraql/reset/confirm/confirm.html
+web/_tesseraql/invite/get.yml
+web/_tesseraql/invite/invite.html
