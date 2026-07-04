@@ -31,6 +31,25 @@ class NotifyEventsTest {
         assertThat(envelope.payload()).containsEntry("email", "a@example.com");
     }
 
+    /** Roadmap Phase 49: an addressed build rides recipient + tenant on the envelope. */
+    @Test
+    void anAddressedEnvelopeRoundTripsAndLegacyEnvelopesDecodeWithoutIt() {
+        NotifyEvents.CompiledNotify notify = NotifyEvents.compile("r", "n",
+                new NotifySpec("approvals", null, "principal.subject", Map.of()));
+        OutboxEvent event = notify.build(
+                Map.of("principal", Map.of("subject", "alice")), "app", "alice", "t-1");
+
+        NotifyEvents.Envelope envelope = NotifyEvents.parse(event.payloadJson());
+        assertThat(envelope.recipient()).isEqualTo("alice");
+        assertThat(envelope.tenant()).isEqualTo("t-1");
+
+        // Unaddressed builds and pre-Phase-49 envelope JSON decode with both absent.
+        NotifyEvents.Envelope legacy = NotifyEvents.parse(
+                "{\"channel\":\"c\",\"source\":\"s\",\"payload\":{}}");
+        assertThat(legacy.recipient()).isNull();
+        assertThat(legacy.tenant()).isNull();
+    }
+
     /** Roadmap Phase 48: the recipient expression resolves against the live context. */
     @Test
     void theRecipientResolvesFromTheContextAndTheOptOutDecisionUsesIt() {

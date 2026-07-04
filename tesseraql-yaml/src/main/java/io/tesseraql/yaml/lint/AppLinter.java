@@ -1933,6 +1933,16 @@ public final class AppLinter {
                                 + ex.getMessage()));
             }
         }
+        // An inbox message must be addressed (roadmap Phase 49): without a recipient there
+        // is no user to deliver to, so this fails the build instead of dead-lettering.
+        if (spec.channel() != null && "inbox".equals(config.getString(
+                "tesseraql.notifications.channels." + spec.channel() + ".type")
+                .orElse(null))
+                && (spec.recipient() == null || spec.recipient().isBlank())) {
+            findings.add(new LintFinding("TQL-YAML-1034", "error", source,
+                    "Notification '" + id + "' delivers to inbox channel '" + spec.channel()
+                            + "' but declares no recipient:"));
+        }
     }
 
     /**

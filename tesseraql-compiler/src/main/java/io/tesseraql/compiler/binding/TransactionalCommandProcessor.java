@@ -410,8 +410,11 @@ public final class TransactionalCommandProcessor implements Processor {
                             enqueued.put(notification.id(), Map.of("optedOut", true));
                             continue;
                         }
+                        // The resolved recipient rides the envelope (roadmap Phase 49) so
+                        // addressed channel types (inbox) know who to deliver to.
                         String eventId = store.insert(connection,
-                                notification.build(context, appName));
+                                notification.build(context, appName,
+                                        notification.resolveRecipient(context), tenantId));
                         enqueued.put(notification.id(), Map.of("eventId", eventId));
                     }
                     context.put("notify", enqueued);

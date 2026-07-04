@@ -87,6 +87,8 @@ public final class TesseraqlProperties {
     public static final String ACCOUNT_SURFACE_BEAN = "tesseraqlAccountSurface";
     /** Registry bean name for the operator's default page theme (roadmap Phase 48), if set. */
     public static final String UI_THEME_BEAN = "tesseraqlUiTheme";
+    /** Registry bean name for the in-app inbox store (roadmap Phase 49), if any inbox channel. */
+    public static final String INBOX_STORE_BEAN = "tesseraqlInboxStore";
     public static final String LANES_BEAN = "tesseraqlExecutionLanes";
     public static final String SLOW_SQL_LOG_BEAN = "tesseraqlSlowSqlLog";
 

@@ -406,6 +406,52 @@ class AppLinterTest {
                 && f.message().contains("missing-channel"));
     }
 
+    /** Roadmap Phase 49: an inbox-channel notification must name its recipient. */
+    @Test
+    void anInboxNotificationWithoutARecipientFailsTheBuild(@TempDir Path dir) throws Exception {
+        Files.createDirectories(dir.resolve("config"));
+        Files.writeString(dir.resolve("config/tesseraql.yml"), """
+                tesseraql:
+                  app:
+                    name: t
+                  notifications:
+                    channels:
+                      approvals:
+                        type: inbox
+                        title: "hello"
+                """);
+        Files.createDirectories(dir.resolve("web/decide"));
+        Files.writeString(dir.resolve("web/decide/post.yml"), """
+                version: tesseraql/v1
+                id: decide
+                kind: route
+                recipe: command-json
+                security:
+                  auth: bearer
+                sql:
+                  file: decide.sql
+                  mode: update
+                notify:
+                  addressed:
+                    channel: approvals
+                    recipient: principal.subject
+                  unaddressed:
+                    channel: approvals
+                response:
+                  json:
+                    body:
+                      ok: notify
+                """);
+        Files.writeString(dir.resolve("web/decide/decide.sql"), "update t set x = 1\n");
+
+        List<LintFinding> findings = new AppLinter().lint(dir);
+
+        assertThat(findings)
+                .filteredOn(f -> f.code().equals("TQL-YAML-1034"))
+                .hasSize(1)
+                .allMatch(f -> f.isError() && f.message().contains("unaddressed"));
+    }
+
     @Test
     void lintsHttpCallStepsAgainstTheEgressAllowList(@TempDir Path dir) throws Exception {
         Files.createDirectories(dir.resolve("config"));

@@ -29,6 +29,8 @@ public final class NotificationChannels {
     /** The supported channel types. */
     public static final String MAIL = "mail";
     public static final String WEBHOOK = "webhook";
+    /** The in-app inbox (roadmap Phase 49): delivery into {@code tql_user_notification}. */
+    public static final String INBOX = "inbox";
 
     private final AppConfig config;
     private final Map<String, Channel> channels;
@@ -52,7 +54,8 @@ public final class NotificationChannels {
                 Map<String, Object> values = new LinkedHashMap<>();
                 raw.forEach((key, value) -> values.put(String.valueOf(key), value));
                 Channel channel = loaded.new Channel(String.valueOf(name), values);
-                if (!MAIL.equals(channel.type()) && !WEBHOOK.equals(channel.type())) {
+                if (!MAIL.equals(channel.type()) && !WEBHOOK.equals(channel.type())
+                        && !INBOX.equals(channel.type())) {
                     throw new TqlException(INVALID_CHANNEL, "Notification channel '" + name
                             + "' has unsupported type '" + channel.type()
                             + "' (expected mail or webhook)");
