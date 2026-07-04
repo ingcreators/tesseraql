@@ -1,0 +1,21 @@
+version: tesseraql/v1
+id: tql.account.delegation.clear
+kind: route
+recipe: command-json
+
+# Clears the caller's own out-of-office rule (roadmap Phase 52). Idempotent.
+
+security:
+  auth: browser
+  csrf: true
+
+sql:
+  service: account.delegation.clear
+  params:
+    subject: principal.subject
+    tenantId: principal.tenantId
+
+response:
+  redirect:
+    status: 303
+    location: /_tesseraql/account

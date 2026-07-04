@@ -1,7 +1,10 @@
 # Workflow delegation and absence — who acts for whom, and when
 
 Status: security design accepted 2026-07-04 (roadmap Phase 52, Horizon 9). Two slices:
-the absence rule and its resolution, then the operator surface and the gallery proof.
+the absence rule and its resolution (**delivered**), then the operator surface and the
+gallery proof. One refinement from implementation: the delegate resolves from a login id
+when the identity **schema answers** — the identity beans exist even without it, so a
+failed lookup falls back to the raw subject rather than failing the card.
 
 Phase 28 gave approvals a per-task escape hatch: the **current assignee** may hand one
 task they already hold to someone else (`POST …/delegate/{to}`). What it deliberately

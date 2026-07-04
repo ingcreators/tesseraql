@@ -69,15 +69,19 @@ final class WorkflowSweeper {
     private final OutboxStore outboxStore;
     private final String appName;
     private final DataSource dataSource;
+    /** Absence resolution for reassign fallbacks (roadmap Phase 52); nullable. */
+    private final io.tesseraql.core.workflow.DelegationStore delegations;
 
     WorkflowSweeper(List<Rule> rules, WorkflowTaskStore taskStore, WorkflowStore workflowStore,
-            OutboxStore outboxStore, String appName, DataSource dataSource) {
+            OutboxStore outboxStore, String appName, DataSource dataSource,
+            io.tesseraql.core.workflow.DelegationStore delegations) {
         this.rules = List.copyOf(rules);
         this.taskStore = taskStore;
         this.workflowStore = workflowStore;
         this.outboxStore = outboxStore;
         this.appName = appName;
         this.dataSource = dataSource;
+        this.delegations = delegations;
     }
 
     /** Applies each overdue task's breach handling; returns the number escalated. */
@@ -120,7 +124,12 @@ final class WorkflowSweeper {
         if (newAssignee == null) {
             return false;
         }
-        taskStore.escalate(connection, task.taskId(), newAssignee);
+        // Absence resolution for the fallback too (roadmap Phase 52): the sweeper runs
+        // without a request tenant, so the untenanted scope applies (documented).
+        io.tesseraql.core.workflow.Delegations.Resolved resolved = io.tesseraql.core.workflow.Delegations
+                .resolve(delegations, null, newAssignee);
+        newAssignee = resolved.assignee();
+        taskStore.escalate(connection, task.taskId(), newAssignee, resolved.delegatedFrom());
         if (workflowStore != null) {
             workflowStore.appendHistory(connection, new WorkflowStore.History(null, task.docType(),
                     task.docId(), "escalate", task.state(), task.state(), SYSTEM_ACTOR,

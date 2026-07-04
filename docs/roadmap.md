@@ -859,10 +859,29 @@ doc when named:
   and list views (the Phase 39/41 filter state, persisted per user through the
   preference store), favorite pages pinned into the shell menu, and recently viewed
   records.
-- **Phase 52 — workflow delegation and absence.** Approval delegation for the
-  Phase 28 workflow engine over the Phase 29 org-unit foundation: absence windows,
-  delegate resolution at assignment time, and a full audit trail of who acted for
-  whom. The heaviest candidate — a security-design-first phase like Phase 37.
+- (Phase 52 was named 2026-07-04; see its section below.)
+
+### Phase 52 — workflow delegation and absence
+
+Security-design-first, like Phase 37; the accepted design is
+[docs/delegation.md](delegation.md). Phase 28 already lets a task's holder hand one
+task over; this phase adds the standing rule — an **absence window with a delegate,
+applied where assignees are resolved** — under four invariants: delegation redirects
+assignment and **never borrows identity** (the delegate acts as themselves; `canAct`,
+guards, and scopes untouched); **one hop, never a chain** (loops impossible by
+construction); **only the delegator writes their own rule** (the account surface's
+self-service invariant, delegate resolved from login id under the managed realm); and
+**the trail is structural** — the persisted task row carries meant/received/acted
+columns, no new history format. Resolution applies at the transition `assign:` rows,
+the sweeper's `reassign` fallback, and the per-task delegate target; candidate groups
+and already-open tasks are deliberately untouched. Two slices: the rule + resolution,
+then the IAM-admin visibility panel + the purchase-request gallery proof.
+
+**Milestone M16** — on the purchase-request gallery app: an approver sets an absence
+with a delegate; a request submitted during the window lands in the delegate's inbox
+marked "for" the approver; the delegate approves it as themselves and the trail shows
+who acted for whom; after the window ends new requests reach the approver again — no
+permission ever borrowed, no chain ever followed.
 
 ## CLI distribution and upgrade delivery (cross-cutting)
 

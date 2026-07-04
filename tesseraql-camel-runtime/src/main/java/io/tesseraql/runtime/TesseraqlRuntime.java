@@ -372,6 +372,13 @@ public final class TesseraqlRuntime implements AutoCloseable {
                     dataSource);
             taskStore.ensureSchema();
             context.getRegistry().bind(TesseraqlProperties.WORKFLOW_TASK_STORE_BEAN, taskStore);
+            // Standing absence rules (roadmap Phase 52): built wherever the task inbox is -
+            // every assignee funnel resolves through this one store, one hop, never a chain.
+            io.tesseraql.operations.workflow.JdbcDelegationStore delegationStore = new io.tesseraql.operations.workflow.JdbcDelegationStore(
+                    dataSource);
+            delegationStore.ensureSchema();
+            context.getRegistry().bind(TesseraqlProperties.DELEGATION_STORE_BEAN,
+                    delegationStore);
             // Deadline escalation (roadmap Phase 28 slice 3): a sweeper reassigns overdue tasks per
             // each state's onBreach.reassign resolver, recording history through the managed store.
             List<WorkflowSweeper.Rule> rules = buildSweeperRules(manifest,
@@ -382,7 +389,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
                                 io.tesseraql.core.workflow.WorkflowStore.class);
                 workflowSweeper = new WorkflowSweeper(rules, taskStore, historyStore, outboxStore,
                         manifest.config().getString("tesseraql.app.name").orElse("app"),
-                        dataSource);
+                        dataSource, delegationStore);
                 context.getRegistry().bind(TesseraqlProperties.WORKFLOW_SWEEPER_BEAN,
                         workflowSweeper);
             }
@@ -726,7 +733,10 @@ public final class TesseraqlRuntime implements AutoCloseable {
                                     context.getRegistry().lookupByNameAndType(
                                             TesseraqlProperties.TOTP_STORE_BEAN,
                                             io.tesseraql.core.credential.TotpStore.class),
-                                    appName))
+                                    appName,
+                                    context.getRegistry().lookupByNameAndType(
+                                            TesseraqlProperties.DELEGATION_STORE_BEAN,
+                                            io.tesseraql.core.workflow.DelegationStore.class)))
                     .register("account.language.save",
                             params -> AccountViews.saveLanguage(params, preferences,
                                     accountLocales))
@@ -787,6 +797,24 @@ public final class TesseraqlRuntime implements AutoCloseable {
                                     context.getRegistry().lookupByNameAndType(
                                             TesseraqlProperties.IDENTITY_REALM_BEAN,
                                             io.tesseraql.identity.RealmConfig.class)))
+                    // Out-of-office self-service (roadmap Phase 52); store binds with the
+                    // task inbox, identity/realm resolve lazily like the neighbours.
+                    .register("account.delegation.save",
+                            params -> AccountViews.saveDelegation(params,
+                                    context.getRegistry().lookupByNameAndType(
+                                            TesseraqlProperties.DELEGATION_STORE_BEAN,
+                                            io.tesseraql.core.workflow.DelegationStore.class),
+                                    context.getRegistry().lookupByNameAndType(
+                                            TesseraqlProperties.IDENTITY_SERVICE_BEAN,
+                                            io.tesseraql.identity.IdentityService.class),
+                                    context.getRegistry().lookupByNameAndType(
+                                            TesseraqlProperties.IDENTITY_REALM_BEAN,
+                                            io.tesseraql.identity.RealmConfig.class)))
+                    .register("account.delegation.clear",
+                            params -> AccountViews.clearDelegation(params,
+                                    context.getRegistry().lookupByNameAndType(
+                                            TesseraqlProperties.DELEGATION_STORE_BEAN,
+                                            io.tesseraql.core.workflow.DelegationStore.class)))
                     .register("account.password.change",
                             params -> AccountViews.changePassword(params,
                                     context.getRegistry().lookupByNameAndType(

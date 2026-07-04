@@ -68,7 +68,15 @@ public final class WorkflowDelegateProcessor implements Processor {
                     throw new TqlException(NOT_ASSIGNED, "Workflow '" + workflowId
                             + "': only the assignee may delegate this task");
                 }
-                taskStore.reassignOpenTasks(connection, docType, docId, to);
+                // Handing a task to someone absent forwards it once (roadmap Phase 52) -
+                // the same one-hop rule as assignment; the task records who it was meant for.
+                io.tesseraql.core.workflow.Delegations.Resolved resolved = io.tesseraql.core.workflow.Delegations
+                        .resolve(exchange.getContext().getRegistry().lookupByNameAndType(
+                                TesseraqlProperties.DELEGATION_STORE_BEAN,
+                                io.tesseraql.core.workflow.DelegationStore.class),
+                                tenantOf(exchange), to);
+                taskStore.reassignOpenTasks(connection, docType, docId, resolved.assignee(),
+                        resolved.delegatedFrom());
                 connection.commit();
             } catch (RuntimeException | SQLException ex) {
                 connection.rollback();
@@ -80,5 +88,11 @@ public final class WorkflowDelegateProcessor implements Processor {
             }
         }
         exchange.getMessage().setBody(Map.of("ok", true));
+    }
+
+    private static String tenantOf(org.apache.camel.Exchange exchange) {
+        Principal principal = exchange.getProperty(TesseraqlProperties.PRINCIPAL,
+                Principal.class);
+        return principal == null ? null : principal.tenantId();
     }
 }

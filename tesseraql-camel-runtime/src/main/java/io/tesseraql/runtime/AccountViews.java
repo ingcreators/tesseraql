@@ -49,7 +49,8 @@ final class AccountViews {
     static Map<String, Object> settings(Map<String, Object> params, PreferenceStore preferences,
             List<String> supportedTags, List<String> optOutChannels, SessionStore sessions,
             boolean passwordEnabled, io.tesseraql.yaml.account.PreferencesSpec appSpec,
-            io.tesseraql.core.credential.TotpStore totp, String issuer) {
+            io.tesseraql.core.credential.TotpStore totp, String issuer,
+            io.tesseraql.core.workflow.DelegationStore delegations) {
         Map<String, Object> model = profile(params);
         Map<String, String> stored = preferences == null
                 ? Map.of()
@@ -112,6 +113,19 @@ final class AccountViews {
             });
         }
         model.put("totp", totpModel);
+        // Out-of-office state (roadmap Phase 52): the card renders only where workflows
+        // assign tasks (the store binds there); the rule is strictly the caller's own.
+        Map<String, Object> delegationModel = new LinkedHashMap<>();
+        delegationModel.put("available", delegations != null);
+        if (delegations != null) {
+            delegations.rule(tenant(params), subject(params)).ifPresent(rule -> {
+                delegationModel.put("delegate", rule.delegateSubject());
+                delegationModel.put("startsAt", rule.startsAt().toString());
+                delegationModel.put("endsAt", rule.endsAt().toString());
+                delegationModel.put("active", rule.covers(java.time.Instant.now()));
+            });
+        }
+        model.put("delegation", delegationModel);
         String locale = stored.get("ui.locale");
         List<Map<String, Object>> locales = new ArrayList<>();
         for (String tag : supportedTags) {
@@ -310,6 +324,77 @@ final class AccountViews {
         if (totp == null) {
             throw new TqlException(PASSWORD_UNAVAILABLE,
                     "Two-factor authentication needs the local identity realm");
+        }
+    }
+
+    /**
+     * Saves the caller's own out-of-office rule (roadmap Phase 52). The delegate is a login
+     * id resolved to its subject when the managed realm is present (unknown -> 4802), else
+     * a raw subject; self-delegation and inverted/expired windows are refused.
+     */
+    static Map<String, Object> saveDelegation(Map<String, Object> params,
+            io.tesseraql.core.workflow.DelegationStore delegations, IdentityService identity,
+            RealmConfig realm) {
+        if (delegations == null) {
+            throw new TqlException(PASSWORD_UNAVAILABLE,
+                    "Delegation needs the managed workflow task inbox");
+        }
+        String delegate = text(params.get("delegate"), "");
+        java.time.Instant startsAt = parseInstant(params.get("startsAt"));
+        java.time.Instant endsAt = parseInstant(params.get("endsAt"));
+        if (delegate.isBlank() || startsAt == null || endsAt == null
+                || !startsAt.isBefore(endsAt) || !endsAt.isAfter(java.time.Instant.now())) {
+            throw new TqlException(INVALID_VALUE,
+                    "Delegation needs a delegate and a window that ends in the future");
+        }
+        String delegateSubject = delegate;
+        if (identity != null && realm != null) {
+            List<Map<String, Object>> users;
+            try {
+                users = identity.execute(realm, IdentityContracts.FIND_USER_BY_LOGIN,
+                        Map.of("loginId", delegate));
+            } catch (RuntimeException noIdentitySchema) {
+                // The identity beans always bind, but the schema may not exist (sql realms,
+                // bare apps). Without it the delegate is taken as a raw subject - the card
+                // says so.
+                users = null;
+            }
+            if (users != null) {
+                if (users.isEmpty()) {
+                    throw new TqlException(INVALID_VALUE,
+                            "No user with login '" + delegate + "'");
+                }
+                delegateSubject = String.valueOf(users.get(0).get("user_id"));
+            }
+        }
+        if (delegateSubject.equals(subject(params))) {
+            throw new TqlException(INVALID_VALUE, "You cannot delegate to yourself");
+        }
+        delegations.put(tenant(params), subject(params), delegateSubject, startsAt, endsAt);
+        return Map.of("ok", true);
+    }
+
+    /** Clears the caller's own rule (idempotent). */
+    static Map<String, Object> clearDelegation(Map<String, Object> params,
+            io.tesseraql.core.workflow.DelegationStore delegations) {
+        if (delegations != null) {
+            delegations.clear(tenant(params), subject(params));
+        }
+        return Map.of("ok", true);
+    }
+
+    private static java.time.Instant parseInstant(Object value) {
+        if (value == null || String.valueOf(value).isBlank()) {
+            return null;
+        }
+        String raw = String.valueOf(value).trim();
+        try {
+            // Accept both the datetime-local form (no zone: interpreted as UTC) and ISO.
+            return raw.length() == 16
+                    ? java.time.LocalDateTime.parse(raw).toInstant(java.time.ZoneOffset.UTC)
+                    : java.time.Instant.parse(raw);
+        } catch (java.time.format.DateTimeParseException ex) {
+            return null;
         }
     }
 

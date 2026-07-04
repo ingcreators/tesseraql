@@ -80,6 +80,38 @@
       <button class="hc-button" data-variant="ghost" data-size="sm" type="submit">Save</button>
     </form>
   </section>
+  <section class="hc-card hc-stack" th:if="${profile.delegation.available}">
+    <h2>Out of office</h2>
+    <p class="hc-text-muted">While the window is open, approval tasks meant for you are
+      assigned to your delegate instead — they act as themselves, and every task records
+      who it was meant for. Tasks you already hold are not moved.</p>
+    <div th:if="${profile.delegation.delegate != null}" class="hc-alert"
+         th:attr="data-variant=${profile.delegation.active} ? 'success' : 'info'" role="status">
+      <p class="hc-alert__title"
+         th:text="|Delegate: ${profile.delegation.delegate} — ${profile.delegation.startsAt} to ${profile.delegation.endsAt}${profile.delegation.active ? ' (active now)' : ''}|">rule</p>
+    </div>
+    <form method="post" action="/_tesseraql/account/delegation" class="hc-cluster">
+      <input type="hidden" name="_csrf" th:value="${_csrf}">
+      <label class="hc-field">
+        <span class="hc-field__label">Delegate (login)</span>
+        <input class="hc-input" name="delegate" required>
+      </label>
+      <label class="hc-field">
+        <span class="hc-field__label">From (UTC)</span>
+        <input class="hc-input" name="startsAt" type="datetime-local" required>
+      </label>
+      <label class="hc-field">
+        <span class="hc-field__label">Until (UTC)</span>
+        <input class="hc-input" name="endsAt" type="datetime-local" required>
+      </label>
+      <button class="hc-button" data-variant="primary" type="submit">Save</button>
+    </form>
+    <form method="post" action="/_tesseraql/account/delegation/clear"
+          th:if="${profile.delegation.delegate != null}">
+      <input type="hidden" name="_csrf" th:value="${_csrf}">
+      <button class="hc-button" data-variant="ghost" data-size="sm" type="submit">Clear</button>
+    </form>
+  </section>
   <section class="hc-card hc-stack" th:if="${!#lists.isEmpty(profile.appPreferences)}">
     <h2>App settings</h2>
     <p class="hc-text-muted">Settings this application declares

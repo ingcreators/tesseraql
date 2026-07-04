@@ -8,6 +8,16 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **Workflow delegation and absence, slice 1** (roadmap Phase 52; design in
+  `docs/delegation.md`): a standing **out-of-office rule** (one window, one delegate per
+  subject, strictly self-service on the account page) redirects **new assignments at
+  assignment time** — the transition `assign:` rows, the sweeper's `reassign` fallback,
+  and the per-task hand-over target all resolve through one one-hop helper, so chains
+  and loops are impossible by construction. **No identity is ever borrowed**: the
+  delegate becomes the assignee and acts as themselves, and the absent approver holds
+  nothing. The task row records `delegated_from`, so meant/received/acted is a
+  structural trail on the persisted task. Candidate groups and already-open tasks are
+  deliberately untouched.
 - **Credential lifecycle, slice 3 — TOTP second factor** (roadmap Phase 50, final slice
   — **the phase is complete and milestone M15 is met**): RFC 6238 over
   `javax.crypto.Mac` (HmacSHA1, 6 digits, 30 s steps, ±1 window) with a hand-rolled
