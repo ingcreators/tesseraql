@@ -1,0 +1,30 @@
+version: tesseraql/v1
+id: tql.account.totp.disable
+kind: route
+recipe: command-json
+
+# Disables the second factor after re-verifying the password (roadmap Phase 50 slice 3):
+# a wrong current password is TQL-ACCOUNT-4804 and nothing changes.
+
+input:
+  current:
+    type: string
+    required: true
+    maxLength: 256
+
+security:
+  auth: browser
+  csrf: true
+
+sql:
+  service: account.totp.disable
+  params:
+    current: params.current
+    loginId: principal.loginId
+    subject: principal.subject
+    tenantId: principal.tenantId
+
+response:
+  redirect:
+    status: 303
+    location: /_tesseraql/account

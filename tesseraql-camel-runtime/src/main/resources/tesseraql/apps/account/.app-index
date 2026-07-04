@@ -11,3 +11,6 @@ web/_tesseraql/inbox/get.yml
 web/_tesseraql/inbox/inbox.html
 web/_tesseraql/inbox/read/post.yml
 web/_tesseraql/inbox/read-all/post.yml
+web/_tesseraql/account/totp/begin/post.yml
+web/_tesseraql/account/totp/confirm/post.yml
+web/_tesseraql/account/totp/disable/post.yml

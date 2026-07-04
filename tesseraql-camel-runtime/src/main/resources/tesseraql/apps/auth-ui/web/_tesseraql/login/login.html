@@ -38,6 +38,11 @@
         <input class="hc-input" id="password" name="password" type="password"
                autocomplete="current-password" required>
       </div>
+      <div class="hc-field">
+        <label class="hc-field__label" for="otp">6-digit code (if two-factor is enabled)</label>
+        <input class="hc-input" id="otp" name="otp" inputmode="numeric" pattern="[0-9]{6}"
+               maxlength="6" autocomplete="one-time-code">
+      </div>
       <button class="hc-button" data-variant="primary" type="submit">Sign in</button>
       <p class="hc-field__message" th:if="${methods.recovery}">
         <a href="/_tesseraql/reset">Forgot password?</a>

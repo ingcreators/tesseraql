@@ -152,5 +152,43 @@
     <p class="hc-text-muted" th:unless="${profile.passwordEnabled}">Your credentials are
       managed by your identity provider; there is nothing to change here.</p>
   </section>
+  <section class="hc-card hc-stack" th:if="${profile.totp.available}">
+    <h2>Two-factor authentication</h2>
+    <th:block th:if="${profile.totp.enrolled}">
+      <p>A second factor protects this account: signing in also asks for a 6-digit code.</p>
+      <form method="post" action="/_tesseraql/account/totp/disable" class="hc-stack">
+        <input type="hidden" name="_csrf" th:value="${_csrf}">
+        <label class="hc-field">
+          <span class="hc-field__label">Current password (to turn it off)</span>
+          <input class="hc-input" type="password" name="current" required
+                 autocomplete="current-password">
+        </label>
+        <button class="hc-button" data-variant="ghost" type="submit">Disable two-factor</button>
+      </form>
+    </th:block>
+    <th:block th:unless="${profile.totp.enrolled}">
+      <th:block th:if="${profile.totp.pendingSecret != null}">
+        <p>Add this secret to your authenticator app (manual entry), then confirm with the
+          code it shows. Nothing is enforced until the code confirms.</p>
+        <p><code th:text="${profile.totp.pendingSecret}">SECRET</code></p>
+        <p class="hc-text-muted" style="word-break: break-all"
+           th:text="${profile.totp.otpauth}">otpauth://...</p>
+        <form method="post" action="/_tesseraql/account/totp/confirm" class="hc-cluster">
+          <input type="hidden" name="_csrf" th:value="${_csrf}">
+          <label class="hc-field">
+            <span class="hc-field__label">6-digit code</span>
+            <input class="hc-input" name="code" inputmode="numeric" pattern="[0-9]{6}"
+                   maxlength="6" required autocomplete="one-time-code">
+          </label>
+          <button class="hc-button" data-variant="primary" type="submit">Confirm</button>
+        </form>
+      </th:block>
+      <form method="post" action="/_tesseraql/account/totp/begin">
+        <input type="hidden" name="_csrf" th:value="${_csrf}">
+        <button class="hc-button" data-variant="ghost" type="submit"
+                th:text="${profile.totp.pendingSecret != null} ? 'Generate a new secret' : 'Set up two-factor authentication'">Set up</button>
+      </form>
+    </th:block>
+  </section>
 </div>
 </html>

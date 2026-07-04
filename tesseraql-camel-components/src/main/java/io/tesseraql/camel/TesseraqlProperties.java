@@ -89,6 +89,8 @@ public final class TesseraqlProperties {
     public static final String UI_THEME_BEAN = "tesseraqlUiTheme";
     /** Registry bean name for the in-app inbox store (roadmap Phase 49), if any inbox channel. */
     public static final String INBOX_STORE_BEAN = "tesseraqlInboxStore";
+    /** Registry bean name for the TOTP enrollment store (roadmap Phase 50), with identity. */
+    public static final String TOTP_STORE_BEAN = "tesseraqlTotpStore";
     public static final String LANES_BEAN = "tesseraqlExecutionLanes";
     public static final String SLOW_SQL_LOG_BEAN = "tesseraqlSlowSqlLog";
 

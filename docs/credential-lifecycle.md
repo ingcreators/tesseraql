@@ -1,9 +1,11 @@
 # Credential lifecycle — reset, invitations, TOTP
 
-Status: design accepted 2026-07-04 (roadmap Phase 50, Horizon 9). Three slices: password
-reset (**delivered**), invitations (**delivered** — re-inviting a still-INVITED account
-is a polite resend under the token cooldown; an already-usable login refuses, so an
-invite can never take over an account), TOTP. Misconfigured recovery fails the boot with
+Status: design accepted 2026-07-04 (roadmap Phase 50, Horizon 9). **All three slices are
+delivered — Phase 50 is complete and milestone M15 is met**: password reset, invitations
+(re-inviting a still-INVITED account is a polite resend under the token cooldown; an
+already-usable login refuses, so an invite can never take over an account), and the TOTP
+second factor (available wherever password login is; enrollment confirms before anything
+enforces). Misconfigured recovery fails the boot with
 `TQL-SEC-4120` — a half configuration must not produce a reset page that goes nowhere.
 
 Phase 48 gave the local realm a self-service password *change* — for users who know

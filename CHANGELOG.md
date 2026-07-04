@@ -8,6 +8,17 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **Credential lifecycle, slice 3 — TOTP second factor** (roadmap Phase 50, final slice
+  — **the phase is complete and milestone M15 is met**): RFC 6238 over
+  `javax.crypto.Mac` (HmacSHA1, 6 digits, 30 s steps, ±1 window) with a hand-rolled
+  Base32 — no new dependency, validated against the RFC's own test vectors. Enrollment
+  lives on the account page and **confirms with a valid code before anything
+  enforces**; a confirmed enrollment makes the login's optional code field required,
+  with missing, wrong, and **replayed** codes all answering exactly like a wrong
+  password — the replay guard is the store's `last_used_step` **compare-and-set**, so a
+  captured code can never be accepted twice. Disabling re-verifies the password
+  (`TQL-ACCOUNT-4804`). QR rendering and recovery codes are deliberately out of scope
+  and documented.
 - **Credential lifecycle, slice 2 — invitations** (roadmap Phase 50): the bundled IAM
   admin grows **Invite user** — the account is created with status `INVITED` (which the
   credential contract already refuses at login) and the one-time accept link mails over
