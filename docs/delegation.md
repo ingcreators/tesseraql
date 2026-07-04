@@ -1,8 +1,9 @@
 # Workflow delegation and absence — who acts for whom, and when
 
-Status: security design accepted 2026-07-04 (roadmap Phase 52, Horizon 9). Two slices:
-the absence rule and its resolution (**delivered**), then the operator surface and the
-gallery proof. One refinement from implementation: the delegate resolves from a login id
+Status: security design accepted 2026-07-04 (roadmap Phase 52, Horizon 9). **Both
+slices are delivered — Phase 52 is complete and milestone M16 is met** on the real
+purchase-request gallery app: the absence rule and its resolution, then the IAM-admin
+visibility panel (`/_tesseraql/admin/delegations`) and the gallery proof. One refinement from implementation: the delegate resolves from a login id
 when the identity **schema answers** — the identity beans exist even without it, so a
 failed lookup falls back to the raw subject rather than failing the card.
 

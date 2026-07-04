@@ -125,6 +125,8 @@ they ride the existing telemetry/audit surfaces like any route. The pages, by sl
   without a store lookup, and without a flash on first paint.
 - **Notifications** (slice 3): opt-out toggles for the channels the operator marked
   user-facing.
+- **Out of office** (Phase 52): the standing absence rule — a delegate and a window —
+  strictly the caller's own; see [docs/delegation.md](delegation.md).
 - **Sessions** (slice 4): the active-session count and list (signed-in / expires) and a
   single **Sign out other sessions** action, served by the runtime-wired
   `POST /_tesseraql/logout-others` beside login/logout (CSRF-checked there explicitly).

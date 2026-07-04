@@ -797,6 +797,31 @@ public final class TesseraqlRuntime implements AutoCloseable {
                                     context.getRegistry().lookupByNameAndType(
                                             TesseraqlProperties.IDENTITY_REALM_BEAN,
                                             io.tesseraql.identity.RealmConfig.class)))
+                    // The operator's delegation visibility (roadmap Phase 52 slice 2):
+                    // read-only rows for the IAM admin panel, tenant-scoped to the caller.
+                    .register("identity.delegations", params -> {
+                        io.tesseraql.core.workflow.DelegationStore store = context.getRegistry()
+                                .lookupByNameAndType(TesseraqlProperties.DELEGATION_STORE_BEAN,
+                                        io.tesseraql.core.workflow.DelegationStore.class);
+                        java.util.List<Map<String, Object>> rows = new java.util.ArrayList<>();
+                        if (store != null) {
+                            java.time.Instant now = java.time.Instant.now();
+                            for (io.tesseraql.core.workflow.DelegationStore.Entry entry : store
+                                    .unexpired(params.get("tenantId") == null
+                                            ? null
+                                            : String.valueOf(params.get("tenantId")),
+                                            now, 200)) {
+                                Map<String, Object> row = new LinkedHashMap<>();
+                                row.put("subject", entry.subject());
+                                row.put("delegate", entry.delegateSubject());
+                                row.put("startsAt", entry.startsAt().toString());
+                                row.put("endsAt", entry.endsAt().toString());
+                                row.put("active", !now.isBefore(entry.startsAt()));
+                                rows.add(row);
+                            }
+                        }
+                        return rows;
+                    })
                     // Out-of-office self-service (roadmap Phase 52); store binds with the
                     // task inbox, identity/realm resolve lazily like the neighbours.
                     .register("account.delegation.save",

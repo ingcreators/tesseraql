@@ -104,6 +104,30 @@ public final class JdbcDelegationStore implements DelegationStore {
         }
     }
 
+    @Override
+    public java.util.List<Entry> unexpired(String tenantId, Instant at, int limit) {
+        java.util.List<Entry> entries = new java.util.ArrayList<>();
+        try (Connection connection = dataSource.getConnection();
+                PreparedStatement ps = connection.prepareStatement(
+                        "select subject, delegate_subject, starts_at, ends_at "
+                                + "from tql_workflow_delegation "
+                                + "where tenant_id = ? and ends_at >= ? "
+                                + "order by starts_at, subject")) {
+            ps.setString(1, tenant(tenantId));
+            ps.setTimestamp(2, Timestamp.from(at));
+            ps.setMaxRows(limit);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    entries.add(new Entry(rs.getString(1), rs.getString(2),
+                            rs.getTimestamp(3).toInstant(), rs.getTimestamp(4).toInstant()));
+                }
+            }
+        } catch (SQLException ex) {
+            throw new IllegalStateException("Failed to list delegation rules", ex);
+        }
+        return entries;
+    }
+
     private static String tenant(String tenantId) {
         return tenantId == null ? "" : tenantId;
     }

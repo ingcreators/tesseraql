@@ -1,0 +1,29 @@
+version: tesseraql/v1
+id: tql.iamAdmin.delegations
+kind: route
+recipe: query-html
+
+# The operator's delegation visibility (roadmap Phase 52 slice 2): who is absent, who
+# covers, until when - the answer to "why did this land with X?". Read-only.
+
+security:
+  auth: browser
+  policy: iam.admin.view
+
+sql:
+  service: identity.delegations
+  params:
+    tenantId: principal.tenantId
+
+response:
+  html:
+    status: 200
+    template: delegations.html
+    model:
+      delegations: sql
+    headers:
+      Content-Security-Policy: "default-src 'self'; style-src 'self' 'unsafe-inline'; frame-ancestors 'none'"
+      X-Content-Type-Options: nosniff
+      X-Frame-Options: DENY
+      Referrer-Policy: no-referrer
+      Cache-Control: "no-store"

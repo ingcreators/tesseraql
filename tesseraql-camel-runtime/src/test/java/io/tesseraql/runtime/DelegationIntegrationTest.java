@@ -143,6 +143,27 @@ class DelegationIntegrationTest {
                 Instant.now().minusSeconds(3600)).statusCode()).isEqualTo(400);
     }
 
+    /** Slice 2: the operator panel lists who is absent, who covers, until when. */
+    @Test
+    void theOperatorPanelListsUnexpiredRules() throws Exception {
+        putRule("colleague-9", "deputy-9");
+        SessionStore sessions = runtime.camelContext().getRegistry().lookupByNameAndType(
+                TesseraqlProperties.SESSION_STORE_BEAN, SessionStore.class);
+        String sid = sessions.create(new Principal("ops-admin", "ops-admin", "Ops", null,
+                List.of(), List.of("ADMIN"), List.of(), Map.of()));
+        HttpRequest request = HttpRequest.newBuilder(
+                URI.create("http://localhost:" + runtime.port()
+                        + "/_tesseraql/admin/delegations"))
+                .header("Cookie", sessions.cookieName() + "=" + sid)
+                .build();
+        HttpResponse<String> page = HttpClient.newHttpClient()
+                .send(request, HttpResponse.BodyHandlers.ofString());
+        assertThat(page.statusCode()).isEqualTo(200);
+        assertThat(page.body()).contains("colleague-9").contains("deputy-9")
+                .contains("active");
+        clearRule("colleague-9");
+    }
+
     private static void putRule(String subject, String delegate) {
         runtime.camelContext().getRegistry().lookupByNameAndType(
                 TesseraqlProperties.DELEGATION_STORE_BEAN,
@@ -265,6 +286,10 @@ class DelegationIntegrationTest {
                     jwt:
                       secret: %s
                       rolesClaim: roles
+                    policies:
+                      iam.admin.view:
+                        anyOf:
+                          - role: ADMIN
                 """.formatted(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(),
                 POSTGRES.getPassword(), JWT_SECRET));
         Path workflowDir = home.resolve("workflow");

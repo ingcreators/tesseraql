@@ -35,4 +35,17 @@ public interface DelegationStore {
 
     /** Removes the subject's rule (a no-op when absent). */
     void clear(String tenantId, String subject);
+
+    /** A rule with its subject, for the operator's visibility panel (slice 2). */
+    record Entry(String subject, String delegateSubject, Instant startsAt, Instant endsAt) {
+    }
+
+    /**
+     * Rules whose window has not ended as of {@code at} (active and upcoming), soonest
+     * first — the IAM admin's "why did this land with X?" panel. Default empty for stores
+     * that never learned to list.
+     */
+    default java.util.List<Entry> unexpired(String tenantId, Instant at, int limit) {
+        return java.util.List.of();
+    }
 }

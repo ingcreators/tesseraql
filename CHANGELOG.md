@@ -8,6 +8,14 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **Workflow delegation and absence, slice 2 — operator visibility + the gallery proof**
+  (roadmap Phase 52, final slice — **the phase is complete and milestone M16 is met**):
+  the IAM admin gains a read-only **Active delegations** panel
+  (`/_tesseraql/admin/delegations`, `iam.admin.view`) — who is absent, who covers, until
+  when — and the full M16 loop is proven against the **real purchase-request gallery
+  app**: absence set on the account page, the submitted request lands with the delegate
+  marked "for" the approver, the absent approver is refused, the delegate approves as
+  themselves, and after the window new requests reach the approver again.
 - **Workflow delegation and absence, slice 1** (roadmap Phase 52; design in
   `docs/delegation.md`): a standing **out-of-office rule** (one window, one delegate per
   subject, strictly self-service on the account page) redirects **new assignments at

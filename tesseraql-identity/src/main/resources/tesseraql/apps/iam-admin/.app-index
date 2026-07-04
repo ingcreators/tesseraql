@@ -7,3 +7,5 @@ web/_tesseraql/admin/users/{id}/detail.html
 web/_tesseraql/admin/users/{id}/enable/post.yml
 web/_tesseraql/admin/users/{id}/disable/post.yml
 web/_tesseraql/admin/users/invite/post.yml
+web/_tesseraql/admin/delegations/get.yml
+web/_tesseraql/admin/delegations/delegations.html
