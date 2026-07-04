@@ -730,6 +730,49 @@ each admission-held in CI), and the five-minute demo
 held green by an integration test (the zero-restart M7 loop, the recorded test, the release
 diff, the Prometheus exposition). Phase 44 followed, completing **Horizon 8 in full**.
 
+## Horizon 9 — the business-application platform (post-M12)
+
+Added 2026-07-04. With the low-code loop closed, the next gap is what every business
+application re-implements *around* its pages: the cross-cutting surfaces end users
+expect from an enterprise platform — the shell's user menu, a settings screen for
+language / theme / notifications, session self-service. The direction (set by the
+maintainer) is that the platform should own these common foundations the way it owns
+routes and views: one framework answer, extended declaratively per app, honest about
+what each deployment supports.
+
+The horizon opens with one phase; further phases join as the direction develops.
+
+### Phase 48 — the account surface
+
+A framework-owned user menu and self-service settings surface. The full design is in
+[docs/account.md](account.md); the shape:
+
+- A `PreferenceStore` SPI over a managed `tql_user_preference` table (the
+  `EventChannelStore` pattern), keys namespaced `ui.*` / `notify.*` / `app.*`, the
+  subject always the session principal's by construction.
+- A reserved `_account` shell variable (beside `_csrf` / `_menu`) rendering an
+  avatar + popover menu in the shared shell — Studio, the docs portal, and the ops
+  console inherit it for free.
+- A bundled `/_tesseraql/account` system app (the `auth-ui` precedent): profile,
+  language (a new `preference.<key>` source in the Phase 22 locale chain), theme
+  (replacing the shell's hardcoded `data-theme`), notification opt-out (an optional
+  `recipient:` on `notify:` plus operator-marked user-facing channels), sessions
+  ("sign out other sessions"; `tql_session` gains an indexed subject), and local-realm
+  password change — with honest disabled states wherever a deployment delegates to an
+  IdP.
+- App extension via `config/preferences.yml`: declared preference groups render as
+  settings sections and read back through a `preference.<key>` namespace in routes,
+  templates, and 2-way SQL.
+
+Machine-checkable throughout: a `TQL-ACCOUNT` error domain (48xx), `preferences.yml`
+lint, and a `preference` NOTE coverage kind. Five slices (store + chrome; language +
+theme; notifications; sessions + password; preference groups).
+
+**Milestone M13** — an end user of a gallery app signs in, switches language and theme
+(persisted server-side), opts out of a notification channel, signs out their other
+sessions, and changes their local password — the app contributing nothing but
+`preferences.yml`; the same app under SSO shows provider-managed states instead.
+
 ## CLI distribution and upgrade delivery (cross-cutting)
 
 ### Phase 38 — CLI distribution and upgrade delivery
@@ -857,3 +900,10 @@ None block Phase 18; flagged for the maintainer as their horizons approach.
    `AggregatingMeter` + Prometheus text exposition live in `tesseraql-core`/the runtime (no
    new dependency on the scrape path), and `tesseraql-observability` maps the same histograms
    onto OTLP — the ring tracer stays. The scrape endpoint is opt-in and policy-gated.
+10. **Account-surface delivery** (Phase 48): a bundled system app riding the shared shell
+    vs scaffolded pages vs a mountable app. Resolved 2026-07-04 at design time in favour
+    of the **bundled system app** (the `auth-ui` precedent): zero setup, updates flow
+    with the framework, and one consistent chrome across the app, Studio, docs, and ops
+    — while the customization ladder keeps app control real (shell/pattern overrides,
+    `menu.yml`, `preferences.yml`, and a kill switch for apps that own the surface
+    themselves). See [docs/account.md](account.md).
