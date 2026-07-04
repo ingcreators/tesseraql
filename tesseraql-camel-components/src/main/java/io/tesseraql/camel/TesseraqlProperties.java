@@ -85,6 +85,8 @@ public final class TesseraqlProperties {
     public static final String PREFERENCE_STORE_BEAN = "tesseraqlPreferenceStore";
     /** Marker bean: present when the bundled account surface is mounted (roadmap Phase 48). */
     public static final String ACCOUNT_SURFACE_BEAN = "tesseraqlAccountSurface";
+    /** Registry bean name for the operator's default page theme (roadmap Phase 48), if set. */
+    public static final String UI_THEME_BEAN = "tesseraqlUiTheme";
     public static final String LANES_BEAN = "tesseraqlExecutionLanes";
     public static final String SLOW_SQL_LOG_BEAN = "tesseraqlSlowSqlLog";
 

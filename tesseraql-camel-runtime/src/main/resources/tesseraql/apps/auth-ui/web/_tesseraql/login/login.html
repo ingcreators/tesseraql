@@ -3,7 +3,7 @@
      sign-in), styled with the Hypermedia Components kit, no inline script (CSP-safe). A plain HTML
      form, so it works without JavaScript: the post lands at POST /_tesseraql/login. -->
 <html xmlns:th="http://www.thymeleaf.org" lang="en" th:lang="${#locale.toLanguageTag()}"
-      data-theme="dark">
+      data-theme="dark" th:attr="data-theme=${_theme != null ? _theme : 'dark'}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">

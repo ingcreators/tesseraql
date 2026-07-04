@@ -12,7 +12,7 @@ security:
   auth: browser
 
 sql:
-  service: account.profile.view
+  service: account.settings.view
   params:
     subject: principal.subject
     loginId: principal.loginId

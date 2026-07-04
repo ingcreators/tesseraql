@@ -43,7 +43,7 @@ public record I18nSettings(String defaultTag, List<String> supportedTags,
     /** English-only settings over the framework built-ins (for tests and bare processors). */
     public static I18nSettings defaults() {
         return new I18nSettings("en", List.of("en"),
-                List.of("principal.claim.locale"), builtinCatalog());
+                List.of("preference.ui.locale", "principal.claim.locale"), builtinCatalog());
     }
 
     /** Reads i18n settings from config and the app home's {@code messages/} directory. */
@@ -71,6 +71,11 @@ public record I18nSettings(String defaultTag, List<String> supportedTags,
         } else if (preference != null) {
             preferences.add(String.valueOf(preference));
         } else {
+            // Default order (roadmap Phase 48): the stored account preference (the full
+            // preference key after the `preference.` prefix) wins over an IdP claim, so the
+            // language a user picks in the account surface takes effect with zero
+            // configuration. Operators reorder by declaring the list explicitly.
+            preferences.add("preference.ui.locale");
             preferences.add("principal.claim.locale");
         }
 

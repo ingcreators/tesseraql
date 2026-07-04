@@ -1,0 +1,30 @@
+version: tesseraql/v1
+id: tql.account.theme.save
+kind: route
+recipe: command-json
+
+# Persists the signed-in user's theme (roadmap Phase 48 slice 2). The enum constraint
+# rejects anything but the two known values before the provider runs; the shell re-syncs
+# the theme cookie on the next render, so the login page follows along too.
+
+input:
+  theme:
+    type: string
+    required: true
+    enum: [light, dark]
+
+security:
+  auth: browser
+  csrf: true
+
+sql:
+  service: account.theme.save
+  params:
+    theme: params.theme
+    subject: principal.subject
+    tenantId: principal.tenantId
+
+response:
+  redirect:
+    status: 303
+    location: /_tesseraql/account
