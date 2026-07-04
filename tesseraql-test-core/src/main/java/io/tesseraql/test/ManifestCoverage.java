@@ -493,12 +493,6 @@ public final class ManifestCoverage {
     }
 
     /**
-     * OIDC coverage (roadmap Phase 25): when the relying party links federated logins to local
-     * users, the identity contracts the login path runs are declared and contract test cases cover
-     * them. Without OIDC (or without linking) the login path executes no app-authored SQL, so
-     * nothing is declared. Mirrors {@link #saml(AppManifest, List)}.
-     */
-    /**
      * Declared preference groups (roadmap Phase 48 slice 5): a NOTE kind listing the
      * {@code config/preferences.yml} keys, so the report shows what the account surface
      * offers. Preferences are configuration, not an executable surface - nothing covers
@@ -511,6 +505,12 @@ public final class ManifestCoverage {
         return coverage;
     }
 
+    /**
+     * OIDC coverage (roadmap Phase 25): when the relying party links federated logins to local
+     * users, the identity contracts the login path runs are declared and contract test cases cover
+     * them. Without OIDC (or without linking) the login path executes no app-authored SQL, so
+     * nothing is declared. Mirrors {@link #saml(AppManifest, List)}.
+     */
     public static ItemCoverage oidc(AppManifest manifest, List<TestSuite> suites) {
         ItemCoverage coverage = new ItemCoverage("oidc");
         AppConfig config = manifest.config();

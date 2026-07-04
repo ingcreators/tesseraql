@@ -418,7 +418,6 @@ public final class AppLinter {
         }
     }
 
-    /** Validates org-unit configuration (roadmap Phase 29 slice 2): a known {@code mode}. */
     /**
      * Validates {@code config/preferences.yml} (roadmap Phase 48 slice 5) by loading it the
      * way the runtime does: TQL-YAML-1030 parse/key/duplicate, 1031 unknown type, 1032 choice
@@ -433,6 +432,7 @@ public final class AppLinter {
         }
     }
 
+    /** Validates org-unit configuration (roadmap Phase 29 slice 2): a known {@code mode}. */
     private void lintOrgUnitConfig(AppConfig config, List<LintFinding> findings) {
         String mode = config.getString("tesseraql.orgunit.mode").orElse(null);
         if (mode != null && !"managed".equalsIgnoreCase(mode) && !"app".equalsIgnoreCase(mode)) {
