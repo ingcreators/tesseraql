@@ -35,7 +35,7 @@ final class LoginRouteBuilder extends RouteBuilder {
 
     private static final String LOGIN_PATH = "/_tesseraql/login";
 
-    private final ObjectMapper mapper = new ObjectMapper();
+    private static final ObjectMapper mapper = new ObjectMapper();
     private final PasswordAuthenticator authenticator;
     private final RealmConfig realm;
     private final SessionStore sessions;
@@ -126,7 +126,8 @@ final class LoginRouteBuilder extends RouteBuilder {
         redirect(exchange, 303, "/_tesseraql/account");
     }
 
-    private static void redirect(Exchange exchange, int status, String location) {
+    /** Shared with the recovery endpoints (roadmap Phase 50), same package. */
+    static void redirect(Exchange exchange, int status, String location) {
         exchange.getMessage().setHeader(Exchange.HTTP_RESPONSE_CODE, status);
         exchange.getMessage().setHeader("Location", location);
         exchange.getMessage().setBody("");
@@ -155,7 +156,8 @@ final class LoginRouteBuilder extends RouteBuilder {
     }
 
     @SuppressWarnings("unchecked")
-    private Map<String, Object> parseBody(Exchange exchange) throws Exception {
+    /** Shared with the recovery endpoints (roadmap Phase 50), same package. */
+    static Map<String, Object> parseBody(Exchange exchange) throws Exception {
         // platform-http may pre-parse a browser form post into a Map body; use it directly.
         if (exchange.getMessage().getBody() instanceof Map<?, ?> formBody) {
             Map<String, Object> form = new LinkedHashMap<>();

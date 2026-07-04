@@ -16,6 +16,9 @@
   <section class="hc-card hc-stack">
     <h1>Sign in</h1>
 
+    <div th:if="${reset}" class="hc-alert" data-variant="success" role="status">
+      <p class="hc-alert__title">Password updated. Sign in with your new password.</p>
+    </div>
     <div th:if="${error}" class="hc-alert" data-variant="error" role="alert">
       <p class="hc-alert__title">Invalid credentials. Please try again.</p>
     </div>
@@ -33,6 +36,9 @@
                autocomplete="current-password" required>
       </div>
       <button class="hc-button" data-variant="primary" type="submit">Sign in</button>
+      <p class="hc-field__message" th:if="${methods.recovery}">
+        <a href="/_tesseraql/reset">Forgot password?</a>
+      </p>
     </form>
 
     <div th:if="${methods.sso}" class="hc-stack">
