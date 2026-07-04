@@ -127,7 +127,7 @@
          NOT a dependency — it is resolved on demand via the CLI's ShrinkWrap resolver, pinned to
          this version (surfaced to the CLI through a build-filtered resource). -->
     <zonky.embedded.postgres.version>2.2.2</zonky.embedded.postgres.version>
-    <zonky.postgres.binaries.version>17.10.0</zonky.postgres.binaries.version>
+    <zonky.postgres.binaries.version>18.4.0</zonky.postgres.binaries.version>
     <spotless.version>3.7.0</spotless.version>
 
     <!-- Build plugin versions -->
