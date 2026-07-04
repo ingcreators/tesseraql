@@ -425,6 +425,13 @@ place), the Gradle plugin (promised "later" by the build policy), official image
 documentation site: tutorial, cookbook, and reference generated from the schemas and error
 taxonomy.
 
+> The **documentation-site leg** was named 2026-07-04 and is designed in
+> [docs/docs-site.md](docs-site.md): a build-only generator module (commonmark, already
+> in-tree), the Hypermedia Components look, curated navigation with a completeness
+> guard, reference pages generated from the JSON schema and a scan of the ~180 `TQL-*`
+> codes, and GitHub Pages publishing. Maven Central, the Gradle plugin, and official
+> images remain open.
+
 ### Phase 36 — security review and support policy
 
 Threat-model refresh, a hardening checklist pass (OWASP ASVS), fuzzing the parsers (2-way
