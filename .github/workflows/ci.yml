@@ -55,3 +55,35 @@ jobs:
 
       - name: Smoke-test the fat jar
         run: java -jar tesseraql-cli/target/tesseraql-cli-*-all.jar routes --app examples/scaffold-demo-app
+
+  # The documentation site (docs/docs-site.md): the same build command Cloudflare
+  # Workers Builds runs, so green CI implies a clean deploy. This is also where the
+  # sync's completeness guard and the links validator gate PRs: a new docs/*.md that
+  # is neither mapped nor excluded, or a broken internal link, fails here.
+  docs-site:
+    name: Docs site (Astro)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6
+        with:
+          package_json_file: docs-site/package.json
+
+      - name: Set up Node
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: docs-site/pnpm-lock.yaml
+
+      - name: Install
+        working-directory: docs-site
+        run: pnpm install --frozen-lockfile
+
+      - name: Build the site (sync, completeness guard, links validation)
+        working-directory: docs-site
+        run: pnpm run build

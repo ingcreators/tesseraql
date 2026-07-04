@@ -1,0 +1,21 @@
+// Cloudflare Worker config for the TesseraQL docs site (mirrors the
+// hypermedia-components deployment).
+//
+// Deploys the Starlight build under docs-site/dist via the Static Assets binding,
+// with worker.mjs handling the /tesseraql base-path stripping (see worker.mjs for
+// why it cannot be declarative).
+//
+// See docs-site/DEPLOYMENT.md for the dashboard-side setup (project create, build
+// command, preview versions, custom domain, zone route).
+{
+  "$schema": "docs-site/node_modules/wrangler/config-schema.json",
+  "name": "tesseraql-docs",
+  "main": "worker.mjs",
+  "compatibility_date": "2026-07-01",
+  "assets": {
+    "directory": "./docs-site/dist",
+    "binding": "ASSETS",
+    "not_found_handling": "404-page",
+    "run_worker_first": true
+  }
+}

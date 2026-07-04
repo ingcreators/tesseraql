@@ -1,0 +1,5 @@
+node_modules/
+dist/
+.astro/
+# Synced from ../docs by scripts/sync-content.mjs; authored chrome is *.mdx.
+src/content/docs/*.md

@@ -8,6 +8,18 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **Documentation site, slice 1 — the Starlight app** (the documentation-site leg of
+  roadmap Phase 35; design v2 in `docs/docs-site.md`): `docs-site/` is an Astro
+  Starlight project mirroring the Hypermedia Components docs stack — Pagefind search,
+  Expressive Code highlighting, `starlight-links-validator` failing the build on
+  broken internal links, and `starlight-llms-txt` emitting `/llms.txt` for AI agents.
+  `docs/` stays the canonical GitHub-browsable tree: a sync step derives frontmatter
+  from each H1, rewrites same-tree `*.md` links to site URLs and repo-relative links
+  to GitHub, and **fails the build when a document is neither mapped into the nav nor
+  explicitly excluded**. Deploys to Cloudflare Workers Static Assets (`wrangler.jsonc`
+  + base-path `worker.mjs`, git-connected with per-PR preview versions); the CI
+  `docs-site` job runs the same build, and the dashboard-side one-time setup is the
+  runbook in `docs-site/DEPLOYMENT.md`.
 - **Personal productivity, slice 2 — recents** (roadmap Phase 51, final slice — **the
   phase is complete and milestone M17 is met, closing every phase named into
   Horizon 9**): rendering a **`view: detail`** page records it in the user's bounded

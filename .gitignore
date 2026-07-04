@@ -44,3 +44,7 @@ examples/*/reports/
 # Agent auth/state
 .codex/
 .claude/
+
+# pnpm content-addressable store: pnpm falls back to an in-tree store when the
+# global one is on a different filesystem (the dev-container volume boundary).
+.pnpm-store/
