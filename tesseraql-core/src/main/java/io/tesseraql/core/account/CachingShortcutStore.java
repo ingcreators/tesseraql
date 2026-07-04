@@ -20,6 +20,8 @@ public final class CachingShortcutStore implements ShortcutStore {
     private final long ttlMillis;
     private final LongSupplier clock;
     private final LinkedHashMap<String, Cached> cache;
+    /** Last write instant per (subject, href) recent - the rapid-reload dedupe window. */
+    private final LinkedHashMap<String, Long> recentTouches;
 
     /** Named {@code Cached} — a nested {@code Entry} shadows {@code Map.Entry} on Java 25. */
     private record Cached(List<Shortcut> pins, long loadedAt) {
@@ -39,6 +41,12 @@ public final class CachingShortcutStore implements ShortcutStore {
             @Override
             protected boolean removeEldestEntry(Map.Entry<String, Cached> eldest) {
                 return size() > maxSubjects;
+            }
+        };
+        this.recentTouches = new LinkedHashMap<>(16, 0.75f, true) {
+            @Override
+            protected boolean removeEldestEntry(Map.Entry<String, Long> eldest) {
+                return size() > maxSubjects * 4;
             }
         };
     }
@@ -66,6 +74,19 @@ public final class CachingShortcutStore implements ShortcutStore {
     @Override
     public void put(String tenantId, String subject, String kind, String href, String label,
             int cap) {
+        if (RECENT.equals(kind)) {
+            // A reloaded record would otherwise write a row per render: identical recents
+            // inside the TTL are skipped - the bump semantics only need coarse ordering.
+            String key = cacheKey(tenantId, subject) + '\u0000' + href;
+            long now = clock.getAsLong();
+            synchronized (recentTouches) {
+                Long last = recentTouches.get(key);
+                if (last != null && now - last < ttlMillis) {
+                    return;
+                }
+                recentTouches.put(key, now);
+            }
+        }
         delegate.put(tenantId, subject, kind, href, label, cap);
         if (PIN.equals(kind)) {
             invalidate(tenantId, subject);

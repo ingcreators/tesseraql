@@ -275,6 +275,23 @@ public final class HtmlResponseRenderer implements Processor {
                 shortcuts.put("current", currentHref == null ? "/" : currentHref);
                 shortcuts.put("pinnedCurrent", pinnedCurrent);
                 model.put("_shortcuts", shortcuts);
+                // Recently viewed records (roadmap Phase 51 slice 2): a detail view render
+                // IS the framework's definition of "viewing a record". Deduped and bumped
+                // by the store wrapper; labelled by the view's own title.
+                if (viewBinding != null && "detail".equals(viewBinding.spec().view())
+                        && currentHref != null) {
+                    Object viewModel = model.get("v");
+                    String label = viewModel instanceof Map<?, ?> v
+                            && v.get("title") != null
+                                    ? String.valueOf(v.get("title"))
+                                    : currentHref;
+                    if (label.length() > 200) {
+                        label = label.substring(0, 200);
+                    }
+                    shortcutStore.put(pinPrincipal.tenantId(), pinPrincipal.subject(),
+                            io.tesseraql.core.account.ShortcutStore.RECENT, currentHref,
+                            label, 20);
+                }
             }
         }
         String theme = storedTheme != null
