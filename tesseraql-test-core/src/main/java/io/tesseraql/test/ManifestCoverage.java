@@ -493,6 +493,19 @@ public final class ManifestCoverage {
     }
 
     /**
+     * Declared preference groups (roadmap Phase 48 slice 5): a NOTE kind listing the
+     * {@code config/preferences.yml} keys, so the report shows what the account surface
+     * offers. Preferences are configuration, not an executable surface - nothing covers
+     * them, which is exactly what the note level communicates.
+     */
+    public static ItemCoverage preference(AppManifest manifest) {
+        ItemCoverage coverage = new ItemCoverage("preference");
+        io.tesseraql.yaml.account.PreferencesSpec.load(manifest.appHome()).fields()
+                .forEach(field -> coverage.declare("app." + field.key()));
+        return coverage;
+    }
+
+    /**
      * OIDC coverage (roadmap Phase 25): when the relying party links federated logins to local
      * users, the identity contracts the login path runs are declared and contract test cases cover
      * them. Without OIDC (or without linking) the login path executes no app-authored SQL, so

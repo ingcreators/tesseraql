@@ -117,6 +117,37 @@ public final class RequestBinder implements Processor {
         if (locale != null) {
             context.put("request", Map.of("locale", locale));
         }
+        // Declared app preferences (config/preferences.yml, roadmap Phase 48), resolvable as
+        // preference.<key>: the signed-in user's stored app.<key> when present, else the
+        // declared default. Only DECLARED keys appear - the namespace is bounded by the
+        // declaration, never by what happens to be in the store.
+        if (appHome != null) {
+            io.tesseraql.yaml.account.PreferencesSpec declared = io.tesseraql.yaml.account.PreferencesSpec
+                    .live(appHome);
+            if (!declared.isEmpty()) {
+                Map<String, String> stored = Map.of();
+                io.tesseraql.core.account.PreferenceStore preferences = exchange.getContext()
+                        .getRegistry().lookupByNameAndType(
+                                TesseraqlProperties.PREFERENCE_STORE_BEAN,
+                                io.tesseraql.core.account.PreferenceStore.class);
+                if (preferences != null && exchange.getProperty(
+                        TesseraqlProperties.PRINCIPAL) instanceof io.tesseraql.security.Principal principal) {
+                    stored = preferences.preferences(principal.tenantId(),
+                            principal.subject());
+                }
+                Map<String, Object> values = new java.util.LinkedHashMap<>();
+                for (io.tesseraql.yaml.account.PreferencesSpec.Field field : declared.fields()) {
+                    String value = stored.get("app." + field.key());
+                    if (value == null) {
+                        value = field.defaultValue();
+                    }
+                    if (value != null) {
+                        values.put(field.key(), value);
+                    }
+                }
+                context.put("preference", values);
+            }
+        }
 
         // Conditional requiredness (requiredWhen): with every input coerced and the request
         // context assembled, an absent field whose condition holds is rejected like required.

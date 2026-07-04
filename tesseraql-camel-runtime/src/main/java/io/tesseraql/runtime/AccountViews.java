@@ -48,7 +48,7 @@ final class AccountViews {
     /** The account page model: profile plus every settings section's state. */
     static Map<String, Object> settings(Map<String, Object> params, PreferenceStore preferences,
             List<String> supportedTags, List<String> optOutChannels, SessionStore sessions,
-            boolean passwordEnabled) {
+            boolean passwordEnabled, io.tesseraql.yaml.account.PreferencesSpec appSpec) {
         Map<String, Object> model = profile(params);
         Map<String, String> stored = preferences == null
                 ? Map.of()
@@ -77,6 +77,22 @@ final class AccountViews {
         }
         model.put("sessions", sessionRows);
         model.put("passwordEnabled", passwordEnabled);
+        // Declared app preference groups (config/preferences.yml, slice 5): current value =
+        // stored app.<key> else the declared default; only declared keys render or save.
+        List<Map<String, Object>> appPreferences = new ArrayList<>();
+        for (io.tesseraql.yaml.account.PreferencesSpec.Field field : appSpec.fields()) {
+            Map<String, Object> entry = new LinkedHashMap<>();
+            entry.put("key", field.key());
+            entry.put("label", field.label());
+            entry.put("type", field.type());
+            entry.put("options", field.options());
+            String value = stored.get("app." + field.key());
+            entry.put("value", value != null
+                    ? value
+                    : field.defaultValue() != null ? field.defaultValue() : "");
+            appPreferences.add(entry);
+        }
+        model.put("appPreferences", appPreferences);
         String locale = stored.get("ui.locale");
         List<Map<String, Object>> locales = new ArrayList<>();
         for (String tag : supportedTags) {
@@ -160,6 +176,24 @@ final class AccountViews {
                 "loginId", loginId,
                 "passwordHash", encoder.encode(next),
                 "passwordParams", encoder.defaultParams()));
+        return Map.of("ok", true);
+    }
+
+    /** Persists one declared app preference; the declaration bounds key and value alike. */
+    static Map<String, Object> saveAppPreference(Map<String, Object> params,
+            PreferenceStore preferences, io.tesseraql.yaml.account.PreferencesSpec appSpec) {
+        String key = text(params.get("key"), "");
+        io.tesseraql.yaml.account.PreferencesSpec.Field field = appSpec.field(key);
+        if (field == null) {
+            throw new TqlException(INVALID_VALUE, "No declared preference named '" + key + "'");
+        }
+        String value = text(params.get("value"),
+                "boolean".equals(field.type()) ? "false" : "");
+        if (!io.tesseraql.yaml.account.PreferencesSpec.accepts(field, value)) {
+            throw new TqlException(INVALID_VALUE,
+                    "Value '" + value + "' is not acceptable for preference '" + key + "'");
+        }
+        preferences.put(tenant(params), subject(params), "app." + key, value);
         return Map.of("ok", true);
     }
 

@@ -1,0 +1,35 @@
+version: tesseraql/v1
+id: tql.account.app.save
+kind: route
+recipe: command-json
+
+# Persists one app-declared preference (roadmap Phase 48 slice 5). The declaration in
+# config/preferences.yml bounds both the key and the acceptable values
+# (TQL-ACCOUNT-4802 otherwise); an unchecked boolean posts no value, which reads as false.
+
+input:
+  key:
+    type: string
+    required: true
+    maxLength: 64
+  value:
+    type: string
+    required: false
+    maxLength: 2000
+
+security:
+  auth: browser
+  csrf: true
+
+sql:
+  service: account.app.save
+  params:
+    key: params.key
+    value: params.value
+    subject: principal.subject
+    tenantId: principal.tenantId
+
+response:
+  redirect:
+    status: 303
+    location: /_tesseraql/account

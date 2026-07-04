@@ -79,6 +79,42 @@
       <button class="hc-button" data-variant="ghost" data-size="sm" type="submit">Save</button>
     </form>
   </section>
+  <section class="hc-card hc-stack" th:if="${!#lists.isEmpty(profile.appPreferences)}">
+    <h2>App settings</h2>
+    <p class="hc-text-muted">Settings this application declares
+      (<code>config/preferences.yml</code>); routes read them back as
+      <code>preference.&lt;key&gt;</code>.</p>
+    <form th:each="pref : ${profile.appPreferences}" method="post"
+          action="/_tesseraql/account/app" class="hc-cluster">
+      <input type="hidden" name="_csrf" th:value="${_csrf}">
+      <input type="hidden" name="key" th:value="${pref.key}">
+      <th:block th:if="${pref.type == 'boolean'}">
+        <label class="hc-radio-label">
+          <input class="hc-switch" type="checkbox" name="value" value="true"
+                 th:checked="${pref.value == 'true'}">
+          <span th:text="${#messages.msgOrNull(pref.label)} ?: ${pref.key}">setting</span>
+        </label>
+      </th:block>
+      <th:block th:if="${pref.type == 'choice'}">
+        <label class="hc-field">
+          <span class="hc-field__label"
+                th:text="${#messages.msgOrNull(pref.label)} ?: ${pref.key}">setting</span>
+          <select class="hc-select" name="value">
+            <option th:each="option : ${pref.options}" th:value="${option}"
+                    th:text="${option}" th:selected="${option == pref.value}">10</option>
+          </select>
+        </label>
+      </th:block>
+      <th:block th:if="${pref.type == 'text'}">
+        <label class="hc-field">
+          <span class="hc-field__label"
+                th:text="${#messages.msgOrNull(pref.label)} ?: ${pref.key}">setting</span>
+          <input class="hc-input" type="text" name="value" th:value="${pref.value}">
+        </label>
+      </th:block>
+      <button class="hc-button" data-variant="ghost" data-size="sm" type="submit">Save</button>
+    </form>
+  </section>
   <section class="hc-card hc-stack">
     <h2>Sessions</h2>
     <p th:text="|${#lists.size(profile.sessions)} active ${#lists.size(profile.sessions) == 1 ? 'session' : 'sessions'}, including this one.|">1 active session, including this one.</p>
