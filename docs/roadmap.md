@@ -811,16 +811,40 @@ bell (`_inbox`, TTL-cached unread count) and `/_tesseraql/inbox` (list, mark rea
 Held green by `InboxDeliveryIntegrationTest` on real PostgreSQL end to end.
 **Phase 49 is complete and milestone M14 is met.**
 
-### Phases 50–52 — recorded candidates (maintainer names which proceeds)
+### Phase 50 — credential lifecycle completion
+
+What slice 4 of Phase 48 opened, finished — reset, invitations, and a second factor
+for the local realm, all JDK-only over existing machinery. The full design is in
+[docs/credential-lifecycle.md](credential-lifecycle.md); the shape:
+
+- One managed **`tql_credential_token`** store (hashed 256-bit tokens, purpose-bound,
+  single-use by check-and-set, cooldown on issue) behind reset and invitations alike.
+- **Password reset**: a public auth-ui pair (`/_tesseraql/reset`, `/reset/confirm`),
+  the destination from a new overridable pack contract
+  (`find-recovery-destination-by-login`, default `tql_users.email`), the mail riding
+  the outbox on an operator-named channel, anti-enumeration end to end, and every
+  session of the subject invalidated on success.
+- **Invitations**: the bundled IAM admin grows *Invite user* — `create-user` with
+  status `INVITED` (which the credential contract already refuses at login), the same
+  token machinery with purpose `invite`, and `/_tesseraql/invite` sets the first
+  password then `enable-user` flips ACTIVE.
+- **TOTP**: RFC 6238 over `javax.crypto.Mac` + a small Base32 codec in
+  `tesseraql-security`; enrollment on the account page (confirm-before-store), an
+  optional code field on the login form that a confirmed enrollment makes required
+  (failures indistinguishable from a wrong password), and a `last_used_step` replay
+  guard. Recovery codes deliberately deferred.
+
+**Milestone M15** — on a local-realm gallery deployment: a locked-out user recovers by
+mail and every old session dies; an invited user goes from nonexistent to signed-in
+without an operator ever knowing a password; an account carries a second factor whose
+codes cannot replay — all JDK-only, no new dependency.
+
+### Phases 51–52 — recorded candidates (maintainer names which proceeds)
 
 Direction candidates for this horizon, recorded 2026-07-04; each gets its own design
 doc when named:
 
-- **Phase 50 — credential lifecycle completion.** What slice 4 of Phase 48 opened,
-  finished: password **reset** via a mailed one-time token (identity pack + notify
-  channels + an auth-ui page), an **invitation** flow (admin invites, the user sets
-  the first password — the entry point user-admin's CRUD lacks), and optional
-  **TOTP** second factor for the local realm (JDK-only HMAC, no new dependency).
+- ~~Phase 50 — credential lifecycle completion~~ **named 2026-07-04; see below.**
 - **Phase 51 — personal productivity surfaces.** Saved filters for the data browser
   and list views (the Phase 39/41 filter state, persisted per user through the
   preference store), favorite pages pinned into the shell menu, and recently viewed
