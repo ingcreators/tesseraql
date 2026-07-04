@@ -81,6 +81,10 @@ public final class TesseraqlProperties {
 
     /** Registry bean name for the business-route audit sink (roadmap Phase 45), if enabled. */
     public static final String ROUTE_AUDIT_SINK_BEAN = "tesseraqlRouteAuditSink";
+    /** Registry bean name for the per-user preference store (roadmap Phase 48), if enabled. */
+    public static final String PREFERENCE_STORE_BEAN = "tesseraqlPreferenceStore";
+    /** Marker bean: present when the bundled account surface is mounted (roadmap Phase 48). */
+    public static final String ACCOUNT_SURFACE_BEAN = "tesseraqlAccountSurface";
     public static final String LANES_BEAN = "tesseraqlExecutionLanes";
     public static final String SLOW_SQL_LOG_BEAN = "tesseraqlSlowSqlLog";
 

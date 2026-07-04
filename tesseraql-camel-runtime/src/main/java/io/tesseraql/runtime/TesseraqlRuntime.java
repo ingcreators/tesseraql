@@ -302,6 +302,18 @@ public final class TesseraqlRuntime implements AutoCloseable {
             context.getRegistry().bind(TesseraqlProperties.ROUTE_AUDIT_SINK_BEAN,
                     routeAuditStore);
         }
+        // The account surface (roadmap Phase 48): the managed per-user preference store, plus
+        // the marker bean the shared shell keys the settings link off. Mounted with the bundled
+        // account app (the auth-ui precedent) — AccountAppProvider.enabled is the one source of
+        // truth for both the app mount and this wiring.
+        if (AccountAppProvider.enabled(manifest.config())) {
+            io.tesseraql.operations.account.JdbcPreferenceStore preferenceStore = new io.tesseraql.operations.account.JdbcPreferenceStore(
+                    dataSource);
+            preferenceStore.ensureSchema();
+            context.getRegistry().bind(TesseraqlProperties.PREFERENCE_STORE_BEAN,
+                    new io.tesseraql.core.account.CachingPreferenceStore(preferenceStore));
+            context.getRegistry().bind(TesseraqlProperties.ACCOUNT_SURFACE_BEAN, Boolean.TRUE);
+        }
         // Inbound-webhook replay protection (roadmap Phase 26): a delivery is processed at most
         // once on any node sharing this database.
         io.tesseraql.operations.webhook.JdbcWebhookReplayStore webhookReplayStore = new io.tesseraql.operations.webhook.JdbcWebhookReplayStore(
@@ -612,7 +624,11 @@ public final class TesseraqlRuntime implements AutoCloseable {
                     })
                     // The bundled login page reads which sign-in methods are available (password
                     // always; OIDC/SAML when their extension is enabled) plus the first-login hint.
-                    .register("auth.loginMethods", params -> LoginMethods.of(manifest.config()));
+                    .register("auth.loginMethods", params -> LoginMethods.of(manifest.config()))
+                    // The bundled account surface's profile page (roadmap Phase 48): the route
+                    // maps the session principal's facts into the params, so the provider can
+                    // only ever describe the caller.
+                    .register("account.profile.view", AccountViews::profile);
             context.getRegistry().bind(TesseraqlProperties.SERVICE_PROVIDERS_BEAN,
                     serviceProviders);
             Map<String, String> claimKeys = new LinkedHashMap<>();

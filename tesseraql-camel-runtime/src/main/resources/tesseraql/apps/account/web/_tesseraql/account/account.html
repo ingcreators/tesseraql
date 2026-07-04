@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<!-- The account surface's profile page (roadmap Phase 48). Uses the generic app-shell form
+     with its own small nav — this is an end-user page, so the system-console navigation
+     (Studio / Operations / IAM) stays out of it. Later slices add Language / Appearance /
+     Notifications / Sessions items here. -->
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{tql/shell :: shell(|Account &middot; TesseraQL|, ~{:: #account-nav}, ~{}, ~{:: #page-content})}">
+<th:block id="account-nav">
+  <a class="hc-item" href="/_tesseraql/account"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use href="/assets/_tesseraql/icons.svg#users"/></svg></span><span class="hc-item__title">Profile</span></a>
+</th:block>
+<div id="page-content" class="hc-stack">
+  <section class="hc-card hc-stack">
+    <h1 th:text="${profile.name}">User</h1>
+    <dl class="hc-description-list">
+      <dt>Login</dt>
+      <dd th:text="${profile.loginId}">user</dd>
+      <dt>Subject</dt>
+      <dd th:text="${profile.subject}">subject</dd>
+      <dt th:if="${!#strings.isEmpty(profile.tenantId)}">Tenant</dt>
+      <dd th:if="${!#strings.isEmpty(profile.tenantId)}" th:text="${profile.tenantId}">tenant</dd>
+      <dt>Roles</dt>
+      <dd>
+        <span th:if="${#lists.isEmpty(profile.roles)}">&mdash;</span>
+        <span class="hc-badge" th:each="role : ${profile.roles}" th:text="${role}">ROLE</span>
+      </dd>
+      <dt>Permissions</dt>
+      <dd>
+        <span th:if="${#lists.isEmpty(profile.permissions)}">&mdash;</span>
+        <span class="hc-badge" data-variant="neutral" th:each="permission : ${profile.permissions}"
+              th:text="${permission}">permission</span>
+      </dd>
+    </dl>
+    <p class="hc-text-muted">These facts come from your sign-in. Language, appearance,
+      notification, and session settings arrive here as the account surface grows
+      (docs/account.md).</p>
+  </section>
+</div>
+</html>

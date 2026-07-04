@@ -1,7 +1,9 @@
 # The account surface — user menu, preferences, self-service settings
 
 Status: design accepted 2026-07-04 (roadmap Phase 48, opening Horizon 9). Slices land
-incrementally; each section below names the slice that delivers it.
+incrementally; each section below names the slice that delivers it. **Slice 1 is
+delivered**: the preference store, the shell user menu, and the account app's profile
+page.
 
 Every business application re-implements the same chrome: a user menu in the shell
 (avatar, name, sign-out), and a settings surface where end users pick their language,

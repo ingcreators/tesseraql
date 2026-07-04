@@ -182,6 +182,32 @@ public final class HtmlResponseRenderer implements Processor {
             }
         }
 
+        // Publish the account chrome (roadmap Phase 48) as the reserved `_account` variable when
+        // the request rides a browser session — the CSRF token stashed on authentication is the
+        // marker, the same one `_csrf` keys off. The shared shell renders the avatar + popover
+        // user menu from it; the settings link appears only when the bundled account app is
+        // mounted (the runtime binds the marker bean), so the shell never links a 404.
+        if (csrfToken != null) {
+            Object name = evaluation.resolve(List.of("principal", "displayName"));
+            if (name == null || String.valueOf(name).isBlank()) {
+                name = evaluation.resolve(List.of("principal", "loginId"));
+            }
+            if (name == null || String.valueOf(name).isBlank()) {
+                name = evaluation.resolve(List.of("principal", "subject"));
+            }
+            if (name != null && !String.valueOf(name).isBlank()) {
+                Map<String, Object> account = new LinkedHashMap<>();
+                account.put("name", String.valueOf(name));
+                account.put("initials", initials(String.valueOf(name)));
+                if (exchange.getContext().getRegistry()
+                        .lookupByName(TesseraqlProperties.ACCOUNT_SURFACE_BEAN) != null) {
+                    account.put("accountHref", "/_tesseraql/account");
+                }
+                account.put("logoutHref", "/_tesseraql/logout");
+                model.put("_account", account);
+            }
+        }
+
         String html = Templates.render(appHome, templateName, model,
                 java.util.Locale.forLanguageTag(tag));
 
@@ -203,6 +229,21 @@ public final class HtmlResponseRenderer implements Processor {
         return value instanceof List<?> list
                 ? list.stream().map(String::valueOf).toList()
                 : List.of();
+    }
+
+    /** The avatar fallback: the first letters of up to two words (one glyph for CJK names). */
+    private static String initials(String name) {
+        StringBuilder initials = new StringBuilder();
+        for (String word : name.trim().split("\\s+")) {
+            if (word.isEmpty()) {
+                continue;
+            }
+            initials.appendCodePoint(Character.toUpperCase(word.codePointAt(0)));
+            if (initials.codePointCount(0, initials.length()) == 2) {
+                break;
+            }
+        }
+        return initials.toString();
     }
 
     private void applyHeaders(Exchange exchange, EvaluationContext evaluation) {
