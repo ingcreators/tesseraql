@@ -855,10 +855,25 @@ Direction candidates for this horizon, recorded 2026-07-04; each gets its own de
 doc when named:
 
 - ~~Phase 50 — credential lifecycle completion~~ **named 2026-07-04; see below.**
-- **Phase 51 — personal productivity surfaces.** Saved filters for the data browser
-  and list views (the Phase 39/41 filter state, persisted per user through the
-  preference store), favorite pages pinned into the shell menu, and recently viewed
-  records.
+- (Phase 51 was named 2026-07-04; see its section below.)
+
+### Phase 51 — personal productivity: pins and recents
+
+Named 2026-07-04; the accepted design is [docs/productivity.md](productivity.md). One
+deliberate collapse from the candidate wording: **a saved filter is a pinned URL whose
+query string rides along** — one control on every shell page (list views, the Studio
+data browser, dashboards) instead of per-surface machinery. Ships as: **pins** (capped,
+labelled, a Pinned sidebar group on every shell page + account-page management, with
+relative-path-only hrefs so a pin can never point off-site) and **recents** (an
+automatic bounded ring of `view: detail` renders, deduped and bumped, listed on the
+account page only). One managed `tql_user_shortcut` table behind one SPI; the
+account-surface construction invariant throughout. Two slices: pins, then recents + the
+list pattern's *Pin this view*.
+
+**Milestone M17** — a user pins a filtered list view and a Studio data-browser query
+and both reappear in the sidebar of every page they open; the records they view collect
+in a bounded recent list on the account page; removing and re-labelling work from there
+— per user, zero app code, and a pin can never point off-site.
 - (Phase 52 was named 2026-07-04; see its section below.)
 
 ### Phase 52 — workflow delegation and absence
