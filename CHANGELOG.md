@@ -8,6 +8,18 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **Personal productivity, slice 1 — pins** (roadmap Phase 51; design in
+  `docs/productivity.md`): every shell page's header gains **Pin / Unpin** for the
+  current URL — **query string included, so pinning a filtered list IS saving the
+  filter** (one control covers Phase 39 list views, the Studio data browser, and
+  dashboards alike). Pins render as a **Pinned** sidebar group on every page (the
+  reserved `_shortcuts` variable, TTL-cached read) and are managed on the account page.
+  Capped at 20 (oldest fall out), re-pinning bumps and relabels, and hrefs are
+  **relative paths only** — absolute, `//`, and `/\` forms are refused
+  (`TQL-ACCOUNT-4802`), so a pin can never point off-site. One managed
+  `tql_user_shortcut` table (keyed on the href's SHA-256 so the composite key fits every
+  dialect's index limits) behind the `ShortcutStore` SPI; recents ride the same store in
+  slice 2.
 - **Workflow delegation and absence, slice 2 — operator visibility + the gallery proof**
   (roadmap Phase 52, final slice — **the phase is complete and milestone M16 is met**):
   the IAM admin gains a read-only **Active delegations** panel

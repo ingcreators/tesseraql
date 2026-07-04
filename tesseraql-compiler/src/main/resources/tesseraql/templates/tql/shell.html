@@ -55,6 +55,18 @@
          bundled account app is mounted (`accountHref` is set), so the shell never links a 404. -->
     <th:block th:if="${_account != null}">
       <span class="hc-spacer"></span>
+      <!-- Pin/Unpin the current page (roadmap Phase 51): a pinned URL keeps its query
+           string, so pinning a filtered list IS saving the filter. -->
+      <form th:if="${_shortcuts != null}" method="post" action="/_tesseraql/account/pins/toggle">
+        <input type="hidden" name="_csrf" th:value="${_csrf}">
+        <input type="hidden" name="href" th:value="${_shortcuts.current}">
+        <input type="hidden" name="label" th:value="${title}">
+        <button class="hc-button" data-variant="ghost" type="submit"
+                th:attr="aria-label=${_shortcuts.pinnedCurrent} ? 'Unpin this page' : 'Pin this page'">
+          <svg class="hc-icon"><use href="/assets/_tesseraql/icons.svg#pin"/></svg>
+          <span th:text="${_shortcuts.pinnedCurrent} ? 'Unpin' : 'Pin'">Pin</span>
+        </button>
+      </form>
       <!-- The inbox bell (roadmap Phase 49): rendered from the reserved `_inbox` variable when
            an inbox channel is configured; the badge shows the cached unread count. -->
       <a th:if="${_inbox != null}" class="hc-button" data-variant="ghost" th:href="${_inbox.href}"
@@ -87,6 +99,17 @@
     <!-- A declarative, role-filtered app menu (config/menu.yml) is injected as the reserved `_menu`
          model variable by HtmlResponseRenderer and takes the nav slot; apps without one keep their
          hand-authored nav fragment. -->
+    <!-- The user's pinned pages (roadmap Phase 51): above every nav, framework and app
+         alike, from the reserved `_shortcuts` variable. -->
+    <th:block th:if="${_shortcuts != null && !#lists.isEmpty(_shortcuts.pins)}">
+      <div class="tql-nav__section" role="group" aria-labelledby="tql-nav-pinned">
+        <p class="tql-nav__group" id="tql-nav-pinned">Pinned</p>
+        <a class="hc-item" th:each="pin : ${_shortcuts.pins}" th:href="${pin.href}">
+          <span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use href="/assets/_tesseraql/icons.svg#pin"/></svg></span>
+          <span class="hc-item__title hc-shell__label" th:text="${pin.label}">pin</span>
+        </a>
+      </div>
+    </th:block>
     <th:block th:replace="${_menu != null} ? ~{tql/shell :: app-menu(${_menu})} : ${nav}"/>
   </nav>
   <main class="hc-shell__main">

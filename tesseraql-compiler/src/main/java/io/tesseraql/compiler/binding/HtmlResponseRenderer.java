@@ -246,6 +246,37 @@ public final class HtmlResponseRenderer implements Processor {
                         "href", "/_tesseraql/inbox"));
             }
         }
+        // Publish pins (roadmap Phase 51) as the reserved `_shortcuts` variable when a
+        // browser session rides the request and the account surface is on: the sidebar's
+        // Pinned group and the header's Pin/Unpin toggle render from it. The list read is
+        // TTL-cached (the inbox badge's trade-off).
+        if (csrfToken != null
+                && exchange.getProperty(
+                        TesseraqlProperties.PRINCIPAL) instanceof io.tesseraql.security.Principal pinPrincipal) {
+            io.tesseraql.core.account.ShortcutStore shortcutStore = exchange.getContext()
+                    .getRegistry().lookupByNameAndType(TesseraqlProperties.SHORTCUT_STORE_BEAN,
+                            io.tesseraql.core.account.ShortcutStore.class);
+            if (shortcutStore != null) {
+                String currentHref = exchange.getMessage().getHeader(Exchange.HTTP_URI,
+                        String.class);
+                java.util.List<Map<String, Object>> pins = new java.util.ArrayList<>();
+                boolean pinnedCurrent = false;
+                for (io.tesseraql.core.account.ShortcutStore.Shortcut pin : shortcutStore
+                        .list(pinPrincipal.tenantId(), pinPrincipal.subject(),
+                                io.tesseraql.core.account.ShortcutStore.PIN, 20)) {
+                    Map<String, Object> row = new LinkedHashMap<>();
+                    row.put("href", pin.href());
+                    row.put("label", pin.label());
+                    pins.add(row);
+                    pinnedCurrent = pinnedCurrent || pin.href().equals(currentHref);
+                }
+                Map<String, Object> shortcuts = new LinkedHashMap<>();
+                shortcuts.put("pins", pins);
+                shortcuts.put("current", currentHref == null ? "/" : currentHref);
+                shortcuts.put("pinnedCurrent", pinnedCurrent);
+                model.put("_shortcuts", shortcuts);
+            }
+        }
         String theme = storedTheme != null
                 ? storedTheme
                 : cookieTheme != null

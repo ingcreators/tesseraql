@@ -50,7 +50,8 @@ final class AccountViews {
             List<String> supportedTags, List<String> optOutChannels, SessionStore sessions,
             boolean passwordEnabled, io.tesseraql.yaml.account.PreferencesSpec appSpec,
             io.tesseraql.core.credential.TotpStore totp, String issuer,
-            io.tesseraql.core.workflow.DelegationStore delegations) {
+            io.tesseraql.core.workflow.DelegationStore delegations,
+            io.tesseraql.core.account.ShortcutStore shortcuts) {
         Map<String, Object> model = profile(params);
         Map<String, String> stored = preferences == null
                 ? Map.of()
@@ -126,6 +127,14 @@ final class AccountViews {
             });
         }
         model.put("delegation", delegationModel);
+        // Pins and recents (roadmap Phase 51): both lists for the account card.
+        Map<String, Object> shortcutModel = new LinkedHashMap<>();
+        shortcutModel.put("available", shortcuts != null);
+        shortcutModel.put("pins", shortcutRows(shortcuts, params,
+                io.tesseraql.core.account.ShortcutStore.PIN));
+        shortcutModel.put("recents", shortcutRows(shortcuts, params,
+                io.tesseraql.core.account.ShortcutStore.RECENT));
+        model.put("shortcuts", shortcutModel);
         String locale = stored.get("ui.locale");
         List<Map<String, Object>> locales = new ArrayList<>();
         for (String tag : supportedTags) {
@@ -396,6 +405,70 @@ final class AccountViews {
         } catch (java.time.format.DateTimeParseException ex) {
             return null;
         }
+    }
+
+    private static List<Map<String, Object>> shortcutRows(
+            io.tesseraql.core.account.ShortcutStore shortcuts, Map<String, Object> params,
+            String kind) {
+        List<Map<String, Object>> rows = new ArrayList<>();
+        if (shortcuts != null) {
+            for (io.tesseraql.core.account.ShortcutStore.Shortcut shortcut : shortcuts
+                    .list(tenant(params), subject(params), kind, 20)) {
+                Map<String, Object> row = new LinkedHashMap<>();
+                row.put("href", shortcut.href());
+                row.put("label", shortcut.label());
+                rows.add(row);
+            }
+        }
+        return rows;
+    }
+
+    /** Pin the current page, or unpin it if it already is - one honest toggle. */
+    static Map<String, Object> togglePin(Map<String, Object> params,
+            io.tesseraql.core.account.ShortcutStore shortcuts) {
+        if (shortcuts == null) {
+            throw new TqlException(PASSWORD_UNAVAILABLE, "Pins need the account surface");
+        }
+        String href = validHref(params.get("href"));
+        String label = text(params.get("label"), href);
+        if (label.length() > 200) {
+            label = label.substring(0, 200);
+        }
+        boolean removed = shortcuts.remove(tenant(params), subject(params),
+                io.tesseraql.core.account.ShortcutStore.PIN, href);
+        if (!removed) {
+            shortcuts.put(tenant(params), subject(params),
+                    io.tesseraql.core.account.ShortcutStore.PIN, href, label, 20);
+        }
+        return Map.of("ok", true, "pinned", !removed);
+    }
+
+    /** Removes one pin or recent from the account card (the caller's own, idempotent). */
+    static Map<String, Object> removeShortcut(Map<String, Object> params,
+            io.tesseraql.core.account.ShortcutStore shortcuts) {
+        String kind = text(params.get("kind"), "");
+        if (shortcuts != null
+                && (io.tesseraql.core.account.ShortcutStore.PIN.equals(kind)
+                        || io.tesseraql.core.account.ShortcutStore.RECENT.equals(kind))) {
+            shortcuts.remove(tenant(params), subject(params), kind,
+                    validHref(params.get("href")));
+        }
+        return Map.of("ok", true);
+    }
+
+    /**
+     * A shortcut href is a RELATIVE path only (roadmap Phase 51 security note): a pin can
+     * never become an off-site redirect in the user's own sidebar.
+     */
+    private static String validHref(Object value) {
+        String href = text(value, "");
+        // "//host" and "/\\host" both read as protocol-relative in browsers - refuse.
+        if (href.isBlank() || href.length() > 1000 || !href.startsWith("/")
+                || href.startsWith("//") || (href.length() > 1 && href.charAt(1) == '\\')) {
+            throw new TqlException(INVALID_VALUE,
+                    "A shortcut needs a relative path of at most 1000 characters");
+        }
+        return href;
     }
 
     private static String subject(Map<String, Object> params) {
