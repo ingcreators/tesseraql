@@ -1,0 +1,13 @@
+# User-facing settings this app declares (roadmap Phase 48): they render as the App
+# settings section of /_tesseraql/account, persist per user, and read back in routes as
+# preference.<key> (with the default until the user chooses).
+preferences:
+  - key: pageSize
+    label: app.pref.pageSize
+    type: choice
+    options: ["10", "25", "50"]
+    default: "25"
+  - key: lowStockBanner
+    label: app.pref.lowStockBanner
+    type: boolean
+    default: "true"

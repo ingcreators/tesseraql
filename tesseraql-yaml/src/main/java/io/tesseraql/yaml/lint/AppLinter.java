@@ -87,6 +87,7 @@ public final class AppLinter {
         lintI18n(appHome, manifest, findings);
         lintSecurityConfig(appHome, manifest, findings);
         lintScopes(appHome, manifest, findings);
+        lintPreferences(appHome, findings);
         lintOrgUnitConfig(manifest.config(), findings);
         lintWorkflows(appHome, manifest, findings);
         lintWorkflowConfig(manifest.config(), findings);
@@ -418,6 +419,20 @@ public final class AppLinter {
     }
 
     /** Validates org-unit configuration (roadmap Phase 29 slice 2): a known {@code mode}. */
+    /**
+     * Validates {@code config/preferences.yml} (roadmap Phase 48 slice 5) by loading it the
+     * way the runtime does: TQL-YAML-1030 parse/key/duplicate, 1031 unknown type, 1032 choice
+     * without options, 1033 default outside the acceptable values.
+     */
+    private void lintPreferences(Path appHome, List<LintFinding> findings) {
+        try {
+            io.tesseraql.yaml.account.PreferencesSpec.load(appHome);
+        } catch (io.tesseraql.core.error.TqlException ex) {
+            findings.add(new LintFinding(ex.code().toString(), "error",
+                    "config/preferences.yml", ex.getMessage()));
+        }
+    }
+
     private void lintOrgUnitConfig(AppConfig config, List<LintFinding> findings) {
         String mode = config.getString("tesseraql.orgunit.mode").orElse(null);
         if (mode != null && !"managed".equalsIgnoreCase(mode) && !"app".equalsIgnoreCase(mode)) {

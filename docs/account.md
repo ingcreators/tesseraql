@@ -1,11 +1,12 @@
 # The account surface — user menu, preferences, self-service settings
 
 Status: design accepted 2026-07-04 (roadmap Phase 48, opening Horizon 9). Slices land
-incrementally; each section below names the slice that delivers it. **Slices 1–4 are
-delivered**: the preference store, the shell user menu, the profile page, the
-language + appearance settings, the notification opt-out, and the session +
-local-password self-service (the settings live as sections on the account page rather
-than separate pages).
+incrementally; each section below names the slice that delivers it. **All five slices
+are delivered — Phase 48 is complete and milestone M13 is met**: the preference store,
+the shell user menu, the profile page, the language + appearance settings, the
+notification opt-out, the session + local-password self-service, and the app-declared
+preference groups (the settings live as sections on the account page rather than
+separate pages).
 
 Every business application re-implements the same chrome: a user menu in the shell
 (avatar, name, sign-out), and a settings surface where end users pick their language,
@@ -214,9 +215,13 @@ under `app.<key>` and only declared keys with valid values are writable
 through a `preference.<key>` namespace that resolves declared defaults when the user
 never chose — so `/* preference.pageSize */'25'` in a query is the whole integration.
 
-Lint (`TQL-YAML-10xx`, next free codes at implementation time) checks duplicate keys,
-unknown types, `choice` without `options`, and a default outside `options`. A
-`preference` NOTE coverage kind lists the declared keys, the `oidc` precedent.
+Lint (`TQL-YAML-1030` parse/key/duplicate, `1031` unknown type, `1032` choice without
+options, `1033` default outside the acceptable values) validates the file exactly as
+the runtime loads it. A `preference` NOTE coverage kind lists the declared keys, the
+`oidc` precedent. The account page resolves each `label` through the message catalog
+and falls back to the raw key untranslated; the `preference.<key>` namespace feeds
+route expressions, templates, and `sql.params` mappings — declared keys only, stored
+value else declared default. The gallery's inventory app dogfoods the file.
 
 ## Error taxonomy
 

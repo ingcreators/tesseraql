@@ -659,7 +659,8 @@ public final class TesseraqlRuntime implements AutoCloseable {
                     .register("account.settings.view",
                             params -> AccountViews.settings(params, preferences,
                                     accountLocales, optOutChannels, sessionStore,
-                                    passwordLoginEnabled))
+                                    passwordLoginEnabled,
+                                    io.tesseraql.yaml.account.PreferencesSpec.live(appHome)))
                     .register("account.language.save",
                             params -> AccountViews.saveLanguage(params, preferences,
                                     accountLocales))
@@ -668,6 +669,9 @@ public final class TesseraqlRuntime implements AutoCloseable {
                     .register("account.notify.save",
                             params -> AccountViews.saveNotifyOptOut(params, preferences,
                                     optOutChannels))
+                    .register("account.app.save",
+                            params -> AccountViews.saveAppPreference(params, preferences,
+                                    io.tesseraql.yaml.account.PreferencesSpec.live(appHome)))
                     // Identity and realm resolve from the registry at call time: they are
                     // bound after this chain builds, and an SSO-only deployment answers with
                     // the honest 4803 instead of failing to register.

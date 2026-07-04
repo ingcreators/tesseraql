@@ -334,6 +334,43 @@ class AccountSurfaceIntegrationTest {
         return setCookie == null ? null : setCookie.split(";")[0];
     }
 
+    /** Slice 5: declared preferences render, save within bounds, and reject the rest. */
+    @Test
+    void declaredAppPreferencesRenderAndSaveWithinTheirDeclaration() throws Exception {
+        try {
+            HttpResponse<String> page = get(runtime, sessionCookie, "/_tesseraql/account");
+            assertThat(page.body()).contains("App settings").contains("pageSize");
+
+            assertThat(postForm(runtime, sessionCookie, "/_tesseraql/account/app",
+                    "key=pageSize&value=50").statusCode()).isEqualTo(303);
+            assertThat(preferenceStore().preferences(null, "account-user"))
+                    .containsEntry("app.pageSize", "50");
+            // Out-of-declaration writes: a value outside the options, an undeclared key.
+            assertThat(postForm(runtime, sessionCookie, "/_tesseraql/account/app",
+                    "key=pageSize&value=999").statusCode()).isEqualTo(400);
+            assertThat(postForm(runtime, sessionCookie, "/_tesseraql/account/app",
+                    "key=hacks&value=1").statusCode()).isEqualTo(400);
+        } finally {
+            preferenceStore().remove(null, "account-user", "app.pageSize");
+        }
+    }
+
+    /** Slice 5: routes read the declaration-bounded preference.<key> namespace back. */
+    @Test
+    void aRouteReadsThePreferenceNamespaceWithDefaultThenChoice() throws Exception {
+        try {
+            // Never chosen: the declared default binds into the SQL.
+            assertThat(get(runtime, sessionCookie, "/page-size").body())
+                    .contains("\"size\":\"25\"");
+            postForm(runtime, sessionCookie, "/_tesseraql/account/app",
+                    "key=pageSize&value=50");
+            assertThat(get(runtime, sessionCookie, "/page-size").body())
+                    .contains("\"size\":\"50\"");
+        } finally {
+            preferenceStore().remove(null, "account-user", "app.pageSize");
+        }
+    }
+
     private static PreferenceStore preferenceStore() {
         return runtime.camelContext().getRegistry().lookupByNameAndType(
                 TesseraqlProperties.PREFERENCE_STORE_BEAN, PreferenceStore.class);
@@ -490,6 +527,39 @@ class AccountSurfaceIntegrationTest {
                 """);
         Files.writeString(notifyMe.resolve("notify-me.sql"),
                 "delete from tql_user_preference where tenant_id = '_never_'\n");
+        // Declared app preferences (slice 5) and a route reading one back.
+        Files.writeString(target.resolve("config/preferences.yml"), """
+                preferences:
+                  - key: pageSize
+                    label: app.pref.pageSize
+                    type: choice
+                    options: ["10", "25", "50"]
+                    default: "25"
+                  - key: beta
+                    type: boolean
+                    default: "false"
+                """);
+        Path pageSize = target.resolve("web/page-size");
+        Files.createDirectories(pageSize);
+        Files.writeString(pageSize.resolve("get.yml"), """
+                version: tesseraql/v1
+                id: page.size
+                kind: route
+                recipe: query-json
+                security:
+                  auth: browser
+                sql:
+                  file: page-size.sql
+                  mode: query
+                  params:
+                    size: preference.pageSize
+                response:
+                  json:
+                    body:
+                      data: sql.rows
+                """);
+        Files.writeString(pageSize.resolve("page-size.sql"),
+                "select /* size */'25' as size\n");
         Files.writeString(home.resolve("home.html"), """
                 <!DOCTYPE html>
                 <html xmlns:th="http://www.thymeleaf.org"

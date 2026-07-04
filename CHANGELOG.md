@@ -8,6 +8,14 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **The account surface, slice 5 — app-declared preference groups** (roadmap Phase 48,
+  final slice — **the phase is complete and milestone M13 is met**): an app declares
+  fields in `config/preferences.yml` (`boolean` | `choice` | `text`, message-catalog
+  labels, defaults); the account page renders them as an App settings section, writes
+  stay bounded by the declaration (`TQL-ACCOUNT-4802`), and routes/templates/SQL read
+  them back through the **`preference.<key>`** namespace — stored value else declared
+  default, declared keys only. Lint `TQL-YAML-1030..1033`, a `preference` NOTE coverage
+  kind, and the inventory gallery app dogfoods the file.
 - **The account surface, slice 4 — sessions and password** (roadmap Phase 48): the
   account page lists the caller's active sessions (`tql_session` gains an indexed,
   nullable `subject` — pre-upgrade rows age out unlisted) with a **Sign out other

@@ -32,7 +32,8 @@ import javax.sql.DataSource;
 public final class AppTestRunner {
 
     /** Coverage kinds whose gaps are framework-inventory hints rather than test gaps. */
-    private static final Set<String> NOTE_KINDS = Set.of("iam-contract", "saml", "oidc", "scim");
+    private static final Set<String> NOTE_KINDS = Set.of("iam-contract", "saml", "oidc",
+            "scim", "preference");
 
     /**
      * Result of a test run: the aggregated report, the collected SQL coverage, and the derived
@@ -88,6 +89,7 @@ public final class AppTestRunner {
             kinds.add(ManifestCoverage.mtls(manifest, suites));
             kinds.add(ManifestCoverage.saml(manifest, suites));
             kinds.add(ManifestCoverage.oidc(manifest, suites));
+            kinds.add(ManifestCoverage.preference(manifest));
             kinds.add(ManifestCoverage.scim(manifest, suites));
             kinds.add(ManifestCoverage.validation(manifest, suites));
             kinds.add(ManifestCoverage.notification(manifest, suites));

@@ -773,6 +773,17 @@ theme; notifications; sessions + password; preference groups).
 sessions, and changes their local password — the app contributing nothing but
 `preferences.yml`; the same app under SSO shows provider-managed states instead.
 
+Delivered 2026-07-04 across five slices: the preference store + shell user menu +
+bundled account app; language + theme through the locale chain and the model-driven
+shell theme; recipient-aware notification opt-out decided at enqueue; session
+self-service (`tql_session` subject, sign-out-others) and the local-realm password
+change over the login path's own contracts; and app-declared preference groups
+(`config/preferences.yml`, lint `TQL-YAML-1030..1033`, the `preference` NOTE coverage
+kind, the `preference.<key>` request namespace, dogfooded by the inventory gallery
+app). Every leg is held green by `AccountSurfaceIntegrationTest` (17 scenarios on real
+PostgreSQL, including the honest disabled/SSO states). **Phase 48 is complete and
+milestone M13 is met.**
+
 ## CLI distribution and upgrade delivery (cross-cutting)
 
 ### Phase 38 — CLI distribution and upgrade delivery

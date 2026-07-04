@@ -498,6 +498,19 @@ public final class ManifestCoverage {
      * them. Without OIDC (or without linking) the login path executes no app-authored SQL, so
      * nothing is declared. Mirrors {@link #saml(AppManifest, List)}.
      */
+    /**
+     * Declared preference groups (roadmap Phase 48 slice 5): a NOTE kind listing the
+     * {@code config/preferences.yml} keys, so the report shows what the account surface
+     * offers. Preferences are configuration, not an executable surface - nothing covers
+     * them, which is exactly what the note level communicates.
+     */
+    public static ItemCoverage preference(AppManifest manifest) {
+        ItemCoverage coverage = new ItemCoverage("preference");
+        io.tesseraql.yaml.account.PreferencesSpec.load(manifest.appHome()).fields()
+                .forEach(field -> coverage.declare("app." + field.key()));
+        return coverage;
+    }
+
     public static ItemCoverage oidc(AppManifest manifest, List<TestSuite> suites) {
         ItemCoverage coverage = new ItemCoverage("oidc");
         AppConfig config = manifest.config();
