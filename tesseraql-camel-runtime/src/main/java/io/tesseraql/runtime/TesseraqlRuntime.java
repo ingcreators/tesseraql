@@ -256,8 +256,23 @@ public final class TesseraqlRuntime implements AutoCloseable {
                     TesseraqlProperties.MTLS_AUTHENTICATOR_BEAN,
                     new io.tesseraql.security.mtls.MtlsAuthenticator(security.mtls()));
         }
+        io.tesseraql.core.spool.FileTempStore tempStore = new io.tesseraql.core.spool.FileTempStore(
+                appHome.resolve("work/tmp/tesseraql"));
+        context.getRegistry().bind(TesseraqlProperties.TEMP_STORE_BEAN, tempStore);
+
+        VertxPlatformHttpServerConfiguration httpConfig = new VertxPlatformHttpServerConfiguration();
+        httpConfig.setBindHost("0.0.0.0");
+        httpConfig.setBindPort(port);
+
+        // The framework's own migrations run before any store touches the schema (versioned
+        // history per component, Flyway's lock serializing concurrent node startups); the
+        // stores' direct bootstrap below stays as the idempotent fallback for embedders.
+        FrameworkMigrations.migrate(dataSource);
         // Browser sessions: in-memory per node by default; "jdbc" shares tql_session across all
         // runtime nodes so a login made on one node resolves on every other (design ch. 11.2).
+        // Constructed after Flyway on purpose: the versioned history owns evolutions like the
+        // V2 subject column, and the store's direct ensureSchema stays the tolerated,
+        // idempotent fallback for embedders without it.
         SessionStore sessionStore;
         if ("jdbc".equalsIgnoreCase(
                 manifest.config().getString("tesseraql.sessions.store").orElse("memory"))) {
@@ -272,18 +287,6 @@ public final class TesseraqlRuntime implements AutoCloseable {
             sessionStore = new io.tesseraql.security.session.InMemorySessionStore();
         }
         context.getRegistry().bind(TesseraqlProperties.SESSION_STORE_BEAN, sessionStore);
-        io.tesseraql.core.spool.FileTempStore tempStore = new io.tesseraql.core.spool.FileTempStore(
-                appHome.resolve("work/tmp/tesseraql"));
-        context.getRegistry().bind(TesseraqlProperties.TEMP_STORE_BEAN, tempStore);
-
-        VertxPlatformHttpServerConfiguration httpConfig = new VertxPlatformHttpServerConfiguration();
-        httpConfig.setBindHost("0.0.0.0");
-        httpConfig.setBindPort(port);
-
-        // The framework's own migrations run before any store touches the schema (versioned
-        // history per component, Flyway's lock serializing concurrent node startups); the
-        // stores' direct bootstrap below stays as the idempotent fallback for embedders.
-        FrameworkMigrations.migrate(dataSource);
         JobRepository jobRepository = new JobRepository(dataSource);
         jobRepository.ensureSchema();
         JdbcIdempotencyStore idempotencyStore = new JdbcIdempotencyStore(dataSource);
