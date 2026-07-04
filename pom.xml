@@ -70,6 +70,7 @@
     <module>tesseraql-apptasks</module>
     <module>tesseraql-studio</module>
     <module>tesseraql-ops-ui</module>
+    <module>tesseraql-docs-reference</module>
     <module>tesseraql-excel</module>
     <module>tesseraql-pdf</module>
     <module>tesseraql-s3</module>
