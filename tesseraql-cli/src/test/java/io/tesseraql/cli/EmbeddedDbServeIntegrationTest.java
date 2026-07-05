@@ -187,6 +187,27 @@ class EmbeddedDbServeIntegrationTest {
     }
 
     @Test
+    void persistentStartRecordsAndReResolvesItsVersion(@TempDir Path dir) throws Exception {
+        Path dataDir = dir.resolve("pgdata");
+
+        // A fresh persistent start pins the directory to the version that initialized it.
+        EmbeddedPostgresSupport.Handle first = EmbeddedPostgresSupport.start(dataDir, false);
+        String version = first.version();
+        first.close();
+        assertThat(EmbeddedPostgresDataDir.pinnedVersion(dataDir)).contains(version);
+        assertThat(EmbeddedPostgresDataDir.isInitialized(dataDir)).isTrue();
+
+        // A later start with an explicit but incompatible-typed request still honours the pin: the
+        // directory carries a marker, so passing null re-resolves exactly the recorded version.
+        EmbeddedPostgresSupport.Handle second = EmbeddedPostgresSupport.start(dataDir, false);
+        try {
+            assertThat(second.version()).isEqualTo(version);
+        } finally {
+            second.close();
+        }
+    }
+
+    @Test
     void fixedPortBindsTheRequestedTcpPort(@TempDir Path dir) throws Exception {
         int port = freePort();
 

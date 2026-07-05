@@ -105,6 +105,14 @@ public final class TesseraqlCli implements Runnable {
                 + "Listens on localhost only.")
         Integer embeddedDbPort;
 
+        @Option(names = {
+                "--embedded-db-version"}, paramLabel = "<version>", description = "Pin the "
+                        + "embedded PostgreSQL binary version (e.g. 17.10.0). Default: the CLI's built-in "
+                        + "version, or, for a persistent data directory, the version it was created with. A "
+                        + "persistent directory records the version that ran it and re-resolves that version "
+                        + "on later starts, so bumping the default never breaks an existing directory.")
+        String embeddedDbVersion;
+
         @Override
         public Integer call() throws InterruptedException {
             if (envProfile != null) {
@@ -141,16 +149,18 @@ public final class TesseraqlCli implements Runnable {
             EmbeddedPostgresSupport.Handle embedded = null;
             if (embeddedDb != null) {
                 Path dataDir = embeddedDb.isEmpty() ? null : Path.of(embeddedDb);
-                embedded = EmbeddedPostgresSupport.start(dataDir, embeddedDbPort, false);
+                embedded = EmbeddedPostgresSupport.start(dataDir, embeddedDbPort, embeddedDbVersion,
+                        false);
                 dbOverride = embedded.override();
-                System.out.println("Embedded PostgreSQL started"
+                System.out.println("Embedded PostgreSQL " + embedded.version() + " started"
                         + (dataDir == null ? " (ephemeral)." : " at " + dataDir + "."));
                 // Surface the (otherwise random) port so a local client can attach. Trust auth on
                 // loopback only — the URL already carries user=postgres; the database is postgres.
                 System.out.printf("  Connect a local client on port %d: %s "
                         + "(no password; localhost only).%n", embedded.port(), embedded.jdbcUrl());
-            } else if (embeddedDbPort != null) {
-                System.err.println("--embedded-db-port is ignored without --embedded-db.");
+            } else if (embeddedDbPort != null || embeddedDbVersion != null) {
+                System.err.println(
+                        "--embedded-db-port and --embedded-db-version are ignored without --embedded-db.");
             }
 
             TesseraqlRuntime runtime = port != null
