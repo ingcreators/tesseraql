@@ -47,4 +47,19 @@ class EmbeddedPostgresDataDirTest {
         // A legacy directory (PG_VERSION but no marker) reports no pin.
         assertThat(EmbeddedPostgresDataDir.pinnedVersion(dir)).isEmpty();
     }
+
+    @Test
+    void onDiskMajorReadsThePgVersionStamp(@TempDir Path dir) throws Exception {
+        assertThat(EmbeddedPostgresDataDir.onDiskMajor(dir)).isEmpty();
+
+        Files.writeString(dir.resolve(EmbeddedPostgresDataDir.PG_VERSION), "17\n");
+        assertThat(EmbeddedPostgresDataDir.onDiskMajor(dir)).contains("17");
+    }
+
+    @Test
+    void majorOfTakesThePartBeforeTheFirstDot() {
+        assertThat(EmbeddedPostgresDataDir.majorOf("17.10.0")).isEqualTo("17");
+        assertThat(EmbeddedPostgresDataDir.majorOf("18.4.0")).isEqualTo("18");
+        assertThat(EmbeddedPostgresDataDir.majorOf("17")).isEqualTo("17");
+    }
 }

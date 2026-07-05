@@ -84,6 +84,7 @@ final class EmbeddedPostgresSupport {
      */
     static Handle start(Path dataDir, Integer port, String requestedVersion, boolean offline) {
         String version = selectVersion(dataDir, requestedVersion);
+        checkMajorCompatibility(dataDir, version);
         Path binaryJar = resolveBinaryJar(EmbeddedPostgresBinary.classifier(), version, offline);
         try {
             EmbeddedPostgres.Builder builder = EmbeddedPostgres.builder()
@@ -102,6 +103,19 @@ final class EmbeddedPostgresSupport {
         } catch (IOException ex) {
             throw new UncheckedIOException("Failed to start embedded PostgreSQL", ex);
         }
+    }
+
+    /**
+     * Fails fast when {@code version} cannot open an already-initialized {@code dataDir} because the
+     * directory's on-disk major differs, turning what would be a cryptic {@code postgres} startup
+     * failure into an actionable message. A fresh or ephemeral directory has nothing to conflict with.
+     */
+    private static void checkMajorCompatibility(Path dataDir, String version) {
+        EmbeddedPostgresDataDir.onDiskMajor(dataDir).ifPresent(onDiskMajor -> {
+            if (!onDiskMajor.equals(EmbeddedPostgresDataDir.majorOf(version))) {
+                throw new EmbeddedPostgresVersionMismatchException(dataDir, onDiskMajor, version);
+            }
+        });
     }
 
     /** The binary version to run: an explicit request, else the directory's pin, else the default. */

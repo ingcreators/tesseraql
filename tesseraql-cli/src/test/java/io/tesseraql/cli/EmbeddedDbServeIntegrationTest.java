@@ -1,6 +1,7 @@
 package io.tesseraql.cli;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import io.tesseraql.runtime.TesseraqlRuntime;
 import io.tesseraql.yaml.scaffold.AppScaffolder;
@@ -205,6 +206,24 @@ class EmbeddedDbServeIntegrationTest {
         } finally {
             second.close();
         }
+    }
+
+    @Test
+    void incompatibleMajorIsRejectedBeforeStart(@TempDir Path dir) throws Exception {
+        Path dataDir = dir.resolve("pgdata");
+
+        // Initialize a real directory (major 17, the test-classpath binary).
+        EmbeddedPostgresSupport.start(dataDir, false).close();
+        String onDiskMajor = EmbeddedPostgresDataDir.onDiskMajor(dataDir).orElseThrow();
+
+        // Forcing an incompatible major fails fast with a guiding message — and before any attempt
+        // to resolve the (uncached, network-only) 18.x binary, so the check itself stays offline.
+        assertThatThrownBy(
+                () -> EmbeddedPostgresSupport.start(dataDir, null, "18.4.0", true))
+                .isInstanceOf(EmbeddedPostgresVersionMismatchException.class)
+                .hasMessageContaining(onDiskMajor)
+                .hasMessageContaining("18.4.0")
+                .hasMessageContaining("--embedded-db-version");
     }
 
     @Test
