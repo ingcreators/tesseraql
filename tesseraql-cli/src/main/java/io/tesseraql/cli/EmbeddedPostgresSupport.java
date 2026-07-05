@@ -169,6 +169,11 @@ final class EmbeddedPostgresSupport {
         };
     }
 
+    /** The CLI's build-time default zonky binaries version (used for ephemeral and fresh runs). */
+    static String defaultVersion() {
+        return binariesVersion();
+    }
+
     private static String binariesVersion() {
         try (InputStream in = EmbeddedPostgresSupport.class
                 .getResourceAsStream("/io/tesseraql/cli/embedded-postgres.properties")) {

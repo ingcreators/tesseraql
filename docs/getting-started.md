@@ -65,6 +65,12 @@ directory from before this pinning existed, or a mismatched explicit `--embedded
 CLI stops with a clear message (pin the matching major, or start fresh) rather than a cryptic
 `postgres` crash.
 
+To see where a directory stands — its on-disk major, its pinned version, and whether the CLI
+default has moved past it — run `tesseraql embedded-db info ./pgdata`. When an upgrade to a newer
+major is available it prints the safe dump/restore procedure to follow. That procedure uses your own
+`pg_dumpall`/`psql`: the embedded binaries are server-only (no client tools bundled), and crossing a
+PostgreSQL major means dumping from the old server and restoring into a fresh one.
+
 The interactive dev loop is all CLI-native:
 
 ```sh

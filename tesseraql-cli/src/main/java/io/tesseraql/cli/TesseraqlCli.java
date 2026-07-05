@@ -39,6 +39,7 @@ import picocli.CommandLine.Option;
         PackageCommand.class,
         VerifyCommand.class,
         ModulesCommand.class,
+        EmbeddedDbCommand.class,
         McpCommand.class
 })
 public final class TesseraqlCli implements Runnable {
