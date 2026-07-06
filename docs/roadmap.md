@@ -946,6 +946,17 @@ commits on `main` and a `queue-consume` projection upserts it into `reporting`; 
 rolled-back command projects nothing; a forced redelivery never doubles a row — all
 declared in YAML, and no XA anywhere in the stack.
 
+Delivered 2026-07-06 in the three designed slices: the design; reads (route-level
+and per-named-query connector selection, per-connector dialect, explicit non-main
+selection authoritative over tenant routing, `TQL-YAML-1035`/`1037`, proven by
+`MultiDatasourceReadIntegrationTest` on two real PostgreSQL databases); and
+projections (the transactional recipes retarget their single-connection
+transaction, main-anchored features refused by lint `TQL-YAML-1036` and the
+compile-time guard `TQL-CAMEL-3112`, proven by
+`MultiDatasourceProjectionIntegrationTest`: commit projects, rollback never does,
+a republished business key never doubles the projection). **Phase 53 is complete
+and milestone M18 is met.**
+
 ## CLI distribution and upgrade delivery (cross-cutting)
 
 ### Phase 38 — CLI distribution and upgrade delivery

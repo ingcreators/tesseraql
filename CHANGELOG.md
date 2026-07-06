@@ -8,6 +8,20 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **Cross-database projections — `datasource:` on transactional routes** (roadmap
+  Phase 53 slice 3, completing the phase; design in `docs/multi-datasource.md`): a
+  `command-json`, `webhook`, or `queue-consume` route moves its whole
+  single-connection transaction to a named connector — the blessed shape being the
+  **projection**: a command commits on `main` and publishes, a `queue-consume` route
+  with `datasource:` idempotently upserts into the second database, while the
+  channel, its claim, and the consumed-key dedup records stay on `main` (delivery
+  semantics unchanged, no JTA/XA anywhere). A non-main transaction is plain SQL:
+  `notify:`/`publish:`/`outbox:` and sequence allocation are refused at build time
+  (`TQL-YAML-1036`) and again at route compile time (`TQL-CAMEL-3112`) — their
+  tables live on `main`; fan-out projects through `main` instead. Proven end to end
+  by `MultiDatasourceProjectionIntegrationTest` on two real PostgreSQL databases:
+  commit projects, rollback never does, and a republished business key never
+  doubles or reorders the projection (milestone M18).
 - **Multi-datasource reads — `datasource:` on read routes** (roadmap Phase 53 slice 2;
   design in `docs/multi-datasource.md`): a read route (`query-json`, `query-html`,
   `page`, `query-export`, and read-only MCP tools/resources/UI) can declare

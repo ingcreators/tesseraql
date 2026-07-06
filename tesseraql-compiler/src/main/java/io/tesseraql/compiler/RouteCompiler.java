@@ -40,6 +40,8 @@ public final class RouteCompiler {
     private static final TqlErrorCode UNSUPPORTED_RECIPE = new TqlErrorCode(TqlDomain.CAMEL, 3100);
     /** TQL-CAMEL-3101: a query-export route declares export blocks only file-export supports. */
     private static final TqlErrorCode INVALID_EXPORT = new TqlErrorCode(TqlDomain.CAMEL, 3101);
+    /** TQL-CAMEL-3112: a non-main command transaction cannot carry main-anchored features. */
+    private static final TqlErrorCode MAIN_ANCHORED = new TqlErrorCode(TqlDomain.CAMEL, 3112);
     private static final String DEFAULT_DATASOURCE = "main";
     private static final int DEFAULT_MAX_ROWS = 10_000;
     private static final long DEFAULT_IDEMPOTENCY_TTL = java.time.Duration.ofHours(24).toMillis();
@@ -324,7 +326,9 @@ public final class RouteCompiler {
         }
 
         Path routeDir = routeFile.source().getParent();
-        String dialect = datasourceDialect();
+        String datasource = definition.effectiveDatasource();
+        requirePlainSqlOffMain(definition);
+        String dialect = datasourceDialect(datasource);
         java.util.function.Function<String, Path> stepFile = file -> io.tesseraql.core.dialect.DialectSqlResolver
                 .resolve(routeDir.resolve(file).normalize(), dialect);
 
@@ -345,7 +349,7 @@ public final class RouteCompiler {
                         compiledAppHome))
                 .process(new io.tesseraql.compiler.binding.TransactionalCommandProcessor(
                         routeId, definition.sql(), definition.steps(), definition.validate(),
-                        definition.notifications(), stepFile, DEFAULT_DATASOURCE, dialect,
+                        definition.notifications(), stepFile, datasource, dialect,
                         definition.outbox(), definition.publish(), definition.errors(), appName,
                         workflow));
         // Named queries still run after the command (outside its transaction), in authored order.
@@ -571,7 +575,12 @@ public final class RouteCompiler {
                     + "': queue-consume recipe needs a consume.channel and consume.topic");
         }
         Path routeDir = routeFile.source().getParent();
-        String dialect = datasourceDialect();
+        // The projection pattern (docs/multi-datasource.md): the consumer's apply transaction may
+        // run on a named connector, while the channel, its claim, and the dedup records stay on
+        // main - only where the SQL commits moves.
+        String datasource = definition.effectiveDatasource();
+        requirePlainSqlOffMain(definition);
+        String dialect = datasourceDialect(datasource);
         java.util.function.Function<String, Path> stepFile = file -> io.tesseraql.core.dialect.DialectSqlResolver
                 .resolve(routeDir.resolve(file).normalize(), dialect);
 
@@ -597,7 +606,7 @@ public final class RouteCompiler {
                 .end();
         route.process(new io.tesseraql.compiler.binding.TransactionalCommandProcessor(
                 routeId, definition.sql(), definition.steps(), definition.validate(),
-                definition.notifications(), stepFile, DEFAULT_DATASOURCE, dialect,
+                definition.notifications(), stepFile, datasource, dialect,
                 definition.outbox(), definition.publish(), definition.errors(), appName));
     }
 
@@ -868,12 +877,14 @@ public final class RouteCompiler {
                 .process(new RequestBinder(definition, java.util.List.of(), compiledAppHome));
 
         if (usesTransactionalCommand(definition)) {
-            String dialect = datasourceDialect();
+            String datasource = definition.effectiveDatasource();
+            requirePlainSqlOffMain(definition);
+            String dialect = datasourceDialect(datasource);
             java.util.function.Function<String, Path> stepFile = file -> io.tesseraql.core.dialect.DialectSqlResolver
                     .resolve(toolDir.resolve(file).normalize(), dialect);
             step = step.process(new io.tesseraql.compiler.binding.TransactionalCommandProcessor(
                     routeId, definition.sql(), definition.steps(), definition.validate(),
-                    definition.notifications(), stepFile, DEFAULT_DATASOURCE, dialect,
+                    definition.notifications(), stepFile, datasource, dialect,
                     definition.outbox(), definition.publish(), definition.errors(), appName));
         } else if (definition.sql() != null) {
             step = step.to(executionUri(toolDir, definition.sql(), "sql",
@@ -1035,6 +1046,30 @@ public final class RouteCompiler {
                 .map(Integer::parseInt)
                 .map(value -> Math.max(0, value))
                 .orElse(30);
+    }
+
+    /**
+     * A command transaction on a named connector is plain SQL (docs/multi-datasource.md): the
+     * outbox, sequences, and workflow tables live on {@code main}, so {@code notify:}/
+     * {@code publish:}/{@code outbox:} and sequence allocation cannot join a non-main
+     * transaction. Lint reports this at build time ({@code TQL-YAML-1036}); this guard keeps a
+     * hot-reloaded or hand-mounted route honest at compile time.
+     */
+    private void requirePlainSqlOffMain(RouteDefinition definition) {
+        if (DEFAULT_DATASOURCE.equals(definition.effectiveDatasource())) {
+            return;
+        }
+        boolean anchored = !definition.notifications().isEmpty() || definition.publish() != null
+                || definition.outbox() != null
+                || (definition.sql() != null && definition.sql().isSequence())
+                || definition.steps().values().stream()
+                        .anyMatch(io.tesseraql.yaml.model.SqlBinding::isSequence);
+        if (anchored) {
+            throw new TqlException(MAIN_ANCHORED, "Route '" + definition.id()
+                    + "': notify:/publish:/outbox: and sequence allocation ride the main"
+                    + " connector and cannot join a 'datasource: "
+                    + definition.effectiveDatasource() + "' transaction");
+        }
     }
 
     /** Resolves the main datasource's dialect, inferring it from the JDBC URL when unset. */

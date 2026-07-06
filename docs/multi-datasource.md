@@ -1,6 +1,12 @@
 # Multi-datasource routes — reads across connectors, consistency through projections
 
-Status: design accepted 2026-07-06 (roadmap Phase 53, Horizon 9).
+Status: design accepted 2026-07-06 (roadmap Phase 53, Horizon 9). **All three slices
+are delivered — Phase 53 is complete and milestone M18 is met** on two real
+PostgreSQL databases (`MultiDatasourceReadIntegrationTest`,
+`MultiDatasourceProjectionIntegrationTest`). One addition from implementation: the
+lint rules are backed by a compile-time guard (`TQL-CAMEL-3112`), so a hot-reloaded
+or hand-mounted route that skipped lint still cannot carry a main-anchored feature
+into a non-main transaction.
 
 The runtime has carried multiple database connectors since Phase 18: every
 `tesseraql.datasources.<name>` block builds its own HikariCP pool, is bound by name in
