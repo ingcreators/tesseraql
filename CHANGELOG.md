@@ -19,6 +19,11 @@ All notable changes to TesseraQL are documented here. The format follows
   different major), the CLI now fails fast with an actionable message — how to pin the
   matching major, or start fresh — instead of surfacing a cryptic `postgres` startup
   crash.
+- **`tesseraql embedded-db info <data-dir>`**: reports an embedded data directory's
+  on-disk PostgreSQL major, its pinned binary version, and the CLI default — and, when
+  the directory sits on an older major, prints the safe dump/restore upgrade procedure.
+  The embedded binaries are server-only, so a cross-major upgrade is driven with the
+  operator's own `pg_dumpall`/`psql`; the command produces the exact steps.
 
 - **Documentation site, slice 2 — the generated reference** (completing the
   documentation-site leg of roadmap Phase 35; design in `docs/docs-site.md`): a
