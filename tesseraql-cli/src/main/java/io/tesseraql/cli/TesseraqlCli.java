@@ -149,8 +149,15 @@ public final class TesseraqlCli implements Runnable {
             EmbeddedPostgresSupport.Handle embedded = null;
             if (embeddedDb != null) {
                 Path dataDir = embeddedDb.isEmpty() ? null : Path.of(embeddedDb);
-                embedded = EmbeddedPostgresSupport.start(dataDir, embeddedDbPort, embeddedDbVersion,
-                        false);
+                try {
+                    embedded = EmbeddedPostgresSupport.start(dataDir, embeddedDbPort,
+                            embeddedDbVersion, false);
+                } catch (EmbeddedPostgresVersionMismatchException ex) {
+                    // A recoverable operator error (incompatible data directory) — a clear message,
+                    // not a stack trace.
+                    System.err.println(ex.getMessage());
+                    return 1;
+                }
                 dbOverride = embedded.override();
                 System.out.println("Embedded PostgreSQL " + embedded.version() + " started"
                         + (dataDir == null ? " (ephemeral)." : " at " + dataDir + "."));

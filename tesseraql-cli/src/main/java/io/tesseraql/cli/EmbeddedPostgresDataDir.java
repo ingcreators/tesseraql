@@ -78,4 +78,31 @@ final class EmbeddedPostgresDataDir {
     static boolean isInitialized(Path dataDir) {
         return dataDir != null && Files.isRegularFile(dataDir.resolve(PG_VERSION));
     }
+
+    /**
+     * The PostgreSQL major version stamped in the directory's {@code PG_VERSION} file (e.g. {@code 17}),
+     * or empty when the directory is uninitialized. This is the on-disk format version and is what
+     * determines whether a given server binary can open the directory.
+     */
+    static Optional<String> onDiskMajor(Path dataDir) {
+        if (!isInitialized(dataDir)) {
+            return Optional.empty();
+        }
+        Path stamp = dataDir.resolve(PG_VERSION);
+        try {
+            String major = Files.readString(stamp).trim();
+            return major.isEmpty() ? Optional.empty() : Optional.of(major);
+        } catch (IOException ex) {
+            throw new UncheckedIOException("Failed to read " + stamp, ex);
+        }
+    }
+
+    /**
+     * The major component of a zonky binaries version — the part before the first dot (PostgreSQL 10+
+     * versions its on-disk format by a single major number). {@code "17.10.0"} maps to {@code "17"}.
+     */
+    static String majorOf(String binariesVersion) {
+        int dot = binariesVersion.indexOf('.');
+        return dot < 0 ? binariesVersion : binariesVersion.substring(0, dot);
+    }
 }

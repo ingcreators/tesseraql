@@ -60,7 +60,10 @@ binary version that initialized the directory (in a `tesseraql-embedded.properti
 re-resolves exactly that version on later starts, so upgrading the CLI — which may bump the default
 binary version — never leaves an existing directory unopenable by a newer, format-incompatible
 major. Pin a specific version yourself with `--embedded-db-version 17.10.0`; an ephemeral run always
-uses the default.
+uses the default. If a directory was created by a different major than the run resolves — a legacy
+directory from before this pinning existed, or a mismatched explicit `--embedded-db-version` — the
+CLI stops with a clear message (pin the matching major, or start fresh) rather than a cryptic
+`postgres` crash.
 
 The interactive dev loop is all CLI-native:
 

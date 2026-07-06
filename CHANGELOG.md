@@ -14,6 +14,11 @@ All notable changes to TesseraQL are documented here. The format follows
   start, so bumping the CLI's default binary version can never re-open an existing
   directory with a format-incompatible major. A new `--embedded-db-version <version>`
   flag pins the version explicitly; ephemeral runs continue to use the default.
+- **Embedded PostgreSQL major-version guard**: when the version resolved for an
+  `--embedded-db` run cannot open the target directory (its `PG_VERSION` records a
+  different major), the CLI now fails fast with an actionable message — how to pin the
+  matching major, or start fresh — instead of surfacing a cryptic `postgres` startup
+  crash.
 
 - **Documentation site, slice 2 — the generated reference** (completing the
   documentation-site leg of roadmap Phase 35; design in `docs/docs-site.md`): a
