@@ -51,10 +51,13 @@ public final class AppLinter {
         return KNOWN_ROUTE_RECIPES;
     }
     /** Recipes whose SQL pipeline is a read, where a route-level {@code datasource:} applies
-     * (roadmap Phase 53); the transactional recipes stay on {@code main} until the projection
-     * slice retargets the command engine. */
+     * (roadmap Phase 53). */
     private static final Set<String> READ_DATASOURCE_RECIPES = Set.of("query-json", "query-html",
             "page", "query-export");
+    /** Recipes whose whole single-connection transaction may move to a named connector (the
+     * projection pattern, docs/multi-datasource.md) — as long as the route stays plain SQL. */
+    private static final Set<String> TRANSACTIONAL_DATASOURCE_RECIPES = Set.of("command-json",
+            "webhook", "queue-consume");
     /** Recipes an application-declared MCP tool may use (roadmap Phase 24 follow-on). */
     private static final Set<String> KNOWN_TOOL_RECIPES = Set.of("query-json", "command-json");
     /** Recipes an MCP Apps UI resource may use - both render HTML (roadmap Phase 24). */
@@ -1744,9 +1747,11 @@ public final class AppLinter {
 
     /**
      * Lints the {@code datasource:} surface (roadmap Phase 53). A named connector must be
-     * declared under {@code tesseraql.datasources} ({@code TQL-YAML-1035}); a route-level
-     * connector applies to read recipes only until the projection slice retargets the
-     * transactional engine ({@code TQL-YAML-1036}); and a binding inside a transactional
+     * declared under {@code tesseraql.datasources} ({@code TQL-YAML-1035}); a read route picks a
+     * connector freely, and a transactional route moves its whole single-connection transaction
+     * there — but only as plain SQL: {@code notify:}/{@code publish:}/{@code outbox:} and
+     * sequence allocation ride the main connector, so declaring one on a non-main route is
+     * {@code TQL-YAML-1036} (project through main instead). A binding inside a transactional
      * pipeline can never pick its own connector — the pipeline is one transaction on one
      * connection ({@code TQL-YAML-1037}). Named queries run outside a command's transaction,
      * so their per-binding override is legal on every recipe.
@@ -1754,14 +1759,26 @@ public final class AppLinter {
     private void lintDatasource(AppConfig config, Path sourceFile, RouteDefinition definition,
             String source, List<LintFinding> findings) {
         boolean read = READ_DATASOURCE_RECIPES.contains(definition.recipe());
-        if (declaredDatasource(definition.datasource())) {
-            if (!read) {
+        if (declaredDatasource(definition.datasource())
+                && !"main".equals(definition.datasource())) {
+            if (read) {
+                lintDatasourceName(config, sourceFile, definition.datasource(), source, findings);
+            } else if (TRANSACTIONAL_DATASOURCE_RECIPES.contains(definition.recipe())) {
+                if (mainAnchored(definition)) {
+                    findings.add(new LintFinding("TQL-YAML-1036", "error", source,
+                            "a 'datasource: " + definition.datasource() + "' route cannot declare"
+                                    + " notify:/publish:/outbox: or sequence allocation - they"
+                                    + " ride the main connector; project through main instead",
+                            lineOf(sourceFile, "datasource:"), null));
+                } else {
+                    lintDatasourceName(config, sourceFile, definition.datasource(), source,
+                            findings);
+                }
+            } else {
                 findings.add(new LintFinding("TQL-YAML-1036", "error", source,
                         "datasource: is not supported on the '" + definition.recipe()
-                                + "' recipe - the transactional engine and the outbox run on main",
+                                + "' recipe - its pipeline runs on main",
                         lineOf(sourceFile, "datasource:"), null));
-            } else {
-                lintDatasourceName(config, sourceFile, definition.datasource(), source, findings);
             }
         }
         SqlBinding sql = definition.sql();
@@ -1803,6 +1820,14 @@ public final class AppLinter {
     /** Whether a {@code datasource:} value is actually declared (non-null, non-blank). */
     private static boolean declaredDatasource(String datasource) {
         return datasource != null && !datasource.isBlank();
+    }
+
+    /** Whether the route declares a feature whose tables live on the main connector. */
+    private static boolean mainAnchored(RouteDefinition definition) {
+        return !definition.notifications().isEmpty() || definition.publish() != null
+                || definition.outbox() != null
+                || (definition.sql() != null && definition.sql().isSequence())
+                || definition.steps().values().stream().anyMatch(SqlBinding::isSequence);
     }
 
     /** {@code TQL-YAML-1035}: a non-main connector must exist under {@code tesseraql.datasources}

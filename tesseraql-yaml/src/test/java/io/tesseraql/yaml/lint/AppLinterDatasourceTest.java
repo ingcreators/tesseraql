@@ -63,7 +63,7 @@ class AppLinterDatasourceTest {
     }
 
     @Test
-    void flagsARouteLevelConnectorOnATransactionalRecipe(@TempDir Path dir) throws Exception {
+    void flagsAMainAnchoredFeatureOnANonMainTransaction(@TempDir Path dir) throws Exception {
         writeConfig(dir);
         Path routeDir = dir.resolve("web/api/orders");
         Files.createDirectories(routeDir);
@@ -82,12 +82,62 @@ class AppLinterDatasourceTest {
                   mode: update
                   params:
                     orderId: body.orderId
+                publish:
+                  channel: events
+                  topic: orders.created
+                  payload:
+                    orderId: body.orderId
                 """);
 
         List<LintFinding> findings = new AppLinter().lint(dir);
 
         assertThat(findings).anyMatch(f -> f.code().equals("TQL-YAML-1036") && f.isError()
                 && f.source().contains("post.yml"));
+    }
+
+    @Test
+    void acceptsAPlainSqlProjectionConsumerOnANamedConnector(@TempDir Path dir) throws Exception {
+        Files.createDirectories(dir.resolve("config"));
+        Files.writeString(dir.resolve("config/tesseraql.yml"), """
+                tesseraql:
+                  app:
+                    name: t
+                  datasources:
+                    main:
+                      jdbcUrl: jdbc:postgresql://localhost/main
+                    reporting:
+                      jdbcUrl: jdbc:postgresql://localhost/reporting
+                  messaging:
+                    channels:
+                      events:
+                        transport: pg-notify
+                """);
+        Path consumeDir = dir.resolve("consume/orders");
+        Files.createDirectories(consumeDir);
+        Files.writeString(consumeDir.resolve("upsert.sql"),
+                "insert into order_projection (id) values (/* orderId */ 'x')\n");
+        Files.writeString(consumeDir.resolve("project.yml"), """
+                version: tesseraql/v1
+                id: orders.project
+                kind: route
+                recipe: queue-consume
+                datasource: reporting
+                consume:
+                  channel: events
+                  topic: orders.created
+                  idempotencyKey: body.orderId
+                input:
+                  orderId: { type: string, required: true }
+                sql:
+                  file: upsert.sql
+                  mode: update
+                  params:
+                    orderId: body.orderId
+                """);
+
+        List<LintFinding> findings = new AppLinter().lint(dir);
+
+        assertThat(findings).noneMatch(f -> f.code().startsWith("TQL-YAML-103"));
     }
 
     @Test

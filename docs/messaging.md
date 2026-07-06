@@ -100,6 +100,29 @@ and skipped (acknowledged without writing a row). Combined with at-least-once de
 processing **effectively exactly-once per business key** — so a consumer's SQL should be an
 idempotent upsert.
 
+### Projecting into another database
+
+A consumer may run its apply transaction on a named connector (roadmap Phase 53) — the blessed
+shape for "a write on `main` must reach a second database" without JTA/XA:
+
+```yaml
+recipe: queue-consume
+datasource: reporting             # a connector under tesseraql.datasources
+consume:
+  channel: events
+  topic: orders.created
+  idempotencyKey: body.orderId
+sql:
+  file: upsert-order-projection.sql   # an idempotent upsert, in reporting's schema
+  mode: update
+```
+
+Only where the SQL commits moves: the channel, its claim, and the consumed-key dedup records stay
+on `main`, so delivery semantics are unchanged. Such a consumer is plain SQL — `notify:` and
+`publish:` ride the main connector and are refused on a non-main route (`TQL-YAML-1036`); a
+projection that must fan out further consumes on `main` and publishes again. The full design and
+the failure walk are in [multi-datasource routes](multi-datasource.md).
+
 ## Channel configuration
 
 Channels are configured centrally, so a route names a channel but carries no transport detail:
