@@ -8,6 +8,13 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **Embedded PostgreSQL version pinning** (`serve --embedded-db`): a persistent data
+  directory now records the exact zonky binaries version that initialized it (in a
+  `tesseraql-embedded.properties` marker) and re-resolves that version on every later
+  start, so bumping the CLI's default binary version can never re-open an existing
+  directory with a format-incompatible major. A new `--embedded-db-version <version>`
+  flag pins the version explicitly; ephemeral runs continue to use the default.
+
 - **Documentation site, slice 2 — the generated reference** (completing the
   documentation-site leg of roadmap Phase 35; design in `docs/docs-site.md`): a
   build-only `tesseraql-docs-reference` module generates two committed markdown pages

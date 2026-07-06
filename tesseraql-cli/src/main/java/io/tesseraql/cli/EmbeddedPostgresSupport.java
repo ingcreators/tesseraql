@@ -31,8 +31,9 @@ final class EmbeddedPostgresSupport {
     private EmbeddedPostgresSupport() {
     }
 
-    /** A running embedded PostgreSQL: the {@code main} override it backs, plus its shutdown. */
-    record Handle(DataSources.MainDatasourceOverride override, EmbeddedPostgres postgres)
+    /** A running embedded PostgreSQL: the {@code main} override it backs, its version, plus its shutdown. */
+    record Handle(DataSources.MainDatasourceOverride override, EmbeddedPostgres postgres,
+            String version)
             implements
                 AutoCloseable {
 
@@ -56,9 +57,14 @@ final class EmbeddedPostgresSupport {
         }
     }
 
-    /** Starts an embedded instance on a random free port (see {@link #start(Path, Integer, boolean)}). */
+    /** Starts an embedded instance on a random free port (see {@link #start(Path, Integer, String, boolean)}). */
     static Handle start(Path dataDir, boolean offline) {
-        return start(dataDir, null, offline);
+        return start(dataDir, null, null, offline);
+    }
+
+    /** Starts an embedded instance with the default binary version (see {@link #start(Path, Integer, String, boolean)}). */
+    static Handle start(Path dataDir, Integer port, boolean offline) {
+        return start(dataDir, port, null, offline);
     }
 
     /**
@@ -69,9 +75,16 @@ final class EmbeddedPostgresSupport {
      * address). Either way it listens on localhost only — zonky's defaults ({@code listen_addresses}
      * = localhost, {@code pg_hba} trust for loopback) are left unchanged, so it is not reachable from
      * other hosts.
+     *
+     * <p>The zonky binaries version is chosen as: {@code requestedVersion} when non-null (an explicit
+     * {@code --embedded-db-version}); otherwise the version this persistent {@code dataDir} is pinned
+     * to (its {@value EmbeddedPostgresDataDir#MARKER} marker); otherwise the CLI's build-time default.
+     * On a successful start the chosen version is recorded as the directory's pin, so a later bump of
+     * the default never re-resolves an incompatible major against an existing directory.
      */
-    static Handle start(Path dataDir, Integer port, boolean offline) {
-        Path binaryJar = resolveBinaryJar(EmbeddedPostgresBinary.classifier(), offline);
+    static Handle start(Path dataDir, Integer port, String requestedVersion, boolean offline) {
+        String version = selectVersion(dataDir, requestedVersion);
+        Path binaryJar = resolveBinaryJar(EmbeddedPostgresBinary.classifier(), version, offline);
         try {
             EmbeddedPostgres.Builder builder = EmbeddedPostgres.builder()
                     .setPgBinaryResolver((system, hardware) -> openBinary(binaryJar));
@@ -84,15 +97,25 @@ final class EmbeddedPostgresSupport {
             EmbeddedPostgres postgres = builder.start();
             DataSources.MainDatasourceOverride override = new DataSources.MainDatasourceOverride(
                     postgres.getJdbcUrl("postgres", "postgres"), "postgres", "");
-            return new Handle(override, postgres);
+            EmbeddedPostgresDataDir.writePinnedVersion(dataDir, version);
+            return new Handle(override, postgres, version);
         } catch (IOException ex) {
             throw new UncheckedIOException("Failed to start embedded PostgreSQL", ex);
         }
     }
 
-    private static Path resolveBinaryJar(String classifier, boolean offline) {
+    /** The binary version to run: an explicit request, else the directory's pin, else the default. */
+    private static String selectVersion(Path dataDir, String requestedVersion) {
+        if (requestedVersion != null && !requestedVersion.isBlank()) {
+            return requestedVersion.trim();
+        }
+        return EmbeddedPostgresDataDir.pinnedVersion(dataDir)
+                .orElseGet(EmbeddedPostgresSupport::binariesVersion);
+    }
+
+    private static Path resolveBinaryJar(String classifier, String version, boolean offline) {
         String coordinate = BINARIES_GROUP + ":embedded-postgres-binaries-" + classifier + ":"
-                + binariesVersion();
+                + version;
         List<ResolvedModule> resolved = new ModuleResolver(ModulesInstaller.BOM_COORDINATE, offline)
                 .resolve(List.of(ModuleCoordinate.parse(coordinate)));
         return resolved.stream()

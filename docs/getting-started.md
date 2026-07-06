@@ -55,6 +55,13 @@ first run needs network); pass a directory to graduate the same data to a standa
 by setting `tesseraql.datasources.main.jdbcUrl`. Embedded mode is single-process — for multiple app
 nodes, point them at a shared external PostgreSQL.
 
+A **persistent directory is pinned to its PostgreSQL version.** On first use TesseraQL records the
+binary version that initialized the directory (in a `tesseraql-embedded.properties` marker) and
+re-resolves exactly that version on later starts, so upgrading the CLI — which may bump the default
+binary version — never leaves an existing directory unopenable by a newer, format-incompatible
+major. Pin a specific version yourself with `--embedded-db-version 17.10.0`; an ephemeral run always
+uses the default.
+
 The interactive dev loop is all CLI-native:
 
 ```sh
