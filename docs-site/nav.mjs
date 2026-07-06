@@ -18,6 +18,7 @@ export const SECTIONS = [
     items: [
       'app-layout',
       'transactional-writes',
+      'multi-datasource',
       'declarative-validation',
       'declarative-views',
       'pagination',
