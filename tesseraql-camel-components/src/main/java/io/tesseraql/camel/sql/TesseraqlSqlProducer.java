@@ -410,9 +410,15 @@ public class TesseraqlSqlProducer extends DefaultProducer {
      * Resolves the datasource for the exchange. When the request carries a resolved tenant and a
      * {@link io.tesseraql.camel.tenant.TenantDataSourceResolver} is bound, the per-tenant datasource
      * is used (database/schema-per-tenant, design ch. 30.2); otherwise the named datasource is used.
+     *
+     * <p>Tenant routing replaces only the {@code main} connector: an explicit non-main
+     * {@code datasource:} (roadmap Phase 53) is authoritative — named connectors are
+     * deployment-shared infrastructure, not tenant homes.
      */
     private DataSource dataSource(Exchange exchange) {
-        Object tenant = exchange.getProperty(TesseraqlProperties.TENANT);
+        Object tenant = "main".equals(endpoint.getDatasource())
+                ? exchange.getProperty(TesseraqlProperties.TENANT)
+                : null;
         if (tenant instanceof io.tesseraql.core.tenant.TenantContext tenantContext) {
             io.tesseraql.camel.tenant.TenantDataSourceResolver resolver = endpoint.getCamelContext()
                     .getRegistry().lookupByNameAndType(

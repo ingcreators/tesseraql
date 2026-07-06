@@ -71,6 +71,21 @@ class TenantDataSourceRoutingIntegrationTest {
     }
 
     @Test
+    void anExplicitConnectorIsNotOverriddenByTenantRouting() throws Exception {
+        // The route pins datasource: reporting (roadmap Phase 53); the tenant header still
+        // resolves a tenant, but tenant routing replaces only the main connector.
+        HttpResponse<String> response = HttpClient.newHttpClient().send(
+                HttpRequest.newBuilder(URI.create(
+                        "http://localhost:" + runtime.port() + "/api/report"))
+                        .header("X-Tenant-Id", "acme")
+                        .build(),
+                HttpResponse.BodyHandlers.ofString());
+        assertThat(response.statusCode()).isEqualTo(200);
+        JsonNode body = MAPPER.readTree(response.body());
+        assertThat(body.get("data").get(0).get("name").asText()).isEqualTo("reporting-only");
+    }
+
+    @Test
     void unknownTenantIsRejected() throws Exception {
         HttpResponse<String> response = HttpClient.newHttpClient().send(
                 HttpRequest.newBuilder(URI.create(
@@ -104,6 +119,11 @@ class TenantDataSourceRoutingIntegrationTest {
                 statement.execute("insert into " + tenant
                         + ".items (name) values ('" + tenant + "-only')");
             }
+            // A deployment-shared reporting area, reached by an explicit datasource: only.
+            statement.execute("create schema reporting_s");
+            statement.execute("create table reporting_s.items"
+                    + " (id serial primary key, name varchar(200) not null)");
+            statement.execute("insert into reporting_s.items (name) values ('reporting-only')");
         }
     }
 
@@ -140,6 +160,13 @@ class TenantDataSourceRoutingIntegrationTest {
                       jdbcUrl: %1$s&currentSchema=globex
                       username: %2$s
                       password: %3$s
+
+                tesseraql:
+                  datasources:
+                    reporting:
+                      jdbcUrl: %1$s&currentSchema=reporting_s
+                      username: %2$s
+                      password: %3$s
                 """.formatted(baseUrl, POSTGRES.getUsername(), POSTGRES.getPassword()));
 
         Path itemsDir = target.resolve("web/api/items");
@@ -164,6 +191,31 @@ class TenantDataSourceRoutingIntegrationTest {
                       data: sql.rows
                 """);
         Files.writeString(itemsDir.resolve("list.sql"), "select id, name from items order by id\n");
+
+        Path reportDir = target.resolve("web/api/report");
+        Files.createDirectories(reportDir);
+        Files.writeString(reportDir.resolve("get.yml"), """
+                version: tesseraql/v1
+                id: report.list
+                kind: route
+                recipe: query-json
+                datasource: reporting
+
+                security:
+                  auth: public
+
+                sql:
+                  file: report.sql
+                  mode: query
+
+                response:
+                  json:
+                    status: 200
+                    body:
+                      data: sql.rows
+                """);
+        Files.writeString(reportDir.resolve("report.sql"),
+                "select id, name from items order by id\n");
         return target;
     }
 

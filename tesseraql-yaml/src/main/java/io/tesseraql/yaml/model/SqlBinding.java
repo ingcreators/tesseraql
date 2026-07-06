@@ -20,11 +20,16 @@ import java.util.Map;
  * @param timeoutSeconds per-binding SQL statement timeout override (roadmap Phase 45); the
  *                 global default is {@code tesseraql.sql.timeoutSeconds}, and {@code 0}
  *                 disables the guard for a deliberately long-running statement
+ * @param datasource the named connector under {@code tesseraql.datasources} this read query runs
+ *                 on (roadmap Phase 53), overriding the route's connector; legal only on read
+ *                 bindings — a step inside a transactional pipeline cannot pick its own connector
+ *                 ({@code TQL-YAML-1037}), because the pipeline is one transaction on one
+ *                 connection
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public record SqlBinding(String file, String contract, String mode, Map<String, String> params,
         String service, Materialize materialize, String sequence, java.util.List<String> keys,
-        Expect expect, Integer timeoutSeconds) {
+        Expect expect, Integer timeoutSeconds, String datasource) {
 
     public SqlBinding {
         params = params == null ? Map.of() : Map.copyOf(params);
@@ -35,7 +40,16 @@ public record SqlBinding(String file, String contract, String mode, Map<String, 
     public SqlBinding(String file, String contract, String mode, Map<String, String> params,
             String service, Materialize materialize, String sequence,
             java.util.List<String> keys, Expect expect) {
-        this(file, contract, mode, params, service, materialize, sequence, keys, expect, null);
+        this(file, contract, mode, params, service, materialize, sequence, keys, expect, null,
+                null);
+    }
+
+    /** The pre-Phase-53 shape (no per-binding connector), for positional callers. */
+    public SqlBinding(String file, String contract, String mode, Map<String, String> params,
+            String service, Materialize materialize, String sequence,
+            java.util.List<String> keys, Expect expect, Integer timeoutSeconds) {
+        this(file, contract, mode, params, service, materialize, sequence, keys, expect,
+                timeoutSeconds, null);
     }
 
     /** Whether this binding executes a named Identity SQL Contract instead of a SQL file. */

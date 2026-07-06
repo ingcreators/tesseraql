@@ -50,6 +50,11 @@ public final class AppLinter {
     public static Set<String> knownRouteRecipes() {
         return KNOWN_ROUTE_RECIPES;
     }
+    /** Recipes whose SQL pipeline is a read, where a route-level {@code datasource:} applies
+     * (roadmap Phase 53); the transactional recipes stay on {@code main} until the projection
+     * slice retargets the command engine. */
+    private static final Set<String> READ_DATASOURCE_RECIPES = Set.of("query-json", "query-html",
+            "page", "query-export");
     /** Recipes an application-declared MCP tool may use (roadmap Phase 24 follow-on). */
     private static final Set<String> KNOWN_TOOL_RECIPES = Set.of("query-json", "command-json");
     /** Recipes an MCP Apps UI resource may use - both render HTML (roadmap Phase 24). */
@@ -691,6 +696,7 @@ public final class AppLinter {
                     "MCP UI resource references undefined policy '" + policy
                             + "' (deny by default)"));
         }
+        lintDatasource(config, ui.source(), definition, source, findings);
     }
 
     /**
@@ -762,6 +768,7 @@ public final class AppLinter {
             findings.add(new LintFinding("TQL-SEC-4030", "warning", source,
                     "MCP resource references undefined policy '" + policy + "' (deny by default)"));
         }
+        lintDatasource(config, resource.source(), definition, source, findings);
     }
 
     /**
@@ -842,6 +849,7 @@ public final class AppLinter {
             findings.add(new LintFinding("TQL-SEC-4030", "warning", source,
                     "MCP tool references undefined policy '" + policy + "' (deny by default)"));
         }
+        lintDatasource(config, tool.source(), definition, source, findings);
     }
 
     /**
@@ -968,6 +976,7 @@ public final class AppLinter {
                     + definition.recipe() + "' recipe"));
         }
         lintPdfExport(route, definition, source, findings);
+        lintDatasource(config, route.source(), definition, source, findings);
         lintEmbeddedVariables(route, definition, source, findings);
         if (definition.security() != null && definition.security().policy() != null
                 && !policyDefined(config, definition.security().policy())) {
@@ -1730,6 +1739,82 @@ public final class AppLinter {
         });
         lintPublish(config, definition, source, findings);
         lintNotify(config, definition, source, findings);
+        lintDatasource(config, consumer.source(), definition, source, findings);
+    }
+
+    /**
+     * Lints the {@code datasource:} surface (roadmap Phase 53). A named connector must be
+     * declared under {@code tesseraql.datasources} ({@code TQL-YAML-1035}); a route-level
+     * connector applies to read recipes only until the projection slice retargets the
+     * transactional engine ({@code TQL-YAML-1036}); and a binding inside a transactional
+     * pipeline can never pick its own connector — the pipeline is one transaction on one
+     * connection ({@code TQL-YAML-1037}). Named queries run outside a command's transaction,
+     * so their per-binding override is legal on every recipe.
+     */
+    private void lintDatasource(AppConfig config, Path sourceFile, RouteDefinition definition,
+            String source, List<LintFinding> findings) {
+        boolean read = READ_DATASOURCE_RECIPES.contains(definition.recipe());
+        if (declaredDatasource(definition.datasource())) {
+            if (!read) {
+                findings.add(new LintFinding("TQL-YAML-1036", "error", source,
+                        "datasource: is not supported on the '" + definition.recipe()
+                                + "' recipe - the transactional engine and the outbox run on main",
+                        lineOf(sourceFile, "datasource:"), null));
+            } else {
+                lintDatasourceName(config, sourceFile, definition.datasource(), source, findings);
+            }
+        }
+        SqlBinding sql = definition.sql();
+        if (sql != null && declaredDatasource(sql.datasource())) {
+            if (read) {
+                lintDatasourceName(config, sourceFile, sql.datasource(), source, findings);
+            } else {
+                findings.add(new LintFinding("TQL-YAML-1037", "error", source,
+                        "sql.datasource on the '" + definition.recipe() + "' recipe would split"
+                                + " the command transaction - a transactional pipeline runs on"
+                                + " one connection"));
+            }
+        }
+        definition.steps().forEach((name, step) -> {
+            if (declaredDatasource(step.datasource())) {
+                findings.add(new LintFinding("TQL-YAML-1037", "error", source,
+                        "Step '" + name + "' declares datasource: - a transactional pipeline is"
+                                + " one transaction on one connection and cannot pick a connector"
+                                + " per step"));
+            }
+        });
+        definition.queries().forEach((name, query) -> {
+            if (declaredDatasource(query.datasource())) {
+                lintDatasourceName(config, sourceFile, query.datasource(), source, findings);
+            }
+        });
+        if (definition.fileImport() != null && definition.fileImport().sql() != null
+                && declaredDatasource(definition.fileImport().sql().datasource())) {
+            findings.add(new LintFinding("TQL-YAML-1037", "error", source,
+                    "import.sql cannot declare datasource: - the import pipeline runs on main"));
+        }
+        if (definition.fileExport() != null && definition.fileExport().sql() != null
+                && declaredDatasource(definition.fileExport().sql().datasource())) {
+            findings.add(new LintFinding("TQL-YAML-1037", "error", source,
+                    "export.sql cannot declare datasource: - the export pipeline runs on main"));
+        }
+    }
+
+    /** Whether a {@code datasource:} value is actually declared (non-null, non-blank). */
+    private static boolean declaredDatasource(String datasource) {
+        return datasource != null && !datasource.isBlank();
+    }
+
+    /** {@code TQL-YAML-1035}: a non-main connector must exist under {@code tesseraql.datasources}
+     * ({@code main} is always legal — an embedded database can supply it outside config). */
+    private void lintDatasourceName(AppConfig config, Path sourceFile, String name, String source,
+            List<LintFinding> findings) {
+        if ("main".equals(name) || config.navigate("tesseraql.datasources." + name) != null) {
+            return;
+        }
+        findings.add(new LintFinding("TQL-YAML-1035", "error", source,
+                "datasource '" + name + "' is not declared under tesseraql.datasources",
+                lineOf(sourceFile, "datasource:"), null));
     }
 
     /**
