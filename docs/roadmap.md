@@ -923,6 +923,29 @@ loop proven against the REAL purchase-request gallery app
 (`PurchaseRequestDelegationIntegrationTest`). **Phase 52 is complete and milestone M16
 is met.**
 
+### Phase 53 — multi-datasource routes: cross-connector reads and projected consistency
+
+Named 2026-07-06; the accepted design is [docs/multi-datasource.md](multi-datasource.md).
+The runtime has carried named connectors since Phase 18 (per-connector pools,
+`db/<name>/migration` trees, `TQL-APP-4201`), but every route is compiled against
+`main`. One new word, `datasource:`, opens them — under one deliberate stance:
+**a business operation is one local transaction on one connector, never two; no
+JTA/XA.** Cross-database consistency is eventual and rides the existing outbox →
+channel → `queue-consume` machinery as a **projection** (`datasource:` on the
+consumer retargets only the apply transaction; the bus, its dedup records, and all
+framework bookkeeping stay on `main`). Reads pick a connector per route — or per
+named read query on a page — with dialect resolved per connector and explicit
+non-main selection authoritative over tenant routing. Main-anchored features
+(`notify:`, `publish:`, workflow, `sequence:`) on a non-main route are lint errors
+(`TQL-YAML-1035..1037` guard the surface). Three slices: design; reads; projections.
+
+**Milestone M18** — on a deployment with two real PostgreSQL databases: an app
+declares a `reporting` connector and migrates it from `db/reporting/migration`; a
+page renders one widget from `main` and one from `reporting`; creating an order
+commits on `main` and a `queue-consume` projection upserts it into `reporting`; a
+rolled-back command projects nothing; a forced redelivery never doubles a row — all
+declared in YAML, and no XA anywhere in the stack.
+
 ## CLI distribution and upgrade delivery (cross-cutting)
 
 ### Phase 38 — CLI distribution and upgrade delivery
