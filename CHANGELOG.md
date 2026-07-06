@@ -8,6 +8,18 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **Multi-datasource reads — `datasource:` on read routes** (roadmap Phase 53 slice 2;
+  design in `docs/multi-datasource.md`): a read route (`query-json`, `query-html`,
+  `page`, `query-export`, and read-only MCP tools/resources/UI) can declare
+  `datasource: <name>` to run its SQL on a named connector under
+  `tesseraql.datasources`, and a named query on a page can override per binding — so
+  one response composes result sets from several databases. The baked SQL dialect
+  (pagination clauses, streaming profiles, label normalization) now resolves per
+  connector, and an explicit non-main `datasource:` is authoritative over per-tenant
+  datasource routing (tenant routing replaces only `main`). Lint guards the surface:
+  an undeclared connector is `TQL-YAML-1035`, a route-level connector on a
+  transactional recipe is `TQL-YAML-1036` (until the projection slice), and a
+  per-step connector inside a transactional pipeline is `TQL-YAML-1037`.
 - **Embedded PostgreSQL version pinning** (`serve --embedded-db`): a persistent data
   directory now records the exact zonky binaries version that initialized it (in a
   `tesseraql-embedded.properties` marker) and re-resolves that version on every later

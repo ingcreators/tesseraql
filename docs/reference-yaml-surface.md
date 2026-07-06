@@ -19,6 +19,7 @@ Schema for TesseraQL Simple YAML documents: routes (web/**/<method>.yml), jobs (
 | `idempotency` | object |  |
 | `policy` | object |  |
 | `outbox` | object |  |
+| `datasource` | string | The named connector under tesseraql.datasources the route's SQL runs on (roadmap Phase 53), defaulting to main. Read recipes only until the projection slice (TQL-YAML-1036); the name must be declared (TQL-YAML-1035). |
 | `sql` | [sqlBinding](#sqlbinding) |  |
 | `steps` | map of [sqlBinding](#sqlbinding) |  |
 | `queries` | map of [sqlBinding](#sqlbinding) | Additional named queries executed after sql, each bound into the execution context under its name. |
@@ -199,6 +200,7 @@ Declarative pagination (roadmap Phase 41): the framework appends the dialect cla
 | `service` | string |  |
 | `mode` | string |  |
 | `timeoutSeconds` | integer ≥ 0 | Per-binding SQL statement timeout override (roadmap Phase 45); 0 disables. Default: tesseraql.sql.timeoutSeconds, else 30s. |
+| `datasource` | string | The named connector this read binding runs on (roadmap Phase 53), overriding the route's connector. A step inside a transactional pipeline cannot pick its own connector (TQL-YAML-1037). |
 | `params` | map of string |  |
 | `sequence` | string |  |
 | `keys` | array of string |  |

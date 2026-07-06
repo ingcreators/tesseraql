@@ -47,6 +47,10 @@
     "idempotency": { "type": "object", "additionalProperties": true },
     "policy": { "type": "object", "additionalProperties": true },
     "outbox": { "type": "object", "additionalProperties": true },
+    "datasource": {
+      "type": "string",
+      "description": "The named connector under tesseraql.datasources the route's SQL runs on (roadmap Phase 53), defaulting to main. Read recipes only until the projection slice (TQL-YAML-1036); the name must be declared (TQL-YAML-1035)."
+    },
     "sql": { "$ref": "#/$defs/sqlBinding" },
     "steps": {
       "type": "object",
@@ -232,6 +236,7 @@
         "service": { "type": "string" },
         "mode": { "type": "string", "examples": ["query", "query-one", "update", "query-spool"] },
         "timeoutSeconds": { "type": "integer", "minimum": 0, "description": "Per-binding SQL statement timeout override (roadmap Phase 45); 0 disables. Default: tesseraql.sql.timeoutSeconds, else 30s." },
+        "datasource": { "type": "string", "description": "The named connector this read binding runs on (roadmap Phase 53), overriding the route's connector. A step inside a transactional pipeline cannot pick its own connector (TQL-YAML-1037)." },
         "params": { "type": "object", "additionalProperties": { "type": "string" } },
         "sequence": { "type": "string" },
         "keys": { "type": "array", "items": { "type": "string" } },

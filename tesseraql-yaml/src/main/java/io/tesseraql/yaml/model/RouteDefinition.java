@@ -33,6 +33,10 @@ import java.util.Map;
  * @param consume the {@code consume:} block of a {@code queue-consume} route, subscribing to a
  *                messaging channel and running the SQL pipeline per message (roadmap Phase 27)
  * @param response response shape
+ * @param datasource the named connector under {@code tesseraql.datasources} the route's SQL runs
+ *                on (roadmap Phase 53), defaulting to {@code main}; on a read route every binding
+ *                runs there (a named read query may override per binding), and a transactional
+ *                route moves its whole single-connection transaction there
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public record RouteDefinition(
@@ -59,7 +63,8 @@ public record RouteDefinition(
         PublishSpec publish,
         ConsumeSpec consume,
         ResponseSpec response,
-        PageSpec page) {
+        PageSpec page,
+        String datasource) {
 
     public RouteDefinition {
         input = input == null ? Map.of() : Map.copyOf(input);
@@ -82,5 +87,10 @@ public record RouteDefinition(
     /** The input policy, or framework defaults (reject unknown / reject read-only). */
     public InputPolicy effectiveInputPolicy() {
         return inputPolicy == null ? InputPolicy.defaults() : inputPolicy;
+    }
+
+    /** The connector the route's SQL runs on: the declared {@code datasource:}, else {@code main}. */
+    public String effectiveDatasource() {
+        return datasource == null || datasource.isBlank() ? "main" : datasource;
     }
 }

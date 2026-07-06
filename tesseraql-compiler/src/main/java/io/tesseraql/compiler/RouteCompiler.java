@@ -393,7 +393,7 @@ public final class RouteCompiler {
             RouteDefinition synthesized = new RouteDefinition("tesseraql/v1", routeId, "route",
                     "command-json", java.util.Map.of(), null, security, null, null, null, command,
                     java.util.Map.of(), java.util.Map.of(), java.util.Map.of(), java.util.Map.of(),
-                    null, null, null, null, null, null, workflowResponse(), null);
+                    null, null, null, null, null, null, workflowResponse(), null, null);
             String urlPath = basePath + "/{key}/" + transition.id();
             RouteFile routeFile = new RouteFile("POST", urlPath, workflowFile.source(),
                     synthesized);
@@ -450,7 +450,7 @@ public final class RouteCompiler {
                 "command-json", java.util.Map.of(), null, def.security(), null, null, null, null,
                 java.util.Map.of(), java.util.Map.of(), java.util.Map.of(), java.util.Map.of(),
                 null,
-                null, null, null, null, null, workflowResponse(), null);
+                null, null, null, null, null, workflowResponse(), null, null);
         ProcessorDefinition<?> route = builder.from(direct).routeId(routeId);
         applySecurity(route, def.security());
         applyTenancy(route);
@@ -635,7 +635,7 @@ public final class RouteCompiler {
         }
         Path sqlPath = routeDir.resolve(definition.sql().file()).normalize();
         String sqlUri = "tesseraql-sql:file:" + sqlPath
-                + "?datasource=" + DEFAULT_DATASOURCE
+                + "?datasource=" + definition.effectiveDatasource()
                 + "&mode=query-export&filename=" + exportFilename(definition, codec);
 
         ProcessorDefinition<?> route = builder.from(direct).routeId(routeId);
@@ -876,12 +876,14 @@ public final class RouteCompiler {
                     definition.notifications(), stepFile, DEFAULT_DATASOURCE, dialect,
                     definition.outbox(), definition.publish(), definition.errors(), appName));
         } else if (definition.sql() != null) {
-            step = step.to(executionUri(toolDir, definition.sql(), "sql"));
+            step = step.to(executionUri(toolDir, definition.sql(), "sql",
+                    definition.effectiveDatasource()));
         }
         for (var entry : definition.queries().entrySet()) {
             step = step
                     .process(new io.tesseraql.compiler.binding.NamedQueryBinder(entry.getValue()))
-                    .to(executionUri(toolDir, entry.getValue(), entry.getKey()));
+                    .to(executionUri(toolDir, entry.getValue(), entry.getKey(),
+                            definition.effectiveDatasource()));
         }
         step.process(mcpToolRenderer(definition));
         applyIdempotencyComplete(step, definition);
@@ -914,12 +916,14 @@ public final class RouteCompiler {
         ProcessorDefinition<?> step = route
                 .process(new RequestBinder(definition, java.util.List.of(), compiledAppHome));
         if (definition.sql() != null) {
-            step = step.to(executionUri(resourceDir, definition.sql(), "sql"));
+            step = step.to(executionUri(resourceDir, definition.sql(), "sql",
+                    definition.effectiveDatasource()));
         }
         for (var entry : definition.queries().entrySet()) {
             step = step
                     .process(new io.tesseraql.compiler.binding.NamedQueryBinder(entry.getValue()))
-                    .to(executionUri(resourceDir, entry.getValue(), entry.getKey()));
+                    .to(executionUri(resourceDir, entry.getValue(), entry.getKey(),
+                            definition.effectiveDatasource()));
         }
         step.process(mcpToolRenderer(definition));
     }
@@ -951,12 +955,14 @@ public final class RouteCompiler {
         ProcessorDefinition<?> step = route
                 .process(new RequestBinder(definition, java.util.List.of(), compiledAppHome));
         if (definition.sql() != null) {
-            step = step.to(executionUri(uiDir, definition.sql(), "sql"));
+            step = step.to(executionUri(uiDir, definition.sql(), "sql",
+                    definition.effectiveDatasource()));
         }
         for (var entry : definition.queries().entrySet()) {
             step = step
                     .process(new io.tesseraql.compiler.binding.NamedQueryBinder(entry.getValue()))
-                    .to(executionUri(uiDir, entry.getValue(), entry.getKey()));
+                    .to(executionUri(uiDir, entry.getValue(), entry.getKey(),
+                            definition.effectiveDatasource()));
         }
         step.process(new HtmlResponseRenderer(definition.response().html(), appHome, uiDir,
                 i18n.defaultTag()));
@@ -984,13 +990,16 @@ public final class RouteCompiler {
     /** Builds an execution step URI: a service provider, a tesseraql-iam contract or a SQL file. */
     private String executionUri(RouteFile routeFile, io.tesseraql.yaml.model.SqlBinding binding,
             String resultKey) {
-        return executionUri(routeFile.source().getParent(), binding, resultKey);
+        return executionUri(routeFile.source().getParent(), binding, resultKey,
+                routeFile.definition().effectiveDatasource());
     }
 
     /** As {@link #executionUri(RouteFile, io.tesseraql.yaml.model.SqlBinding, String)}, resolving
-     * SQL files relative to {@code sourceDir} (shared by routes and MCP tools). */
+     * SQL files relative to {@code sourceDir} (shared by routes and MCP tools). The binding's own
+     * {@code datasource:} wins over {@code routeDatasource}, the route-level connector (roadmap
+     * Phase 53); the baked dialect follows the connector the SQL actually runs on. */
     private String executionUri(Path sourceDir, io.tesseraql.yaml.model.SqlBinding binding,
-            String resultKey) {
+            String resultKey, String routeDatasource) {
         if (binding.isService()) {
             return "tesseraql-service:call?name=" + binding.service() + "&resultKey=" + resultKey;
         }
@@ -998,12 +1007,15 @@ public final class RouteCompiler {
             return "tesseraql-iam:contract?name=" + binding.contract()
                     + "&mode=" + binding.effectiveMode() + "&resultKey=" + resultKey;
         }
+        String datasource = binding.datasource() == null || binding.datasource().isBlank()
+                ? routeDatasource
+                : binding.datasource();
         Path sqlPath = sourceDir.resolve(binding.file()).normalize();
         return "tesseraql-sql:file:" + sqlPath
-                + "?datasource=" + DEFAULT_DATASOURCE
+                + "?datasource=" + datasource
                 + "&mode=" + binding.effectiveMode()
                 + "&resultKey=" + resultKey
-                + "&dialect=" + datasourceDialect()
+                + "&dialect=" + datasourceDialect(datasource)
                 + "&maxRows=" + effectiveMaxRows(binding)
                 + "&onOverflow=" + effectiveOnOverflow(binding)
                 + "&queryTimeoutSeconds=" + effectiveTimeoutSeconds(binding);
@@ -1025,9 +1037,18 @@ public final class RouteCompiler {
                 .orElse(30);
     }
 
-    /** Resolves the configured datasource dialect, inferring it from the JDBC URL when unset. */
+    /** Resolves the main datasource's dialect, inferring it from the JDBC URL when unset. */
     private String datasourceDialect() {
-        String prefix = "tesseraql.datasources." + DEFAULT_DATASOURCE + ".";
+        return datasourceDialect(DEFAULT_DATASOURCE);
+    }
+
+    /**
+     * Resolves a named connector's dialect exactly as {@code main}'s: the declared
+     * {@code tesseraql.datasources.<name>.dialect}, else inferred from its JDBC URL (roadmap
+     * Phase 53) — so a MySQL connector beside a PostgreSQL main paginates with its own clauses.
+     */
+    private String datasourceDialect(String datasource) {
+        String prefix = "tesseraql.datasources." + datasource + ".";
         return config.getString(prefix + "dialect")
                 .orElseGet(() -> io.tesseraql.core.dialect.Dialect
                         .fromJdbcUrl(config.getString(prefix + "jdbcUrl").orElse(""))
