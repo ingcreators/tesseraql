@@ -8,6 +8,13 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **`tesseraql lint --format json`** (roadmap Phase 54 slice 2; design in
+  `docs/vscode-extension.md`): the lint command can print the cross-surface findings
+  document the MCP dev-tools' `lint` tool has emitted since Phase 24 —
+  `{errors, warnings, findings: [{code, severity, source, message, line, column}]}` —
+  as the one JSON object on stdout, so editors parse the same shape agents do.
+  `--format text` names today's output and stays the default; exit semantics
+  (including `--fail-on-warning`) are identical in both formats.
 - **Cross-database projections — `datasource:` on transactional routes** (roadmap
   Phase 53 slice 3, completing the phase; design in `docs/multi-datasource.md`): a
   `command-json`, `webhook`, or `queue-consume` route moves its whole
