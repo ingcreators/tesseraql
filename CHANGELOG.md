@@ -8,6 +8,19 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **VS Code extension (MVP)** (roadmap Phase 54 slice 3; design in
+  `docs/vscode-extension.md`): `vscode-extension/` ships the editor shell over the
+  existing engines — saving a file in an app home runs
+  `tesseraql lint --format json` (the CLI named by the new `tesseraql.cliPath`
+  setting) and publishes every finding to the Problems panel at its source, line,
+  and column, with the finding code linking to the published error-code reference;
+  *TesseraQL: Serve / Test / Migrate / Admission / Package* run in the integrated
+  terminal and *Lint* headless; a *TesseraQL* explorer view walks routes by kind,
+  views, migrations, and test suites; `TQL-*` hovers link into the reference; and
+  snippets cover the blessed route shapes. TypeScript with zero runtime
+  dependencies; the editor-free core is unit-tested with `node:test`; a new CI job
+  typechecks, tests, and packages the `.vsix` (marketplace publishing stays an
+  operator step per the design).
 - **`tesseraql lint --format json`** (roadmap Phase 54 slice 2; design in
   `docs/vscode-extension.md`): the lint command can print the cross-surface findings
   document the MCP dev-tools' `lint` tool has emitted since Phase 24 —

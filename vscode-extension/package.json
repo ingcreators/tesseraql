@@ -1,0 +1,113 @@
+{
+  "name": "tesseraql-vscode",
+  "displayName": "TesseraQL",
+  "description": "TesseraQL application authoring: real lint findings in the Problems panel, the CLI verbs as commands, and an app explorer.",
+  "version": "0.1.0",
+  "publisher": "ingcreators",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ingcreators/tesseraql",
+    "directory": "vscode-extension"
+  },
+  "engines": {
+    "vscode": "^1.90.0",
+    "node": ">=22"
+  },
+  "packageManager": "pnpm@11.8.0",
+  "categories": [
+    "Linters",
+    "Snippets",
+    "Other"
+  ],
+  "activationEvents": [
+    "workspaceContains:config/tesseraql.yml",
+    "workspaceContains:*/config/tesseraql.yml"
+  ],
+  "main": "./out/src/extension.js",
+  "contributes": {
+    "configuration": {
+      "title": "TesseraQL",
+      "properties": {
+        "tesseraql.cliPath": {
+          "type": "string",
+          "default": "tesseraql",
+          "description": "The tesseraql CLI the extension runs for lint and commands — the project's version, so editor findings always match the build."
+        }
+      }
+    },
+    "commands": [
+      {
+        "command": "tesseraql.lint",
+        "title": "Lint",
+        "category": "TesseraQL"
+      },
+      {
+        "command": "tesseraql.serve",
+        "title": "Serve",
+        "category": "TesseraQL"
+      },
+      {
+        "command": "tesseraql.test",
+        "title": "Test",
+        "category": "TesseraQL"
+      },
+      {
+        "command": "tesseraql.migrate",
+        "title": "Migrate",
+        "category": "TesseraQL"
+      },
+      {
+        "command": "tesseraql.admission",
+        "title": "Admission",
+        "category": "TesseraQL"
+      },
+      {
+        "command": "tesseraql.package",
+        "title": "Package",
+        "category": "TesseraQL"
+      },
+      {
+        "command": "tesseraql.refreshExplorer",
+        "title": "Refresh Explorer",
+        "category": "TesseraQL",
+        "icon": "$(refresh)"
+      }
+    ],
+    "views": {
+      "explorer": [
+        {
+          "id": "tesseraqlExplorer",
+          "name": "TesseraQL",
+          "when": "tesseraql.hasApp"
+        }
+      ]
+    },
+    "menus": {
+      "view/title": [
+        {
+          "command": "tesseraql.refreshExplorer",
+          "when": "view == tesseraqlExplorer",
+          "group": "navigation"
+        }
+      ]
+    },
+    "snippets": [
+      {
+        "language": "yaml",
+        "path": "./snippets/tesseraql.code-snippets"
+      }
+    ]
+  },
+  "scripts": {
+    "build": "tsc -p .",
+    "test": "pnpm run build && node --test out/test/*.test.js",
+    "package": "pnpm run build && vsce package --no-dependencies"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.0",
+    "@types/vscode": "~1.90.0",
+    "@vscode/vsce": "^3.6.0",
+    "typescript": "^5.8.0"
+  }
+}
