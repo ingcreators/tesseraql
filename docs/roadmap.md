@@ -1001,6 +1001,34 @@ Keeps extension principle 4 (the notifier is opt-out and deterministic) and 5 (n
 `tesseraql-core` dependency — the version check lives in the CLI module). Cross-references Phase 35
 (distribution maturity) and Decision point 3 (pull distribution forward if adoption is near-term).
 
+## Editor surface (cross-cutting)
+
+### Phase 54 — the VS Code extension
+
+Named 2026-07-07; the accepted design is [docs/vscode-extension.md](vscode-extension.md).
+The editor is the fourth authoring surface after Studio, the MCP dev-tools, and the
+CLI — and the only one the real linter never reaches: Phase 43's scaffolded JSON
+Schema wiring checks shape, nothing more. `vscode-extension/` closes the loop as a
+thin editor shell over the existing engines, under one stance: **the extension holds
+no validation logic**. It runs the project-selected CLI (`tesseraql.cliPath`) and
+renders the findings contract the MCP dev-tools already emit, which
+`tesseraql lint --format json` makes the one cross-surface shape. The MVP: lint on
+save into the Problems panel at `source:line:column`, the CLI verbs (serve, test,
+migrate, admission, package) as palette commands, an explorer tree over the app
+layout, error-code hovers into the published reference, snippets aligned with the
+YAML surface — TypeScript with zero runtime dependencies (editor-free core modules
+unit-tested with `node:test`), a CI job on the docs-site toolchain (pnpm, Node 22),
+and the scaffolder recommending the extension. Marketplace publishing is an operator
+step (the Cloudflare-dashboard precedent); a full language server, Test Explorer
+integration, and Studio deep links are the recorded ladder above the MVP. Four
+slices: design; the CLI JSON contract; the extension MVP + CI; adoption wiring.
+
+**Milestone M19** — in a fresh `tesseraql new` app opened in VS Code with the
+extension: a route-breaking edit surfaces the real `TQL-*` finding at line and column
+within seconds of save and clears on fix; serve, test, and migrate run from the
+palette; the explorer reaches every route, view, migration, and test suite — no
+Studio, no hand-typed terminal.
+
 ## Continuous tracks
 
 - **Platform maintenance**: weekly Dependabot triage (policy encoded in

@@ -29,6 +29,7 @@ export const SECTIONS = [
       'attachments',
       'scaffolding',
       'documentation-portal',
+      'vscode-extension',
     ],
   },
   {
