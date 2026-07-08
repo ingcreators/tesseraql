@@ -88,9 +88,11 @@ public final class AppScaffolder {
             }
             """;
 
+    // Schema completion (redhat.vscode-yaml, Phase 43) plus the TesseraQL extension
+    // (roadmap Phase 54): real lint findings, the CLI verbs, and the app explorer.
     private static final String VSCODE_EXTENSIONS_JSON = """
             {
-              "recommendations": ["redhat.vscode-yaml"]
+              "recommendations": ["redhat.vscode-yaml", "ingcreators.tesseraql-vscode"]
             }
             """;
 

@@ -1029,6 +1029,17 @@ within seconds of save and clears on fix; serve, test, and migrate run from the
 palette; the explorer reaches every route, view, migration, and test suite — no
 Studio, no hand-typed terminal.
 
+Delivered 2026-07-07 in the four designed slices: the design; the CLI contract
+(`lint --format json`, proven against a broken scaffold by
+`AppLifecycleCommandsTest`); the extension MVP with its CI job (the editor-free core
+under `node:test`, the findings loop proven end to end — the real fat jar's JSON
+parsed by the extension's own contract parser mapping a missing-SQL error to its
+route file); and the adoption wiring (the scaffolder recommends the extension; the
+marketplace publish stays the recorded operator step, so M19 runs off the CI-built
+`.vsix` today). The linter also learned to accept a relative app home — the
+documented `lint --app .` form crashed before the end-to-end pass caught it.
+**Phase 54 is complete and milestone M19 is met.**
+
 ## Continuous tracks
 
 - **Platform maintenance**: weekly Dependabot triage (policy encoded in

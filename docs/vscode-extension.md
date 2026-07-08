@@ -1,7 +1,10 @@
 # The VS Code extension — the editor as a first-class authoring surface
 
 Status: design accepted 2026-07-07 (roadmap Phase 54, a cross-cutting developer-experience
-track like Phase 38).
+track like Phase 38). **All four slices are delivered — Phase 54 is complete and
+milestone M19 is met** (`vscode-extension/`, `tesseraql lint --format json`, the
+`vscode-extension` CI job, and the scaffolder recommendation). The marketplace publish
+remains the recorded operator step; until then the CI-built `.vsix` installs from file.
 
 TesseraQL already has three authoring surfaces, each riding the same engines: **Studio**
 in the browser (Track J), the **MCP dev-tools** for coding agents (Phase 24), and the

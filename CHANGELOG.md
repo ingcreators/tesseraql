@@ -8,6 +8,12 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **Scaffolded apps recommend the TesseraQL VS Code extension** (roadmap Phase 54
+  slice 4, completing the phase; design in `docs/vscode-extension.md`):
+  `tesseraql new` writes `.vscode/extensions.json` recommending
+  `ingcreators.tesseraql-vscode` alongside `redhat.vscode-yaml`, so a fresh app opens
+  with schema completion and the real lint loop one install away. Marketplace
+  publishing stays an operator step; the CI-built `.vsix` installs from file.
 - **VS Code extension (MVP)** (roadmap Phase 54 slice 3; design in
   `docs/vscode-extension.md`): `vscode-extension/` ships the editor shell over the
   existing engines — saving a file in an app home runs

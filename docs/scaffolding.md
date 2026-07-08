@@ -193,3 +193,10 @@ After changing the generators intentionally, refresh the gallery and commit the 
 `redhat.vscode-yaml` extension. Any editor with a YAML language server then validates and
 completes route, job, and view documents offline — no Studio required. `tesseraql lint`
 findings carry `source:line` positions where the rule can locate itself.
+
+Scaffolded apps also recommend the TesseraQL VS Code extension
+(`ingcreators.tesseraql-vscode`, [docs/vscode-extension.md](vscode-extension.md)): the
+real linter's findings in the Problems panel on save, the CLI verbs as commands, an app
+explorer, error-code hovers, and route snippets. The schema wiring above stays the
+completion source — the extension complements it. Until the marketplace publish (an
+operator step), install the CI-built `.vsix` from file.
