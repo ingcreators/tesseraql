@@ -1,7 +1,11 @@
 package io.tesseraql.cli;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.tesseraql.coverage.CoverageRegression;
 import io.tesseraql.coverage.CoverageThresholds;
+import io.tesseraql.coverage.SqlCoverageReport;
 import io.tesseraql.identity.RealmConfig;
 import io.tesseraql.report.AppTestRunner;
 import io.tesseraql.report.CoverageThresholdResolver;
@@ -73,6 +77,14 @@ final class TestCommand implements Callable<Integer> {
             "--regression-tolerance"}, description = "Allowed coverage drop (percentage points) before it is a regression.")
     double regressionTolerance;
 
+    @Option(names = {
+            "--format"}, defaultValue = "text", description = "Output format: ${COMPLETION-CANDIDATES} (default: ${DEFAULT-VALUE}).")
+    Format format;
+
+    enum Format {
+        text, json
+    }
+
     @Override
     public Integer call() throws Exception {
         AppManifest manifest = new ManifestLoader().load(app);
@@ -83,12 +95,9 @@ final class TestCommand implements Callable<Integer> {
         AppTestRunner.RunResult result = new AppTestRunner().run(app, dataSource,
                 RealmConfig.managed(realm, "main"), reports);
         TestReport report = result.report();
-        System.out.println(
-                "TesseraQL tests: " + report.passed() + " passed, " + report.failed() + " failed");
-        for (TestReport.TestResult testResult : report.results()) {
-            if (!testResult.passed()) {
-                System.err.println("FAIL " + testResult.name() + ": " + testResult.message());
-            }
+        switch (format) {
+            case text -> printText(report);
+            case json -> printJson(result);
         }
         boolean regressed = writeReport && writeOverlay(manifest, result);
         if (!report.allPassed()) {
@@ -96,6 +105,44 @@ final class TestCommand implements Callable<Integer> {
         }
         // A clean test run that regressed coverage (opt-in gate) exits 2, distinct from a test failure.
         return regressed ? 2 : 0;
+    }
+
+    private static void printText(TestReport report) {
+        System.out.println(
+                "TesseraQL tests: " + report.passed() + " passed, " + report.failed() + " failed");
+        for (TestReport.TestResult testResult : report.results()) {
+            if (!testResult.passed()) {
+                System.err.println("FAIL " + testResult.name() + ": " + testResult.message());
+            }
+        }
+    }
+
+    /**
+     * The editor test-run contract (docs/vscode-extension.md, Phase 55): the complete per-case
+     * results plus per-file SQL coverage with the 1-based covered/coverable line lists, one JSON
+     * object on stdout. Files and lines are emitted sorted, so the document is deterministic.
+     */
+    private static void printJson(AppTestRunner.RunResult result) throws Exception {
+        ObjectMapper mapper = new ObjectMapper();
+        ObjectNode document = mapper.createObjectNode();
+        document.put("passed", result.report().passed());
+        document.put("failed", result.report().failed());
+        document.set("results", mapper.valueToTree(result.report().results()));
+        ArrayNode sql = document.putArray("sql");
+        result.coverage().reports().entrySet().stream()
+                .sorted(java.util.Map.Entry.comparingByKey())
+                .forEach(entry -> {
+                    SqlCoverageReport report = entry.getValue();
+                    ObjectNode file = sql.addObject();
+                    file.put("file", entry.getKey());
+                    file.put("lineRatio", report.lineRatio());
+                    file.put("branchRatio", report.branchRatio());
+                    file.set("coveredLines",
+                            mapper.valueToTree(report.coveredLines().stream().sorted().toList()));
+                    file.set("coverableLines",
+                            mapper.valueToTree(report.coverableLines().stream().sorted().toList()));
+                });
+        System.out.println(mapper.writerWithDefaultPrettyPrinter().writeValueAsString(document));
     }
 
     /**

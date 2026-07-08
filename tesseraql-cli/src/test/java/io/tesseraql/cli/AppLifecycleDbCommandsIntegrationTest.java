@@ -2,6 +2,11 @@ package io.tesseraql.cli;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import java.io.ByteArrayOutputStream;
+import java.io.PrintStream;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
@@ -23,7 +28,7 @@ class AppLifecycleDbCommandsIntegrationTest {
     static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("postgres:16-alpine");
 
     @Test
-    void migrateTestCoverageSchemaAndIdentityOverPostgres(@TempDir Path dir) {
+    void migrateTestCoverageSchemaAndIdentityOverPostgres(@TempDir Path dir) throws Exception {
         assertThat(execute("new", "demo", "--dir", dir.toString())).isZero();
         Path app = dir.resolve("demo");
 
@@ -37,6 +42,21 @@ class AppLifecycleDbCommandsIntegrationTest {
         assertThat(execute(args(app, "test", "--report"))).isZero();
         assertThat(app.resolve(".tesseraql/docs/report.json")).exists();
         assertThat(app.resolve(".tesseraql/docs/history.json")).exists();
+
+        // The editor test-run contract (Phase 55): complete per-case results plus per-file
+        // SQL coverage with the 1-based covered/coverable line lists, one JSON object.
+        Captured json = executeCapturing(args(app, "test", "--format", "json"));
+        assertThat(json.exitCode()).isZero();
+        JsonNode document = new ObjectMapper().readTree(json.stdout());
+        assertThat(document.get("failed").asLong()).isZero();
+        assertThat(document.get("passed").asLong()).isEqualTo(document.get("results").size());
+        assertThat(document.get("results").get(0).get("name").asText()).isNotBlank();
+        assertThat(document.get("results").get(0).get("passed").asBoolean()).isTrue();
+        assertThat(document.get("sql").size()).isPositive();
+        JsonNode sqlFile = document.get("sql").get(0);
+        assertThat(sqlFile.get("file").asText()).endsWith(".sql");
+        assertThat(sqlFile.get("coveredLines").isArray()).isTrue();
+        assertThat(sqlFile.get("coverableLines").isArray()).isTrue();
 
         // Coverage gate (default thresholds are 0, so it passes).
         assertThat(execute(args(app, "coverage"))).isZero();
@@ -62,5 +82,20 @@ class AppLifecycleDbCommandsIntegrationTest {
 
     private static int execute(String... args) {
         return new CommandLine(new TesseraqlCli()).execute(args);
+    }
+
+    private static Captured executeCapturing(String... args) {
+        PrintStream original = System.out;
+        ByteArrayOutputStream buffer = new ByteArrayOutputStream();
+        try {
+            System.setOut(new PrintStream(buffer, true, StandardCharsets.UTF_8));
+            int exitCode = execute(args);
+            return new Captured(exitCode, buffer.toString(StandardCharsets.UTF_8));
+        } finally {
+            System.setOut(original);
+        }
+    }
+
+    private record Captured(int exitCode, String stdout) {
     }
 }

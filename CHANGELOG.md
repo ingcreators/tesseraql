@@ -8,6 +8,15 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **`tesseraql test --format json`** (roadmap Phase 55 slice 3; design in
+  `docs/vscode-extension.md`): the test command can print the editor test-run
+  contract — `{passed, failed, results: [{name, passed, message}], sql: [{file,
+  lineRatio, branchRatio, coveredLines, coverableLines}]}` — as the one JSON object
+  on stdout: the complete per-case results (the `report.json` overlay only carries
+  cases joined to a route) plus per-file SQL line/branch coverage with the 1-based
+  line lists, files and lines sorted for determinism. `--format text` names today's
+  output and stays the default; exit semantics (1 on failure, 2 on the opt-in
+  regression gate) are identical in both formats.
 - **Scaffolded apps recommend the TesseraQL VS Code extension** (roadmap Phase 54
   slice 4, completing the phase; design in `docs/vscode-extension.md`):
   `tesseraql new` writes `.vscode/extensions.json` recommending
