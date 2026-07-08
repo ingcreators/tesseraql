@@ -77,6 +77,41 @@ class AppLifecycleCommandsTest {
     }
 
     @Test
+    void symbolsPrintsPoliciesMessagesAndRoutesWithLines(@TempDir Path dir) throws Exception {
+        Path app = scaffold(dir);
+        Files.createDirectories(app.resolve("messages"));
+        Files.writeString(app.resolve("messages/en.yml"), """
+                users:
+                  list:
+                    title: Users
+                """);
+        Captured captured = executeCapturing("symbols", "--app", app.toString());
+        assertThat(captured.exitCode()).isZero();
+        JsonNode document = new ObjectMapper().readTree(captured.stdout());
+
+        JsonNode appRead = null;
+        for (JsonNode policy : document.get("policies")) {
+            if (policy.get("name").asText().equals("app.read")) {
+                appRead = policy;
+            }
+        }
+        assertThat(appRead).as("the scaffolded app.read policy").isNotNull();
+        assertThat(appRead.get("source").asText()).isEqualTo("config/tesseraql.yml");
+        assertThat(appRead.get("line").asInt()).isPositive();
+
+        assertThat(document.get("messages")).hasSize(1);
+        JsonNode message = document.get("messages").get(0);
+        assertThat(message.get("key").asText()).isEqualTo("users.list.title");
+        assertThat(message.get("line").asInt()).isEqualTo(3);
+
+        assertThat(document.get("routes").size()).isPositive();
+        JsonNode route = document.get("routes").get(0);
+        assertThat(route.get("id").asText()).isNotBlank();
+        assertThat(route.get("source").asText()).endsWith(".yml");
+        assertThat(route.get("recipe").asText()).isNotBlank();
+    }
+
+    @Test
     void generateWritesOpenApiHtmxAndDocsSpec(@TempDir Path dir) {
         Path app = scaffold(dir);
         assertThat(execute("generate", "--app", app.toString())).isZero();

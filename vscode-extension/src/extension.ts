@@ -7,6 +7,7 @@ import { ErrorCodeHoverProvider } from './vscode/hover';
 import { ReferenceLinkProvider } from './vscode/referenceLinks';
 import { SuiteTestController } from './vscode/testing';
 import { ServeStatus } from './vscode/serveStatus';
+import { SymbolCompletionProvider, SymbolDefinitionProvider, SymbolIndex } from './vscode/language';
 
 // The thin editor shell over the existing engines (docs/vscode-extension.md): lint
 // findings into the Problems panel, the CLI verbs as commands, the app explorer, and
@@ -21,18 +22,23 @@ export function activate(context: vscode.ExtensionContext): void {
   const explorer = new AppExplorer(homes);
   const testing = new SuiteTestController(homes, output);
   const serveStatus = new ServeStatus();
+  const symbols = new SymbolIndex(homes, output);
 
   context.subscriptions.push(
       output,
       lint,
       testing,
       serveStatus,
+      symbols,
       vscode.commands.registerCommand('tesseraql.openServer', () =>
           vscode.env.openExternal(vscode.Uri.parse(ServeStatus.serverUrl()))),
       vscode.window.registerTreeDataProvider('tesseraqlExplorer', explorer),
       vscode.languages.registerHoverProvider(
           ['yaml', 'sql', 'html', 'properties', 'plaintext'], new ErrorCodeHoverProvider()),
       vscode.languages.registerDocumentLinkProvider('yaml', new ReferenceLinkProvider()),
+      vscode.languages.registerDefinitionProvider('yaml', new SymbolDefinitionProvider(symbols)),
+      vscode.languages.registerCompletionItemProvider('yaml',
+          new SymbolCompletionProvider(symbols), ':', ' ', '.'),
       vscode.commands.registerCommand('tesseraql.lint', () =>
           withHome(homes, (home) => void lint.lintNow(home))),
       vscode.commands.registerCommand('tesseraql.refreshExplorer', () => explorer.refresh()),
@@ -40,12 +46,14 @@ export function activate(context: vscode.ExtensionContext): void {
         const home = homeOf(document.uri.fsPath, homes);
         if (home !== undefined) {
           lint.scheduleLint(home);
+          symbols.scheduleRefresh(home);
         }
       }),
       vscode.workspace.onDidChangeWorkspaceFolders(() => {
         homes = discoverHomes();
         explorer.setHomes(homes);
         testing.setHomes(homes);
+        symbols.setHomes(homes);
         if (homes.length > 0) {
           serveStatus.start();
         } else {
