@@ -1154,6 +1154,8 @@ public final class TesseraqlRuntime implements AutoCloseable {
                                         studio.isReadOnly(), true, studio.sourceIfExists(path),
                                         sample);
                             }
+                            // The Studio-to-editor half of the boundary's round trip (Phase 57).
+                            model.put("editorHref", studio.editorHref(path));
                             // Offer the "run tests" action on a route page only when A2 is enabled.
                             model.put("testRunnerEnabled", testRunnerEnabled);
                             // Warn when applying would overwrite a concurrently changed source (D5).

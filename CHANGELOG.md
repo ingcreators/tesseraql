@@ -8,6 +8,12 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **Studio: Open in editor** (roadmap Phase 57 slice 2; design in
+  `docs/vscode-extension.md`): the source view gains the reverse half of the
+  Studio–editor round trip — a `vscode://file/…` deep link next to *Edit as form*,
+  landing on the same file in VS Code. Best-effort by design: the link assumes the
+  browser and the files share a machine (the normal dev loop) and stays inert
+  otherwise; the traversal guard covers the deep link too.
 - **VS Code extension 0.3.0** (roadmap Phase 56 complete; design in
   `docs/vscode-extension.md`): the version carrying Phase 56's editor
   intelligence — single-case Test Explorer runs, Studio deep links, MCP
