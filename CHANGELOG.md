@@ -8,6 +8,16 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **The language layer — `tesseraql symbols` and editor intelligence** (roadmap
+  Phase 56 slice 5, completing the phase; design in `docs/vscode-extension.md`):
+  `tesseraql symbols --app <dir>` prints what the framework declares — security
+  policies, default-locale message keys, and routes, each with source and line — as
+  one sorted, deterministic JSON object. Over it the VS Code extension adds
+  completion for `policy:` and `message:` values and go-to-definition from a
+  `policy:` value to its declaration in `config/tesseraql.yml` and from a
+  `message:` (or key-naming `title:`/`label:`) value to its catalog line, refreshed
+  on save. Unknown references stay lint findings — the providers navigate, they do
+  not judge.
 - **VS Code extension: MCP registration** (roadmap Phase 56 slice 4; design in
   `docs/vscode-extension.md`): *TesseraQL: Register MCP Server* writes the Phase 24
   dev-tools server (`tesseraql mcp --app .`, stdio) into the chosen client
