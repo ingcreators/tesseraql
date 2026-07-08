@@ -97,7 +97,7 @@
     <sshd.version>2.18.0</sshd.version>
     <maven.api.version>3.9.16</maven.api.version>
     <maven.plugin.tools.version>3.15.2</maven.plugin.tools.version>
-    <junit.version>6.1.0</junit.version>
+    <junit.version>6.1.1</junit.version>
     <assertj.version>3.27.7</assertj.version>
     <commons-io.version>2.20.0</commons-io.version>
     <shrinkwrap.resolver.version>3.3.4</shrinkwrap.resolver.version>
