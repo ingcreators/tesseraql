@@ -8,6 +8,13 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **VS Code extension: MCP registration** (roadmap Phase 56 slice 4; design in
+  `docs/vscode-extension.md`): *TesseraQL: Register MCP Server* writes the Phase 24
+  dev-tools server (`tesseraql mcp --app .`, stdio) into the chosen client
+  configuration in the app home — `.vscode/mcp.json` (VS Code MCP clients) and/or
+  the project `.mcp.json` (Claude Code) — merging with existing servers, no-op when
+  already registered, and never overwriting a foreign `tesseraql` entry without a
+  modal confirmation.
 - **VS Code extension: Studio deep links** (roadmap Phase 56 slice 3; design in
   `docs/vscode-extension.md`): *TesseraQL: Open in Studio* — from the editor context
   menu, the TesseraQL explorer, or the command palette — opens the file's live

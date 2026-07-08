@@ -73,6 +73,11 @@
         "category": "TesseraQL"
       },
       {
+        "command": "tesseraql.registerMcp",
+        "title": "Register MCP Server",
+        "category": "TesseraQL"
+      },
+      {
         "command": "tesseraql.openInStudio",
         "title": "Open in Studio",
         "category": "TesseraQL"
