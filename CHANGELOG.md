@@ -8,6 +8,15 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **Studio route form options derive from the framework** (roadmap Phase 57
+  slice 3, completing the phase; design in `docs/vscode-extension.md`): the form's
+  recipe, auth, and input-type choices come from the same surfaces the shipped JSON
+  Schema is drift-tested against (`AppLinter.knownRouteRecipes()` and the new
+  `knownAuthModes()`/`knownInputTypes()`), replacing hand-coded lists that had
+  already drifted — the form offered four auth modes where the framework accepts
+  five (`public` was missing). `security.auth` is now a real `enum` in the shipped
+  JSON Schema (editors gain completion), and `SchemaSyncTest` holds the schema, the
+  linter, and the form to one source.
 - **VS Code extension 0.3.0** (roadmap Phase 56 complete; design in
   `docs/vscode-extension.md`): the version carrying Phase 56's editor
   intelligence — single-case Test Explorer runs, Studio deep links, MCP

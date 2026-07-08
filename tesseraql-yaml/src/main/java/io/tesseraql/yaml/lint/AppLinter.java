@@ -50,6 +50,26 @@ public final class AppLinter {
     public static Set<String> knownRouteRecipes() {
         return KNOWN_ROUTE_RECIPES;
     }
+
+    private static final Set<String> KNOWN_AUTH_MODES = Set.of("bearer", "browser", "apiKey",
+            "mtls", "public");
+
+    /**
+     * The route auth modes — exposed so the shipped JSON Schema's {@code security.auth} enum and
+     * the Studio route form are drift-tested against one source (roadmap Phase 57; the hand-coded
+     * form list had already lost {@code public}).
+     */
+    public static Set<String> knownAuthModes() {
+        return KNOWN_AUTH_MODES;
+    }
+
+    private static final Set<String> KNOWN_INPUT_TYPES = Set.of("string", "integer", "number",
+            "boolean", "date", "array");
+
+    /** The declared-input types — exposed for the same drift tests as {@link #knownAuthModes()}. */
+    public static Set<String> knownInputTypes() {
+        return KNOWN_INPUT_TYPES;
+    }
     /** Recipes whose SQL pipeline is a read, where a route-level {@code datasource:} applies
      * (roadmap Phase 53). */
     private static final Set<String> READ_DATASOURCE_RECIPES = Set.of("query-json", "query-html",

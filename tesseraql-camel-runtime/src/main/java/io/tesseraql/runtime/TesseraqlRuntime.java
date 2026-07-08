@@ -1219,11 +1219,15 @@ public final class TesseraqlRuntime implements AutoCloseable {
                             model.put("form", studio.routeForm(path));
                             model.put("editable", canEdit);
                             model.put("readOnly", !canEdit);
-                            model.put("recipes", java.util.List.of("query-json", "query-html",
-                                    "command-json", "page", "query-export", "file-import",
-                                    "file-export", "webhook"));
-                            model.put("authOptions",
-                                    java.util.List.of("bearer", "browser", "apiKey", "mtls"));
+                            // Framework-derived options (roadmap Phase 57): the same surfaces
+                            // the shipped JSON Schema is drift-tested against, so the schema,
+                            // the linter, and this form can never disagree.
+                            model.put("recipes", io.tesseraql.yaml.lint.AppLinter
+                                    .knownRouteRecipes().stream().sorted().toList());
+                            model.put("authOptions", io.tesseraql.yaml.lint.AppLinter
+                                    .knownAuthModes().stream().sorted().toList());
+                            model.put("inputTypes", io.tesseraql.yaml.lint.AppLinter
+                                    .knownInputTypes().stream().sorted().toList());
                             java.util.List<String> policyIds = studio.securityPolicies().stream()
                                     .map(policy -> String.valueOf(policy.get("id"))).toList();
                             model.put("policyOptions", policyIds);
