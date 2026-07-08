@@ -163,7 +163,10 @@ hand-typed terminal.
 
 ## Phase 56 — editor intelligence: the remaining ladder
 
-Status: design accepted 2026-07-08 (roadmap Phase 56). The four remaining ladder
+Status: design accepted 2026-07-08 (roadmap Phase 56). **All five slices are
+delivered — Phase 56 is complete and milestone M21 is met** (single-case runs,
+Studio deep links, MCP registration, the `tesseraql symbols` language layer;
+extension 0.3.0). The four remaining ladder
 items, in the order they pay off: single-case runs, Studio deep links, MCP
 registration, and the language layer. One design decision up front:
 

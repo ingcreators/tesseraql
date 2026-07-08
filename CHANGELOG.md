@@ -8,6 +8,10 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **VS Code extension 0.3.0** (roadmap Phase 56 complete; design in
+  `docs/vscode-extension.md`): the version carrying Phase 56's editor
+  intelligence — single-case Test Explorer runs, Studio deep links, MCP
+  registration, and the `tesseraql symbols` language layer.
 - **The language layer — `tesseraql symbols` and editor intelligence** (roadmap
   Phase 56 slice 5, completing the phase; design in `docs/vscode-extension.md`):
   `tesseraql symbols --app <dir>` prints what the framework declares — security

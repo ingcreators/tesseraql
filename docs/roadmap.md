@@ -1092,6 +1092,18 @@ file opens in Studio from the editor; one command registers the MCP server and a
 connected agent lists the dev tools; `policy:`/`message:` values complete from the
 app's declarations and Ctrl+click lands on them.
 
+Delivered 2026-07-08 in the five designed slices: the design; single-case runs
+(`tesseraql test --case` through a filtered `AppTestRunner` overload, proven against
+real PostgreSQL, wired into Test Explorer run requests); Studio deep links (*Open in
+Studio* onto the source view every Studio surface already links to); MCP
+registration (merge-preserving writes into `.vscode/mcp.json` / `.mcp.json`, foreign
+entries confirm-gated); and the language layer (`tesseraql symbols` — policies,
+default-locale message keys with catalog lines from an indentation-stack walker, and
+routes — powering completion and go-to-definition, proven end to end against the
+real fat jar). The recorded decision held: providers over the symbols contract, no
+LSP wire process; extension 0.3.0. **Phase 56 is complete and milestone M21 is
+met.**
+
 ## Continuous tracks
 
 - **Platform maintenance**: weekly Dependabot triage (policy encoded in
