@@ -6,6 +6,7 @@ import { AppExplorer } from './vscode/explorer';
 import { ErrorCodeHoverProvider } from './vscode/hover';
 import { ReferenceLinkProvider } from './vscode/referenceLinks';
 import { SuiteTestController } from './vscode/testing';
+import { ServeStatus } from './vscode/serveStatus';
 
 // The thin editor shell over the existing engines (docs/vscode-extension.md): lint
 // findings into the Problems panel, the CLI verbs as commands, the app explorer, and
@@ -19,11 +20,15 @@ export function activate(context: vscode.ExtensionContext): void {
   let homes = discoverHomes();
   const explorer = new AppExplorer(homes);
   const testing = new SuiteTestController(homes, output);
+  const serveStatus = new ServeStatus();
 
   context.subscriptions.push(
       output,
       lint,
       testing,
+      serveStatus,
+      vscode.commands.registerCommand('tesseraql.openServer', () =>
+          vscode.env.openExternal(vscode.Uri.parse(ServeStatus.serverUrl()))),
       vscode.window.registerTreeDataProvider('tesseraqlExplorer', explorer),
       vscode.languages.registerHoverProvider(
           ['yaml', 'sql', 'html', 'properties', 'plaintext'], new ErrorCodeHoverProvider()),
@@ -41,6 +46,11 @@ export function activate(context: vscode.ExtensionContext): void {
         homes = discoverHomes();
         explorer.setHomes(homes);
         testing.setHomes(homes);
+        if (homes.length > 0) {
+          serveStatus.start();
+        } else {
+          serveStatus.stop();
+        }
       }),
   );
 
@@ -60,6 +70,9 @@ export function activate(context: vscode.ExtensionContext): void {
 
   for (const home of homes) {
     lint.scheduleLint(home);
+  }
+  if (homes.length > 0) {
+    serveStatus.start();
   }
 }
 

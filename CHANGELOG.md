@@ -8,6 +8,12 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **VS Code extension: serve status** (roadmap Phase 55 slice 5, completing the
+  phase; design in `docs/vscode-extension.md`): a status-bar item polls the served
+  app's readiness probe (`/_tesseraql/health/ready`, Phase 45) on the new
+  `tesseraql.serverUrl` setting while an app home is open — up, DOWN (a 503
+  readiness answer), or offline — and one click opens the app. Extension version
+  0.2.0.
 - **VS Code extension: Test Explorer and SQL coverage** (roadmap Phase 55 slice 4;
   design in `docs/vscode-extension.md`): suites under `tests/**/*.yml` appear in the
   native Test Explorer (cases discovered by name and line — presentation, not

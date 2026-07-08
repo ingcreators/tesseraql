@@ -2,7 +2,7 @@
   "name": "tesseraql-vscode",
   "displayName": "TesseraQL",
   "description": "TesseraQL application authoring: real lint findings in the Problems panel, the CLI verbs as commands, and an app explorer.",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "publisher": "ingcreators",
   "license": "Apache-2.0",
   "repository": {
@@ -33,6 +33,11 @@
           "type": "string",
           "default": "tesseraql",
           "description": "The tesseraql CLI the extension runs for lint and commands — the project's version, so editor findings always match the build."
+        },
+        "tesseraql.serverUrl": {
+          "type": "string",
+          "default": "http://localhost:8080",
+          "description": "The served app's base URL — the status bar polls its readiness probe (/_tesseraql/health/ready)."
         }
       }
     },
@@ -65,6 +70,11 @@
       {
         "command": "tesseraql.package",
         "title": "Package",
+        "category": "TesseraQL"
+      },
+      {
+        "command": "tesseraql.openServer",
+        "title": "Open Served App",
         "category": "TesseraQL"
       },
       {
