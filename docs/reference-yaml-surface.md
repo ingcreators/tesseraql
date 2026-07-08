@@ -49,7 +49,7 @@ Schema for TesseraQL Simple YAML documents: routes (web/**/<method>.yml), jobs (
 
 | Property | Type | Description |
 | --- | --- | --- |
-| `auth` | string | bearer \| browser \| apiKey \| mtls (deny-by-default: no auth means no access to protected data). |
+| `auth` | enum: `bearer` \| `browser` \| `apiKey` \| `mtls` \| `public` | bearer \| browser \| apiKey \| mtls \| public (deny-by-default: no auth means no access to protected data). |
 | `policy` | string | A policy id under tesseraql.security.policies. |
 | `provider` | string |  |
 | `csrf` | boolean |  |
