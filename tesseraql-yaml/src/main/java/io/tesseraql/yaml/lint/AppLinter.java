@@ -70,6 +70,10 @@ public final class AppLinter {
 
     /** Loads and lints the app home, returning all findings. */
     public List<LintFinding> lint(Path appHome) {
+        // The manifest loader absolutizes every source path; a relative app home (the
+        // documented `tesseraql lint --app .` form) must match, or relativizing the
+        // sources for finding locations throws.
+        appHome = appHome.toAbsolutePath().normalize();
         AppManifest manifest = new ManifestLoader().load(appHome);
         List<LintFinding> findings = new ArrayList<>();
         for (RouteFile route : manifest.routes()) {

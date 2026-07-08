@@ -415,6 +415,12 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Fixed
 
+- **`tesseraql lint --app .` no longer crashes on a relative app home.** The linter
+  relativized the manifest loader's absolute source paths against the app home as
+  given, so the documented relative form threw
+  `IllegalArgumentException: 'other' is different type of Path` on any app with
+  routes; the app home is now absolutized on entry (the MCP dev-tools and the Maven
+  goal ride the same fix).
 - **`min`/`max` bounds are decimal-exact.** The bound check compared `number.longValue()`, so
   `max: 5` admitted `5.9` and `min: 0` admitted `-0.9`; bounds are now `BigDecimal`-compared and
   fractional bounds (`min: 0.5`) are declarable. (`spec.json` and OpenAPI emit the same numbers

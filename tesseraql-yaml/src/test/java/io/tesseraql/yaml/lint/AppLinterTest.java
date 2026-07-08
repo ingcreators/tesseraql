@@ -18,6 +18,15 @@ class AppLinterTest {
     }
 
     @Test
+    void acceptsARelativeAppHome() {
+        // The documented CLI form is `tesseraql lint --app .` — the linter must not
+        // trip over relativizing the loader's absolute source paths against it.
+        List<LintFinding> findings = new AppLinter()
+                .lint(Path.of("..", "examples", "user-admin-app"));
+        assertThat(findings).noneMatch(LintFinding::isError);
+    }
+
+    @Test
     void lintsMcpTools(@TempDir Path dir) throws Exception {
         Files.createDirectories(dir.resolve("config"));
         Files.writeString(dir.resolve("config/tesseraql.yml"), """
