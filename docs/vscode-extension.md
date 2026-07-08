@@ -221,7 +221,10 @@ declaration, same for message keys — the editor knows what the framework knows
 
 ## Phase 57 — the Studio–editor boundary, kept honest
 
-Status: design accepted 2026-07-08 (roadmap Phase 57). Phases 54–56 grew the editor
+Status: design accepted 2026-07-08 (roadmap Phase 57). **All three slices are
+delivered — Phase 57 is complete and milestone M22 is met** (principle 6, the
+reverse deep link, framework-derived form options; the live `auth: public` drift
+fixed). Phases 54–56 grew the editor
 alongside Studio; this phase names the boundary that emerged and closes its two
 gaps. The principle, now extension principle 6 in the roadmap: **Studio owns the
 live runtime side (data, state, audited draft/apply writes under runtime
