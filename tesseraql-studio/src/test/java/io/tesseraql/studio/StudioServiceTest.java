@@ -40,6 +40,20 @@ class StudioServiceTest {
     }
 
     @Test
+    void editorHrefLinksTheAbsoluteSourcePath() {
+        StudioService studio = new StudioService(exampleManifest(), true);
+        String href = studio.editorHref("web/api/users/get.yml");
+        assertThat(href).startsWith("vscode://file/");
+        assertThat(href).endsWith("/examples/user-admin-app/web/api/users/get.yml");
+        // Characters outside the unreserved set percent-encode; separators survive.
+        assertThat(studio.editorHref("web/items/{id}/get.yml"))
+                .endsWith("/web/items/%7Bid%7D/get.yml");
+        // The traversal guard holds for the deep link too.
+        assertThatThrownBy(() -> studio.editorHref("../secrets.yml"))
+                .hasMessageContaining("escapes app home");
+    }
+
+    @Test
     void explorerFiltersRoutesAndJobsByQuery() {
         StudioService studio = new StudioService(exampleManifest(), true);
 

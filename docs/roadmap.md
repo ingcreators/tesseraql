@@ -1104,6 +1104,26 @@ real fat jar). The recorded decision held: providers over the symbols contract, 
 LSP wire process; extension 0.3.0. **Phase 56 is complete and milestone M21 is
 met.**
 
+### Phase 57 — the Studio–editor boundary, kept honest
+
+Named 2026-07-08; the accepted design is the Phase 57 section of
+[docs/vscode-extension.md](vscode-extension.md). Three slices realizing the boundary
+review's recommendations: the boundary itself codified as extension principle 6
+(this entry); the reverse deep link — the Studio source view gains *Open in editor*
+(`vscode://file/…`, the local-dev counterpart of the editor's *Open in Studio*); and
+framework-derived form options — the route form's recipe, auth, and input-type
+choices come from the framework surfaces the shipped JSON Schema is drift-tested
+against, instead of hand-coded lists (which had already drifted: the form offered
+four auth modes; the framework accepts five — `public` was missing). Deliberately
+not chosen: generating the whole form from the schema — the form is a curated
+subset with the text editor as the escape hatch, and full generation would couple
+its UX to schema structure for little gain.
+
+**Milestone M22** — in a running scaffolded app: the Studio source view jumps to
+the same file in VS Code; the route form offers exactly the recipes, auth modes
+(including `public`), and input types the framework accepts — the schema, the
+linter, and the form provably in sync.
+
 ## Continuous tracks
 
 - **Platform maintenance**: weekly Dependabot triage (policy encoded in
@@ -1127,6 +1147,12 @@ Invariants every phase must keep:
    deterministic generated artifacts (reproducibility, ch. 48).
 5. **Module boundaries hold**: `tesseraql-core` stays dependency-free; heavy dependencies
    live in leaf modules behind SPIs.
+6. **Two surfaces, one engine**: Studio owns the live runtime side — data, state, and
+   audited draft/apply writes under runtime governance; the editor owns the
+   source-of-truth loop — files, git, tests, findings. Both are thin renderers over
+   the same engines and CLI contracts; neither re-implements the other's trust model
+   (no data browsing or live-state editing in the editor, no git in Studio), and they
+   meet through deep links.
 
 ## Decision points
 

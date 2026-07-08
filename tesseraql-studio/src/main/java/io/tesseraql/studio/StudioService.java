@@ -2560,6 +2560,32 @@ public final class StudioService {
         }
     }
 
+    /**
+     * The {@code vscode://file/...} deep link for a source file — the Studio-to-editor half of the
+     * boundary's round trip (docs/vscode-extension.md, Phase 57). Best-effort by design: the
+     * absolute path is the server's, so the link works when the browser and the files share a
+     * machine (the normal dev loop) and stays inert otherwise.
+     */
+    public String editorHref(String relativePath) {
+        String absolute = resolve(relativePath).toString().replace('\\', '/');
+        StringBuilder encoded = new StringBuilder("vscode://file");
+        if (!absolute.startsWith("/")) {
+            encoded.append('/');
+        }
+        for (int i = 0; i < absolute.length(); i++) {
+            char c = absolute.charAt(i);
+            if (c == '/' || Character.isLetterOrDigit(c) || c == '.' || c == '-' || c == '_'
+                    || c == '~') {
+                encoded.append(c);
+            } else {
+                for (byte b : String.valueOf(c).getBytes(java.nio.charset.StandardCharsets.UTF_8)) {
+                    encoded.append('%').append(String.format("%02X", b));
+                }
+            }
+        }
+        return encoded.toString();
+    }
+
     private Path resolve(String relativePath) {
         Path resolved = appHome.resolve(relativePath).normalize();
         if (!resolved.startsWith(appHome)) {

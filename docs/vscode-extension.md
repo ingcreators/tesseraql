@@ -218,3 +218,43 @@ the Test Explorer; right-click on a route file opens that source in Studio; one
 command registers the MCP server and a connected agent lists the dev tools; typing
 `policy:` offers the app's declared policies and Ctrl+click on one lands on its
 declaration, same for message keys — the editor knows what the framework knows.
+
+## Phase 57 — the Studio–editor boundary, kept honest
+
+Status: design accepted 2026-07-08 (roadmap Phase 57). Phases 54–56 grew the editor
+alongside Studio; this phase names the boundary that emerged and closes its two
+gaps. The principle, now extension principle 6 in the roadmap: **Studio owns the
+live runtime side (data, state, audited draft/apply writes under runtime
+governance); the editor owns the source-of-truth loop (files, git, tests,
+findings); both are thin renderers over the same engines, meeting through deep
+links — neither re-implements the other's trust model.**
+
+**Slice 1 — this design**, and the principle recorded in the roadmap.
+
+**Slice 2 — the reverse deep link.** The Studio source view gains *Open in editor*
+(`vscode://file/<absolute path>`) next to *Edit as form* — the counterpart of the
+editor's *Open in Studio*, closing the round trip: see a finding or a failing test
+in Studio, land in the editor on the same file. Best-effort by design: the protocol
+link assumes the browser and the files share a machine (the normal dev loop); a
+remote or containerized Studio simply leaves the button inert, and no configuration
+is added until someone needs a different editor scheme.
+
+**Slice 3 — framework-derived form options.** The route form's dropdowns are today
+hand-coded lists in the runtime and the template — and they have already drifted:
+the form offers four auth modes where the framework accepts five (`auth: public` is
+missing). The fix follows the `knownRouteRecipes()` precedent (exposed exactly so
+the shipped JSON Schema could be drift-tested): the recipe options come from
+`AppLinter.knownRouteRecipes()`, and two new surfaces — `knownAuthModes()` and
+`knownInputTypes()` — feed the auth and input-type selects, land as real `enum`s in
+the shipped JSON Schema (today `security.auth` is free-text with examples, so the
+editor gains completion too), and extend `SchemaSyncTest` so the schema, the
+linter, and the form can never disagree again. Deliberately not chosen: generating
+the whole form from the schema. The form is a curated subset — id, recipe,
+security, inputs — with the text editor as the escape hatch; full generation would
+couple its UX to schema structure for little gain, and the choices, not the layout,
+are where drift lives.
+
+**Milestone M22** — in a running scaffolded app: the Studio source view jumps to
+the same file in VS Code; the route form offers exactly the recipes, auth modes
+(including `public`), and input types the framework accepts — the schema, the
+linter, and the form provably in sync.
