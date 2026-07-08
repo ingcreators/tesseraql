@@ -58,6 +58,15 @@ class AppLifecycleDbCommandsIntegrationTest {
         assertThat(sqlFile.get("coveredLines").isArray()).isTrue();
         assertThat(sqlFile.get("coverableLines").isArray()).isTrue();
 
+        // Single-case granularity (Phase 56): --case runs exactly the named case.
+        Captured single = executeCapturing(args(app, "test", "--format", "json",
+                "--case", "the items search returns the seeded row"));
+        assertThat(single.exitCode()).isZero();
+        JsonNode filtered = new ObjectMapper().readTree(single.stdout());
+        assertThat(filtered.get("results").size()).isEqualTo(1);
+        assertThat(filtered.get("results").get(0).get("name").asText())
+                .isEqualTo("the items search returns the seeded row");
+
         // Coverage gate (default thresholds are 0, so it passes).
         assertThat(execute(args(app, "coverage"))).isZero();
 

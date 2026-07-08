@@ -1072,6 +1072,26 @@ covered/uncovered 2-way-SQL lines); and the serve status bar over the Phase 45
 readiness probe (`tesseraql.serverUrl`), shipping extension 0.2.0. **Phase 55 is
 complete and milestone M20 is met.**
 
+### Phase 56 — editor intelligence: the remaining ladder
+
+Named 2026-07-08; the accepted design is the Phase 56 section of
+[docs/vscode-extension.md](vscode-extension.md). The four remaining ladder items in
+the order they pay off — single-case runs (`tesseraql test --case`, the Test
+Explorer re-runs one failing case alone); Studio deep links (*Open in Studio* onto
+`/_tesseraql/studio/ui/source?path=…`); MCP registration (one command writes the
+Phase 24 dev-tools server into `.vscode/mcp.json` and/or the repo-root `.mcp.json`);
+and the language layer (a `tesseraql symbols --format json` contract — policies,
+message keys, routes with source lines — powering completion and go-to-definition
+for `policy:` and `message:` values). Design decision recorded: the "full LSP"
+ships as in-extension providers over the symbols contract; the LSP wire protocol
+joins the ladder for the day a second editor is targeted. Five slices: design;
+single-case runs; Studio links; MCP registration; the language layer.
+
+**Milestone M21** — in a scaffolded app: one failing case re-runs alone; a route
+file opens in Studio from the editor; one command registers the MCP server and a
+connected agent lists the dev tools; `policy:`/`message:` values complete from the
+app's declarations and Ctrl+click lands on them.
+
 ## Continuous tracks
 
 - **Platform maintenance**: weekly Dependabot triage (policy encoded in
