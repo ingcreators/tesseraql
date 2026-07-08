@@ -1124,6 +1124,17 @@ the same file in VS Code; the route form offers exactly the recipes, auth modes
 (including `public`), and input types the framework accepts — the schema, the
 linter, and the form provably in sync.
 
+Delivered 2026-07-08 in the three designed slices: the principle codified
+(extension principle 6, this document); the reverse deep link (*Open in editor* on
+the Studio source view, traversal-guarded and percent-encoded, best-effort local-dev
+by design); and framework-derived form options (`knownAuthModes()` /
+`knownInputTypes()` alongside `knownRouteRecipes()`, real `security.auth` enum in
+the shipped JSON Schema, `SchemaSyncTest` extended, the generated YAML-surface
+reference regenerated) — fixing the live drift the review predicted: the form
+offered four auth modes where the framework accepts five, and `auth: public` is now
+offered and integration-asserted. **Phase 57 is complete and milestone M22 is
+met.**
+
 ## Continuous tracks
 
 - **Platform maintenance**: weekly Dependabot triage (policy encoded in
