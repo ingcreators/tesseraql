@@ -21,6 +21,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.Callable;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Mixin;
@@ -81,6 +82,10 @@ final class TestCommand implements Callable<Integer> {
             "--format"}, defaultValue = "text", description = "Output format: ${COMPLETION-CANDIDATES} (default: ${DEFAULT-VALUE}).")
     Format format;
 
+    @Option(names = {
+            "--case"}, description = "Run only the named case(s), exact match; repeatable (default: all).")
+    List<String> cases = List.of();
+
     enum Format {
         text, json
     }
@@ -93,7 +98,7 @@ final class TestCommand implements Callable<Integer> {
         Files.createDirectories(reports);
 
         AppTestRunner.RunResult result = new AppTestRunner().run(app, dataSource,
-                RealmConfig.managed(realm, "main"), reports);
+                RealmConfig.managed(realm, "main"), reports, Set.copyOf(cases));
         TestReport report = result.report();
         switch (format) {
             case text -> printText(report);

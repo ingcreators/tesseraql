@@ -8,6 +8,12 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **Single-case test runs — `tesseraql test --case`** (roadmap Phase 56 slice 2;
+  design in `docs/vscode-extension.md`): a repeatable exact-name filter runs only
+  the named case(s) — suites with no match are skipped, item coverage derives from
+  what actually ran, and the `--format json` document reports only the filtered
+  results. The VS Code Test Explorer passes the filter when a run request names
+  specific cases, so one failing case re-runs alone.
 - **VS Code extension: serve status** (roadmap Phase 55 slice 5, completing the
   phase; design in `docs/vscode-extension.md`): a status-bar item polls the served
   app's readiness probe (`/_tesseraql/health/ready`, Phase 45) on the new
