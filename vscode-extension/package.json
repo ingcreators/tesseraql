@@ -73,6 +73,16 @@
         "category": "TesseraQL"
       },
       {
+        "command": "tesseraql.registerMcp",
+        "title": "Register MCP Server",
+        "category": "TesseraQL"
+      },
+      {
+        "command": "tesseraql.openInStudio",
+        "title": "Open in Studio",
+        "category": "TesseraQL"
+      },
+      {
         "command": "tesseraql.openServer",
         "title": "Open Served App",
         "category": "TesseraQL"
@@ -98,6 +108,20 @@
         {
           "command": "tesseraql.refreshExplorer",
           "when": "view == tesseraqlExplorer",
+          "group": "navigation"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "tesseraql.openInStudio",
+          "when": "view == tesseraqlExplorer && viewItem == file",
+          "group": "navigation"
+        }
+      ],
+      "editor/context": [
+        {
+          "command": "tesseraql.openInStudio",
+          "when": "resourceExtname =~ /\\.(yml|sql|html)$/ && tesseraql.hasApp",
           "group": "navigation"
         }
       ]
