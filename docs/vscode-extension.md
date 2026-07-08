@@ -109,3 +109,52 @@ the Problems panel at its line and column within seconds of save, and clears on 
 serve, test, and migrate run from the command palette; the explorer navigates to every
 route, view, migration, and test suite — all without opening Studio or a terminal by
 hand.
+
+## Phase 55 — editor authoring depth
+
+Status: design accepted 2026-07-08 (roadmap Phase 55, the first rungs of the ladder
+above). Four capabilities, in the order they pay off, under the same Phase 54 stance:
+**the extension computes nothing the framework already knows.** Reference resolution
+follows the documented app layout, test results and coverage come from run contracts
+the framework already writes, health comes from the Phase 45 probe.
+
+**Slice 1 — this design.**
+
+**Slice 2 — reference navigation (the pre-LSP rung).** A document-link provider makes
+`file:`, `view:`, and `template:` values in app YAML clickable, resolved against the
+document's directory exactly as the runtime resolves them (a `frags.html::fragment`
+suffix links to the file). Links appear only when the target exists — a broken
+reference stays a lint finding, not a dead link. No YAML semantics enter the
+extension: the provider matches the documented key shapes line-by-line, in the
+editor-free core, under `node:test`. The full go-to-definition ladder (message keys,
+policies, named queries) stays with the language server rung.
+
+**Slice 3 — the test-run contract.** `tesseraql test --app <dir> --format json`
+prints one JSON object on stdout:
+`{passed, failed, results: [{name, passed, message}], sql: [{file, lineRatio,
+branchRatio, coveredLines, coverableLines}]}` — the complete per-case results
+(`report.json` only carries cases joined to a route) plus per-file SQL line/branch
+coverage with the 1-based line lists the portal already renders. `--format text`
+names today's output and stays the default; exit semantics (1 on failure, 2 on the
+opt-in regression gate) are identical in both formats.
+
+**Slice 4 — Test Explorer and SQL coverage.** The extension discovers suites from
+`tests/**/*.yml` (case names and lines only — presentation, not semantics) into the
+native Test Explorer; a run executes the slice-3 contract against the app's
+datasource and maps results back by case name. The same run feeds VS Code's test
+coverage API: `coverableLines` minus `coveredLines` renders covered/uncovered SQL
+lines in the editor — the 2-way SQL branch story, visible where the SQL is written.
+Single-case filtering server-side is deferred (the CLI runs the whole app; runs are
+seconds on a scaffold); it joins the ladder.
+
+**Slice 5 — serve status.** A status-bar item polls the Phase 45 readiness probe
+(`/_tesseraql/health/ready`) on the configured base URL (`tesseraql.serverUrl`,
+default `http://localhost:8080`) while an app home is open: up, DOWN (503), or
+unreachable, one click to open the app. Nothing new server-side — the probe is the
+contract.
+
+**Milestone M20** — in a scaffolded app: Ctrl+click on a `file:`/`view:` value jumps
+to the SQL or view source; the Test Explorer lists every suite case, a run marks
+pass/fail inline and paints covered/uncovered lines in the route's SQL files; the
+status bar tracks `tesseraql serve` up and down — still no Studio, still no
+hand-typed terminal.
