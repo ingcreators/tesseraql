@@ -8,6 +8,11 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **VS Code extension: Studio deep links** (roadmap Phase 56 slice 3; design in
+  `docs/vscode-extension.md`): *TesseraQL: Open in Studio* — from the editor context
+  menu, the TesseraQL explorer, or the command palette — opens the file's live
+  counterpart in the running Studio's source view
+  (`/_tesseraql/studio/ui/source?path=…` on `tesseraql.serverUrl`).
 - **Single-case test runs — `tesseraql test --case`** (roadmap Phase 56 slice 2;
   design in `docs/vscode-extension.md`): a repeatable exact-name filter runs only
   the named case(s) — suites with no match are skipped, item coverage derives from

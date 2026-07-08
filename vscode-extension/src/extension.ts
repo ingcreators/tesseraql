@@ -7,6 +7,8 @@ import { ErrorCodeHoverProvider } from './vscode/hover';
 import { ReferenceLinkProvider } from './vscode/referenceLinks';
 import { SuiteTestController } from './vscode/testing';
 import { ServeStatus } from './vscode/serveStatus';
+import { studioSourceUrl } from './core/studio';
+import * as path from 'node:path';
 
 // The thin editor shell over the existing engines (docs/vscode-extension.md): lint
 // findings into the Problems panel, the CLI verbs as commands, the app explorer, and
@@ -29,6 +31,26 @@ export function activate(context: vscode.ExtensionContext): void {
       serveStatus,
       vscode.commands.registerCommand('tesseraql.openServer', () =>
           vscode.env.openExternal(vscode.Uri.parse(ServeStatus.serverUrl()))),
+      vscode.commands.registerCommand('tesseraql.openInStudio',
+          (resource?: vscode.Uri | { path?: string }) => {
+            const file = resource instanceof vscode.Uri
+                ? resource.fsPath
+                : typeof resource?.path === 'string'
+                    ? resource.path
+                    : vscode.window.activeTextEditor?.document.uri.fsPath;
+            if (file === undefined) {
+              return;
+            }
+            const home = homeOf(file, homes);
+            if (home === undefined) {
+              void vscode.window.showInformationMessage(
+                  'TesseraQL: the file is not inside an app home.');
+              return;
+            }
+            const relative = path.relative(home, file).split(path.sep).join('/');
+            void vscode.env.openExternal(
+                vscode.Uri.parse(studioSourceUrl(ServeStatus.serverUrl(), relative)));
+          }),
       vscode.window.registerTreeDataProvider('tesseraqlExplorer', explorer),
       vscode.languages.registerHoverProvider(
           ['yaml', 'sql', 'html', 'properties', 'plaintext'], new ErrorCodeHoverProvider()),

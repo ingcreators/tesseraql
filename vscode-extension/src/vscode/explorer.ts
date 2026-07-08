@@ -31,6 +31,7 @@ export class AppExplorer implements vscode.TreeDataProvider<AppNode> {
     } else if (node.path !== undefined) {
       item.resourceUri = vscode.Uri.file(node.path);
       if (node.kind === 'file') {
+        item.contextValue = 'file';
         item.command = {
           command: 'vscode.open',
           title: 'Open',
