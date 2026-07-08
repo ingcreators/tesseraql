@@ -4,6 +4,7 @@ import { terminalCommand } from './core/cli';
 import { LintController } from './vscode/diagnostics';
 import { AppExplorer } from './vscode/explorer';
 import { ErrorCodeHoverProvider } from './vscode/hover';
+import { ReferenceLinkProvider } from './vscode/referenceLinks';
 
 // The thin editor shell over the existing engines (docs/vscode-extension.md): lint
 // findings into the Problems panel, the CLI verbs as commands, the app explorer, and
@@ -23,6 +24,7 @@ export function activate(context: vscode.ExtensionContext): void {
       vscode.window.registerTreeDataProvider('tesseraqlExplorer', explorer),
       vscode.languages.registerHoverProvider(
           ['yaml', 'sql', 'html', 'properties', 'plaintext'], new ErrorCodeHoverProvider()),
+      vscode.languages.registerDocumentLinkProvider('yaml', new ReferenceLinkProvider()),
       vscode.commands.registerCommand('tesseraql.lint', () =>
           withHome(homes, (home) => void lint.lintNow(home))),
       vscode.commands.registerCommand('tesseraql.refreshExplorer', () => explorer.refresh()),
