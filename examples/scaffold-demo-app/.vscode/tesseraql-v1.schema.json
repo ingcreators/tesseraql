@@ -34,9 +34,9 @@
       "type": "object",
       "properties": {
         "auth": {
-          "description": "bearer | browser | apiKey | mtls (deny-by-default: no auth means no access to protected data).",
+          "description": "bearer | browser | apiKey | mtls | public (deny-by-default: no auth means no access to protected data).",
           "type": "string",
-          "examples": ["bearer", "browser", "apiKey", "mtls"]
+          "enum": ["bearer", "browser", "apiKey", "mtls", "public"]
         },
         "policy": { "type": "string", "description": "A policy id under tesseraql.security.policies." },
         "provider": { "type": "string" },

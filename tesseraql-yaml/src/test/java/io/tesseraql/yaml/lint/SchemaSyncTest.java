@@ -32,4 +32,26 @@ class SchemaSyncTest {
                 .forEach(node -> kinds.add(node.asText()));
         assertThat(kinds).containsExactlyInAnyOrder("route", "job", "view");
     }
+
+    @Test
+    void schemaAuthEnumMatchesTheFrameworkAuthModes() throws Exception {
+        JsonNode schema = new ObjectMapper().readTree(
+                getClass().getResourceAsStream("/schema/tesseraql-v1.schema.json"));
+        List<String> authModes = new ArrayList<>();
+        schema.path("properties").path("security").path("properties").path("auth").path("enum")
+                .forEach(node -> authModes.add(node.asText()));
+        assertThat(authModes)
+                .containsExactlyInAnyOrderElementsOf(AppLinter.knownAuthModes());
+    }
+
+    @Test
+    void schemaInputTypeEnumMatchesTheFrameworkInputTypes() throws Exception {
+        JsonNode schema = new ObjectMapper().readTree(
+                getClass().getResourceAsStream("/schema/tesseraql-v1.schema.json"));
+        List<String> types = new ArrayList<>();
+        schema.path("$defs").path("inputField").path("properties").path("type").path("enum")
+                .forEach(node -> types.add(node.asText()));
+        assertThat(types)
+                .containsExactlyInAnyOrderElementsOf(AppLinter.knownInputTypes());
+    }
 }

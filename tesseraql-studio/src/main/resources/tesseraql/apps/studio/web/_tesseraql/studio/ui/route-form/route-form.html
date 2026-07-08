@@ -82,7 +82,7 @@
               <td>
                 <select class="hc-select" data-size="sm" th:name="|in${i}type|">
                   <option value="">(default)</option>
-                  <option th:each="t : ${ {'string','integer','number','boolean','date','array'} }"
+                  <option th:each="t : ${rf.inputTypes}"
                           th:value="${t}" th:text="${t}" th:selected="${row != null && t == row.type}"></option>
                 </select>
               </td>

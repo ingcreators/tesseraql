@@ -1826,6 +1826,11 @@ class StudioIntegrationTest {
         assertThat(page.statusCode()).isEqualTo(200);
         assertThat(page.body()).contains("Route form").contains("query-json")
                 .contains("Save as draft");
+        // Framework-derived options (Phase 57): every auth mode the framework accepts is
+        // offered - the hand-coded list had lost 'public'.
+        for (String auth : io.tesseraql.yaml.lint.AppLinter.knownAuthModes()) {
+            assertThat(page.body()).contains(">" + auth + "<");
+        }
 
         String form = "path=" + enc("web/api/formed/get.yml")
                 + "&recipe=query-json&auth=bearer&policy=app.read"
