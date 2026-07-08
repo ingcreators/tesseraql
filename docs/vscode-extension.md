@@ -160,3 +160,58 @@ to the SQL or view source; the Test Explorer lists every suite case, a run marks
 pass/fail inline and paints covered/uncovered lines in the route's SQL files; the
 status bar tracks `tesseraql serve` up and down — still no Studio, still no
 hand-typed terminal.
+
+## Phase 56 — editor intelligence: the remaining ladder
+
+Status: design accepted 2026-07-08 (roadmap Phase 56). The four remaining ladder
+items, in the order they pay off: single-case runs, Studio deep links, MCP
+registration, and the language layer. One design decision up front:
+
+**The "full LSP" ships as in-extension providers over a CLI symbols contract, not as
+a language-server process.** Everything a language server would know about a
+TesseraQL app — declared policies, message keys, route ids — only the framework can
+resolve, so the intelligence lives in a new CLI contract and the editor stays a thin
+renderer (the Phase 54 stance). Inside VS Code, definition/completion providers over
+that contract are functionally identical to an LSP client and cost one process less.
+The LSP wire protocol becomes worthwhile only when a second editor is targeted; that
+rung stays on the ladder, and the editor-free core keeps the seam open.
+
+**Slice 1 — this design.**
+
+**Slice 2 — single-case runs.** `tesseraql test` gains a repeatable `--case <name>`
+filter (exact case names): the runner executes only the matching cases, and the
+`--format json` document reports only them. The Test Explorer passes the filter when
+a run request names specific cases, so one failing case re-runs alone — the
+seconds-long whole-app run stops being the only granularity.
+
+**Slice 3 — Studio deep links.** *TesseraQL: Open in Studio* on an app file (editor
+context, explorer context, and the command palette) opens
+`/_tesseraql/studio/ui/source?path=<app-relative path>` on `tesseraql.serverUrl` —
+the same source view every Studio surface links to. The editor and Studio stop being
+parallel worlds: the file under the cursor is one click from its live, hot-reloading
+counterpart.
+
+**Slice 4 — MCP registration.** *TesseraQL: Register MCP Server* writes the Phase 24
+dev-tools server (`<cliPath> mcp --app <home>`, stdio transport) into the chosen
+client configuration: `.vscode/mcp.json` (VS Code MCP clients) and/or the repo-root
+`.mcp.json` (Claude Code), merging with any existing servers and never overwriting a
+foreign `tesseraql` entry without confirmation. One command, and any connected agent
+sees manifest, lint, tests, and scaffolding.
+
+**Slice 5 — the language layer.** A new CLI contract, `tesseraql symbols --app <dir>
+--format json`, prints what the framework declares:
+`{policies: [{name, source, line}], messages: [{key, source, line}], routes: [{id,
+source, path, recipe}]}` — policies from the app config, message keys from the
+default-locale catalog (flattened dotted keys with their source lines), routes from
+the manifest; sorted, deterministic. Over it the extension adds, per app home and
+refreshed on save: **completion** for `policy:` values (declared policies) and
+`message:` values (catalog keys), and **go-to-definition** from a `policy:` value to
+its declaration in `config/tesseraql.yml` and from a `message:` value (or a view
+`title:`/`label:` that names an existing key) to its line in the catalog. Unknown
+references stay lint findings — the providers navigate, they do not judge.
+
+**Milestone M21** — in a scaffolded app: a single failing case re-runs alone from
+the Test Explorer; right-click on a route file opens that source in Studio; one
+command registers the MCP server and a connected agent lists the dev tools; typing
+`policy:` offers the app's declared policies and Ctrl+click on one lands on its
+declaration, same for message keys — the editor knows what the framework knows.
