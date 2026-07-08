@@ -1,0 +1,9 @@
+# Ship the compiled extension, the manifest, and the snippets — nothing else.
+src/**
+test/**
+out/test/**
+out/**/*.map
+node_modules/**
+tsconfig.json
+pnpm-lock.yaml
+.gitignore

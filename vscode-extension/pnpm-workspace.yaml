@@ -1,0 +1,6 @@
+# Native postinstall policy (the docs-site precedent): neither package needs its
+# build script here - vsce-sign only signs marketplace publishes (an operator step)
+# and keytar only stores publish tokens.
+allowBuilds:
+  '@vscode/vsce-sign': false
+  keytar: false

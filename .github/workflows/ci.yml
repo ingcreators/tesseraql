@@ -87,3 +87,38 @@ jobs:
       - name: Build the site (sync, completeness guard, links validation)
         working-directory: docs-site
         run: pnpm run build
+
+  # The VS Code extension (docs/vscode-extension.md): typecheck, the node:test suite
+  # over the editor-free core, and a vsce package smoke so a broken manifest can
+  # never merge.
+  vscode-extension:
+    name: VS Code extension
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6
+        with:
+          package_json_file: vscode-extension/package.json
+
+      - name: Set up Node
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: vscode-extension/pnpm-lock.yaml
+
+      - name: Install
+        working-directory: vscode-extension
+        run: pnpm install --frozen-lockfile
+
+      - name: Build and test
+        working-directory: vscode-extension
+        run: pnpm run test
+
+      - name: Package smoke
+        working-directory: vscode-extension
+        run: pnpm run package
