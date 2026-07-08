@@ -76,7 +76,9 @@ export class SuiteTestController {
       }
       let report: TestRunReport;
       try {
-        report = await this.execute(home);
+        // A request that names specific items runs only those cases (Phase 56).
+        report = await this.execute(home,
+            request.include === undefined ? undefined : [...cases.keys()]);
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         for (const testCase of cases.values()) {
@@ -130,10 +132,14 @@ export class SuiteTestController {
     return byHome;
   }
 
-  private execute(home: string): Promise<TestRunReport> {
+  private execute(home: string, caseNames?: readonly string[]): Promise<TestRunReport> {
     const cliPath = vscode.workspace.getConfiguration('tesseraql').get<string>('cliPath', 'tesseraql');
+    const args = ['test', '--app', home, '--format', 'json'];
+    for (const name of caseNames ?? []) {
+      args.push('--case', name);
+    }
     return new Promise((resolve, reject) => {
-      execFile(cliPath, ['test', '--app', home, '--format', 'json'],
+      execFile(cliPath, args,
           { cwd: home, maxBuffer: 64 * 1024 * 1024 },
           (error, stdout) => {
             // Exit 1 with the document is a normal failing run; only a spawn failure

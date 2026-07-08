@@ -55,6 +55,17 @@ public final class AppTestRunner {
 
     /** Runs every {@code tests/**}{@code /*.yml} suite and writes reports under {@code reportDir}. */
     public RunResult run(Path appHome, DataSource dataSource, RealmConfig realm, Path reportDir) {
+        return run(appHome, dataSource, realm, reportDir, Set.of());
+    }
+
+    /**
+     * Runs the suites filtered to the named cases (all cases when {@code caseNames} is empty) —
+     * the single-case granularity the editor Test Explorer re-runs a failing case with
+     * (docs/vscode-extension.md, Phase 56). Item coverage is derived from the filtered suites:
+     * a filtered run reports the coverage of what it ran.
+     */
+    public RunResult run(Path appHome, DataSource dataSource, RealmConfig realm, Path reportDir,
+            Set<String> caseNames) {
         IdentityService identity = new IdentityService(name -> dataSource);
         SqlCoverage coverage = new SqlCoverage();
         TestRunner runner = new TestRunner(dataSource, appHome, identity, realm, coverage);
@@ -64,6 +75,13 @@ public final class AppTestRunner {
         List<TestSuite> suites = new ArrayList<>();
         for (Path suiteFile : suiteFiles(appHome)) {
             TestSuite suite = loader.load(suiteFile);
+            if (!caseNames.isEmpty()) {
+                suite = new TestSuite(suite.tests().stream()
+                        .filter(testCase -> caseNames.contains(testCase.name())).toList());
+                if (suite.tests().isEmpty()) {
+                    continue;
+                }
+            }
             suites.add(suite);
             results.addAll(runner.run(suite).results());
         }
