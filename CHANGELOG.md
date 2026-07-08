@@ -8,6 +8,11 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **VS Code extension: Studio deep links** (roadmap Phase 56 slice 3; design in
+  `docs/vscode-extension.md`): *TesseraQL: Open in Studio* — from the editor context
+  menu, the TesseraQL explorer, or the command palette — opens the file's live
+  counterpart in the running Studio's source view
+  (`/_tesseraql/studio/ui/source?path=…` on `tesseraql.serverUrl`).
 - **VS Code extension: serve status** (roadmap Phase 55 slice 5, completing the
   phase; design in `docs/vscode-extension.md`): a status-bar item polls the served
   app's readiness probe (`/_tesseraql/health/ready`, Phase 45) on the new
