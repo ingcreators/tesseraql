@@ -7,6 +7,7 @@ import { ErrorCodeHoverProvider } from './vscode/hover';
 import { ReferenceLinkProvider } from './vscode/referenceLinks';
 import { SuiteTestController } from './vscode/testing';
 import { ServeStatus } from './vscode/serveStatus';
+import { registerMcpServer } from './vscode/mcpRegistration';
 
 // The thin editor shell over the existing engines (docs/vscode-extension.md): lint
 // findings into the Problems panel, the CLI verbs as commands, the app explorer, and
@@ -29,6 +30,8 @@ export function activate(context: vscode.ExtensionContext): void {
       serveStatus,
       vscode.commands.registerCommand('tesseraql.openServer', () =>
           vscode.env.openExternal(vscode.Uri.parse(ServeStatus.serverUrl()))),
+      vscode.commands.registerCommand('tesseraql.registerMcp', () =>
+          withHome(homes, (home) => void registerMcpServer(home))),
       vscode.window.registerTreeDataProvider('tesseraqlExplorer', explorer),
       vscode.languages.registerHoverProvider(
           ['yaml', 'sql', 'html', 'properties', 'plaintext'], new ErrorCodeHoverProvider()),
