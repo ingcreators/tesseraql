@@ -128,7 +128,7 @@
          this version (surfaced to the CLI through a build-filtered resource). -->
     <zonky.embedded.postgres.version>2.2.2</zonky.embedded.postgres.version>
     <zonky.postgres.binaries.version>17.10.0</zonky.postgres.binaries.version>
-    <spotless.version>3.7.0</spotless.version>
+    <spotless.version>3.8.0</spotless.version>
 
     <!-- Build plugin versions -->
     <maven.compiler.plugin.version>3.15.0</maven.compiler.plugin.version>
