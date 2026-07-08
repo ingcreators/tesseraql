@@ -8,6 +8,12 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **VS Code extension: reference navigation** (roadmap Phase 55 slice 2; design in
+  `docs/vscode-extension.md`): `file:`, `view:`, and `template:` values in app YAML
+  are document links, resolved against the document's directory exactly as the
+  runtime resolves them (a `frags.html::fragment` suffix links to the file; a
+  `view: list` kind without a file extension is not a reference). A link appears
+  only when the target exists — a broken reference stays a lint finding.
 - **`tesseraql test --format json`** (roadmap Phase 55 slice 3; design in
   `docs/vscode-extension.md`): the test command can print the editor test-run
   contract — `{passed, failed, results: [{name, passed, message}], sql: [{file,
