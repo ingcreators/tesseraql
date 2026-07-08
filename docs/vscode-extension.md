@@ -113,7 +113,9 @@ hand.
 ## Phase 55 — editor authoring depth
 
 Status: design accepted 2026-07-08 (roadmap Phase 55, the first rungs of the ladder
-above). Four capabilities, in the order they pay off, under the same Phase 54 stance:
+above). **All five slices are delivered — Phase 55 is complete and milestone M20 is
+met** (reference links, `tesseraql test --format json`, Test Explorer, SQL coverage,
+the serve status bar; extension 0.2.0). Four capabilities, in the order they pay off, under the same Phase 54 stance:
 **the extension computes nothing the framework already knows.** Reference resolution
 follows the documented app layout, test results and coverage come from run contracts
 the framework already writes, health comes from the Phase 45 probe.

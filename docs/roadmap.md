@@ -1063,6 +1063,15 @@ the source; the Test Explorer lists every case, a run marks pass/fail inline and
 paints covered/uncovered lines in the route's SQL; the status bar tracks
 `tesseraql serve` up and down.
 
+Delivered 2026-07-08 in the five designed slices: the design; reference navigation
+(document links over the documented layout, the `expect.rows` and view-kind traps
+covered by the core tests); the test-run contract (`test --format json`, proven
+against real PostgreSQL by `AppLifecycleDbCommandsIntegrationTest`); Test Explorer +
+SQL coverage (native test UI runs over the contract, `StatementCoverage` painting
+covered/uncovered 2-way-SQL lines); and the serve status bar over the Phase 45
+readiness probe (`tesseraql.serverUrl`), shipping extension 0.2.0. **Phase 55 is
+complete and milestone M20 is met.**
+
 ## Continuous tracks
 
 - **Platform maintenance**: weekly Dependabot triage (policy encoded in
