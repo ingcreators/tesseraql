@@ -1040,6 +1040,29 @@ marketplace publish stays the recorded operator step, so M19 runs off the CI-bui
 documented `lint --app .` form crashed before the end-to-end pass caught it.
 **Phase 54 is complete and milestone M19 is met.**
 
+### Phase 55 — editor authoring depth
+
+Named 2026-07-08; the accepted design is the Phase 55 section of
+[docs/vscode-extension.md](vscode-extension.md). The first rungs of the Phase 54
+ladder, in the order they pay off and under the same stance (the extension computes
+nothing the framework already knows): reference navigation — `file:`/`view:`/
+`template:` values become document links resolved by the documented app layout;
+`tesseraql test --format json` — the complete per-case results plus per-file SQL
+line/branch coverage with 1-based line lists, one JSON object on stdout, exit
+semantics unchanged; Test Explorer — suites discovered from `tests/**/*.yml` into
+the native test UI, runs executing the JSON contract and mapping back by case name;
+SQL coverage — the same run feeds the editor's coverage API so covered/uncovered
+2-way-SQL lines paint where the SQL is written; and a status-bar serve probe over
+the Phase 45 readiness endpoint. Single-case server-side filtering, message-key /
+policy / named-query navigation, and the full language server stay on the ladder.
+Five slices: design; links; the test contract; Test Explorer + coverage; serve
+status.
+
+**Milestone M20** — in a scaffolded app: Ctrl+click a `file:`/`view:` value jumps to
+the source; the Test Explorer lists every case, a run marks pass/fail inline and
+paints covered/uncovered lines in the route's SQL; the status bar tracks
+`tesseraql serve` up and down.
+
 ## Continuous tracks
 
 - **Platform maintenance**: weekly Dependabot triage (policy encoded in
