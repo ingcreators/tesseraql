@@ -8,6 +8,14 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **VS Code extension: Test Explorer and SQL coverage** (roadmap Phase 55 slice 4;
+  design in `docs/vscode-extension.md`): suites under `tests/**/*.yml` appear in the
+  native Test Explorer (cases discovered by name and line — presentation, not
+  semantics); a run executes `tesseraql test --format json` against the app's
+  datasource and maps results back by case name, and a *Run with Coverage* run feeds
+  the same document's per-file SQL `coveredLines`/`coverableLines` into the editor's
+  test coverage API — covered and uncovered 2-way-SQL lines paint where the SQL is
+  written.
 - **VS Code extension: reference navigation** (roadmap Phase 55 slice 2; design in
   `docs/vscode-extension.md`): `file:`, `view:`, and `template:` values in app YAML
   are document links, resolved against the document's directory exactly as the

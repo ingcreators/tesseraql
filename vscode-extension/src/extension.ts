@@ -5,6 +5,7 @@ import { LintController } from './vscode/diagnostics';
 import { AppExplorer } from './vscode/explorer';
 import { ErrorCodeHoverProvider } from './vscode/hover';
 import { ReferenceLinkProvider } from './vscode/referenceLinks';
+import { SuiteTestController } from './vscode/testing';
 
 // The thin editor shell over the existing engines (docs/vscode-extension.md): lint
 // findings into the Problems panel, the CLI verbs as commands, the app explorer, and
@@ -17,10 +18,12 @@ export function activate(context: vscode.ExtensionContext): void {
   const lint = new LintController(output);
   let homes = discoverHomes();
   const explorer = new AppExplorer(homes);
+  const testing = new SuiteTestController(homes, output);
 
   context.subscriptions.push(
       output,
       lint,
+      testing,
       vscode.window.registerTreeDataProvider('tesseraqlExplorer', explorer),
       vscode.languages.registerHoverProvider(
           ['yaml', 'sql', 'html', 'properties', 'plaintext'], new ErrorCodeHoverProvider()),
@@ -37,6 +40,7 @@ export function activate(context: vscode.ExtensionContext): void {
       vscode.workspace.onDidChangeWorkspaceFolders(() => {
         homes = discoverHomes();
         explorer.setHomes(homes);
+        testing.setHomes(homes);
       }),
   );
 
@@ -46,7 +50,10 @@ export function activate(context: vscode.ExtensionContext): void {
   }
 
   const watcher = vscode.workspace.createFileSystemWatcher('**/*.{yml,sql,html}');
-  const refresh = () => explorer.refresh();
+  const refresh = () => {
+    explorer.refresh();
+    testing.discover();
+  };
   watcher.onDidCreate(refresh);
   watcher.onDidDelete(refresh);
   context.subscriptions.push(watcher);
