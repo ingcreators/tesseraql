@@ -27,24 +27,30 @@
         routes, sources, lint and schema, previews buffers, and — only with your edit role —
         saves <strong>drafts</strong>. Nothing it does is served until you review and apply
         the draft in the editor; every saved draft lands in the audit trail under your name.</p>
-      <div class="hc-stack" th:if="${!chat.entries.isEmpty()}">
-        <div th:each="entry : ${chat.entries}"
-             th:class="${entry.role == 'user'} ? 'hc-alert' : 'hc-card'"
-             th:attr="data-variant=${entry.role == 'user'} ? 'info' : null">
-          <p class="hc-field__message" th:if="${entry.tool != null}"
-             th:text="|used: ${entry.tool}|"></p>
-          <p th:if="${!entry.text.isBlank()}" th:text="${entry.text}"
-             style="white-space: pre-wrap"></p>
-        </div>
+      <!-- The kit's chat-messages recipe (hc 0.1.9): a role=log transcript the composer
+           appends to over htmx; the reply streams into the placeholder the send returns
+           (streaming-response recipe, see docs/copilot.md). Entries and the message input
+           arrive pre-rendered from CopilotFragments — the same markup the SSE done event
+           carries — so a streamed turn and a reload render identically. -->
+      <div class="hc-chat" role="log" aria-label="Copilot conversation">
+        <ol class="hc-chat__list" tabindex="0" id="copilot-chat-list">
+          <th:block th:each="entry : ${chat.entries}" th:utext="${entry}"/>
+        </ol>
       </div>
-      <form class="hc-cluster" method="post" action="/_tesseraql/studio/ui/copilot/send">
+      <form id="copilot-composer" class="hc-cluster" method="post"
+            action="/_tesseraql/studio/ui/copilot/send"
+            hx-post="/_tesseraql/studio/ui/copilot/send"
+            hx-target="#copilot-chat-list" hx-swap="beforeend"
+            hx-disabled-elt="find button[type=submit]">
         <input type="hidden" name="_csrf" th:value="${_csrf}">
-        <input class="hc-input hc-field--grow" name="message" required maxlength="4000"
-               placeholder="Describe the route, page or fix you want&hellip;" autofocus>
+        <th:block th:utext="${chat.input}"/>
         <button class="hc-button" data-variant="primary" type="submit">Send</button>
       </form>
       <p class="hc-field__message" th:unless="${chat.editable}">You hold no Studio edit role,
         so the copilot answers questions but cannot save drafts in this session.</p>
+      <!-- htmx's sse extension (bundled in the htmx WebJar) — the EventSource behind the
+           streaming placeholder. Deferred, so it runs after the shell's htmx.min.js. -->
+      <script src="/assets/vendor/htmx.org/dist/ext/sse.js" defer></script>
     </th:block>
   </section>
 </div>
