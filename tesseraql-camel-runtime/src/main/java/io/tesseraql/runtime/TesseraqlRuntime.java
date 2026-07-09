@@ -1114,6 +1114,10 @@ public final class TesseraqlRuntime implements AutoCloseable {
                         rows) -> renderExportPdf(export, routeDir, appHome, rows);
                 context.addRoutes(new StudioRouteBuilder(studio, reloader, studioTests,
                         studioScaffold, studioAccess, studioMask, studioPdf));
+                // The copilot's send + stream transports (docs/copilot.md): Java routes
+                // because streaming and HX-Request negotiation sit below the YAML surface.
+                // Mounted with Studio; unconfigured stays a clean TQL-STUDIO-4235 refusal.
+                context.addRoutes(new CopilotRouteBuilder(copilotService, studioAccess));
                 // Providers backing the bundled studio app (design ch. 16, 47).
                 serviceProviders
                         .register("studio.explorer", params -> {
@@ -1197,17 +1201,18 @@ public final class TesseraqlRuntime implements AutoCloseable {
                             model.put("enabled", copilotService != null);
                             boolean canEdit = studioAccess.canEdit(params.get("roles"));
                             model.put("editable", canEdit);
+                            // Entries arrive pre-rendered (CopilotFragments, the single
+                            // markup source shared with the SSE done event); the message
+                            // input too, so the htmx out-of-band clear cannot drift from
+                            // the page's own form.
                             model.put("entries", copilotService == null
                                     ? java.util.List.of()
-                                    : copilotService.transcript(actorOf(params)));
+                                    : copilotService.transcript(actorOf(params)).stream()
+                                            .map(io.tesseraql.studio.CopilotFragments::entryHtml)
+                                            .toList());
+                            model.put("input",
+                                    io.tesseraql.studio.CopilotFragments.messageInput(false));
                             return model;
-                        })
-                        .register("studio.copilot.send", params -> {
-                            requireCopilot(copilotService);
-                            String message = requiredParam(params, "message");
-                            boolean canEdit = studioAccess.canEdit(params.get("roles"));
-                            return Map.of("entries", copilotService.send(actorOf(params),
-                                    message, canEdit));
                         })
                         .register("studio.copilot.reset", params -> {
                             requireCopilot(copilotService);

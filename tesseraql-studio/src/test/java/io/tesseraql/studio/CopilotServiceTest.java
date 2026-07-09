@@ -110,6 +110,137 @@ class CopilotServiceTest {
         });
     }
 
+    /** A scripted SSE chat-completions endpoint: streams each canned message as deltas. */
+    private String scriptedStreamingEndpoint(ConcurrentLinkedQueue<String> replies)
+            throws Exception {
+        server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        server.createContext("/v1/chat/completions", exchange -> {
+            String message = replies.poll();
+            exchange.getResponseHeaders().set("Content-Type", "text/event-stream");
+            exchange.sendResponseHeaders(200, 0);
+            try (OutputStream out = exchange.getResponseBody()) {
+                // One frame per character of content — the crudest possible delta split —
+                // and the whole tool_calls array in one frame.
+                com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+                com.fasterxml.jackson.databind.JsonNode canned = mapper.readTree(message);
+                String content = canned.path("content").asText(null);
+                if (content != null) {
+                    for (char c : content.toCharArray()) {
+                        com.fasterxml.jackson.databind.node.ObjectNode root = mapper
+                                .createObjectNode();
+                        root.putArray("choices").addObject().putObject("delta")
+                                .put("content", String.valueOf(c));
+                        out.write(("data: " + mapper.writeValueAsString(root) + "\n\n")
+                                .getBytes(StandardCharsets.UTF_8));
+                    }
+                }
+                if (canned.path("tool_calls").isArray()
+                        && !canned.path("tool_calls").isEmpty()) {
+                    com.fasterxml.jackson.databind.node.ObjectNode root = mapper
+                            .createObjectNode();
+                    com.fasterxml.jackson.databind.node.ObjectNode delta = root
+                            .putArray("choices").addObject().putObject("delta");
+                    com.fasterxml.jackson.databind.node.ArrayNode calls = delta
+                            .putArray("tool_calls");
+                    int index = 0;
+                    for (com.fasterxml.jackson.databind.JsonNode call : canned
+                            .path("tool_calls")) {
+                        com.fasterxml.jackson.databind.node.ObjectNode part = calls
+                                .addObject();
+                        part.put("index", index++);
+                        part.setAll((com.fasterxml.jackson.databind.node.ObjectNode) call);
+                    }
+                    out.write(("data: " + mapper.writeValueAsString(root) + "\n\n")
+                            .getBytes(StandardCharsets.UTF_8));
+                }
+                out.write("data: [DONE]\n\n".getBytes(StandardCharsets.UTF_8));
+            }
+        });
+        server.start();
+        return "http://127.0.0.1:" + server.getAddress().getPort() + "/v1/chat/completions";
+    }
+
+    /** The streaming turn (docs/copilot.md): deltas forwarded, the reply reassembled. */
+    @Test
+    void aStreamedTurnForwardsDeltasAndReturnsTheAppendedEntries(@TempDir Path dir)
+            throws Exception {
+        StudioService studio = new StudioService(new ManifestLoader().load(app(dir)), false);
+        ConcurrentLinkedQueue<String> replies = new ConcurrentLinkedQueue<>(List.of(
+                "{\"role\":\"assistant\",\"content\":\"Hi!\"}"));
+        CopilotService copilot = new CopilotService(studio,
+                new ManifestLoader().load(dir), scriptedStreamingEndpoint(replies), "m",
+                () -> null, 2);
+
+        String turnId = copilot.begin("alice", "hello", false);
+        List<String> deltas = new java.util.ArrayList<>();
+        List<CopilotService.Entry> appended = copilot.runTurn("alice",
+                copilot.consumeTurn(turnId, "alice"), new CopilotService.TurnListener() {
+                    @Override
+                    public void delta(String text) {
+                        deltas.add(text);
+                    }
+
+                    @Override
+                    public void toolCall(String name) {
+                        deltas.add("[" + name + "]");
+                    }
+                });
+
+        // One frame per character arrived in order, and the reply reassembled whole.
+        assertThat(String.join("", deltas)).isEqualTo("Hi!");
+        assertThat(appended).extracting(CopilotService.Entry::text).containsExactly("Hi!");
+        // The turn landed in the shared history like any other exchange.
+        assertThat(copilot.transcript("alice")).extracting(CopilotService.Entry::text)
+                .containsExactly("hello", "Hi!");
+    }
+
+    /** The turn id is a single-use, actor-bound capability with a TTL. */
+    @Test
+    void turnIdsAreSingleUseAndActorBound(@TempDir Path dir) throws Exception {
+        StudioService studio = new StudioService(new ManifestLoader().load(app(dir)), false);
+        CopilotService copilot = new CopilotService(studio,
+                new ManifestLoader().load(dir), "http://127.0.0.1:9/unused", "m",
+                () -> null, 2);
+
+        String turnId = copilot.begin("alice", "hello", false);
+        // A foreign actor cannot consume it — and the failed attempt burned it.
+        org.assertj.core.api.Assertions.assertThatThrownBy(
+                () -> copilot.consumeTurn(turnId, "mallory"))
+                .isInstanceOf(io.tesseraql.core.error.TqlException.class)
+                .hasMessageContaining("turn");
+        org.assertj.core.api.Assertions.assertThatThrownBy(
+                () -> copilot.consumeTurn(turnId, "alice"))
+                .isInstanceOf(io.tesseraql.core.error.TqlException.class);
+        org.assertj.core.api.Assertions.assertThatThrownBy(
+                () -> copilot.consumeTurn("never-issued", "alice"))
+                .isInstanceOf(io.tesseraql.core.error.TqlException.class);
+    }
+
+    /** A dead endpoint mid-stream never throws: the failure rides done as an entry. */
+    @Test
+    void aStreamingModelFailureLandsAsAnEntryInsteadOfThrowing(@TempDir Path dir)
+            throws Exception {
+        StudioService studio = new StudioService(new ManifestLoader().load(app(dir)), false);
+        CopilotService copilot = new CopilotService(studio,
+                new ManifestLoader().load(dir), "http://127.0.0.1:9/unreachable", "m",
+                () -> null, 2);
+
+        String turnId = copilot.begin("alice", "hello", false);
+        List<CopilotService.Entry> appended = copilot.runTurn("alice",
+                copilot.consumeTurn(turnId, "alice"), new CopilotService.TurnListener() {
+                    @Override
+                    public void delta(String text) {
+                    }
+
+                    @Override
+                    public void toolCall(String name) {
+                    }
+                });
+
+        assertThat(appended).hasSize(1);
+        assertThat(appended.get(0).text()).contains("The model endpoint failed");
+    }
+
     @Test
     void withoutAnEditRoleTheWriteToolIsRefusedAndReadsStillWork(@TempDir Path dir)
             throws Exception {

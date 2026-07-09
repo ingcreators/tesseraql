@@ -8,6 +8,18 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **The copilot streams its replies** (hc 0.1.9 adoption; design in `docs/copilot.md`,
+  "Streaming replies"): the Studio chat adopts the kit's `chat-messages` and
+  `streaming-response` recipes on htmx's bundled `sse` extension — send returns the user
+  item plus a streaming placeholder, and an SSE stream delivers the model's deltas as
+  `chunk` events with a `done` payload rendered by the same `CopilotFragments` markup the
+  page itself uses. The turn id is a single-use, actor-bound capability; a no-JS post
+  still runs the blocking loop and redirects (the old behavior, now the fallback). Behind
+  it sits the framework's first streaming transport, `SseResponse` — a piped-InputStream
+  SSE writer over platform-http, built for reuse. The `send` endpoint moved from a YAML
+  route to `CopilotRouteBuilder` (streaming and `HX-Request` negotiation are transport
+  concerns below the YAML surface); the upstream chat-completions call now sets
+  `stream: true` and reassembles fragmented tool-call deltas.
 - **One-click light/dark toggle in the shell header** (hc 0.1.9 adoption; design in
   `docs/account.md`): the kit's `installThemeToggle` flips the page instantly, and the
   framework bootstrap mirrors `hc:themechange` to the account appearance route, so the

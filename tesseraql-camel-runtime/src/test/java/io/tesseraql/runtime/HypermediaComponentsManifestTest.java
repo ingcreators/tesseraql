@@ -32,16 +32,18 @@ class HypermediaComponentsManifestTest {
             "installCopy", // share-URL copy buttons (data-hc-copy)
             "installConfirm", // data-hc-confirm gated actions
             "installCodeEditor", // live hc-code editor overlay (Studio 2-way SQL grammar)
-            "installThemeToggle"); // shell light/dark toggle (data-hc-theme-toggle)
+            "installThemeToggle", // shell light/dark toggle (data-hc-theme-toggle)
+            "installChatScroll"); // copilot hc-chat transcript follows the stream
 
     /** Custom events the framework listens for / documents. */
     private static final List<String> REQUIRED_EVENTS = List.of(
             "hc:confirmed", "hc:toast", "hc:copied", "hc:datagridsort",
             "hc:themechange"); // the bootstrap persists it to the account preference
 
-    /** Recipes the scaffolds emit and the hypermedia-ui contract documents. */
+    /** Recipes the scaffolds emit and the hypermedia-ui/copilot contracts document. */
     private static final List<String> REQUIRED_RECIPES = List.of(
-            "mutating-form", "field-errors", "data-region", "toast", "confirm-action");
+            "mutating-form", "field-errors", "data-region", "toast", "confirm-action",
+            "chat-messages", "streaming-response"); // the copilot panel (docs/copilot.md)
 
     /** Named exports the framework imports from the behaviors bundle as an ES module. */
     private static final List<String> REQUIRED_BUNDLE_EXPORTS = List.of(
