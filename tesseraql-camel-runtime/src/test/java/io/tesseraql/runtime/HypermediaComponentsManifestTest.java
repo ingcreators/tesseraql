@@ -31,11 +31,13 @@ class HypermediaComponentsManifestTest {
             "installNavCurrent", // sidebar active-link marking (data-hc-nav-current)
             "installCopy", // share-URL copy buttons (data-hc-copy)
             "installConfirm", // data-hc-confirm gated actions
-            "installCodeEditor"); // live hc-code editor overlay (Studio 2-way SQL grammar)
+            "installCodeEditor", // live hc-code editor overlay (Studio 2-way SQL grammar)
+            "installThemeToggle"); // shell light/dark toggle (data-hc-theme-toggle)
 
     /** Custom events the framework listens for / documents. */
     private static final List<String> REQUIRED_EVENTS = List.of(
-            "hc:confirmed", "hc:toast", "hc:copied", "hc:datagridsort");
+            "hc:confirmed", "hc:toast", "hc:copied", "hc:datagridsort",
+            "hc:themechange"); // the bootstrap persists it to the account preference
 
     /** Recipes the scaffolds emit and the hypermedia-ui contract documents. */
     private static final List<String> REQUIRED_RECIPES = List.of(

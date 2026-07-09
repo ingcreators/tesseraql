@@ -8,6 +8,13 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **One-click light/dark toggle in the shell header** (hc 0.1.9 adoption; design in
+  `docs/account.md`): the kit's `installThemeToggle` flips the page instantly, and the
+  framework bootstrap mirrors `hc:themechange` to the account appearance route, so the
+  stored `ui.theme` preference — not localStorage — remains the source of truth (the
+  cookie re-sync then carries the choice onto pre-login pages). Rendered only when the
+  bundled account app is mounted; app pages can opt in with the same
+  `data-hc-theme-toggle` button, documented in `docs/hypermedia-ui.md`.
 - **Studio route form options derive from the framework** (roadmap Phase 57
   slice 3, completing the phase; design in `docs/vscode-extension.md`): the form's
   recipe, auth, and input-type choices come from the same surfaces the shipped JSON

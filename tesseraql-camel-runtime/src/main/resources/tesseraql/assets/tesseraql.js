@@ -108,3 +108,26 @@ document.body.addEventListener("htmx:beforeSwap", (event) => {
 // Sidebar active-link marking (data-hc-nav-current on the shell sidebar) and share-URL copy buttons
 // (data-hc-copy) are now the kit's installNavCurrent and installCopy behaviors (hc 0.1.6, #270/#272),
 // auto-installed by the behaviors bundle imported above — the local stand-ins they replaced are gone.
+
+// Theme persistence (roadmap Phase 48): the kit's installThemeToggle (hc 0.1.9) flips
+// data-theme on <html> and fires hc:themechange — client-side only, by design. The stored
+// preference is the source of truth (framework toggles carry no data-persist), so every
+// change is mirrored to the account app's appearance route; the renderer re-syncs the
+// tesseraql_theme cookie on the next render, which carries the choice onto pre-login pages.
+// The 303 target page is not needed, hence redirect: "manual". Without a session there is
+// no csrf-token meta tag and nothing to persist — the flip stays visual for the page.
+document.addEventListener("hc:themechange", (event) => {
+    const csrf = document.querySelector('meta[name="csrf-token"]');
+    if (!csrf) {
+        return;
+    }
+    fetch("/_tesseraql/account/appearance", {
+        method: "POST",
+        redirect: "manual",
+        headers: {
+            "Content-Type": "application/x-www-form-urlencoded",
+            "X-CSRF-Token": csrf.content,
+        },
+        body: "theme=" + encodeURIComponent(event.detail.theme),
+    });
+});
