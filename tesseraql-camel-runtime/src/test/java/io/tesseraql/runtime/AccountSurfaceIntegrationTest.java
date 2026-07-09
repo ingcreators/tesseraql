@@ -180,6 +180,19 @@ class AccountSurfaceIntegrationTest {
                 "theme=hotdog").statusCode()).isEqualTo(400);
     }
 
+    /** hc 0.1.9 adoption: the signed-in shell offers the kit's light/dark toggle. */
+    @Test
+    void theShellRendersTheThemeToggleWhenTheAccountAppIsMounted() throws Exception {
+        HttpResponse<String> home = get(runtime, sessionCookie, "/home");
+        assertThat(home.statusCode()).isEqualTo(200);
+        // The toggle carries no data-persist: the bootstrap mirrors hc:themechange to the
+        // appearance route (the same header-authenticated POST shape postForm() proves all
+        // over this suite), so the stored preference - not localStorage - is what lasts.
+        assertThat(home.body()).contains("data-hc-theme-toggle")
+                .contains("icons.svg#sun-moon")
+                .doesNotContain("data-persist=\"hc-theme\"");
+    }
+
     /** Slice 3: the account page offers the user-facing channel and persists the choice. */
     @Test
     void theNotificationOptOutTogglePersists() throws Exception {
@@ -392,12 +405,13 @@ class AccountSurfaceIntegrationTest {
                     TesseraqlProperties.PREFERENCE_STORE_BEAN, PreferenceStore.class))
                     .isNull();
             // A signed-in shell page still shows the user menu — just without the settings
-            // link, so the chrome never links a 404.
+            // link or the theme toggle, so the chrome never links (or posts to) a 404.
             HttpResponse<String> shellPage = get(disabled, cookie, "/home");
             assertThat(shellPage.statusCode()).isEqualTo(200);
             assertThat(shellPage.body()).contains("tql-account-menu")
                     .contains("Sign out")
-                    .doesNotContain("Account settings");
+                    .doesNotContain("Account settings")
+                    .doesNotContain("data-hc-theme-toggle");
         } finally {
             disabled.close();
             deleteRecursively(disabledHome);

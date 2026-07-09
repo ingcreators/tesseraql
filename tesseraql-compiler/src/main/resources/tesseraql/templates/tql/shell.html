@@ -74,6 +74,16 @@
         <svg class="hc-icon"><use href="/assets/_tesseraql/icons.svg#bell"/></svg>
         <span class="hc-badge" th:if="${_inbox.unread > 0}" th:text="${_inbox.unread}">3</span>
       </a>
+      <!-- Light/dark toggle: the kit's installThemeToggle flips data-theme client-side and
+           fires hc:themechange, which the framework bootstrap posts to the account app's
+           appearance route — so the stored preference stays the source of truth. Deliberately
+           no data-persist (localStorage would shadow the preference), and rendered only when
+           the account app is mounted, so the persistence POST never hits a 404. The accessible
+           name comes from the kit's catalog (themeToggle.label), localized per request. -->
+      <button th:if="${_account.accountHref != null}" class="hc-button" data-variant="ghost"
+              data-hc-theme-toggle type="button">
+        <svg class="hc-icon" aria-hidden="true"><use href="/assets/_tesseraql/icons.svg#sun-moon"/></svg>
+      </button>
       <button class="hc-avatar" type="button" popovertarget="tql-account-menu"
               th:attr="aria-label=${_account.name}">
         <span class="hc-avatar__fallback" th:text="${_account.initials}">U</span>

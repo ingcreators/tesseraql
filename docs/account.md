@@ -163,6 +163,17 @@ never echoed markup). When the stored choice differs from the request's cookie, 
 renderer re-syncs the cookie on the response — that is what carries a signed-in
 choice onto pre-login pages like the login screen, with no store lookup there.
 
+**Toggle** (hc 0.1.9 adoption). Beyond the account page's radio form, the signed-in
+shell header offers the kit's one-click toggle (`data-hc-theme-toggle`, the
+`installThemeToggle` behavior): it flips `data-theme` on `<html>` instantly — no
+round trip — and fires `hc:themechange`, which the framework bootstrap mirrors to
+the appearance route so the stored preference stays the source of truth. The toggle
+deliberately carries no `data-persist`: the kit's localStorage persistence would
+shadow the preference and desynchronize devices. It renders only when the account
+app is mounted (same rule as the settings link — the chrome never posts to a 404),
+and its accessible name comes from the kit catalog (`themeToggle.label`). See the
+blessed pattern in [hypermedia-ui.md](hypermedia-ui.md) for app-authored toggles.
+
 ## Notification opt-out (slice 3)
 
 Two additions, both opt-in so existing apps are untouched:

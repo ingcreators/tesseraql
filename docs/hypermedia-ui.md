@@ -202,6 +202,27 @@ redirects on success, while degrading to a plain form post with no JavaScript:
   confirm event: `hx-trigger="hc:confirmed"` on the form. The no-JS path posts straight
   through (the server re-validates anyway).
 
+## Theme toggle
+
+The signed-in shell header carries the kit's light/dark toggle, and any app page can add
+its own — a plain button opts in:
+
+```html
+<button class="hc-button" data-variant="ghost" data-hc-theme-toggle type="button">
+  <svg class="hc-icon" aria-hidden="true"><use href="/assets/_tesseraql/icons.svg#sun-moon"/></svg>
+</button>
+```
+
+The kit's auto-installed `installThemeToggle` behavior flips `data-theme` on `<html>`
+instantly and reflects state via `aria-pressed`; with no visible text it labels the button
+from the catalog (`themeToggle.label`, localized). The framework bootstrap listens for the
+kit's `hc:themechange` event and mirrors every change to the account app's appearance
+route, so the choice lands in the user's stored preference and follows them across devices
+and onto pre-login pages (the cookie re-sync in [account.md](account.md)). **Never add
+`data-persist`** — the kit's localStorage persistence would shadow the stored preference,
+and the two would fight after the next sign-in. Signed-out pages have no CSRF meta tag, so
+a toggle there flips the current page only.
+
 ## CSRF tokens
 
 State-changing browser routes declare `csrf: true`. The framework shell publishes the session
