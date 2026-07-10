@@ -8,6 +8,14 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **IAM Admin: bulk disable** (hc 0.1.9 adoption; pattern in `docs/hypermedia-ui.md`,
+  "Bulk actions"): the users list becomes an `hc-datagrid` with row selection — the kit's
+  `datagrid-bulk-actions` recipe — and a confirm-gated "Disable selected" toolbar that
+  posts the selection to `POST /_tesseraql/admin/users/bulk`. The endpoint is a Java
+  route (repeated `ids` form fields sit below the Simple-YAML input surface), runs the
+  same `identity.disable-user` contract per id behind the same browser + CSRF +
+  `iam.admin.write` gates, and answers post/redirect/get; the select-all checkbox
+  carries no name, so it never reaches the server.
 - **The inbox bell is live** (hc 0.1.9 adoption; design in `docs/inbox.md`, "Live
   badge"): the shell subscribes the badge to a new per-session event stream,
   `GET /_tesseraql/events` (the kit's `sse-updates` recipe over the `SseRoutes`

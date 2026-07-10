@@ -135,6 +135,65 @@ class IamAdminIntegrationTest {
         assertThat(response.statusCode()).isEqualTo(401);
     }
 
+    /** Bulk disable (hc datagrid-bulk-actions, docs/hypermedia-ui.md "Bulk actions"). */
+    @Test
+    void bulkDisableTakesTheSelectionAndRedirectsBack() throws Exception {
+        // The list wears the recipe markup: selection checkboxes posting repeated ids,
+        // a nameless select-all, and the confirm-gated toolbar the kit reveals.
+        HttpResponse<String> list = get("/_tesseraql/admin/users", true);
+        assertThat(list.body()).contains("data-hc-datagrid-actions=\"#iam-users\"")
+                .contains("data-hc-datagrid-count")
+                .contains("name=\"ids\" value=\"u1\"")
+                .contains("aria-label=\"Select all\"");
+        try {
+            HttpResponse<String> bulk = postForm("/_tesseraql/admin/users/bulk",
+                    "action=disable&ids=u1&ids=u2");
+            assertThat(bulk.statusCode()).isEqualTo(303);
+            assertThat(bulk.headers().firstValue("location"))
+                    .hasValue("/_tesseraql/admin/users");
+            assertThat(get("/_tesseraql/admin/users/u1", true).body()).contains("DISABLED");
+            assertThat(get("/_tesseraql/admin/users/u2", true).body()).contains("DISABLED");
+        } finally {
+            post("/_tesseraql/admin/users/u1/enable");
+            post("/_tesseraql/admin/users/u2/enable");
+        }
+    }
+
+    /** The selection is client state: an empty one and an unknown verb are refused. */
+    @Test
+    void bulkRefusesAnEmptySelectionAndAnUnknownAction() throws Exception {
+        assertThat(postForm("/_tesseraql/admin/users/bulk", "action=disable")
+                .statusCode()).isEqualTo(400);
+        assertThat(postForm("/_tesseraql/admin/users/bulk", "action=vaporize&ids=u2")
+                .statusCode()).isEqualTo(400);
+        assertThat(get("/_tesseraql/admin/users/u2", true).body()).contains("ACTIVE");
+    }
+
+    /** The bulk endpoint rides the same gates as the per-user writes. */
+    @Test
+    void bulkRequiresAuthentication() throws Exception {
+        HttpRequest request = HttpRequest.newBuilder(
+                URI.create("http://localhost:" + runtime.port()
+                        + "/_tesseraql/admin/users/bulk"))
+                .header("Content-Type", "application/x-www-form-urlencoded")
+                .POST(HttpRequest.BodyPublishers.ofString("action=disable&ids=u2"))
+                .build();
+        assertThat(HttpClient.newHttpClient()
+                .send(request, HttpResponse.BodyHandlers.ofString()).statusCode())
+                .isEqualTo(401);
+    }
+
+    private static HttpResponse<String> postForm(String path, String form) throws Exception {
+        HttpRequest request = HttpRequest.newBuilder(
+                URI.create("http://localhost:" + runtime.port() + path))
+                .header("Cookie", adminCookie)
+                .header("X-CSRF-Token", adminCsrf)
+                .header("Content-Type", "application/x-www-form-urlencoded")
+                .POST(HttpRequest.BodyPublishers.ofString(form))
+                .build();
+        return HttpClient.newHttpClient().send(request, HttpResponse.BodyHandlers.ofString());
+    }
+
     @Test
     void rendersNotFoundPageForUnknownUser() throws Exception {
         HttpResponse<String> response = get("/_tesseraql/admin/users/missing", true);
