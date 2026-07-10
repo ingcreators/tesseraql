@@ -40,10 +40,11 @@ class HypermediaComponentsManifestTest {
             "hc:confirmed", "hc:toast", "hc:copied", "hc:datagridsort",
             "hc:themechange"); // the bootstrap persists it to the account preference
 
-    /** Recipes the scaffolds emit and the hypermedia-ui/copilot contracts document. */
+    /** Recipes the scaffolds emit and the hypermedia-ui/copilot/inbox contracts document. */
     private static final List<String> REQUIRED_RECIPES = List.of(
             "mutating-form", "field-errors", "data-region", "toast", "confirm-action",
-            "chat-messages", "streaming-response"); // the copilot panel (docs/copilot.md)
+            "chat-messages", "streaming-response", // the copilot panel (docs/copilot.md)
+            "sse-updates"); // the live inbox badge (docs/inbox.md)
 
     /** Named exports the framework imports from the behaviors bundle as an ES module. */
     private static final List<String> REQUIRED_BUNDLE_EXPORTS = List.of(

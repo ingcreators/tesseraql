@@ -42,7 +42,6 @@ final class CopilotRouteBuilder extends RouteBuilder {
         onException(Exception.class).handled(true).process(new ErrorResponseRenderer());
 
         rest().post(PAGE + "/send").to("direct:tql.copilot.send");
-        rest().get(PAGE + "/stream").to("direct:tql.copilot.stream");
 
         // The chat-messages recipe's dual-path send: an htmx caller gets the user item, the
         // streaming placeholder, and an out-of-band composer clear; a no-JS post runs the
@@ -72,35 +71,46 @@ final class CopilotRouteBuilder extends RouteBuilder {
                     exchange.getMessage().setBody("");
                 });
 
-        // The streaming-response recipe's stream: consume the single-use turn (404 before
-        // the stream opens), then run the tool loop on the SSE producer — deltas as chunk
-        // events, tool markers in between, and done carrying the final transcript markup.
-        from("direct:tql.copilot.stream").routeId("tql.copilot.stream")
-                .to(AUTH).process(exchange -> {
-                    requireCopilot();
-                    String actor = actor(exchange);
-                    CopilotService.Turn turn = copilot.consumeTurn(
-                            exchange.getMessage().getHeader("turn", String.class), actor);
-                    SseResponse.respond(exchange, writer -> {
-                        List<CopilotService.Entry> appended;
-                        try {
-                            appended = copilot.runTurn(actor, turn, new StreamBridge(writer));
-                        } catch (RuntimeException ex) {
-                            // runTurn absorbs model failures; anything else is transport-level.
-                            writer.event("error", CopilotFragments.errorHtml(
-                                    "The copilot turn failed; reload the page."));
-                            return;
-                        }
-                        StringBuilder done = new StringBuilder();
-                        appended.forEach(entry -> done
-                                .append(CopilotFragments.entryHtml(entry)));
-                        writer.event("done", done.toString());
-                    });
-                });
+    }
+
+    /**
+     * The streaming-response recipe's stream, {@code GET …/copilot/stream?turn=<id>} — an
+     * {@link SseRoutes} endpoint (registered after the platform server starts, hence not a
+     * Camel route; see SseRoutes): consume the single-use turn (404 before the stream
+     * opens), then run the tool loop on the SSE producer — deltas as chunk events, tool
+     * markers in between, and done carrying the final transcript markup.
+     */
+    static void registerStream(org.apache.camel.CamelContext context, int port,
+            CopilotService copilot, StudioAccess studioAccess) {
+        SseRoutes.register(context, port, PAGE + "/stream", (principal, query) -> {
+            if (copilot == null) {
+                throw new TqlException(new TqlErrorCode(TqlDomain.STUDIO, 4235),
+                        "The copilot is not configured"
+                                + " (tesseraql.copilot.enabled/endpoint/model)");
+            }
+            String actor = principal.loginId() != null
+                    ? principal.loginId()
+                    : principal.subject();
+            CopilotService.Turn turn = copilot.consumeTurn(query.apply("turn"), actor);
+            return writer -> {
+                List<CopilotService.Entry> appended;
+                try {
+                    appended = copilot.runTurn(actor, turn, new StreamBridge(writer));
+                } catch (RuntimeException ex) {
+                    // runTurn absorbs model failures; anything else is transport-level.
+                    writer.event("error", CopilotFragments.errorHtml(
+                            "The copilot turn failed; reload the page."));
+                    return;
+                }
+                StringBuilder done = new StringBuilder();
+                appended.forEach(entry -> done.append(CopilotFragments.entryHtml(entry)));
+                writer.event("done", done.toString());
+            };
+        });
     }
 
     /** Forwards loop callbacks as SSE chunk frames; an IOException ends the turn early. */
-    private record StreamBridge(SseResponse.Writer writer)
+    private record StreamBridge(SseRoutes.Writer writer)
             implements
                 CopilotService.TurnListener {
         @Override
