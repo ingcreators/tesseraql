@@ -98,3 +98,27 @@ Milestone **M14** closes the phase: a gallery app declares one inbox channel and
 `recipient:`-addressed `notify:`; the event shows up as an unread badge in the shell and
 a message in the inbox, reading clears it, opting out silences it — zero app code beyond
 those declarations.
+
+## Live badge (hc 0.1.9 adoption)
+
+The bell's badge is pushed, not polled: the shell subscribes it to the framework's
+per-session event stream with the kit's `sse-updates` recipe on htmx's bundled `sse`
+extension — the second consumer of the `SseRoutes` transport the copilot's streaming
+replies introduced (docs/copilot.md, "The SSE transport").
+
+- **`GET /_tesseraql/events`** — browser-session-authenticated SSE, mounted exactly when
+  an inbox channel is configured (like the bell). One named event today, `inbox:badge`,
+  whose payload is the badge fragment; idle `ping` frames double as heartbeats. Named
+  events are the wire contract, so later live surfaces ride the same stream.
+- **One choke point** — the runtime binds the inbox store wrapped in a notifying layer:
+  outbox delivery, mark-read, and mark-all-read all signal the subject's open streams
+  automatically. Signals coalesce per stream; the caching layer sits underneath, and a
+  local mutation invalidates it before the signal fires, so the pushed count is fresh.
+- **One markup source** — `InboxBadge.html` renders the fragment for both the page's
+  initial `_inbox.badge` and the pushed payload; an all-read inbox pushes an empty
+  payload, clearing the badge. A pushed update and a reload are byte-identical.
+- **Bounded by construction** — subscriptions are capped per subject and globally (a new
+  stream evicts the oldest), and each stream ends itself after a fixed lifetime; the
+  browser's EventSource reconnects at the server-set `retry` delay, which also covers
+  evictions. Initial state always renders server-side — the stream only freshens it, so
+  no JavaScript means the Phase 49 behavior: the badge updates on the next page load.

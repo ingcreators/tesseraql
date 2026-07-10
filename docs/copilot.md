@@ -71,13 +71,17 @@ page GET and reset stay YAML app routes.
 
 ### The SSE transport
 
-The framework's first streaming surface, built to be reused (the inbox bell is the next
-candidate): `SseResponse` formats `event:`/`data:` frames and answers a platform-http
-exchange with a piped `InputStream` body — camel-platform-http-vertx pumps InputStream
-bodies to the client chunked, so frames flush as they are written. The producing side
-runs on a virtual thread; a client disconnect surfaces as an IOException on the next
-write and aborts the turn. `data:` payloads are single-line by construction (newlines
-become markup before framing).
+The framework's first streaming surface, built to be reused (the inbox bell rides it
+too): `SseRoutes` registers each stream as a **raw route on the platform's Vert.x
+router**, not a Camel route. A Camel exchange answers with a complete body, and the
+platform-http `InputStream` pump (`AsyncInputStream`) only delivers full 8 KB buffers —
+an SSE frame must reach the wire the moment it is written, so streams bypass the exchange
+body entirely and write to the response directly. Per connection: the browser session
+authenticates exactly like `auth: browser` routes, a pre-stream refusal renders the
+framework's JSON error envelope with its mapped status, the producer runs on a virtual
+thread with every frame write hopping to the connection's event loop, and a client
+disconnect fails the next write, which ends the producer. `data:` payloads are
+single-line by construction (newlines become markup before framing).
 
 ### One source for the transcript markup
 

@@ -26,6 +26,9 @@
 <link rel="stylesheet" href="/assets/vendor/hypermedia-components__core/dist/hc.min.css">
 <link rel="stylesheet" href="/assets/_tesseraql/tesseraql.css">
 <script src="/assets/vendor/htmx.org/dist/htmx.min.js" defer></script>
+<!-- htmx's sse extension (bundled in the htmx WebJar): the EventSource behind the live
+     inbox badge and the copilot's streaming reply. Deferred, so it runs after htmx. -->
+<script src="/assets/vendor/htmx.org/dist/ext/sse.js" defer></script>
 <!-- The locale's message catalog must merge into the kit before its behaviors install at
      DOMContentLoaded; module scripts execute in document order, so this stays first. -->
 <script type="module" th:src="|/assets/_tesseraql/messages.js?locale=${#locale.toLanguageTag()}|"
@@ -68,11 +71,16 @@
         </button>
       </form>
       <!-- The inbox bell (roadmap Phase 49): rendered from the reserved `_inbox` variable when
-           an inbox channel is configured; the badge shows the cached unread count. -->
+           an inbox channel is configured. The badge is LIVE (docs/inbox.md "Live badge", the
+           kit's sse-updates recipe): the bell owns an EventSource to /_tesseraql/events and
+           the framework pushes the same pre-rendered fragment the page loaded with
+           (InboxBadge, one markup source) whenever the unread count changes. -->
       <a th:if="${_inbox != null}" class="hc-button" data-variant="ghost" th:href="${_inbox.href}"
-         aria-label="Notifications" id="tql-inbox-bell">
+         aria-label="Notifications" id="tql-inbox-bell"
+         hx-ext="sse" sse-connect="/_tesseraql/events">
         <svg class="hc-icon"><use href="/assets/_tesseraql/icons.svg#bell"/></svg>
-        <span class="hc-badge" th:if="${_inbox.unread > 0}" th:text="${_inbox.unread}">3</span>
+        <span id="tql-inbox-badge" sse-swap="inbox:badge" hx-swap="innerHTML"
+              th:utext="${_inbox.badge}"></span>
       </a>
       <!-- Light/dark toggle: the kit's installThemeToggle flips data-theme client-side and
            fires hc:themechange, which the framework bootstrap posts to the account app's

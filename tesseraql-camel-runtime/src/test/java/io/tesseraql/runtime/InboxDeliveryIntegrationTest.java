@@ -125,6 +125,55 @@ class InboxDeliveryIntegrationTest {
         }
     }
 
+    /** Live badge (docs/inbox.md): a delivery pushes the fragment; all-read clears it. */
+    @Test
+    void theEventStreamPushesTheBadgeOnDeliveryAndClearsOnAllRead() throws Exception {
+        InboxStore inbox = inboxStore();
+        HttpResponse<java.io.InputStream> stream = HttpClient.newHttpClient().send(
+                HttpRequest.newBuilder(URI.create(
+                        "http://localhost:" + runtime.port() + "/_tesseraql/events"))
+                        .header("Cookie", sessionCookie).build(),
+                HttpResponse.BodyHandlers.ofInputStream());
+        assertThat(stream.statusCode()).isEqualTo(200);
+        assertThat(stream.headers().firstValue("Content-Type").orElse(""))
+                .startsWith("text/event-stream");
+        try (java.io.BufferedReader frames = new java.io.BufferedReader(
+                new java.io.InputStreamReader(stream.body(),
+                        java.nio.charset.StandardCharsets.UTF_8))) {
+            // The stream opens with the reconnect delay — the headers are on the wire, so
+            // the subscription below is registered and the delivery cannot race it.
+            assertThat(frames.readLine()).startsWith("retry:");
+            assertThat(frames.readLine()).isEmpty();
+
+            inbox.deliver("live-evt-1", null, "inbox-user", "approvals", "s", "live", null);
+            assertThat(frames.readLine()).isEqualTo("event: inbox:badge");
+            assertThat(frames.readLine()).startsWith("data: ")
+                    .contains("<span class=\"hc-badge\">");
+            assertThat(frames.readLine()).isEmpty();
+
+            // The same fragment the page itself renders (InboxBadge, one markup source).
+            assertThat(get("/_tesseraql/account").body())
+                    .contains("<span class=\"hc-badge\">")
+                    .contains("sse-connect=\"/_tesseraql/events\"");
+
+            // All-read pushes the empty payload — the badge clears without a reload.
+            inbox.markAllRead(null, "inbox-user");
+            assertThat(frames.readLine()).isEqualTo("event: inbox:badge");
+            assertThat(frames.readLine()).isEqualTo("data: ");
+        }
+    }
+
+    /** The event stream rides the browser session: anonymous connections are refused. */
+    @Test
+    void theEventStreamRequiresASession() throws Exception {
+        HttpResponse<String> refused = HttpClient.newHttpClient().send(
+                HttpRequest.newBuilder(URI.create(
+                        "http://localhost:" + runtime.port() + "/_tesseraql/events"))
+                        .build(),
+                HttpResponse.BodyHandlers.ofString());
+        assertThat(refused.statusCode()).isEqualTo(401);
+    }
+
     /** Slice 2: the bell badges on any shell page, the page lists, and reading clears. */
     @Test
     void theBellBadgesAndThePageListsAndReadingClears() throws Exception {

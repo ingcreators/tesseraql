@@ -48,9 +48,7 @@
       </form>
       <p class="hc-field__message" th:unless="${chat.editable}">You hold no Studio edit role,
         so the copilot answers questions but cannot save drafts in this session.</p>
-      <!-- htmx's sse extension (bundled in the htmx WebJar) — the EventSource behind the
-           streaming placeholder. Deferred, so it runs after the shell's htmx.min.js. -->
-      <script src="/assets/vendor/htmx.org/dist/ext/sse.js" defer></script>
+      <!-- The sse extension behind the streaming placeholder loads once in the shell. -->
     </th:block>
   </section>
 </div>

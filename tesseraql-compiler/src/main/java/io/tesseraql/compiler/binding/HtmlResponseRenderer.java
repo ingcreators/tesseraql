@@ -240,9 +240,14 @@ public final class HtmlResponseRenderer implements Processor {
                     .lookupByNameAndType(TesseraqlProperties.INBOX_STORE_BEAN,
                             io.tesseraql.core.inbox.InboxStore.class);
             if (inbox != null) {
+                int unread = inbox.unreadCount(inboxPrincipal.tenantId(),
+                        inboxPrincipal.subject());
+                // The badge is pre-rendered (InboxBadge, the single markup source shared
+                // with the /_tesseraql/events inbox:badge payload), so the shell's initial
+                // render and a pushed update are byte-identical.
                 model.put("_inbox", Map.of(
-                        "unread", inbox.unreadCount(inboxPrincipal.tenantId(),
-                                inboxPrincipal.subject()),
+                        "unread", unread,
+                        "badge", InboxBadge.html(unread),
                         "href", "/_tesseraql/inbox"));
             }
         }

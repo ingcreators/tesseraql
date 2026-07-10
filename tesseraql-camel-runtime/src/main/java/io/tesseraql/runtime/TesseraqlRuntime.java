@@ -263,6 +263,10 @@ public final class TesseraqlRuntime implements AutoCloseable {
         VertxPlatformHttpServerConfiguration httpConfig = new VertxPlatformHttpServerConfiguration();
         httpConfig.setBindHost("0.0.0.0");
         httpConfig.setBindPort(port);
+        // SSE endpoints register on the platform's Vert.x router, which exists only once
+        // the context (and with it the HTTP server) has started — collected here, run
+        // right after context.start() (see SseRoutes for why they are not Camel routes).
+        java.util.List<Runnable> sseEndpoints = new java.util.ArrayList<>();
 
         // The framework's own migrations run before any store touches the schema (versioned
         // history per component, Flyway's lock serializing concurrent node startups); the
@@ -464,6 +468,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
         // type inbox is declared - no channel, no table, no bell. ensureSchema is the only
         // owner of tql_user_notification (deliberately outside the Flyway component set).
         final io.tesseraql.core.inbox.InboxStore inboxStore;
+        final InboxStreams inboxStreams;
         if (notificationChannels.names().stream()
                 .anyMatch(name -> io.tesseraql.yaml.notify.NotificationChannels.INBOX
                         .equals(notificationChannels.require(name).type()))) {
@@ -473,11 +478,22 @@ public final class TesseraqlRuntime implements AutoCloseable {
                             .getString("tesseraql.inbox.retentionDays")
                             .map(Long::parseLong).orElse(90L)));
             jdbcInbox.ensureSchema();
-            // Wrapped so the bell's per-page unread count is a map lookup; the sink and the
-            // page share the wrapper, so local deliveries/reads refresh the badge at once.
-            inboxStore = new io.tesseraql.core.inbox.CachingInboxStore(jdbcInbox);
+            // Wrapped twice: the caching layer keeps the bell's per-page unread count a map
+            // lookup (a local mutation invalidates it first), and the notifying layer
+            // signals the subject's open /_tesseraql/events streams (docs/inbox.md, "Live
+            // badge") — the sink, the pages, and the mark-read routes all share the same
+            // wrapper, so every mutation pushes a fresh badge with no per-caller wiring.
+            inboxStreams = new InboxStreams();
+            inboxStore = new NotifyingInboxStore(
+                    new io.tesseraql.core.inbox.CachingInboxStore(jdbcInbox), inboxStreams);
             context.getRegistry().bind(TesseraqlProperties.INBOX_STORE_BEAN, inboxStore);
+            // The live-badge stream exists exactly when the bell does (docs/inbox.md).
+            final InboxStreams streams = inboxStreams;
+            final io.tesseraql.core.inbox.InboxStore inboxForEvents = inboxStore;
+            sseEndpoints.add(() -> InboxEvents.register(context, port, streams,
+                    inboxForEvents));
         } else {
+            inboxStreams = null;
             inboxStore = null;
         }
         // Invitations (roadmap Phase 50 slice 2): configured when both the accept-link base
@@ -1114,10 +1130,13 @@ public final class TesseraqlRuntime implements AutoCloseable {
                         rows) -> renderExportPdf(export, routeDir, appHome, rows);
                 context.addRoutes(new StudioRouteBuilder(studio, reloader, studioTests,
                         studioScaffold, studioAccess, studioMask, studioPdf));
-                // The copilot's send + stream transports (docs/copilot.md): Java routes
-                // because streaming and HX-Request negotiation sit below the YAML surface.
+                // The copilot's send + stream transports (docs/copilot.md): below the YAML
+                // surface because of streaming and HX-Request negotiation. Send is a Camel
+                // route; the stream is an SseRoutes endpoint registered after start.
                 // Mounted with Studio; unconfigured stays a clean TQL-STUDIO-4235 refusal.
                 context.addRoutes(new CopilotRouteBuilder(copilotService, studioAccess));
+                sseEndpoints.add(() -> CopilotRouteBuilder.registerStream(context, port,
+                        copilotService, studioAccess));
                 // Providers backing the bundled studio app (design ch. 16, 47).
                 serviceProviders
                         .register("studio.explorer", params -> {
@@ -2540,6 +2559,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
                         alertChannel, alertPeriod, appName));
             }
             context.start();
+            sseEndpoints.forEach(Runnable::run);
         } catch (Exception ex) {
             tenantDataSources.close();
             lanes.close();

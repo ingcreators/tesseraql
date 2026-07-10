@@ -8,6 +8,15 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **The inbox bell is live** (hc 0.1.9 adoption; design in `docs/inbox.md`, "Live
+  badge"): the shell subscribes the badge to a new per-session event stream,
+  `GET /_tesseraql/events` (the kit's `sse-updates` recipe over the `SseRoutes`
+  transport the streaming copilot introduced). Delivery, mark-read, and mark-all-read
+  signal the subject's open streams through one notifying store wrapper, and the pushed
+  payload is the same `InboxBadge` fragment the page renders — byte-identical on reload.
+  Streams are capped per subject and globally, end themselves after a fixed lifetime,
+  and the browser's EventSource reconnects; without JavaScript the badge simply updates
+  on the next page load, the Phase 49 behavior.
 - **The copilot streams its replies** (hc 0.1.9 adoption; design in `docs/copilot.md`,
   "Streaming replies"): the Studio chat adopts the kit's `chat-messages` and
   `streaming-response` recipes on htmx's bundled `sse` extension — send returns the user
@@ -15,11 +24,13 @@ All notable changes to TesseraQL are documented here. The format follows
   `chunk` events with a `done` payload rendered by the same `CopilotFragments` markup the
   page itself uses. The turn id is a single-use, actor-bound capability; a no-JS post
   still runs the blocking loop and redirects (the old behavior, now the fallback). Behind
-  it sits the framework's first streaming transport, `SseResponse` — a piped-InputStream
-  SSE writer over platform-http, built for reuse. The `send` endpoint moved from a YAML
-  route to `CopilotRouteBuilder` (streaming and `HX-Request` negotiation are transport
-  concerns below the YAML surface); the upstream chat-completions call now sets
-  `stream: true` and reassembles fragmented tool-call deltas.
+  it sits the framework's first streaming transport, `SseRoutes` — raw routes on the
+  platform's Vert.x router that write frames to the wire as they are produced (a Camel
+  exchange answers with a complete body, and the platform-http InputStream pump only
+  delivers full buffers — unusable for SSE). The `send` endpoint moved from a YAML route
+  to `CopilotRouteBuilder` (streaming and `HX-Request` negotiation are transport concerns
+  below the YAML surface); the upstream chat-completions call now sets `stream: true` and
+  reassembles fragmented tool-call deltas.
 - **One-click light/dark toggle in the shell header** (hc 0.1.9 adoption; design in
   `docs/account.md`): the kit's `installThemeToggle` flips the page instantly, and the
   framework bootstrap mirrors `hc:themechange` to the account appearance route, so the
