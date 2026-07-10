@@ -42,6 +42,10 @@ final class RouteReloader {
     private final String appName;
     private final List<SystemApps.MountedApp> mountedApps;
     private AppManifest current;
+    /** Per-route content fingerprints (source-directory digests) from the last good reload. */
+    private Map<String, String> fingerprints;
+    /** The app-wide inputs every compiled route bakes in (config/); a change rebuilds all. */
+    private String appFingerprint;
 
     RouteReloader(CamelContext context, Path appHome, AppManifest current, StudioService studio,
             String appName, List<SystemApps.MountedApp> mountedApps) {
@@ -51,6 +55,8 @@ final class RouteReloader {
         this.studio = studio;
         this.appName = appName;
         this.mountedApps = List.copyOf(mountedApps);
+        this.fingerprints = fingerprintsOf(current);
+        this.appFingerprint = appFingerprintOf(appHome);
     }
 
     /** One route that failed to compile on reload; its endpoint serves this error as a 500. */
@@ -63,10 +69,21 @@ final class RouteReloader {
     }
 
     /**
-     * Diffs the re-read manifest against the running routes and applies the delta with
-     * per-route failure isolation.
+     * The instant-loop reload: like {@link #reload(boolean) reload(false)}, kept routes
+     * whose sources did not change are left running untouched — bouncing a route is the
+     * risky, expensive part of a reload (a stop/re-add races in-flight requests on its
+     * endpoint), so an apply that edits one file bounces one route, not the whole app.
      */
     synchronized Result reload() {
+        return reload(false);
+    }
+
+    /**
+     * Diffs the re-read manifest against the running routes and applies the delta with
+     * per-route failure isolation. {@code force} rebuilds every kept route regardless of
+     * content — the manual {@code POST /_tesseraql/studio/reload} recovery hammer.
+     */
+    synchronized Result reload(boolean force) {
         // Tolerant load: an unparseable route document is a per-route failure like a compile
         // error, not a reason to abort — only app.yml/config problems still fail the load.
         List<ManifestLoader.BrokenRoute> broken = new ArrayList<>();
@@ -109,6 +126,24 @@ final class RouteReloader {
             }
         });
 
+        // Content diff (the instant-loop default): a kept route whose source directory —
+        // its yml, 2-way SQL, and templates live together — and the app-wide config are
+        // both unchanged keeps SERVING, untouched. Only genuinely changed routes bounce:
+        // the stop/re-add is the risky part of a reload, so the delta stays minimal.
+        Map<String, String> prints = fingerprintsOf(reloaded);
+        String appNow = appFingerprintOf(appHome);
+        boolean rebuildAll = force || !appNow.equals(appFingerprint);
+        List<String> rebuild = new ArrayList<>();
+        int unchanged = 0;
+        for (String id : kept) {
+            if (!rebuildAll && prints.get(id) != null
+                    && prints.get(id).equals(fingerprints.get(id))) {
+                unchanged++;
+            } else {
+                rebuild.add(id);
+            }
+        }
+
         for (String id : brokenIds) {
             RouteFile old = before.get(id);
             try {
@@ -131,7 +166,7 @@ final class RouteReloader {
 
         List<String> reloadedIds = new ArrayList<>();
         List<String> addedIds = new ArrayList<>();
-        List<String> changes = new ArrayList<>(kept);
+        List<String> changes = new ArrayList<>(rebuild);
         changes.addAll(added);
         for (String id : changes) {
             try {
@@ -152,9 +187,73 @@ final class RouteReloader {
         }
 
         this.current = reloaded;
-        LOG.info("Hot reload: {} reloaded, {} added, {} removed, {} failed", reloadedIds.size(),
-                addedIds.size(), removed.size(), failed.size());
+        this.fingerprints = prints;
+        this.appFingerprint = appNow;
+        LOG.info("Hot reload: {} reloaded, {} added, {} removed, {} failed, {} unchanged",
+                reloadedIds.size(), addedIds.size(), removed.size(), failed.size(), unchanged);
         return new Result(reloadedIds, addedIds, removed, failed, studio.reload());
+    }
+
+    /** Per-route content fingerprints: the digest of each route's source directory. */
+    private static Map<String, String> fingerprintsOf(AppManifest manifest) {
+        Map<Path, String> byDirectory = new LinkedHashMap<>();
+        Map<String, String> prints = new LinkedHashMap<>();
+        for (RouteFile route : manifest.routes()) {
+            if (route.definition().id() != null) {
+                prints.put(route.definition().id(), byDirectory.computeIfAbsent(
+                        normalize(route.source()).getParent(), RouteReloader::digestDirectory));
+            }
+        }
+        return prints;
+    }
+
+    /**
+     * The app-wide compiled-in inputs: everything under {@code config/}. Flags, menus,
+     * messages, and templates resolve live at render time and never bake into a route.
+     */
+    private static String appFingerprintOf(Path appHome) {
+        return digestTree(appHome.resolve("config"));
+    }
+
+    /** Digest of a directory's immediate regular files (name + bytes, sorted). */
+    private static String digestDirectory(Path directory) {
+        try (java.util.stream.Stream<Path> files = java.nio.file.Files.list(directory)) {
+            return digest(files);
+        } catch (java.io.IOException ex) {
+            // An unreadable directory reads as changed, so the route safely rebuilds.
+            return "unreadable:" + ex.getMessage();
+        }
+    }
+
+    /** Digest of a whole tree (the config directory nests environment overlays). */
+    private static String digestTree(Path root) {
+        if (!java.nio.file.Files.isDirectory(root)) {
+            return "absent";
+        }
+        try (java.util.stream.Stream<Path> files = java.nio.file.Files.walk(root)) {
+            return digest(files);
+        } catch (java.io.IOException ex) {
+            return "unreadable:" + ex.getMessage();
+        }
+    }
+
+    private static String digest(java.util.stream.Stream<Path> files) throws java.io.IOException {
+        try {
+            java.security.MessageDigest sha = java.security.MessageDigest
+                    .getInstance("SHA-256");
+            List<Path> regular = files.filter(java.nio.file.Files::isRegularFile)
+                    .sorted().toList();
+            for (Path file : regular) {
+                sha.update(file.getFileName().toString()
+                        .getBytes(java.nio.charset.StandardCharsets.UTF_8));
+                sha.update((byte) 0);
+                sha.update(java.nio.file.Files.readAllBytes(file));
+                sha.update((byte) 0);
+            }
+            return java.util.HexFormat.of().formatHex(sha.digest());
+        } catch (java.security.NoSuchAlgorithmException ex) {
+            throw new IllegalStateException("SHA-256 unavailable", ex);
+        }
     }
 
     private static Path normalize(Path source) {

@@ -6,6 +6,18 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ## Unreleased
 
+### Changed
+
+- **The hot reload is a content diff**: an apply now bounces only the routes whose
+  sources actually changed — each route's fingerprint is its source directory (its yml,
+  2-way SQL, and templates live together), and a `config/` change still rebuilds
+  everything. Previously every apply stopped and re-added every kept route (30+ bounces
+  for a one-file edit), and a stop/re-add races in-flight requests on that endpoint —
+  the leading suspect in the recurring CI hang where a request vanished right after a
+  reload storm. The manual `POST /_tesseraql/studio/reload` deliberately stays the
+  force hammer: it rebuilds every kept route even when nothing changed, which is also
+  the recovery move if a route ever wedges.
+
 ### Added
 
 - **IAM Admin: bulk disable** (hc 0.1.9 adoption; pattern in `docs/hypermedia-ui.md`,

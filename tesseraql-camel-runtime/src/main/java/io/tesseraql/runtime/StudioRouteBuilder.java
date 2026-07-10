@@ -159,8 +159,10 @@ final class StudioRouteBuilder extends RouteBuilder {
                     return result;
                 }));
 
+        // The manual reload is the recovery hammer: force rebuilds every kept route even
+        // when its sources look unchanged (the automatic apply-path reloads content-diff).
         from("direct:studio.reload").routeId("studio.reload")
-                .to(AUTH).process(json(exchange -> reloader.reload()));
+                .to(AUTH).process(json(exchange -> reloader.reload(true)));
     }
 
     private static String requirePath(Exchange exchange) {
