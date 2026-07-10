@@ -960,6 +960,11 @@ public final class TesseraqlRuntime implements AutoCloseable {
             context.getRegistry().bind(TesseraqlProperties.TOTP_STORE_BEAN, totpStore);
             context.addRoutes(new LoginRouteBuilder(
                     new PasswordAuthenticator(identity), realm, sessionStore, totpStore));
+            // The IAM Admin bulk endpoint (docs/hypermedia-ui.md "Bulk actions"): Java
+            // because the form posts repeated ids fields, which the Simple-YAML input
+            // surface deliberately does not model. Gated by iam.admin.write like the
+            // per-user routes the iam-admin app compiles.
+            context.addRoutes(new IamAdminRouteBuilder());
             // Password recovery (roadmap Phase 50 slice 1): fail-fast validation - a half
             // configuration must not silently produce a reset page that goes nowhere.
             String recoveryChannel = null;

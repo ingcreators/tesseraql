@@ -202,6 +202,37 @@ redirects on success, while degrading to a plain form post with no JavaScript:
   confirm event: `hx-trigger="hc:confirmed"` on the form. The no-JS path posts straight
   through (the server re-validates anyway).
 
+## Bulk actions
+
+A list that offers one action against many rows follows the kit's `datagrid-bulk-actions`
+recipe (IAM Admin's users list is the blessed example): a form wraps the `hc-datagrid` and
+the toolbar, each row carries a checkbox serialized as repeated `ids` fields, the header's
+select-all deliberately has **no `name`** so it never posts, and the auto-installed
+`installDatagridActions` behavior reveals the toolbar — with a live
+`data-hc-datagrid-count` — while anything is selected:
+
+```html
+<form method="post" action="/members/bulk">
+  <input type="hidden" name="_csrf" th:value="${_csrf}">
+  <div class="hc-toolbar" role="toolbar" aria-label="Bulk actions"
+       data-hc-datagrid-actions="#members" hidden>
+    <span data-hc-datagrid-count></span>
+    <button class="hc-button" data-variant="error" type="submit" name="action" value="disable"
+            data-hc-confirm="Disable the selected members?" data-hc-confirm-ok="Disable"
+            data-hc-confirm-variant="error">Disable selected</button>
+  </div>
+  <div class="hc-datagrid" id="members">…rows with
+    <code>&lt;input type="checkbox" class="hc-checkbox" name="ids" value="…"&gt;</code>…</div>
+</form>
+```
+
+The server names the verb from the submit button (`action=disable`), validates every
+submitted id itself (a selection is client state — never trust it), and answers
+post/redirect/get like any other mutating form. A destructive action gates on
+`data-hc-confirm`, which intercepts the plain submit and posts on confirm. The htmx
+enhancement from the recipe (swap the tbody in place instead of reloading) can layer on
+later; the plain-form shape above is the no-JS baseline it must keep.
+
 ## Theme toggle
 
 The signed-in shell header carries the kit's light/dark toggle, and any app page can add

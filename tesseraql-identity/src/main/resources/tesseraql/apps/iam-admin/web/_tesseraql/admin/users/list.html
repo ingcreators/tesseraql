@@ -33,18 +33,52 @@
 </section>
 <section class="hc-card">
   <div class="hc-empty" th:if="${#lists.isEmpty(users)}"><p class="hc-empty__title">No users found.</p></div>
-  <table class="hc-table">
-    <thead><tr><th>Login</th><th>Display name</th><th>Email</th><th>Status</th><th>Tenant</th></tr></thead>
-    <tbody>
-      <tr th:each="u : ${users}">
-        <td><a th:href="|/_tesseraql/admin/users/${u.user_id}|" th:text="${u.login_id}"></a></td>
-        <td th:text="${u.display_name}"></td>
-        <td th:text="${u.email}"></td>
-        <td class="hc-status" th:attr="data-variant=${u.status == 'ACTIVE' ? 'success' : 'error'}" th:text="${u.status}"></td>
-        <td th:text="${u.tenant_id}"></td>
-      </tr>
-    </tbody>
-  </table>
+  <!-- Bulk actions (the kit's datagrid-bulk-actions recipe, docs/hypermedia-ui.md): the form
+       wraps the grid, row checkboxes serialize as repeated `ids`, the header's select-all
+       carries no name so it never posts, and installDatagridActions reveals the toolbar with
+       a live count while anything is selected. The destructive submit is confirm-gated
+       (data-hc-confirm intercepts and submits on confirm); post/redirect/get like the
+       per-user actions. -->
+  <form method="post" action="/_tesseraql/admin/users/bulk" th:unless="${#lists.isEmpty(users)}">
+    <input type="hidden" name="_csrf" th:value="${_csrf}">
+    <div class="hc-toolbar" role="toolbar" aria-label="Bulk actions"
+         data-hc-datagrid-actions="#iam-users" hidden>
+      <span data-hc-datagrid-count></span>
+      <button class="hc-button" data-variant="error" data-size="sm" type="submit"
+              name="action" value="disable"
+              data-hc-confirm="Disable the selected users?"
+              data-hc-confirm-title="Confirm disable"
+              data-hc-confirm-ok="Disable" data-hc-confirm-variant="error">Disable selected</button>
+    </div>
+    <div class="hc-datagrid" id="iam-users">
+      <div class="hc-datagrid__scroll">
+        <table class="hc-datagrid__table">
+          <thead class="hc-datagrid__head">
+            <tr>
+              <th class="hc-datagrid__headcell"><input type="checkbox" class="hc-checkbox" aria-label="Select all"></th>
+              <th class="hc-datagrid__headcell" scope="col">Login</th>
+              <th class="hc-datagrid__headcell" scope="col">Display name</th>
+              <th class="hc-datagrid__headcell" scope="col">Email</th>
+              <th class="hc-datagrid__headcell" scope="col">Status</th>
+              <th class="hc-datagrid__headcell" scope="col">Tenant</th>
+            </tr>
+          </thead>
+          <tbody class="hc-datagrid__body">
+            <tr class="hc-datagrid__row" th:each="u : ${users}">
+              <td class="hc-datagrid__cell"><input type="checkbox" class="hc-checkbox"
+                  name="ids" th:value="${u.user_id}"
+                  th:attr="aria-label=|Select ${u.login_id}|"></td>
+              <td class="hc-datagrid__cell"><a th:href="|/_tesseraql/admin/users/${u.user_id}|" th:text="${u.login_id}"></a></td>
+              <td class="hc-datagrid__cell" th:text="${u.display_name}"></td>
+              <td class="hc-datagrid__cell" th:text="${u.email}"></td>
+              <td class="hc-datagrid__cell hc-status" th:attr="data-variant=${u.status == 'ACTIVE' ? 'success' : 'error'}" th:text="${u.status}"></td>
+              <td class="hc-datagrid__cell" th:text="${u.tenant_id}"></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </form>
 </section>
 </div>
 </html>

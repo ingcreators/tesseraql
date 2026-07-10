@@ -33,7 +33,9 @@ class HypermediaComponentsManifestTest {
             "installConfirm", // data-hc-confirm gated actions
             "installCodeEditor", // live hc-code editor overlay (Studio 2-way SQL grammar)
             "installThemeToggle", // shell light/dark toggle (data-hc-theme-toggle)
-            "installChatScroll"); // copilot hc-chat transcript follows the stream
+            "installChatScroll", // copilot hc-chat transcript follows the stream
+            "installDatagrid", // the view compiler's list/table markup (tql/view/table.html)
+            "installDatagridActions"); // IAM Admin bulk selection bar (users list)
 
     /** Custom events the framework listens for / documents. */
     private static final List<String> REQUIRED_EVENTS = List.of(
@@ -44,7 +46,8 @@ class HypermediaComponentsManifestTest {
     private static final List<String> REQUIRED_RECIPES = List.of(
             "mutating-form", "field-errors", "data-region", "toast", "confirm-action",
             "chat-messages", "streaming-response", // the copilot panel (docs/copilot.md)
-            "sse-updates"); // the live inbox badge (docs/inbox.md)
+            "sse-updates", // the live inbox badge (docs/inbox.md)
+            "datagrid-bulk-actions"); // IAM Admin bulk disable (users list)
 
     /** Named exports the framework imports from the behaviors bundle as an ES module. */
     private static final List<String> REQUIRED_BUNDLE_EXPORTS = List.of(
