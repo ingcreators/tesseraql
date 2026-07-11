@@ -34,23 +34,54 @@ public record TestSuite(List<TestCase> tests) {
      *                 (roadmap Phase 20; "notify" itself is not a legal record component)
      * @param messages a message-catalog target (roadmap Phase 22)
      * @param httpCall an {@code http-call:} target — a job's outbound REST steps (roadmap Phase 26)
+     * @param verify   read-back steps of a {@code sql} case, run on the case's transaction after
+     *                 the target and rolled back with it (only legal with a {@code sql} target)
      */
     @JsonIgnoreProperties(ignoreUnknown = true)
     public record TestCase(String name, SqlTarget sql, String contract,
             Map<String, Object> params, Expectation expect, ValidateTarget validate,
             @com.fasterxml.jackson.annotation.JsonProperty("notify") NotifyTarget notifications,
             MessagesTarget messages,
-            @com.fasterxml.jackson.annotation.JsonProperty("http-call") HttpCallTarget httpCall) {
+            @com.fasterxml.jackson.annotation.JsonProperty("http-call") HttpCallTarget httpCall,
+            List<VerifyStep> verify) {
 
         public TestCase {
             params = params == null ? Map.of() : Map.copyOf(params);
+            verify = verify == null ? List.of() : List.copyOf(verify);
+        }
+
+        /** Convenience constructor without {@code verify} steps (the read-only shape). */
+        public TestCase(String name, SqlTarget sql, String contract, Map<String, Object> params,
+                Expectation expect, ValidateTarget validate, NotifyTarget notifications,
+                MessagesTarget messages, HttpCallTarget httpCall) {
+            this(name, sql, contract, params, expect, validate, notifications, messages, httpCall,
+                    null);
         }
 
         /** Convenience constructor without an {@code http-call} target (the pre-Phase-26 shape). */
         public TestCase(String name, SqlTarget sql, String contract, Map<String, Object> params,
                 Expectation expect, ValidateTarget validate, NotifyTarget notifications,
                 MessagesTarget messages) {
-            this(name, sql, contract, params, expect, validate, notifications, messages, null);
+            this(name, sql, contract, params, expect, validate, notifications, messages, null,
+                    null);
+        }
+    }
+
+    /**
+     * One read-back of a write {@code sql} case: a query file run on the same connection, inside
+     * the same always-rolled-back transaction, after the case's target — so it observes the
+     * uncommitted write and rolls back with it. A verify step must return rows (a write file is
+     * not a legal read-back).
+     *
+     * @param sql    the query file to run, app-home relative like a case's target
+     * @param params bind parameters for the file
+     * @param expect the step's expectation on the returned rows
+     */
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public record VerifyStep(SqlTarget sql, Map<String, Object> params, Expectation expect) {
+
+        public VerifyStep {
+            params = params == null ? Map.of() : Map.copyOf(params);
         }
     }
 
@@ -113,16 +144,26 @@ public record TestSuite(List<TestCase> tests) {
     }
 
     /**
-     * Assertions on the result rows.
+     * Assertions on the outcome. A query outcome (result rows) is asserted with {@code rowCount}
+     * and {@code rows}; a write outcome (an {@code UPDATE}/{@code INSERT}/{@code DELETE} file's
+     * affected-row count) is asserted with {@code updateCount}. Mixing the two fails the case
+     * with a message naming the right assertion.
      *
-     * @param rowCount expected number of rows, or null to skip
-     * @param rows     per-row partial matchers: each map's entries must be present in the row
+     * @param rowCount    expected number of result rows, or null to skip
+     * @param rows        per-row partial matchers: each map's entries must be present in the row
+     * @param updateCount expected affected-row count of a write target, or null to skip
      */
     @JsonIgnoreProperties(ignoreUnknown = true)
-    public record Expectation(Integer rowCount, List<Map<String, Object>> rows) {
+    public record Expectation(Integer rowCount, List<Map<String, Object>> rows,
+            Integer updateCount) {
 
         public Expectation {
             rows = rows == null ? List.of() : List.copyOf(rows);
+        }
+
+        /** Convenience constructor without an {@code updateCount} (the read-only shape). */
+        public Expectation(Integer rowCount, List<Map<String, Object>> rows) {
+            this(rowCount, rows, null);
         }
     }
 }

@@ -84,6 +84,156 @@ class TestRunnerIntegrationTest {
     }
 
     /**
+     * A write file is a first-class sql case: it runs inside an always-rolled-back transaction,
+     * {@code expect.updateCount} asserts the affected rows, and a {@code verify:} read-back on
+     * the same connection observes the uncommitted write — while the database is left untouched
+     * once the case ends.
+     */
+    @Test
+    void runsWriteCasesInARolledBackTransaction() throws Exception {
+        TestSuite suite = new TestSuiteLoader().parse("""
+                tests:
+                  - name: deactivating sato affects one row and the read-back sees it
+                    sql:
+                      file: web/api/users/deactivate/deactivate.sql
+                    params:
+                      name: sato
+                    expect:
+                      updateCount: 1
+                    verify:
+                      - sql:
+                          file: web/api/users/search.sql
+                        params:
+                          q: sato
+                          limit: 50
+                          offset: 0
+                        expect:
+                          rowCount: 1
+                          rows:
+                            - status: INACTIVE
+                  - name: deactivating an unknown user affects nothing
+                    sql:
+                      file: web/api/users/deactivate/deactivate.sql
+                    params:
+                      name: nobody
+                    expect:
+                      updateCount: 0
+                """);
+
+        TestReport report = runner.run(suite);
+
+        assertThat(report.results()).allMatch(TestReport.TestResult::passed,
+                report.results().toString());
+        // The rollback guarantee: the write never persisted, so the seeded row is untouched.
+        try (Connection connection = dataSource.getConnection();
+                Statement statement = connection.createStatement();
+                var resultSet = statement
+                        .executeQuery("select status from users where name = 'sato'")) {
+            assertThat(resultSet.next()).isTrue();
+            assertThat(resultSet.getString(1)).isEqualTo("ACTIVE");
+        }
+    }
+
+    /** A write with a RETURNING clause produces result rows and is asserted like a query. */
+    @Test
+    void aReturningWriteYieldsResultRows(@org.junit.jupiter.api.io.TempDir Path appHome)
+            throws Exception {
+        java.nio.file.Files.writeString(appHome.resolve("insert-returning.sql"), """
+                insert into users (name, status)
+                values (/* name */'demo', 'PENDING')
+                returning name, status
+                """);
+        TestRunner writeRunner = new TestRunner(dataSource, appHome);
+        TestSuite suite = new TestSuiteLoader().parse("""
+                tests:
+                  - name: the insert returns the new row
+                    sql:
+                      file: insert-returning.sql
+                    params:
+                      name: tanaka
+                    expect:
+                      rowCount: 1
+                      rows:
+                        - name: tanaka
+                          status: PENDING
+                """);
+
+        TestReport report = writeRunner.run(suite);
+
+        assertThat(report.allPassed()).as(report.results().toString()).isTrue();
+        // The RETURNING insert rolled back with its transaction.
+        try (Connection connection = dataSource.getConnection();
+                Statement statement = connection.createStatement();
+                var resultSet = statement
+                        .executeQuery("select count(*) from users where name = 'tanaka'")) {
+            assertThat(resultSet.next()).isTrue();
+            assertThat(resultSet.getInt(1)).isZero();
+        }
+    }
+
+    /** Misusing the assertion kinds fails the case with a message naming the right one. */
+    @Test
+    void mismatchedExpectationsFailWithGuidance() {
+        TestSuite suite = new TestSuiteLoader().parse("""
+                tests:
+                  - name: rowCount asserted on a write
+                    sql:
+                      file: web/api/users/deactivate/deactivate.sql
+                    params:
+                      name: sato
+                    expect:
+                      rowCount: 1
+                  - name: updateCount asserted on a query
+                    sql:
+                      file: web/api/users/search.sql
+                    params:
+                      q: sato
+                      limit: 50
+                      offset: 0
+                    expect:
+                      updateCount: 1
+                  - name: wrong updateCount
+                    sql:
+                      file: web/api/users/deactivate/deactivate.sql
+                    params:
+                      name: nobody
+                    expect:
+                      updateCount: 1
+                  - name: verify without a sql target
+                    contract: identity.find-roles-by-user-id
+                    params:
+                      userId: u1
+                    verify:
+                      - sql:
+                          file: web/api/users/search.sql
+                  - name: a write as a verify step
+                    sql:
+                      file: web/api/users/deactivate/deactivate.sql
+                    params:
+                      name: sato
+                    verify:
+                      - sql:
+                          file: web/api/users/deactivate/deactivate.sql
+                        params:
+                          name: sato
+                """);
+
+        TestReport report = runner.run(suite);
+
+        assertThat(report.results()).hasSize(5);
+        assertThat(report.results()).allMatch(result -> !result.passed(),
+                report.results().toString());
+        assertThat(report.results().get(0).message())
+                .contains("assert expect.updateCount, not rowCount/rows");
+        assertThat(report.results().get(1).message()).contains("assert rowCount/rows");
+        assertThat(report.results().get(2).message())
+                .contains("expected updateCount 1 but was 0");
+        assertThat(report.results().get(3).message()).contains("require a sql target");
+        assertThat(report.results().get(4).message())
+                .contains("verify steps are read-backs");
+    }
+
+    /**
      * Phase 19: a validation case evaluates a route's {@code validate:} block — SQL rules
      * against the test database, expression rules against the case's params — and asserts on
      * the violations as rows, so a rule is testable without serving the route.

@@ -1241,8 +1241,10 @@ class StudioIntegrationTest {
         assertThat(response.statusCode()).isEqualTo(200);
         JsonNode result = MAPPER.readTree(response.body());
         assertThat(result.get("ran").asBoolean()).isTrue();
-        // The two sql cases targeting search.sql run against the seeded users table.
-        assertThat(result.get("total").asInt()).isEqualTo(2);
+        // The two sql cases targeting search.sql, plus the write case whose verify: read-back
+        // runs search.sql, all run against the seeded users table (the sandbox rolls the write
+        // back, so the read cases pass regardless of order).
+        assertThat(result.get("total").asInt()).isEqualTo(3);
         // The q=sato case passes against the seeded row; the runner reports a genuine result.
         assertThat(result.get("cases")).anySatisfy(testCase -> {
             assertThat(testCase.get("name").asText()).isEqualTo("search finds sato by name");

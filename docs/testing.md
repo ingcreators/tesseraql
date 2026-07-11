@@ -32,11 +32,11 @@ exactly as an omitted query parameter would at runtime.
 
 ## Case kinds
 
-- **`sql`** — runs a 2-way SQL file; the result rows are the case's rows. The file is executed
-  as a query, so only files that return rows can be targets: an `UPDATE`/`INSERT`/`DELETE` file
-  cannot be a `sql` case. Exercise write routes through their `validate:` and `notify:`
-  declarations instead, and assert on read queries. Because of this rule, a test run only ever
-  issues reads against the database.
+- **`sql`** — runs a 2-way SQL file. A query's result rows are the case's rows; a write file
+  (`UPDATE`/`INSERT`/`DELETE`) is just as valid a target — its affected-row count is asserted
+  with `expect.updateCount`, and `verify:` read-backs observe the write (see
+  [Testing write routes](#testing-write-routes)). Every `sql` case runs inside a transaction
+  the runner always rolls back, so a test run never commits anything to the database.
 - **`contract`** — runs a named identity contract (for example
   `identity.find-roles-by-user-id`) against the configured realm; its rows are the case's rows.
 - **`validate`** — evaluates a route's `validate:` rules against the case's `params` (the
@@ -60,13 +60,59 @@ exactly as an omitted query parameter would at runtime.
 `expect.rowCount` asserts the exact number of rows. `expect.rows` is a list of partial
 matchers: the first map is checked against the first row, the second against the second, and
 each entry must be present in that row (extra columns are ignored; values compare as strings,
-so `id: 42` matches a numeric column). A case without `expect` passes when its target executes
-without error — useful for data-independent smoke cases that still record coverage.
+so `id: 42` matches a numeric column). For a write target, `expect.rowCount`/`rows` do not
+apply — `expect.updateCount` asserts the affected-row count instead, and mixing the two fails
+the case with a message naming the right assertion. A case without `expect` passes when its
+target executes without error — useful for data-independent smoke cases that still record
+coverage.
 
 Suites run against a real database — the schema and any seed data your migrations create.
 Apply migrations first (`tesseraql migrate --app .` or the `tesseraql:migrate` goal), and
 either seed known rows in a test migration or write data-independent expectations (a filter
-for `no-such-row` expecting `rowCount: 0` passes against any contents).
+for `no-such-row` expecting `rowCount: 0` passes against any contents). Write cases never
+change that state: they roll back (below), so the database is identical before and after every
+run.
+
+## Testing write routes
+
+A write file is tested by running it for real. The runner executes every `sql` case inside a
+manual-commit transaction it always rolls back — pass or fail — so nothing a case writes ever
+persists, suites stay order-independent, and repeated runs are idempotent:
+
+```yaml
+tests:
+  - name: deactivating sato affects one row and the search sees the new status
+    sql:
+      file: web/api/users/deactivate/deactivate.sql
+    params:
+      name: sato
+    expect:
+      updateCount: 1
+    verify:
+      - sql:
+          file: web/api/users/search.sql
+        params:
+          q: sato
+          limit: 50
+          offset: 0
+        expect:
+          rowCount: 1
+          rows:
+            - status: INACTIVE
+```
+
+`expect.updateCount` asserts the number of rows the statement affected. The optional `verify:`
+list holds read-back steps — each a query file with `params` and its own `expect` — that run on
+the same connection, inside the same transaction, after the target: they observe the case's
+uncommitted write and roll back with it. A verify step must return rows (a write file is not a
+legal read-back), and `verify:` is only legal on a `sql` case. A write file ending in a
+`RETURNING` clause produces result rows instead of an update count and is asserted with
+`rowCount`/`rows` like a query.
+
+Write cases record SQL coverage like read cases, and a `verify:` read-back exercises its file
+for route and item coverage exactly as a case target does — so a `command-json` route's UPDATE
+now counts toward the `route` and `security` coverage kinds. The route's `validate:` and
+`notify:` declarations remain separately testable through their own case kinds.
 
 ## Running the suites
 

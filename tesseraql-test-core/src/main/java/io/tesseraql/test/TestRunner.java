@@ -33,6 +33,12 @@ import javax.sql.DataSource;
  * Runs a declarative {@link TestSuite} against a database, executing SQL files, Identity SQL
  * Contracts, and route validation rules and checking the result rows (design ch. 13, 13.2;
  * roadmap Phase 19 — a validation case's violations are its rows).
+ *
+ * <p>A {@code sql} case runs inside a manual-commit transaction that is always rolled back, so a
+ * write file (an {@code UPDATE}/{@code INSERT}/{@code DELETE}) is a first-class target: its
+ * affected-row count is asserted with {@code expect.updateCount}, and {@code verify:} read-back
+ * steps observe the uncommitted write on the same connection before the rollback. A test run
+ * never commits anything to the database.
  */
 public final class TestRunner {
 
@@ -73,6 +79,13 @@ public final class TestRunner {
 
     private TestResult runCase(TestCase test) {
         try {
+            if (test.sql() != null && test.sql().file() != null) {
+                return runSqlCase(test);
+            }
+            if (!test.verify().isEmpty()) {
+                throw new IllegalArgumentException("Test '" + test.name()
+                        + "' declares verify: steps, which require a sql target");
+            }
             List<Map<String, Object>> rows = resultRows(test);
             return assertExpectation(test, rows);
         } catch (RuntimeException ex) {
@@ -100,36 +113,102 @@ public final class TestRunner {
             }
             return identity.execute(realm, stripIdentityPrefix(test.contract()), test.params());
         }
-        if (test.sql() == null || test.sql().file() == null) {
-            throw new IllegalArgumentException(
-                    "Test '" + test.name() + "' has no sql, contract, or validate target");
+        throw new IllegalArgumentException(
+                "Test '" + test.name() + "' has no sql, contract, or validate target");
+    }
+
+    /**
+     * Runs a {@code sql} case — the target file plus its {@code verify:} read-backs — on one
+     * connection, inside a manual-commit transaction that is always rolled back. A write file
+     * (an {@code UPDATE}/{@code INSERT}/{@code DELETE}) therefore executes for real and is
+     * asserted through {@code expect.updateCount} and the verify steps, yet a test run never
+     * commits anything to the database — pass or fail.
+     */
+    private TestResult runSqlCase(TestCase test) {
+        try (Connection connection = dataSource.getConnection()) {
+            connection.setAutoCommit(false);
+            try {
+                SqlOutcome outcome = executeSql(connection,
+                        appHome.resolve(test.sql().file()), test.params());
+                String failure = assertOutcome(test.expect(), outcome);
+                for (int i = 0; failure == null && i < test.verify().size(); i++) {
+                    failure = runVerifyStep(connection, test.verify().get(i), i);
+                }
+                return failure == null
+                        ? TestResult.pass(test.name())
+                        : TestResult.fail(test.name(), failure);
+            } finally {
+                connection.rollback();
+                connection.setAutoCommit(true);
+            }
+        } catch (java.sql.SQLException ex) {
+            throw new IllegalStateException("SQL execution failed: " + ex.getMessage(), ex);
         }
-        return executeSql(appHome.resolve(test.sql().file()), test.params());
+    }
+
+    /** Runs one read-back on the case's transaction; null on pass, else the failure message. */
+    private String runVerifyStep(Connection connection, TestSuite.VerifyStep step, int index) {
+        String label = "verify[" + index + "]";
+        if (step.sql() == null || step.sql().file() == null) {
+            throw new IllegalArgumentException(label + " needs a sql.file target");
+        }
+        SqlOutcome outcome = executeSql(connection, appHome.resolve(step.sql().file()),
+                step.params());
+        if (outcome.rows() == null) {
+            throw new IllegalArgumentException(label + " (" + step.sql().file()
+                    + ") is a write; verify steps are read-backs and must return rows");
+        }
+        String failure = assertOutcome(step.expect(), outcome);
+        return failure == null ? null : label + " (" + step.sql().file() + "): " + failure;
     }
 
     private TestResult assertExpectation(TestCase test, List<Map<String, Object>> rows) {
-        Expectation expect = test.expect();
+        String failure = assertOutcome(test.expect(), new SqlOutcome(rows, null));
+        return failure == null
+                ? TestResult.pass(test.name())
+                : TestResult.fail(test.name(), failure);
+    }
+
+    /** Checks an expectation against an outcome; null on pass, else the failure message. */
+    private static String assertOutcome(Expectation expect, SqlOutcome outcome) {
         if (expect == null) {
-            return TestResult.pass(test.name());
+            return null;
+        }
+        if (outcome.updateCount() != null) {
+            if (expect.rowCount() != null || !expect.rows().isEmpty()) {
+                return "the target is a write affecting " + outcome.updateCount()
+                        + " row(s); assert expect.updateCount, not rowCount/rows";
+            }
+            if (expect.updateCount() != null
+                    && outcome.updateCount().intValue() != expect.updateCount()) {
+                return "expected updateCount " + expect.updateCount() + " but was "
+                        + outcome.updateCount();
+            }
+            return null;
+        }
+        List<Map<String, Object>> rows = outcome.rows();
+        if (expect.updateCount() != null) {
+            return "expected updateCount " + expect.updateCount()
+                    + " but the target returned " + rows.size()
+                    + " result row(s); assert rowCount/rows";
         }
         if (expect.rowCount() != null && rows.size() != expect.rowCount()) {
-            return TestResult.fail(test.name(),
-                    "expected rowCount " + expect.rowCount() + " but was " + rows.size());
+            return "expected rowCount " + expect.rowCount() + " but was " + rows.size();
         }
         for (int i = 0; i < expect.rows().size(); i++) {
             if (i >= rows.size()) {
-                return TestResult.fail(test.name(), "expected at least " + (i + 1) + " rows");
+                return "expected at least " + (i + 1) + " rows";
             }
             Map<String, Object> actual = rows.get(i);
             for (Map.Entry<String, Object> entry : expect.rows().get(i).entrySet()) {
                 if (!looselyEqual(actual.get(entry.getKey()), entry.getValue())) {
-                    return TestResult.fail(test.name(), "row " + i + " field '" + entry.getKey()
+                    return "row " + i + " field '" + entry.getKey()
                             + "' expected " + entry.getValue() + " but was "
-                            + actual.get(entry.getKey()));
+                            + actual.get(entry.getKey());
                 }
             }
         }
-        return TestResult.pass(test.name());
+        return null;
     }
 
     /**
@@ -367,22 +446,34 @@ public final class TestRunner {
                         "Unknown route '" + routeId + "' in validation case"));
     }
 
-    private List<Map<String, Object>> executeSql(Path sqlFile, Map<String, Object> params) {
+    /**
+     * The outcome of executing a 2-way SQL file: the result rows of a query (including a write
+     * with a {@code RETURNING} clause), or the affected-row count of a plain write — exactly one
+     * of the two is non-null.
+     */
+    private record SqlOutcome(List<Map<String, Object>> rows, Integer updateCount) {
+    }
+
+    /** Executes a 2-way SQL file on the given (case-transaction) connection, recording coverage. */
+    private SqlOutcome executeSql(Connection connection, Path sqlFile,
+            Map<String, Object> params) {
         List<SqlNode> nodes = Sql2WayParser.parse(read(sqlFile));
         BoundSql bound = SqlRenderer.render(nodes, params);
         if (coverage != null) {
             coverage.record(appHome.relativize(sqlFile).toString().replace('\\', '/'),
                     bound.coverageTrace(), SqlCoverableLines.compute(nodes));
         }
-        try (Connection connection = dataSource.getConnection();
-                PreparedStatement statement = connection.prepareStatement(bound.sql())) {
+        try (PreparedStatement statement = connection.prepareStatement(bound.sql())) {
             for (int i = 0; i < bound.parameters().size(); i++) {
                 BoundParameter parameter = bound.parameters().get(i);
                 statement.setObject(i + 1, parameter.value());
             }
-            try (ResultSet resultSet = statement.executeQuery()) {
-                return readRows(resultSet);
+            if (statement.execute()) {
+                try (ResultSet resultSet = statement.getResultSet()) {
+                    return new SqlOutcome(readRows(resultSet), null);
+                }
             }
+            return new SqlOutcome(null, statement.getUpdateCount());
         } catch (java.sql.SQLException ex) {
             throw new IllegalStateException("SQL execution failed: " + ex.getMessage(), ex);
         }

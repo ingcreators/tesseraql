@@ -78,7 +78,11 @@ class ReportGeneratorTest {
                 .extracting(CaseResult::name, CaseResult::passed)
                 .containsExactly(
                         tuple("search finds sato by name", true),
-                        tuple("search without query returns all users", false));
+                        tuple("search without query returns all users", false),
+                        // The write case links via its verify: read-back on search.sql; the
+                        // fabricated run carries no result for it, so it reports as not run.
+                        tuple("deactivating sato affects one row and the search sees the new status",
+                                false));
     }
 
     @Test

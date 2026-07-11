@@ -77,9 +77,9 @@ class ReportGeneratorIntegrationTest {
         ReportDoc doc = generator.generate(manifest, result, new CoverageThresholds(0.0, 0.0),
                 "it", "2026-06-15T12:00:00Z");
 
-        // Run-level summary mirrors the suite (17 cases, all passing) and the gate passes at 0%.
-        assertThat(doc.summary().total()).isEqualTo(17);
-        assertThat(doc.summary().passed()).isEqualTo(17);
+        // Run-level summary mirrors the suite (18 cases, all passing) and the gate passes at 0%.
+        assertThat(doc.summary().total()).isEqualTo(18);
+        assertThat(doc.summary().passed()).isEqualTo(18);
         assertThat(doc.summary().failed()).isZero();
         assertThat(doc.summary().sqlLineRatio()).isBetween(0.0, 1.0);
         assertThat(doc.gate().passed()).isTrue();

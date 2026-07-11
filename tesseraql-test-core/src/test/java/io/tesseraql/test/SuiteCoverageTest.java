@@ -30,6 +30,25 @@ class SuiteCoverageTest {
     }
 
     @Test
+    void assertionCoverageCountsUpdateCountAndVerifyAssertions() {
+        TestSuite suite = new TestSuite(List.of(
+                new TestCase("asserts-update-count", new SqlTarget("write.sql"), null, Map.of(),
+                        new Expectation(null, null, 1), null, null, null, null, null),
+                new TestCase("asserts-only-in-verify", new SqlTarget("write.sql"), null, Map.of(),
+                        null, null, null, null, null,
+                        List.of(new TestSuite.VerifyStep(new SqlTarget("read.sql"), Map.of(),
+                                new Expectation(1, null)))),
+                new TestCase("assert-free-verify", new SqlTarget("write.sql"), null, Map.of(),
+                        null, null, null, null, null,
+                        List.of(new TestSuite.VerifyStep(new SqlTarget("read.sql"), Map.of(),
+                                null)))));
+        ItemCoverage coverage = SuiteCoverage.assertions(List.of(suite));
+        assertThat(coverage.covered())
+                .containsExactlyInAnyOrder("asserts-update-count", "asserts-only-in-verify");
+        assertThat(coverage.uncovered()).containsExactly("assert-free-verify");
+    }
+
+    @Test
     void contractCoverageTracksExercisedStandardContracts() {
         ItemCoverage coverage = SuiteCoverage.contracts(List.of(SUITE));
         assertThat(coverage.covered()).contains("find-user-by-login");

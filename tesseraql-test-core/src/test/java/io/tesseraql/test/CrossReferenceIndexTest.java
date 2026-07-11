@@ -120,6 +120,23 @@ class CrossReferenceIndexTest {
     }
 
     @Test
+    void verifyReadBacksExerciseTheirFilesLikeCaseTargets() {
+        RouteFile route = route("web/api/users/get.yml", SEARCH_ROUTE);
+        TestSuite suite = new TestSuite(List.of(new TestCase("write with read-back",
+                new SqlTarget("web/api/users/update.sql"), null, Map.of(), null, null, null, null,
+                null, List.of(new TestSuite.VerifyStep(
+                        new SqlTarget("web/api/users/search.sql"), Map.of(), null)))));
+        CrossReferenceIndex index = CrossReferenceIndex.of(manifest(), List.of(suite));
+
+        // The verify step reads the route's SQL, so the case exercises and links to the route.
+        assertThat(index.exercises(route)).isTrue();
+        assertThat(index.testedSqlPaths())
+                .contains(APP_HOME.resolve("web/api/users/search.sql").normalize());
+        assertThat(index.casesFor(route)).extracting(TestCase::name)
+                .containsExactly("write with read-back");
+    }
+
+    @Test
     void casesForCollectsCasesLinkedBySqlContractValidateRouteAndNotifyRoute() {
         RouteFile route = route("web/api/users/get.yml", SEARCH_ROUTE);
         TestSuite suite = new TestSuite(List.of(

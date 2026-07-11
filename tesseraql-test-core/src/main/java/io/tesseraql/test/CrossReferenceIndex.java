@@ -25,7 +25,8 @@ import java.util.Set;
  * route-file relative, as the compiler resolves bindings), any named {@code queries}/{@code steps}
  * entry, the {@code import}/{@code export} SQL of a file-transfer route, or the Identity SQL
  * Contract one of those bindings runs (the {@code identity.} prefix a binding uses but a contract
- * test case omits is stripped on both sides).
+ * test case omits is stripped on both sides). A case's {@code verify:} read-back steps exercise
+ * their files the same way the case's target does — they execute the same SQL.
  */
 public final class CrossReferenceIndex {
 
@@ -130,6 +131,12 @@ public final class CrossReferenceIndex {
                 && boundPaths.contains(appHome.resolve(test.sql().file()).normalize())) {
             return true;
         }
+        for (TestSuite.VerifyStep step : test.verify()) {
+            if (step.sql() != null && step.sql().file() != null
+                    && boundPaths.contains(appHome.resolve(step.sql().file()).normalize())) {
+                return true;
+            }
+        }
         if (test.contract() != null && !test.contract().isBlank()
                 && boundContracts.contains(stripIdentityPrefix(test.contract()))) {
             return true;
@@ -181,6 +188,11 @@ public final class CrossReferenceIndex {
             for (TestCase test : suite.tests()) {
                 if (test.sql() != null && test.sql().file() != null) {
                     paths.add(appHome.resolve(test.sql().file()).normalize());
+                }
+                for (TestSuite.VerifyStep step : test.verify()) {
+                    if (step.sql() != null && step.sql().file() != null) {
+                        paths.add(appHome.resolve(step.sql().file()).normalize());
+                    }
                 }
             }
         }
