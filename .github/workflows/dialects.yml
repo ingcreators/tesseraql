@@ -1,0 +1,44 @@
+# The gated Oracle / SQL Server portability suites (docs/release.md preconditions).
+# They run against live vendor containers, so they are not part of per-PR CI - but
+# waiting for a release to run them lets dialect regressions sit on main for weeks
+# (the 0.5.0 release caught a broken releaseSavepoint call exactly this way). A
+# weekly run keeps the window small; workflow_dispatch covers pre-release checks.
+name: Dialect suites
+
+on:
+  schedule:
+    - cron: '0 3 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  dialects:
+    name: Oracle + SQL Server portability
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Set up Java
+        uses: actions/setup-java@1bcf9fb12cf4aa7d266a90ae39939e61372fe520 # v5
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+
+      - name: Install the reactor (tests deferred to the suites)
+        run: ./mvnw -B -ntp -DskipTests install
+
+      - name: Plan guards (coverage-core)
+        run: >
+          ./mvnw -B -ntp -pl tesseraql-coverage-core test -Dtesseraql.dialect.its=true
+          -Dtest='OraclePlanGuardIntegrationTest,SqlServerPlanGuardIntegrationTest'
+
+      - name: Runtime portability (camel-runtime)
+        run: >
+          ./mvnw -B -ntp -pl tesseraql-camel-runtime test -Dtesseraql.dialect.its=true
+          -Dtest='OraclePortabilityIntegrationTest,SqlServerPortabilityIntegrationTest'
