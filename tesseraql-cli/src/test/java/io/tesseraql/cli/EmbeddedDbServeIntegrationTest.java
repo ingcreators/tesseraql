@@ -3,21 +3,33 @@ package io.tesseraql.cli;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import io.tesseraql.apptasks.IdentityBootstrap;
+import io.tesseraql.report.DriverManagerDataSource;
+import io.tesseraql.runtime.DataSources;
 import io.tesseraql.runtime.TesseraqlRuntime;
+import io.tesseraql.yaml.config.AppConfig;
+import io.tesseraql.yaml.manifest.ManifestLoader;
 import io.tesseraql.yaml.scaffold.AppScaffolder;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.PrintStream;
 import java.net.ServerSocket;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.ResultSet;
 import java.sql.Statement;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import picocli.CommandLine;
 
 /**
  * Exercises the {@code serve --embedded-db} machinery end to end: the platform PostgreSQL binary is
@@ -241,6 +253,132 @@ class EmbeddedDbServeIntegrationTest {
         } finally {
             embedded.close();
         }
+    }
+
+    @Test
+    void identitySchemaPicksUpTheRunningEmbeddedDatabaseMarker(@TempDir Path dir) throws Exception {
+        Path app = dir.resolve("demo");
+        AppScaffolder scaffolder = new AppScaffolder();
+        scaffolder.writeNew(app, scaffolder.scaffold("demo"));
+        // Point the app's configured database at a port nothing answers on — the situation a
+        // `serve --embedded-db` user is in (no compose database running).
+        writeUnreachableMainDatasource(app);
+
+        EmbeddedPostgresSupport.Handle embedded = EmbeddedPostgresSupport.start(null, false);
+        try {
+            // What `serve --embedded-db` leaves behind at startup: the hand-off marker.
+            EmbeddedDbMarker.write(app, embedded.jdbcUrl());
+            Path passwordFile = dir.resolve("admin.pw");
+            Files.writeString(passwordFile, "change-me");
+
+            Captured result = executeCapturing("identity-schema", "--app", app.toString(),
+                    "--admin-login", "admin", "--admin-password-file", passwordFile.toString());
+
+            assertThat(result.exitCode()).isZero();
+            assertThat(result.stdout())
+                    .contains("Using the running embedded database (work/embedded-db.jdbc)")
+                    .contains("Applied the managed IAM schema (postgres)")
+                    .contains("Seeded administrator 'admin'");
+            // The schema and the administrator landed in the running embedded database.
+            try (Connection connection = DriverManager.getConnection(embedded.jdbcUrl());
+                    Statement statement = connection.createStatement();
+                    ResultSet rows = statement.executeQuery(
+                            "select count(*) from tql_users where login_id = 'admin'")) {
+                assertThat(rows.next()).isTrue();
+                assertThat(rows.getLong(1)).isEqualTo(1);
+            }
+        } finally {
+            embedded.close();
+        }
+    }
+
+    @Test
+    void aStaleMarkerNeverBacksIdentitySchema(@TempDir Path dir) throws Exception {
+        Path app = dir.resolve("demo");
+        AppScaffolder scaffolder = new AppScaffolder();
+        scaffolder.writeNew(app, scaffolder.scaffold("demo"));
+        writeUnreachableMainDatasource(app);
+        // A marker left by a crashed serve: its database no longer answers.
+        EmbeddedDbMarker.write(app, "jdbc:postgresql://localhost:" + freePort() + "/postgres");
+
+        Captured result = executeCapturing("identity-schema", "--app", app.toString());
+
+        // The marker fails the freshness probe, so resolution falls back to the configured
+        // datasource (which is down) — the command fails as before, without claiming the marker.
+        assertThat(result.exitCode()).isNotZero();
+        assertThat(result.stdout()).doesNotContain("Using the running embedded database");
+    }
+
+    @Test
+    void firstAdminHintShowsUntilAnAdministratorExists(@TempDir Path dir) throws Exception {
+        Path app = dir.resolve("demo");
+        AppScaffolder scaffolder = new AppScaffolder();
+        scaffolder.writeNew(app, scaffolder.scaffold("demo"));
+
+        EmbeddedPostgresSupport.Handle embedded = EmbeddedPostgresSupport.start(null, false);
+        try {
+            AppConfig config = new ManifestLoader().load(app).config();
+
+            // The identity schema was never applied: the hint shows, with no URL to hand-copy.
+            assertThat(FirstAdminHint.check(config, app, embedded.override()))
+                    .hasValueSatisfying(hint -> assertThat(hint)
+                            .contains("No users exist yet")
+                            .contains("tesseraql identity-schema --app " + app
+                                    + " --admin-login admin --admin-password-file <file>"));
+
+            // Applied but still empty: still the hint.
+            IdentityBootstrap bootstrap = new IdentityBootstrap(
+                    new DriverManagerDataSource(embedded.jdbcUrl(), null, null));
+            bootstrap.applySchema("postgres");
+            assertThat(FirstAdminHint.check(config, app, embedded.override())).isPresent();
+
+            // With the password login form switched off the managed realm is not a login path,
+            // so the hint stays quiet even though the store is empty.
+            Files.writeString(app.resolve("config/tesseraql.yml"),
+                    "\n  console:\n    login:\n      password:\n        enabled: false\n",
+                    StandardOpenOption.APPEND);
+            AppConfig passwordLoginOff = new ManifestLoader().load(app).config();
+            assertThat(FirstAdminHint.check(passwordLoginOff, app, embedded.override())).isEmpty();
+
+            // A seeded administrator silences it for good.
+            bootstrap.seedAdmin("admin", "change-me", List.of("iam.admin"), List.of());
+            assertThat(FirstAdminHint.check(config, app, embedded.override())).isEmpty();
+
+            // An unreachable database never fails the check — it just stays quiet.
+            assertThat(FirstAdminHint.check(config, app, new DataSources.MainDatasourceOverride(
+                    "jdbc:postgresql://localhost:" + freePort() + "/nope", null, null))).isEmpty();
+        } finally {
+            embedded.close();
+        }
+    }
+
+    /** Rewrites the scaffolded {@code db.main.*} inputs to a port nothing listens on. */
+    private static void writeUnreachableMainDatasource(Path app) throws IOException {
+        Files.writeString(app.resolve("config/application.yml"), """
+                server:
+                  port: 8080
+
+                db:
+                  main:
+                    url: jdbc:postgresql://localhost:%d/demo
+                    username: demo
+                    password: demo
+                """.formatted(freePort()));
+    }
+
+    private static Captured executeCapturing(String... args) {
+        PrintStream original = System.out;
+        ByteArrayOutputStream buffer = new ByteArrayOutputStream();
+        try {
+            System.setOut(new PrintStream(buffer, true, StandardCharsets.UTF_8));
+            int exitCode = new CommandLine(new TesseraqlCli()).execute(args);
+            return new Captured(exitCode, buffer.toString(StandardCharsets.UTF_8));
+        } finally {
+            System.setOut(original);
+        }
+    }
+
+    private record Captured(int exitCode, String stdout) {
     }
 
     private static boolean tableExists(String jdbcUrl, String table) throws Exception {

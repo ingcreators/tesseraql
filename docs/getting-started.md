@@ -43,18 +43,22 @@ tesseraql scaffold crud --app . --table items
 
 ### First login
 
-Studio and the ops console sign in against the identity store, which is **not seeded** — create
-the first administrator once (in a second terminal):
+Studio and the ops console sign in against the identity store, which is **not seeded** — while
+no users exist, `serve` says so and prints this step. Create the first administrator once (in a
+second terminal, with `serve` still running):
 
 ```sh
 printf 'change-me' > admin.pw
 tesseraql identity-schema --app . --admin-login admin --admin-password-file admin.pw
 ```
 
-Then open `http://localhost:8080/_tesseraql/studio` and sign in with that login. (With
-`--embedded-db` there is no config-declared database — pass the JDBC URL that `serve` prints as
-`--jdbc-url` instead of `--app .`.) The full identity surface — roles, policies, SSO — is in
-[authentication.md](authentication.md).
+Then open `http://localhost:8080/_tesseraql/studio` and sign in with that login. The same
+command works under `--embedded-db`: `serve` leaves the running embedded database's JDBC URL in
+`work/embedded-db.jdbc`, and `identity-schema --app .` falls back to it whenever the configured
+database does not answer (announced as `Using the running embedded database
+(work/embedded-db.jdbc)`). To seed a database the app config does not reach — say a remote
+server — pass `--jdbc-url` explicitly; it always takes precedence. The full identity surface —
+roles, policies, SSO — is in [authentication.md](authentication.md).
 
 ### Try it without a database
 

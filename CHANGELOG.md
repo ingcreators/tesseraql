@@ -4,6 +4,22 @@ All notable changes to TesseraQL are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [Semantic Versioning](https://semver.org/).
 
+## Unreleased
+
+### Added
+
+- **First-login hand-off**: the unseeded identity store no longer strands every entry
+  path at Studio's login form. `serve --embedded-db` writes the embedded database's
+  JDBC URL to `work/embedded-db.jdbc` (overwritten each start, removed on graceful
+  shutdown), and `identity-schema --app .` falls back to that running instance whenever
+  the app's configured main datasource is missing, unresolvable, or does not answer —
+  announced as `Using the running embedded database (work/embedded-db.jdbc)`. An
+  explicit `--jdbc-url` still always wins, and a stale marker is ignored (its URL must
+  answer a connection probe). `serve` also prints a one-time hint right after the
+  serving line when the managed store holds no users (and the password login form is a
+  login path): the exact `identity-schema` command to create the first administrator,
+  with no URL to hand-copy.
+
 ## 0.5.0 - 2026-07-11
 
 ### Fixed
