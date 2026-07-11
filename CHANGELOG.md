@@ -20,6 +20,14 @@ All notable changes to TesseraQL are documented here. The format follows
   login path): the exact `identity-schema` command to create the first administrator,
   with no URL to hand-copy.
 
+- **SFTP host-key verification for `poll:` triggers** (`docs/connectors.md`, "Remote
+  sources"): `tesseraql.connectors.poll.knownHostsFile` pins the SSH host keys SFTP
+  sources may present — an OpenSSH known-hosts file, resolved against the app home like
+  other configured paths — and the consumer then runs with strict host-key checking.
+  Unset keeps the historical unchecked behavior, and lint nudges with the new
+  `TQL-SEC-4084` warning, so existing apps keep working while B2B exchanges adopt the
+  pin.
+
 ## 0.5.0 - 2026-07-11
 
 ### Fixed

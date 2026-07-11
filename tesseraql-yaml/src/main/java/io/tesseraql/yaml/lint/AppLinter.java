@@ -1925,7 +1925,9 @@ public final class AppLinter {
      * Statically checks a {@code poll:}-triggered file-import job (roadmap Phase 26): the source is
      * a known kind with a path, a remote source has an allow-listed host
      * ({@code TQL-SEC-4080}, deny by default) and a configured credential ({@code TQL-SEC-4081}, a
-     * warning), and the job carries an {@code import:} block whose per-row SQL file exists.
+     * warning), an SFTP source should verify the server's host key against
+     * {@code tesseraql.connectors.poll.knownHostsFile} ({@code TQL-SEC-4084}, a warning), and the
+     * job carries an {@code import:} block whose per-row SQL file exists.
      */
     private void lintPollJob(AppConfig config, io.tesseraql.yaml.manifest.JobFile job,
             String source,
@@ -1968,6 +1970,12 @@ public final class AppLinter {
                 findings.add(new LintFinding("TQL-SEC-4081", "warning", source,
                         "Poll trigger references undeclared credential '" + poll.credential()
                                 + "'"));
+            }
+            if ("sftp".equals(kind)
+                    && config.navigate("tesseraql.connectors.poll.knownHostsFile") == null) {
+                findings.add(new LintFinding("TQL-SEC-4084", "warning", source,
+                        "SFTP poll source does not verify the server's SSH host key; set"
+                                + " tesseraql.connectors.poll.knownHostsFile to pin it"));
             }
         }
         io.tesseraql.yaml.model.ImportSpec importSpec = job.definition().fileImport();

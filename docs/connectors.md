@@ -223,8 +223,20 @@ tesseraql:
           password: ${secret.env.SFTP_PASS}
 ```
 
-The SSH host key of an SFTP edge is verified out of band today — the consumer does not check
-it against a known-hosts file, so restrict the egress allow-list accordingly. FTPS rides the identical recipe and runtime path with
+The SSH host key of an SFTP edge is verified against an OpenSSH known-hosts file when
+`tesseraql.connectors.poll.knownHostsFile` is set (a path resolved against the app home, or an
+absolute path). The consumer then runs with strict host-key checking, so a server whose key is
+not pinned in that file is refused:
+
+```yaml
+tesseraql:
+  connectors:
+    poll:
+      knownHostsFile: security/known_hosts   # pins the SSH host keys SFTP sources may present
+```
+
+Without it, host keys are not checked and lint nudges with `TQL-SEC-4084` (a warning, so
+existing apps keep working). FTPS rides the identical recipe and runtime path with
 `source: ftps`; only the endpoint scheme differs.
 
 ### Governance and testing
@@ -237,6 +249,7 @@ app down:
 | -------------- | -------- | --------------------------------------------------------------------- |
 | `TQL-SEC-4080` | error    | a remote source's host is not in `tesseraql.connectors.poll.allowedHosts` |
 | `TQL-SEC-4081` | warning  | the trigger references a credential not declared under `credentials`  |
+| `TQL-SEC-4084` | warning  | an SFTP source polls without `tesseraql.connectors.poll.knownHostsFile` (host key unchecked) |
 | `TQL-YAML-1005`| error    | the source is not local/sftp/ftps, has no path, or a remote source has no host |
 | `TQL-YAML-1006`| error    | a poll-triggered job has no `import:` block with a per-row SQL         |
 
