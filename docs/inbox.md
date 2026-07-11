@@ -1,4 +1,4 @@
-# The in-app notification center — the shell's bell and inbox
+# In-app notification center
 
 Business applications tell their users things: your request was approved, a document
 needs you, stock ran low. [Notifications](notifications.md) deliver those over mail and

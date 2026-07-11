@@ -1,4 +1,4 @@
-# Multi-datasource routes — reads across connectors, consistency through projections
+# Multi-datasource routes
 
 TesseraQL applications can run route SQL on database connectors other than `main`
 — a reporting warehouse, a legacy system, a read replica with its own schema. One

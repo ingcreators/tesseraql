@@ -1,4 +1,4 @@
-# The account surface — user menu, preferences, self-service settings
+# Account surface
 
 Every business application needs the same chrome: a user menu in the shell (avatar,
 name, sign-out), and a settings surface where end users pick their language, theme, and

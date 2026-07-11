@@ -1,4 +1,4 @@
-# The five-minute demo
+# Five-minute demo
 
 One command boots a complete, seeded, browsable app with Studio open.
 

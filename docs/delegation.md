@@ -1,4 +1,4 @@
-# Workflow delegation and absence — who acts for whom, and when
+# Workflow delegation and absence
 
 The [approval workflow](approval-workflow.md) gives approvals a per-task escape
 hatch: the **current assignee** may hand one task they already hold to someone else

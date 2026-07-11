@@ -1,4 +1,4 @@
-# Scaffolding and Project Generation
+# Scaffolding
 
 `tesseraql new` and `tesseraql scaffold crud` take a team from an empty directory to a
 working, tested CRUD slice. Everything they emit is ordinary TesseraQL
