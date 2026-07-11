@@ -6,6 +6,15 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ## Unreleased
 
+### Fixed
+
+- **Queue-consume dedup on Oracle and SQL Server**: marking an event consumed with an
+  idempotency key crashed with `SQLFeatureNotSupportedException: releaseSavepoint` on
+  both drivers (`TQL-BATCH-5313`). The savepoint that fences the dedup insert is no
+  longer explicitly released — the commit that follows releases it implicitly on every
+  dialect; the unique-violation rollback path is unchanged. Caught by the gated dialect
+  portability suites.
+
 ### Changed
 
 - **The hot reload is a content diff**: an apply now bounces only the routes whose

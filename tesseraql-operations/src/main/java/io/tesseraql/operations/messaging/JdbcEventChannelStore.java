@@ -225,8 +225,11 @@ public final class JdbcEventChannelStore implements EventChannelStore {
 
     /**
      * Records the idempotency key, tolerating a concurrent delivery of the same key. The insert is
-     * fenced by a savepoint: a unique violation aborts only the savepoint, not the whole transaction
-     * (PostgreSQL aborts a transaction on any error), so the message's consumed state still commits.
+     * fenced by a savepoint: a unique violation rolls back only to the savepoint, not the whole
+     * transaction (PostgreSQL aborts a transaction on any error), so the message's consumed state
+     * still commits. The savepoint is never explicitly released — the commit that follows releases
+     * it implicitly on every dialect, whereas {@code releaseSavepoint} is a
+     * {@code SQLFeatureNotSupportedException} on the Oracle and SQL Server drivers.
      */
     private void recordDedup(Connection connection, String channel, String topic, String key)
             throws SQLException {
@@ -239,7 +242,6 @@ public final class JdbcEventChannelStore implements EventChannelStore {
             dedup.setString(3, key);
             dedup.setTimestamp(4, Timestamp.from(Instant.now()));
             dedup.executeUpdate();
-            connection.releaseSavepoint(savepoint);
         } catch (SQLException ex) {
             if (!SqlErrors.isUniqueViolation(ex)) {
                 throw ex;
