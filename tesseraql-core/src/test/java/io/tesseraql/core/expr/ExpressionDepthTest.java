@@ -78,10 +78,11 @@ class ExpressionDepthTest {
 
     @Test
     void unknownFunctionsAndWrongAritiesFailAtParse() {
-        // An unknown name never reaches evaluation (whitelist, guardrail ch. 20.6): it parses
-        // as a path and then the '(' is a syntax error.
+        // An unknown name never reaches evaluation (whitelist, guardrail ch. 20.6): a call to
+        // a name that is neither a built-in nor an installed custom function is a parse error.
         assertThatThrownBy(() -> ExpressionParser.parse("exec('rm')"))
-                .isInstanceOf(TqlException.class);
+                .isInstanceOf(TqlException.class)
+                .hasMessageContaining("Unknown function 'exec()'");
         assertThatThrownBy(() -> ExpressionParser.parse("length('a', 'b')"))
                 .isInstanceOf(TqlException.class)
                 .hasMessageContaining("takes 1 argument");

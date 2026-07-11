@@ -116,11 +116,12 @@ arithmetic and string logic LOB rules actually need:
   `*`/`/`/`%`, unary `!`/`-`, and `(...)` grouping. Arithmetic is decimal-exact
   (`BigDecimal` — `qty * price <= budget` carries no float drift); `+` concatenates when
   either side is a string; a `null` operand propagates `null`.
-- **Functions** (a fixed whitelist — unknown names and wrong arities fail the build):
-  `length(s)`, `lower(s)`, `upper(s)`, `trim(s)`, `contains(s, sub)`,
+- **Functions** (whitelist-only — unknown names and wrong arities fail the build):
+  the built-ins `length(s)`, `lower(s)`, `upper(s)`, `trim(s)`, `contains(s, sub)`,
   `startsWith(s, p)`, `endsWith(s, p)`, `matches(s, regex)`, `abs(n)`, `round(n)`,
-  `floor(n)`, `ceil(n)`, `min(a, b)`, `max(a, b)`, `coalesce(a, b)`. Predicates are
-  null-safe (`false` on null), transforms propagate `null`.
+  `floor(n)`, `ceil(n)`, `min(a, b)`, `max(a, b)`, `coalesce(a, b)`, plus any
+  [custom functions](#custom-functions) installed from the app's modules. Built-in
+  predicates are null-safe (`false` on null), transforms propagate `null`.
 - There is no method invocation, reflection, or assignment.
 
 ```yaml
@@ -134,6 +135,65 @@ validate:
     code: corp-mail
     rule: matches(lower(trim(params.email)), '.+@corp[.]example')
 ```
+
+## Custom functions
+
+When a rule needs one predicate the built-ins cannot express — a checksum, a code-format
+rule, a business-calendar check — you do not have to fall back to validation SQL or a full
+runtime extension. Implement the `ExpressionFunction` SPI (`tesseraql-core`, dependency-free),
+one class per function:
+
+```java
+public final class IsKatakana implements ExpressionFunction {
+    public String name() { return "isKatakana"; }
+    public int arity() { return 1; }
+    public Object apply(List<Object> args) {
+        return args.get(0) != null
+                && String.valueOf(args.get(0)).matches("[\\u30A0-\\u30FF]+");
+    }
+}
+```
+
+Register it in the jar's
+`META-INF/services/io.tesseraql.core.expr.ExpressionFunction`, publish the jar, and declare
+it like any other module:
+
+```yaml
+# config/tesseraql.yml
+tesseraql:
+  modules:
+    - com.example:example-expression-functions
+```
+
+`serve`, `lint`, `test`, `coverage`, and `mcp` all install the functions from the resolved
+modules classpath before parsing (the CLI's `--modules <dir>` composes for local jars; the
+Maven goals discover functions declared as plugin dependencies). Once installed, the function
+is callable wherever the expression language runs — `validate:` rules, 2-way SQL `/*%if*/`
+directives, `requiredWhen`, notify `when:` guards, workflow guards:
+
+```yaml
+validate:
+  kanaName:
+    field: kanaName
+    code: not-kana
+    rule: isKatakana(trim(body.kanaName))
+```
+
+The rules that keep the language safe still hold:
+
+- **The purity contract.** A function must be side-effect-free (no I/O, no state mutation),
+  total (return `null`/`false` for absent or mismatched values instead of throwing, like the
+  built-ins), and fast — expressions evaluate on every request and inside validation
+  transactions. This is a contract, not a sandbox: the modules set is the reviewed,
+  lock-pinned channel (`modules.lock`), which is exactly why functions load from it and not
+  from `plugins/`.
+- **Fail-fast installation.** A name that is not a legal identifier, shadows a built-in, or
+  is contributed twice stops the command with `TQL-SQL-2110` — a broken function jar can
+  never silently change what an existing expression means.
+- **Parse-time whitelist.** Unknown names and wrong arities are still build errors. An app
+  that calls custom functions therefore fails `tesseraql admission` (the declarative-only
+  gate lints without the app's modules), which is intentional: custom Java is `extended`
+  territory, not marketplace territory — see [admission.md](admission.md).
 
 ## Validation SQL: rows are violations
 

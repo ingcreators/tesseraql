@@ -19,6 +19,21 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **Custom expression functions** (`ExpressionFunction` SPI): a one-class Java hook for the
+  predicate the built-in whitelist cannot express — a checksum, a code-format rule, a
+  business-calendar check — without a full runtime extension. Implement
+  `io.tesseraql.core.expr.ExpressionFunction` (`name`/`arity`/`apply`, side-effect-free and
+  total by contract), register it via `META-INF/services`, and ship the jar through
+  `tesseraql.modules` (or `--modules`, or as a Maven-plugin dependency for the goals). Once
+  installed the function is callable wherever the expression language runs: `validate:`
+  rules, 2-way SQL `/*%if*/` directives, `requiredWhen`, notify `when:` guards, workflow
+  guards. `serve`, `lint`, `test`, `coverage`, and `mcp` all install the same function set
+  from the app's modules classpath before parsing (`lint`/`test`/`coverage` gain a
+  `--modules` option); installation fails fast with `TQL-SQL-2110` on a name collision or an
+  illegal name, unknown names remain parse/lint errors (now with a message naming the
+  modules channel), and `tesseraql admission` still rejects apps calling custom functions —
+  custom Java stays out of the declarative-only marketplace bar by design.
+
 - **Write routes are directly testable**: a `sql` test case may now target an
   `UPDATE`/`INSERT`/`DELETE` file. Every `sql` case runs inside a manual-commit transaction
   the runner always rolls back — pass or fail — so nothing a test writes ever persists.

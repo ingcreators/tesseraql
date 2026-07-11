@@ -144,8 +144,10 @@ the jpackage image (or a fat jar + launcher).
 ## Work item 4 — Opt-in modules (drivers, codecs, connectors)
 
 Drivers and the pdf/excel/s3 modules all use the same model: a `ServiceLoader` SPI discovered
-on the classpath (`java.sql.Driver`, `FileCodec`, `BlobStoreProvider`). Base = PostgreSQL
-driver + CSV codec; everything else is opt-in, injected one of two ways:
+on the classpath (`java.sql.Driver`, `FileCodec`, `BlobStoreProvider`, and — for
+[custom expression functions](declarative-validation.md#custom-functions) —
+`ExpressionFunction`). Base = PostgreSQL driver + CSV codec; everything else is opt-in,
+injected one of two ways:
 
 - **Maven / wrapper-pom:** declare the dependency (BOM-managed version); it lands on the
   classpath and the SPI finds it. No `--modules` needed.

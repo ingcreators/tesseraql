@@ -109,11 +109,13 @@ select * from t
 ```
 
 Conditions use the core expression language — the same whitelist-only language as
-[declarative validation](declarative-validation.md): comparisons, `&&`/`||`/`!`, literals, and
-dotted paths over the bound names. There are no method calls and no side effects. A bare value
-is truthy when it is non-null (a `Boolean` counts as itself), so `q != null && q != ""` is the
-idiomatic guard for an optional text filter. The `where 1 = 1` anchor keeps the statement valid
-in both a plain tool and every rendered variant.
+[declarative validation](declarative-validation.md): comparisons, `&&`/`||`/`!`, literals,
+dotted paths over the bound names, and the whitelisted functions (the built-ins plus any
+[custom functions](declarative-validation.md#custom-functions) installed from the app's
+modules). There are no method calls and no side effects. A bare value is truthy when it is
+non-null (a `Boolean` counts as itself), so `q != null && q != ""` is the idiomatic guard for
+an optional text filter. The `where 1 = 1` anchor keeps the statement valid in both a plain
+tool and every rendered variant.
 
 Each `if`/`elseif` branch is a coverage branch: test suites report which variants of a
 statement were exercised.

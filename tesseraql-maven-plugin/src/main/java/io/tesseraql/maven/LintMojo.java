@@ -26,6 +26,9 @@ public class LintMojo extends AbstractMojo {
 
     @Override
     public void execute() throws MojoFailureException {
+        // Custom expression functions (ExpressionFunction SPI) resolve from the plugin's
+        // classpath: declare the function jar as a plugin dependency and it is installed here.
+        io.tesseraql.core.expr.ExpressionFunctions.install(getClass().getClassLoader());
         List<LintFinding> findings = new AppLinter().lint(appHome.toPath());
         long errors = 0;
         for (LintFinding finding : findings) {

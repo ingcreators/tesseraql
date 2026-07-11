@@ -1,9 +1,13 @@
 package io.tesseraql.cli;
 
+import io.tesseraql.cli.modules.ModulesInstaller;
+import io.tesseraql.core.expr.ExpressionFunctions;
+import io.tesseraql.yaml.manifest.ManifestLoader;
 import java.io.File;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.net.URLClassLoader;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -16,7 +20,7 @@ import java.util.List;
  * {@code FileCodec} {@link java.util.ServiceLoader} SPI, which resolves against the thread context
  * classloader; pointing that at a child loader over the modules directory is the whole mechanism.
  */
-final class CliModules {
+public final class CliModules {
 
     private CliModules() {
     }
@@ -41,6 +45,32 @@ final class CliModules {
             urls.addAll(Arrays.asList(jars(dir)));
         }
         return urls.isEmpty() ? parent : new URLClassLoader(urls.toArray(new URL[0]), parent);
+    }
+
+    /**
+     * Composes the app's resolved {@code tesseraql.modules} cache and an optional explicit
+     * {@code --modules} directory onto the thread context classloader and installs the
+     * {@link ExpressionFunctions} registry from it — the authoring-tool counterpart of the
+     * {@code serve} wiring, so {@code lint}/{@code test}/{@code coverage}/{@code mcp} parse and
+     * evaluate the same custom functions the runtime serves. A broken app (unreadable manifest)
+     * installs nothing and does not fail here: the linter reports the manifest problem itself.
+     */
+    public static void installAppExtensions(Path app, File explicitModules) {
+        List<File> moduleDirs = new ArrayList<>();
+        try {
+            new ModulesInstaller()
+                    .install(app, new ManifestLoader().load(app).config(), false)
+                    .ifPresent(result -> moduleDirs.add(result.cacheDir().toFile()));
+        } catch (RuntimeException ex) {
+            // lint of a broken app must still run; modules just stay uninstalled
+        }
+        if (explicitModules != null) {
+            moduleDirs.add(explicitModules);
+        }
+        ClassLoader loader = classLoaderOver(moduleDirs,
+                Thread.currentThread().getContextClassLoader());
+        Thread.currentThread().setContextClassLoader(loader);
+        ExpressionFunctions.install(loader);
     }
 
     /** The {@code *.jar} files in {@code modulesDir} as URLs, sorted for a stable classpath order. */

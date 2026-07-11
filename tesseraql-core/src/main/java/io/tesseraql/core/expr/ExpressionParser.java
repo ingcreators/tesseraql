@@ -157,10 +157,18 @@ public final class ExpressionParser {
                 return new Expr.Literal(Boolean.FALSE);
             }
             default -> {
-                // A whitelisted function call (roadmap Phase 40): IDENT '(' args ')'. Unknown
-                // names and wrong arities are parse errors, so lint catches them at build.
-                if (!atEnd() && peek().type() == TokenType.LPAREN
-                        && Expr.Call.FUNCTIONS.containsKey(first.text())) {
+                // A function call (roadmap Phase 40): IDENT '(' args ')'. The name must be a
+                // built-in or an installed ExpressionFunction, and the arity must match —
+                // unknown names and wrong arities are parse errors, so lint catches them at
+                // build. Only calls use '(', so an unknown name here is always a mistake.
+                if (!atEnd() && peek().type() == TokenType.LPAREN) {
+                    Integer arity = ExpressionFunctions.arity(first.text());
+                    if (arity == null) {
+                        throw error("Unknown function '" + first.text() + "()' — not a"
+                                + " built-in and no installed custom function of that name"
+                                + " (custom functions load from tesseraql.modules /"
+                                + " --modules)");
+                    }
                     advance();
                     List<Expr> args = new ArrayList<>();
                     if (!match(TokenType.RPAREN)) {
@@ -170,7 +178,6 @@ public final class ExpressionParser {
                         }
                         expect(TokenType.RPAREN, "Expected ')' after arguments");
                     }
-                    int arity = Expr.Call.FUNCTIONS.get(first.text());
                     if (args.size() != arity) {
                         throw error(first.text() + "() takes " + arity + " argument"
                                 + (arity == 1 ? "" : "s") + ", got " + args.size());
