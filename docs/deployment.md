@@ -78,6 +78,30 @@ expand/contract (backward compatible) - the same discipline the canary flow alre
   Cloudflare, or plug a shared TempStore implementation behind the SPI.
 - Framework and app migrations take Flyway's lock, so concurrent node startups serialize.
 
+## Embedded database lifecycle
+
+`tesseraql serve --embedded-db [dir]` runs a real PostgreSQL inside the process — for
+development and demos, not multi-node production (it is single-process; point multiple app
+nodes at a shared server instead). An ephemeral run gets a fresh database wiped on exit; a
+directory argument makes the data persistent.
+
+A **persistent directory is pinned to its PostgreSQL version.** On first use the CLI records
+the binary version that initialized the directory (a `tesseraql-embedded.properties` marker)
+and re-resolves exactly that version on later starts, so upgrading the CLI — which may bump
+the default binary version — never leaves an existing directory unopenable by a newer,
+format-incompatible major. Pin a specific version yourself with
+`--embedded-db-version 17.10.0`; an ephemeral run always uses the default. If a directory was
+created by a different major than the run resolves, the CLI stops with a clear message (pin
+the matching major, or start fresh) rather than a cryptic `postgres` crash.
+
+To see where a directory stands — its on-disk major, its pinned version, and whether the CLI
+default has moved past it — run `tesseraql embedded-db info ./pgdata`. When an upgrade to a
+newer major is available it prints the safe dump/restore procedure to follow. That procedure
+uses your own `pg_dumpall`/`psql`: the embedded binaries are server-only (no client tools
+bundled), and crossing a PostgreSQL major means dumping from the old server and restoring
+into a fresh one. To graduate embedded data to a standalone server, point
+`tesseraql.datasources.main.jdbcUrl` at the new server after the restore.
+
 ## Environment profiles
 
 One switch selects a per-environment overlay layer (see [promotion](promotion.md) for the

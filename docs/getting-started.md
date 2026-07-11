@@ -3,7 +3,11 @@
 You build an application *on* TesseraQL in your own repository — a directory of 2-way SQL, YAML
 routes, and templates ([app-layout.md](app-layout.md)). You obtain the framework as installed
 tooling (the `tesseraql` CLI) and resolved Maven artifacts; you do **not** clone the framework
-monorepo. The wider rationale is in [app-developer-distribution.md](app-developer-distribution.md).
+repository to build an app. (Want to see a finished app before building one? The
+[five-minute demo](five-minute-demo.md) boots a seeded gallery app in one command.)
+
+This documentation tracks the current development line. If a documented feature is missing
+from your installed CLI, it is newer than that release — check the release notes.
 
 ## Prerequisites
 
@@ -11,7 +15,7 @@ monorepo. The wider rationale is in [app-developer-distribution.md](app-develope
 | --- | --- | --- |
 | JDK 21+ | For the JVM channels | Not needed on the host if you use the jpackage image (bundled JVM) or a container. |
 | TesseraQL CLI | Yes | The only TesseraQL-specific tool. Studio and the pdf/excel codecs ride inside it. |
-| A reachable PostgreSQL | Yes | `docker compose up -d` (the scaffold ships a `compose.yaml`), or point `DB_USER`/`DB_PASSWORD` (or `config/application.yml`) at an existing server. |
+| A reachable PostgreSQL | Yes — or none, with `--embedded-db` | `docker compose up -d` (the scaffold ships a `compose.yaml`), point `DB_USER`/`DB_PASSWORD` (or `config/application.yml`) at an existing server, or run with an [embedded database](#try-it-without-a-database). |
 | Docker | Optional | Convenience database and container image builds. |
 | Maven | No | The CLI loop needs none; the Maven path uses the bundled `./mvnw` (JDK only). |
 | Node/npm | No | The UI is Hypermedia Components served from a WebJar; no JS build. |
@@ -24,8 +28,6 @@ monorepo. The wider rationale is in [app-developer-distribution.md](app-develope
   `PATH`).
 - **Native image** — the release / CI also builds a jpackage app image per OS (a launcher with a
   bundled JVM; no separate JDK needed).
-- **From source** (until you adopt a release): `./mvnw -pl tesseraql-cli -am -Pdist -DskipTests
-  package` in the monorepo produces the same archive under `tesseraql-cli/target/`.
 
 Verify: `tesseraql --version`.
 
@@ -35,9 +37,24 @@ Verify: `tesseraql --version`.
 tesseraql new myapp                  # scaffold into your own repo (config, a migration, routes, tests)
 cd myapp
 docker compose up -d                 # a local PostgreSQL (or point config at your own)
-tesseraql serve --app .              # auto-applies db/migration; Studio at /_tesseraql/studio/ui
+tesseraql serve --app .              # auto-applies db/migration; Studio at /_tesseraql/studio
 tesseraql scaffold crud --app . --table items
 ```
+
+### First login
+
+Studio and the ops console sign in against the identity store, which is **not seeded** — create
+the first administrator once (in a second terminal):
+
+```sh
+printf 'change-me' > admin.pw
+tesseraql identity-schema --app . --admin-login admin --admin-password-file admin.pw
+```
+
+Then open `http://localhost:8080/_tesseraql/studio` and sign in with that login. (With
+`--embedded-db` there is no config-declared database — pass the JDBC URL that `serve` prints as
+`--jdbc-url` instead of `--app .`.) The full identity surface — roles, policies, SSO — is in
+[authentication.md](authentication.md).
 
 ### Try it without a database
 
@@ -55,21 +72,10 @@ first run needs network); pass a directory to graduate the same data to a standa
 by setting `tesseraql.datasources.main.jdbcUrl`. Embedded mode is single-process — for multiple app
 nodes, point them at a shared external PostgreSQL.
 
-A **persistent directory is pinned to its PostgreSQL version.** On first use TesseraQL records the
-binary version that initialized the directory (in a `tesseraql-embedded.properties` marker) and
-re-resolves exactly that version on later starts, so upgrading the CLI — which may bump the default
-binary version — never leaves an existing directory unopenable by a newer, format-incompatible
-major. Pin a specific version yourself with `--embedded-db-version 17.10.0`; an ephemeral run always
-uses the default. If a directory was created by a different major than the run resolves — a legacy
-directory from before this pinning existed, or a mismatched explicit `--embedded-db-version` — the
-CLI stops with a clear message (pin the matching major, or start fresh) rather than a cryptic
-`postgres` crash.
-
-To see where a directory stands — its on-disk major, its pinned version, and whether the CLI
-default has moved past it — run `tesseraql embedded-db info ./pgdata`. When an upgrade to a newer
-major is available it prints the safe dump/restore procedure to follow. That procedure uses your own
-`pg_dumpall`/`psql`: the embedded binaries are server-only (no client tools bundled), and crossing a
-PostgreSQL major means dumping from the old server and restoring into a fresh one.
+A persistent directory is **pinned to the PostgreSQL version that initialized it**, so a CLI
+upgrade never leaves your data unopenable; `tesseraql embedded-db info ./pgdata` shows where a
+directory stands and prints the upgrade procedure when one applies. Version pinning and
+cross-major upgrades are covered in [deployment.md](deployment.md#embedded-database-lifecycle).
 
 The interactive dev loop is all CLI-native:
 
@@ -95,8 +101,38 @@ JDK:
     -Dtesseraql.jdbcUrl=jdbc:postgresql://localhost:5432/myapp
 ```
 
-The framework artifacts resolve from a Maven repository (GitHub Packages; add it to your
-`~/.m2/settings.xml`). Behind a proxy or internal mirror, see [proxy.md](proxy.md).
+The framework artifacts resolve from GitHub Packages, which **requires authentication even for
+public reads**. The scaffolded `pom.xml` declares no repository, so add both the repository and
+a personal access token with `read:packages` to your `~/.m2/settings.xml` (in CI, the workflow
+`GITHUB_TOKEN` works the same way):
+
+```xml
+<settings>
+  <activeProfiles><activeProfile>tesseraql</activeProfile></activeProfiles>
+  <profiles>
+    <profile>
+      <id>tesseraql</id>
+      <repositories>
+        <repository>
+          <id>github-tesseraql</id>
+          <url>https://maven.pkg.github.com/ingcreators/tesseraql</url>
+        </repository>
+      </repositories>
+    </profile>
+  </profiles>
+  <servers>
+    <server>
+      <id>github-tesseraql</id>
+      <username>YOUR_GITHUB_USER</username>
+      <password>ghp_your_token_with_read_packages</password>
+    </server>
+  </servers>
+</settings>
+```
+
+The BOM version-manages the opt-in JDBC drivers (`ojdbc11`, `mssql-jdbc`,
+`mysql-connector-j`), so a consumer declares bare coordinates. Behind a proxy or internal
+mirror, see [proxy.md](proxy.md).
 
 ## Opt-in modules (drivers and codecs)
 
@@ -116,9 +152,3 @@ declared set on start.
 - [app-layout.md](app-layout.md) — the application directory and URL mapping.
 - [deployment.md](deployment.md) — container deployment.
 - [proxy.md](proxy.md) — corporate proxy / internal mirror / air-gapped networks.
-
-## See it running first
-
-Want to see a finished app before building one? The
-[five-minute demo](five-minute-demo.md) boots a seeded gallery app with Studio open in one
-command — `tesseraql serve --app examples/inventory-app --embedded-db` — or one container.

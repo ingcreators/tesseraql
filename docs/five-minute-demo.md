@@ -2,6 +2,16 @@
 
 One command boots a complete, seeded, browsable app with Studio open.
 
+## What you need
+
+The gallery apps live in the framework repository — clone it for the **app files only**; you
+run them with your installed CLI and never build the framework:
+
+```bash
+git clone https://github.com/ingcreators/tesseraql
+cd tesseraql
+```
+
 ## One command
 
 ```bash
@@ -12,11 +22,34 @@ No database, no compose: an embedded PostgreSQL starts inside the process, the a
 migrations create and **seed** the schema, and every route serves immediately. Any gallery
 app works the same way (`purchase-request-app`, `helpdesk-app`, `scaffold-demo-app`).
 
-Or as one container:
+Alternatively, one container — note the image build **compiles the framework from source**
+(a multi-stage build; the first build takes several minutes, later builds cache):
 
 ```bash
 docker build -f deploy/Dockerfile.demo -t tesseraql-demo .
 docker run --rm -p 8080:8080 tesseraql-demo
+```
+
+## First login
+
+Studio signs in against the identity store, which the demo does not seed. Create an
+administrator once (second terminal; `serve` prints the embedded database's JDBC URL at
+startup):
+
+```bash
+printf 'demo-password' > admin.pw
+tesseraql identity-schema --jdbc-url "<the URL serve printed>" \
+    --admin-login admin --admin-password-file admin.pw
+```
+
+To browse rows in the data browser step below, also enable it for the demo app — add one
+line to `examples/inventory-app/config/tesseraql.yml` and restart:
+
+```yaml
+tesseraql:
+  studio:
+    dataBrowser:
+      enabled: true
 ```
 
 ## The Studio tour
@@ -27,18 +60,20 @@ around — every stop is live against the seeded data:
 1. **Explorer** — every route, view, job and workflow the app serves, straight from the
    files on disk. Open `web/products/get.yml`: the whole page is one YAML document and one
    2-way SQL file.
-2. **Data browser** — the seeded rows (opt-in via `tesseraql.studio.dataBrowser.enabled`).
-   Filter, sort, export CSV; with the row editor enabled, fix a value under audit + confirm.
+2. **Data browser** — the seeded rows (the opt-in flag you set above). Filter, sort, export
+   CSV; with the row editor enabled, fix a value under audit + confirm.
 3. **The instant loop** — edit the SQL in the source editor, apply, and the running page
    changes; scaffold a CRUD slice from a table and its pages serve immediately; create a
    migration and press **Migrate now**. No restart anywhere.
 4. **Tests** — open a route and run its declarative suite in the sandbox; record a new case
    from the API console with one click.
 5. **Docs portal** — the generated documentation: routes, schema, coverage, the release
-   diff. `tesseraql admission --app .` is the bar a shared app must clear
-   ([marketplace admission](admission.md)).
-6. **Dashboards** — `/products/dashboard` renders stats, a chart and a low-stock table from
-   three SQL files and one `view: dashboard` document. No HTML anywhere in the app.
+   diff. `tesseraql admission --app examples/inventory-app` is the bar a shared app must
+   clear ([marketplace admission](admission.md)).
+6. **Dashboards** — open `web/products/dashboard/` in the Explorer: stats, a chart and a
+   low-stock table from three SQL files and one `view: dashboard` document, no HTML anywhere
+   in the app. (The demo app's own pages are guarded by `auth: bearer` — call them with a
+   token via the API console; the Studio tour itself needs only your browser login.)
 
 ## The low-code loop, end to end
 
