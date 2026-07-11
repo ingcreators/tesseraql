@@ -13,6 +13,10 @@ panel at any OpenAI-compatible chat-completions endpoint:
 
 ```yaml
 tesseraql:
+  http:
+    outbound:
+      allowedHosts:
+        - api.example.com                    # the copilot endpoint must be allow-listed
   copilot:
     enabled: true
     endpoint: https://api.example.com/v1/chat/completions   # vLLM, Ollama, a gateway, ...
@@ -32,9 +36,12 @@ result of every tool the model called — which can include entire source files 
 (route YAML, 2-way SQL, templates), the route inventory, lint findings, and introspected
 table and column names. No table data is sent — the schema tool returns names only —
 and the API key rides as a bearer header. The
-[outbound egress allow-list](connectors.md) does **not** apply here: configuring
-`tesseraql.copilot.endpoint` is itself the authorization, so point it only at an
-endpoint you trust with your app's source.
+[outbound egress allow-list](connectors.md) **applies**: the endpoint's host must be in
+`tesseraql.http.outbound.allowedHosts` — egress is deny by default, exactly as for an
+`http-call` step — and a configured copilot whose host is not allow-listed fails the
+boot with `TQL-SEC-4085`, an error that names the host and the YAML to add. Configuring
+`tesseraql.copilot.endpoint` alone is deliberately not enough: allow-listing the host is
+the second, explicit authorization to ship your app's source there.
 
 ## What the copilot may do
 

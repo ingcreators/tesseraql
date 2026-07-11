@@ -6,6 +6,17 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ## Unreleased
 
+### Changed
+
+- **The copilot endpoint obeys the outbound egress allow-list** (breaking): the host of
+  `tesseraql.copilot.endpoint` must now be in `tesseraql.http.outbound.allowedHosts` —
+  the same deny-by-default egress rule an `http-call` step obeys. A configured copilot
+  whose endpoint host is not allow-listed (including when no allow-list is declared at
+  all) fails the boot with `TQL-SEC-4085`, an error naming the host and showing the
+  exact YAML to add. Previously configuring the endpoint was itself the authorization
+  and the allow-list did not apply. **Migration**: add the copilot endpoint's host to
+  `tesseraql.http.outbound.allowedHosts`.
+
 ### Added
 
 - **`serve --watch`**: an opt-in file watcher for editor-first development. Saving a
@@ -17,6 +28,11 @@ All notable changes to TesseraQL are documented here. The format follows
   server: the route serves its compile error as a 500 stub until the file is fixed, and
   the watcher reports the error and keeps watching. Scope matches the reload's: `web/`
   routes — jobs, consumers, and `config/` changes still need a restart.
+
+- **Configurable SAML clock skew**: `tesseraql.saml.clockSkew` (a duration string such
+  as `30s` or `5m`) sets the allowed skew for the assertion's time-bound conditions
+  (`NotBefore`, `NotOnOrAfter`, subject confirmation expiry). Unset keeps the previous
+  fixed five minutes, so existing deployments are unchanged.
 - **First-login hand-off**: the unseeded identity store no longer strands every entry
   path at Studio's login form. `serve --embedded-db` writes the embedded database's
   JDBC URL to `work/embedded-db.jdbc` (overwritten each start, removed on graceful

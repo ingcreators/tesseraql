@@ -336,6 +336,10 @@ class CopilotIntegrationTest {
                     enabled: true
                     readOnly: false
                     editRoles: ADMIN
+                  http:
+                    outbound:
+                      allowedHosts:
+                        - 127.0.0.1
                   copilot:
                     enabled: true
                     endpoint: %s

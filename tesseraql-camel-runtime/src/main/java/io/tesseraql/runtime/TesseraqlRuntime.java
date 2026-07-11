@@ -453,14 +453,18 @@ public final class TesseraqlRuntime implements AutoCloseable {
                             attachmentStore, io.tesseraql.core.scan.AttachmentScanners.discover(),
                             onInfected));
         }
+        // The outbound egress policy (roadmap Phase 26): deny-by-default allow-list, named
+        // credentials, timeouts. One instance gates every framework-issued outbound call —
+        // http-call steps here and the Studio copilot endpoint below.
+        final io.tesseraql.yaml.http.HttpOutbound httpOutbound = io.tesseraql.yaml.http.HttpOutbound
+                .load(manifest.config());
         JobExecutor jobExecutor = new JobExecutor(jobRepository, tempStore, slowSqlLog, tracer)
                 .notificationOutbox(outboxStore)
                 // Recipient-aware notify steps honor per-user opt-outs (roadmap Phase 48).
                 .preferenceStore(preferences)
                 // Outbound REST for http-call pipeline steps (roadmap Phase 26): deny-by-default
                 // egress, secret-managed credentials, timeouts, and circuit breaking from config.
-                .httpCall(new io.tesseraql.operations.http.HttpCallClient(
-                        io.tesseraql.yaml.http.HttpOutbound.load(manifest.config()),
+                .httpCall(new io.tesseraql.operations.http.HttpCallClient(httpOutbound,
                         manifest.config(), tracer));
         // Notification channels and operations alerts (roadmap Phase 20).
         io.tesseraql.yaml.notify.NotificationChannels notificationChannels = io.tesseraql.yaml.notify.NotificationChannels
@@ -1095,13 +1099,14 @@ public final class TesseraqlRuntime implements AutoCloseable {
                         .map(Boolean::parseBoolean).orElse(false);
                 // Copilot (roadmap Phase 44): entirely absent unless the operator opts in
                 // and names an endpoint + model; the api key stays a lazy config read so a
-                // ${secret.*} reference resolves at call time, never at startup.
+                // ${secret.*} reference resolves at call time, never at startup. The endpoint
+                // must pass the same deny-by-default egress allow-list an http-call step
+                // obeys — an off-allow-list host fails the boot (SEC 4085).
                 final io.tesseraql.studio.CopilotService copilotService = manifest.config()
                         .getString("tesseraql.copilot.enabled")
                         .map(Boolean::parseBoolean).orElse(false)
                                 ? new io.tesseraql.studio.CopilotService(studio, manifest,
-                                        manifest.config()
-                                                .requireString("tesseraql.copilot.endpoint"),
+                                        copilotEndpoint(manifest.config(), httpOutbound),
                                         manifest.config()
                                                 .requireString("tesseraql.copilot.model"),
                                         () -> manifest.config()
@@ -2908,6 +2913,45 @@ public final class TesseraqlRuntime implements AutoCloseable {
                             io.tesseraql.core.error.TqlDomain.STUDIO, 4232),
                     what + " need explicit confirmation");
         }
+    }
+
+    /**
+     * The configured copilot endpoint, gated by the same deny-by-default egress allow-list an
+     * {@code http-call} step obeys (docs/copilot.md): every turn ships app source to this
+     * endpoint, so a host outside {@code tesseraql.http.outbound.allowedHosts} fails the boot
+     * with {@code TQL-SEC-4085} — a chat must never become the one outbound call the egress
+     * policy does not govern.
+     */
+    private static String copilotEndpoint(io.tesseraql.yaml.config.AppConfig config,
+            io.tesseraql.yaml.http.HttpOutbound outbound) {
+        String endpoint = config.requireString("tesseraql.copilot.endpoint");
+        String host;
+        try {
+            host = java.net.URI.create(endpoint).getHost();
+        } catch (IllegalArgumentException ex) {
+            host = null;
+        }
+        if (host == null) {
+            throw new io.tesseraql.core.error.TqlException(
+                    new io.tesseraql.core.error.TqlErrorCode(
+                            io.tesseraql.core.error.TqlDomain.SEC, 4085),
+                    "tesseraql.copilot.endpoint '" + endpoint
+                            + "' must be an absolute http or https URL");
+        }
+        if (!outbound.isHostAllowed(host)) {
+            throw new io.tesseraql.core.error.TqlException(
+                    new io.tesseraql.core.error.TqlErrorCode(
+                            io.tesseraql.core.error.TqlDomain.SEC, 4085),
+                    "Copilot endpoint host '" + host
+                            + "' is not in tesseraql.http.outbound.allowedHosts (egress is"
+                            + " deny by default); allow it:\n"
+                            + "tesseraql:\n"
+                            + "  http:\n"
+                            + "    outbound:\n"
+                            + "      allowedHosts:\n"
+                            + "        - " + host);
+        }
+        return endpoint;
     }
 
     /** Rejects a copilot call when the operator has not configured the panel. */
