@@ -10,7 +10,6 @@ import java.io.UncheckedIOException;
 import java.net.ServerSocket;
 import java.net.URI;
 import java.net.URLEncoder;
-import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
@@ -2763,14 +2762,13 @@ class StudioIntegrationTest {
     // The UI form posts go to /_tesseraql/studio/ui/** (browser auth): carry the admin session
     // cookie and its CSRF token. The bearer is harmless on these routes (browser auth ignores it).
     private static HttpResponse<String> postForm(String path, String form) throws Exception {
-        HttpRequest request = HttpRequest.newBuilder(
+        HttpRequest.Builder request = HttpRequest.newBuilder(
                 URI.create("http://localhost:" + runtime.port() + path))
                 .header("Cookie", adminCookie)
                 .header("X-CSRF-Token", adminCsrf)
                 .header("Content-Type", "application/x-www-form-urlencoded")
-                .POST(HttpRequest.BodyPublishers.ofString(form))
-                .build();
-        return HttpClient.newHttpClient().send(request, HttpResponse.BodyHandlers.ofString());
+                .POST(HttpRequest.BodyPublishers.ofString(form));
+        return TestHttp.send(request);
     }
 
     // Shared helpers carry BOTH a bearer (for the JSON API) and the admin session cookie + CSRF (for
@@ -2781,8 +2779,7 @@ class StudioIntegrationTest {
         if (auth) {
             request.header("Authorization", "Bearer " + token()).header("Cookie", adminCookie);
         }
-        return HttpClient.newHttpClient().send(request.build(),
-                HttpResponse.BodyHandlers.ofString());
+        return TestHttp.send(request);
     }
 
     private static HttpResponse<String> post(String path, String body, boolean auth)
@@ -2794,16 +2791,15 @@ class StudioIntegrationTest {
             request.header("Authorization", "Bearer " + token()).header("Cookie", adminCookie)
                     .header("X-CSRF-Token", adminCsrf);
         }
-        return HttpClient.newHttpClient().send(request.build(),
-                HttpResponse.BodyHandlers.ofString());
+        return TestHttp.send(request);
     }
 
     /** A GET carrying a specific browser-session cookie (for the role-scoped /ui tests). */
     private static HttpResponse<String> getWithCookie(String path, String cookie) throws Exception {
-        HttpRequest request = HttpRequest.newBuilder(
+        HttpRequest.Builder request = HttpRequest.newBuilder(
                 URI.create("http://localhost:" + runtime.port() + path))
-                .header("Cookie", cookie).build();
-        return HttpClient.newHttpClient().send(request, HttpResponse.BodyHandlers.ofString());
+                .header("Cookie", cookie);
+        return TestHttp.send(request);
     }
 
     private static String enc(String value) {
@@ -2811,19 +2807,19 @@ class StudioIntegrationTest {
     }
 
     private static HttpResponse<String> getWithToken(String path, String bearer) throws Exception {
-        HttpRequest request = HttpRequest.newBuilder(
+        HttpRequest.Builder request = HttpRequest.newBuilder(
                 URI.create("http://localhost:" + runtime.port() + path))
-                .header("Authorization", "Bearer " + bearer).build();
-        return HttpClient.newHttpClient().send(request, HttpResponse.BodyHandlers.ofString());
+                .header("Authorization", "Bearer " + bearer);
+        return TestHttp.send(request);
     }
 
     private static HttpResponse<String> postWithToken(String path, String body, String bearer)
             throws Exception {
-        HttpRequest request = HttpRequest.newBuilder(
+        HttpRequest.Builder request = HttpRequest.newBuilder(
                 URI.create("http://localhost:" + runtime.port() + path))
                 .header("Authorization", "Bearer " + bearer)
-                .POST(HttpRequest.BodyPublishers.ofString(body)).build();
-        return HttpClient.newHttpClient().send(request, HttpResponse.BodyHandlers.ofString());
+                .POST(HttpRequest.BodyPublishers.ofString(body));
+        return TestHttp.send(request);
     }
 
     private static String token() throws Exception {
