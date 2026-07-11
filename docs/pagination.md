@@ -1,9 +1,9 @@
 # Declarative pagination
 
-Roadmap Phase 41: a `page:` block on a `query-json`/`query-html` route paginates the main
-query — the framework appends the dialect's pagination clause at execution time, so the
-authored 2-way SQL stays plain-tool runnable and carries no `LIMIT` of its own
-(`TQL-YAML-1018` warns when it does).
+A `page:` block on a `query-json`/`query-html` route paginates the main query — the
+framework appends the dialect's pagination clause at execution time, so the authored
+2-way SQL stays plain-tool runnable and carries no `LIMIT` of its own (`TQL-YAML-1018`
+warns when it does).
 
 ## Offset strategy (default)
 
@@ -23,7 +23,7 @@ to answer `hasNext` without a count. The `page` context entry carries
 response bodies (`meta: page`) and templates; the response automatically carries
 `X-Total-Count` (when counting) and RFC 8288 `Link` `rel="next"`/`rel="prev"` headers. A
 `view: list` on a paginated route renders the kit's `hc-pagination` nav, links preserving
-the search and sort state ([docs/declarative-views.md](declarative-views.md)).
+the search and sort state ([declarative views](declarative-views.md)).
 
 ## Keyset strategy
 

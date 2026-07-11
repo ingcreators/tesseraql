@@ -1,6 +1,6 @@
 # Declarative Validation
 
-A command declares its business-rule validation in YAML (roadmap Phase 19): cross-field
+A command declares its business-rule validation in YAML: cross-field
 rules in the core expression language plus validation SQL — SELECTs whose returned rows are
 the violations (uniqueness, existence, balance checks) — executed inside the command's
 transaction, before a single step writes. Violations come back as a field-scoped
@@ -10,7 +10,7 @@ message keys, localized at render time through the app's message catalogs
 required, range, enum) still reject malformed requests with `400` at bind time; `validate:`
 is the business-rule layer behind them.
 
-## Input constraints (roadmap Phase 40)
+## Input constraints
 
 The declared-input vocabulary covers what LOB forms actually need, so simple rules never
 leak into SQL. On any `input:` field:
@@ -98,19 +98,18 @@ response:
 Rules evaluate in their authored order and **all of them run** — the response carries every
 violation, so a form repaints once. Each rule declares exactly one of:
 
-- `rule:` — a cross-field expression in the core expression language (design ch. 8.1):
-  comparisons, `&&`/`||`/`!`, dotted paths over `body`, `query`, `path`, `principal`,
+- `rule:` — a cross-field expression in the core expression language: comparisons, `&&`/`||`/`!`, dotted paths over `body`, `query`, `path`, `principal`,
   `tenant`. The language is whitelist-only — no method calls, no side effects.
 - `file:` — a validation SQL file, a plain SQL-tool-runnable 2-way SELECT. It executes on
   the command's connection, inside the transaction, so it sees a consistent snapshot (and
   may lock rows with `FOR UPDATE` for balance checks). A non-SELECT fails at route build
   time: validation must not write.
 
-## The expression language (roadmap Phase 40)
+## The expression language
 
 `validate:` rules, `requiredWhen`, `response.html.headersWhen` guards, and workflow guards
-share one deliberately small, side-effect-free expression language. Since Phase 40 it
-covers the arithmetic and string logic LOB rules actually need:
+share one deliberately small, side-effect-free expression language. It covers the
+arithmetic and string logic LOB rules actually need:
 
 - **Operators** (by precedence): `||`, `&&`, `==`/`!=`, `<`/`>`/`<=`/`>=`, `+`/`-`,
   `*`/`/`/`%`, unary `!`/`-`, and `(...)` grouping. Arithmetic is decimal-exact
@@ -121,7 +120,7 @@ covers the arithmetic and string logic LOB rules actually need:
   `startsWith(s, p)`, `endsWith(s, p)`, `matches(s, regex)`, `abs(n)`, `round(n)`,
   `floor(n)`, `ceil(n)`, `min(a, b)`, `max(a, b)`, `coalesce(a, b)`. Predicates are
   null-safe (`false` on null), transforms propagate `null`.
-- There is still no method invocation, reflection, or assignment (guardrail ch. 20.6).
+- There is no method invocation, reflection, or assignment.
 
 ```yaml
 validate:
@@ -239,7 +238,7 @@ Lint reports statically what would otherwise fail at route build time:
 - malformed `when:`/`rule:` expressions (`TQL-SQL-2101`)
 - a missing rule SQL file (`TQL-SQL-2103`)
 
-## Error codes added in this phase
+## Error codes
 
 | Code | Status | Meaning |
 | --- | --- | --- |

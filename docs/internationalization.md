@@ -1,8 +1,8 @@
 # Internationalization
 
-An app serves every locale from one set of templates, SQL, and YAML (roadmap Phase 22):
-message catalogs translate the UI and the error model, the request locale negotiates per
-user, and date/number inputs parse the way that user writes them.
+An app serves every locale from one set of templates, SQL, and YAML: message catalogs
+translate the UI and the error model, the request locale negotiates per user, and
+date/number inputs parse the way that user writes them.
 
 ## Message catalogs
 
@@ -39,15 +39,16 @@ tesseraql:
     locales: [en, ja]            # served locales; defaults to the catalogs found
     preference:                  # user-preference sources, highest priority first
       - query.lang               # ?lang=ja — a language toggle without sign-in
-      - preference.ui.locale     # the account surface's stored choice (roadmap Phase 48)
+      - preference.ui.locale     # the account surface's stored choice
       - principal.claim.locale   # the signed-in user's locale claim
 ```
 
 Every route resolves its locale once, right after authentication: the preference sources in
 order, then `Accept-Language` negotiation (RFC 4647 lookup, so `ja-JP` matches a supported
 `ja`), then the default. Three source kinds exist: `preference.<key>` reads the signed-in
-user's stored preference (the full key after the prefix — the account surface's language
-picker writes `ui.locale`), `principal.*` reads the authenticated principal, and
+user's stored preference (the full key after the prefix — the language picker in the
+[account surface](account.md) writes `ui.locale`), `principal.*` reads the authenticated
+principal, and
 `query.<name>` reads a request parameter. When no list is declared the default is
 `[preference.ui.locale, principal.claim.locale]` — the language a user picks in
 `/_tesseraql/account` takes effect with zero configuration, and an IdP claim still covers

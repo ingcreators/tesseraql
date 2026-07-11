@@ -1,68 +1,18 @@
 # Declarative views
 
-Design for roadmap Phase 39 (drafted 2026-07-03; resolves decision point 7). Status:
-**all four slices shipped — Phase 39 is complete** — the `kind: view` document, `response.html.view`, the
-list + form + detail patterns (a detail composes its route's named queries as child
-lists) with the L2 override resolver and the shared `tql/view/table` pattern, named
-slots (L1: `header`/`footer`, plus `actions` on forms — a slot fills from an app
-fragment referenced as `template::fragment`, colocated-first), the eject action
-(`tesseraql scaffold eject-view`, L3), `TQL-VIEW-33xx` lint, the `view` coverage kind,
-and the example gallery's view-backed board list + detail
-(`examples/user-admin-app/web/users/board`). Slice 3 moved `scaffold crud` onto views (one list route with the pattern's search box and
-server-driven sort — no fragment route; forms derive from the command routes; slots carry the
-New/back/confirmed-delete affordances) and the gallery regenerates on views. Slice 4 shipped
-`view: dashboard`: query-backed panels on the kit's `hc-grid` — `stat`, `sparkline`,
-`chart` (deterministic server-rendered SVG wearing the kit's `hc-chart` skin: every color a
-`--hc-chart-*` token, the gridline group colored by `[aria-label$=grid]`, no client
-scripting), and embedded `table` panels. No upstream brief was needed: `hc-chart` and
-`hc-grid` ship in the kit as CSS-only components (the Track-I lesson — grep `hc.min.css`,
-not only the behaviors bundle).
-
-## Context and goals
-
 Every TesseraQL surface is declarative — routes, validation, workflows, scopes, menus,
-MCP — except the screen. Pages are hand-written Thymeleaf + htmx (~50 lines per
-scaffolded form), and a route's `input:` constraints (`required`, `maxLength`, enums)
-are duplicated into HTML attributes by hand. Adding a column to a table today means a
-migration, a SQL edit, an `input:` edit, *and* HTML surgery on the form, the table
-fragment, and the detail page — the HTML being the only step with no builder, no lint,
-and no single source of truth.
+MCP — and views make the screen declarative too. A **view** is a `kind: view` document
+that describes a page — a list, form, detail, or dashboard — over a route's data, and
+the runtime renders it through framework-shipped Hypermedia Components patterns. The
+route keeps everything it already owns — SQL, security, validation, response headers;
+the view only replaces the hand-written template.
 
-A **view** makes the rendering declarative: a `kind: view` document describes a list or
-form over a route's data, and the runtime renders it through framework-shipped
-Hypermedia Components patterns. The route keeps everything it already owns — SQL,
-security, validation, response headers; the view only replaces the hand-written
-template.
-
-Non-goals: this is not a client-side component model (rendering stays server-side
-hypermedia, mandatory rule 11); it does not replace templates (they remain the escape
-hatch and the tool for bespoke pages); declarative pagination is Phase 41.
-
-## Decision: interpretation, not build-time generation
-
-Decision point 7 asked whether `kind: view` compiles into generated templates at build
-time or is interpreted at render time. **Resolved in favour of interpretation:**
-
-1. **Pattern overrides come free.** The customization ladder's L2 (an app shadowing
-   `tql/view/form.html`) is pure template-chain resolution at render time — the
-   resolver order in `Templates` already models it. A build-time variant would need a
-   regeneration step after every override edit, and a stale-artifact failure mode.
-2. **Derived columns need the live row shape.** A list view with no explicit
-   `columns:` renders the columns the query actually returned, in authored SQL order —
-   `select *` plus a migration shows the new column with zero edits. Only a render-time
-   view can do that.
-3. **It matches the instantly-live direction.** The menu (`config/menu.yml`) moved to
-   per-render interpretation so Studio edits show on the next render; views get the
-   same behaviour through the existing route hot-reload, with no generated file to
-   regenerate or drift.
-4. **Reproducibility is preserved, not weakened.** Rendering is a pure function of
-   (view document, fragment set, response model) — there is simply no generated
-   artifact to keep deterministic. Build-time work remains where it pays: the manifest
-   parses and lints every view, and existence/reference checks fail the build.
-
-The generated-artifact benefit the compile option offered — a diffable HTML file — is
-covered where it matters by Studio's rendered preview (the route render path shows the
-actual output) and by L3 ejection, which *is* deterministic generation on demand.
+Use a view wherever a page follows a standard shape: adding a column to a table becomes
+a migration plus a SQL edit, with no HTML surgery, because the rendering derives from
+the route's own declarations. Views are not a client-side component model (rendering
+stays server-side hypermedia), and they do not replace templates — templates remain the
+escape hatch and the tool for bespoke pages. Pagination is its own feature and composes
+with list views ([pagination](pagination.md)).
 
 ## The view document
 
@@ -88,7 +38,7 @@ response:
 version: tesseraql/v1
 id: items.new.form
 kind: view
-view: form                    # list | form (slice 1); detail follows in slice 2
+view: form                    # list | form | detail | dashboard
 title: view.items.new.title   # message key; literal fallback
 action: /items/create         # the command route this form posts to
 fields:                       # optional — override only what differs
@@ -111,11 +61,33 @@ columns:                      # optional — omit to render the query's own colu
     label: view.items.due
 ```
 
-`response.html.view` and `response.html.template` are mutually exclusive
-(`TQL-VIEW-3302`). Everything else on the route — `status`, `headers`, `headersWhen`,
-`model` — behaves unchanged.
+The `view:` key names one of the four kinds — `list`, `form`, `detail`, or `dashboard`;
+anything else is `TQL-VIEW-3301`. `response.html.view` and `response.html.template` are
+mutually exclusive (`TQL-VIEW-3302`). Everything else on the route — `status`,
+`headers`, `headersWhen`, `model` — behaves unchanged.
 
-## Fields derive from the command route: one source of truth
+## List views
+
+With no `columns:`, a list renders the result set's own columns in authored SQL order —
+`select *` plus a migration shows the new column with zero edits. `columns:` selects,
+orders, and decorates: `label` overrides the heading, `link` renders a per-row link with
+`{expr}` placeholders resolved per row, and `text:`/`link:` columns render a per-row
+action button.
+
+Lists also carry search and server-driven sort:
+
+- `search:` renders the pattern's filter box, wired to a declared route input.
+- `sortable: true` on a column renders `?sort=&dir=` header links with `aria-sort`; the
+  route's enum-gated `sort`/`dir` inputs apply them in SQL.
+
+The wiring is lint-checked (`TQL-VIEW-3309/3310`): the search key must be a declared
+input of the route, and sortable columns require the route to declare the `sort` and
+`dir` inputs its SQL applies.
+
+On a paginated route, the list renders the kit's `hc-pagination` nav, with links
+preserving the search and sort state ([pagination](pagination.md)).
+
+## Form views: fields derive from the command route
 
 A form view does not redeclare its fields. `action:` names the command route the form
 posts to; the compiler resolves that route at build time and derives the field list
@@ -135,16 +107,39 @@ Adding a field to the command's `input:` block adds it to the form with **zero v
 edits**; the HTML constraint attributes can never disagree with the server-side
 validation again, because they are the same declaration. A `fields:` list, when
 present, selects and orders the fields and merges presentation overrides (label,
-widget, and later slice attributes) onto the derived definitions — it cannot invent a
-field the action route does not declare (`TQL-VIEW-3304`).
+widget, and other presentation attributes) onto the derived definitions — it cannot
+invent a field the action route does not declare (`TQL-VIEW-3304`).
 
-Lists mirror the idea at render time: with no `columns:`, the view renders the result
-set's own columns in authored SQL order; `columns:` selects, orders, and decorates
-(label, `link` with `{expr}` placeholders resolved per row, format in a later slice).
+A form's `action:` resolves `{placeholder}`s per record, and prefills fall back from
+camelCase input names to snake_case columns.
+
+## Detail views
+
+`view: detail` renders a labelled value list over one row, and composes its route's
+named queries as child lists: a `children:` entry names a source that must be one of
+the route's `queries:` (`TQL-VIEW-3308`). A detail offers the same `header`/`footer`
+slots as a list.
+
+## Dashboard views
+
+`view: dashboard` renders query-backed `panels:` over the route's results, laid out on
+the kit's `hc-grid`:
+
+- `stat` — one value.
+- `sparkline` — the kit component.
+- `chart` — bar/line as deterministic server-rendered SVG wearing the kit's `hc-chart`
+  skin: every color a `--hc-chart-*` token, the gridline group colored by
+  `[aria-label$=grid]`, no client scripting.
+- `table` — an embedded table on the shared list pattern.
+
+Panel sources validate like children: a panel's `source:` must be `sql` or one of the
+route's named queries (`TQL-VIEW-3308`). Chart data rides the `p.series` model key
+(OGNL resolves a bare `values` to `Map#values()`). Ejection is not offered for
+dashboards — the SVG is data-dependent.
 
 ## Rendering pipeline and the fragment contract
 
-`HtmlResponseRenderer` gains a view branch: when `view:` is set it parses the document
+`HtmlResponseRenderer` has a view branch: when `view:` is set it parses the document
 at build time (cached, existence-checked), and at render time assembles a **view
 model** `v` and renders the framework entry fragment for the kind through the same
 template engine, wrapped in the existing `tql/shell` page (title, the `config/menu.yml`
@@ -162,105 +157,111 @@ the **public rendering contract**:
 `v` carries `{id, kind, title, action, csrf, fields[]|columns[], data, errorsTarget}`;
 a field `f` carries `{name, label, widget, required, maxLength, min, max, options,
 value, error}`. These shapes and the fragment signatures are **public API**: versioned
-with the YAML schema, annotated under the Phase 34 stability contract, and every change
-recorded as breaking in the CHANGELOG. The emitted markup follows
+with the YAML schema, annotated under the framework's stability contract, and every
+change recorded as breaking in the CHANGELOG. The emitted markup follows
 [hypermedia-ui.md](hypermedia-ui.md) exactly — the framework-shipped patterns stay
-hc-conformant (rule 11); what an *override* emits is the app's own choice, with the
-same status as a hand-written template today.
+hc-conformant; what an *override* emits is the app's own choice, with the same status
+as a hand-written template today.
 
-### The customization ladder (from the roadmap)
+### The customization ladder
 
 - **L0 — view options**: keys in the view document. No HTML.
-- **L1 — slots** (shipped, slice 2): the view declares named insertion points filled by
-  app fragments — the parameterized `tql/shell :: shell(...)` pattern applied to views.
-  A list or detail offers `header`/`footer`; a form adds `actions` beside its submit
-  button. A slot value is `template::fragment` (compact, so the plain YAML scalar stays
-  legal), the template resolving colocated-first then under `templates/`. An unknown
-  slot name is `TQL-VIEW-3306`; an unresolved reference is `TQL-VIEW-3302`.
-- **L2 — pattern overrides**: `Templates` gains one app-override `FileTemplateResolver`
-  ordered ahead of the shared classpath resolver, scoped to `tql/view/*`, rooted at the
-  app's `templates/` directory, with existence-check fallthrough. Dropping
-  `templates/tql/view/form.html` into the app restyles every form; a
-  `field-date.html` retargets one widget everywhere; the per-view `template:` key
-  points a single view at a custom fragment. Lint checks an override file declares the
-  expected `th:fragment` signature (`TQL-VIEW-3307`).
-- **L3 — eject** (shipped, slice 2): `tesseraql scaffold eject-view --app . --route
-  web/…/get.yml` renders the view's pattern once into a real template (deterministic
-  output, stamped with the scaffold checksum so edit detection applies) and flips the
-  route from `view:` to `template:`. Ejecting pins the layout — a list/detail must
-  declare its `columns:`/`fields:` explicitly first — and filled slots inline as static
-  fragment inserts. The view document stays on disk for reference; a Studio surface for
-  the same action is a later extension.
+- **L1 — slots**: the view declares named insertion points filled by app fragments —
+  the parameterized `tql/shell :: shell(...)` pattern applied to views. A list or
+  detail offers `header`/`footer`; a form adds `actions` beside its submit button. A
+  slot value is `template::fragment` (compact, so the plain YAML scalar stays legal),
+  the template resolving colocated-first then under `templates/`. An unknown slot name
+  is `TQL-VIEW-3306`; an unresolved reference is `TQL-VIEW-3302`.
+- **L2 — pattern overrides**: `Templates` carries one app-override
+  `FileTemplateResolver` ordered ahead of the shared classpath resolver, scoped to
+  `tql/view/*`, rooted at the app's `templates/` directory, with existence-check
+  fallthrough. Dropping `templates/tql/view/form.html` into the app restyles every
+  form; a `field-date.html` retargets one widget everywhere; the per-view `template:`
+  key points a single view at a custom fragment. Lint checks an override file declares
+  the expected `th:fragment` signature (`TQL-VIEW-3307`).
+- **L3 — eject**: `tesseraql scaffold eject-view --app . --route web/…/get.yml`
+  renders the view's pattern once into a real template (deterministic output, stamped
+  with the scaffold checksum so edit detection applies) and flips the route from
+  `view:` to `template:`. Ejecting pins the layout — a list/detail must declare its
+  `columns:`/`fields:` explicitly first — and filled slots inline as static fragment
+  inserts. The view document stays on disk for reference; a Studio surface for the same
+  action is not currently offered.
+
+## Scaffolding and examples
+
+`scaffold crud` emits view documents instead of raw templates
+([scaffolding](scaffolding.md)): one list route with the pattern's search box and
+server-driven sort (no fragment route), forms derived from the command routes, and
+slots carrying the New/back/confirmed-delete affordances. The example gallery includes
+a view-backed board list + detail (`examples/user-admin-app/web/users/board`).
 
 ## i18n, security, Studio
 
 - **i18n**: `title` and labels resolve through the app message catalog (the engine's
   `CatalogMessageResolver`), key-first with literal fallback; a derived field with no
   override gets `view.<viewId>.<field>` then a humanized name (`login_id` → "Login
-  id"). Locale-aware value formatting composes with Phase 40/41 work.
+  id"). Locale-aware value formatting composes with [declarative
+  validation](declarative-validation.md) and [pagination](pagination.md).
 - **Security**: nothing new. A view renders inside its route's existing
   auth/policy/CSRF; the form fragment emits the `_csrf` field per the recipe; no new
   endpoints appear. (Rendering `response.json.fields`-style output masking into list
-  columns is a recorded later extension, not slice 1.)
+  columns is planned, not currently supported.)
 - **Studio**: the rendered preview already renders routes through the real pipeline, so
   view-backed routes preview (and live-data preview) unchanged; `.view.yml` sources get
-  the YAML editor treatment. A form-driven view editor is Phase 43 (Track J1's pattern)
-  and the copilot operates on view documents precisely because they are structured
-  (Phase 44).
+  the YAML editor treatment, and the Studio copilot ([copilot](copilot.md)) operates on
+  view documents precisely because they are structured. A dedicated form-driven view
+  editor is not currently offered.
 
 ## Machine-checkable surface
 
-Lint family **`TQL-VIEW-33xx`** (next free block after workflow 31xx/32xx):
+Lint family **`TQL-VIEW-33xx`**:
 
 | code | check |
 | --- | --- |
-| 3301 | unknown `view:` kind (not `list`/`form`) |
+| 3301 | unknown `view:` kind (not `list`/`form`/`detail`/`dashboard`) |
 | 3302 | `view:` and `template:` both set, or the view file does not resolve |
 | 3303 | a form's `action:` names no route, or the named route declares no `input:` |
 | 3304 | a `fields:` entry names an input the action route does not declare |
 | 3305 | unknown widget name |
 | 3306 | unknown slot name for the view kind |
 | 3307 | an L2 override file lacks the expected `th:fragment` signature |
-| 3308 | a `children:` entry names a source the route's `queries:` do not declare |
+| 3308 | a `children:` or `panels:` entry names a source the route's `queries:` do not declare |
+| 3309 | `search:` names an input the route does not declare |
+| 3310 | sortable columns without the route declaring the `sort`/`dir` inputs its SQL applies |
 
 Coverage kind **`view`**: one item per view document, exercised when a declarative
-suite invokes its route. The htmx-contract and OpenAPI generators are unaffected in
-slice 1 (views change how HTML is produced, not the HTTP contract).
+suite invokes its route. The htmx-contract and OpenAPI generators are unaffected —
+views change how HTML is produced, not the HTTP contract.
 
-## Slices
+## Design notes
 
-1. **list + form core** — the view document model and loader, the `response.html.view`
-   reference, the interpretation renderer, the `tql/view/*` fragment set, the L2
-   app-override resolver in `Templates` (day one), `TQL-VIEW-3301..3305/3307` lint, and
-   the `view` coverage kind. The example gallery gains one view-backed page as the
-   dogfood.
-2. **detail + relations + slots** (shipped) — `view: detail` (labelled value list over one row),
-   parent + child-list composition, named slots (L1, `TQL-VIEW-3306`), and the eject
-   action.
-3. **scaffold on views** (shipped) — `scaffold crud` emits view documents instead of raw
-   templates; the gallery regenerates on views (byte-identical reproducibility check as
-   today); the live-search + server-sort list composition moved into the list pattern
-   (`search:` renders the filter box, `sortable: true` columns render `?sort=&dir=` header
-   links with `aria-sort`, the route's enum-gated `sort`/`dir` inputs apply them in SQL —
-   `TQL-VIEW-3309/3310` keep the wiring lint-checked; `text:`/`link:` columns render the
-   per-row action button; a form's `action:` resolves `{placeholder}`s per record and
-   prefills fall back from camelCase input names to snake_case columns).
-4. **dashboards** (shipped) — `view: dashboard` with `panels:` over the route's results:
-   `stat` (one value), `sparkline` (the kit component), `chart` (bar/line as deterministic
-   server-rendered SVG in the kit's `hc-chart` skin, `ChartSvg` in `tesseraql-yaml`), and
-   `table` (the shared pattern), laid out on `hc-grid`. Panel sources validate like
-   children (`TQL-VIEW-3308`). Ejection of dashboards is not offered (the SVG is
-   data-dependent); note the `p.series` model key — OGNL resolves `values` to
-   `Map#values()`.
+Views are **interpreted at render time**, not compiled into generated templates:
 
-## Deferred / open
+1. **Pattern overrides come free.** An app shadowing `tql/view/form.html` (L2) is pure
+   template-chain resolution at render time — the resolver order in `Templates`
+   already models it. A build-time variant would need a regeneration step after every
+   override edit, and a stale-artifact failure mode.
+2. **Derived columns need the live row shape.** A list view with no explicit `columns:`
+   renders the columns the query actually returned, in authored SQL order — only a
+   render-time view can do that.
+3. **It matches the instantly-live direction.** Like the `config/menu.yml` app menu,
+   views are interpreted per render, so edits show on the next render through the
+   route hot reload, with no generated file to regenerate or drift.
+4. **Reproducibility is preserved, not weakened.** Rendering is a pure function of
+   (view document, fragment set, response model) — there is simply no generated
+   artifact to keep deterministic. Build-time work remains where it pays: the manifest
+   parses and lints every view, and existence/reference checks fail the build.
 
-- **Pagination**: Phase 41's `page:` block will feed `v.data` and a pager slot; the
-  list pattern reserves the slot rather than inventing its own paging.
-- **Fragment-mode views** (a bare view for an htmx target region, no shell) ride the
-  slice-3 list composition.
+The one thing compilation would have offered — a diffable HTML file — is covered by
+Studio's rendered preview and by L3 ejection, which *is* deterministic generation on
+demand.
+
+Not currently supported:
+
+- **Fragment-mode views** — a bare view for an htmx target region, rendered without
+  the shell — are planned.
 - **Shared views** (one view document used by several routes) stay colocated-only until
   a concrete need appears; the `templates/` root fallback already covers the common
   case.
-- **Write-side field masking** (per-role field visibility on forms) composes with the
-  existing `FieldPolicy` machinery in a later phase.
+- **Write-side field masking** (per-role field visibility on forms) is planned to
+  compose with the existing `FieldPolicy` machinery.

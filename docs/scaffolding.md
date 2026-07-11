@@ -1,10 +1,10 @@
 # Scaffolding and Project Generation
 
 `tesseraql new` and `tesseraql scaffold crud` take a team from an empty directory to a
-working, tested CRUD slice (roadmap Phase 23). Everything they emit is ordinary TesseraQL
+working, tested CRUD slice. Everything they emit is ordinary TesseraQL
 source — YAML routes, 2-way SQL, Thymeleaf pages, declarative suites — indistinguishable from
 hand-written code and owned by the app from then on. Generation is a pure function of its
-inputs, so the same schema always produces byte-identical artifacts (design ch. 48).
+inputs, so the same schema always produces byte-identical artifacts.
 
 ## `tesseraql new <app>`
 
@@ -21,7 +21,7 @@ config/application.yml       server port, main database coordinates (env-overrid
 config/tesseraql.yml         app name, datasource, managed identity realm, security
                              defaults, JWT dev secret, the app.read / app.write policies
 db/migration/V1__create_items.sql
-                             a starter table following the Phase 18 write conventions:
+                             a starter table following the transactional-writes conventions:
                              identity key, version column, audit columns, a named unique
                              index — exactly the shape `scaffold crud` consumes
 templates/nav.html           the shared sidebar fragment pages reference
@@ -57,7 +57,7 @@ web/items/{id}/delete/           command-json delete (confirmed, version-checked
 tests/items-crud-test.yml        data-independent suite over the generated queries
 ```
 
-Since roadmap Phase 39 slice 3 the pages are **declarative views**
+The pages are **declarative views**
 ([docs/declarative-views.md](declarative-views.md)), not hand-written templates: one list
 route renders through the `tql/view/list` pattern (search box, server-driven sort, per-row
 Open action — no separate fragment route), the create/edit forms derive their fields from
@@ -141,7 +141,7 @@ tesseraql scaffold eject-view --app . --route web/items/get.yml
 #   flipped   web/items/get.yml (view: -> template: items.html)
 ```
 
-## Regeneration and edit detection (design ch. 22.20)
+## Regeneration and edit detection
 
 Every `scaffold crud` file carries one checksum comment over the rest of its own content:
 
@@ -170,19 +170,12 @@ hand editing. CI proves it stays that way:
   over HTTP: create with a generated key, edit, a stale-version 409 (`TQL-SQL-4092`), a
   duplicate-name field error, and a confirmed delete.
 
-After changing the generators intentionally, refresh the gallery and commit the diff:
-
-```bash
-./mvnw -pl tesseraql-maven-plugin test -Dtest=ScaffoldDogfoodIntegrationTest \
-  -Dtesseraql.scaffold.regenerate=true
-```
-
 ## Error codes
 
 | Code | Meaning |
 | --- | --- |
 | `TQL-APP-5201` | introspection failed: unknown table or unreadable metadata |
-| `TQL-APP-5202` | a scaffolded path escapes the app home (design ch. 20.2) |
+| `TQL-APP-5202` | a scaffolded path escapes the app home |
 | `TQL-APP-5203` | unsupported target: invalid app name, non-empty `new` target, or a table without a single-column primary key |
 
 ## Editor feedback in scaffolded repos
@@ -198,5 +191,5 @@ Scaffolded apps also recommend the TesseraQL VS Code extension
 (`ingcreators.tesseraql-vscode`, [docs/vscode-extension.md](vscode-extension.md)): the
 real linter's findings in the Problems panel on save, the CLI verbs as commands, an app
 explorer, error-code hovers, and route snippets. The schema wiring above stays the
-completion source — the extension complements it. Until the marketplace publish (an
-operator step), install the CI-built `.vsix` from file.
+completion source — the extension complements it. Until the extension is published to the
+marketplace, install the CI-built `.vsix` from file.

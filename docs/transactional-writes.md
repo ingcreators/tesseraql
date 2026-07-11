@@ -1,6 +1,6 @@
 # Transactional Writes
 
-`command-json` executes one business operation, not one statement (roadmap Phase 18). A
+`command-json` executes one business operation, not one statement. A
 command may declare an ordered list of SQL steps that run in a single transaction, allocate
 gapless document numbers, capture generated keys for later steps, stamp audit columns from
 canonical binds, turn silent lost updates into `409 Conflict`, and map constraint violations
@@ -110,7 +110,8 @@ sql:
   params: { sort: query.sort, dir: query.dir }
 ```
 
-The Phase 23 CRUD scaffold uses exactly this for its sortable list datagrid.
+The CRUD scaffold ([scaffolding](scaffolding.md)) uses exactly this for its sortable list
+datagrid.
 
 ## Audit binds
 
@@ -229,7 +230,7 @@ Commands compose with the existing idempotency machinery: declare `idempotency:`
 `Idempotency-Key` header — a replay returns the stored response without re-executing any
 step, so a double-submitted order form writes once.
 
-## Error codes added in this phase
+## Error codes
 
 | Code | Status | Meaning |
 | --- | --- | --- |

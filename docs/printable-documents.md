@@ -1,9 +1,9 @@
 # Printable documents (PDF)
 
-Roadmap Phase 21. The optional `tesseraql-pdf` module adds a `pdf` codec behind the standard
+The optional `tesseraql-pdf` module adds a `pdf` codec behind the standard
 file-codec SPI: any `query-export` or `file-export` route can stream a printable document
-instead of a tabular file. Putting the jar on the classpath is the whole install
-(ServiceLoader, design ch. 28, 47). PDF is output-only: `file-import` rejects it
+instead of a tabular file. Putting the jar on the classpath is the whole install — the
+codec is discovered via ServiceLoader. PDF is output-only: `file-import` rejects it
 (`TQL-LD-2830`).
 
 ## A printable route
@@ -40,7 +40,7 @@ downloads the finished document), including `after:` follow-up statements.
 ## Print templates
 
 A print template is an app-authored XHTML file (well-formed XML, `.html`), colocated with the
-route and rendered through the standard template engine (design ch. 12) before PDF conversion.
+route and rendered through the standard template engine before PDF conversion.
 The model is:
 
 - `rows` — the query rows, values already formatted per the column mappings (locale, time
@@ -92,7 +92,7 @@ Registration order is file-name order, deterministic across machines. The exampl
 
 ## Deterministic output
 
-Rendered documents are normalized so exports stay reproducibility-friendly (design ch. 48):
+Rendered documents are normalized so exports stay reproducibility-friendly:
 the producer is fixed to `TesseraQL`, creation/modification dates and XMP metadata are
 dropped, and the trailer `/ID` derives from a fixed seed. The same rows through the same
 template yield byte-identical PDFs.
@@ -100,7 +100,7 @@ template yield byte-identical PDFs.
 ## Engine and licensing
 
 The renderer is [openhtmltopdf](https://github.com/openhtmltopdf/openhtmltopdf) (LGPL),
-adopted at the design ch. 50 decision point for its full page-oriented CSS support. The LGPL
+chosen for its full page-oriented CSS support. The LGPL
 dependency never leaks into applications that do not print: `tesseraql-pdf` is an opt-in
 module - no runtime module depends on it, and without the jar a `format: pdf` route fails
 loudly at build time (`TQL-LD-2801`). Inside the module the engine sits behind the
