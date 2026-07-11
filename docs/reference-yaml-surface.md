@@ -3,7 +3,7 @@
 
 Generated from [`tesseraql-v1.schema.json`](../tesseraql-yaml/src/main/resources/schema/tesseraql-v1.schema.json) — the schema the loader, the editors, and the linter share — on every refresh, so it cannot drift from what the framework accepts. One document = one file under an app's `routes/` tree; which root properties apply depends on the document's `kind`.
 
-Schema for TesseraQL Simple YAML documents: routes (web/**/<method>.yml), jobs (batch/**/job.yml), queue consumers (consume/**), and declarative views (*.view.yml). Deepened for editor feedback (roadmap Phase 43); additionalProperties stays true so newer keys never break older editors. The route recipe enum is kept in sync with the linter by a build-time test.
+Schema for TesseraQL Simple YAML documents: routes (web/**/<method>.yml), jobs (batch/**/job.yml), queue consumers (consume/**), and declarative views (*.view.yml). additionalProperties stays true so newer keys never break older editors. The route recipe enum is kept in sync with the linter by a build-time test.
 
 ## The document
 
@@ -19,7 +19,7 @@ Schema for TesseraQL Simple YAML documents: routes (web/**/<method>.yml), jobs (
 | `idempotency` | object |  |
 | `policy` | object |  |
 | `outbox` | object |  |
-| `datasource` | string | The named connector under tesseraql.datasources the route's SQL runs on (roadmap Phase 53), defaulting to main. Read recipes only until the projection slice (TQL-YAML-1036); the name must be declared (TQL-YAML-1035). |
+| `datasource` | string | The named connector under tesseraql.datasources the route's SQL runs on, defaulting to main. The name must be declared (TQL-YAML-1035); a non-main route cannot declare notify:/publish:/outbox: or sequence allocation - they ride the main connector (TQL-YAML-1036). |
 | `sql` | [sqlBinding](#sqlbinding) |  |
 | `steps` | map of [sqlBinding](#sqlbinding) |  |
 | `queries` | map of [sqlBinding](#sqlbinding) | Additional named queries executed after sql, each bound into the execution context under its name. |
@@ -31,9 +31,9 @@ Schema for TesseraQL Simple YAML documents: routes (web/**/<method>.yml), jobs (
 | `webhook` | [object](#webhook) |  |
 | `publish` | [object](#publish) |  |
 | `consume` | [object](#consume) |  |
-| `page` | [object](#page) | Declarative pagination (roadmap Phase 41): the framework appends the dialect clause; authored SQL carries no LIMIT/FETCH. |
+| `page` | [object](#page) | Declarative pagination: the framework appends the dialect clause; authored SQL carries no LIMIT/FETCH. |
 | `response` | [object](#response) |  |
-| `view` | enum: `list` \| `form` \| `detail` \| `dashboard` | Declarative view documents (kind: view, roadmap Phase 39): list \| form \| detail \| dashboard. |
+| `view` | enum: `list` \| `form` \| `detail` \| `dashboard` | Declarative view documents (kind: view): list \| form \| detail \| dashboard. |
 | `title` | string |  |
 | `search` | string |  |
 | `source` | string |  |
@@ -79,7 +79,7 @@ Schema for TesseraQL Simple YAML documents: routes (web/**/<method>.yml), jobs (
 
 ### page
 
-Declarative pagination (roadmap Phase 41): the framework appends the dialect clause; authored SQL carries no LIMIT/FETCH.
+Declarative pagination: the framework appends the dialect clause; authored SQL carries no LIMIT/FETCH.
 
 | Property | Type | Description |
 | --- | --- | --- |
@@ -199,8 +199,8 @@ Declarative pagination (roadmap Phase 41): the framework appends the dialect cla
 | `contract` | string |  |
 | `service` | string |  |
 | `mode` | string |  |
-| `timeoutSeconds` | integer ≥ 0 | Per-binding SQL statement timeout override (roadmap Phase 45); 0 disables. Default: tesseraql.sql.timeoutSeconds, else 30s. |
-| `datasource` | string | The named connector this read binding runs on (roadmap Phase 53), overriding the route's connector. A step inside a transactional pipeline cannot pick its own connector (TQL-YAML-1037). |
+| `timeoutSeconds` | integer ≥ 0 | Per-binding SQL statement timeout override; 0 disables. Default: tesseraql.sql.timeoutSeconds, else 30s. |
+| `datasource` | string | The named connector this read binding runs on, overriding the route's connector. A step inside a transactional pipeline cannot pick its own connector (TQL-YAML-1037). |
 | `params` | map of string |  |
 | `sequence` | string |  |
 | `keys` | array of string |  |
