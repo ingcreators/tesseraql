@@ -11,7 +11,7 @@ export const BASE = '/tesseraql';
 export const SECTIONS = [
   {
     label: 'Tutorial',
-    items: ['getting-started', 'five-minute-demo'],
+    items: ['getting-started', 'five-minute-demo', 'your-first-app'],
   },
   {
     label: 'Building applications',
@@ -47,6 +47,7 @@ export const SECTIONS = [
       'productivity',
       'approval-workflow',
       'ai-mcp',
+      'app-mcp',
       'copilot',
     ],
   },
@@ -54,7 +55,9 @@ export const SECTIONS = [
     label: 'Security & identity',
     items: [
       'authentication',
+      'saml',
       'data-scoping',
+      'multi-tenancy',
       'credential-lifecycle',
       'delegation',
       'admission',
@@ -65,6 +68,7 @@ export const SECTIONS = [
     items: [
       'deployment',
       'promotion',
+      'upgrading',
       'proxy',
     ],
   },
