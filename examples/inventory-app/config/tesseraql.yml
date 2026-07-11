@@ -2,6 +2,10 @@ tesseraql:
   app:
     name: inventory
 
+  studio:
+    dataBrowser:
+      enabled: true    # the five-minute-demo tour browses the seeded rows
+
   datasources:
     main:
       jdbcUrl: ${db.main.url}

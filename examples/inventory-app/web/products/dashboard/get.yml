@@ -4,7 +4,7 @@ kind: route
 recipe: query-html
 
 security:
-  auth: bearer
+  auth: browser
   policy: inv.read
 
 sql:

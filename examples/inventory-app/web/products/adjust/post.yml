@@ -11,8 +11,9 @@ input:
   delta: { type: integer, required: true, min: -10000, max: 10000 }
 
 security:
-  auth: bearer
+  auth: browser
   policy: inv.write
+  csrf: true
 
 validate:
   stockStaysNonNegative:
