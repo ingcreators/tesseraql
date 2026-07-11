@@ -18,18 +18,21 @@ import java.util.stream.Stream;
  * The error-code index (docs/docs-site.md): every {@code TQL-<DOMAIN>-<n>} the framework
  * can raise, scanned from the modules' {@code src/main/java} trees — both the literal
  * string form and the {@code TqlDomain.<D>, <n>} constructor form, unioned — grouped by
- * domain with the raising files as provenance and links to the cookbook pages that
- * mention each code. Honest about coverage: an undocumented code still appears; that is
- * the point of an index.
+ * domain with a best-effort meaning extracted from each raise site (the message's
+ * string-literal fragments, dynamic parts shown as {@code …}, or the javadoc above an
+ * error-code constant), the raising files as provenance, and links to the cookbook pages
+ * that mention each code. Honest about coverage: an undocumented code still appears;
+ * that is the point of an index.
  */
 final class ErrorIndex {
 
-    private static final Pattern LITERAL = Pattern.compile("TQL-([A-Z]+)-(\\d+)");
+    // The trailing guard keeps wildcard mentions like "TQL-ADM-47xx" out of the index.
+    private static final Pattern LITERAL = Pattern.compile("TQL-([A-Z]+)-(\\d+)(?![0-9A-Za-z])");
     private static final Pattern CONSTRUCTED = Pattern.compile("TqlDomain\\.([A-Z]+),\\s*(\\d+)");
     private static final String BLOB = "https://github.com/ingcreators/tesseraql/blob/main/";
 
     /** One error code with everywhere it appears; the sets keep themselves sorted. */
-    record Code(TreeSet<String> sources, TreeSet<String> docs) {
+    record Code(TreeSet<String> sources, TreeSet<String> docs, TreeSet<String> messages) {
     }
 
     private ErrorIndex() {
@@ -44,10 +47,11 @@ final class ErrorIndex {
         StringBuilder md = new StringBuilder();
         md.append("# Error code reference\n\n").append("All ").append(total)
                 .append(" `TQL-*` codes, scanned from the framework sources on every "
-                        + "refresh and grouped by domain, with the raising files as "
-                        + "provenance. Where a cookbook page discusses a code, it is "
-                        + "linked; an undocumented code still appears — that is the point "
-                        + "of an index.\n\n");
+                        + "refresh and grouped by domain. The meaning is extracted from "
+                        + "the raising site (its message text, with dynamic parts shown "
+                        + "as `…`), the raising files are the provenance, and where a "
+                        + "cookbook page discusses a code, it is linked. An undocumented "
+                        + "code still appears — that is the point of an index.\n\n");
         List<String> toc = new ArrayList<>();
         for (String domain : byDomain.keySet()) {
             toc.add("[" + domain + "](#" + ReferenceGenerator.slug(domain) + ")");
@@ -55,10 +59,12 @@ final class ErrorIndex {
         md.append(String.join(" · ", toc)).append('\n');
         for (Map.Entry<String, Map<Integer, Code>> domain : byDomain.entrySet()) {
             md.append("\n## ").append(domain.getKey()).append('\n')
-                    .append("\n| Code | Raised in | Documented in |\n| --- | --- | --- |\n");
+                    .append("\n| Code | Meaning | Raised in | Documented in |\n"
+                            + "| --- | --- | --- | --- |\n");
             for (Map.Entry<Integer, Code> code : domain.getValue().entrySet()) {
                 md.append("| `TQL-").append(domain.getKey()).append('-')
                         .append(code.getKey()).append("` | ")
+                        .append(meaningCell(code.getValue().messages())).append(" | ")
                         .append(sourceLinks(code.getValue().sources())).append(" | ")
                         .append(docLinks(code.getValue().docs())).append(" |\n");
             }
@@ -74,8 +80,9 @@ final class ErrorIndex {
                 for (Path file : files.filter(p -> p.toString().endsWith(".java")).toList()) {
                     String source = Files.readString(file);
                     String rel = repoRoot.relativize(file).toString().replace('\\', '/');
-                    collect(byDomain, LITERAL.matcher(source), rel);
-                    collect(byDomain, CONSTRUCTED.matcher(source), rel);
+                    Lexed lexed = lex(source);
+                    collect(byDomain, LITERAL.matcher(source), rel, source, lexed);
+                    collect(byDomain, CONSTRUCTED.matcher(source), rel, source, lexed);
                 }
             }
         }
@@ -101,13 +108,256 @@ final class ErrorIndex {
     }
 
     private static void collect(Map<String, Map<Integer, Code>> byDomain, Matcher matcher,
-            String rel) {
+            String rel, String source, Lexed lexed) {
         while (matcher.find()) {
-            byDomain.computeIfAbsent(matcher.group(1), domain -> new TreeMap<>())
+            Code code = byDomain.computeIfAbsent(matcher.group(1), domain -> new TreeMap<>())
                     .computeIfAbsent(Integer.parseInt(matcher.group(2)),
-                            number -> new Code(new TreeSet<>(), new TreeSet<>()))
-                    .sources().add(rel);
+                            number -> new Code(new TreeSet<>(), new TreeSet<>(), new TreeSet<>()));
+            code.sources().add(rel);
+            meaningAt(source, lexed, matcher.start(), matcher.end())
+                    .ifPresent(code.messages()::add);
         }
+    }
+
+    /**
+     * Best-effort meaning of one raise site: the message's string-literal fragments from
+     * the surrounding statement (dynamic parts shown as {@code …}), falling back to the
+     * javadoc directly above an error-code constant declaration. Empty when the site
+     * offers neither — the index shows those honestly as unexplained.
+     */
+    private static java.util.Optional<String> meaningAt(String source, Lexed lexed, int start,
+            int end) {
+        java.util.Optional<String> fromStatement = messageFromStatement(source, lexed, start, end);
+        if (fromStatement.isEmpty()) {
+            fromStatement = javadocAbove(source, start);
+        }
+        if (fromStatement.isEmpty()) {
+            fromStatement = constantMeaning(source, lexed, start, end);
+        }
+        // A meaning that opens by naming its own code just repeats the Code column.
+        return fromStatement.map(text -> text.replaceFirst("^TQL-[A-Z]+-\\d+:?\\s*", ""))
+                .filter(text -> !text.isEmpty());
+    }
+
+    private static final Pattern CONSTANT = Pattern
+            .compile("TqlErrorCode\\s+([A-Za-z_][A-Za-z0-9_]*)\\s*=");
+
+    /**
+     * For an undocumented {@code TqlErrorCode NAME = new TqlErrorCode(…)} constant: the
+     * message literal at one of the constant's use sites in the same file, else the
+     * constant's own name read as prose ({@code UNKNOWN_FORMAT} → "unknown format").
+     */
+    private static java.util.Optional<String> constantMeaning(String source, Lexed lexed,
+            int matchStart, int matchEnd) {
+        int declFrom = Math.max(0, matchStart - 200);
+        Matcher decl = CONSTANT.matcher(source.substring(declFrom, matchStart));
+        String name = null;
+        while (decl.find()) {
+            name = decl.group(1);
+        }
+        if (name == null) {
+            return java.util.Optional.empty();
+        }
+        for (int i = source.indexOf(name); i >= 0; i = source.indexOf(name, i + 1)) {
+            if (i >= declFrom && i <= matchEnd) {
+                continue;
+            }
+            char before = i == 0 ? ' ' : source.charAt(i - 1);
+            int afterAt = i + name.length();
+            char after = afterAt >= source.length() ? ' ' : source.charAt(afterAt);
+            if (Character.isJavaIdentifierPart(before)
+                    || Character.isJavaIdentifierPart(after)) {
+                continue;
+            }
+            java.util.Optional<String> atUse = messageFromStatement(source, lexed, i, afterAt);
+            if (atUse.isPresent()) {
+                return atUse;
+            }
+        }
+        return name.length() < 4 || !name.contains("_")
+                ? java.util.Optional.empty()
+                : java.util.Optional
+                        .of(name.toLowerCase(java.util.Locale.ROOT).replace('_', ' '));
+    }
+
+    /**
+     * Lexical facts about one source file, computed once and reused for every match in
+     * it: string-literal content spans, and the positions of {@code ; { }} outside
+     * literals and comments. Starting from the top of the file keeps the quote parity
+     * honest — a fixed-size window can open mid-literal and read code as text.
+     */
+    record Lexed(List<int[]> literals, List<Integer> boundaries) {
+    }
+
+    static Lexed lex(String source) {
+        List<int[]> literals = new ArrayList<>();
+        List<Integer> boundaries = new ArrayList<>();
+        int i = 0;
+        int n = source.length();
+        while (i < n) {
+            char c = source.charAt(i);
+            if (c == '/' && i + 1 < n && source.charAt(i + 1) == '/') {
+                int eol = source.indexOf('\n', i);
+                i = eol < 0 ? n : eol + 1;
+            } else if (c == '/' && i + 1 < n && source.charAt(i + 1) == '*') {
+                int close = source.indexOf("*/", i + 2);
+                i = close < 0 ? n : close + 2;
+            } else if (source.startsWith("\"\"\"", i)) {
+                int close = source.indexOf("\"\"\"", i + 3);
+                literals.add(new int[]{i + 3, close < 0 ? n : close});
+                i = close < 0 ? n : close + 3;
+            } else if (c == '"') {
+                int content = ++i;
+                while (i < n && source.charAt(i) != '"') {
+                    i += source.charAt(i) == '\\' ? 2 : 1;
+                }
+                literals.add(new int[]{content, Math.min(i, n)});
+                i++;
+            } else if (c == '\'') {
+                i++;
+                while (i < n && source.charAt(i) != '\'') {
+                    i += source.charAt(i) == '\\' ? 2 : 1;
+                }
+                i++;
+            } else {
+                if (c == ';' || c == '{' || c == '}') {
+                    boundaries.add(i);
+                }
+                i++;
+            }
+        }
+        return new Lexed(literals, boundaries);
+    }
+
+    /**
+     * Extracts the message from the statement around a match: bounds the statement at
+     * the nearest {@code ; { }} outside literals and comments, merges
+     * {@code +}-concatenated literal runs with {@code …} standing in for the dynamic
+     * expressions, and picks the longest prose-looking candidate.
+     */
+    private static java.util.Optional<String> messageFromStatement(String source, Lexed lexed,
+            int start, int end) {
+        int stmtFrom = 0;
+        int stmtTo = source.length();
+        for (int b : lexed.boundaries()) {
+            if (b < start) {
+                stmtFrom = b + 1;
+            } else if (b >= end) {
+                stmtTo = b;
+                break;
+            }
+        }
+        List<String> candidates = new ArrayList<>();
+        StringBuilder current = null;
+        int chainFrom = -1;
+        int previousEnd = -1;
+        for (int[] lit : lexed.literals()) {
+            if (lit[0] < stmtFrom || lit[1] > stmtTo) {
+                continue;
+            }
+            String text = source.substring(lit[0], lit[1]).replace("\\\"", "\"")
+                    .replace("\\n", " ").replace("\\t", " ");
+            boolean concatenated = current != null && previousEnd + 1 <= lit[0] - 1
+                    && isConcatenationGap(source.substring(previousEnd + 1, lit[0] - 1));
+            if (concatenated) {
+                current.append('…').append(text);
+            } else {
+                if (current != null) {
+                    candidates.add(openEnded(source, current, chainFrom, previousEnd));
+                }
+                current = new StringBuilder(text);
+                chainFrom = lit[0];
+            }
+            previousEnd = lit[1];
+        }
+        if (current != null) {
+            candidates.add(openEnded(source, current, chainFrom, previousEnd));
+        }
+        return candidates.stream()
+                .map(text -> text.replaceAll("\\s+", " ").trim())
+                .filter(text -> text.length() >= 12 && text.contains(" "))
+                .filter(text -> !text.startsWith("TQL-"))
+                .max(java.util.Comparator.comparingInt(String::length));
+    }
+
+    /**
+     * A chain whose concatenation continues beyond its literals ("Failed to parse: " +
+     * cause) gets the dynamic tail (or head) shown as {@code …} too.
+     */
+    private static String openEnded(String source, StringBuilder chain, int chainFrom,
+            int chainEnd) {
+        if (nextMeaningfulChar(source, chainEnd + 1) == '+') {
+            chain.append('…');
+        }
+        if (previousMeaningfulChar(source, chainFrom - 2) == '+') {
+            chain.insert(0, '…');
+        }
+        return chain.toString();
+    }
+
+    private static char nextMeaningfulChar(String source, int from) {
+        for (int i = from; i < Math.min(source.length(), from + 40); i++) {
+            if (!Character.isWhitespace(source.charAt(i))) {
+                return source.charAt(i);
+            }
+        }
+        return ' ';
+    }
+
+    private static char previousMeaningfulChar(String source, int from) {
+        for (int i = from; i >= Math.max(0, from - 40); i--) {
+            if (!Character.isWhitespace(source.charAt(i))) {
+                return source.charAt(i);
+            }
+        }
+        return ' ';
+    }
+
+    /** A gap between two literals joins them only when it is a bare {@code +} chain. */
+    private static boolean isConcatenationGap(String gap) {
+        if (!gap.contains("+")) {
+            return false;
+        }
+        int depth = 0;
+        for (int i = 0; i < gap.length(); i++) {
+            char c = gap.charAt(i);
+            if (c == '(') {
+                depth++;
+            } else if (c == ')') {
+                depth--;
+            } else if (c == ',' && depth <= 0) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /**
+     * The javadoc directly above a declaration (only whitespace and declaration tokens —
+     * no statement boundary — between {@code *&#47;} and the match), flattened to one
+     * line. Covers the {@code TqlErrorCode} constant idiom, where the meaning lives in
+     * the constant's doc rather than a message argument.
+     */
+    private static java.util.Optional<String> javadocAbove(String source, int matchStart) {
+        int close = source.lastIndexOf("*/", matchStart);
+        if (close < 0) {
+            return java.util.Optional.empty();
+        }
+        String between = source.substring(close + 2, matchStart);
+        if (between.contains(";") || between.contains("{") || between.contains("}")) {
+            return java.util.Optional.empty();
+        }
+        int open = source.lastIndexOf("/**", close);
+        if (open < 0) {
+            return java.util.Optional.empty();
+        }
+        String doc = source.substring(open + 3, close)
+                .replaceAll("(?m)^\\s*\\*", " ")
+                .replaceAll("\\{@code ([^}]*)\\}", "`$1`")
+                .replaceAll("\\{@link ([^}]*)\\}", "$1")
+                .replaceAll("\\s+", " ")
+                .trim();
+        return doc.isEmpty() ? java.util.Optional.empty() : java.util.Optional.of(doc);
     }
 
     /**
@@ -147,6 +397,22 @@ final class ErrorIndex {
                 }
             }
         }
+    }
+
+    /**
+     * The meaning column: distinct extracted messages (a code raised for two reasons
+     * shows both), markdown-table-safe, capped at two entries and 220 characters with an
+     * honest ellipsis; {@code —} when no raise site offered one.
+     */
+    private static String meaningCell(TreeSet<String> messages) {
+        if (messages.isEmpty()) {
+            return "—";
+        }
+        String joined = String.join(" · ", messages.stream().limit(2).toList());
+        if (messages.size() > 2 || joined.length() > 220) {
+            joined = joined.length() > 220 ? joined.substring(0, 219) + "…" : joined + " …";
+        }
+        return joined.replace("|", "\\|").replace("<", "&lt;").replace(">", "&gt;");
     }
 
     /** File basenames linked to the GitHub blob, capped at three with an honest remainder. */
