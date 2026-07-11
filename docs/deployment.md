@@ -1,8 +1,13 @@
 # Deployment
 
-The reference deployment is a small VPS (e.g. Lightsail) running Docker containers deployed by
+This page is the production-operations hub — health endpoints, shipping apps, bootstrap and
+migrations, environment profiles, logging, metrics, and the safety valves — and applies
+whatever your stack, even where the examples use the reference setup. The reference
+deployment is a small VPS (e.g. Lightsail) running Docker containers deployed by
 Kamal 2, fronted by Cloudflare (DNS, CDN, WAF) through a Cloudflare Tunnel, with a managed
-PostgreSQL database. `deploy/Dockerfile` and `deploy/kamal/deploy.yml` are the templates.
+PostgreSQL database. [deploy/Dockerfile](../deploy/Dockerfile) and
+[deploy/kamal/deploy.yml](../deploy/kamal/deploy.yml) — templates shipped in the framework
+repository — are the starting points.
 
 ```
 users → Cloudflare (DNS / CDN / WAF / Access)
@@ -18,7 +23,7 @@ it never touches a dependency), and `GET /_tesseraql/health/ready` — also what
 `/_tesseraql/health` serves — is the readiness roll-up: it probes every configured datasource
 live and answers `503 {"status":"DOWN"}` when one fails, `WARN` on active alerts, `UP`
 otherwise (status word only). Point container health checks at
-`/health/live` and load-balancer/proxy checks at `/health/ready`; the
+`/_tesseraql/health/live` and load-balancer/proxy checks at `/_tesseraql/health/ready`; the
   detailed health/metrics stay behind the authorized ops API.
 - Put a Cloudflare Access policy on `/_tesseraql/*` so the system consoles sit behind both the
   Cloudflare login and the app's own authentication.
@@ -28,7 +33,7 @@ otherwise (status word only). Point container health checks at
 
 ## Shipping apps
 
-**A. Baked image (default).** The app home is COPYed into the image; deploying the app is
+**A. Baked image (default).** The [app home](app-layout.md) is COPYed into the image; deploying the app is
 `kamal deploy`. The running container maps one-to-one to a git commit, CI gates
 (`lint`, `test`, `governance`, `release-evidence`) run before the build, and rollback is the
 previous image.
@@ -55,15 +60,19 @@ is a per-host canary.
 
 ## Bootstrap and migrations
 
-1. `mvn tesseraql:migrate -Dtesseraql.appHome=. -Dtesseraql.jdbcUrl=...` per datasource
-   (`-Dtesseraql.datasource=<name>` for named connections), or rely on the mount-time
-   migrations - both converge on the same per-app Flyway history.
-2. `mvn tesseraql:identity-schema -Dtesseraql.jdbcUrl=... -Dtesseraql.adminLogin=admin
-   -Dtesseraql.adminPasswordFile=... -Dtesseraql.adminRoles=ADMIN
-   -Dtesseraql.adminPermissions=ops.app.*` seeds the first administrator. There are no default
+1. `tesseraql migrate --app . --jdbc-url ...` applies the app's schema migrations, per
+   datasource (`--datasource <name>` for named connections) — or rely on the mount-time
+   migrations; both converge on the same per-app Flyway history. In CI, the
+   `tesseraql:migrate` Maven goal does the same
+   (`mvn tesseraql:migrate -Dtesseraql.appHome=. -Dtesseraql.jdbcUrl=...`).
+2. `tesseraql identity-schema --jdbc-url ... --admin-login admin
+   --admin-password-file ./admin.pw --admin-roles ADMIN --admin-permissions ops.app.*`
+   applies the managed IAM schema and seeds the first administrator; the
+   `tesseraql:identity-schema` Maven goal is the CI alternative. There are no default
    credentials; the role names must match the app's `tesseraql.security.policies`.
    `ops.app.<name>` permissions scope what an operator sees in the ops console and the
-   `/_tesseraql/ops` API: batch jobs, executions, and traces are attributed to their owning app
+   `/_tesseraql/ops` API: [batch jobs](jobs.md), executions, and traces are attributed to their
+   owning app
    and hidden outside the caller's grants (deny by default); `ops.app.*` grants everything.
 3. `kamal setup` / `kamal deploy`.
 
@@ -72,7 +81,8 @@ expand/contract (backward compatible) - the same discipline the canary flow alre
 
 ## Multi-server notes
 
-- Sessions, scheduled-job claims, outbox dispatch and file transfers are app- and node-safe on
+- Sessions, [scheduled-job](jobs.md) claims, [outbox](notifications.md) dispatch and file
+  transfers are app- and node-safe on
   a shared database; adding a host is a `servers:` entry.
 - Generated export files live on the node that produced them: keep session affinity at
   Cloudflare, or plug a shared TempStore implementation behind the SPI.
@@ -126,10 +136,9 @@ values can never reach the trail; a failed audit insert never fails the request.
 `GET /_tesseraql/ops/audit` reads the newest rows, bearer + `ops.batch.view` gated and
 narrowed to the caller's `ops.app.<name>` grants like every other per-app ops read.
 
-**Custom error pages**: drop `templates/errors/<status>.html` (or the catch-all
-`templates/errors/error.html`) into the app and a top-level browser GET that fails renders it
-(model: `status`, `error.code`, `error.message`); htmx swaps keep the inline fragment and API
-clients keep the JSON envelope. No template — today's JSON behavior.
+**Custom error pages** are app-authoring content: drop `templates/errors/<status>.html` into
+the app to brand what a failed browser navigation renders — see
+[hypermedia-ui.md](hypermedia-ui.md#custom-error-pages).
 
 ## Logging
 

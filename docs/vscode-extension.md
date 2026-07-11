@@ -1,12 +1,12 @@
 # VS Code extension
 
-The TesseraQL VS Code extension (`vscode-extension/` in the repository,
-`ingcreators.tesseraql-vscode`) turns the plain editor into a full authoring surface
-for TesseraQL apps: real linter findings in the Problems panel, the CLI verbs on the
-command palette, a project explorer, test runs with inline SQL coverage, and
-navigation that knows what the framework knows. It is a thin shell over the same
-engines behind the other three surfaces — **Studio** in the browser, the
-[MCP dev-tools](ai-mcp.md) for coding agents, and the **CLI** for scripts and CI.
+The TesseraQL VS Code extension, `ingcreators.tesseraql-vscode`, turns the plain
+editor into a full authoring surface for TesseraQL apps: real linter findings in the
+Problems panel, the CLI verbs on the command palette, a project explorer, test runs
+with inline SQL coverage, and navigation that knows what the framework knows. It is a
+thin shell over the same engines behind the other three surfaces — **Studio** in the
+browser, the [MCP dev-tools](ai-mcp.md) for coding agents, and the **CLI** for
+scripts and CI (its source lives at `vscode-extension/` in the repository).
 
 A JSON Schema can only check *shape*. Every scaffolded app
 ([scaffolding](scaffolding.md)) already associates the committed
@@ -22,8 +22,10 @@ closes that loop by running the project's own CLI and rendering what it reports.
 The scaffolder's `.vscode/extensions.json` (and the committed
 `examples/scaffold-demo-app` copy) recommends the extension alongside
 `redhat.vscode-yaml`, so a fresh `tesseraql new` app opened in VS Code prompts for
-both. Until the extension is published to the Visual Studio Marketplace / Open VSX,
-the CI-built `.vsix` installs from file (Extensions view → *Install from VSIX…*).
+both. The extension is not yet published to the Visual Studio Marketplace / Open VSX,
+and no built `.vsix` is distributed anywhere yet: for now, build it from the
+repository (`pnpm run package` under `vscode-extension/`) and install the resulting
+`.vsix` from file (Extensions view → *Install from VSIX…*).
 
 The extension resolves the `tesseraql` binary from the `tesseraql.cliPath` setting
 (default: `tesseraql` on `PATH`), so findings always come from the CLI version the
@@ -212,8 +214,8 @@ deterministic.
   process less; a separate language-server process becomes worthwhile only when a
   second editor is targeted. The editor-free core keeps that seam open.
 - **Marketplace publication.** Publishing to the Visual Studio Marketplace / Open VSX
-  (and automating it in the release workflow) is planned; until then the CI-built
-  `.vsix` installs from file.
+  (and automating it in the release workflow) is planned; until then the `.vsix` is
+  built from the repository and installed from file.
 - **Embedded-SQL analysis** against the introspected catalog, and go-to-definition
   for named queries.
 
@@ -239,8 +241,6 @@ deterministic.
   know about a TesseraQL app — declared policies, message keys, route ids — only the
   framework can resolve, so it is exposed as a CLI contract (`symbols`) and the
   editor stays a thin renderer.
-- **CI.** A `vscode-extension` job (pnpm, Node 22) runs typecheck, the unit tests,
-  and a `vsce package` smoke, so a broken manifest can never merge.
 - **The Studio–editor boundary.** Studio owns the live runtime side; the editor owns
   the source-of-truth loop; they meet through deep links in both directions. Full
   generation of Studio's route form from the JSON Schema was deliberately not chosen:

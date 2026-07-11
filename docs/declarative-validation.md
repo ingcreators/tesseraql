@@ -1,6 +1,6 @@
 # Declarative validation
 
-A command declares its business-rule validation in YAML: cross-field
+A [command](transactional-writes.md) declares its business-rule validation in YAML: cross-field
 rules in the core expression language plus validation SQL — SELECTs whose returned rows are
 the violations (uniqueness, existence, balance checks) — executed inside the command's
 transaction, before a single step writes. Violations come back as a field-scoped
@@ -25,8 +25,8 @@ input:
     maxLength: 320
   price:
     type: number
-    min: 0.5               # decimal-exact bounds: 5.9 violates max: 5, min: 0.5 is legal
-    max: 9999.99
+    min: 0.5               # decimal-exact bounds: 0.49 violates min: 0.5
+    max: 9999.99           # and 10000 violates max: 9999.99 — no float drift
   note:
     type: string
     requiredWhen: params.kind == 'noted'   # conditional requiredness, the core

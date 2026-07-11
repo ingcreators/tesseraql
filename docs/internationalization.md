@@ -100,8 +100,8 @@ so the kit's client catalog can re-resolve it after a swap.
 ## Locale-aware input parsing
 
 `date`, `datetime`, and `number` inputs parse with the request locale and an optional
-`format` pattern — the same machinery as file-transfer columns
-(`DateTimeFormatter`/`DecimalFormat`):
+`format` pattern — the same format-pattern rules as export columns
+([file transfers](file-transfers.md)):
 
 ```yaml
 input:
@@ -119,8 +119,8 @@ A bad value answers `400` with the matching `tql.input.<type>` field error.
 ## The client catalog (Hypermedia Components)
 
 The shell loads `/assets/_tesseraql/messages.js?locale=<tag>` before the framework
-bootstrap: an ES module that imports the kit's official locale pack for the language when
-one ships (`dist/locales/ja.js`, hc 0.1.1+) and then merges the app's catalog entries via
+bootstrap: an ES module that imports the kit's official locale pack when the component kit
+ships one for the language, and then merges the app's catalog entries via
 `setMessages()` — later merges win, so app wording layers over the pack. Module scripts
 execute in document order, so the catalog lands before the behaviors install at
 `DOMContentLoaded`. English needs no pack — the kit's own defaults apply. Field-error items
@@ -129,8 +129,8 @@ placeholders interpolates the violation's values after a swap.
 
 ## Testing and lint
 
-Declarative suites assert on catalogs directly — one row per key with `key`, `locale`, and
-`text` columns:
+Declarative suites ([testing.md](testing.md)) assert on catalogs directly — one row per key
+with `key`, `locale`, and `text` columns:
 
 ```yaml
 - name: the japanese catalog translates the provisioning error

@@ -21,6 +21,7 @@ The skeleton is a runnable app home:
 config/application.yml       server port, main database coordinates (env-overridable)
 config/tesseraql.yml         app name, datasource, managed identity realm, security
                              defaults, JWT dev secret, the app.read / app.write policies
+config/menu.yml              the sidebar menu, rendered server-side into the shell
 db/migration/V1__create_items.sql
                              a starter table following the transactional-writes conventions:
                              identity key, version column, audit columns, a named unique
@@ -30,6 +31,12 @@ web/get.yml + index.html     a public home page on the hc-shell layout
 web/api/items/get.yml + search.sql
                              a query-json search with 2-way SQL branches
 tests/smoke-test.yml         exercises the seeded row and both SQL branches
+pom.xml + mvnw / .mvn/       a thin wrapper POM binding the Maven plugin, plus the Maven
+                             Wrapper, so the CI / Maven path needs only a JDK
+compose.yaml                 a local PostgreSQL for development (Docker optional)
+README.md                    the two dev loops — interactive CLI and Maven/CI
+.vscode/                     the JSON Schema, its yaml.schemas association, and the
+                             recommended extensions (see "Editor feedback" below)
 .gitignore                   excludes the work/ runtime scratch directory
 ```
 
@@ -90,29 +97,32 @@ Conventions are applied when the table opts in:
   drivers append `RETURNING` for generated-key capture, which a terminator would break.
 
 The pages compose the framework `tql/shell` layout; navigation comes from the skeleton's
-`config/menu.yml` (`tesseraql new` generates it), rendered server-side into the shell. The
-list renders as a Hypermedia Components **`hc-datagrid`** — a scroll container that keeps wide
-tables horizontally scrollable with the header in view, degrading to a plain styled grid with
-no JavaScript. Its **column headers sort server-side**: each header links to
-`?sort=<col>&dir=<asc|desc>` on the list route itself, re-rendered over htmx (`hx-select` on
-the table region; the search term rides along via `hx-include`), and `aria-sort` drives the
-kit's sort arrow — CSP-clean, no inline JS. The
-`search.sql` `ORDER BY` is an [embedded variable](transactional-writes.md#embedded-variables-dynamic-identifiers)
-— `/*# order by t.{sort} {dir}, t.<pk> */` — so the whole clause lives in a comment and the file
-stays runnable in a plain SQL tool, with the primary key as a stable pagination tiebreaker. The
-`sort`/`dir` inputs are `enum` allowlists (so an interpolated value can only be a known column or
-direction — no injection, enforced by `TQL-SQL-2109`), defaulting to the primary key / ascending. The
-create and edit forms follow the Hypermedia Components
-**mutating-form recipe**: an htmx post
-(`hx-post` mirroring `method`/`action`) with an in-form field-errors container, a
-double-submit guard and busy spinner, and the hidden CSRF field — degrading to a plain form
-post with no JavaScript. A failed write swaps the kit's field-errors fragment inline (a `422`
-validation error, a `409` optimistic-locking conflict, or a `409` constraint violation
-distributes to the offending input); a success answers `HX-Redirect` for the htmx caller
-(`204`) and a plain `303 Location` for the no-JS caller. The edit page's delete uses the
-confirmed-destructive variant — `data-hc-confirm` gates the submit and the form fires on
-`hc:confirmed`. The generated security blocks reference the `app.read` / `app.write` policies
-the skeleton defines — the CLI prints a hint when an app is missing them or the nav template.
+`config/menu.yml` (`tesseraql new` generates it), rendered server-side into the shell.
+
+- **The list renders as a Hypermedia Components `hc-datagrid`** — a scroll container that
+  keeps wide tables horizontally scrollable with the header in view, degrading to a plain
+  styled grid with no JavaScript.
+- **Column headers sort server-side**: each header links to `?sort=<col>&dir=<asc|desc>` on
+  the list route itself, re-rendered over htmx (`hx-select` on the table region; the search
+  term rides along via `hx-include`), and `aria-sort` drives the kit's sort arrow — CSP-clean,
+  no inline JS.
+- **The `ORDER BY` lives in a comment**: the `search.sql` clause is an
+  [embedded variable](transactional-writes.md#embedded-variables-dynamic-identifiers) —
+  `/*# order by t.{sort} {dir}, t.<pk> */` — so the file stays runnable in a plain SQL tool,
+  with the primary key as a stable pagination tiebreaker. The `sort`/`dir` inputs are `enum`
+  allowlists (an interpolated value can only be a known column or direction — no injection,
+  enforced by `TQL-SQL-2109`), defaulting to the primary key / ascending.
+- **The create and edit forms follow the mutating-form recipe**
+  ([hypermedia-ui.md](hypermedia-ui.md#mutating-forms)): an htmx post mirroring
+  `method`/`action`, inline field errors on a failed write (a `422` validation error, a `409`
+  optimistic-locking conflict, or a `409` constraint violation distributes to the offending
+  input), `HX-Redirect` on success for the htmx caller and a plain `303 Location` with no
+  JavaScript.
+- **The edit page's delete is the confirmed-destructive variant** — `data-hc-confirm` gates
+  the submit and the form fires on `hc:confirmed`
+  ([confirmed actions](hypermedia-ui.md#confirmed-actions)).
+- **The generated security blocks reference the `app.read` / `app.write` policies** the
+  skeleton defines; the CLI prints a hint when an app is missing them or the nav template.
 
 ### CSRF, on by default
 
@@ -163,15 +173,9 @@ the files themselves.
 
 [`examples/scaffold-demo-app`](../examples/scaffold-demo-app) is exactly
 `tesseraql new scaffold-demo` plus `tesseraql scaffold crud --table items` — not a byte of
-hand editing. CI proves it stays that way:
-
-- `ScaffoldDogfoodIntegrationTest` (Maven plugin module) applies the skeleton's migration to
-  PostgreSQL, regenerates the app, and asserts the committed tree is byte-identical; then
-  lints it (no errors, no undefined-policy warnings) and runs its declarative suites — both
-  generated search templates at 100% branch coverage.
-- `ScaffoldedCrudIntegrationTest` (runtime module) boots the app and drives the full flow
-  over HTTP: create with a generated key, edit, a stale-version 409 (`TQL-SQL-4092`), a
-  duplicate-name field error, and a confirmed delete.
+hand editing — and CI keeps it that way: it regenerates the app and asserts the committed
+tree is byte-identical, lints it, runs its suites at full branch coverage, and drives the
+full CRUD flow over HTTP, including the stale-edit `409` (`TQL-SQL-4092`).
 
 ## Error codes
 

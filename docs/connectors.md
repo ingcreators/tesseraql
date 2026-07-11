@@ -35,6 +35,8 @@ pipeline:
       query:
         base: job.base                              # bound from the step context
       credential: partner                           # a configured credential, never inline
+      expectStatus: 200                             # optional; omitted, any 2xx succeeds
+      connectTimeout: 5s                            # optional per-step override
       requestTimeout: 20s                           # optional per-step override
 
   - id: store
@@ -57,7 +59,9 @@ The response is published as:
 A step declares exactly one of `sql:`, `notify:`, or `http-call:`. The `query:` values and
 `body:` are source expressions bound from the step context exactly like a SQL step's params;
 static `headers:` values may carry `${...}` config or secret placeholders, resolved at call
-time. `body:` resolves a single context expression and is sent as JSON.
+time. `body:` resolves a single context expression and is sent as JSON. `expectStatus:` pins
+success to one exact status — without it any `2xx` succeeds — and `connectTimeout:` /
+`requestTimeout:` override the configured defaults per step.
 
 ### Why a job step, not a command step
 
@@ -134,8 +138,9 @@ the runtime's identical deny-by-default guard. At runtime an off-allow-list host
 
 ## Testing
 
-An `http-call` declarative test **plans** a job's steps against the case's params — resolving
-the url, binding query params, and applying the allow-list — without issuing a network request.
+An `http-call` declarative test ([testing](testing.md)) **plans** a job's steps against the
+case's params — resolving the url, binding query params, and applying the allow-list — without
+issuing a network request.
 Each planned request is a row, so a suite asserts the recipe is wired correctly and the
 `http-call` coverage kind tracks it.
 

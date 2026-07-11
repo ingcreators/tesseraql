@@ -91,8 +91,9 @@ sql:                              # or steps: — runs in one transaction, like 
 
 The message body is the published payload, bound into the context exactly like a request body — so
 `body.orderId` and the `input:` constraints work the same way. **A consumer must declare `input:`
-for the fields it reads**: the deny-by-default mass-assignment guard rejects an undeclared field,
-just as it does for an HTTP route.
+for the fields it reads**: the deny-by-default mass-assignment guard
+([declarative validation](declarative-validation.md)) rejects an undeclared field, just as it does
+for an HTTP route.
 
 `idempotencyKey` resolves a business key from the message; when omitted, the publisher's `key` is
 used. The first delivery of a key runs the pipeline and records the key; a redelivery is recognised
@@ -206,5 +207,5 @@ Lint catches a misconfigured channel before it ships:
 | `TQL-YAML-1106` | error    | a malformed or unknown-transport `tesseraql.messaging.channels` entry         |
 
 A `queue-consume` route is covered by the `queue-consume` coverage kind when a declarative suite
-exercises its SQL (the same SQL-file basis as route coverage); gate it with
+([testing](testing.md)) exercises its SQL (the same SQL-file basis as route coverage); gate it with
 `coverage.thresholds.queue-consume`.

@@ -1,14 +1,14 @@
 # Hypermedia UI patterns
 
-TesseraQL pages are server-rendered Thymeleaf composed with
-[Hypermedia Components](https://ingcreators.com/hypermedia-components) (`hc-*` markup, served
-from the WebJar at version-less `/assets/vendor/` paths, see [app-layout.md](app-layout.md))
-and htmx. The framework bootstrap (`/assets/_tesseraql/tesseraql.js`) imports the kit's
-behaviors bundle, which auto-installs every behavior at DOMContentLoaded — including
-`installNavCurrent`, which marks the current sidebar item (`aria-current="page"`, longest
-path-segment prefix wins) from the `data-hc-nav-current` opt-in on the shell sidebar — and the
-bootstrap itself wires the htmx error-fragment swap. This page records the blessed htmx patterns
-the system apps use, so user apps can copy them instead of inventing their own.
+This page records the blessed htmx patterns TesseraQL UIs are built from — the compositions
+the bundled system apps (the signed-in shell, IAM Admin, the ops console) use — so user apps
+can copy them instead of inventing their own. Pages are server-rendered Thymeleaf composed
+with [Hypermedia Components](https://ingcreators.com/hypermedia-components) (`hc-*` markup,
+served from the WebJar at version-less `/assets/vendor/` paths, see
+[app-layout.md](app-layout.md)) and htmx. The framework bootstrap
+(`/assets/_tesseraql/tesseraql.js`) imports the kit's behaviors bundle, which auto-installs
+every behavior at DOMContentLoaded, and the bootstrap itself wires the htmx error-fragment
+swap.
 
 ## Confirmed actions
 
@@ -129,7 +129,7 @@ behavior renders the notification (a `data-hc-toast-region` container must exist
 value with no `{…}` placeholder (the CSP, `X-Frame-Options`, …) is emitted verbatim.
 
 For a command route, the success/error split makes this conditional for free: a successful render
-emits these headers, while a validation failure takes the field-errors renderer (below), which does
+emits these headers, while a validation failure takes the field-errors renderer (above), which does
 not. `HX-Reswap` / `HX-Retarget` can likewise be set as (static or interpolated) header values when
 a response needs to override its swap strategy or target.
 
@@ -164,6 +164,17 @@ response:
     retarget: "#flash"     # send the error fragment to a flash region…
     reswap: outerHTML      # …replacing it whole
 ```
+
+## CSRF tokens
+
+State-changing browser routes declare `csrf: true`. The framework shell publishes the session
+token as `<meta name="csrf-token" content="…">` whenever an authenticated session resolved it,
+and the kit's auto-installed `installCsrfHeader` behavior reads that tag at request time and
+attaches the `X-CSRF-Token` header to every htmx request — so an htmx form needs no per-request
+wiring. The no-JS path can't send a header, so the form also carries a hidden `_csrf` field;
+the framework's `csrf` step accepts the header or the field (the header wins), and treats
+`_csrf` as a reserved request field that never trips the mass-assignment guard. A page that
+hosts a mutating form must therefore be authenticated, so the meta tag is present.
 
 ## Mutating forms
 
@@ -233,6 +244,13 @@ post/redirect/get like any other mutating form. A destructive action gates on
 enhancement from the recipe (swap the tbody in place instead of reloading) can layer on
 later; the plain-form shape above is the no-JS baseline it must keep.
 
+## Marking the current navigation item
+
+The kit's auto-installed `installNavCurrent` behavior marks the current sidebar item with
+`aria-current="page"` from the `data-hc-nav-current` opt-in on the shell sidebar; when several
+items share a prefix, the longest path-segment prefix wins. Apps composing the framework shell
+get this for free — a custom sidebar only needs the opt-in attribute.
+
 ## Theme toggle
 
 The signed-in shell header carries the kit's light/dark toggle, and any app page can add
@@ -254,13 +272,10 @@ and onto pre-login pages (the cookie re-sync in [account.md](account.md)). **Nev
 and the two would fight after the next sign-in. Signed-out pages have no CSRF meta tag, so
 a toggle there flips the current page only.
 
-## CSRF tokens
+## Custom error pages
 
-State-changing browser routes declare `csrf: true`. The framework shell publishes the session
-token as `<meta name="csrf-token" content="…">` whenever an authenticated session resolved it,
-and the kit's auto-installed `installCsrfHeader` behavior reads that tag at request time and
-attaches the `X-CSRF-Token` header to every htmx request — so an htmx form needs no per-request
-wiring. The no-JS path can't send a header, so the form also carries a hidden `_csrf` field;
-the framework's `csrf` step accepts the header or the field (the header wins), and treats
-`_csrf` as a reserved request field that never trips the mass-assignment guard. A page that
-hosts a mutating form must therefore be authenticated, so the meta tag is present.
+Drop `templates/errors/<status>.html` (or the catch-all `templates/errors/error.html`) into
+the app and a top-level browser GET that fails renders it, with `status`, `error.code`, and
+`error.message` in the model. htmx swaps keep the inline error fragment and API clients keep
+the JSON envelope; with no template, every caller gets the JSON envelope. A broken error
+template never masks the original failure — the response falls back to JSON.

@@ -74,7 +74,7 @@ auth.
 | `source_read` | one source file (YAML/SQL/template) by app-relative path, path-confined |
 | `schema_introspect` | a table's columns, primary key, version column, and unique indexes via JDBC metadata |
 | `lint` | every lint finding (code, severity, source, message) with error/warning counts |
-| `test` | runs the declarative suites, returns pass/fail per case plus SQL and item coverage and the coverage-gate result |
+| `test` | runs the declarative suites ([testing](testing.md)), returns pass/fail per case plus SQL and item coverage and the coverage-gate result |
 | `ops_status` | outbox counts and recent events, and recent batch job executions (a note when the ops schema is absent) |
 
 ### Write (gated; omitted under `--read-only`)
@@ -377,23 +377,30 @@ or is mounted into another.
 
 ## Error codes
 
+Lint findings:
+
+| Code | Meaning |
+| --- | --- |
+| `TQL-MCP-1001` | an application MCP tool uses a recipe other than `query-json` / `command-json` |
+| `TQL-MCP-1002` | (warning) an application MCP tool has no `description` |
+| `TQL-MCP-1003` | an application MCP resource is not read-only (`query-json` with query-mode SQL) |
+| `TQL-MCP-1004` | an application MCP resource declares no `uri` |
+| `TQL-MCP-1005` | (warning) an application MCP resource has no `description` |
+| `TQL-MCP-1006` | an application MCP resource declares `input:` (a resource takes no arguments) |
+| `TQL-MCP-1007` | two application MCP resources declare the same `uri` (UI resources share the namespace) |
+| `TQL-MCP-1008` | an MCP Apps UI resource does not render HTML (use `query-html` or `page`) |
+| `TQL-MCP-1009` | an MCP Apps UI resource declares no `ui://` uri |
+| `TQL-MCP-1010` | (warning) an MCP Apps UI resource has no `description` |
+| `TQL-MCP-1011` | an MCP Apps UI resource declares `input:` (a UI resource takes no arguments) |
+| `TQL-MCP-1012` | a tool's `ui:` link resolves to no declared UI resource |
+| `TQL-MCP-4030` | a write MCP tool declares no authorization policy |
+
+Runtime errors:
+
 | Code | Meaning |
 | --- | --- |
 | `TQL-MCP-4002` | a dev-tool call is missing a required argument |
 | `TQL-MCP-5001` | no datasource: the call gave no `jdbcUrl` and the app declares no main datasource |
-| `TQL-MCP-1001` | (lint) an application MCP tool uses a recipe other than `query-json` / `command-json` |
-| `TQL-MCP-1002` | (lint, warning) an application MCP tool has no `description` |
-| `TQL-MCP-4030` | (lint) a write MCP tool declares no authorization policy |
-| `TQL-MCP-1003` | (lint) an application MCP resource is not read-only (`query-json` with query-mode SQL) |
-| `TQL-MCP-1004` | (lint) an application MCP resource declares no `uri` |
-| `TQL-MCP-1005` | (lint, warning) an application MCP resource has no `description` |
-| `TQL-MCP-1006` | (lint) an application MCP resource declares `input:` (a resource takes no arguments) |
-| `TQL-MCP-1007` | (lint) two application MCP resources declare the same `uri` (UI resources share the namespace) |
-| `TQL-MCP-1008` | (lint) an MCP Apps UI resource does not render HTML (use `query-html` or `page`) |
-| `TQL-MCP-1009` | (lint) an MCP Apps UI resource declares no `ui://` uri |
-| `TQL-MCP-1010` | (lint, warning) an MCP Apps UI resource has no `description` |
-| `TQL-MCP-1011` | (lint) an MCP Apps UI resource declares `input:` (a UI resource takes no arguments) |
-| `TQL-MCP-1012` | (lint) a tool's `ui:` link resolves to no declared UI resource |
 
 Tool failures (a bad argument, a missing datasource, a draft that does not compile) come back
 as an MCP tool result with `isError: true` and the message — the connection stays up so the

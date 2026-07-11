@@ -1,4 +1,4 @@
-# Declarative pagination
+# Pagination
 
 A `page:` block on a `query-json`/`query-html` route paginates the main query — the
 framework appends the dialect's pagination clause at execution time, so the authored
@@ -20,7 +20,24 @@ The framework owns the `?page=` (1-based) and `?size=` request parameters — th
 declared inputs (a bad value is a field-scoped `400`). One row beyond the page is fetched
 to answer `hasNext` without a count. The `page` context entry carries
 `number`/`size`/`hasNext`/`hasPrev` (+ `totalRows`/`totalPages` with `count: true`) for
-response bodies (`meta: page`) and templates; the response automatically carries
+response bodies and templates — map it into the body like any other value
+([response shaping](response-shaping.md)):
+
+```yaml
+response:
+  json:
+    body:
+      rows: sql.rows
+      meta: page
+```
+
+```json
+{"rows": [{"id": 1, "name": "…"}],
+ "meta": {"number": 1, "size": 50, "hasNext": true, "hasPrev": false,
+          "totalRows": 1234, "totalPages": 25}}
+```
+
+The response automatically carries
 `X-Total-Count` (when counting) and RFC 8288 `Link` `rel="next"`/`rel="prev"` headers. A
 `view: list` on a paginated route renders the kit's `hc-pagination` nav, links preserving
 the search and sort state ([declarative views](declarative-views.md)).
@@ -40,7 +57,9 @@ page:
   size: 20
 ```
 
-Keyset keeps the predicate in the SQL — SQL-first, plain-runnable:
+Keyset keeps the predicate in the SQL — SQL-first, plain-runnable. The
+`/*%if after != null */` wrapper is a 2-way SQL conditional block, so the cursor clause
+renders only when a cursor was sent ([two-way-sql.md](two-way-sql.md)):
 
 ```sql
 select u.id, u.name from users u

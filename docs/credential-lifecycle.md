@@ -10,16 +10,10 @@ exists: the identity contract pack, the [notification channels and
 outbox](notifications.md), the bundled auth-ui and account apps, and the
 managed-table patterns.
 
-Re-inviting a still-INVITED account is a polite resend under the token cooldown; an
-already-usable login refuses, so an invite can never take over an account.
-Misconfigured recovery fails the boot with `TQL-SEC-4120` — a half configuration must
-not produce a reset page that goes nowhere.
-
 ## One token store for reset and invitations
 
-`CredentialTokenStore` SPI in core, `JdbcCredentialTokenStore` in operations, over
-`tql_credential_token` — outside the Flyway component set, `ensureSchema`-only (the
-established pattern):
+Reset and invite links share one token table, `tql_credential_token`, which the runtime
+creates and manages automatically. For reference, its shape:
 
 ```sql
 create table if not exists tql_credential_token (
@@ -47,9 +41,13 @@ tesseraql:
   identity:
     recovery:
       enabled: true
-      channel: user-mail        # a configured mail channel; fail-fast if missing/not mail
+      channel: user-mail        # a configured mail channel
       url: https://app.example.com/_tesseraql/reset/confirm   # absolute; the mailed link base
 ```
+
+Enabling recovery without a `channel:`, or naming a channel that is not a mail channel, fails
+the boot with `TQL-SEC-4120` — a half configuration must never produce a reset page that goes
+nowhere.
 
 - The login page grows **Forgot password?** (only when enabled). `/_tesseraql/reset`
   (public, auth-ui app) takes a login id; the POST always answers the same neutral
@@ -59,7 +57,7 @@ tesseraql:
   **`find-recovery-destination-by-login`** — default: the `tql_users.email` of an
   ACTIVE user. A `sql` realm overrides the contract like any other.
 - The mail rides the [outbox](notifications.md) as a NOTIFICATION on the configured
-  channel (the `ops.alert` direct-enqueue precedent): at-least-once, retries,
+  channel: at-least-once, retries,
   dead-letters; payload `{resetUrl, loginId, displayName}` feeds the channel template.
 - `/_tesseraql/reset/confirm?token=…` (public) shows the new-password form; the POST
   verifies + consumes the token, writes the hash through the existing
@@ -69,16 +67,33 @@ tesseraql:
 
 ## Invitations
 
+Invitations are switched on by naming the mail channel and the link base together:
+
+```yaml
+tesseraql:
+  identity:
+    invite:
+      channel: user-mail        # a configured mail channel
+      url: https://app.example.com/_tesseraql/invite   # absolute; the mailed link base
+```
+
+**Both keys are required**: setting one without the other — or naming a channel that is
+not a mail channel — fails the boot with `TQL-SEC-4120`, so a half configuration can
+never send an invite that goes nowhere.
+
 The bundled IAM admin (`/_tesseraql/admin/users`) has **Invite user**: login id,
 display name, email, roles. The provider runs the existing `create-user` contract with
 **status `INVITED`** — no credential columns at all, and `find-credential-by-login`
 already refuses any status but ACTIVE, so an invited account **cannot sign in** until
 accepted — then issues an invite token and enqueues the mail (same machinery, purpose
-`invite`, `tesseraql.identity.invite.url` as the link base).
+`invite`, the configured `url` as the link base).
 
 `/_tesseraql/invite?token=…` (public) sets the first password: verify + consume, the
 `update-password` contract, then the existing `enable-user` contract flips the status
 to ACTIVE. From zero to signed-in without an operator ever knowing a password.
+
+Re-inviting a still-INVITED account is a polite resend under the token cooldown; an
+already-usable login refuses, so an invite can never take over an account.
 
 ## TOTP second factor
 
@@ -107,7 +122,6 @@ to ACTIVE. From zero to signed-in without an operator ever knowing a password.
   logins, missing emails, and cooldowns; the confirm page answers identically for
   unknown, used, and expired tokens; the TOTP login failure is indistinguishable from
   a wrong password.
-- A consumed reset invalidates every session of the subject (the [account
-  surface](account.md) session machinery with an empty keep-id).
-- The TOTP secret is server-side data in the identity database (like the password
-  hashes beside it); the cookbook says so plainly.
+- A consumed reset invalidates every session of the subject.
+- The TOTP secret is server-side data in the identity database, like the password
+  hashes beside it — protect that database accordingly.

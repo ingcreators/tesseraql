@@ -125,7 +125,7 @@ All 319 `TQL-*` codes, scanned from the framework sources on every refresh and g
 
 | Code | Meaning | Raised in | Documented in |
 | --- | --- | --- | --- |
-| `TQL-IDEM-4090` | Idempotency store is not configured | [IdempotencyProcessors.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-compiler/src/main/java/io/tesseraql/compiler/binding/IdempotencyProcessors.java) | — |
+| `TQL-IDEM-4090` | Idempotency store is not configured | [IdempotencyProcessors.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-compiler/src/main/java/io/tesseraql/compiler/binding/IdempotencyProcessors.java) | [transactional-writes](transactional-writes.md) |
 | `TQL-IDEM-5001` | store error | [JdbcIdempotencyStore.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-operations/src/main/java/io/tesseraql/operations/idempotency/JdbcIdempotencyStore.java) | — |
 
 ## LANE

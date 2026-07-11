@@ -1,10 +1,12 @@
 # Transactional writes
 
-`command-json` executes one business operation, not one statement. A
-command may declare an ordered list of SQL steps that run in a single transaction, allocate
-gapless document numbers, capture generated keys for later steps, stamp audit columns from
-canonical binds, turn silent lost updates into `409 Conflict`, and map constraint violations
-to field-level errors. Every step stays a plain, SQL-tool-runnable 2-way SQL file.
+`command-json` — the recipe a route file declares for a JSON write endpoint (see
+[application layout](app-layout.md) for how routes and their recipes are laid out) — executes
+one business operation, not one statement. A command may declare an ordered list of SQL steps
+that run in a single transaction, allocate gapless document numbers, capture generated keys
+for later steps, stamp audit columns from canonical binds, turn silent lost updates into
+`409 Conflict`, and map constraint violations to field-level errors. Every step stays a plain,
+SQL-tool-runnable [2-way SQL](two-way-sql.md) file.
 
 ## Steps: one transaction, many statements
 
@@ -57,7 +59,8 @@ transaction rolls back. Each step publishes its result into the execution contex
 
 Steps default to `mode: update`. A step references only request sources and *earlier* steps;
 forward references fail at route build time (`TQL-CAMEL-3102`). The single-statement `sql:`
-form is unchanged and still publishes `sql.affectedRows` (and `sql.eventId` with an outbox).
+form is unchanged and still publishes `sql.affectedRows`; with an outbox it also exposes the
+same event id as `sql.eventId` — a compatibility alias for `outbox.eventId`.
 
 ### Generated keys
 
@@ -82,24 +85,13 @@ values
 
 ### Embedded variables (dynamic identifiers)
 
-A `/* expr */` bind becomes a `?` placeholder — safe, but a placeholder is only valid where a
-*value* goes, never an identifier. For an identifier-position fragment a bind cannot drive — a
-dynamic `ORDER BY` column, sort direction, or table name — use a **`/*# template */` embedded
-variable** (Doma-style). Its `{placeholder}` references are interpolated into the SQL *text* at
-render time, not bound. Keep the whole fragment inside the comment so the statement stays runnable
-in a plain SQL tool (the comment is skipped, the base query runs):
-
-```sql
-select * from items t
-where 1 = 1
-/*# order by t.{sort} {dir}, t.id */   -- applied at render time; a plain tool runs it unordered
-limit 50
-```
-
-Because the value is written into SQL text, it **must** be constrained to a safe set: every
-placeholder has to resolve to an `enum`-validated input, or the build fails (`TQL-SQL-2109`). The
-renderer additionally rejects a resolved value carrying SQL meta-characters (`TQL-SQL-2108`) as
-defense in depth, but the `enum` allowlist is the real guarantee:
+A bind renders a `?` placeholder, which is only valid where a *value* goes — never an
+identifier. A dynamic `ORDER BY` column, sort direction, or table name uses a
+`/*# template */` embedded variable instead; the syntax and its safety rules live in
+[2-way SQL](two-way-sql.md#embedded-variables-dynamic-identifiers). What matters on a command
+route is the allowlist: every placeholder fed from request input must resolve to an
+`enum`-validated input, or the build fails (`TQL-SQL-2109`) — the runtime's rejection of SQL
+meta-characters (`TQL-SQL-2108`) is only defense in depth behind it:
 
 ```yaml
 input:
@@ -229,6 +221,17 @@ keys.
 Commands compose with the existing idempotency machinery: declare `idempotency:` and send an
 `Idempotency-Key` header — a replay returns the stored response without re-executing any
 step, so a double-submitted order form writes once.
+
+```yaml
+idempotency:
+  required: true    # the Idempotency-Key header becomes mandatory (default: optional)
+  scope: orders     # key namespace; defaults to the route id
+  ttl: 24h          # how long a stored response replays; defaults to 24h
+```
+
+The presence of the block enables idempotency; every key is optional. Reusing a key for a
+*different* request, or while the first request is still in flight, answers `409 Conflict`
+(`TQL-IDEM-4090`).
 
 ## Error codes
 
