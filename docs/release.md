@@ -11,6 +11,9 @@ TesseraQL itself.
   (non-admins must go through a PR). Release tags (`v*`) are immutable by ruleset: they can
   be created but not moved or deleted.
 - `CHANGELOG.md` has a section for the version with the release date filled in.
+- No untracked `docs/*.md` files sit in the working tree: the generated-reference drift
+  guard scans the docs directory on the filesystem, so in-progress pages that are not
+  part of the release commit fail `clean verify` (move them aside first).
 - The gated dialect suites pass against live containers (they are not part of regular CI):
 
 ```bash
