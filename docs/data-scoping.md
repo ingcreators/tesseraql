@@ -124,8 +124,8 @@ order by o.id
   -- scope/orders_in_my_subtree.sql
   exists (
     select 1 from tql_org_closure cl
-    where cl.descendant = $.owner_unit
-      and cl.ancestor  in /* my_units */ ('U1')
+    where cl.descendant_id = $.owner_unit
+      and cl.ancestor_id  in /* my_units */ ('U1')
   )
   ```
 

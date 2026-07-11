@@ -98,8 +98,9 @@ response:
 Rules evaluate in their authored order and **all of them run** — the response carries every
 violation, so a form repaints once. Each rule declares exactly one of:
 
-- `rule:` — a cross-field expression in the core expression language: comparisons, `&&`/`||`/`!`, dotted paths over `body`, `query`, `path`, `principal`,
-  `tenant`. The language is whitelist-only — no method calls, no side effects.
+- `rule:` — a cross-field expression in the core expression language: comparisons, `&&`/`||`/`!`, dotted paths over `params`, `body`, `query`, `path`,
+  `principal`, `tenant` (`params` and `query` name the same map — the examples here use
+  `params`). The language is whitelist-only — no method calls, no side effects.
 - `file:` — a validation SQL file, a plain SQL-tool-runnable 2-way SELECT. It executes on
   the command's connection, inside the transaction, so it sees a consistent snapshot (and
   may lock rows with `FOR UPDATE` for balance checks). A non-SELECT fails at route build
@@ -124,10 +125,12 @@ arithmetic and string logic LOB rules actually need:
 
 ```yaml
 validate:
-  - field: total
+  overBudget:
+    field: total
     code: over-budget
     rule: params.qty * params.price <= params.budget
-  - field: email
+  corpMail:
+    field: email
     code: corp-mail
     rule: matches(lower(trim(params.email)), '.+@corp[.]example')
 ```

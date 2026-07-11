@@ -8,7 +8,7 @@ declared state machine rather than adding a new runtime subsystem. The worked ex
 is a purchase-request approval application built only with YAML, 2-way SQL, and templates.
 
 This is **not** route governance. The route-governance approval gate
-([`RouteGovernance`](../tesseraql-yaml/src/main/java/io/tesseraql/yaml/governance/RouteGovernance.java))
+(the build-time gate behind [marketplace admission](admission.md))
 reviews *routes* at build time — a deploy-time control over the application's own surface. Approval
 workflow reviews *documents* at run time — a business control over the data an application moves.
 The two share neither namespace nor lint family.
@@ -132,14 +132,16 @@ transition's `assign` contract is a 2-way SQL `SELECT` returning `assignee`/`can
 
 ```sql
 -- workflow/assignees/manager_of_requester.sql
--- the principals who manage the requester's org unit (and everything above it)
-select u.subject
-from   tql_users u
-join   tql_user_roles ur on ur.user_id = u.id and ur.role = 'approver'
-where  u.org_unit in (
+-- the approvers responsible for the requester's unit, or any unit above it
+select a.subject as assignee
+from   approvers a
+where  a.unit_id in (
          select ancestor_id from tql_org_closure
          where descendant_id = /* requesterUnit */ 'U1')
 ```
+
+(`approvers` here is the application's own table mapping principals to the units they
+approve for; the managed `tql_org_closure` supplies the hierarchy.)
 
 The `tql_org_closure` join is the managed org-unit foundation ([data scoping](data-scoping.md))
 consumed unchanged (`OrgUnitStore.descendants(...)` is the Java seam when resolution is done in code
@@ -421,16 +423,6 @@ second org model:
   semantics.
 - A **transition** is a scoped write — the `/*%scope … */` in its `UPDATE … WHERE` confines it to
   authorized documents, complementing the guard.
-
-## Module placement
-
-| Concern | Module |
-| --- | --- |
-| `WorkflowDefinition` model, `WorkflowStore` SPI, guard evaluation | `tesseraql-core` (dependency-free) |
-| `JdbcWorkflowStore`, managed DDL | `tesseraql-operations` |
-| Transition recipe compilation, inbox templates | `tesseraql-compiler` |
-| `kind: workflow` parsing, `TQL-WORKFLOW-31xx` lint | `tesseraql-yaml` |
-| Mode wiring, the sweeper route | `tesseraql-camel-runtime` |
 
 ## Design notes
 

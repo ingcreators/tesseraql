@@ -173,7 +173,7 @@ command commit
 
 Every hop is durable: the outbox guarantees the event survives the commit, and `tql_event`
 guarantees it survives until a consumer acknowledges it. A failed consume is retried until a
-dead-letter ceiling (`tesseraql.outbox.maxAttempts`), visible to operators like any outbox event.
+dead-letter ceiling (`tesseraql.outbox.dispatch.maxAttempts`), visible to operators like any outbox event.
 
 ## Operational notes
 

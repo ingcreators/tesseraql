@@ -8,12 +8,14 @@ regardless of how the caller proved its identity.
 
 ```yaml
 security:
-  auth: bearer        # bearer | apiKey | browser | public
+  auth: bearer        # bearer | apiKey | browser | mtls | public
   policy: users.read  # authorization policy evaluated against the principal
 ```
 
-This page covers the **bearer JWT** and **API-key** methods. Browser sessions are covered in
-[hypermedia-ui.md](hypermedia-ui.md); corporate SSO (SAML, and OIDC) is configured separately.
+This page covers every method: **bearer JWT**, **API keys**, **mTLS**, **browser sessions** and
+the login page, and **OIDC**; SAML setup has its own configuration surface and is only summarized
+here. Browser-session *usage patterns* (forms, CSRF in templates) are in
+[hypermedia-ui.md](hypermedia-ui.md).
 
 All JWT and API-key crypto is JDK-only — there is no JOSE/JWT third-party dependency, matching the
 SAML module's supply-chain posture.
@@ -270,7 +272,7 @@ in. The login method is therefore a **config switch**, with no per-route changes
   create the first administrator once:
 
   ```bash
-  tesseraql identity-schema --admin-login admin --admin-password-file ./admin.pw
+  tesseraql identity-schema --app . --admin-login admin --admin-password-file ./admin.pw
   ```
 
 - **OIDC.** Set `tesseraql.oidc.enabled: true` (see *OpenID Connect* above). The login page then
@@ -344,13 +346,6 @@ guarantees are pinned by the unit tests in `tesseraql-security`.
 ## Testing
 
 Declarative suites exercise a route's SQL through the same pipeline regardless of authentication
-method. End-to-end authentication wiring is covered by integration tests in `tesseraql-camel-runtime`
-(`RsaJwksIntegrationTest` serves a JWKS document from a local HTTP server and asserts accept /
-reject / rotation; `ApiKeyIntegrationTest` asserts `200`/`401`/`403` for valid, invalid, and
-under-privileged keys; `MtlsIntegrationTest` forwards a client certificate in the configured header
-and asserts `200`/`401`/`403` for a recognized, an expired/unrecognized/missing, and an
-under-privileged certificate; `OidcLoginIntegrationTest` drives the full authorization-code + PKCE
-flow against a local mock provider and asserts a session is issued and that tampered / replayed state
-and provider errors are rejected). mTLS certificate parsing, validity, PKIX trust, and DN/SAN/sha256
-matching are unit-tested in `tesseraql-security` (`MtlsAuthenticatorTest`); OIDC's PKCE S256 is
-unit-tested against the RFC 7636 vector.
+method, so app test cases need no per-method setup. The authentication wiring itself — JWKS
+rotation, API-key privilege checks, mTLS trust and matching, the OIDC code + PKCE flow — is held
+by the framework's own test suite; an application does not re-test it.
