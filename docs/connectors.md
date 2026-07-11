@@ -218,8 +218,8 @@ tesseraql:
           password: ${secret.env.SFTP_PASS}
 ```
 
-The SSH host key of an SFTP edge is expected to be verified out of band; set a `knownHostsFile` for
-strict checking in production. FTPS rides the identical recipe and runtime path with
+The SSH host key of an SFTP edge is verified out of band today — the consumer does not check
+it against a known-hosts file, so restrict the egress allow-list accordingly. FTPS rides the identical recipe and runtime path with
 `source: ftps`; only the endpoint scheme differs.
 
 ### Governance and testing

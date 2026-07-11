@@ -282,7 +282,7 @@ the meantime.
 | Module | Adds |
 | --- | --- |
 | `tesseraql-core` | `io.tesseraql.core.blob` (`BlobStore`, `BlobWriter`, `BlobRef`, `BlobSpec`), `FileBlobStore`, `AttachmentStore` SPI, `io.tesseraql.core.scan.AttachmentScanner` + no-op default — all dependency-free |
-| `tesseraql-yaml` | the `kind: attachment` model + parser, the `object-storage`/`attachments`/`retention.attachments` config, and the lint (`TQL-YAML-12xx`, `TQL-SEC-411x`) |
+| `tesseraql-yaml` | the `kind: attachment` model + parser, the `object-storage`/`attachments`/`retention.attachments` config, and the lint (`TQL-ATTACH-34xx`, `TQL-SEC-411x`) |
 | `tesseraql-compiler` | `buildAttachment` — synthesizes the upload/download routes and binds the `AttachmentStore` |
 | `tesseraql-operations` | `JdbcAttachmentStore` (managed `tql_attachment`), the off-heap upload/download integration with `FileTransferService`, and the `RetentionSweeper` attachments pass |
 | `tesseraql-s3` | `S3BlobStore` + `S3BlobStoreProvider` (ServiceLoader), AWS SDK v2 (Apache-2.0) confined here, and the S3/compatible config. The `BlobStoreProvider` SPI + `BlobStores` factory live in `tesseraql-yaml` |

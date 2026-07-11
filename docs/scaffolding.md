@@ -11,6 +11,7 @@ inputs, so the same schema always produces byte-identical artifacts.
 ```bash
 tesseraql new order-entry
 cd order-entry
+docker compose up -d        # the scaffolded local PostgreSQL (or: serve --embedded-db)
 tesseraql serve --app .
 ```
 
@@ -44,8 +45,10 @@ tesseraql scaffold crud --app . --table items \
   --jdbc-url jdbc:postgresql://localhost:5432/order_entry --username dev --password dev
 ```
 
-The table's shape is read through plain JDBC metadata (columns in ordinal order, primary
-key, single-column unique indexes) and drives the generated slice:
+The table must already exist in the database — apply your migration first (`serve`
+auto-applies `db/migration` on start, or run `tesseraql migrate --app .`). The table's
+shape is then read through plain JDBC metadata (columns in ordinal order, primary key,
+single-column unique indexes) and drives the generated slice:
 
 ```
 web/items/                       list route + list.view.yml + search.sql + frags.html (slots)
