@@ -17,6 +17,7 @@ export const SECTIONS = [
     label: 'Building applications',
     items: [
       'app-layout',
+      'two-way-sql',
       'transactional-writes',
       'multi-datasource',
       'declarative-validation',
@@ -25,9 +26,11 @@ export const SECTIONS = [
       'response-shaping',
       'hypermedia-ui',
       'internationalization',
+      'file-transfers',
       'printable-documents',
       'attachments',
       'scaffolding',
+      'testing',
       'documentation-portal',
       'vscode-extension',
     ],
@@ -35,6 +38,7 @@ export const SECTIONS = [
   {
     label: 'Platform services',
     items: [
+      'jobs',
       'account',
       'inbox',
       'productivity',
