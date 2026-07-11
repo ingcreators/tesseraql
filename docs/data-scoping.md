@@ -26,7 +26,7 @@ A **scope** is a named, reusable row-level predicate, declared once and applied 
 At execution time TesseraQL resolves the scope against the principal and renders a parameterized
 SQL predicate at the point the author marked with a `/*%scope ... */` directive.
 
-Three invariants hold (the framework's extension principles):
+Three invariants hold:
 
 1. **SQL-first, no hidden generation.** The author writes `/*%scope name */` where the predicate
    belongs; the engine never rewrites a `WHERE` clause or adds a table to the `FROM` clause. A scope

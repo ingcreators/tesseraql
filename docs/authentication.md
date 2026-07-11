@@ -1,6 +1,6 @@
 # Authentication
 
-TesseraQL routes are deny-by-default (design ch. 11, 20.14): a route is reachable only when it
+TesseraQL routes are deny-by-default: a route is reachable only when it
 declares how it authenticates, and authorization policies are evaluated against the resolved
 `Principal`. Every authentication method plugs in behind the same authentication step and the same
 principal model, so claims, roles, permissions, and tenant resolve identically downstream
