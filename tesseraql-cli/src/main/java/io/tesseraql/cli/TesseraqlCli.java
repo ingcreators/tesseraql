@@ -149,6 +149,10 @@ public final class TesseraqlCli implements Runnable {
             }
             Thread.currentThread().setContextClassLoader(CliModules.classLoaderOver(moduleDirs,
                     Thread.currentThread().getContextClassLoader()));
+            // Custom expression functions (ExpressionFunction SPI) install from the same composed
+            // classloader, so routes parse and evaluate with the full function set from boot.
+            io.tesseraql.core.expr.ExpressionFunctions
+                    .install(Thread.currentThread().getContextClassLoader());
 
             // Optionally start an embedded PostgreSQL and point the runtime's main datasource at it,
             // so the app runs with no external database. An empty value (the option given without a

@@ -8,9 +8,11 @@ import java.util.Objects;
  *
  * <p>Expressions are deliberately small: literals, dotted property paths, comparison, equality,
  * logical {@code &&}/{@code ||}/{@code !}, grouping, and — since roadmap Phase 40 — arithmetic
- * ({@code + - * / %}, decimal-exact), string concatenation via {@code +}, and a fixed whitelist
- * of pure functions ({@link Call#FUNCTIONS}). There is still no method invocation, reflection,
- * or assignment, so evaluation cannot trigger side effects (guardrail design ch. 20.6).
+ * ({@code + - * / %}, decimal-exact), string concatenation via {@code +}, and a whitelist of
+ * pure functions: the built-ins ({@link Call#FUNCTIONS}) plus any operator-installed
+ * {@link ExpressionFunction}s, whose contract is equally side-effect-free. There is still no
+ * method invocation, reflection, or assignment, so evaluation cannot trigger side effects
+ * (guardrail design ch. 20.6).
  */
 public sealed interface Expr {
 
@@ -130,10 +132,11 @@ public sealed interface Expr {
     }
 
     /**
-     * A whitelisted pure function (roadmap Phase 40). The set is fixed — parse rejects unknown
-     * names and wrong arities, so an expression can never reach outside these:
+     * A pure function call (roadmap Phase 40). Parse rejects unknown names and wrong arities,
+     * so an expression can never reach outside the built-ins —
      * {@code length lower upper trim contains startsWith endsWith matches abs round floor ceil
-     * min max coalesce}.
+     * min max coalesce} — plus any operator-installed {@link ExpressionFunction}s (contract:
+     * side-effect-free and total, see {@link ExpressionFunctions}).
      */
     record Call(String name, List<Expr> args) implements Expr {
 
@@ -156,6 +159,9 @@ public sealed interface Expr {
 
         @Override
         public Object eval(EvaluationContext context) {
+            if (!FUNCTIONS.containsKey(name)) {
+                return evalCustom(context);
+            }
             Object a = args.get(0).eval(context);
             Object b = args.size() > 1 ? args.get(1).eval(context) : null;
             return switch (name) {
@@ -193,6 +199,24 @@ public sealed interface Expr {
                 case "coalesce" -> a != null ? a : b;
                 default -> throw new IllegalStateException(name);
             };
+        }
+
+        /**
+         * Dispatches to the installed {@link ExpressionFunction}. The parser only builds a call
+         * for a name known at parse time, so a miss here means the registry changed since —
+         * a clear error beats evaluating against the wrong function set.
+         */
+        private Object evalCustom(EvaluationContext context) {
+            ExpressionFunction function = ExpressionFunctions.custom(name);
+            if (function == null) {
+                throw new IllegalStateException("Expression function '" + name
+                        + "' is no longer installed");
+            }
+            List<Object> values = new java.util.ArrayList<>(args.size());
+            for (Expr arg : args) {
+                values.add(arg.eval(context));
+            }
+            return function.apply(java.util.Collections.unmodifiableList(values));
         }
     }
 

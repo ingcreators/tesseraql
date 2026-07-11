@@ -27,6 +27,66 @@ class AppLinterTest {
     }
 
     @Test
+    void customExpressionFunctionsLintCleanOnceInstalled(@TempDir Path dir) throws Exception {
+        Files.createDirectories(dir.resolve("config"));
+        Files.writeString(dir.resolve("config/tesseraql.yml"), """
+                tesseraql:
+                  app:
+                    name: t
+                """);
+        Files.createDirectories(dir.resolve("web/members"));
+        Files.writeString(dir.resolve("web/members/register.sql"),
+                "insert into members (kana) values (/* kana */'カナ')\n");
+        Files.writeString(dir.resolve("web/members/post.yml"), """
+                version: tesseraql/v1
+                id: members.register
+                kind: route
+                recipe: command-json
+                validate:
+                  kanaName:
+                    rule: isKatakana(body.kana)
+                    field: kana
+                    code: not-kana
+                sql:
+                  file: register.sql
+                  mode: update
+                response:
+                  json:
+                    status: 201
+                """);
+
+        // Without the function installed, the rule's call site is an unknown-function error.
+        assertThat(new AppLinter().lint(dir))
+                .anyMatch(finding -> finding.isError()
+                        && finding.message().contains("Unknown function 'isKatakana()'"));
+
+        // Installed (as `tesseraql lint` does from the modules classpath), the same app is clean.
+        io.tesseraql.core.expr.ExpressionFunctions.install(List.of(
+                new io.tesseraql.core.expr.ExpressionFunction() {
+                    @Override
+                    public String name() {
+                        return "isKatakana";
+                    }
+
+                    @Override
+                    public int arity() {
+                        return 1;
+                    }
+
+                    @Override
+                    public Object apply(List<Object> args) {
+                        return args.get(0) != null
+                                && String.valueOf(args.get(0)).matches("[\\u30A0-\\u30FF]+");
+                    }
+                }));
+        try {
+            assertThat(new AppLinter().lint(dir)).noneMatch(LintFinding::isError);
+        } finally {
+            io.tesseraql.core.expr.ExpressionFunctions.reset();
+        }
+    }
+
+    @Test
     void lintsMcpTools(@TempDir Path dir) throws Exception {
         Files.createDirectories(dir.resolve("config"));
         Files.writeString(dir.resolve("config/tesseraql.yml"), """

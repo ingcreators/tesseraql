@@ -90,8 +90,15 @@ final class TestCommand implements Callable<Integer> {
         text, json
     }
 
+    @Option(names = {"--modules"}, description = "Directory of extra module jars (composes with"
+            + " the app's declared tesseraql.modules).")
+    java.io.File modules;
+
     @Override
     public Integer call() throws Exception {
+        // Validation rules evaluate expressions, so custom functions install first (the same
+        // modules wiring serve boots with).
+        CliModules.installAppExtensions(app, modules);
         AppManifest manifest = new ManifestLoader().load(app);
         DriverManagerDataSource dataSource = datasource.resolve(manifest.config());
         Path reports = reportDir != null ? reportDir : app.resolve("work").resolve("reports");

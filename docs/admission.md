@@ -16,6 +16,12 @@ The profile composes the existing gates and adds the marketplace constraints:
 | `TQL-ADM-4705` | **Governance clean.** Every review-worthy surface is approved in `governance/approvals.yml` at its current hash. |
 | `TQL-ADM-4706` | **Lint clean.** Every lint error fails admission. |
 
+Declarative-only also covers the expression language: `tesseraql admission` lints without
+the app's `tesseraql.modules` classpath, so an expression calling an operator-installed
+[custom function](declarative-validation.md#custom-functions) fails the lint gate
+(`TQL-ADM-4706`) as an unknown function. Custom Java — whether a runtime service, a plugin
+jar, or an expression function — is `extended` territory by design.
+
 ## When it fails
 
 Each failure prints one line — the code, the subject (a route id or file), and the reason —

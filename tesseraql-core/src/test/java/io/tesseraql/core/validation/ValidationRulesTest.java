@@ -115,6 +115,41 @@ class ValidationRulesTest {
     }
 
     @Test
+    void customExpressionFunctionsWorkInValidationRules() throws Exception {
+        io.tesseraql.core.expr.ExpressionFunctions.install(List.of(
+                new io.tesseraql.core.expr.ExpressionFunction() {
+                    @Override
+                    public String name() {
+                        return "isKatakana";
+                    }
+
+                    @Override
+                    public int arity() {
+                        return 1;
+                    }
+
+                    @Override
+                    public Object apply(List<Object> args) {
+                        return args.get(0) != null
+                                && String.valueOf(args.get(0)).matches("[\\u30A0-\\u30FF]+");
+                    }
+                }));
+        try {
+            ValidationRules rules = new ValidationRules(List.of(ValidationRules.expression(
+                    "kanaName", null, "isKatakana(body.kanaName)", "kanaName", "not-kana", null)));
+
+            assertThat(rules.evaluate(Map.of("body", Map.of("kanaName", "カタカナ")), null))
+                    .isEmpty();
+            assertThat(rules.evaluate(Map.of("body", Map.of("kanaName", "sato")), null))
+                    .singleElement()
+                    .satisfies(violation -> assertThat(violation)
+                            .containsEntry("code", "not-kana"));
+        } finally {
+            io.tesseraql.core.expr.ExpressionFunctions.reset();
+        }
+    }
+
+    @Test
     void selectDetectionSkipsLeadingCommentsAndAcceptsWithClauses() {
         assertThat(ValidationRules.isSelect("select 1")).isTrue();
         assertThat(ValidationRules.isSelect("  \n-- existence check\nSELECT 1")).isTrue();

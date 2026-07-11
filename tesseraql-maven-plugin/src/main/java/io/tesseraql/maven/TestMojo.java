@@ -41,6 +41,9 @@ public class TestMojo extends AbstractMojo {
 
     @Override
     public void execute() throws MojoFailureException {
+        // Custom expression functions (ExpressionFunction SPI) resolve from the plugin's
+        // classpath: declare the function jar as a plugin dependency and it is installed here.
+        io.tesseraql.core.expr.ExpressionFunctions.install(getClass().getClassLoader());
         DriverManagerDataSource dataSource = new DriverManagerDataSource(jdbcUrl, username,
                 password);
         TestReport report = new AppTestRunner().run(
