@@ -4,6 +4,13 @@ on:
   push:
     tags:
       - 'v*'
+  # (Re)publish the demo image for an existing release - e.g. after a
+  # Dockerfile.demo fix that postdates the tag. Only the demo-image job runs.
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing release tag to publish the demo image for
+        required: true
 
 permissions:
   contents: write
@@ -12,6 +19,7 @@ permissions:
 jobs:
   release:
     name: Verify tag and publish GitHub release
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
 
     steps:
@@ -58,3 +66,38 @@ jobs:
             --verify-tag \
             tesseraql-cli/target/tesseraql-cli-*-dist.zip \
             tesseraql-cli/target/tesseraql-cli-*-dist.tar.gz
+
+  # A prebuilt demo image so the five-minute demo is one docker run, no source
+  # build: ghcr.io/<owner>/tesseraql-demo:{version,latest}. Rebuilds from the tag
+  # inside Docker (Dockerfile.demo is multi-stage), so it needs nothing from the
+  # release job beyond the tag having been verified there.
+  demo-image:
+    name: Publish the demo image
+    runs-on: ubuntu-latest
+    needs: release
+    if: always() && (github.event_name == 'workflow_dispatch' || needs.release.result == 'success')
+
+    steps:
+      - name: Checkout the release sources
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref }}
+          fetch-depth: 0
+
+      # The image CONTENT comes from the tag; the build RECIPE comes from the ref
+      # the workflow ran from, so a Dockerfile.demo fix that postdates a tag can
+      # still publish that tag's image (no-op on tag-push events).
+      - name: Use the workflow's build recipe
+        run: git checkout ${{ github.sha }} -- deploy/Dockerfile.demo
+
+      - name: Log in to GHCR
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+
+      - name: Build and push
+        run: |
+          TAG="${{ github.event.inputs.tag || github.ref_name }}"
+          VERSION="${TAG#v}"
+          IMAGE="ghcr.io/${{ github.repository_owner }}/tesseraql-demo"
+          docker build -f deploy/Dockerfile.demo -t "$IMAGE:$VERSION" -t "$IMAGE:latest" .
+          docker push "$IMAGE:$VERSION"
+          docker push "$IMAGE:latest"

@@ -13,7 +13,10 @@
 FROM maven:3.9-eclipse-temurin-21 AS build
 WORKDIR /src
 COPY . .
-RUN ./mvnw -B -ntp -pl tesseraql-cli -am -DskipTests package \
+# install (not package): the second invocation resolves the reactor's own modules
+# from the container-local repository - package alone leaves them unresolvable and
+# copy-dependencies fails on the io.tesseraql:* coordinates.
+RUN ./mvnw -B -ntp -pl tesseraql-cli -am -DskipTests install \
     && ./mvnw -B -ntp -pl tesseraql-cli dependency:copy-dependencies -DoutputDirectory=target/dependency -DskipTests
 
 FROM eclipse-temurin:21-jre
