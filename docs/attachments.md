@@ -1,14 +1,7 @@
 # Attachments and object storage
 
-> **Status: Phase 30 complete (roadmap) — slices 1–3 delivered.** Delivered: attachment core on a
-> durable `BlobStore` with a local default (slice 1); the opt-in `tesseraql-s3` leaf module for S3
-> and S3-compatible stores (slice 2); the scan-hook SPI (synchronous scan, download gated on clean)
-> and age-based retention (slice 3). Remaining refinements (not blocking the phase): app-mode 2-way
-> SQL metadata, the `attachment` coverage kind, and orphan-GC (needs a `BlobStore` listing
-> capability). This completes the attachments leg of **Milestone M9**.
-
 Attachments let a business record carry files — an invoice PDF, a scanned form, a product image —
-stored as durable objects outside the database and addressed from SQL. The phase adds three things:
+stored as durable objects outside the database and addressed from SQL. The feature has three parts:
 a durable object-store SPI (`BlobStore`) with a local default and an opt-in S3 implementation; a
 **record-attachment recipe** that streams uploads off-heap, writes metadata through 2-way SQL, and
 serves downloads under the same authorization a query gets; and the governance (deny-by-default
@@ -20,14 +13,15 @@ It builds on existing subsystems rather than inventing parallel machinery:
   streaming primitives (`SpoolWriter`, `SpoolRef`) that already keep large payloads out of the heap.
 - **The file-transfer machinery** (`FileTransferService` / `JdbcFileTransferService`) — the
   asynchronous, off-heap, operations-tracked transfer path behind `file-import`/`file-export` and
-  the Phase 26 `poll:` trigger. Uploads ride it; downloads stream from the store the same way.
+  the `poll:` trigger ([managed connectors](connectors.md)). Uploads ride it; downloads stream from
+  the store the same way.
 - **2-way SQL + policies + scoping** — attachment metadata is a row, so reading an attachment is a
-  `SELECT` under the same `policy:` and Phase 29 `/*%scope ... */` machinery every other query gets.
-  Authorization is never a second, bespoke code path (see [data-scoping.md](data-scoping.md)).
+  `SELECT` under the same `policy:` and `/*%scope ... */` machinery every other query gets.
+  Authorization is never a second, bespoke code path (see [data scoping](data-scoping.md)).
 - **The SecretResolver SPI** (`io.tesseraql.yaml.secret`) — object-store credentials resolve from
   `${secret.env.*}` / `${secret.file.*}` lazily, never logged, never written to an artifact.
-- **The retention sweeper** (`RetentionSweeper`, design ch. 44) — orphaned and aged blobs are
-  reclaimed by the same cluster-safe timer that purges the outbox and job history.
+- **The retention sweeper** (`RetentionSweeper`) — orphaned and aged blobs are reclaimed by the same
+  cluster-safe timer that purges the outbox and job history.
 - **The opt-in leaf-module pattern** ([tesseraql-oidc](authentication.md), `tesseraql-pdf`) — the
   heavy object-store SDK lives in a leaf module apps install only if they need it.
 
@@ -41,7 +35,7 @@ governed by retention, never by the store. Overriding `TempStore` with an S3 imp
 naive reading of "S3-compatible `TempStore`" — would push spool traffic into object storage and
 conflate two lifecycles that must stay separate.
 
-So Phase 30 introduces a sibling SPI, **`BlobStore`** (`io.tesseraql.core.blob`), for durable
+TesseraQL therefore provides a sibling SPI, **`BlobStore`** (`io.tesseraql.core.blob`), for durable
 objects, and reuses the spool *streaming primitives* (off-heap write, checksum-as-you-stream) rather
 than the spool *store*. The two SPIs coexist: a deployment can keep spool on local disk and put
 attachments in S3, or vice versa. (An app that genuinely wants spool in S3 can also install an
@@ -82,14 +76,15 @@ Two built-in implementations:
 - **`FileBlobStore`** (`tesseraql-core`, default) — durable objects under `{appHome}/work/blob/…`,
   `java.nio` only, no new dependency. Works out of the box; the local-development and single-node
   default.
-- **`S3BlobStore`** (`tesseraql-s3` leaf module, slice 2) — AWS SDK for Java v2, confined to the
-  opt-in module so its weight never reaches an app that does not store blobs in S3.
+- **`S3BlobStore`** (`tesseraql-s3` leaf module) — AWS SDK for Java v2, confined to the opt-in
+  module so its weight never reaches an app that does not store blobs in S3.
 
 ## The record-attachment recipe
 
 An attachment is a durable blob **plus** a metadata row that ties it to a business record. The
-metadata follows IAM's managed/app duality (like `WorkflowStore` and `OrgUnitStore`), selected per
-document or globally by `tesseraql.attachments.mode`:
+metadata follows IAM's managed/app duality (like the [approval workflow](approval-workflow.md)
+`WorkflowStore` and the [data scoping](data-scoping.md) `OrgUnitStore`), selected per document or
+globally by `tesseraql.attachments.mode`:
 
 - **`managed`** (default) — the runtime provisions and owns a generic `tql_attachment` table
   (`id`, `entity`, `entity_id`, `filename`, `content_type`, `byte_size`, `checksum`, `storage_key`,
@@ -116,7 +111,7 @@ bucket: app-uploads                              # a logical bucket; see tessera
 limits:
   maxBytes: 25MB
   contentTypes: [application/pdf, image/png, image/jpeg]
-scan: require-clean                              # gate downloads on a clean scan (slice 3)
+scan: require-clean                              # gate downloads on a clean scan
 # managed mode needs nothing more; app mode adds:
 # metadata:
 #   mode: app
@@ -134,13 +129,15 @@ scan: require-clean                              # gate downloads on a clean sca
 2. The durable object is written to the `BlobStore`, yielding a `BlobRef`.
 3. The metadata row is inserted in a DB transaction — managed (`AttachmentStore.record(...)`) or the
    app's `insert:` 2-way SQL — binding `storage_key`, `content_type`, `byte_size`, `checksum`, the
-   record reference, and the canonical `/* audit.user */` / `/* audit.now */` binds (Phase 18).
+   record reference, and the canonical `/* audit.user */` / `/* audit.now */` binds
+   ([transactional writes](transactional-writes.md)).
 
-The blob write (step 2) is **not** transactional — like the Phase 26 `http-call` step and the
-Phase 27 outbox, an external side effect cannot be rolled back. If the transaction in step 3 fails or
-the request aborts after step 2, the blob is **orphaned**, and retention's orphan-GC reclaims it
-(see [Retention](#retention)). This is the same "commit the record, reconcile the side effect"
-discipline the framework already uses, not a new failure model.
+The blob write (step 2) is **not** transactional — like the `http-call` step
+([managed connectors](connectors.md)) and the transactional outbox ([messaging](messaging.md)), an
+external side effect cannot be rolled back. If the transaction in step 3 fails or the request aborts
+after step 2, the blob is **orphaned**; a best-effort delete on the failure path covers the common
+case, and retention reclaims aged blobs (see [Retention](#retention)). This is the same "commit the
+record, reconcile the side effect" discipline the framework already uses, not a new failure model.
 
 ### Download — authorization is a `SELECT`
 
@@ -149,23 +146,23 @@ discipline the framework already uses, not a new failure model.
 1. The framework runs the metadata `SELECT` — managed default or the app's `select:` — under the
    route's `policy:` and any `/*%scope ... */` directive it carries. **If the caller may not see the
    row, the query returns nothing and the download is `404`** (`403` when policy denies outright).
-   Attachment access control is therefore *the same SELECT under the same policy and Phase 29 row
-   scoping every other read gets* — there is no second authorization path to get wrong.
+   Attachment access control is therefore *the same SELECT under the same policy and row scoping
+   every other read gets* — there is no second authorization path to get wrong.
 2. If `scan: require-clean` and the row is not `scan_status = clean`, the download is refused (`409`).
 3. The blob streams from the `BlobStore` with `Content-Disposition: attachment; filename="…"` and
    the stored `content_type` — or, when the provider supports it and presigning is enabled, a `302`
    to a short-lived pre-signed GET URL so the bytes never transit the app. The presign is issued
    **only after** step 1 authorizes, so offloading transfer never bypasses authorization.
 
-A job pipeline may also gain an `attach:` step (a later refinement) so a batch can attach a
-generated file — e.g. a Phase 21 `pdf` export — to a record. It composes with the `BlobStore` and
-`AttachmentStore` exactly as the route does.
+An `attach:` job-pipeline step — so a batch can attach a generated file, e.g. a `pdf` export
+([printable documents](printable-documents.md)), to a record — is planned but not currently
+supported. It would compose with the `BlobStore` and `AttachmentStore` exactly as the routes do.
 
 ## S3-compatible storage
 
-The `tesseraql-s3` leaf module (slice 2) ships `S3BlobStore` on **AWS SDK for Java v2**, whose
-`S3Client` targets any S3-compatible store — AWS S3, Cloudflare R2, Ceph RGW, Backblaze B2, Wasabi —
-by overriding the endpoint. **One module covers AWS and every compatible store**; there is no
+The `tesseraql-s3` leaf module ships `S3BlobStore` on **AWS SDK for Java v2**, whose `S3Client`
+targets any S3-compatible store — AWS S3, Cloudflare R2, Ceph RGW, Backblaze B2, Wasabi — by
+overriding the endpoint. **One module covers AWS and every compatible store**; there is no
 per-provider module.
 
 ```yaml
@@ -198,11 +195,9 @@ Compatibility settings that the config exposes because they bite in practice:
   restoring compatibility; `default` keeps the SDK behavior for AWS.
 
 `S3BlobStore` is contributed by a `BlobStoreProvider` discovered through `ServiceLoader` (the
-PdfEngine/FileCodec idiom) and selected when `provider: s3`, binding itself as the `BlobStore`. (A
-`RuntimeExtension` would install too late — after the attachment service is constructed — so the
-provider factory, resolved inside the same wiring step, is the right seam.) **Switching `provider`
-is the whole change** — no DSL touches the bytes, so an app moves from local disk to S3 by config
-alone.
+PdfEngine/FileCodec idiom) and selected when `provider: s3`, binding itself as the `BlobStore`.
+**Switching `provider` is the whole change** — no DSL touches the bytes, so an app moves from local
+disk to S3 by config alone.
 
 ## Governance
 
@@ -211,9 +206,9 @@ Object storage is **egress**, so it is deny-by-default like outbound HTTP and po
 - **`tesseraql.object-storage.allowedBuckets`** is an explicit allow-list; an attachment document
   whose `bucket` resolves to a bucket not on the list fails the build (it is never silently served).
 - **Credentials** resolve through the SecretResolver at call time, never inlined, never logged,
-  never written to a generated artifact (rule 6).
-- The Camel/SDK client stays an implementation detail — apps see the `bucket`/`limits`/`scan` recipe
-  surface, never raw SDK options (extension principle 2).
+  never written to a generated artifact.
+- The SDK client stays an implementation detail — apps see the `bucket`/`limits`/`scan` recipe
+  surface, never raw SDK options.
 
 ### Scanning
 
@@ -236,40 +231,40 @@ lazily, so the no-op default never opens the blob), and the verdict is recorded 
 `CLEAN` object is served normally; an `INFECTED` object is recorded `infected` and **never served**
 (the download gate refuses any non-clean object with `409`), and is kept or removed per
 `tesseraql.attachments.scan.onInfected: quarantine | delete` (default `quarantine`); a scanner
-`ERROR` fails the upload closed (`503`). (An asynchronous `pending → scanned` model is a possible
-later refinement; synchronous keeps the gate simple and needs no scan sweeper.)
+`ERROR` fails the upload closed (`503`). An asynchronous `pending → scanned` model is not currently
+supported; synchronous keeps the gate simple and needs no scan sweeper.
 
 ### Retention
 
-Attachment retention wires into the ch. 44 `RetentionSweeper` (the cluster-safe timer that already
-purges the outbox and job history), gated by `tesseraql.retention.attachments`:
+Attachment retention wires into the `RetentionSweeper` (the cluster-safe timer that already purges
+the outbox and job history), gated by `tesseraql.retention.attachments`:
 
-- **Age policy** (delivered) — attachment metadata past the configured window is deleted and each
-  blob reclaimed (best-effort, so a concurrent node or an already-removed blob is harmless). Driven
-  by the sweep rather than provider lifecycle rules **on purpose**: server-side lifecycle support
-  varies across S3-compatible stores, so the portable, observable path is the in-app sweep.
-- **Orphan GC** (deferred) — reclaiming a blob whose `storage_key` matches no metadata row needs a
-  store-listing capability the minimal `BlobStore` SPI does not yet expose; the upload path's
-  best-effort delete-on-failure already covers the common case. A later refinement.
+- **Age policy** — attachment metadata past the configured window is deleted and each blob reclaimed
+  (best-effort, so a concurrent node or an already-removed blob is harmless). Driven by the sweep
+  rather than provider lifecycle rules **on purpose**: server-side lifecycle support varies across
+  S3-compatible stores, so the portable, observable path is the in-app sweep.
+- **Orphan GC** (not currently supported) — reclaiming a blob whose `storage_key` matches no
+  metadata row needs a store-listing capability the minimal `BlobStore` SPI does not expose; the
+  upload path's best-effort delete-on-failure already covers the common case. A planned refinement.
 
 ## Lint and coverage
 
-Machine-checkable like every other recipe (extension principle 4). The attachment document gets its
+The attachment surface is machine-checkable like every other recipe. The attachment document has its
 own lint family (`TQL-ATTACH-34xx`, mirroring the `TQL-WORKFLOW`/`TQL-SCOPE` per-kind families rather
-than crowding the `TQL-YAML` loader-error number space); object-storage egress in slice 2 takes
-`TQL-SEC-411x` (`TQL-SEC-4100` is reserved by Phase 29 for write-scope bypass):
+than crowding the `TQL-YAML` loader-error number space); object-storage egress takes `TQL-SEC-411x`
+(`TQL-SEC-4100` is reserved for the write-scope bypass check in [data scoping](data-scoping.md)):
 
-| Code | Severity | Meaning | Status |
-| --- | --- | --- | --- |
-| `TQL-ATTACH-3401` | error | a `kind: attachment` document does not declare `kind: attachment` | slice 1 |
-| `TQL-ATTACH-3402` | error | a `kind: attachment` document is missing `basePath` | slice 1 |
-| `TQL-ATTACH-3403` | error | a `kind: attachment` document is missing `record.entity`/`record.key` | slice 1 |
-| `TQL-ATTACH-3404` | error | the `basePath` does not contain the record key as a path parameter | slice 1 |
-| `TQL-ATTACH-3405` | error | `limits.maxBytes` is missing or unparseable | slice 1 |
-| `TQL-SEC-4110` | error | with `provider: s3`, an attachment's resolved bucket is not in `tesseraql.object-storage.allowedBuckets` (deny-by-default) | slice 2 |
+| Code | Severity | Meaning |
+| --- | --- | --- |
+| `TQL-ATTACH-3401` | error | a `kind: attachment` document does not declare `kind: attachment` |
+| `TQL-ATTACH-3402` | error | a `kind: attachment` document is missing `basePath` |
+| `TQL-ATTACH-3403` | error | a `kind: attachment` document is missing `record.entity`/`record.key` |
+| `TQL-ATTACH-3404` | error | the `basePath` does not contain the record key as a path parameter |
+| `TQL-ATTACH-3405` | error | `limits.maxBytes` is missing or unparseable |
+| `TQL-SEC-4110` | error | with `provider: s3`, an attachment's resolved bucket is not in `tesseraql.object-storage.allowedBuckets` (deny-by-default) |
 
-Scanning (slice 3) adds no lint — it is config + a ServiceLoader scanner, with no new YAML surface —
-and is enforced at runtime instead (the codes below).
+Scanning adds no lint — it is config + a ServiceLoader scanner, with no new YAML surface — and is
+enforced at runtime instead (the codes below).
 
 The runtime fails closed, all mapped from the `TQL-LD-284x` codes the processors/service raise: a
 `404` when an attachment is unknown or owned by a different record (never leaked across records), a
@@ -277,69 +272,40 @@ The runtime fails closed, all mapped from the `TQL-LD-284x` codes the processors
 that did not pass scanning, and a `503` when the scanner cannot reach a verdict (fail-closed).
 
 An **`attachment`** coverage kind (one item per `kind: attachment` document, gated with
-`coverage.thresholds.attachment`) is the slice-1 follow-up: it needs a declarative test target that
-exercises the upload/download round-trip, which pulls the attachment runtime into the test harness —
-a focused change kept out of the core slice. The `TQL-ATTACH-34xx` lint already makes the attachment
-surface machine-checkable in the meantime.
+`coverage.thresholds.attachment`) is planned but not currently supported: it needs a declarative test
+target that exercises the upload/download round-trip, which pulls the attachment runtime into the
+test harness. The `TQL-ATTACH-34xx` lint already makes the attachment surface machine-checkable in
+the meantime.
 
 ## Module layout
 
 | Module | Adds |
 | --- | --- |
-| `tesseraql-core` | `io.tesseraql.core.blob` (`BlobStore`, `BlobWriter`, `BlobRef`, `BlobSpec`), `FileBlobStore`, `AttachmentStore` SPI, `io.tesseraql.core.scan.AttachmentScanner` + no-op default — all dependency-free (principle 5) |
+| `tesseraql-core` | `io.tesseraql.core.blob` (`BlobStore`, `BlobWriter`, `BlobRef`, `BlobSpec`), `FileBlobStore`, `AttachmentStore` SPI, `io.tesseraql.core.scan.AttachmentScanner` + no-op default — all dependency-free |
 | `tesseraql-yaml` | the `kind: attachment` model + parser, the `object-storage`/`attachments`/`retention.attachments` config, and the lint (`TQL-YAML-12xx`, `TQL-SEC-411x`) |
 | `tesseraql-compiler` | `buildAttachment` — synthesizes the upload/download routes and binds the `AttachmentStore` |
 | `tesseraql-operations` | `JdbcAttachmentStore` (managed `tql_attachment`), the off-heap upload/download integration with `FileTransferService`, and the `RetentionSweeper` attachments pass |
-| `tesseraql-s3` (new) | `S3BlobStore` + `S3BlobStoreProvider` (ServiceLoader), AWS SDK v2 (Apache-2.0) confined here, and S3/compatible config — added to the root `pom.xml` `<modules>` and the BOM. The `BlobStoreProvider` SPI + `BlobStores` factory live in `tesseraql-yaml` |
+| `tesseraql-s3` | `S3BlobStore` + `S3BlobStoreProvider` (ServiceLoader), AWS SDK v2 (Apache-2.0) confined here, and the S3/compatible config. The `BlobStoreProvider` SPI + `BlobStores` factory live in `tesseraql-yaml` |
 
-Integration tests for `S3BlobStore` run against **Adobe S3Mock** (Apache-2.0) via Testcontainers —
-not MinIO; see the decision points. They are the compatibility gate that catches the checksum and
-path-style issues above (consistent with the project's Testcontainers IT approach for backing
-stores).
+## Design notes
 
-## Decision points
-
-1. **Object-store SDK.** AWS SDK for Java v2 (Apache-2.0), confined to the `tesseraql-s3` leaf
-   module, is the chosen client: standard, robust multipart/retry/presign, and it covers AWS and all
-   S3-compatible stores from one module. The alternative — a JDK-only SigV4 signer over
-   `java.net.http.HttpClient`, in the spirit of the JDK-only OIDC/JWKS and mTLS choices — keeps the
-   supply chain minimal but reimplements multipart, retries, and presigning. Deferred; the
-   `BlobStore` SPI is the seam that lets it replace AWS SDK v2 later without touching the DSL.
-2. **Test fixture / MinIO.** MinIO is **not** used, even as a test fixture. The MinIO *server* is
-   AGPLv3 (since 2021), and its community edition direction has soured (admin UI removed from the
-   community build in 2025; widely described as in maintenance mode). Although using an unmodified
-   AGPL server as a separate-process Testcontainers fixture does not propagate AGPL to TesseraQL,
-   the project's supply-chain-minimal ethos and AGPL-flagging license scanners make it cleaner to
-   avoid it entirely. The S3-compatibility ITs use **Adobe S3Mock** (Apache-2.0); a gated CI job may
-   run against real AWS S3 for highest fidelity. What TesseraQL ships is AWS SDK v2 (Apache-2.0) —
-   no MinIO code is embedded or distributed.
-3. **Metadata mode default.** `managed` (the framework `tql_attachment` table) is the default,
-   because attachment metadata is a new generic concern with no pre-existing app table; `app` mode is
-   available per document for apps that want attachments in their own schema. Authorization flows
-   through a 2-way SQL `SELECT` in **both** modes, so policy and Phase 29 scoping apply uniformly.
-
-## Delivery slices
-
-Phase 30 ships in slices, each a reviewable PR with CI green:
-
-1. **Attachment core** — the `BlobStore`/`BlobWriter`/`BlobRef` SPI and `FileBlobStore` default
-   (`tesseraql-core`), the `AttachmentStore` and `AttachmentService` SPIs with the managed
-   `tql_attachment` store (`tesseraql-operations`), the `kind: attachment` document and its
-   synthesized off-heap upload/list/download routes (`tesseraql-compiler`/runtime), and the
-   `TQL-ATTACH-34xx` lint. No S3, no new module — ships value on local storage alone. **Delivered**
-   for managed mode; app-mode 2-way SQL metadata and the `attachment` coverage kind are the
-   immediate slice-1 follow-up.
-2. **`tesseraql-s3` leaf module** (delivered) — `S3BlobStore` on AWS SDK v2, contributed by a
-   `BlobStoreProvider` discovered via `ServiceLoader` and selected by `provider: s3`; the
-   deny-by-default `allowedBuckets` egress and SecretResolver credentials; the
-   `endpoint`/`region`/`pathStyle`/`checksumMode` compatibility settings; the `TQL-SEC-4110` lint;
-   and Adobe S3Mock compatibility ITs. Switching `provider: s3` is the whole change.
-3. **Scanning and retention** (delivered) — the `AttachmentScanner` scan-hook SPI with the no-op
-   default, synchronous scan-on-upload, the download gate that refuses any non-clean object, and the
-   `tesseraql.attachments.scan.onInfected` (quarantine/delete) policy; plus the `RetentionSweeper`
-   attachments pass (age-based deletion of metadata and blobs, gated by
-   `tesseraql.retention.attachments`). Completes the phase. Orphan GC is a later refinement (it needs
-   a `BlobStore` listing capability).
-
-This completes the attachments leg of **Milestone M9** (an approval-workflow application with
-org-scoped data and attachments).
+- **Object-store client.** AWS SDK for Java v2 (Apache-2.0), confined to the `tesseraql-s3` leaf
+  module, is the chosen client: standard, robust multipart/retry/presign, and it covers AWS and all
+  S3-compatible stores from one module. A JDK-only SigV4 signer over `java.net.http.HttpClient` —
+  in the spirit of the JDK-only OIDC/JWKS and mTLS choices — would keep the supply chain minimal
+  but reimplement multipart, retries, and presigning; the `BlobStore` SPI is the seam that would
+  let it replace AWS SDK v2 later without touching the DSL.
+- **No MinIO, even as a test fixture.** The MinIO *server* is AGPLv3 (since 2021), and its community
+  edition is widely described as in maintenance mode. Although using an unmodified AGPL server as a
+  separate-process test fixture would not propagate AGPL to TesseraQL, the project's
+  supply-chain-minimal ethos and AGPL-flagging license scanners make it cleaner to avoid entirely.
+  The S3-compatibility integration tests run against **Adobe S3Mock** (Apache-2.0) via
+  Testcontainers — they are the compatibility gate that catches the checksum and path-style issues
+  above. What TesseraQL ships is AWS SDK v2 (Apache-2.0); no MinIO code is embedded or distributed.
+- **`ServiceLoader` provider, not a `RuntimeExtension`.** A `RuntimeExtension` would install too
+  late — after the attachment service is constructed — so the `BlobStoreProvider` factory, resolved
+  inside the same wiring step, is the right seam.
+- **Metadata mode default.** `managed` (the framework `tql_attachment` table) is the default,
+  because attachment metadata is a new generic concern with no pre-existing app table; `app` mode is
+  available per document for apps that want attachments in their own schema. Authorization flows
+  through a 2-way SQL `SELECT` in **both** modes, so policy and row scoping apply uniformly.

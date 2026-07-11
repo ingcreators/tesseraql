@@ -1,12 +1,13 @@
 # Response shaping
 
-Roadmap Phase 41: three declarative response tools on `query-json`/`query-html` routes, so
-common shaping never needs a template or an extra endpoint.
+Response shaping gives `query-json`/`query-html` routes three declarative tools —
+computed fields, nested composition, and conditional statuses — so common shaping never
+needs a template or an extra endpoint.
 
 ## Computed fields
 
 Every leaf of `response.json.body` (and every `response.html.model` value) is an expression
-in the [core expression language](declarative-validation.md#the-expression-language-roadmap-phase-40)
+in the [core expression language](declarative-validation.md#the-expression-language)
 — a plain dotted path behaves exactly as before, and computed leaves come for free:
 
 ```yaml

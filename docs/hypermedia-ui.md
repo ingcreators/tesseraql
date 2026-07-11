@@ -168,7 +168,7 @@ response:
 ## Mutating forms
 
 A form that changes server state follows the kit's `mutating-form` recipe — the composition
-the Phase 23 scaffolds emit. It posts over htmx, swaps inline field errors on a 4xx, and
+the [scaffolding](scaffolding.md) generators emit. It posts over htmx, swaps inline field errors on a 4xx, and
 redirects on success, while degrading to a plain form post with no JavaScript:
 
 ```html

@@ -1,40 +1,39 @@
 # Multi-datasource routes — reads across connectors, consistency through projections
 
-Status: design accepted 2026-07-06 (roadmap Phase 53, Horizon 9). **All three slices
-are delivered — Phase 53 is complete and milestone M18 is met** on two real
-PostgreSQL databases (`MultiDatasourceReadIntegrationTest`,
-`MultiDatasourceProjectionIntegrationTest`). One addition from implementation: the
-lint rules are backed by a compile-time guard (`TQL-CAMEL-3112`), so a hot-reloaded
-or hand-mounted route that skipped lint still cannot carry a main-anchored feature
-into a non-main transaction.
+TesseraQL applications can run route SQL on database connectors other than `main`
+— a reporting warehouse, a legacy system, a read replica with its own schema. One
+key, `datasource:`, selects the connector; consistency across databases is handled
+by a deliberately narrow model built on the existing messaging machinery.
 
-The runtime has carried multiple database connectors since Phase 18: every
-`tesseraql.datasources.<name>` block builds its own HikariCP pool, is bound by name in
-the Camel registry, and migrates from its own `db/<name>/migration[-<vendor>]` tree
-under its own Flyway history table (an unknown name fails fast with `TQL-APP-4201`).
-What no route could do is *use* one: the compiler pins every SQL execution — reads and
-the transactional command engine alike — to `main`. This phase opens that last door
-with one new word, `datasource:`, and one deliberately narrow consistency model.
+The runtime carries multiple database connectors: every
+`tesseraql.datasources.<name>` block builds its own HikariCP pool, is bound by name
+in the Camel registry, and migrates from its own `db/<name>/migration[-<vendor>]`
+tree under its own Flyway history table (an unknown name fails fast with
+`TQL-APP-4201`). By default the compiler pins every SQL execution — reads and the
+[transactional command engine](transactional-writes.md) alike — to `main`;
+`datasource:` is how a route opts out.
 
 ## The transaction stance first
 
 - **One business operation is one local transaction on one connector — never two.**
-  The Phase 18 engine's whole guarantee is a single JDBC connection carrying every
-  step, validation, and outbox insert to one commit. A `datasource:` moves that
-  connection to a named connector; it never splits it.
+  The [transactional command engine](transactional-writes.md)'s whole guarantee is a
+  single JDBC connection carrying every step, validation, and outbox insert to one
+  commit. A `datasource:` moves that connection to a named connector; it never
+  splits it.
 - **No JTA/XA.** Two-phase commit would demand XA drivers and XA-capable pooling, a
   recovery log with crash-recovery operations, `max_prepared_transactions` tuning on
   every PostgreSQL, and heuristic-outcome monitoring — a standing operational tax on
-  every deployment, against the project's JDK-only, no-heavy-runtime grain
-  (extension principle 5). TesseraQL takes the transactional-outbox answer instead:
-  **cross-database consistency is eventual, explicit, and rides machinery that
-  already exists** (Phase 20 outbox → Phase 27 channels → `queue-consume`).
+  every deployment, against the project's JDK-only, no-heavy-runtime grain.
+  TesseraQL takes the transactional-outbox answer instead: **cross-database
+  consistency is eventual, explicit, and rides machinery that already exists**
+  (the [transactional outbox](notifications.md) → [messaging channels](messaging.md)
+  → `queue-consume`).
 - **Framework bookkeeping lives on `main`.** The outbox, the durable `tql_event` log
   and its dedup records, workflow state, sequences, sessions, preferences — all of it
   stays on the main connector. A route on another connector is *plain SQL*: what it
   reads and writes there is entirely the app's schema.
 
-## Reading from a named connector (slice 2)
+## Reading from a named connector
 
 A route declares the connector its SQL runs on; read recipes accept it wholesale:
 
@@ -77,7 +76,7 @@ lint already reads for channels), and a per-step `datasource:` inside a command'
 transactional pipeline — which would silently split the transaction — is refused
 outright as `TQL-YAML-1037`.
 
-## Writing across databases: the projection pattern (slice 3)
+## Writing across databases: the projection pattern
 
 `datasource:` is equally legal on the transactional recipes (`command-json`,
 `webhook`, `queue-consume`, MCP tools): the *whole* command transaction — steps,
@@ -112,16 +111,16 @@ sql:
   mode: update
 ```
 
-Delivery semantics are Phase 27's, unchanged, because the *bus* never moves: the
-event is written in the main command's transaction (a rolled-back command never
-publishes), relayed onto the durable `tql_event` log on `main`, claimed with
-`SKIP LOCKED` on `main`, deduplicated against `main`'s consumed-key records. Only
-the consumer's **apply transaction** runs on `reporting`. The apply commit and the
-consumed-mark are two transactions on two databases, so the honest contract is the
-one Phase 27 already documents: **at-least-once delivery, effectively exactly-once
-per idempotency key, and the projection SQL is an idempotent upsert** — a crash
-between apply and acknowledge redelivers, the key check skips it, and the upsert
-makes even the residual window harmless.
+Delivery semantics are [messaging](messaging.md)'s, unchanged, because the *bus*
+never moves: the event is written in the main command's transaction (a rolled-back
+command never publishes), relayed onto the durable `tql_event` log on `main`,
+claimed with `SKIP LOCKED` on `main`, deduplicated against `main`'s consumed-key
+records. Only the consumer's **apply transaction** runs on `reporting`. The apply
+commit and the consumed-mark are two transactions on two databases, so the honest
+contract is the one the messaging documentation already states: **at-least-once
+delivery, effectively exactly-once per idempotency key, and the projection SQL is
+an idempotent upsert** — a crash between apply and acknowledge redelivers, the key
+check skips it, and the upsert makes even the residual window harmless.
 
 What a non-main transaction cannot carry is anything whose tables live on `main`:
 `notify:`, `publish:`, `outbox:`, workflow transitions, `sequence:` allocation.
@@ -141,24 +140,16 @@ checks against the state being written.
 | `TQL-SQL-2502`  | runtime  | the named datasource is not bound at execution time (existing)          |
 | `TQL-APP-4201`  | runtime  | a `db/<name>/migration` tree names an undeclared connector (existing)   |
 
+The lint rules are backed by a compile-time guard (`TQL-CAMEL-3112`), so a
+hot-reloaded or hand-mounted route that skipped lint still cannot carry a
+main-anchored feature into a non-main transaction.
+
 ## Deliberately out of scope (documented, not implied)
 
 - **JTA/XA and any two-connector transaction** — the stance above is the design.
 - **Cross-connector joins or subqueries** — compose result sets, don't merge SQL.
-- **Broker transports** (Kafka/JMS) — unchanged, still later opt-in leaf modules.
+- **Broker transports** (Kafka/JMS) — not currently supported; planned as opt-in
+  leaf modules.
 - **Studio's data browser and the docs portal's schema introspection** stay on
-  `main` for now; extending them per-connector is a Studio-backlog item, not this
-  phase.
+  `main` for now; extending them per-connector is planned, not currently supported.
 - **Per-tenant named connectors** — tenancy remains a `main`-only concern.
-
-**Milestone M18** — on a deployment with two real PostgreSQL databases: an app
-declares a `reporting` connector and migrates it from `db/reporting/migration`; a
-page renders one widget from `main` and one from `reporting`; creating an order
-commits on `main` and a `queue-consume` projection upserts it into `reporting`;
-a rolled-back command projects nothing; a forced redelivery never doubles a row —
-all declared in YAML, and no XA anywhere in the stack.
-
-Three slices: this design; **reads** (route-level + read-query `datasource:`,
-per-connector dialect, tenancy precedence, `TQL-YAML-1035`/`1037`, schema +
-reference regeneration); **projections** (transactional retarget, `TQL-YAML-1036`,
-the two-database integration proof, and the messaging cookbook entry).
