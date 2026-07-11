@@ -17,7 +17,7 @@ managed PostgreSQL (sessions, jobs, outbox, file transfers all multi-node safe)
 it never touches a dependency), and `GET /_tesseraql/health/ready` — also what the bare
 `/_tesseraql/health` serves — is the readiness roll-up: it probes every configured datasource
 live and answers `503 {"status":"DOWN"}` when one fails, `WARN` on active alerts, `UP`
-otherwise (status word only, roadmap Phase 45). Point container health checks at
+otherwise (status word only). Point container health checks at
 `/health/live` and load-balancer/proxy checks at `/health/ready`; the
   detailed health/metrics stay behind the authorized ops API.
 - Put a Cloudflare Access policy on `/_tesseraql/*` so the system consoles sit behind both the
@@ -80,8 +80,8 @@ expand/contract (backward compatible) - the same discipline the canary flow alre
 
 ## Environment profiles
 
-One switch selects a per-environment overlay layer (roadmap Phase 46):
-`--env staging` on `tesseraql serve` (or `TESSERAQL_ENV=staging`, or
+One switch selects a per-environment overlay layer (see [promotion](promotion.md) for the
+full dev → staging → prod loop): `--env staging` on `tesseraql serve` (or `TESSERAQL_ENV=staging`, or
 `-Dtesseraql.env=staging`) merges `config/env/staging.yml` **between** the app's base config
 (`application.yml` → `tesseraql.yml`) and Studio's `overlay.yml` — the profile is the
 environment's tuning, and dev-time Studio edits still win on top. A named profile whose file
@@ -109,7 +109,7 @@ clients keep the JSON envelope. No template — today's JSON behavior.
 
 ## Logging
 
-The CLI distribution ships a JDK-only SLF4J provider (roadmap Phase 45): one line per event on
+The CLI distribution ships a JDK-only SLF4J provider: one line per event on
 stderr, plain text by default, `--log-format json` (or `-Dtesseraql.logging.format=json`) for
 structured lines, `--log-level` for the threshold. Every line carries the MDC — the runtime
 puts the request's `traceId`/`spanId` there and Camel bridges them across async steps — so a
@@ -119,12 +119,13 @@ keeps Boot's Logback (add `logstash-logback-encoder` there if you want JSON).
 An **opt-in HTTP access log** rides the same correlation: `tesseraql.logging.accessLog: true`
 emits one line per request on the `tesseraql.access` logger —
 `GET /api/users 200 12ms route=users.search user=alice`.
+
 ## Safety valves and multi-node semantics
 
 **SQL statement timeout.** Every route SQL statement is bounded by default: 30 seconds, the
 app-wide `tesseraql.sql.timeoutSeconds`, or a per-binding `sql.timeoutSeconds` override —
 an explicit `0` opts a deliberately long-running statement out. A runaway query is cancelled
-by the driver instead of holding a pool connection forever (roadmap Phase 45).
+by the driver instead of holding a pool connection forever.
 
 **Connection pools.** Each `tesseraql.datasources.<name>` block tunes its HikariCP pool:
 `maximumPoolSize`, `minimumIdle`, `connectionTimeoutMillis`, `idleTimeoutMillis`,

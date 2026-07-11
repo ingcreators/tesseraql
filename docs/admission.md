@@ -1,8 +1,8 @@
 # Marketplace admission profile
 
-The machine-checkable bar a shared app must clear before anyone else runs it (roadmap
-Phase 47, realizing the Phase 37 admission gate): run `tesseraql admission --app .` (or the
-`tesseraql:admission` Maven goal, bound to `verify`) and ship only on exit 0.
+The admission profile is the machine-checkable bar a shared app must clear before anyone
+else runs it: run `tesseraql admission --app .` (or the `tesseraql:admission` Maven goal,
+bound to `verify`) and ship only on exit 0.
 
 The profile composes the existing gates and adds the marketplace constraints:
 
@@ -15,7 +15,7 @@ The profile composes the existing gates and adds the marketplace constraints:
 | `TQL-ADM-4705` | **Governance clean.** Every review-worthy surface is approved in `governance/approvals.yml` at its current hash. |
 | `TQL-ADM-4706` | **Lint clean.** Every `AppLinter` error fails admission. |
 
-The gallery starter apps under `examples/` are held to this bar in CI — what we ship passes
-what we gate others on. Provenance (signing, SBOM, hash pinning) rides the existing
-`tesseraql:release-evidence` pipeline and `.tqlapp` sha256 pinning; see
-[docs/promotion.md](promotion.md) and [docs/deployment.md](deployment.md).
+The gallery starter apps under `examples/` are held to this bar in CI — the shipped
+starters pass the same gate that shared apps are held to. Provenance (signing, SBOM, hash
+pinning) rides the existing `tesseraql:release-evidence` pipeline and `.tqlapp` sha256
+pinning; see [promotion](promotion.md) and [deployment](deployment.md).

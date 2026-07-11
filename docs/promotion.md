@@ -1,14 +1,14 @@
 # Promotion: dev → staging → prod
 
-The git-native recipe (roadmap Phase 46) that aligns the read-only-prod-Studio posture with an
-explicit path for how an edit gets to production. Nothing here is new machinery — it composes
-the pieces the framework already ships.
+The git-native recipe that aligns the read-only-prod-Studio posture with an explicit path
+for how an edit gets to production. Nothing here is new machinery — it composes the pieces
+the framework already ships.
 
 ## The loop
 
 1. **Edit in dev.** Studio is writable in dev (`tesseraql.studio.readOnly: false`): route
    form, source editor, scaffolds, migrations, policy edits — everything lands as files in
-   the app tree, and applying serves immediately (the Phase 42 instant loop).
+   the app tree, and applying serves immediately (the hot reload).
 2. **Branch and PR.** The app tree is a git repository; Studio edits are ordinary diffs.
    Open a PR from the dev branch. The Studio audit trail (`work/studio/audit/`) tells you
    who changed what if the diff needs context — `work/` itself is never committed.
