@@ -1,4 +1,4 @@
-# AI-Assisted Development (MCP)
+# AI-assisted development (MCP)
 
 TesseraQL's artifacts are declarative and machine-checkable — lint, declarative tests,
 coverage kinds, deterministic generated output — which is exactly the feedback loop a coding

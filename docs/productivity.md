@@ -1,4 +1,4 @@
-# Personal productivity — pins and recents
+# Pins and recents
 
 Business users keep coming back to the same places: a filtered list ("open requests over
 5000"), a Studio data-browser query, a handful of records they touch daily. Pins and

@@ -1,4 +1,4 @@
-# Transactional Writes
+# Transactional writes
 
 `command-json` executes one business operation, not one statement. A
 command may declare an ordered list of SQL steps that run in a single transaction, allocate

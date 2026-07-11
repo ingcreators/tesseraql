@@ -1,4 +1,4 @@
-# Credential lifecycle — reset, invitations, TOTP
+# Credential lifecycle
 
 The [account surface](account.md) gives the local realm a self-service password
 *change* — for users who know their current password. The credential lifecycle

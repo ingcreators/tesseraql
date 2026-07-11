@@ -1,4 +1,4 @@
-# Promotion: dev → staging → prod
+# Environments and promotion
 
 The git-native recipe that aligns the read-only-prod-Studio posture with an explicit path
 for how an edit gets to production. Nothing here is new machinery — it composes the pieces

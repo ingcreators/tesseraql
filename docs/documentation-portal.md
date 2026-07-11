@@ -1,4 +1,4 @@
-# Application Documentation Portal
+# Documentation portal
 
 A TesseraQL application is defined entirely by declarative source: Simple YAML routes/jobs,
 2-way SQL, Thymeleaf pages, declarative test suites, and Flyway migrations. Because that source

@@ -1,4 +1,4 @@
-# Getting started (without cloning the framework)
+# Getting started
 
 You build an application *on* TesseraQL in your own repository — a directory of 2-way SQL, YAML
 routes, and templates ([app-layout.md](app-layout.md)). You obtain the framework as installed

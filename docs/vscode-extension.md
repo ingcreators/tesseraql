@@ -1,4 +1,4 @@
-# The VS Code extension — the editor as a first-class authoring surface
+# VS Code extension
 
 The TesseraQL VS Code extension (`vscode-extension/` in the repository,
 `ingcreators.tesseraql-vscode`) turns the plain editor into a full authoring surface

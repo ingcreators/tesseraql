@@ -1,4 +1,4 @@
-# Application developer distribution and onboarding
+# Distribution and onboarding
 
 How a developer obtains TesseraQL and builds an application on it without cloning the
 framework repository. Everything below is available today except the items called out

@@ -1,4 +1,4 @@
-# Declarative Validation
+# Declarative validation
 
 A command declares its business-rule validation in YAML: cross-field
 rules in the core expression language plus validation SQL — SELECTs whose returned rows are
