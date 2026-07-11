@@ -157,8 +157,10 @@ and at runtime the literal becomes the bound `q` input.
 Press **Apply** in Studio. The instant loop hot-reloads exactly the routes whose sources
 changed — no restart — and the reload result names the rebuilt route. Go back to
 `/tasks` and type `tut`: the row appears. (Editing the file on disk in your own editor is
-equally fine; those edits are picked up on the next restart or Studio apply. Hot reload
-covers `web/` routes — jobs and consumers still need a restart.)
+equally fine: serve with `tesseraql serve --app . --watch` and every save under `web/`
+hot-reloads the same way, no Apply needed; without `--watch`, disk edits are picked up on
+the next restart or Studio apply. Hot reload covers `web/` routes — jobs and consumers
+still need a restart.)
 
 ## Add a validation rule
 

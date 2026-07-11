@@ -91,6 +91,12 @@ public final class TesseraqlCli implements Runnable {
         @Option(names = {"--port"}, description = "Override the configured HTTP port.")
         Integer port;
 
+        @Option(names = {"--watch"}, description = "Watch the app's web/ tree and hot-reload "
+                + "changed routes on save — the editor-first alternative to Studio's Apply, "
+                + "with the same scope: web/ routes reload; jobs, consumers, and config/ "
+                + "changes still need a restart.")
+        boolean watch;
+
         @Option(names = {"--modules"}, description = "Directory of optional plugin module jars "
                 + "(e.g. the pdf/excel file-format codecs) to load onto the runtime classpath.")
         File modules;
@@ -193,6 +199,14 @@ public final class TesseraqlCli implements Runnable {
             // login form, so say how to create the first administrator (works as printed under
             // --embedded-db too — identity-schema picks up the marker written above).
             FirstAdminHint.check(config, app, dbOverride).ifPresent(System.out::println);
+            // The editor-first instant loop (serve --watch): a daemon-thread file watcher
+            // funnels saves under web/ into the same hot reload Studio's Apply triggers;
+            // the Ctrl+C shutdown hook above stops it with the runtime.
+            if (watch) {
+                runtime.watchRoutes(System.out::println);
+                System.out.println(
+                        "Watching web/ for changes; save a route file to hot-reload it.");
+            }
             Thread.currentThread().join();
             return 0;
         }

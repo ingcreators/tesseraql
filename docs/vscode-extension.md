@@ -110,7 +110,9 @@ story from the documentation portal, visible where the SQL is written.
 A status-bar item polls the readiness probe (`/_tesseraql/health/ready`, see
 [deployment](deployment.md)) on `tesseraql.serverUrl` while an app home is open:
 up, DOWN (503), or unreachable, one click to open the app. Nothing extension-specific
-server-side — the probe is the contract.
+server-side — the probe is the contract. Pair it with `tesseraql serve --app . --watch`
+in the terminal and every save under `web/` hot-reloads its route — the editor-first
+instant loop, no Studio **Apply** needed.
 
 ## Error-code hovers
 
