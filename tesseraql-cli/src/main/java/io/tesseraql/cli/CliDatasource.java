@@ -2,6 +2,8 @@ package io.tesseraql.cli;
 
 import io.tesseraql.report.DriverManagerDataSource;
 import io.tesseraql.yaml.config.AppConfig;
+import java.nio.file.Path;
+import java.util.Optional;
 import picocli.CommandLine.Option;
 
 /**
@@ -46,5 +48,48 @@ final class CliDatasource {
             }
         }
         return new DriverManagerDataSource(url, user, pass);
+    }
+
+    /**
+     * Resolves like {@link #resolve(AppConfig)}, plus the {@code serve --embedded-db} first-login
+     * hand-off: when no explicit {@code --jdbc-url} is given and {@code appHome} carries the
+     * running-embedded-database marker ({@value EmbeddedDbMarker#RELATIVE_PATH}), the marker's URL
+     * backs the command whenever the config's main datasource is missing, unresolvable, or does
+     * not answer a connection while the marker's does (announced with one line on stdout).
+     * Precedence: explicit {@code --jdbc-url}, then a resolvable-and-reachable config, then the
+     * embedded marker. Without a marker file nothing is probed, so apps with a real configured
+     * database resolve exactly as before.
+     */
+    DriverManagerDataSource resolve(AppConfig config, Path appHome) {
+        if (jdbcUrl == null && appHome != null) {
+            String configUrl = null;
+            String configUser = username;
+            String configPass = password;
+            if (config != null) {
+                try {
+                    configUrl = config.getString("tesseraql.datasources.main.jdbcUrl").orElse(null);
+                    if (configUser == null) {
+                        configUser = config.getString("tesseraql.datasources.main.username")
+                                .orElse(null);
+                    }
+                    if (configPass == null) {
+                        configPass = config.getString("tesseraql.datasources.main.password")
+                                .orElse(null);
+                    }
+                } catch (RuntimeException ex) {
+                    // Unresolvable placeholders (e.g. ${db.main.url} with no input declared) —
+                    // exactly the situation the running embedded database can answer for.
+                    configUrl = null;
+                }
+            }
+            Optional<String> marker = EmbeddedDbMarker.pick(appHome, configUrl, configUser,
+                    configPass, EmbeddedDbMarker::reachable);
+            if (marker.isPresent()) {
+                System.out.println("Using the running embedded database ("
+                        + EmbeddedDbMarker.RELATIVE_PATH + ")");
+                return new DriverManagerDataSource(marker.get(), null, null);
+            }
+        }
+        return resolve(config);
     }
 }

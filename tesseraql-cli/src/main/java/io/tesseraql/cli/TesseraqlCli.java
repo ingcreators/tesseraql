@@ -161,6 +161,9 @@ public final class TesseraqlCli implements Runnable {
                     return 1;
                 }
                 dbOverride = embedded.override();
+                // The first-login hand-off: leave the (random-port) JDBC URL where a second
+                // terminal's `identity-schema --app .` finds it, instead of hand-copying it.
+                EmbeddedDbMarker.write(app, embedded.jdbcUrl());
                 System.out.println("Embedded PostgreSQL " + embedded.version() + " started"
                         + (dataDir == null ? " (ephemeral)." : " at " + dataDir + "."));
                 // Surface the (otherwise random) port so a local client can attach. Trust auth on
@@ -181,10 +184,15 @@ public final class TesseraqlCli implements Runnable {
                 // Stop the embedded postgres only after the runtime released its connections.
                 if (embeddedToClose != null) {
                     embeddedToClose.close();
+                    EmbeddedDbMarker.delete(app);
                 }
             }));
             System.out.println(
                     "TesseraQL serving on port " + runtime.port() + ". Press Ctrl+C to stop.");
+            // One-time, best-effort: an unseeded identity store stalls every entry path at the
+            // login form, so say how to create the first administrator (works as printed under
+            // --embedded-db too — identity-schema picks up the marker written above).
+            FirstAdminHint.check(config, app, dbOverride).ifPresent(System.out::println);
             Thread.currentThread().join();
             return 0;
         }

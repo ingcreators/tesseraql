@@ -26,9 +26,10 @@ TesseraQL serving on port 8080. Press Ctrl+C to stop.
 ```
 
 No Docker? Run `tesseraql serve --app . --embedded-db` instead — a real PostgreSQL inside
-the process. The later database-touching commands (`identity-schema`, `migrate`,
-`scaffold crud`, `test`) must then be pointed at the JDBC URL `serve` prints, via
-`--jdbc-url`, instead of reading the compose database from `--app .`'s config.
+the process. `identity-schema --app .` below finds the running embedded database on its own
+(via `work/embedded-db.jdbc`); the other database-touching commands (`migrate`,
+`scaffold crud`, `test`) must be pointed at the JDBC URL `serve` prints, via `--jdbc-url`,
+instead of reading the compose database from `--app .`'s config.
 
 ### First login
 

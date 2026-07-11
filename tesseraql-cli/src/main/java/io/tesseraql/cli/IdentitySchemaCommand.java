@@ -25,7 +25,10 @@ import picocli.CommandLine.Option;
 final class IdentitySchemaCommand implements Callable<Integer> {
 
     @Option(names = {
-            "--app"}, description = "App home for datasource fallback (optional; else use --jdbc-url).")
+            "--app"}, description = "App home for datasource fallback (optional; else use "
+                    + "--jdbc-url). Precedence: an explicit --jdbc-url, then the app's configured "
+                    + "main datasource, then a running `serve --embedded-db` (its "
+                    + "work/embedded-db.jdbc marker) when the config does not resolve or answer.")
     Path app;
 
     @Mixin
@@ -53,7 +56,7 @@ final class IdentitySchemaCommand implements Callable<Integer> {
     @Override
     public Integer call() throws Exception {
         AppConfig config = app != null ? new ManifestLoader().load(app).config() : null;
-        DriverManagerDataSource dataSource = datasource.resolve(config);
+        DriverManagerDataSource dataSource = datasource.resolve(config, app);
         IdentityBootstrap bootstrap = new IdentityBootstrap(dataSource);
         bootstrap.applySchema(dialect);
         System.out.println("Applied the managed IAM schema (" + dialect + ")");

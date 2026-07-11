@@ -33,18 +33,20 @@ also works, but compiles the framework from source and takes several minutes.)
 
 ## First login
 
-Studio signs in against the identity store, which the demo does not seed. Create an
-administrator once (second terminal; `serve` prints the embedded database's JDBC URL at
-startup):
+Studio signs in against the identity store, which the demo does not seed — `serve` says so at
+startup and prints this step. Create an administrator once (second terminal; the CLI finds the
+running embedded database by itself):
 
 ```bash
 printf 'demo-password' > admin.pw
-tesseraql identity-schema --jdbc-url "<the URL serve printed>" \
+tesseraql identity-schema --app examples/inventory-app \
     --admin-login admin --admin-roles INV_READ,INV_WRITE --admin-password-file admin.pw
 ```
 
 (The roles grant the demo app's own `inv.read`/`inv.write` policies, so the product pages
-open for this login too.)
+open for this login too. Seeding a database the app config points at elsewhere — a remote
+server, say? Pass `--jdbc-url` explicitly; it takes precedence over both the config and
+the running embedded database.)
 
 ## The Studio tour
 
