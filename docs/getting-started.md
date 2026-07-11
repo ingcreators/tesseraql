@@ -94,6 +94,11 @@ tesseraql package --app .            # build a .tqlapp under work/
 `migrate` (apply/info/validate/repair), `schema`, `governance`, `identity-schema`, and `verify`
 round out the surface. Every subcommand calls the same engine as the matching Maven goal.
 
+Prefer your own editor over Studio? `tesseraql serve --app . --watch` watches the `web/`
+tree and hot-reloads a route the moment you save its SQL, YAML, or template — the same
+instant loop as Studio's **Apply**, with the same scope (jobs, consumers, and `config/`
+changes still need a restart).
+
 ## The Maven / CI path
 
 `tesseraql new` also scaffolds a thin wrapper `pom.xml` and the Maven Wrapper, so CI needs only a

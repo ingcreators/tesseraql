@@ -1044,14 +1044,18 @@ public final class TesseraqlRuntime implements AutoCloseable {
                     extensionSink.send(event);
                 }
             };
+            boolean readOnly = manifest.config().getString("tesseraql.studio.readOnly")
+                    .map(Boolean::parseBoolean).orElse(true);
+            io.tesseraql.studio.StudioService studio = new io.tesseraql.studio.StudioService(
+                    manifest, readOnly);
+            RouteReloader reloader = new RouteReloader(context, appHome, manifest, studio,
+                    appName, mountedApps);
+            // The serve --watch file watcher drives the exact reloader Studio's apply uses;
+            // bound unstarted (independent of Studio being enabled) so watchRoutes() can
+            // start it on demand without threading it through the runtime constructor.
+            context.getRegistry().bind(RouteWatcher.BEAN, new RouteWatcher(appHome, reloader));
             if (manifest.config().getString("tesseraql.studio.enabled")
                     .map(Boolean::parseBoolean).orElse(true)) {
-                boolean readOnly = manifest.config().getString("tesseraql.studio.readOnly")
-                        .map(Boolean::parseBoolean).orElse(true);
-                io.tesseraql.studio.StudioService studio = new io.tesseraql.studio.StudioService(
-                        manifest, readOnly);
-                RouteReloader reloader = new RouteReloader(context, appHome, manifest, studio,
-                        appName, mountedApps);
                 // The Studio test runner (backlog A2): run a route's read-only sql cases against the
                 // dev datasource. Gated on writable Studio + an explicit opt-in, sandboxed per run
                 // (read-only connection, statement timeout, row cap, rollback on close).
@@ -3191,6 +3195,20 @@ public final class TesseraqlRuntime implements AutoCloseable {
                 io.tesseraql.core.files.FileTransferService.class);
     }
 
+    /**
+     * Starts the {@code serve --watch} file watcher: saves under the app's {@code web/} tree
+     * hot-reload through the same content-diff reloader Studio's apply uses, reporting one
+     * concise line per reload to {@code out}. A failed reload never kills the watcher or the
+     * server — the broken route serves its compile error as a 500 stub until the file is
+     * fixed. The watcher runs on a daemon thread and stops with {@link #close()}.
+     */
+    public AutoCloseable watchRoutes(java.util.function.Consumer<String> out) {
+        RouteWatcher watcher = camelContext.getRegistry()
+                .lookupByNameAndType(RouteWatcher.BEAN, RouteWatcher.class);
+        watcher.start(out);
+        return watcher;
+    }
+
     public int port() {
         return port;
     }
@@ -3201,6 +3219,9 @@ public final class TesseraqlRuntime implements AutoCloseable {
 
     @Override
     public void close() {
+        // Stop the --watch file watcher first so no reload races the context shutdown.
+        closeQuietly(camelContext.getRegistry()
+                .lookupByNameAndType(RouteWatcher.BEAN, RouteWatcher.class));
         closeQuietly(pinningSource);
         closeQuietly(otelSdk);
         io.tesseraql.operations.files.JdbcFileTransferService fileTransfers = camelContext

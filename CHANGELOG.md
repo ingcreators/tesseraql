@@ -8,6 +8,15 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **`serve --watch`**: an opt-in file watcher for editor-first development. Saving a
+  route source under `web/` (its yml, 2-way SQL, or templates) hot-reloads that route
+  through the exact content-diff reloader Studio's Apply uses — no click in Studio, no
+  restart. A burst of editor save events debounces into one reload (300ms of quiet),
+  backup/swap/temp files and dotfiles are ignored, and each reload prints one concise
+  line (what changed, after which file). A broken save never kills the watcher or the
+  server: the route serves its compile error as a 500 stub until the file is fixed, and
+  the watcher reports the error and keeps watching. Scope matches the reload's: `web/`
+  routes — jobs, consumers, and `config/` changes still need a restart.
 - **First-login hand-off**: the unseeded identity store no longer strands every entry
   path at Studio's login form. `serve --embedded-db` writes the embedded database's
   JDBC URL to `work/embedded-db.jdbc` (overwritten each start, removed on graceful
