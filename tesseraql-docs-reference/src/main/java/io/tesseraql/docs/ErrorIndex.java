@@ -7,6 +7,7 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.regex.Matcher;
@@ -110,9 +111,16 @@ final class ErrorIndex {
     }
 
     /**
+     * The internal planning documents (the docs-site nav.mjs EXCLUDED set): not user
+     * documentation, so the index never cites them as a code's cookbook page.
+     */
+    private static final Set<String> INTERNAL_DOCS = Set.of("roadmap.md", "docs-site.md",
+            "studio-backlog.md", "hc-briefs.md");
+
+    /**
      * Marks each code with the cookbook pages whose markdown mentions it — every
      * {@code docs/*.md} except the generated reference pages themselves, which would
-     * otherwise "document" every code they index.
+     * otherwise "document" every code they index, and the {@link #INTERNAL_DOCS}.
      */
     private static void mentionDocs(Path docsDir, Map<String, Map<Integer, Code>> byDomain)
             throws IOException {
@@ -121,6 +129,7 @@ final class ErrorIndex {
             pages = docs
                     .filter(p -> p.getFileName().toString().endsWith(".md"))
                     .filter(p -> !p.getFileName().toString().startsWith("reference-"))
+                    .filter(p -> !INTERNAL_DOCS.contains(p.getFileName().toString()))
                     .sorted()
                     .toList();
         }
