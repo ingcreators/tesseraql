@@ -56,6 +56,28 @@ jobs:
       - name: Smoke-test the fat jar
         run: java -jar tesseraql-cli/target/tesseraql-cli-*-all.jar routes --app examples/scaffold-demo-app
 
+      # The dist-only failure class (a stale or missing class, a dropped driver, a
+      # service file lost in the fat-jar merge) is invisible to in-JVM tests: prove
+      # the shipped archive actually lints, clears admission, and SERVES a gallery
+      # app end to end.
+      - name: Serve a gallery app from the dist archive
+        run: |
+          tar xzf tesseraql-cli/target/tesseraql-cli-*-dist.tar.gz -C "$RUNNER_TEMP"
+          TQL=$(echo "$RUNNER_TEMP"/tesseraql-*/bin/tesseraql)
+          "$TQL" lint --app examples/inventory-app
+          "$TQL" admission --app examples/inventory-app
+          "$TQL" serve --app examples/inventory-app --embedded-db > serve.log 2>&1 &
+          SERVE_PID=$!
+          READY=0
+          for i in $(seq 1 90); do
+            if curl -sf http://localhost:8080/_tesseraql/health/ready > /dev/null; then READY=1; break; fi
+            kill -0 "$SERVE_PID" 2>/dev/null || break
+            sleep 2
+          done
+          if [ "$READY" != "1" ]; then echo '--- serve.log ---'; cat serve.log; exit 1; fi
+          curl -sf http://localhost:8080/_tesseraql/health/live > /dev/null
+          kill "$SERVE_PID"
+
   # The documentation site (docs/docs-site.md): the same build command Cloudflare
   # Workers Builds runs, so green CI implies a clean deploy. This is also where the
   # sync's completeness guard and the links validator gate PRs: a new docs/*.md that
