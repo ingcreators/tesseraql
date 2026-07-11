@@ -63,7 +63,14 @@ final class SchemaReference {
         }
         JsonNode properties = node.get("properties");
         if (properties == null) {
-            return;
+            // An array- or map-valued definition (e.g. statusWhen) documents its
+            // element shape: resolve through items/additionalProperties first.
+            JsonNode resolved = resolve(node, root);
+            properties = resolved.get("properties");
+            if (properties == null) {
+                return;
+            }
+            node = resolved;
         }
         List<String> required = new ArrayList<>();
         if (node.has("required")) {

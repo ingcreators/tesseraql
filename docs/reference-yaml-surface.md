@@ -3,31 +3,31 @@
 
 Generated from [`tesseraql-v1.schema.json`](../tesseraql-yaml/src/main/resources/schema/tesseraql-v1.schema.json) — the schema the loader, the editors, and the linter share — on every refresh, so it cannot drift from what the framework accepts. One document = one file under an app's `routes/` tree; which root properties apply depends on the document's `kind`.
 
-Schema for TesseraQL Simple YAML documents: routes (web/**/<method>.yml), jobs (batch/**/job.yml), queue consumers (consume/**), and declarative views (*.view.yml). additionalProperties stays true so newer keys never break older editors. The route recipe enum is kept in sync with the linter by a build-time test.
+Schema for TesseraQL Simple YAML documents: routes (web/**/<method>.yml), jobs (batch/**/job.yml), queue consumers (consume/**), and declarative views (*.view.yml).
 
 ## The document
 
 | Property | Type | Description |
 | --- | --- | --- |
 | `version` \* | const `tesseraql/v1` |  |
-| `id` \* | string, min length 1 |  |
+| `id` \* | string, min length 1 | Unique document id, e.g. products.page; referenced by tests, coverage, governance approvals, and logs. |
 | `kind` \* | enum: `route` \| `job` \| `view` |  |
-| `recipe` | enum: `query-json` \| `command-json` \| `query-html` \| `page` \| `query-export` \| `file-import` \| `file-export` \| `webhook` \| `queue-consume` \| `batch-tasklet` \| `batch-pipeline` | Route recipes (the linter's KNOWN_ROUTE_RECIPES) plus queue-consume (consume/** documents) and the job recipes batch-tasklet/batch-pipeline. |
+| `recipe` | enum: `query-json` \| `command-json` \| `query-html` \| `page` \| `query-export` \| `file-import` \| `file-export` \| `webhook` \| `queue-consume` \| `batch-tasklet` \| `batch-pipeline` | What the route does: query-json/command-json (JSON APIs), query-html/page (HTML pages), query-export/file-import/file-export (file transfers), webhook (inbound webhooks), queue-consume (consume/** documents), and the job recipes batch-tasklet/batch-pipeline. |
 | `input` | map of [inputField](#inputfield) |  |
-| `inputPolicy` | object |  |
+| `inputPolicy` | object | Route-level input handling policy (e.g. unknown-field behavior) layered over the deny-by-default input: contract. |
 | `security` | [object](#security) |  |
-| `idempotency` | object |  |
-| `policy` | object |  |
-| `outbox` | object |  |
+| `idempotency` | object | Idempotent replay for commands: required, scope (default: the route id), ttl (default 24h). A replayed key returns the stored response; a reused key with a different body is TQL-IDEM-4090. Documented in transactional-writes.md. |
+| `policy` | object | Row-authority policy binds for /*%scope*/ directives in the route's SQL. Documented in data-scoping.md. |
+| `outbox` | object | Transactional outbox event recorded with the command and delivered at-least-once after commit. Documented in notifications.md and messaging.md. |
 | `datasource` | string | The named connector under tesseraql.datasources the route's SQL runs on, defaulting to main. The name must be declared (TQL-YAML-1035); a non-main route cannot declare notify:/publish:/outbox: or sequence allocation - they ride the main connector (TQL-YAML-1036). |
 | `sql` | [sqlBinding](#sqlbinding) |  |
 | `steps` | map of [sqlBinding](#sqlbinding) |  |
 | `queries` | map of [sqlBinding](#sqlbinding) | Additional named queries executed after sql, each bound into the execution context under its name. |
-| `validate` | map of object |  |
-| `notify` | map of object |  |
-| `errors` | object |  |
-| `import` | object |  |
-| `export` | object |  |
+| `validate` | map of object | Declarative validation rules keyed by rule id; each declares one of rule: (expression) or file: (validation SQL). Documented in declarative-validation.md. |
+| `notify` | map of object | Notifications enqueued with the command on the transactional outbox, keyed by channel. Documented in notifications.md. |
+| `errors` | object | Per-route error mapping: constraint codes and statuses onto response fields and messages. Documented in declarative-validation.md. |
+| `import` | object | file-import parsing and column-to-bind mapping (headerRow, startRow, columns, onError: rollback\|skip). Documented in file-transfers.md. |
+| `export` | object | query-export / file-export output: format (csv, excel, pdf), filename, columns with headers and format patterns, locale/timezone. Documented in file-transfers.md. |
 | `webhook` | [object](#webhook) |  |
 | `publish` | [object](#publish) |  |
 | `consume` | [object](#consume) |  |
@@ -232,3 +232,8 @@ Declarative pagination: the framework appends the dialect clause; authored SQL c
 | `unmaskWhen` | string |  |
 
 ### statusWhen
+
+| Property | Type | Description |
+| --- | --- | --- |
+| `when` \* | string | A whitelist-only expression over the execution context; the first matching entry wins. |
+| `status` \* | integer ≥ 100 ≤ 599 | The HTTP status to answer when the expression is truthy. |

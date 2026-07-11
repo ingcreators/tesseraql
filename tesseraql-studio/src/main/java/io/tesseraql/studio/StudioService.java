@@ -2590,7 +2590,7 @@ public final class StudioService {
         Path resolved = appHome.resolve(relativePath).normalize();
         if (!resolved.startsWith(appHome)) {
             throw new TqlException(TRAVERSAL,
-                    "Path escapes app home (design ch. 20.2): " + relativePath);
+                    "Path escapes app home: " + relativePath);
         }
         return resolved;
     }

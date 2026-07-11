@@ -59,14 +59,14 @@ final class ErrorIndex {
         md.append(String.join(" · ", toc)).append('\n');
         for (Map.Entry<String, Map<Integer, Code>> domain : byDomain.entrySet()) {
             md.append("\n## ").append(domain.getKey()).append('\n')
-                    .append("\n| Code | Meaning | Raised in | Documented in |\n"
+                    .append("\n| Code | Meaning | Documented in | Raised in |\n"
                             + "| --- | --- | --- | --- |\n");
             for (Map.Entry<Integer, Code> code : domain.getValue().entrySet()) {
                 md.append("| `TQL-").append(domain.getKey()).append('-')
                         .append(code.getKey()).append("` | ")
                         .append(meaningCell(code.getValue().messages())).append(" | ")
-                        .append(sourceLinks(code.getValue().sources())).append(" | ")
-                        .append(docLinks(code.getValue().docs())).append(" |\n");
+                        .append(docLinks(code.getValue().docs())).append(" | ")
+                        .append(sourceLinks(code.getValue().sources())).append(" |\n");
             }
         }
         return md.toString();
@@ -127,16 +127,42 @@ final class ErrorIndex {
      */
     private static java.util.Optional<String> meaningAt(String source, Lexed lexed, int start,
             int end) {
-        java.util.Optional<String> fromStatement = messageFromStatement(source, lexed, start, end);
-        if (fromStatement.isEmpty()) {
-            fromStatement = javadocAbove(source, start);
+        if (quotedInProse(source, lexed, start, end) || lexed.insideComment(start, end)) {
+            // A code embedded in some longer string (a neighbor's message or a rendered
+            // template naming it) or mentioned in passing in a comment: extracting the
+            // surrounding text would bleed a neighbor's message onto this code. Its own
+            // raise site — where the literal IS the code — explains it; curated constant
+            // javadoc is found there too.
+            return java.util.Optional.empty();
         }
-        if (fromStatement.isEmpty()) {
-            fromStatement = constantMeaning(source, lexed, start, end);
+        java.util.Optional<String> meaning = messageFromStatement(source, lexed, start, end);
+        if (meaning.isEmpty()) {
+            meaning = javadocAbove(source, start);
         }
-        // A meaning that opens by naming its own code just repeats the Code column.
-        return fromStatement.map(text -> text.replaceFirst("^TQL-[A-Z]+-\\d+:?\\s*", ""))
-                .filter(text -> !text.isEmpty());
+        if (meaning.isEmpty()) {
+            meaning = constantMeaning(source, lexed, start, end);
+        }
+        // A meaning that opens by naming its own code just repeats the Code column; a
+        // markup or JSON template is not prose.
+        return meaning.map(text -> text.replaceFirst("^TQL-[A-Z]+-\\d+:?\\s*", "").trim())
+                .filter(text -> !text.isEmpty())
+                .filter(text -> !text.startsWith("{") && !text.startsWith("<"));
+    }
+
+    /**
+     * True when the match sits inside a string literal whose content is more than the
+     * code itself — i.e. the code is quoted in someone else's prose or template, not
+     * being raised. A literal that IS the bare code (the usual lint-finding argument)
+     * stays a raise site.
+     */
+    private static boolean quotedInProse(String source, Lexed lexed, int start, int end) {
+        for (int[] span : lexed.literals()) {
+            if (span[0] <= start && end <= span[1]) {
+                return !source.substring(span[0], span[1]).trim()
+                        .equals(source.substring(start, end));
+            }
+        }
+        return false;
     }
 
     private static final Pattern CONSTANT = Pattern
@@ -186,21 +212,43 @@ final class ErrorIndex {
      * literals and comments. Starting from the top of the file keeps the quote parity
      * honest — a fixed-size window can open mid-literal and read code as text.
      */
-    record Lexed(List<int[]> literals, List<Integer> boundaries) {
+    record Lexed(List<int[]> literals, List<Integer> boundaries, List<int[]> comments) {
+
+        /** Whether the span [start, end) lies inside a string-literal content span. */
+        boolean insideLiteral(int start, int end) {
+            return covers(literals, start, end);
+        }
+
+        /** Whether the span [start, end) lies inside a comment. */
+        boolean insideComment(int start, int end) {
+            return covers(comments, start, end);
+        }
+
+        private static boolean covers(List<int[]> spans, int start, int end) {
+            for (int[] span : spans) {
+                if (span[0] <= start && end <= span[1]) {
+                    return true;
+                }
+            }
+            return false;
+        }
     }
 
     static Lexed lex(String source) {
         List<int[]> literals = new ArrayList<>();
         List<Integer> boundaries = new ArrayList<>();
+        List<int[]> comments = new ArrayList<>();
         int i = 0;
         int n = source.length();
         while (i < n) {
             char c = source.charAt(i);
             if (c == '/' && i + 1 < n && source.charAt(i + 1) == '/') {
                 int eol = source.indexOf('\n', i);
+                comments.add(new int[]{i, eol < 0 ? n : eol});
                 i = eol < 0 ? n : eol + 1;
             } else if (c == '/' && i + 1 < n && source.charAt(i + 1) == '*') {
                 int close = source.indexOf("*/", i + 2);
+                comments.add(new int[]{i, close < 0 ? n : close + 2});
                 i = close < 0 ? n : close + 2;
             } else if (source.startsWith("\"\"\"", i)) {
                 int close = source.indexOf("\"\"\"", i + 3);
@@ -226,7 +274,7 @@ final class ErrorIndex {
                 i++;
             }
         }
-        return new Lexed(literals, boundaries);
+        return new Lexed(literals, boundaries, comments);
     }
 
     /**
@@ -410,8 +458,11 @@ final class ErrorIndex {
             return "—";
         }
         String joined = String.join(" · ", messages.stream().limit(2).toList());
-        if (messages.size() > 2 || joined.length() > 220) {
-            joined = joined.length() > 220 ? joined.substring(0, 219) + "…" : joined + " …";
+        if (joined.length() > 220) {
+            int cut = joined.lastIndexOf(' ', 219);
+            joined = joined.substring(0, cut > 120 ? cut : 219) + " …";
+        } else if (messages.size() > 2) {
+            joined = joined + " …";
         }
         return joined.replace("|", "\\|").replace("<", "&lt;").replace(">", "&gt;");
     }
