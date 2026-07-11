@@ -1,10 +1,9 @@
-# Application developer distribution and onboarding plan
+# Application developer distribution and onboarding
 
-Status: implemented (all suggested-sequencing steps below are done) except the deferred
-later-horizon items called out inline — Maven Central + signing (GitHub Packages ships now) and a
-Gradle plugin. This document elaborates the **Distribution** gap row in [roadmap.md](roadmap.md)
-("GitHub Releases only; no Maven Central, no Gradle plugin, no docs site") into a concrete
-workstream.
+How a developer obtains TesseraQL and builds an application on it without cloning the
+framework repository. Everything below is available today except the items called out
+inline as planned — Maven Central + signing (GitHub Packages ships now) and a Gradle
+plugin.
 
 ## Goal
 
@@ -21,7 +20,7 @@ layer.
 
 ## Non-goals
 
-- Gradle plugin (tracked separately in the roadmap; later horizon).
+- Gradle plugin (planned, not currently supported).
 - Changing the app-layout contract or the runtime.
 - Replacing the Maven plugin. It stays as the CI / lifecycle-integration surface.
 
