@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://tesseraql.io/schema/tesseraql-v1.schema.json",
   "title": "TesseraQL Simple YAML v1",
-  "description": "Schema for TesseraQL Simple YAML documents: routes (web/**/<method>.yml), jobs (batch/**/job.yml), queue consumers (consume/**), and declarative views (*.view.yml). Deepened for editor feedback (roadmap Phase 43); additionalProperties stays true so newer keys never break older editors. The route recipe enum is kept in sync with the linter by a build-time test.",
+  "description": "Schema for TesseraQL Simple YAML documents: routes (web/**/<method>.yml), jobs (batch/**/job.yml), queue consumers (consume/**), and declarative views (*.view.yml). additionalProperties stays true so newer keys never break older editors. The route recipe enum is kept in sync with the linter by a build-time test.",
   "type": "object",
   "required": ["version", "id", "kind"],
   "properties": {
@@ -49,7 +49,7 @@
     "outbox": { "type": "object", "additionalProperties": true },
     "datasource": {
       "type": "string",
-      "description": "The named connector under tesseraql.datasources the route's SQL runs on (roadmap Phase 53), defaulting to main. Read recipes only until the projection slice (TQL-YAML-1036); the name must be declared (TQL-YAML-1035)."
+      "description": "The named connector under tesseraql.datasources the route's SQL runs on, defaulting to main. The name must be declared (TQL-YAML-1035); a non-main route cannot declare notify:/publish:/outbox: or sequence allocation - they ride the main connector (TQL-YAML-1036)."
     },
     "sql": { "$ref": "#/$defs/sqlBinding" },
     "steps": {
@@ -93,7 +93,7 @@
       "additionalProperties": true
     },
     "page": {
-      "description": "Declarative pagination (roadmap Phase 41): the framework appends the dialect clause; authored SQL carries no LIMIT/FETCH.",
+      "description": "Declarative pagination: the framework appends the dialect clause; authored SQL carries no LIMIT/FETCH.",
       "type": "object",
       "properties": {
         "strategy": { "enum": ["offset", "keyset"] },
@@ -184,7 +184,7 @@
       "additionalProperties": true
     },
     "view": {
-      "description": "Declarative view documents (kind: view, roadmap Phase 39): list | form | detail | dashboard.",
+      "description": "Declarative view documents (kind: view): list | form | detail | dashboard.",
       "enum": ["list", "form", "detail", "dashboard"]
     },
     "title": { "type": "string" },
@@ -235,8 +235,8 @@
         "contract": { "type": "string" },
         "service": { "type": "string" },
         "mode": { "type": "string", "examples": ["query", "query-one", "update", "query-spool"] },
-        "timeoutSeconds": { "type": "integer", "minimum": 0, "description": "Per-binding SQL statement timeout override (roadmap Phase 45); 0 disables. Default: tesseraql.sql.timeoutSeconds, else 30s." },
-        "datasource": { "type": "string", "description": "The named connector this read binding runs on (roadmap Phase 53), overriding the route's connector. A step inside a transactional pipeline cannot pick its own connector (TQL-YAML-1037)." },
+        "timeoutSeconds": { "type": "integer", "minimum": 0, "description": "Per-binding SQL statement timeout override; 0 disables. Default: tesseraql.sql.timeoutSeconds, else 30s." },
+        "datasource": { "type": "string", "description": "The named connector this read binding runs on, overriding the route's connector. A step inside a transactional pipeline cannot pick its own connector (TQL-YAML-1037)." },
         "params": { "type": "object", "additionalProperties": { "type": "string" } },
         "sequence": { "type": "string" },
         "keys": { "type": "array", "items": { "type": "string" } },
