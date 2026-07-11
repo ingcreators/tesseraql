@@ -22,13 +22,14 @@ No database, no compose: an embedded PostgreSQL starts inside the process, the a
 migrations create and **seed** the schema, and every route serves immediately. Any gallery
 app works the same way (`purchase-request-app`, `helpdesk-app`, `scaffold-demo-app`).
 
-Alternatively, one container — note the image build **compiles the framework from source**
-(a multi-stage build; the first build takes several minutes, later builds cache):
+Alternatively, one container — a prebuilt image is published with each release:
 
 ```bash
-docker build -f deploy/Dockerfile.demo -t tesseraql-demo .
-docker run --rm -p 8080:8080 tesseraql-demo
+docker run --rm -p 8080:8080 ghcr.io/ingcreators/tesseraql-demo:latest
 ```
+
+(Building it yourself — `docker build -f deploy/Dockerfile.demo -t tesseraql-demo .` —
+also works, but compiles the framework from source and takes several minutes.)
 
 ## First login
 
