@@ -5,7 +5,7 @@ coverage kinds, deterministic generated output — which is exactly the feedback
 agent needs. `tesseraql mcp` turns that loop into a [Model Context
 Protocol](https://modelcontextprotocol.io) server: an agent connected only over MCP can
 scaffold a table-backed route and iterate until lint, tests, and coverage pass, without any
-direct filesystem access (roadmap Phase 24).
+direct filesystem access.
 
 Every tool reuses the same service the CLI and Maven plugin use, so a tool call behaves
 exactly like running the command by hand — same generation, same lint rules, same coverage
@@ -88,9 +88,9 @@ auth.
 
 `schema_introspect`, `scaffold_crud`, `test`, and `ops_status` use the app's configured main
 datasource unless the call supplies `jdbcUrl` / `username` / `password`. Writes go through the
-same machinery as the CLI: `scaffold_crud` through the checksum-aware writer (design ch.
-22.20), and the draft tools through [Studio's](app-layout.md) draft/apply mechanism — both
-confined to the app home (design ch. 20.2), so a path that escapes it is rejected.
+same machinery as the CLI: `scaffold_crud` through the checksum-aware writer, and the
+draft tools through [Studio's](app-layout.md) draft/apply mechanism — both confined to the
+app home, so a path that escapes it is rejected.
 
 ## The iterate loop
 
@@ -117,8 +117,9 @@ steers the connecting agent's model through the tools above: orient with `manife
 
 This is "describe" without an in-app model: TesseraQL ships the workflow, the agent's own model
 does the natural-language reasoning, and every step is a separately-gated tool call — so the
-copilot adds no LLM dependency, no API key, and no new privilege. It honors the roadmap's bet
-that the MCP loop, not an embedded model, is the AI surface.
+copilot adds no LLM dependency, no API key, and no new privilege. The MCP loop, not an
+embedded model, is TesseraQL's AI surface. (For the in-Studio chat panel that drives the
+same loop, see the [Studio copilot](copilot.md).)
 
 ## A reusable protocol core
 
@@ -350,7 +351,7 @@ Write a [(${tone})] welcome message for [(${name})].
 
 ## Mounted-app tools
 
-A TesseraQL runtime hosts the main app and any mounted or bundled system apps (design ch. 32) —
+A TesseraQL runtime hosts the main app and any mounted or bundled system apps —
 the ops console, Studio, IAM admin, and apps listed under `tesseraql.apps.<name>`. Each is a plain
 YAML/SQL/template tree compiled by the same route compiler, so each may declare its own MCP tools,
 resources, and UI resources under `mcp/`. The runtime serves them all from the one

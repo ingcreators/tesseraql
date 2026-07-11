@@ -1,6 +1,6 @@
 # Messaging and events
 
-TesseraQL apps emit and consume domain events through **messaging channels** (roadmap Phase 27):
+TesseraQL apps emit and consume domain events through **messaging channels**:
 governed recipes for publish/subscribe between commands and other systems. A command publishes an
 event on the same transactional outbox it uses for notifications, and a `queue-consume` route runs a
 SQL pipeline for every message it receives, with at-least-once delivery and idempotency-key
@@ -14,7 +14,7 @@ event bus from the database it already runs — no Kafka, no JMS:
   Server, Oracle, and PostgreSQL behind a transaction-pooling proxy that breaks `LISTEN`).
 
 Both give identical at-least-once, idempotent delivery; they differ only in latency. Broker
-transports (Kafka, JMS) arrive later as opt-in leaf modules. The `publish:`/`consume:` YAML is
+transports (Kafka, JMS) are not currently supported but planned as opt-in modules. The `publish:`/`consume:` YAML is
 identical across all transports, so moving between them changes only configuration.
 
 ## The signal-and-log model
@@ -102,7 +102,7 @@ idempotent upsert.
 
 ### Projecting into another database
 
-A consumer may run its apply transaction on a named connector (roadmap Phase 53) — the blessed
+A consumer may run its apply transaction on a named connector — the blessed
 shape for "a write on `main` must reach a second database" without JTA/XA:
 
 ```yaml
@@ -183,16 +183,15 @@ dead-letter ceiling (`tesseraql.outbox.maxAttempts`), visible to operators like 
 - **Payload size** (pg-notify): a `NOTIFY` carries only a wake signal, never the payload, so the
   8 KB `NOTIFY` limit never applies to message size; the payload lives in `tql_event`.
 - **Throughput** (pg-notify): `NOTIFY` serialises at commit time, which is ample for
-  line-of-business volumes but not a high-throughput firehose. For that, a broker transport (a later
-  slice) is the fit.
+  line-of-business volumes but not a high-throughput firehose. For that, a broker transport (not
+  currently supported; planned) is the fit.
 - **Latency vs. polling** (db-poll): with no in-database push, a consumer sees a message at most one
   `backstop` interval after it is published. A shorter interval tightens delivery but polls an idle
   channel more often; the durable table makes either choice correct, only faster or slower.
 - **Dialect**: the durable `tql_event` queue is portable (`SKIP LOCKED` exists on PostgreSQL, MySQL
   8.0+, Oracle, and SQL Server via `READPAST`), so `db-poll` runs everywhere. `LISTEN`/`NOTIFY` is
-  PostgreSQL-only, so `pg-notify` runs only on a PostgreSQL main datasource — consistent with the
-  roadmap's "PostgreSQL first" capability matrix. A `pg-notify` channel on a non-PostgreSQL
-  datasource is logged and left idle (switch it to `db-poll`).
+  PostgreSQL-only, so `pg-notify` runs only on a PostgreSQL main datasource. A `pg-notify` channel
+  on a non-PostgreSQL datasource is logged and left idle (switch it to `db-poll`).
 
 ## Governance and testing
 

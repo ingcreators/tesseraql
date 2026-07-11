@@ -1,6 +1,6 @@
 # Notifications
 
-A command or batch job declares the notifications it sends in YAML (roadmap Phase 20): a
+A command or batch job declares the notifications it sends in YAML: a
 `notify:` block on a `command-json` route, or a `notify:` pipeline step on a job. A
 notification names a **channel** — SMTP mail or an HMAC-signed webhook, configured under
 `tesseraql.notifications.channels` — and a payload resolved from the execution context.
@@ -53,7 +53,7 @@ notify:
   confirmation:
     channel: user-mail
     when: body.active == true        # optional guard; a falsy guard skips the notification
-    recipient: principal.subject     # optional (roadmap Phase 48): honors that subject's opt-out
+    recipient: principal.subject     # optional: honors that subject's opt-out
     payload:
       userName: body.userName
       givenName: body.givenName
@@ -100,12 +100,11 @@ A pipeline step declares exactly one of `sql:` or `notify:`. The step reports
 `affectedRows: 1` and its `eventId` when the notification enqueued, `0` when the guard
 skipped it.
 
-## Per-user opt-out (roadmap Phase 48)
+## Per-user opt-out
 
 A notification that names its **recipient** — an expression resolving to a subject, such as
 `principal.subject` or `body.assignee` — honors that subject's per-channel opt-out, stored
-as the `notify.<channel>.optOut` preference by the account surface
-([docs/account.md](account.md)). The decision runs **at enqueue**, in the command's
+as the `notify.<channel>.optOut` preference by the [account surface](account.md). The decision runs **at enqueue**, in the command's
 transaction (and equally in a job's `notify:` step): an opted-out notification writes no
 outbox row — nothing to retry, nothing half-delivered — and the command's `notify` context
 reports `{optedOut: true}` in place of the event id.
@@ -240,7 +239,7 @@ the build like any other kind.
 - a channel the config does not declare (`TQL-YAML-1102`, warning — another environment's
   config may declare it)
 
-## Error codes added in this phase
+## Error codes
 
 | Code | Status | Meaning |
 | --- | --- | --- |
