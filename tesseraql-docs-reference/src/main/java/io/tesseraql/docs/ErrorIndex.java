@@ -114,8 +114,8 @@ final class ErrorIndex {
      * The internal planning documents (the docs-site nav.mjs EXCLUDED set): not user
      * documentation, so the index never cites them as a code's cookbook page.
      */
-    private static final Set<String> INTERNAL_DOCS =
-            Set.of("roadmap.md", "docs-site.md", "studio-backlog.md", "hc-briefs.md");
+    private static final Set<String> INTERNAL_DOCS = Set.of("roadmap.md", "docs-site.md",
+            "studio-backlog.md", "hc-briefs.md");
 
     /**
      * Marks each code with the cookbook pages whose markdown mentions it — every
