@@ -352,6 +352,12 @@ public final class RouteCompiler {
                         definition.notifications(), stepFile, datasource, dialect,
                         definition.outbox(), definition.publish(), definition.errors(), appName,
                         workflow));
+        // Live-view topics broadcast only after a successful commit: an exception in the
+        // command processor (rollback) bypasses this step (docs/realtime.md).
+        if (!definition.emit().isEmpty()) {
+            step = step.process(new io.tesseraql.compiler.binding.TopicEmitProcessor(
+                    definition.emit()));
+        }
         // Named queries still run after the command (outside its transaction), in authored order.
         for (var entry : definition.queries().entrySet()) {
             step = step
@@ -397,7 +403,8 @@ public final class RouteCompiler {
             RouteDefinition synthesized = new RouteDefinition("tesseraql/v1", routeId, "route",
                     "command-json", java.util.Map.of(), null, security, null, null, null, command,
                     java.util.Map.of(), java.util.Map.of(), java.util.Map.of(), java.util.Map.of(),
-                    null, null, null, null, null, null, workflowResponse(), null, null);
+                    null, null, null, null, null, null, workflowResponse(), null, null,
+                    null);
             String urlPath = basePath + "/{key}/" + transition.id();
             RouteFile routeFile = new RouteFile("POST", urlPath, workflowFile.source(),
                     synthesized);
@@ -454,7 +461,7 @@ public final class RouteCompiler {
                 "command-json", java.util.Map.of(), null, def.security(), null, null, null, null,
                 java.util.Map.of(), java.util.Map.of(), java.util.Map.of(), java.util.Map.of(),
                 null,
-                null, null, null, null, null, workflowResponse(), null, null);
+                null, null, null, null, null, workflowResponse(), null, null, null);
         ProcessorDefinition<?> route = builder.from(direct).routeId(routeId);
         applySecurity(route, def.security());
         applyTenancy(route);

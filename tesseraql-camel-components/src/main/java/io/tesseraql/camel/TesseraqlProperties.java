@@ -89,6 +89,9 @@ public final class TesseraqlProperties {
     public static final String UI_THEME_BEAN = "tesseraqlUiTheme";
     /** Registry bean name for the in-app inbox store (roadmap Phase 49), if any inbox channel. */
     public static final String INBOX_STORE_BEAN = "tesseraqlInboxStore";
+
+    /** The live-view topic bus commands emit to after commit (docs/realtime.md). */
+    public static final String TOPIC_BUS_BEAN = "tesseraqlTopicBus";
     /** Registry bean name for the TOTP enrollment store (roadmap Phase 50), with identity. */
     public static final String TOTP_STORE_BEAN = "tesseraqlTotpStore";
     /** Registry bean name for the absence-delegation store (roadmap Phase 52), with tasks. */
