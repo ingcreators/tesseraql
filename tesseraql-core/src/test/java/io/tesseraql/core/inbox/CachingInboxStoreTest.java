@@ -73,4 +73,69 @@ class CachingInboxStoreTest {
         store.unreadCount(null, "u");
         assertThat(delegate.counts.get()).isEqualTo(4);
     }
+
+    /**
+     * The read-through/invalidation race behind the InboxDeliveryIntegrationTest flake: a slow
+     * concurrent reader (the SSE badge pusher reacting to a delivery) finishes its delegate
+     * query after a mark-read invalidated the key. Its stale count must be discarded, not
+     * cached — otherwise the badge serves the pre-mark-read value for a full TTL.
+     */
+    @Test
+    void aReadThroughThatRacesAnInvalidationDoesNotCacheTheStaleCount() throws Exception {
+        var queryEntered = new java.util.concurrent.CountDownLatch(1);
+        var invalidated = new java.util.concurrent.CountDownLatch(1);
+        CountingStore counting = new CountingStore();
+        InboxStore delegate = new InboxStore() {
+            @Override
+            public void deliver(String eventId, String tenantId, String subject, String channel,
+                    String source, String title, String body) {
+                counting.deliver(eventId, tenantId, subject, channel, source, title, body);
+            }
+
+            @Override
+            public int unreadCount(String tenantId, String subject) {
+                int unread = counting.unreadCount(tenantId, subject);
+                if (queryEntered.getCount() > 0) {
+                    queryEntered.countDown();
+                    try {
+                        // Stall the first read-through until the main thread's markRead ran.
+                        invalidated.await(5, java.util.concurrent.TimeUnit.SECONDS);
+                    } catch (InterruptedException ex) {
+                        Thread.currentThread().interrupt();
+                    }
+                    // Re-read: the count the stalled reader returns is the pre-mark-read one.
+                }
+                return unread;
+            }
+
+            @Override
+            public List<InboxMessage> recent(String tenantId, String subject, int limit) {
+                return counting.recent(tenantId, subject, limit);
+            }
+
+            @Override
+            public boolean markRead(String tenantId, String subject, String eventId) {
+                return counting.markRead(tenantId, subject, eventId);
+            }
+
+            @Override
+            public int markAllRead(String tenantId, String subject) {
+                return counting.markAllRead(tenantId, subject);
+            }
+        };
+        CachingInboxStore store = new CachingInboxStore(delegate, 15_000, 8, () -> 0L);
+        store.deliver("e1", null, "u", "c", "s", "t", null);
+
+        Thread badgePusher = new Thread(() -> store.unreadCount(null, "u"));
+        badgePusher.start();
+        assertThat(queryEntered.await(5, java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+        // The slow reader saw unread=1 and is now stalled; the owner marks the message read.
+        store.markRead(null, "u", "e1");
+        invalidated.countDown();
+        badgePusher.join(5_000);
+
+        // The stale 1 must not have been cached over the invalidation: the next read hits the
+        // delegate and reports 0.
+        assertThat(store.unreadCount(null, "u")).isZero();
+    }
 }

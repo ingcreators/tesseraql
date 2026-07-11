@@ -17,6 +17,14 @@ All notable changes to TesseraQL are documented here. The format follows
   and the allow-list did not apply. **Migration**: add the copilot endpoint's host to
   `tesseraql.http.outbound.allowedHosts`.
 
+### Fixed
+
+- **Stale inbox badge after mark-read**: a race between the unread-count cache's
+  read-through and a mark-read invalidation (the SSE badge pusher reacting to a delivery
+  could re-cache the pre-mark-read count) made the shell bell show the old badge for up
+  to a full cache TTL. Invalidations now bump an epoch and a racing read-through discards
+  its stale result.
+
 ### Added
 
 - **Custom expression functions** (`ExpressionFunction` SPI): a one-class Java hook for the
