@@ -26,8 +26,8 @@ export:
   filename: users.pdf
   template: print.html        # colocated with the route; omit for the built-in grid
   columns:
-    - { name: name,   header: 氏名 }
-    - { name: status, header: 状態 }
+    - { name: name,   header: Name }
+    - { name: status, header: Status }
 ```
 
 Without a `template:` the built-in grid lays the rows out as a plain A4 table with repeating
@@ -65,7 +65,7 @@ Page-oriented CSS drives the print layout:
   </style>
 </head>
 <body>
-  <h1>利用者一覧</h1>
+  <h1>User list</h1>
   <table>
     <thead><tr><th th:each="column : ${columns}" th:text="${column.header}">h</th></tr></thead>
     <tbody>
