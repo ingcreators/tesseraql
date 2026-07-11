@@ -1,18 +1,20 @@
 # The in-app notification center — the shell's bell and inbox
 
-Status: design accepted 2026-07-04 (roadmap Phase 49, Horizon 9). **Both slices are
-delivered — Phase 49 is complete and milestone M14 is met**: the inbox channel type and
-store (slice 1), the shell bell and `/_tesseraql/inbox` (slice 2).
-
 Business applications tell their users things: your request was approved, a document
-needs you, stock ran low. Phase 20 delivers those over mail and webhooks; Phase 48 gave
-notifications a **recipient** and a per-user opt-out. What is still missing is the place
-users actually expect these to land: an in-app inbox behind a bell in the shell. This
-phase adds it as a third **channel type** — not a new pipeline — so everything the outbox
-already guarantees (at-least-once retries, dead letters, the enqueue-time opt-out, the
+needs you, stock ran low. [Notifications](notifications.md) deliver those over mail and
+webhooks, and every notification can carry a **recipient** and a per-user opt-out
+([account surface](account.md)). The in-app inbox is the place users actually expect
+these to land: a bell in the shell with an unread badge, and an inbox page behind it.
+It is a third **channel type** — not a new pipeline — so everything the outbox already
+guarantees (at-least-once retries, dead letters, the enqueue-time opt-out, the
 `notification` coverage kind) applies to inbox messages unchanged.
 
-## The channel type (slice 1)
+End to end: an application declares one inbox channel and one `recipient:`-addressed
+`notify:`; the event shows up as an unread badge in the shell and a message in the
+inbox, reading clears it, and opting out silences it — zero app code beyond those
+declarations.
+
+## The channel type
 
 ```yaml
 tesseraql:
@@ -22,18 +24,18 @@ tesseraql:
         type: inbox                      # beside mail and webhook
         title: "Request [(${payload.requestId})] was [(${payload.decision})]"
         body: "Decided by [(${payload.decidedBy})]."
-        userOptOut: "true"               # optional, the Phase 48 marker
+        userOptOut: "true"               # optional, shows the per-user opt-out toggle
 ```
 
-A `notify:` on an inbox channel **must** name its `recipient:` (the Phase 48 expression
-resolving to a subject) — an inbox message without an addressee is meaningless, so a
-missing one is a **lint error**, not a runtime surprise. The resolved recipient now rides
-the outbox envelope (a new optional field; old in-flight envelopes decode with it absent),
-and `NotificationSink` grows an `inbox` case beside mail and webhook that renders the
-`title`/`body` templates against the payload (the mail channel's inline-template
-mechanism) and inserts into the managed table.
+A `notify:` on an inbox channel **must** name its `recipient:` (the
+[account surface](account.md) expression resolving to a subject) — an inbox message
+without an addressee is meaningless, so a missing one is a **lint error**, not a runtime
+surprise. The resolved recipient rides the outbox envelope (an optional field; envelopes
+without it decode with it absent), and `NotificationSink` has an `inbox` case beside
+mail and webhook that renders the `title`/`body` templates against the payload (the mail
+channel's inline-template mechanism) and inserts into the managed table.
 
-## The store (slice 1)
+## The store
 
 `InboxStore` SPI in `tesseraql-core`, `JdbcInboxStore` in `tesseraql-operations`, over:
 
@@ -59,10 +61,10 @@ create table if not exists tql_user_notification (
   `tesseraql.inbox.retentionDays` (default 90) — the session-store prune-on-create
   pattern; unread messages stay.
 - The table lives outside the Flyway component set (the `tql_user_preference` pattern):
-  `ensureSchema` is its only owner, so the slice-4 dual-ownership collision cannot recur.
+  `ensureSchema` is its only owner, so the schema never has two competing owners.
 - The store binds only when an inbox channel is declared — no channel, no table, no bell.
 
-## The surface (slice 2)
+## The surface
 
 - The shared shell grows a bell between the header slot and the user menu, rendered from
   a reserved **`_inbox`** variable (beside `_account`/`_theme`): a link to
@@ -77,34 +79,12 @@ create table if not exists tql_user_notification (
 - Message bodies are plain text rendered escaped — a notification never carries markup
   into the page.
 
-## What this deliberately reuses
-
-| Concern | Answer |
-| --- | --- |
-| Delivery guarantees | The Phase 20 outbox: at-least-once, retries, dead letters |
-| Addressing | The Phase 48 `recipient:` expression |
-| Muting | The Phase 48 opt-out (`userOptOut: true` shows the toggle; the enqueue check silences) |
-| Testing | The existing `notification` coverage kind and `notify:` suite targets |
-| Chrome | The reserved-variable + bundled-app pattern (`_account`, `/_tesseraql/account`) |
-
-## Error and lint surface
-
-- Lint `TQL-YAML-1034`: a `notify:` on an inbox-type channel declares no `recipient:`.
-- `TQL-ACCOUNT-4806`: marking a message that is not the caller's (or unknown) as read.
-- Delivery failures throw, so the dispatcher's retry/dead-letter policy applies — except
-  the duplicate-key case, which reads as already-delivered success.
-
-Milestone **M14** closes the phase: a gallery app declares one inbox channel and one
-`recipient:`-addressed `notify:`; the event shows up as an unread badge in the shell and
-a message in the inbox, reading clears it, opting out silences it — zero app code beyond
-those declarations.
-
-## Live badge (hc 0.1.9 adoption)
+## Live badge
 
 The bell's badge is pushed, not polled: the shell subscribes it to the framework's
-per-session event stream with the kit's `sse-updates` recipe on htmx's bundled `sse`
-extension — the second consumer of the `SseRoutes` transport the copilot's streaming
-replies introduced (docs/copilot.md, "The SSE transport").
+per-session event stream with the Hypermedia Components `sse-updates` recipe on htmx's
+bundled `sse` extension — the same `SseRoutes` transport that carries the
+[copilot](copilot.md#the-sse-transport)'s streaming replies.
 
 - **`GET /_tesseraql/events`** — browser-session-authenticated SSE, mounted exactly when
   an inbox channel is configured (like the bell). One named event today, `inbox:badge`,
@@ -121,4 +101,24 @@ replies introduced (docs/copilot.md, "The SSE transport").
   stream evicts the oldest), and each stream ends itself after a fixed lifetime; the
   browser's EventSource reconnects at the server-set `retry` delay, which also covers
   evictions. Initial state always renders server-side — the stream only freshens it, so
-  no JavaScript means the Phase 49 behavior: the badge updates on the next page load.
+  without JavaScript the badge simply updates on the next page load.
+
+## Error and lint surface
+
+- Lint `TQL-YAML-1034`: a `notify:` on an inbox-type channel declares no `recipient:`.
+- `TQL-ACCOUNT-4806`: marking a message that is not the caller's (or unknown) as read.
+- Delivery failures throw, so the dispatcher's retry/dead-letter policy applies — except
+  the duplicate-key case, which reads as already-delivered success.
+
+## Design notes
+
+The inbox deliberately reuses existing framework machinery rather than introducing a
+new delivery pipeline:
+
+| Concern | Answer |
+| --- | --- |
+| Delivery guarantees | The [notifications](notifications.md) outbox: at-least-once, retries, dead letters |
+| Addressing | The `recipient:` expression ([account surface](account.md)) |
+| Muting | The per-user opt-out (`userOptOut: true` shows the toggle; the enqueue check silences) |
+| Testing | The existing `notification` coverage kind and `notify:` suite targets |
+| Chrome | The reserved-variable + bundled-app pattern (`_account`, `/_tesseraql/account`) |

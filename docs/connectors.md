@@ -1,13 +1,13 @@
 # Managed connectors
 
-TesseraQL apps integrate with neighbouring systems through **managed connectors** (roadmap
-Phase 26): governed recipes for files and HTTP. Camel's component catalog stays an
+TesseraQL apps integrate with neighbouring systems through **managed connectors**: governed
+recipes for files and HTTP. Camel's component catalog stays an
 implementation detail — an app never writes a raw endpoint URI; it declares a connector that
 runs under the framework's allow-lists, secrets, lint, and coverage.
 
 This page covers the outbound `http-call` pipeline step, the inbound directory-polling trigger
 for `file-import`, and the inbound `webhook` recipe. For publish/subscribe between commands and
-other systems — domain events on a broker-free PostgreSQL channel or, later, a message broker — see
+other systems — domain events on a broker-free database channel — see
 [messaging and events](messaging.md).
 
 ## The `http-call` pipeline step
@@ -282,9 +282,9 @@ tesseraql:
 
 ### Verification
 
-The signature covers `<timestamp>.<body>` — the same scheme the Phase 20 [outbound
-webhook](notifications.md) signs with, so a TesseraQL app can both send and receive signed
-webhooks. The sender sends the `sha256=<hex>` signature and the epoch-seconds timestamp in the
+The signature covers `<timestamp>.<body>` — the same scheme the [outbound
+webhook notification](notifications.md) signs with, so a TesseraQL app can both send and receive
+signed webhooks. The sender sends the `sha256=<hex>` signature and the epoch-seconds timestamp in the
 configured headers; the recipe:
 
 1. recomputes the HMAC over the received timestamp and **raw body** and compares in constant time

@@ -1,12 +1,12 @@
 # Studio copilot
 
-An in-Studio chat panel that drives the framework's **existing gated loop** as tools
-(roadmap Phase 44). Describe → the copilot reads routes, sources, lint and schema, previews
+An in-Studio chat panel that drives the framework's **existing gated loop** as tools.
+Describe → the copilot reads routes, sources, lint and schema, previews
 buffers — and, only when you hold an edit role, saves **drafts**. Nothing it does is served
 until you review and apply the draft in the editor's diff-confirm UI, and every
 copilot-saved draft lands in the audit trail under your name.
 
-## Setup (decision point 8)
+## Setup
 
 TesseraQL ships **no model** and stores **no key in app source**. The operator points the
 panel at any OpenAI-compatible chat-completions endpoint:
@@ -33,13 +33,13 @@ The key is read lazily per request through the config placeholder chain, so a
 | `save_draft` | your Studio **edit role** — offered to the model only when you hold one |
 | apply | **never** — a human applies every draft in the editor |
 
-The `studio_copilot` MCP prompt (Phase 24) remains the way to drive the same loop from an
-external agent; the panel is the zero-setup, in-Studio path.
+The `studio_copilot` MCP prompt ([MCP dev tools](ai-mcp.md)) remains the way to drive the
+same loop from an external agent; the panel is the zero-setup, in-Studio path.
 
-## Streaming replies (hc 0.1.9 adoption)
+## Streaming replies
 
 The panel streams the assistant's reply as it is produced instead of blocking on the whole
-tool loop. It adopts two kit recipes verbatim — `chat-messages` (the transcript is an
+tool loop. It adopts two Hypermedia Components kit recipes (hc 0.1.9) verbatim — `chat-messages` (the transcript is an
 `hc-chat` log whose composer posts over htmx) and `streaming-response` (the assistant
 placeholder owns its own SSE connection) — on htmx's bundled `sse` extension. No new
 dependency: the extension ships inside the htmx WebJar and is served version-less like
@@ -71,7 +71,7 @@ page GET and reset stay YAML app routes.
 
 ### The SSE transport
 
-The framework's first streaming surface, built to be reused (the inbox bell rides it
+The framework's streaming surface, built to be reused (the [inbox](inbox.md) bell rides it
 too): `SseRoutes` registers each stream as a **raw route on the platform's Vert.x
 router**, not a Camel route. A Camel exchange answers with a complete body, and the
 platform-http `InputStream` pump (`AsyncInputStream`) only delivers full 8 KB buffers —
