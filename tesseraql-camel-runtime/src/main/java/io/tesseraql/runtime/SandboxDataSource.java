@@ -17,12 +17,15 @@ import javax.sql.DataSource;
  * executes and its rows are returned, but nothing persists. Every statement also gets a query
  * timeout and a max-row cap, so a query can neither run away nor flood memory.
  *
- * <p>The wrapper is intentionally thin: the test runner only acquires a connection, prepares a
- * statement, and reads a result set, so the connection proxy special-cases statement creation,
- * commit/auto-commit/read-only locking, and close; everything else delegates to the pooled
- * connection. (The no-persistence guarantee rests on rollback-on-close plus commit suppression; an
- * explicit {@code COMMIT} statement inside a case's SQL would defeat it, but 2-way SQL files carry
- * single statements, never transaction control.)
+ * <p>The wrapper is intentionally thin: the test runner acquires a connection, prepares a
+ * statement, reads a result set or update count, and manages its own case transaction, so the
+ * connection proxy special-cases statement creation, commit/auto-commit/read-only locking, and
+ * close; everything else delegates to the pooled connection. The runner's own transaction
+ * handling composes cleanly: its {@code setAutoCommit} calls are suppressed (the sandbox is
+ * already manual-commit) and its per-case {@code rollback} delegates — one more rollback before
+ * the rollback-on-close. (The no-persistence guarantee rests on rollback-on-close plus commit
+ * suppression; an explicit {@code COMMIT} statement inside a case's SQL would defeat it, but
+ * 2-way SQL files carry single statements, never transaction control.)
  */
 final class SandboxDataSource implements DataSource {
 

@@ -36,7 +36,10 @@ class AppDocGeneratorTest {
                 .containsExactly(
                         tuple("search finds sato by name", "sql", "web/api/users/search.sql"),
                         tuple("search without query returns all users", "sql",
-                                "web/api/users/search.sql"));
+                                "web/api/users/search.sql"),
+                        // The write case's verify: read-back runs search.sql, so it links too.
+                        tuple("deactivating sato affects one row and the search sees the new status",
+                                "sql", "web/api/users/deactivate/deactivate.sql"));
     }
 
     @Test

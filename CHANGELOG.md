@@ -19,6 +19,20 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **Write routes are directly testable**: a `sql` test case may now target an
+  `UPDATE`/`INSERT`/`DELETE` file. Every `sql` case runs inside a manual-commit transaction
+  the runner always rolls back — pass or fail — so nothing a test writes ever persists.
+  `expect.updateCount` asserts the affected-row count, and the new `verify:` list runs
+  read-back queries on the same connection, inside the same transaction, after the target:
+  they observe the uncommitted write and roll back with it. A write ending in `RETURNING`
+  produces result rows and is asserted with `rowCount`/`rows` like a query, and mixing the
+  assertion kinds fails the case with a message naming the right one. Write cases record
+  SQL coverage, and `verify:` read-backs exercise their files for route and item coverage
+  exactly as case targets do, so command routes now count toward the `route`/`security`
+  coverage kinds. Applies everywhere suites run: `tesseraql test`/`coverage`, the Maven
+  goals, Studio's per-route test runner (whose sandbox keeps its own rollback), and the
+  editor Test Explorer.
+
 - **`serve --watch`**: an opt-in file watcher for editor-first development. Saving a
   route source under `web/` (its yml, 2-way SQL, or templates) hot-reloads that route
   through the exact content-diff reloader Studio's Apply uses — no click in Studio, no

@@ -23,7 +23,7 @@ public final class SuiteCoverage {
         for (TestSuite suite : suites) {
             for (TestCase test : suite.tests()) {
                 coverage.declare(test.name());
-                if (asserts(test.expect())) {
+                if (asserts(test)) {
                     coverage.cover(test.name());
                 }
             }
@@ -45,8 +45,15 @@ public final class SuiteCoverage {
         return coverage;
     }
 
+    /** A case asserts when its own expectation does, or when any verify: read-back's does. */
+    private static boolean asserts(TestCase test) {
+        return asserts(test.expect())
+                || test.verify().stream().anyMatch(step -> asserts(step.expect()));
+    }
+
     private static boolean asserts(Expectation expect) {
-        return expect != null && (expect.rowCount() != null || !expect.rows().isEmpty());
+        return expect != null && (expect.rowCount() != null || expect.updateCount() != null
+                || !expect.rows().isEmpty());
     }
 
     private static String stripIdentityPrefix(String contract) {

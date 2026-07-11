@@ -76,6 +76,27 @@ tests:
       rows:
         - name: sato
 
+  # A write case: the UPDATE runs for real inside an always-rolled-back transaction,
+  # updateCount asserts the affected rows, and the verify read-back observes the write.
+  - name: deactivating sato affects one row and the search sees the new status
+    sql:
+      file: web/api/users/deactivate/deactivate.sql
+    params:
+      name: sato
+    expect:
+      updateCount: 1
+    verify:
+      - sql:
+          file: web/api/users/search.sql
+        params:
+          q: sato
+          limit: 50
+          offset: 0
+        expect:
+          rowCount: 1
+          rows:
+            - status: INACTIVE
+
   - name: admin user resolves the USER_READ role
     contract: identity.find-roles-by-user-id
     params:
