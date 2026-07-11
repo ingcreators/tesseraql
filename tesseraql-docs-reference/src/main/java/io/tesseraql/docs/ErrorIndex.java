@@ -365,7 +365,8 @@ final class ErrorIndex {
      * documentation, so the index never cites them as a code's cookbook page.
      */
     private static final Set<String> INTERNAL_DOCS = Set.of("roadmap.md", "docs-site.md",
-            "studio-backlog.md", "hc-briefs.md");
+            "studio-backlog.md", "hc-briefs.md", "release.md", "build.md",
+            "development-environment.md", "app-developer-distribution.md");
 
     /**
      * Marks each code with the cookbook pages whose markdown mentions it — every

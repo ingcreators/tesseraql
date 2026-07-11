@@ -1,8 +1,7 @@
 # Proxy and restricted networks
 
 TesseraQL works behind a corporate proxy, an internal Maven mirror, and a TLS-intercepting proxy.
-This guide covers the build/resolution-time and runtime outbound paths. The cross-cutting design is
-in [app-developer-distribution.md](app-developer-distribution.md).
+This guide covers the build/resolution-time and runtime outbound paths.
 
 ## What honors what
 
