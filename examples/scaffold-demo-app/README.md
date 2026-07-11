@@ -25,6 +25,11 @@ tesseraql package --app .        # build a .tqlapp under work/
 
 ## Maven path (CI / lifecycle)
 
+The framework artifacts resolve from GitHub Packages, which requires
+authentication even for public reads: add the repository profile and a token
+with `read:packages` to your `~/.m2/settings.xml` first — the snippet is in
+[getting started](https://github.com/ingcreators/tesseraql/blob/main/docs/getting-started.md#the-maven--ci-path).
+
 ```sh
 ./mvnw verify                    # lint + governance gate (no database)
 ./mvnw tesseraql:migrate tesseraql:test \
