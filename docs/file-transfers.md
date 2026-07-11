@@ -173,7 +173,7 @@ URL.
 ## Formats and optional modules
 
 `csv` is built in. The other formats are opt-in modules resolved through the standard module
-mechanism ([app-developer-distribution.md](app-developer-distribution.md)):
+mechanism ([getting-started](getting-started.md#opt-in-modules-drivers-and-codecs)):
 
 ```bash
 tesseraql modules add io.tesseraql:tesseraql-excel --app .   # excel, import and export

@@ -147,6 +147,12 @@ tesseraql modules add com.oracle.database.jdbc:ojdbc11 --app .
 `modules.lock` pins the exact resolved closure (committed, reproducible). `serve` resolves the
 declared set on start.
 
+Non-PostgreSQL drivers are opt-in because their licenses differ: SQL Server (`mssql-jdbc`, MIT)
+is unencumbered; MySQL (`mysql-connector-j`, GPLv2 + FOSS Exception) and Oracle (`ojdbc11`,
+Oracle Free Use terms) are fetched at your explicit request from the vendor's repository under
+the vendor's terms — the framework never redistributes them. In CI, resolve modules once and
+bake the cache into your image so production hosts need no repository access.
+
 ## Next
 
 - [app-layout.md](app-layout.md) — the application directory and URL mapping.

@@ -18,8 +18,8 @@ export const SECTIONS = [
     items: [
       'app-layout',
       'two-way-sql',
+      'scaffolding',
       'transactional-writes',
-      'multi-datasource',
       'declarative-validation',
       'declarative-views',
       'pagination',
@@ -29,7 +29,7 @@ export const SECTIONS = [
       'file-transfers',
       'printable-documents',
       'attachments',
-      'scaffolding',
+      'multi-datasource',
       'testing',
       'documentation-portal',
       'vscode-extension',
@@ -39,13 +39,13 @@ export const SECTIONS = [
     label: 'Platform services',
     items: [
       'jobs',
+      'notifications',
+      'messaging',
+      'connectors',
       'account',
       'inbox',
       'productivity',
       'approval-workflow',
-      'notifications',
-      'messaging',
-      'connectors',
       'ai-mcp',
       'copilot',
     ],
@@ -65,11 +65,7 @@ export const SECTIONS = [
     items: [
       'deployment',
       'promotion',
-      'release',
-      'build',
-      'development-environment',
       'proxy',
-      'app-developer-distribution',
     ],
   },
   {
@@ -86,4 +82,16 @@ export const SECTIONS = [
  * blob instead of a site URL. A stale entry (file deleted) fails the sync, keeping
  * the list honest.
  */
-export const EXCLUDED = ['studio-backlog.md', 'hc-briefs.md', 'roadmap.md', 'docs-site.md'];
+export const EXCLUDED = [
+  'studio-backlog.md',
+  'hc-briefs.md',
+  'roadmap.md',
+  'docs-site.md',
+  // Framework-maintainer pages: releasing/building the framework itself and the
+  // monorepo dev environment; their few consumer-relevant facts moved to
+  // getting-started (GitHub Packages auth, driver licensing) and testing.md.
+  'release.md',
+  'build.md',
+  'development-environment.md',
+  'app-developer-distribution.md',
+];
