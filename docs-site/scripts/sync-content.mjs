@@ -46,6 +46,23 @@ for (const name of EXCLUDED) {
 if (new Set(mappedFiles).size !== mappedFiles.length) {
   problems.push('nav.mjs maps a document twice');
 }
+// Published pages must not leak maintainer vocabulary (roadmap phases, design-doc
+// chapter numbers): the de-noising convention, held by the build. Code fences are
+// exempt - an error-code table may quote a message; prose may not.
+const INTERNAL_VOCAB = /\b(?:Phase \d|[Mm]ilestone M?\d|Horizon \d|slice \d|roadmap|design ch\.)/;
+for (const slug of SECTIONS.flatMap((section) => section.items)) {
+  const file = path.join(docsDir, `${slug}.md`);
+  if (!fs.existsSync(file)) continue; // the completeness check above reports it
+  const lines = fs.readFileSync(file, 'utf8').split('\n');
+  let fenced = false;
+  lines.forEach((line, i) => {
+    if (line.trimStart().startsWith('```')) fenced = !fenced;
+    if (!fenced && INTERNAL_VOCAB.test(line)) {
+      problems.push(`docs/${slug}.md:${i + 1} leaks internal vocabulary onto the site: ${line.trim().slice(0, 80)}`);
+    }
+  });
+}
+
 if (problems.length > 0) {
   console.error('sync-content: the nav manifest and docs/ disagree:');
   for (const problem of problems) console.error(`  - ${problem}`);
