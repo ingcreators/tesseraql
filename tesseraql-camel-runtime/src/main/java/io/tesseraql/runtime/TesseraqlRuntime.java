@@ -46,6 +46,13 @@ public final class TesseraqlRuntime implements AutoCloseable {
     private static final io.tesseraql.core.error.TqlErrorCode DUPLICATE_JOB = new io.tesseraql.core.error.TqlErrorCode(
             io.tesseraql.core.error.TqlDomain.APP, 4202);
 
+    /**
+     * TQL-STUDIO-4234: the data-browser row edit was rejected — editor disabled, unknown
+     * table, no row matches the key, or the update failed (HTTP 400).
+     */
+    private static final io.tesseraql.core.error.TqlErrorCode ROW_EDIT_REJECTED = new io.tesseraql.core.error.TqlErrorCode(
+            io.tesseraql.core.error.TqlDomain.STUDIO, 4234);
+
     private final CamelContext camelContext;
     private final Map<String, HikariDataSource> dataSources;
     private final HikariDataSource mainDataSource;
@@ -1973,9 +1980,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
                             try {
                                 studioData.updateRow(table, dataRowKey(params), changes);
                             } catch (IllegalArgumentException | IllegalStateException ex) {
-                                throw new io.tesseraql.core.error.TqlException(
-                                        new io.tesseraql.core.error.TqlErrorCode(
-                                                io.tesseraql.core.error.TqlDomain.STUDIO, 4234),
+                                throw new io.tesseraql.core.error.TqlException(ROW_EDIT_REJECTED,
                                         ex.getMessage());
                             }
                             // Audit the row identity and the columns touched — never the values

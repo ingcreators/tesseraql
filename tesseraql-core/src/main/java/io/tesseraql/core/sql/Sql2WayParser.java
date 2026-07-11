@@ -31,6 +31,7 @@ import java.util.List;
  */
 public final class Sql2WayParser {
 
+    /** TQL-SQL-2102: a 2-way SQL file could not be parsed; the message names the offending line. */
     private static final TqlErrorCode PARSE_ERROR = new TqlErrorCode(TqlDomain.SQL, 2102);
 
     private final String source;

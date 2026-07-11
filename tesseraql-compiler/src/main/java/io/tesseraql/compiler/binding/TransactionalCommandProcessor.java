@@ -93,6 +93,7 @@ public final class TransactionalCommandProcessor implements Processor {
     private static final TqlErrorCode FK_VIOLATION = new TqlErrorCode(TqlDomain.SQL, 4091);
     private static final TqlErrorCode NOT_NULL_VIOLATION = new TqlErrorCode(TqlDomain.SQL, 4001);
     private static final TqlErrorCode CHECK_VIOLATION = new TqlErrorCode(TqlDomain.SQL, 4002);
+    /** TQL-SQL-4093: a serialization failure or deadlock; the write may succeed if retried (HTTP 409). */
     private static final TqlErrorCode SERIALIZATION = new TqlErrorCode(TqlDomain.SQL, 4093);
     /** TQL-WORKFLOW-3201: a transition is not legal for the document's current state (HTTP 409). */
     private static final TqlErrorCode ILLEGAL_TRANSITION = new TqlErrorCode(TqlDomain.WORKFLOW,

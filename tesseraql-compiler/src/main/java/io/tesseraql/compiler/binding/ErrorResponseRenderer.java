@@ -32,6 +32,12 @@ import org.apache.camel.Processor;
  */
 public final class ErrorResponseRenderer implements Processor {
 
+    /**
+     * TQL-CAMEL-5000: an unexpected internal error — the failure carried no TesseraQL error
+     * code (HTTP 500).
+     */
+    private static final TqlErrorCode INTERNAL_ERROR = new TqlErrorCode(TqlDomain.CAMEL, 5000);
+
     private final ObjectMapper mapper = new ObjectMapper();
     private final I18nSettings i18n;
     private final Map<String, OnError> onErrorByRoute;
@@ -72,7 +78,7 @@ public final class ErrorResponseRenderer implements Processor {
         Throwable cause = exchange.getProperty(Exchange.EXCEPTION_CAUGHT, Throwable.class);
         TqlErrorCode code = cause instanceof TqlException tql
                 ? tql.code()
-                : new TqlErrorCode(TqlDomain.CAMEL, 5000);
+                : INTERNAL_ERROR;
         int status = httpStatus(code);
         String tag = exchange.getProperty(TesseraqlProperties.LOCALE,
                 i18n.defaultTag(), String.class);

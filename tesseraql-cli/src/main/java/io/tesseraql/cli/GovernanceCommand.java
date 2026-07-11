@@ -18,6 +18,12 @@ import picocli.CommandLine.Option;
 @Command(name = "governance", description = "Assess route governance and apply the review gate.")
 final class GovernanceCommand implements Callable<Integer> {
 
+    /**
+     * TQL-GOV-3001: a route that needs review has no valid approval pinning its current source
+     * hash in {@code governance/approvals.yml}.
+     */
+    private static final String VIOLATION = "TQL-GOV-3001";
+
     @Option(names = {"--app"}, required = true, description = "Path to the external app home.")
     Path app;
 
@@ -37,7 +43,7 @@ final class GovernanceCommand implements Callable<Integer> {
                     : line + " - " + String.join("; ", assessment.riskFactors()));
         }
         for (GovernanceGate.Violation violation : report.violations()) {
-            System.err.println("TQL-GOV-3001 " + violation.routeId() + ": " + violation.reason()
+            System.err.println(VIOLATION + " " + violation.routeId() + ": " + violation.reason()
                     + ". To approve after review, add to governance/approvals.yml: route="
                     + violation.routeId() + ", sha256=" + violation.sha256());
         }
