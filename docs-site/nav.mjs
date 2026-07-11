@@ -74,15 +74,12 @@ export const SECTIONS = [
     label: 'Reference',
     items: ['reference-yaml-surface', 'reference-error-codes'],
   },
-  {
-    label: 'Project & design',
-    items: ['roadmap', 'docs-site'],
-  },
 ];
 
 /**
- * Documents deliberately not on the site: internal working trackers, not user
- * documentation. Links pointing at these rewrite to the GitHub blob instead of a
- * site URL. A stale entry (file deleted) fails the sync, keeping the list honest.
+ * Documents deliberately not on the site: internal working trackers and project
+ * planning, not user documentation. Links pointing at these rewrite to the GitHub
+ * blob instead of a site URL. A stale entry (file deleted) fails the sync, keeping
+ * the list honest.
  */
-export const EXCLUDED = ['studio-backlog.md', 'hc-briefs.md'];
+export const EXCLUDED = ['studio-backlog.md', 'hc-briefs.md', 'roadmap.md', 'docs-site.md'];
