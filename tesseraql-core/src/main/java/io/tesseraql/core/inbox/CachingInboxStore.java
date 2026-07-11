@@ -21,6 +21,15 @@ public final class CachingInboxStore implements InboxStore {
     private final long ttlMillis;
     private final LongSupplier clock;
     private final LinkedHashMap<String, Counted> cache;
+    /**
+     * Bumped by every invalidation (guarded by {@code cache}). A read-through records the epoch
+     * before querying the delegate and only caches the result if no invalidation landed in
+     * between — otherwise a slow concurrent reader (the SSE badge pusher reacting to a delivery)
+     * re-inserts a count from before a mark-read and the badge serves the stale value for a full
+     * TTL. Global rather than per-key so the guard adds no per-subject state; the cost is one
+     * wasted cacheable read when an unrelated subject mutates mid-query.
+     */
+    private long epoch;
 
     /** Named {@code Counted} — a nested {@code Entry} shadows {@code Map.Entry} on Java 25. */
     private record Counted(int unread, long loadedAt) {
@@ -48,15 +57,19 @@ public final class CachingInboxStore implements InboxStore {
     public int unreadCount(String tenantId, String subject) {
         String key = cacheKey(tenantId, subject);
         long now = clock.getAsLong();
+        long observedEpoch;
         synchronized (cache) {
             Counted counted = cache.get(key);
             if (counted != null && now - counted.loadedAt() < ttlMillis) {
                 return counted.unread();
             }
+            observedEpoch = epoch;
         }
         int unread = delegate.unreadCount(tenantId, subject);
         synchronized (cache) {
-            cache.put(key, new Counted(unread, now));
+            if (epoch == observedEpoch) {
+                cache.put(key, new Counted(unread, now));
+            }
         }
         return unread;
     }
@@ -90,6 +103,7 @@ public final class CachingInboxStore implements InboxStore {
     private void invalidate(String tenantId, String subject) {
         synchronized (cache) {
             cache.remove(cacheKey(tenantId, subject));
+            epoch++;
         }
     }
 
