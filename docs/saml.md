@@ -43,6 +43,7 @@ tesseraql:
       provision: false    # JIT-provision an unknown user the first time they sign in
     allowIdpInitiated: false     # accept unsolicited (IdP-initiated) responses
     requireSignedLogout: true    # inbound single-logout requests must be signed
+    clockSkew: 5m                # allowed skew for the assertion's time conditions
 ```
 
 | Key | Required | Meaning |
@@ -60,6 +61,7 @@ tesseraql:
 | `link.provision` | no | With linking on, create a local user on first federated sign-in (default `false`). |
 | `allowIdpInitiated` | no | Accept responses that answer no pending request (default `false`). |
 | `requireSignedLogout` | no | Reject unsigned inbound logout requests (default `true`). |
+| `clockSkew` | no | Allowed clock skew for the assertion's time-bound conditions, as a duration string such as `5m` or `30s` (default `5m`). |
 
 Key and metadata paths are files **relative to the app home**, read at startup. Fetching IdP
 metadata from a URL is not currently supported — download it and ship the file with the app.
@@ -125,7 +127,8 @@ IdP.
   accepted at most once until its `NotOnOrAfter`. Because the state is in the shared database,
   replays are rejected on any node of a multi-node deployment.
 - **Clock skew.** Time-bound conditions (`NotBefore`, `NotOnOrAfter`, subject confirmation expiry)
-  allow a fixed five minutes of skew; this is not configurable.
+  allow five minutes of skew by default; `tesseraql.saml.clockSkew` (a duration string such as
+  `30s`) tightens or relaxes it.
 - **IdP-initiated SSO is off by default.** An unsolicited response — one answering no pending
   request — is rejected unless `allowIdpInitiated: true`. Leave it off unless your IdP portal
   starts logins itself.

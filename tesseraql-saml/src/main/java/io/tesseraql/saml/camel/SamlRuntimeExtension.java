@@ -53,8 +53,12 @@ public final class SamlRuntimeExtension implements RuntimeExtension {
                 .map(path -> IdpMetadata.signingKey(readBytes(manifest, path)))
                 .orElseGet(() -> SamlKeys.publicKey(
                         readBytes(manifest, config.requireString("tesseraql.saml.idp.publicKey"))));
+        // Allowed clock skew for the assertion's time-bound conditions; unset keeps the
+        // 5-minute default (SamlValidationConfig).
+        java.time.Duration clockSkew = config.getString("tesseraql.saml.clockSkew")
+                .map(io.tesseraql.core.util.Durations::parse).orElse(null);
         SamlResponseValidator validator = new SamlResponseValidator(
-                new SamlValidationConfig(audience, idpKey, recipient, null));
+                new SamlValidationConfig(audience, idpKey, recipient, clockSkew));
         SamlAttributeMapping mapping = new SamlAttributeMapping(
                 config.getString("tesseraql.saml.attributes.loginId").orElse(null),
                 config.getString("tesseraql.saml.attributes.displayName").orElse(null),

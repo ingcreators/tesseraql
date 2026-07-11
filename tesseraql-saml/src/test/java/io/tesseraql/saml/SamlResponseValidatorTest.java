@@ -9,6 +9,7 @@ import java.nio.charset.StandardCharsets;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
 import java.security.PrivateKey;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import javax.xml.crypto.dsig.CanonicalizationMethod;
@@ -49,8 +50,12 @@ class SamlResponseValidatorTest {
     }
 
     private SamlResponseValidator validator() {
+        return validator(null);
+    }
+
+    private SamlResponseValidator validator(Duration clockSkew) {
         return new SamlResponseValidator(
-                new SamlValidationConfig(AUDIENCE, keyPair.getPublic(), RECIPIENT, null));
+                new SamlValidationConfig(AUDIENCE, keyPair.getPublic(), RECIPIENT, clockSkew));
     }
 
     @Test
@@ -85,6 +90,48 @@ class SamlResponseValidatorTest {
         String xml = signedResponse(NOW.minusSeconds(3600), NOW.minusSeconds(1800),
                 AUDIENCE, RECIPIENT, true);
         assertThatThrownBy(() -> validator().validate(xml, NOW))
+                .isInstanceOf(SamlException.class)
+                .hasMessageContaining("expired");
+    }
+
+    /** A configured skew moves the expiry boundary: accepted strictly before NotOnOrAfter+skew. */
+    @Test
+    void customClockSkewMovesTheExpiryBoundary() throws Exception {
+        SamlResponseValidator tight = validator(Duration.ofSeconds(30));
+        String insideSkew = signedResponse(NOW.minusSeconds(300), NOW.minusSeconds(29),
+                AUDIENCE, RECIPIENT, true);
+        assertThat(tight.validate(insideSkew, NOW).nameId()).isEqualTo("alice@example.com");
+        String onBoundary = signedResponse(NOW.minusSeconds(300), NOW.minusSeconds(30),
+                AUDIENCE, RECIPIENT, true);
+        assertThatThrownBy(() -> tight.validate(onBoundary, NOW))
+                .isInstanceOf(SamlException.class)
+                .hasMessageContaining("expired");
+    }
+
+    /** The same skew bounds NotBefore: accepted from NotBefore-skew onwards. */
+    @Test
+    void customClockSkewMovesTheNotBeforeBoundary() throws Exception {
+        SamlResponseValidator tight = validator(Duration.ofSeconds(30));
+        String onBoundary = signedResponse(NOW.plusSeconds(30), NOW.plusSeconds(600),
+                AUDIENCE, RECIPIENT, true);
+        assertThat(tight.validate(onBoundary, NOW).nameId()).isEqualTo("alice@example.com");
+        String beyondSkew = signedResponse(NOW.plusSeconds(31), NOW.plusSeconds(600),
+                AUDIENCE, RECIPIENT, true);
+        assertThatThrownBy(() -> tight.validate(beyondSkew, NOW))
+                .isInstanceOf(SamlException.class)
+                .hasMessageContaining("not yet valid");
+    }
+
+    /** An unset skew keeps the historical five minutes — no more, no less. */
+    @Test
+    void defaultClockSkewRemainsFiveMinutes() throws Exception {
+        String insideDefault = signedResponse(NOW.minusSeconds(3600), NOW.minusSeconds(299),
+                AUDIENCE, RECIPIENT, true);
+        assertThat(validator().validate(insideDefault, NOW).nameId())
+                .isEqualTo("alice@example.com");
+        String onDefaultBoundary = signedResponse(NOW.minusSeconds(3600), NOW.minusSeconds(300),
+                AUDIENCE, RECIPIENT, true);
+        assertThatThrownBy(() -> validator().validate(onDefaultBoundary, NOW))
                 .isInstanceOf(SamlException.class)
                 .hasMessageContaining("expired");
     }
