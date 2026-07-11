@@ -58,6 +58,11 @@ tesseraql:
       secret: ${secret.env.JWT_SECRET}
 ```
 
+A `${secret.env.…}` placeholder resolves the value through the secret provider at use time
+instead of inlining it in config — never at startup, never into logs or generated artifacts;
+[connectors.md](connectors.md#outbound-policy) describes how these references resolve. The same
+form works for every credential setting on this page.
+
 ### RS256 with a static public key
 
 Verifies with an RSA public key — appropriate for tokens issued by an external identity provider
@@ -135,8 +140,8 @@ tesseraql:
           status: ACTIVE            # ACTIVE (default) | DISABLED
 ```
 
-Only a **hex SHA-256 of the key is stored** — never the raw key — and is best supplied through the
-secret SPI. Generate it with, for example, `printf %s "$RAW_KEY" | sha256sum`. The presented key is
+Only a **hex SHA-256 of the key is stored** — never the raw key — and is best supplied as a
+`${secret.…}` reference. Generate it with, for example, `printf %s "$RAW_KEY" | sha256sum`. The presented key is
 hashed and compared in constant time against every active client; the raw key is never stored or
 logged. A match resolves to that client's principal — with its tenant bound from the key, not the
 request, so a key cannot escalate across tenants — and the route's authorization policy then applies
@@ -333,15 +338,18 @@ secret store.
 
 ## Coverage
 
-The `api-key` coverage kind declares every route authenticated by `auth: apiKey` and marks it
-covered when a declarative suite exercises it, so a test gap on a service-caller route is visible.
-Gate it like any kind with `coverage.thresholds.api-key`. The `mtls` coverage kind does the same for
-routes authenticated by `auth: mtls`; gate it with `coverage.thresholds.mtls`. The `oidc` coverage
-kind (like `saml`)
-declares the identity contracts the login path runs when user linking is on, covered by contract
-test cases; gate it with `coverage.thresholds.oidc`. RS256 vs HS256 is a verification detail of the
-same bearer path and is covered by the existing `security`/`route` kinds; its cryptographic
-guarantees are pinned by the unit tests in `tesseraql-security`.
+Three coverage kinds make authentication test gaps visible (see
+[testing.md](testing.md#coverage-kinds) for how kinds and threshold gating work):
+
+- `api-key` — every route authenticated by `auth: apiKey`, covered when a declarative suite
+  exercises it; gate with `coverage.thresholds.api-key`.
+- `mtls` — the same for routes authenticated by `auth: mtls`; gate with
+  `coverage.thresholds.mtls`.
+- `oidc` (like `saml`) — the identity contracts the login path runs when user linking is on,
+  covered by contract test cases; gate with `coverage.thresholds.oidc`.
+
+RS256 vs HS256 is a verification detail of the same bearer path and is covered by the existing
+`security`/`route` kinds.
 
 ## Testing
 

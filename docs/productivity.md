@@ -56,8 +56,9 @@ user's shortcuts.
   and redirecting to user input is best avoided anyway.
 - The sidebar renders the **Pinned** group above the app's own navigation (menu.yml apps
   and framework navs alike) from the reserved `_shortcuts` variable — the `_account`
-  pattern, published by the renderer from a short-TTL-cached read (the badge-count
-  trade-off, same numbers).
+  pattern, published by the renderer from a short-TTL-cached read: a few seconds of
+  staleness instead of a query per page render, the same trade the [inbox](inbox.md)
+  badge count makes.
 - The account page gains a **Pinned & recent** card: both lists, remove buttons, and the
   honest empty states.
 
@@ -76,8 +77,8 @@ TTL instead of writing a row per render.
   sidebar.
 - Labels are length-capped and rendered escaped, like every account-surface string.
 - Recents record **URLs the user already saw**, per user, self-viewable only, in a ring
-  that old entries fall out of; remove is one click. The cookbook says what is tracked
-  and where it shows.
+  that old entries fall out of; remove is one click. Only detail-view renders are
+  tracked, and the only place they show is the user's own account page.
 
 ## Design notes
 

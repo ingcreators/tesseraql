@@ -11,14 +11,16 @@ It builds on three existing subsystems:
 - **The principal model** (`tesseraql-security` `Principal`) — `roles`, `groups`, `permissions`,
   and raw `claims`, populated identically by every [authentication](authentication.md) mechanism
   (JWT, OIDC, SAML, API keys, mTLS).
-- **2-way SQL** — a scope predicate is injected at a site the author chooses, parameterized, and
-  stays runnable in a plain SQL tool. No query is rewritten behind the author's back.
-- **Field policies / masking** (`FieldPolicyApplier`) — the same principal that drives scoping
-  drives whether a field is shown, masked, or hidden (see
+- **[2-way SQL](two-way-sql.md)** — a scope predicate is injected at a site the author chooses,
+  parameterized, and stays runnable in a plain SQL tool. No query is rewritten behind the
+  author's back.
+- **Field policies / masking** — the field-policy masking step keys off the same principal that
+  drives scoping to decide whether a field is shown, masked, or hidden (see
   [row-level masking](#row-level-masking) below).
 
-It deliberately mirrors the **tenant-predicate** mechanism (`tenant.id` binds plus the
-`TQL-TENANT-3001` lint): same shape, one level deeper.
+It deliberately mirrors the **tenant-predicate** mechanism used in multi-tenant deployments,
+where every scoped table carries a tenant column (`tenant.id` binds plus the `TQL-TENANT-3001`
+lint): same shape, one level deeper.
 
 ## The model
 
@@ -39,8 +41,8 @@ Three invariants hold:
 
 ## Declaring a scope
 
-A scope is a `kind: scope` document under `scope/`, indexed into the manifest like `consume/` and
-`mcp/` documents. It is an **ordered list of match arms**: each arm pairs a principal condition
+A scope is a `kind: scope` document under `scope/` in the app tree (see
+[application layout](app-layout.md)). It is an **ordered list of match arms**: each arm pairs a principal condition
 (`when`, a `Policy`-style role/permission/claim matcher) with an effect — `apply: all`,
 `apply: none`, or a 2-way SQL predicate `file` (with its `params`).
 
@@ -138,14 +140,14 @@ transition carries its row authority.
 
 ## Org-unit hierarchy — a shared foundation
 
-"My department and everything under it" needs an org-unit graph. Consistent with IAM's
-managed/SQL-contract realm duality (`IdentityContracts`/`RealmConfig`), the org-unit model has two
-modes, selected by `tesseraql.orgunit.mode`:
+"My department and everything under it" needs an org-unit graph. Like identity — which offers a
+managed identity realm and a SQL-contract realm — the org-unit model has two modes, selected by
+`tesseraql.orgunit.mode`:
 
 - **`managed`** — the runtime provisions and maintains two managed tables: `tql_org_unit` (units and
   their `parent_id` links) and `tql_org_closure` (the transitive closure — every ancestor/descendant
-  pair, depth 0 being the unit itself). The `OrgUnitStore` (`tesseraql-core` SPI,
-  `JdbcOrgUnitStore` impl) maintains the closure: `upsert`/`delete` units, then `rebuildClosure()`
+  pair, depth 0 being the unit itself). The `OrgUnitStore` SPI maintains the closure:
+  `upsert`/`delete` units, then `rebuildClosure()`
   recomputes the closure from the parent graph (in Java, so it is dialect-agnostic — no recursive
   CTE). A subtree scope is then a plain, portable SELECT against the closure:
 
@@ -175,23 +177,16 @@ modes, selected by `tesseraql.orgunit.mode`:
   recursive view. Nothing managed is provisioned, so an existing app gains no tables until it opts in.
 
 This org-unit model is deliberately factored as a **shared foundation, not a scoping-private
-table**: [approval workflow](approval-workflow.md) consumes the same graph unchanged —
-`OrgUnitStore.descendants(...)` is the Java seam both sides reuse.
+table**: [approval workflow](approval-workflow.md) consumes the same graph unchanged.
 
 ### Relationship to approval workflow
 
-Approval workflow and org-scoped data are duals over one org graph:
-
-- **Scope** maps `principal → predicate over data rows`. **Assignee resolution**
-  ([approval workflow](approval-workflow.md)) maps `document/task → set of principals`. Same graph,
-  opposite direction — so the org-unit foundation here is the substrate for workflow assignee
-  resolution, not a second org model.
-- A workflow **task inbox** ("tasks I can act on") is just a `/*%scope ... */` applied to the task
-  table; additive (OR) composition is exactly its semantics — direct assignee *or* a candidate group
-  I belong to *or* a task delegated to me.
-- A workflow **state transition** is a scoped write: a `/*%scope ... */` in the transition's
-  `UPDATE` confines it to the documents the caller has authority over, complementing the transition's
-  expression-language guard (the guard checks state-machine legality; the scope checks row authority).
+[Approval workflow](approval-workflow.md) consumes the same org graph in the opposite direction:
+scoping maps a principal to a predicate over data rows, while assignee resolution maps a document
+to the set of principals who may act on it. In practice, a workflow task inbox is a
+`/*%scope ... */` applied to the task table, and a state transition is a scoped write whose
+`UPDATE` is confined to the documents the caller has authority over (the transition guard checks
+state-machine legality; the scope checks row authority).
 
 ## Row-level masking
 
@@ -215,7 +210,8 @@ response:
       salary: { mask: fixed, unmaskWhen: _in_scope }   # masked unless the row is in scope
 ```
 
-This keeps masking SQL-first and reuses the existing `FieldPolicyApplier` resolution order.
+This keeps masking SQL-first and reuses the field-policy masking step's existing resolution
+order.
 
 ## Governance and testing
 
@@ -232,9 +228,9 @@ The runtime fails closed: a directive rendered without a scope resolver configur
 and a directive naming an undeclared scope is `TQL-SQL-2107` — a scope can never silently no-op.
 
 Planned but not currently implemented: `TQL-SCOPE-3001` (a scope-governed table queried with no
-scope predicate, mirroring `TQL-TENANT-3001`), `TQL-SCOPE-3010` (a route's `scope:` field naming an
-undeclared scope), and `TQL-SEC-4100` (a write route bypassing a governed scope without an explicit
-bypass policy).
+scope predicate, mirroring `TQL-TENANT-3001`), `TQL-SCOPE-3010` (a future route-level scope
+declaration naming an undeclared scope), and `TQL-SEC-4100` (a write route bypassing a governed
+scope without an explicit bypass policy).
 
 The **`data-scope`** coverage kind declares one item per scope under `scope/`; a scope counts as
 covered when a declarative suite exercises a route (or consumer) whose SQL applies it through a

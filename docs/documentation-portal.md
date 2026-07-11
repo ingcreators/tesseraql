@@ -1,10 +1,5 @@
 # Documentation portal
 
-A TesseraQL application is defined entirely by declarative source: Simple YAML routes/jobs,
-2-way SQL, Thymeleaf pages, declarative test suites, and Flyway migrations. Because that source
-*is* the specification, documentation derived from it is authoritative and cannot drift from the
-implementation — unlike hand-written reference docs.
-
 The documentation portal is a single, browsable **per-application reference**, served in-product
 by Studio, that lets an operator or reviewer see, with cross-references between them:
 
@@ -15,6 +10,11 @@ by Studio, that lets an operator or reviewer see, with cross-references between 
    to the route they cover.
 3. **Test results** — pass/fail and coverage for the last run, overlaid onto the same routes.
 4. **Table definitions** — the schema the application reads and writes.
+
+A TesseraQL application is defined entirely by declarative source: Simple YAML routes/jobs,
+2-way SQL, Thymeleaf pages, declarative test suites, and Flyway migrations. Because that source
+*is* the specification, documentation derived from it is authoritative and cannot drift from the
+implementation — unlike hand-written reference docs.
 
 Because deny-by-default security and ABAC policies are declared per endpoint, the portal doubles
 as a security/audit artifact: for each endpoint it surfaces auth type, required policy, the input
@@ -33,9 +33,30 @@ Page specs and test specs are **spec** layer. Test results, coverage, and the in
 are **report** layer. The portal renders both but keeps them separate, so the report overlay never
 compromises the spec layer's reproducibility guarantee.
 
+## Generating the artifacts
+
+Each artifact has a CLI verb and a matching Maven goal, so a CLI-only app produces the same
+portal a Maven build does:
+
+```bash
+tesseraql generate --app .        # spec.json (with openapi.json and htmx-contract.json)
+                                  # under work/generated/; `tesseraql package` folds the
+                                  # generated docs into the .tqlapp
+tesseraql test --app . --report   # runs the suites, then writes the report overlay
+                                  # (.tesseraql/docs/report.json + history.json)
+tesseraql schema --app .          # introspects the migrated database into
+                                  # .tesseraql/docs/schema.json
+```
+
+On the Maven side the `generate` goal runs at build (writing under
+`target/tesseraql-generated/`), the `test`/`coverage` goals produce the run results in the
+`integration-test` phase, the `report` goal ingests them into the overlay sidecars, and the
+`schema` goal introspects after `migrate`.
+
 ## The spec layer — `spec.json`
 
-The `generate` Maven goal emits `tesseraql-generated/docs/spec.json` (plus the spec Markdown), a
+The `generate` Maven goal emits `target/tesseraql-generated/docs/spec.json` (plus the spec
+Markdown) — the CLI writes the same file under the app home's `work/generated/docs/` — a
 deterministic, byte-stable artifact aggregated from the application manifest:
 
 - **Per route/page:** method, path, recipe, inputs with constraints, security (auth, policy,
@@ -58,7 +79,7 @@ home. An unpackaged source/dev run has no `spec.json`; the portal then renders a
 
 The declarative test suites run through the `test`/`coverage` Maven goals in the
 `integration-test` phase and produce `tesseraql-result.json` (pass/fail per case) and
-`coverage/sql-coverage.json` (SQL line/branch plus 21 item-coverage kinds). The `report` goal
+`coverage/sql-coverage.json` (SQL line/branch plus the item-coverage kinds). The `report` goal
 **ingests** those results — it never re-runs tests — and writes two sidecars into the app home's
 `.tesseraql/docs/` directory:
 
@@ -88,7 +109,7 @@ ReportDoc(
   summary: Summary(total, passed, failed, sqlLineRatio, sqlBranchRatio, gatePassed),
   thresholds: Thresholds(sqlLine, sqlBranch, kinds: Map<String,Double>),   // from CoverageThresholds
   gate: Gate(passed, failures: List<String>),                              // from CoverageGate
-  kinds: List<KindCoverage(kind, ratio, covered, declared, uncovered: List<String>)>,  // 21 kinds
+  kinds: List<KindCoverage(kind, ratio, covered, declared, uncovered: List<String>)>,  // one per kind
   routes: Map<String, RouteReport>          // keyed by RouteSpec.id
 )
 RouteReport(
@@ -226,12 +247,10 @@ beside the other release evidence for the CI governance gate. See
   the presentation layer is swappable and the reproducible-artifact pipeline never takes on a
   foreign toolchain.
 - **The portal is a surface of the bundled Studio app.** Studio is itself a bundled TesseraQL
-  application running on the runtime — route YAML plus Thymeleaf pages, mounted through the
-  `AppSourceProvider` SPI. The portal's pages are ordinary `query-html` routes fed by `service:`
-  bindings (`docs.index`, `docs.route`, `docs.search`, `docs.coverage`, `docs.schema`,
-  `docs.table`) instead of SQL, and its templates compose `tql/shell` with Hypermedia Components
-  markup exactly like the rest of Studio. That is what makes the portal's presentation
-  Thymeleaf-customizable through the seams above.
+  application running on the runtime, and the portal's pages are ordinary routes whose
+  templates compose `tql/shell` with Hypermedia Components markup exactly like the rest of
+  Studio. That is what makes the portal's presentation Thymeleaf-customizable through the
+  seams above.
 - **Generation happens at build; Studio reads artifacts.** The heavy aggregation — manifest, test
   specs, the cross-reference index — runs in the build and lands in `spec.json` and the sidecars.
   At runtime Studio only reads those artifacts, renders Thymeleaf, and builds the search index;
@@ -240,7 +259,5 @@ beside the other release evidence for the CI governance gate. See
 - **Report and schema sidecars never enter the `.tqlapp`.** `spec.json` is byte-stable and
   packaged into the reproducible archive. Test results and the introspected schema are
   run-dependent and non-deterministic; folding them into the archive would break artifact
-  reproducibility. The Maven lifecycle also enforces the placement: `package` seals the `.tqlapp`
-  before `integration-test` produces the report, so the run-dependent artifacts live beside (not
-  inside) the packaged spec, in `.tesseraql/docs/`. All of these files are generated artifacts —
-  never hand-edit them.
+  reproducibility, so they live beside (not inside) the packaged spec, in `.tesseraql/docs/`.
+  All of these files are generated artifacts — never hand-edit them.

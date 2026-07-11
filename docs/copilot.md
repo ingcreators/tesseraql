@@ -23,7 +23,18 @@ tesseraql:
 
 The key is read lazily per request through the config placeholder chain, so a
 `${secret.*}` reference never resolves at startup and never lands in a file. Without
-`enabled: true` the panel renders a setup hint and the endpoint refuses.
+`enabled: true` the panel renders a setup hint and the chat endpoints (send, stream,
+reset) answer `TQL-STUDIO-4235`.
+
+**What leaves the server.** Every turn POSTs the whole conversation to the configured
+endpoint: a system prompt naming the app, your messages, the model's replies, and the
+result of every tool the model called — which can include entire source files it read
+(route YAML, 2-way SQL, templates), the route inventory, lint findings, and introspected
+table and column names. No table data is sent — the schema tool returns names only —
+and the API key rides as a bearer header. The
+[outbound egress allow-list](connectors.md) does **not** apply here: configuring
+`tesseraql.copilot.endpoint` is itself the authorization, so point it only at an
+endpoint you trust with your app's source.
 
 ## What the copilot may do
 
@@ -61,43 +72,16 @@ every other vendor asset.
 - **No JS**: the same send URL without `HX-Request` runs the blocking loop and answers
   `303` back to the page — exactly the pre-streaming behavior, now the fallback.
 
-### Why these are Java routes
-
-Streaming and `HX-Request` content negotiation are transport concerns the Simple-YAML
-surface deliberately does not model — the same boundary that keeps login, logout, assets,
-health, and MCP in Java route builders. `send` and `stream` live in `CopilotRouteBuilder`
-(mounted with Studio; an unconfigured copilot still refuses with TQL-STUDIO-4235); the
-page GET and reset stay YAML app routes.
-
 ### The SSE transport
 
-The framework's streaming surface, built to be reused (the [inbox](inbox.md) bell rides it
-too): `SseRoutes` registers each stream as a **raw route on the platform's Vert.x
-router**, not a Camel route. A Camel exchange answers with a complete body, and the
-platform-http `InputStream` pump (`AsyncInputStream`) only delivers full 8 KB buffers —
-an SSE frame must reach the wire the moment it is written, so streams bypass the exchange
-body entirely and write to the response directly. Per connection: the browser session
-authenticates exactly like `auth: browser` routes, a pre-stream refusal renders the
-framework's JSON error envelope with its mapped status, the producer runs on a virtual
-thread with every frame write hopping to the connection's event loop, and a client
-disconnect fails the next write, which ends the producer. `data:` payloads are
-single-line by construction (newlines become markup before framing).
-
-### One source for the transcript markup
-
-The per-entry `hc-chat` markup is built once in Java (`CopilotFragments`) and used by
-both surfaces: the SSE `done` event carries it, and the page view model carries it
-pre-rendered per entry (the template inserts it with `th:utext`). A reload after a
-streamed turn and the streamed turn itself render identically — no template/Java drift
-to guard.
-
-### Upstream
-
-The chat-completions call gains `stream: true`; the JDK HttpClient reads the upstream SSE
-line stream, forwards content deltas, and assembles fragmented `tool_calls` deltas by
-index into the same message shape the buffered call returned — history, trimming, and the
-tool loop are unchanged. An upstream that cannot stream surfaces as the `error` event;
-the panel stays usable through the no-JS path.
+How streaming behaves, in short: the reply rides server-sent events over the framework's
+shared streaming transport — the same one that pushes the [inbox](inbox.md) bell badge.
+The stream authenticates the browser session exactly like `auth: browser` routes, and a
+refusal before the stream opens renders the framework's normal JSON error envelope with
+its mapped status. Upstream, the chat-completions call streams too; an endpoint that
+cannot stream surfaces as the stream's `error` event. Without JavaScript the same send
+URL runs the blocking loop and answers `303` back to the page, so the panel works —
+rendered identically — with no stream at all.
 
 ### Security
 

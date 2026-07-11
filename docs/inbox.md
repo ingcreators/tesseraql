@@ -24,11 +24,12 @@ tesseraql:
         type: inbox                      # beside mail and webhook
         title: "Request [(${payload.requestId})] was [(${payload.decision})]"
         body: "Decided by [(${payload.decidedBy})]."
-        userOptOut: "true"               # optional, shows the per-user opt-out toggle
+        userOptOut: true                 # optional, shows the per-user opt-out toggle
 ```
 
 A `notify:` on an inbox channel **must** name its `recipient:` (the
-[account surface](account.md) expression resolving to a subject) — an inbox message
+[per-user opt-out](notifications.md#per-user-opt-out) expression resolving to a
+subject) — an inbox message
 without an addressee is meaningless, so a missing one is a **lint error**, not a runtime
 surprise. The resolved recipient rides the outbox envelope (an optional field; envelopes
 without it decode with it absent), and `NotificationSink` has an `inbox` case beside

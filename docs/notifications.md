@@ -1,9 +1,11 @@
 # Notifications
 
 A command or batch job declares the notifications it sends in YAML: a
-`notify:` block on a `command-json` route, or a `notify:` pipeline step on a job. A
-notification names a **channel** — SMTP mail or an HMAC-signed webhook, configured under
-`tesseraql.notifications.channels` — and a payload resolved from the execution context.
+`notify:` block on a `command-json` route, or a `notify:` pipeline step on a
+[job](jobs.md). A
+notification names a **channel** — SMTP mail, an HMAC-signed webhook, or the in-app
+[inbox](inbox.md), configured under `tesseraql.notifications.channels` — and a payload
+resolved from the execution context.
 
 Delivery rides the transactional outbox: the notification is written as a `NOTIFICATION`
 event in the command's transaction (a rolled back command never notifies), then delivered
@@ -112,7 +114,7 @@ reports `{optedOut: true}` in place of the event id.
 Two rules keep this honest:
 
 - A notification **without** `recipient:` is channel-level and always delivered — the
-  cookbook example above sends `audit` regardless of anyone's preferences.
+  example above sends `audit` regardless of anyone's preferences.
 - Only channels the operator marks **`userOptOut: true`** appear on the account page's
   notification section, so operational channels are never user-disableable. The marker
   controls the *page*; the enqueue check applies to any recipient-naming notification on
@@ -201,9 +203,10 @@ channel:
 
 ## Testing notifications in declarative suites
 
-A suite case evaluates a route's `notify:` block or a job's notify steps — guards and
-payload expressions run exactly as at runtime — and the fired notifications are the case's
-rows (`notify`, `channel`, `source`, plus the payload columns). No SMTP or HTTP is touched:
+A suite case ([testing](testing.md)) evaluates a route's `notify:` block or a job's notify
+steps — guards and payload expressions run exactly as at runtime — and the fired
+notifications are the case's rows (`notify`, `channel`, `source`, plus the payload
+columns). No SMTP or HTTP is touched:
 
 ```yaml
 tests:
@@ -241,13 +244,13 @@ the build like any other kind.
 
 ## Error codes
 
-| Code | Status | Meaning |
-| --- | --- | --- |
-| `TQL-FIELD-2004` | — | invalid notify declaration (build/lint time) |
-| `TQL-YAML-1004` | — | lint: `notify:` on a non-command recipe |
-| `TQL-YAML-1102` | — | invalid or undeclared notification channel |
-| `TQL-BATCH-5301` | — | delivery: the referenced channel is not configured |
-| `TQL-BATCH-5302` | — | delivery: the notification envelope failed to encode/decode |
-| `TQL-BATCH-5303` | — | delivery: the webhook receiver answered non-2xx |
-| `TQL-BATCH-5304` | — | delivery: mail channel misdeclared or template outside the app home |
-| `TQL-OPS-9006` | — | alert: outbox events are dead-lettered |
+| Code | Meaning |
+| --- | --- |
+| `TQL-FIELD-2004` | invalid notify declaration (build/lint time) |
+| `TQL-YAML-1004` | lint: `notify:` on a non-command recipe |
+| `TQL-YAML-1102` | invalid or undeclared notification channel |
+| `TQL-BATCH-5301` | delivery: the referenced channel is not configured |
+| `TQL-BATCH-5302` | delivery: the notification envelope failed to encode/decode |
+| `TQL-BATCH-5303` | delivery: the webhook receiver answered non-2xx |
+| `TQL-BATCH-5304` | delivery: mail channel misdeclared or template outside the app home |
+| `TQL-OPS-9006` | alert: outbox events are dead-lettered |

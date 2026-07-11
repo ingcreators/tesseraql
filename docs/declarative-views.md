@@ -68,6 +68,31 @@ mutually exclusive (`TQL-VIEW-3302`). Everything else on the route — `status`,
 
 ## List views
 
+The route behind a list is a plain query route with an HTML response. A paginated list
+declares `recipe: query-html` — only the query recipes accept a `page:` block
+([pagination](pagination.md)):
+
+```yaml
+# web/items/get.yml
+version: tesseraql/v1
+id: items.page
+kind: route
+recipe: query-html
+security: { auth: browser, policy: app.read }
+input:
+  q: { type: string, required: false, maxLength: 100 }
+  sort: { type: string, required: false }
+  dir: { type: string, required: false, enum: [asc, desc] }
+page: { size: 20, count: true }
+sql:
+  file: items.sql
+  mode: query
+  params: { q: query.q }
+response:
+  html:
+    view: items.view.yml
+```
+
 With no `columns:`, a list renders the result set's own columns in authored SQL order —
 `select *` plus a migration shows the new column with zero edits. `columns:` selects,
 orders, and decorates: `label` overrides the heading, `link` renders a per-row link with
@@ -91,7 +116,8 @@ preserving the search and sort state ([pagination](pagination.md)).
 
 A form view does not redeclare its fields. `action:` names the command route the form
 posts to; the compiler resolves that route at build time and derives the field list
-from its **`input:` block** — the same declarations `InputBinder` enforces server-side:
+from its **`input:` block** — the same declarations the input binder enforces
+server-side:
 
 | `input:` declaration | derived rendering |
 | --- | --- |
@@ -132,16 +158,32 @@ the kit's `hc-grid`:
   `[aria-label$=grid]`, no client scripting.
 - `table` — an embedded table on the shared list pattern.
 
-Panel sources validate like children: a panel's `source:` must be `sql` or one of the
-route's named queries (`TQL-VIEW-3308`). Chart data rides the `p.series` model key
-(OGNL resolves a bare `values` to `Map#values()`). Ejection is not offered for
-dashboards — the SVG is data-dependent.
+```yaml
+# web/products/dashboard/dashboard.view.yml
+version: tesseraql/v1
+id: products.dashboard.view
+kind: view
+view: dashboard
+title: Inventory dashboard
+panels:
+  - { type: stat, source: sql, column: products, label: Products }
+  - type: chart
+    kind: bar
+    source: byCategory          # one of the route's named queries
+    title: Stock by category
+    x: label                    # the column supplying each bar's label
+    y: value                    # the numeric column charted
+```
+
+A `stat` shows the named `column:` of its source's first row; a `chart` plots the
+`x:`/`y:` columns across the source's rows. Panel sources validate like children: a
+panel's `source:` must be `sql` or one of the route's named queries (`TQL-VIEW-3308`).
+Ejection is not offered for dashboards — the SVG is data-dependent.
 
 ## Rendering pipeline and the fragment contract
 
-`HtmlResponseRenderer` has a view branch: when `view:` is set it parses the document
-at build time (cached, existence-checked), and at render time assembles a **view
-model** `v` and renders the framework entry fragment for the kind through the same
+When `view:` is set, the HTML renderer parses the document at build time (cached,
+existence-checked), and at render time assembles a **view model** `v` and renders the framework entry fragment for the kind through the same
 template engine, wrapped in the existing `tql/shell` page (title, the `config/menu.yml`
 app menu, content) so a view is a complete page with the app's chrome.
 
@@ -172,10 +214,9 @@ as a hand-written template today.
   slot value is `template::fragment` (compact, so the plain YAML scalar stays legal),
   the template resolving colocated-first then under `templates/`. An unknown slot name
   is `TQL-VIEW-3306`; an unresolved reference is `TQL-VIEW-3302`.
-- **L2 — pattern overrides**: `Templates` carries one app-override
-  `FileTemplateResolver` ordered ahead of the shared classpath resolver, scoped to
-  `tql/view/*`, rooted at the app's `templates/` directory, with existence-check
-  fallthrough. Dropping `templates/tql/view/form.html` into the app restyles every
+- **L2 — pattern overrides**: the template resolver chain resolves an app override —
+  scoped to `tql/view/*`, rooted at the app's `templates/` directory — ahead of the
+  shared classpath fragments, with existence-check fallthrough. Dropping `templates/tql/view/form.html` into the app restyles every
   form; a `field-date.html` retargets one widget everywhere; the per-view `template:`
   key points a single view at a custom fragment. Lint checks an override file declares
   the expected `th:fragment` signature (`TQL-VIEW-3307`).
@@ -197,8 +238,8 @@ a view-backed board list + detail (`examples/user-admin-app/web/users/board`).
 
 ## i18n, security, Studio
 
-- **i18n**: `title` and labels resolve through the app message catalog (the engine's
-  `CatalogMessageResolver`), key-first with literal fallback; a derived field with no
+- **i18n**: `title` and labels resolve through the app message catalog, key-first with
+  literal fallback; a derived field with no
   override gets `view.<viewId>.<field>` then a humanized name (`login_id` → "Login
   id"). Locale-aware value formatting composes with [declarative
   validation](declarative-validation.md) and [pagination](pagination.md).
@@ -219,7 +260,7 @@ Lint family **`TQL-VIEW-33xx`**:
 | code | check |
 | --- | --- |
 | 3301 | unknown `view:` kind (not `list`/`form`/`detail`/`dashboard`) |
-| 3302 | `view:` and `template:` both set, or the view file does not resolve |
+| 3302 | `view:` and `template:` both set, the view file does not resolve, or a slot's `template::fragment` reference does not resolve |
 | 3303 | a form's `action:` names no route, or the named route declares no `input:` |
 | 3304 | a `fields:` entry names an input the action route does not declare |
 | 3305 | unknown widget name |
@@ -238,8 +279,8 @@ views change how HTML is produced, not the HTTP contract.
 Views are **interpreted at render time**, not compiled into generated templates:
 
 1. **Pattern overrides come free.** An app shadowing `tql/view/form.html` (L2) is pure
-   template-chain resolution at render time — the resolver order in `Templates`
-   already models it. A build-time variant would need a regeneration step after every
+   template-chain resolution at render time — the template resolver chain already
+   models it. A build-time variant would need a regeneration step after every
    override edit, and a stale-artifact failure mode.
 2. **Derived columns need the live row shape.** A list view with no explicit `columns:`
    renders the columns the query actually returned, in authored SQL order — only a

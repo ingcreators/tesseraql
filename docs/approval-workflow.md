@@ -23,7 +23,7 @@ It builds on subsystems already in the framework:
   (`OrgUnitStore`) that scope resolution reads is the substrate workflow assignee resolution reads.
 - **The core expression language** (`io.tesseraql.core.expr`) — whitelist-only, side-effect-free, no
   method calls — evaluates transition guards.
-- **The scheduler** (quartz/timer routes with cluster-safe `tql_job_claim` claiming) — fires
+- **The scheduler** ([jobs](jobs.md) — quartz/timer routes with cluster-safe claiming) — fires
   deadlines, escalations, and reminders exactly once across a cluster.
 - **The outbox** ([notifications](notifications.md), [messaging](messaging.md)) — assignment and
   escalation notifications ride the existing at-least-once delivery, visible in the operations
@@ -67,13 +67,11 @@ document:
   table: purchase_requests          # the app-owned business table
   key: id
   stateColumn: wf_state             # app mode: a column on the business table
-                                    # managed mode: omit — state lives in tql_workflow_instance
 initial: draft
 states:
   - { id: draft,     type: initial }
   - { id: submitted }
   - { id: approved,  type: terminal }
-  - { id: rejected,  type: terminal }
 transitions:
   - id: submit
     from: draft
@@ -84,25 +82,12 @@ transitions:
       file: assignees/manager_of_requester.sql
       params:
         requester: document.created_by
-  - id: approve
-    from: submitted
-    to: approved
-    guard: "principal.role == 'approver'"
-    command: approve.sql
-  - id: reject
-    from: submitted
-    to: rejected
-    command: reject.sql
-deadlines:
-  - state: submitted
-    within: 48h
-    onBreach:
-      escalate: approve                           # auto-run a transition…
-      reassign: assignees/dept_head.sql           # …or reassign the task to a fallback resolver
 ```
 
 Each `*.sql` stays runnable in a plain SQL tool — `submit.sql` is an ordinary `UPDATE` with a 2-way
-scope directive and audit binds, `assignees/manager_of_requester.sql` an ordinary `SELECT`.
+scope directive and audit binds, `assignees/manager_of_requester.sql` an ordinary `SELECT`. The full
+document surface — deadlines, `mode`, `http`, and `security` — is in the
+[workflow document schema](#workflow-document-schema) below.
 
 ### Guard versus scope: legality versus authority
 
@@ -220,16 +205,11 @@ Consistent with IAM's managed/SQL realm duality and the org-unit model
   - `tql_workflow_history` — the append-only audit trail (instance, transition, from/to state, actor,
     timestamp, note).
 
-  The DDL ships per dialect (`postgres`/`mysql`/`oracle`/`sqlserver`) and is applied by
-  `SqlScripts.applyForVendor`, exactly as `tql_org_unit`/`tql_org_closure` are. To stay portable it
-  uses inline `unique` constraints rather than a separate `CREATE INDEX` (MySQL does not accept
-  `CREATE INDEX IF NOT EXISTS`); the Oracle variant uses plain `CREATE` plus ORA-00955 tolerance and
-  the SQL Server variant guards with `if object_id(...) is null`, exactly as the org-unit DDL does.
-  The store's `advanceState` is a conditional
+  The DDL ships per dialect (`postgres`/`mysql`/`oracle`/`sqlserver`) and is applied at boot
+  exactly as the org-unit tables are. Advancing the state is a conditional
   `UPDATE tql_workflow_instance SET current_state = ? … WHERE … AND current_state = ?`; zero rows
-  affected means a concurrent transition and surfaces as a `409`. The store is bound in
-  `TesseraqlRuntime` at the same point the `OrgUnitStore` is, only when the app declares workflows
-  and the mode is `managed`.
+  affected means a concurrent transition and surfaces as a `409`. The store is bound only when the
+  app declares workflows and the mode is `managed`.
 
 - **`app`** (default) — the application owns its workflow tables (or folds state into the business
   table via `stateColumn`); transitions, tasks, and history are app-provided SQL contracts resolved
@@ -238,8 +218,9 @@ Consistent with IAM's managed/SQL realm duality and the org-unit model
   (the same zero-rows-means-`409` conflict check), and history is an optional app contract.
 
 The `WorkflowStore` SPI lives in `tesseraql-core` (dependency-free); the `JdbcWorkflowStore` and DDL
-live in `tesseraql-operations` (heavy dependencies behind the SPI). Sketch, mirroring `OutboxStore`'s
-connection-threaded inserts so a transition stays atomic:
+live in `tesseraql-operations` (heavy dependencies behind the SPI). Every state mutation takes the
+caller's JDBC connection — the same connection-threaded idiom the outbox uses — so a transition
+stays atomic:
 
 ```java
 public interface WorkflowStore {
@@ -328,10 +309,10 @@ necessary but not sufficient — the write still confirms authority server-side.
 ## Deadlines, escalation, and delegation
 
 A workflow declares deadlines per state; the opened task carries a `due_at` set from the `to` state's
-`within` (e.g. `within: 48h`). A managed **sweeper** — a fixed-delay timer route claimed cluster-safe
-through `tql_job_claim` (`JobRepository.tryClaimFiring`, the same machinery scheduled jobs use, at the
-`tesseraql.workflow.sweep.interval`, default 60s) — calls `WorkflowTaskStore.overdue(...)` and applies
-each breached state's `onBreach`, **exactly once** even across nodes:
+`within` (e.g. `within: 48h`). A managed **sweeper** — a fixed-delay timer route claimed through the
+cluster-safe job claim ([jobs](jobs.md)), at the `tesseraql.workflow.sweep.interval` (default 60s) —
+sweeps the overdue tasks and applies each breached state's `onBreach`, **exactly once** even across
+nodes:
 
 - **`reassign`** — reassigns the overdue task to the fallback resolver named by the SQL contract (a
   2-way SQL `SELECT` returning the new assignee), clearing the task's `due_at` and recording an
@@ -355,7 +336,9 @@ deadlines:
 **Delegation** is a built-in operation, not a transition (it changes no state): the current assignee
 reassigns the document's open task to another principal at `POST {basePath}/{key}/delegate/{to}`, who
 then sees it in their inbox (the task store reassigns the open tasks to `{to}`). Only a caller who
-holds the task may delegate, else `TQL-WORKFLOW-3203` (403).
+holds the task may delegate, else `TQL-WORKFLOW-3203` (403). Standing delegation — an out-of-office
+rule that redirects new tasks for a whole absence window — extends exactly this operation; see
+[workflow delegation and absence](delegation.md).
 
 **Reminder notifications** ride the [notification channels](notifications.md): a workflow declares a
 `notify:` block whose `assigned` reminder fires when a transition opens a task and whose `escalated`
@@ -406,10 +389,10 @@ transition attempted by a caller who holds none of the document's open tasks is 
 scoped write is today — a workflow can never silently no-op a transition.
 
 The **`workflow`** coverage kind declares one item per **transition** across `workflow/` documents; a
-transition counts as covered when a declarative suite exercises a route that runs it (the same
-SQL-file basis as route and `data-scope` coverage). An app with no workflows reports a 1.0 ratio.
-Gate it with `coverage.thresholds.workflow`. Per-state-path coverage — every state's outgoing
-transitions exercised — is not currently supported.
+transition counts as covered when a declarative suite ([testing](testing.md)) exercises a route that
+runs it (the same SQL-file basis as route and `data-scope` coverage). An app with no workflows
+reports a 1.0 ratio. Gate it with `coverage.thresholds.workflow`. Per-state-path coverage — every
+state's outgoing transitions exercised — is not currently supported.
 
 ## Relationship to data scoping
 
@@ -440,6 +423,5 @@ surface — the same way the PDF codec keeps its engine SPI
 
 **One transaction engine, not two.** A transition extends the transactional-writes command processor
 rather than running through a parallel one, so there is one transaction engine, the state advance and
-history write ride the command's own JDBC `Connection` (the connection-threaded idiom
-`OutboxStore.insert(Connection, …)` already uses), and the guard runs *inside* the transaction with
-no time-of-check/time-of-use gap.
+history write ride the command's own JDBC `Connection` (the same connection-threaded idiom the
+outbox uses), and the guard runs *inside* the transaction with no time-of-check/time-of-use gap.

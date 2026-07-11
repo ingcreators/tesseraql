@@ -1,10 +1,16 @@
 # Printable documents (PDF)
 
 The optional `tesseraql-pdf` module adds a `pdf` codec behind the standard
-file-codec SPI: any `query-export` or `file-export` route can stream a printable document
+file-codec SPI: any `query-export` or `file-export` route
+([file transfers](file-transfers.md)) can stream a printable document
 instead of a tabular file. Putting the jar on the classpath is the whole install — the
-codec is discovered via ServiceLoader. PDF is output-only: `file-import` rejects it
-(`TQL-LD-2830`).
+codec is discovered via ServiceLoader:
+
+```bash
+tesseraql modules add io.tesseraql:tesseraql-pdf --app .
+```
+
+PDF is output-only: `file-import` rejects it (`TQL-LD-2830`).
 
 ## A printable route
 
@@ -88,7 +94,8 @@ registered under the family name carried in the font itself — so
 `font-family: 'Noto Sans JP'` works as soon as `NotoSansJP-Regular.ttf` is in `fonts/`.
 Registration order is file-name order, deterministic across machines. The examples ship
 `TesseraQL Sample Gothic`, a small renamed Noto Sans JP glyph subset (OFL 1.1, see
-`examples/user-admin-app/fonts/README.md`); real applications should ship complete fonts.
+[`examples/user-admin-app/fonts/README.md`](../examples/user-admin-app/fonts/README.md));
+real applications should ship complete fonts.
 
 ## Deterministic output
 
@@ -99,13 +106,10 @@ template yield byte-identical PDFs.
 
 ## Engine and licensing
 
-The renderer is [openhtmltopdf](https://github.com/openhtmltopdf/openhtmltopdf) (LGPL),
-chosen for its full page-oriented CSS support. The LGPL
-dependency never leaks into applications that do not print: `tesseraql-pdf` is an opt-in
-module - no runtime module depends on it, and without the jar a `format: pdf` route fails
-loudly at build time (`TQL-LD-2801`). Inside the module the engine sits behind the
-`PdfEngine` ServiceLoader SPI with the `tesseraql.pdf.engine` system property (default
-`openhtml`), so a replacement stack can ship as a drop-in jar without touching the codec.
+No runtime module depends on the PDF engine — `tesseraql-pdf` is opt-in, and without the jar
+a `format: pdf` route fails loudly at build time (`TQL-LD-2801`). The bundled renderer is
+[openhtmltopdf](https://github.com/openhtmltopdf/openhtmltopdf) (LGPL), replaceable as a
+drop-in jar via the `tesseraql.pdf.engine` system property (default `openhtml`).
 
 ## Testing and coverage
 

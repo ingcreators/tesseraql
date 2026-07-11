@@ -1,8 +1,8 @@
 # Environments and promotion
 
-The git-native recipe that aligns the read-only-prod-Studio posture with an explicit path
-for how an edit gets to production. Nothing here is new machinery — it composes the pieces
-the framework already ships.
+How an edit made in dev Studio reaches production: it travels through git, passes the CI
+gates, and lands as the same artifact configured per environment by a profile. Nothing here
+is new machinery — it composes the pieces the framework already ships.
 
 ## The loop
 
@@ -16,10 +16,11 @@ the framework already ships.
    - `tesseraql lint` (or `tesseraql:lint`) — structure, security, references; findings carry
      `source:line`.
    - `tesseraql test` + coverage kinds (`tesseraql:report`) — the declarative suites, with
-     per-kind thresholds.
+     per-kind thresholds (see [testing](testing.md)).
    - `tesseraql release-diff --app . --baseline <deployed-tree>` — **what does this deploy
      change**: routes, API contract, the migrations it will run, policy changes, schema
-     delta. Post the Markdown to the PR; a reviewer approves the *change*, not a prose
+     delta. The baseline is a checkout of the previously released tag. Post the Markdown to
+     the PR; a reviewer approves the *change*, not a prose
      description of it.
    - `tesseraql:release-evidence` — the SBOM, OpenAPI, and htmx-contract artifacts.
 4. **Tag and package.** On merge, CI builds the immutable artifact — `tesseraql package`
@@ -27,16 +28,19 @@ the framework already ships.
    `.tesseraql/` stay out of the package by design; `spec.json` (byte-stable) rides along.
 5. **Promote by config, not edits.** Staging and prod run the SAME artifact with a different
    environment profile: `--env staging` / `--env prod` selects `config/env/<profile>.yml`
-   (datasources, pool sizing, metrics/audit switches). Secrets stay in the environment or
+   (datasources, pool sizing, metrics/audit switches — see [environment
+   profiles](deployment.md#environment-profiles)). Secrets stay in the environment or
    the secret provider — never in the tree.
 6. **Prod Studio is read-only.** `tesseraql.studio.readOnly: true` (optionally plus
    `editRoles: []`) in the prod profile: the explorer, docs portal, ops console and release
    diff page stay available for inspection; every write path is disabled. An edit gets to
    prod exactly one way — back through steps 1-5.
-7. **Capture the next baseline.** After the deploy, capture the baselines the portal diffs
-   against: copy `.tesseraql/docs/openapi.json` → `openapi.baseline.json` and
-   `schema.json` → `schema.baseline.json` (and keep the deployed tree/tag available as the
-   `release-diff` baseline for the next cycle).
+7. **Capture the next baseline.** After the deploy, capture the baselines the documentation
+   portal's [Release diff page](documentation-portal.md#release-diff) reads from the app
+   home: copy the released `openapi.json` (the API spec `tesseraql generate` writes, also a
+   release-evidence artifact) to `.tesseraql/docs/openapi.baseline.json`, and the schema
+   sidecar `.tesseraql/docs/schema.json` to `.tesseraql/docs/schema.baseline.json`. Keep the
+   deployed tree/tag available as the `release-diff` baseline for the next cycle.
 
 ## Rollback
 

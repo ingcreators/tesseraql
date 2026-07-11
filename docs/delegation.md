@@ -8,26 +8,25 @@ have not arrived yet cannot be handed over at all. Delegation adds the standing
 rule: **an absence window with a delegate, applied where assignees are resolved**,
 with a trail that always shows who acted for whom.
 
-## The security stance
-
-- **Delegation redirects assignment. It never borrows identity.** The delegate becomes
-  the task's assignee and acts **as themselves**, within their own roles, permissions,
-  and scopes. `canAct`, guards, and row scoping are untouched; there is no
-  impersonation surface anywhere in this design.
-- **One hop, never a chain.** If A delegates to B and B is also absent, a task for A
-  lands with B regardless. Resolution consults exactly one rule — the assignee's — so
-  loops (A→B→A) are impossible by construction, not by cycle detection.
-- **Only the delegator writes their own rule.** The [account surface](account.md)'s
-  construction invariant (the subject is always the session principal's) applies;
-  nobody can delegate someone else's approvals. Self-delegation is refused.
-- **The trail is structural.** The task row records `delegated_from` at assignment;
-  tasks persist after completion (`DONE`, `completed_by`). Who was meant, who received,
-  and who acted are three columns on one immutable-in-practice row, joined to the
-  transition history's actor — no new history format, nothing to forget to write.
-
 ## Setting the rule
 
-One standing rule per subject, self-served from the account page ("Out of office"):
+The rule is self-served from the **Out of office** card on the account page
+(`/_tesseraql/account`, the [account surface](account.md)). It asks for three
+things: the delegate, and the **From** and **Until** ends of the absence window
+(UTC). **Save** records the rule, **Clear** removes it, and while a rule exists the
+card shows the delegate and window, marked as active when the window is open.
+
+- When the managed identity schema is installed, the delegate is entered by
+  **login id** and resolved to its subject (an unknown login is refused with
+  `TQL-ACCOUNT-4802`); otherwise enter the raw subject — the page says which it
+  expects.
+- The window must have both ends and end in the future, and the delegate cannot be
+  yourself.
+- The card appears wherever the approval workflow machinery is in use; no
+  configuration is needed.
+
+One standing rule per subject — one window, one delegate. The runtime creates the
+backing table, `tql_workflow_delegation`, automatically; for reference:
 
 ```sql
 create table if not exists tql_workflow_delegation (
@@ -41,23 +40,12 @@ create table if not exists tql_workflow_delegation (
 );
 ```
 
-`DelegationStore` SPI in core (`active(tenant, subject, at)` → the delegate while
-`starts_at ≤ at < ends_at`, else empty; `put`/`clear`), `JdbcDelegationStore` in
-operations — outside the Flyway component set, `ensureSchema`-only. The account
-card validates: a window with both ends, ending in the
-future, and a delegate that is not the subject; when the managed identity realm is
-present the delegate is entered as a **login id** and resolved to its subject
-(unknown → `TQL-ACCOUNT-4802`), otherwise a raw subject is accepted and the page says
-so. The login-id resolution applies when the identity **schema answers** — the
-identity beans exist even without it, so a failed lookup falls back to the raw
-subject rather than failing the card.
-
 ## Resolution at assignment time
 
 Everywhere a **direct assignee** is chosen, the engine asks once: *is this subject
 absent right now?* If so, the task opens for the delegate, with `delegated_from`
 recording the intended assignee. The three call sites — all funnels into the same
-store methods — are:
+resolution — are:
 
 1. a transition's `assign:` resolver rows (the `openTask` site);
 2. the sweeper's `onBreach: reassign` fallback assignee;
@@ -76,6 +64,21 @@ delegate; a request submitted during the window lands in the delegate's inbox
 marked "for" the approver; the delegate approves it **as themselves** and the trail
 shows who acted for whom; after the window ends new requests reach the approver
 again — no permission ever borrowed, no chain ever followed.
+
+## The security stance
+
+- **Delegation redirects assignment; it never borrows identity.** The delegate becomes
+  the task's assignee and acts as themselves, within their own roles, permissions,
+  and scopes — `canAct`, guards, and row scoping are untouched, and there is no
+  impersonation surface.
+- **One hop, never a chain.** If A delegates to B and B is also absent, a task for A
+  lands with B regardless: resolution consults exactly one rule — the assignee's — so
+  loops are impossible by construction.
+- **Only the delegator writes their own rule.** Nobody can delegate someone else's
+  approvals, and self-delegation is refused.
+- **The trail is structural.** The task row records who was meant (`delegated_from`),
+  who received (the assignee), and who acted (`completed_by`); tasks persist after
+  completion, so nothing has to be remembered to be written.
 
 ## The operator surface
 

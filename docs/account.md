@@ -57,7 +57,7 @@ schema is ensured at boot when the account surface is enabled.
 
 ## The shell account region
 
-`HtmlResponseRenderer` publishes a third reserved model variable beside `_csrf` and
+The HTML renderer publishes a third reserved model variable beside `_csrf` and
 `_menu`: when the request carries a browser session principal,
 
 ```
@@ -135,14 +135,12 @@ renderer re-syncs the cookie on the response — that is what carries a signed-i
 onto pre-login pages like the login screen, with no store lookup there.
 
 **Toggle.** Beyond the account page's radio form, the signed-in shell header offers the
-UI kit's one-click toggle (`data-hc-theme-toggle`, the `installThemeToggle` behavior,
-hc 0.1.9): it flips `data-theme` on `<html>` instantly — no round trip — and fires
-`hc:themechange`, which the framework bootstrap mirrors to the appearance route so the
-stored preference stays the source of truth. The toggle deliberately carries no
-`data-persist`: the kit's localStorage persistence would shadow the preference and
-desynchronize devices. It renders only when the account app is mounted (same rule as
-the settings link — the chrome never posts to a 404), and its accessible name comes
-from the kit catalog (`themeToggle.label`). See the blessed pattern in
+UI kit's one-click theme toggle: it flips the page theme instantly — no round trip —
+and the framework mirrors the change to the appearance route, so the stored preference
+stays the source of truth. The toggle deliberately carries no `data-persist`: the kit's
+localStorage persistence would shadow the preference and desynchronize devices. It
+renders only when the account app is mounted (same rule as the settings link — the
+chrome never posts to a 404). See the blessed pattern in
 [hypermedia-ui.md](hypermedia-ui.md) for app-authored toggles.
 
 ## Notification opt-out
@@ -231,9 +229,10 @@ A `TQL-ACCOUNT` domain, codes in the 48xx block: `4801` undeclared preference ke
 The account surface is a bundled system app riding the shared shell — over scaffolded
 pages (updates would not flow with the framework) and over a mountable app (setup where
 zero-setup is the point). App-side customization stays real through the existing
-ladder: shell/pattern overrides (L2) restyle the surface, `menu.yml` decides its links,
-`preferences.yml` extends its content, and the kill switch removes it entirely for apps
-that want to own the surface themselves.
+customization ladder ([scaffolding](scaffolding.md)): template pattern overrides
+restyle the surface, `menu.yml` decides its links, `preferences.yml` extends its
+content, and the kill switch removes it entirely for apps that want to own the surface
+themselves.
 
 An app author *could* build a settings page by hand, but could not reach the shell
 chrome, the locale-resolution chain, the notification dispatch path, or the session
