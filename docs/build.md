@@ -47,7 +47,7 @@ reports under `target/tesseraql-reports/`:
   coverage exports for CI publishers
 - `coverage/coverage.sarif` — coverage gaps as SARIF for code scanning
 
-Coverage kinds beyond SQL line/branch (design ch. 14): `assertion` (cases that assert),
+Coverage kinds beyond SQL line/branch: `assertion` (cases that assert),
 `iam-contract` (standard identity contracts exercised), `route` / `security` (manifest routes —
 and the subset declaring `security:` — whose SQL artifacts the suites exercise), `saml` (the
 identity contracts the SAML user-link login path executes, when linking is enabled), `scim`

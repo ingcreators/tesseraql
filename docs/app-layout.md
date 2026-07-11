@@ -1,6 +1,6 @@
 # Application layout
 
-The canonical layout of a TesseraQL application (design ch. 4). The same rules apply to user
+The canonical layout of a TesseraQL application. The same rules apply to user
 apps, the bundled system apps (ops-console, studio, iam-admin) and future `.tqlapp` packages.
 
 ```
