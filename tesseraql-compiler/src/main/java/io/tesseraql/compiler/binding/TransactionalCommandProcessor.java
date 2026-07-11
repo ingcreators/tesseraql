@@ -86,7 +86,7 @@ public final class TransactionalCommandProcessor implements Processor {
     private static final TqlErrorCode INVALID_STEPS = new TqlErrorCode(TqlDomain.CAMEL, 3102);
     /** TQL-SQL-4092: a row-count expectation failed, reported as an optimistic-lock conflict. */
     private static final TqlErrorCode EXPECT_CONFLICT = new TqlErrorCode(TqlDomain.SQL, 4092);
-    /** TQL-FIELD-4220: declarative validation rejected the input (HTTP 422, roadmap Phase 19). */
+    /** TQL-FIELD-4220: declarative validation rejected the input (HTTP 422). */
     private static final TqlErrorCode VALIDATION_FAILED = new TqlErrorCode(TqlDomain.FIELD, 4220);
     // Portable constraint-violation codes, mapped to HTTP statuses by ErrorResponseRenderer.
     private static final TqlErrorCode UNIQUE_VIOLATION = new TqlErrorCode(TqlDomain.SQL, 4090);

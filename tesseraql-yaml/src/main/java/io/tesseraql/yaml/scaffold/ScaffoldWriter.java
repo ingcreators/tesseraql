@@ -88,7 +88,7 @@ public final class ScaffoldWriter {
         Path target = home.resolve(relativePath).normalize();
         if (!target.startsWith(home)) {
             throw new TqlException(TRAVERSAL,
-                    "Scaffolded path escapes the app home (design ch. 20.2): " + relativePath);
+                    "Scaffolded path escapes the app home: " + relativePath);
         }
         return target;
     }
