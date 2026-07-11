@@ -39,18 +39,11 @@ startup):
 ```bash
 printf 'demo-password' > admin.pw
 tesseraql identity-schema --jdbc-url "<the URL serve printed>" \
-    --admin-login admin --admin-password-file admin.pw
+    --admin-login admin --admin-roles INV_READ,INV_WRITE --admin-password-file admin.pw
 ```
 
-To browse rows in the data browser step below, also enable it for the demo app — add one
-line to `examples/inventory-app/config/tesseraql.yml` and restart:
-
-```yaml
-tesseraql:
-  studio:
-    dataBrowser:
-      enabled: true
-```
+(The roles grant the demo app's own `inv.read`/`inv.write` policies, so the product pages
+open for this login too.)
 
 ## The Studio tour
 
@@ -60,8 +53,9 @@ around — every stop is live against the seeded data:
 1. **Explorer** — every route, view, job and workflow the app serves, straight from the
    files on disk. Open `web/products/get.yml`: the whole page is one YAML document and one
    2-way SQL file.
-2. **Data browser** — the seeded rows (the opt-in flag you set above). Filter, sort, export
-   CSV; with the row editor enabled, fix a value under audit + confirm.
+2. **Data browser** — the seeded rows (the demo app ships with
+   `tesseraql.studio.dataBrowser.enabled: true`). Filter, sort, export CSV; with the row
+   editor enabled, fix a value under audit + confirm.
 3. **The instant loop** — edit the SQL in the source editor, apply, and the running page
    changes; scaffold a CRUD slice from a table and its pages serve immediately; create a
    migration and press **Migrate now**. No restart anywhere.
@@ -70,10 +64,10 @@ around — every stop is live against the seeded data:
 5. **Docs portal** — the generated documentation: routes, schema, coverage, the release
    diff. `tesseraql admission --app examples/inventory-app` is the bar a shared app must
    clear ([marketplace admission](admission.md)).
-6. **Dashboards** — open `web/products/dashboard/` in the Explorer: stats, a chart and a
-   low-stock table from three SQL files and one `view: dashboard` document, no HTML anywhere
-   in the app. (The demo app's own pages are guarded by `auth: bearer` — call them with a
-   token via the API console; the Studio tour itself needs only your browser login.)
+6. **Dashboards** — open `http://localhost:8080/products/dashboard` in the browser: stats,
+   a chart and a low-stock table from three SQL files and one `view: dashboard` document, no
+   HTML anywhere in the app. The product pages share your browser login (the demo app's JSON
+   APIs stay `auth: bearer` for machine callers).
 
 ## The low-code loop, end to end
 

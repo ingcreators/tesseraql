@@ -2,3 +2,7 @@ app:
   pref:
     pageSize: Rows per page
     lowStockBanner: Show the low-stock banner
+
+inventory:
+  adjust:
+    insufficient: Stock cannot go below zero.
