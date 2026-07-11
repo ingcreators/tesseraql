@@ -21,6 +21,11 @@ import java.util.Optional;
  * resolve their {@code ${...}} placeholders lazily, per read, so secrets declared through the
  * SecretResolver SPI are fetched when the consumer starts, never into logs or artifacts —
  * mirroring {@link HttpOutbound} for outbound HTTP.
+ *
+ * <p>An optional {@code knownHostsFile} pins the SSH host keys SFTP sources are allowed to
+ * present (an OpenSSH known-hosts file, resolved against the app home). When set, every SFTP
+ * consumer verifies the server's host key against it; when unset, host keys are not checked and
+ * lint nudges with {@code TQL-SEC-4084}.
  */
 public final class PollConnectors {
 
@@ -32,13 +37,15 @@ public final class PollConnectors {
     private final AppConfig config;
     private final boolean present;
     private final List<String> allowedHosts;
+    private final String knownHostsFile;
     private final Map<String, Credential> credentials;
 
     private PollConnectors(AppConfig config, boolean present, List<String> allowedHosts,
-            Map<String, Credential> credentials) {
+            String knownHostsFile, Map<String, Credential> credentials) {
         this.config = config;
         this.present = present;
         this.allowedHosts = List.copyOf(allowedHosts);
+        this.knownHostsFile = knownHostsFile;
         // Populated by load() after this instance exists (Credential is an inner class), so the
         // live reference is shared, not copied.
         this.credentials = credentials;
@@ -51,8 +58,12 @@ public final class PollConnectors {
         if (config.navigate("tesseraql.connectors.poll.allowedHosts") instanceof List<?> hosts) {
             hosts.forEach(host -> allowedHosts.add(String.valueOf(host)));
         }
+        String knownHostsFile = config.getString("tesseraql.connectors.poll.knownHostsFile")
+                .filter(value -> !value.isBlank())
+                .orElse(null);
         Map<String, Credential> credentials = new LinkedHashMap<>();
-        PollConnectors loaded = new PollConnectors(config, present, allowedHosts, credentials);
+        PollConnectors loaded = new PollConnectors(config, present, allowedHosts, knownHostsFile,
+                credentials);
         if (config
                 .navigate("tesseraql.connectors.poll.credentials") instanceof Map<?, ?> declared) {
             declared.forEach((name, settings) -> {
@@ -76,6 +87,14 @@ public final class PollConnectors {
 
     public List<String> allowedHosts() {
         return allowedHosts;
+    }
+
+    /**
+     * The OpenSSH known-hosts file SFTP host keys are verified against (a path relative to the
+     * app home, or absolute), or empty when host-key checking is left off.
+     */
+    public Optional<String> knownHostsFile() {
+        return Optional.ofNullable(knownHostsFile);
     }
 
     /**

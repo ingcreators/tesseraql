@@ -909,7 +909,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
             // allow-list. The Camel file/ftp endpoint stays an implementation detail.
             context.addRoutes(new PollingRouteBuilder(List.copyOf(jobs.values()),
                     io.tesseraql.yaml.connectors.PollConnectors.load(manifest.config()), appName,
-                    jobOwners));
+                    jobOwners, appHome));
             // Messaging consumers (roadmap Phase 27): each queue-consume route drains its channel
             // off the durable tql_event table — that table is what makes delivery at-least-once.
             // The wake mechanism depends on the channel's transport: pg-notify adds low-latency

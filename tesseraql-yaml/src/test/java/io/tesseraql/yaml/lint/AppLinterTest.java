@@ -611,6 +611,7 @@ class AppLinterTest {
                     poll:
                       allowedHosts:
                         - sftp.partner.example
+                      knownHostsFile: security/known_hosts
                       credentials:
                         partner-sftp:
                           username: svc
@@ -680,6 +681,50 @@ class AppLinterTest {
         // The poll job with no import block.
         assertThat(findings).anyMatch(f -> f.code().equals("TQL-YAML-1006") && f.isError()
                 && f.message().contains("bad.intake"));
+        // With knownHostsFile configured, the host-key nudge stays quiet.
+        assertThat(findings).noneMatch(f -> f.code().equals("TQL-SEC-4084"));
+    }
+
+    @Test
+    void nudgesKnownHostsFileOnUncheckedSftpPolls(@TempDir Path dir) throws Exception {
+        Files.createDirectories(dir.resolve("config"));
+        Files.writeString(dir.resolve("config/tesseraql.yml"), """
+                tesseraql:
+                  app:
+                    name: t
+                  connectors:
+                    poll:
+                      allowedHosts:
+                        - sftp.partner.example
+                      credentials:
+                        partner-sftp:
+                          username: svc
+                          password: ${secret.env.SFTP_PASS}
+                """);
+        // An otherwise-clean SFTP poll job, but no knownHostsFile: the host key goes unchecked.
+        Files.createDirectories(dir.resolve("batch/partner"));
+        Files.writeString(dir.resolve("batch/partner/upsert.sql"), "insert into t values (1)\n");
+        Files.writeString(dir.resolve("batch/partner/job.yml"), """
+                version: tesseraql/v1
+                id: partner.intake
+                kind: job
+                recipe: file-import
+                trigger:
+                  poll:
+                    source: sftp
+                    host: sftp.partner.example
+                    path: /outbound
+                    credential: partner-sftp
+                import:
+                  format: csv
+                  sql:
+                    file: upsert.sql
+                """);
+
+        // A warning, not an error — existing apps keep shipping while being nudged.
+        assertThat(new AppLinter().lint(dir))
+                .anyMatch(f -> f.code().equals("TQL-SEC-4084") && !f.isError()
+                        && f.message().contains("tesseraql.connectors.poll.knownHostsFile"));
     }
 
     @Test
