@@ -1,24 +1,21 @@
 # Organizational data scoping
 
-> **Status: delivered (roadmap Phase 29 complete).** All three slices are implemented: the scope
-> document, the `/*%scope ... */` directive with additive role-conditional match arms, the lint and
-> `data-scope` coverage kind (slice 1); the managed org-unit hierarchy (slice 2); and row-level
-> masking via `unmaskWhen` (slice 3).
-
 Organizational data scoping confines what rows a request can see, derived from the authenticated
 **principal** (roles, groups, claims) rather than hand-written into every query. It is the row-level
 complement to multi-tenancy: where tenancy isolates whole tenants, scoping restricts a caller to
 their organizational reach *within* a tenant — their department, their region, their own records, or
-(later) the subtree of org units they manage.
+the subtree of org units they manage.
 
 It builds on three existing subsystems:
 
 - **The principal model** (`tesseraql-security` `Principal`) — `roles`, `groups`, `permissions`,
-  and raw `claims`, populated identically by every auth mechanism (JWT, OIDC, SAML, API keys, mTLS).
+  and raw `claims`, populated identically by every [authentication](authentication.md) mechanism
+  (JWT, OIDC, SAML, API keys, mTLS).
 - **2-way SQL** — a scope predicate is injected at a site the author chooses, parameterized, and
   stays runnable in a plain SQL tool. No query is rewritten behind the author's back.
 - **Field policies / masking** (`FieldPolicyApplier`) — the same principal that drives scoping
-  drives whether a field is shown, masked, or hidden (the masking integration is a later slice).
+  drives whether a field is shown, masked, or hidden (see
+  [row-level masking](#row-level-masking) below).
 
 It deliberately mirrors the **tenant-predicate** mechanism (`tenant.id` binds plus the
 `TQL-TENANT-3001` lint): same shape, one level deeper.
@@ -124,7 +121,7 @@ order by o.id
 - **Scopes that need a join** are correlated subqueries, not top-level joins:
 
   ```sql
-  -- scope/orders_in_my_subtree.sql  (roadmap slice 2)
+  -- scope/orders_in_my_subtree.sql
   exists (
     select 1 from tql_org_closure cl
     where cl.descendant = $.owner_unit
@@ -135,10 +132,11 @@ order by o.id
 Because the directive sits where a `WHERE` predicate goes, an accidental top-level join is a SQL
 syntax error in a plain tool — the 2-way "runs in a SQL tool" property enforces invariant 1 for free.
 
-Writes will be scoped the same way: a `/*%scope ... */` in the `WHERE` of an `UPDATE`/`DELETE` (a
-later slice) confines the write to authorized rows.
+Writes are scoped the same way: a `/*%scope ... */` in the `WHERE` of an `UPDATE`/`DELETE` confines
+the write to authorized rows. This is how an [approval workflow](approval-workflow.md) state
+transition carries its row authority.
 
-## Org-unit hierarchy — a shared foundation (slice 2, delivered)
+## Org-unit hierarchy — a shared foundation
 
 "My department and everything under it" needs an org-unit graph. Consistent with IAM's
 managed/SQL-contract realm duality (`IdentityContracts`/`RealmConfig`), the org-unit model has two
@@ -173,21 +171,21 @@ modes, selected by `tesseraql.orgunit.mode`:
   the full subtree. A principal with no unit claim resolves to an empty `in (…)` and sees nothing.
 
 - **`app`** (default) — the application owns its own organization tables; a subtree scope is written
-  against them with the scope-core directive, exactly as above but joining the app's own closure or a
+  against them with the scope directive, exactly as above but joining the app's own closure or a
   recursive view. Nothing managed is provisioned, so an existing app gains no tables until it opts in.
 
 This org-unit model is deliberately factored as a **shared foundation, not a scoping-private
-table**, because the next roadmap phase needs the same graph (see below). It is delivered in
-Phase 29 and consumed unchanged by Phase 28 — `OrgUnitStore.descendants(...)` is the Java seam both
-sides reuse.
+table**: [approval workflow](approval-workflow.md) consumes the same graph unchanged —
+`OrgUnitStore.descendants(...)` is the Java seam both sides reuse.
 
-### Relationship to Phase 28 (approval workflow)
+### Relationship to approval workflow
 
-Milestone M9 pairs approval workflow with org-scoped data, and the two are duals over one org graph:
+Approval workflow and org-scoped data are duals over one org graph:
 
-- **Scope** maps `principal → predicate over data rows`. **Assignee resolution** (Phase 28) maps
-  `document/task → set of principals`. Same graph, opposite direction — so the org-unit foundation
-  here is the substrate for workflow assignee resolution, not a second org model.
+- **Scope** maps `principal → predicate over data rows`. **Assignee resolution**
+  ([approval workflow](approval-workflow.md)) maps `document/task → set of principals`. Same graph,
+  opposite direction — so the org-unit foundation here is the substrate for workflow assignee
+  resolution, not a second org model.
 - A workflow **task inbox** ("tasks I can act on") is just a `/*%scope ... */` applied to the task
   table; additive (OR) composition is exactly its semantics — direct assignee *or* a candidate group
   I belong to *or* a task delegated to me.
@@ -195,14 +193,10 @@ Milestone M9 pairs approval workflow with org-scoped data, and the two are duals
   `UPDATE` confines it to the documents the caller has authority over, complementing the transition's
   expression-language guard (the guard checks state-machine legality; the scope checks row authority).
 
-Phase 29 therefore reserves the seams Phase 28 plugs into — the assignee-resolution contract shape,
-candidate-group derivation, and the write-scope injection point — without implementing the workflow
-engine itself.
-
-## Masking integration (slice 3, delivered)
+## Row-level masking
 
 Column-level, role-conditional masking already works through `FieldPolicy.policy` (the field is shown
-only when the principal satisfies a `Policy`). Slice 3 adds **row-level** masking: a field is masked
+only when the principal satisfies a `Policy`). Scoping adds **row-level** masking: a field is masked
 in rows *outside* the caller's scope. Rather than evaluate a predicate per row in Java, the query
 selects the scope predicate as a boolean flag (the `as boolean` directive renders it as a portable
 `case when … then 1 else 0 end`) and the field policy keys off it with `unmaskWhen`; the flag column
@@ -225,7 +219,7 @@ This keeps masking SQL-first and reuses the existing `FieldPolicyApplier` resolu
 
 ## Governance and testing
 
-Lint catches a misdeclared or unreferenceable scope before it ships (delivered in slice 1):
+Lint catches a misdeclared or unreferenceable scope before it ships:
 
 | Code | Severity | Meaning |
 | --- | --- | --- |
@@ -237,27 +231,13 @@ Lint catches a misdeclared or unreferenceable scope before it ships (delivered i
 The runtime fails closed: a directive rendered without a scope resolver configured is `TQL-SQL-2106`,
 and a directive naming an undeclared scope is `TQL-SQL-2107` — a scope can never silently no-op.
 
-Planned for later slices: `TQL-SCOPE-3001` (a scope-governed table queried with no scope predicate,
-mirroring `TQL-TENANT-3001`), `TQL-SCOPE-3010` (a route's `scope:` field naming an undeclared scope),
-and `TQL-SEC-4100` (a write route bypassing a governed scope without an explicit bypass policy).
+Planned but not currently implemented: `TQL-SCOPE-3001` (a scope-governed table queried with no
+scope predicate, mirroring `TQL-TENANT-3001`), `TQL-SCOPE-3010` (a route's `scope:` field naming an
+undeclared scope), and `TQL-SEC-4100` (a write route bypassing a governed scope without an explicit
+bypass policy).
 
 The **`data-scope`** coverage kind declares one item per scope under `scope/`; a scope counts as
 covered when a declarative suite exercises a route (or consumer) whose SQL applies it through a
 `/*%scope name */` directive — the same SQL-file basis as route coverage. An app with no scopes
 reports a 1.0 ratio. Gate it with `coverage.thresholds.data-scope`. (Per-role-path coverage —
-`<scopeId>#<role>` — is a later refinement.)
-
-## Delivery slices
-
-Phase 29 ships in slices, each a reviewable PR with CI green:
-
-1. **Scope core** (delivered) — `scope/` documents, the `/*%scope ... */` directive (parser/AST/
-   renderer in `tesseraql-core`, dependency-free, expanded at execution through the `ScopeResolver`
-   SPI), additive `match` arms, the `TQL-SCOPE-30xx` lint, and the `data-scope` coverage kind.
-   Attribute-based scoping with no hierarchy; ships value alone.
-2. **Shared org-unit foundation** (delivered) — the `managed`/`app` org-unit model (the duality
-   above): managed `tql_org_unit`/`tql_org_closure` with an `OrgUnitStore` that maintains the
-   closure, and subtree scopes that join it. Designed for Phase 28 to consume unchanged.
-3. **Masking integration** (delivered) — the `/*%scope … as boolean */` flag directive plus
-   `FieldPolicy.unmaskWhen`, masking a field in rows outside the caller's scope (the flag column is
-   stripped from the response).
+`<scopeId>#<role>` — is planned but not currently supported.)

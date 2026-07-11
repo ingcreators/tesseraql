@@ -1,6 +1,6 @@
 # The five-minute demo
 
-One command boots a complete, seeded, browsable app with Studio open (roadmap Phase 47).
+One command boots a complete, seeded, browsable app with Studio open.
 
 ## One command
 
@@ -35,17 +35,19 @@ around — every stop is live against the seeded data:
 4. **Tests** — open a route and run its declarative suite in the sandbox; record a new case
    from the API console with one click.
 5. **Docs portal** — the generated documentation: routes, schema, coverage, the release
-   diff. `tesseraql admission --app .` is the bar a shared app must clear.
+   diff. `tesseraql admission --app .` is the bar a shared app must clear
+   ([marketplace admission](admission.md)).
 6. **Dashboards** — `/products/dashboard` renders stats, a chart and a low-stock table from
    three SQL files and one `view: dashboard` document. No HTML anywhere in the app.
 
-## Milestone M12 — the low-code loop, closed
+## The low-code loop, end to end
 
-The demo walks the milestone end to end: a semi-technical author adds a column and its
-screen behavior entirely in Studio — **migration** (created and applied with Migrate now,
-Phase 42), **view** (a declarative document, Phase 39), **recorded test** (the API console's
-one click, Phase 43) — writing no HTML and never restarting; the change **promotes through a
-release diff** (Phase 46); and the route's **latency shows up on a scraped dashboard**
-(Phase 45, `deploy/grafana/tesseraql-dashboard.json`). Each leg is held green by an
-integration test: the zero-restart M7 loop, the Studio test recorder, the release diff
-engine, and the Prometheus exposition.
+The demo walks the whole loop: a semi-technical author adds a column and its screen
+behavior entirely in Studio — **migration** (created and applied with Migrate now, via the
+hot reload), **view** (a [declarative document](declarative-views.md)), **recorded test**
+(the API console's one click, in Studio) — writing no HTML and never restarting; the change
+**promotes through a release diff** ([environment profiles and promotion](promotion.md));
+and the route's **latency shows up on a scraped dashboard**
+([observability](deployment.md), `deploy/grafana/tesseraql-dashboard.json`). Each leg is
+held green by an integration test: the zero-restart hot reload, the Studio test recorder,
+the release diff engine, and the Prometheus exposition.

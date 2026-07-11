@@ -1,20 +1,14 @@
 # Workflow delegation and absence — who acts for whom, and when
 
-Status: security design accepted 2026-07-04 (roadmap Phase 52, Horizon 9). **Both
-slices are delivered — Phase 52 is complete and milestone M16 is met** on the real
-purchase-request gallery app: the absence rule and its resolution, then the IAM-admin
-visibility panel (`/_tesseraql/admin/delegations`) and the gallery proof. One refinement from implementation: the delegate resolves from a login id
-when the identity **schema answers** — the identity beans exist even without it, so a
-failed lookup falls back to the raw subject rather than failing the card.
+The [approval workflow](approval-workflow.md) gives approvals a per-task escape
+hatch: the **current assignee** may hand one task they already hold to someone else
+(`POST …/delegate/{to}`). What that deliberately does not answer is absence: an
+approver on leave should not need to hand over tasks one by one — and tasks that
+have not arrived yet cannot be handed over at all. Delegation adds the standing
+rule: **an absence window with a delegate, applied where assignees are resolved**,
+with a trail that always shows who acted for whom.
 
-Phase 28 gave approvals a per-task escape hatch: the **current assignee** may hand one
-task they already hold to someone else (`POST …/delegate/{to}`). What it deliberately
-did not answer is absence: an approver on leave should not need to hand over tasks one
-by one — and tasks that have not arrived yet cannot be handed over at all. This phase
-adds the standing rule: **an absence window with a delegate, applied where assignees are
-resolved**, with a trail that always shows who acted for whom.
-
-## The security stance first
+## The security stance
 
 - **Delegation redirects assignment. It never borrows identity.** The delegate becomes
   the task's assignee and acts **as themselves**, within their own roles, permissions,
@@ -23,15 +17,15 @@ resolved**, with a trail that always shows who acted for whom.
 - **One hop, never a chain.** If A delegates to B and B is also absent, a task for A
   lands with B regardless. Resolution consults exactly one rule — the assignee's — so
   loops (A→B→A) are impossible by construction, not by cycle detection.
-- **Only the delegator writes their own rule.** The account surface's construction
-  invariant (the subject is always the session principal's) applies; nobody can
-  delegate someone else's approvals. Self-delegation is refused.
+- **Only the delegator writes their own rule.** The [account surface](account.md)'s
+  construction invariant (the subject is always the session principal's) applies;
+  nobody can delegate someone else's approvals. Self-delegation is refused.
 - **The trail is structural.** The task row records `delegated_from` at assignment;
   tasks persist after completion (`DONE`, `completed_by`). Who was meant, who received,
   and who acted are three columns on one immutable-in-practice row, joined to the
   transition history's actor — no new history format, nothing to forget to write.
 
-## The rule (slice 1)
+## Setting the rule
 
 One standing rule per subject, self-served from the account page ("Out of office"):
 
@@ -49,14 +43,16 @@ create table if not exists tql_workflow_delegation (
 
 `DelegationStore` SPI in core (`active(tenant, subject, at)` → the delegate while
 `starts_at ≤ at < ends_at`, else empty; `put`/`clear`), `JdbcDelegationStore` in
-operations — outside the Flyway component set, `ensureSchema`-only, like every
-Horizon 9 table. The account card validates: a window with both ends, ending in the
+operations — outside the Flyway component set, `ensureSchema`-only. The account
+card validates: a window with both ends, ending in the
 future, and a delegate that is not the subject; when the managed identity realm is
 present the delegate is entered as a **login id** and resolved to its subject
 (unknown → `TQL-ACCOUNT-4802`), otherwise a raw subject is accepted and the page says
-so.
+so. The login-id resolution applies when the identity **schema answers** — the
+identity beans exist even without it, so a failed lookup falls back to the raw
+subject rather than failing the card.
 
-## Resolution at assignment time (slice 1)
+## Resolution at assignment time
 
 Everywhere a **direct assignee** is chosen, the engine asks once: *is this subject
 absent right now?* If so, the task opens for the delegate, with `delegated_from`
@@ -65,36 +61,34 @@ store methods — are:
 
 1. a transition's `assign:` resolver rows (the `openTask` site);
 2. the sweeper's `onBreach: reassign` fallback assignee;
-3. the target of the Phase 28 per-task `delegate/{to}` operation (handing a task to
+3. the target of the per-task `delegate/{to}` operation (handing a task to
    someone absent forwards it once, same one-hop rule).
 
 **Candidate groups are untouched** — a pool does not go on leave. **Existing tasks are
 untouched** — the window redirects what is assigned during it; tasks already held are
-exactly what the per-task delegate operation and the deadline sweeper are for, and the
-cookbook says so plainly.
+exactly what the per-task delegate operation and the deadline sweeper are for.
 
 The task inbox shows the provenance (“for &lt;delegator&gt;”), and the `assigned`
 reminder notification carries the *effective* assignee — the person who must act.
 
-## The operator surface and the proof (slice 2)
+Put together, on a typical approval app: an approver sets an absence with a
+delegate; a request submitted during the window lands in the delegate's inbox
+marked "for" the approver; the delegate approves it **as themselves** and the trail
+shows who acted for whom; after the window ends new requests reach the approver
+again — no permission ever borrowed, no chain ever followed.
 
-- The IAM admin gains a read-only **Active delegations** panel: who is absent, who
-  covers, until when — the operator's answer to "why did this land with X?".
-- The purchase-request gallery app dogfoods the loop end to end, and the integration
-  test holds it green (milestone M16).
+## The operator surface
 
-## Deliberately out of scope (documented, not implied)
+The IAM admin has a read-only **Active delegations** panel
+(`/_tesseraql/admin/delegations`): who is absent, who covers, until when — the
+operator's answer to "why did this land with X?".
+
+## Not currently supported
 
 - Multi-rule calendars, partial-day windows, per-workflow delegates: one subject, one
   window, one delegate. The table shape leaves room; the semantics stay small.
 - Delegating candidate-group membership.
 - Retroactive reassignment of already-open tasks when a window begins (the per-task
   operation covers it deliberately).
-- Admin-imposed delegation on behalf of another user — a later, separately-audited
-  surface if ever; today the rule is strictly self-service.
-
-**Milestone M16** — on the purchase-request gallery app: an approver sets an absence
-with a delegate; a request submitted during the window lands in the delegate's inbox
-marked "for" the approver; the delegate approves it **as themselves** and the trail
-shows who acted for whom; after the window ends new requests reach the approver again
-— no permission ever borrowed, no chain ever followed.
+- Admin-imposed delegation on behalf of another user — a possible later,
+  separately-audited surface; today the rule is strictly self-service.
