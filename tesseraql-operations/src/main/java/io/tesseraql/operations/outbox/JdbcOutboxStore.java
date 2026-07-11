@@ -21,6 +21,7 @@ import javax.sql.DataSource;
  */
 public final class JdbcOutboxStore implements OutboxStore {
 
+    /** TQL-BATCH-5101: the outbox store could not complete an operation. */
     private static final TqlErrorCode STORE_ERROR = new TqlErrorCode(TqlDomain.BATCH, 5101);
 
     private final DataSource dataSource;

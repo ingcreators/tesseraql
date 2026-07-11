@@ -28,6 +28,10 @@ import org.apache.camel.builder.RouteBuilder;
 final class OperationsRouteBuilder extends RouteBuilder {
 
     private static final String VIEW = "tesseraql-auth:authenticate?auth=bearer";
+    /**
+     * TQL-BATCH-4040: the requested operations resource (job, execution, trace, or event) is
+     * unknown — or outside the caller's {@code ops.app.<name>} scope, which reads the same.
+     */
     private static final Map<String, Object> NOT_FOUND = Map.of("error",
             Map.of("code", "TQL-BATCH-4040", "message", "Not Found"));
 

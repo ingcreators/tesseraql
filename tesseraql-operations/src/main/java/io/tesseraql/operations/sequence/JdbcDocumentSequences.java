@@ -30,6 +30,7 @@ import javax.sql.DataSource;
  */
 public final class JdbcDocumentSequences implements DocumentSequences {
 
+    /** TQL-SQL-2610: a document sequence number could not be allocated from its table. */
     private static final TqlErrorCode ALLOCATION_ERROR = new TqlErrorCode(TqlDomain.SQL, 2610);
     /** Two attempts suffice: a lost seed race is retried once against the committed row. */
     private static final int MAX_ATTEMPTS = 3;

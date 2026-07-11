@@ -11,6 +11,10 @@ import java.time.Duration;
  */
 public final class Durations {
 
+    /**
+     * TQL-YAML-1301: a configured duration is not {@code <number><unit>} with unit ms/s/m/h/d,
+     * for example {@code 30s}.
+     */
     private static final TqlErrorCode INVALID = new TqlErrorCode(TqlDomain.YAML, 1301);
 
     private Durations() {

@@ -39,6 +39,7 @@ import org.apache.camel.support.DefaultProducer;
  */
 public class TesseraqlSqlProducer extends DefaultProducer {
 
+    /** TQL-SQL-2500: the SQL failed to execute for a reason beyond the portable constraint kinds. */
     private static final TqlErrorCode EXECUTION_ERROR = new TqlErrorCode(TqlDomain.SQL, 2500);
     private static final TqlErrorCode UNSUPPORTED_MODE = new TqlErrorCode(TqlDomain.SQL, 2501);
     private static final TqlErrorCode NO_DATASOURCE = new TqlErrorCode(TqlDomain.SQL, 2502);
@@ -49,6 +50,7 @@ public class TesseraqlSqlProducer extends DefaultProducer {
     private static final TqlErrorCode NOT_NULL_VIOLATION_CODE = new TqlErrorCode(TqlDomain.SQL,
             4001);
     private static final TqlErrorCode CHECK_VIOLATION_CODE = new TqlErrorCode(TqlDomain.SQL, 4002);
+    /** TQL-SQL-4093: a serialization failure or deadlock; the write may succeed if retried (HTTP 409). */
     private static final TqlErrorCode SERIALIZATION_CODE = new TqlErrorCode(TqlDomain.SQL, 4093);
     /** TQL-LD-0001: result materialization exceeded the configured maxRows. */
     private static final TqlErrorCode MATERIALIZATION_OVERFLOW = new TqlErrorCode(TqlDomain.LD, 1);

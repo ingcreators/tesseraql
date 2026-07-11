@@ -21,6 +21,7 @@ import javax.sql.DataSource;
  */
 public final class JobRepository {
 
+    /** TQL-BATCH-5001: the job repository could not read or write the job/execution tables. */
     private static final TqlErrorCode REPO_ERROR = new TqlErrorCode(TqlDomain.BATCH, 5001);
 
     private final DataSource dataSource;

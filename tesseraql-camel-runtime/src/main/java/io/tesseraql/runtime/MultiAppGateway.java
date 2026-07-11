@@ -43,6 +43,12 @@ public final class MultiAppGateway implements AutoCloseable {
     /** The default tenant header checked for app entitlement at the front door (ch. 32.8). */
     private static final String TENANT_HEADER = "X-Tenant-Id";
 
+    /** TQL-APP-4030: the request's tenant is not on the app's entitlement list (HTTP 403). */
+    private static final String NOT_ENTITLED = "TQL-APP-4030";
+
+    /** TQL-APP-5020: the gateway failed to forward the request to the app's runtime (HTTP 502). */
+    private static final String GATEWAY_ERROR = "TQL-APP-5020";
+
     private final MultiAppHost host;
     private final HttpServer server;
     private final HttpClient client;
@@ -120,7 +126,7 @@ public final class MultiAppGateway implements AutoCloseable {
             String tenant = exchange.getRequestHeaders().getFirst(TENANT_HEADER);
             InstalledApp app = appsById.get(appId);
             if (tenant != null && app != null && !app.isEntitled(tenant)) {
-                respond(exchange, 403, "{\"error\":{\"code\":\"TQL-APP-4030\"}}");
+                respond(exchange, 403, "{\"error\":{\"code\":\"" + NOT_ENTITLED + "\"}}");
                 return;
             }
 
@@ -134,10 +140,10 @@ public final class MultiAppGateway implements AutoCloseable {
             forward(exchange, appPort, downstreamPath);
         } catch (InterruptedException ex) {
             Thread.currentThread().interrupt();
-            respond(exchange, 502, "{\"error\":{\"code\":\"TQL-APP-5020\"}}");
+            respond(exchange, 502, "{\"error\":{\"code\":\"" + GATEWAY_ERROR + "\"}}");
         } catch (RuntimeException ex) {
             LOG.warn("Gateway error: {}", ex.getMessage());
-            respond(exchange, 502, "{\"error\":{\"code\":\"TQL-APP-5020\"}}");
+            respond(exchange, 502, "{\"error\":{\"code\":\"" + GATEWAY_ERROR + "\"}}");
         } finally {
             exchange.close();
         }

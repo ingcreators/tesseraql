@@ -20,6 +20,12 @@ import org.apache.maven.plugins.annotations.Parameter;
 @Mojo(name = "governance", defaultPhase = LifecyclePhase.VERIFY, threadSafe = true)
 public class GovernanceMojo extends AbstractMojo {
 
+    /**
+     * TQL-GOV-3001: a route that needs review has no valid approval pinning its current source
+     * hash in {@code governance/approvals.yml}.
+     */
+    private static final String VIOLATION = "TQL-GOV-3001";
+
     /** The external app home to assess. */
     @Parameter(property = "tesseraql.appHome", required = true)
     private File appHome;
@@ -43,7 +49,7 @@ public class GovernanceMojo extends AbstractMojo {
             }
         }
         for (GovernanceGate.Violation violation : report.violations()) {
-            getLog().error("TQL-GOV-3001 " + violation.routeId() + ": " + violation.reason()
+            getLog().error(VIOLATION + " " + violation.routeId() + ": " + violation.reason()
                     + ". To approve after review, add to governance/approvals.yml: route="
                     + violation.routeId() + ", sha256=" + violation.sha256());
         }

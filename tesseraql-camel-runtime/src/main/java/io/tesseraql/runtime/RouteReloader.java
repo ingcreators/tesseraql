@@ -36,6 +36,12 @@ final class RouteReloader {
 
     private static final Logger LOG = LoggerFactory.getLogger(RouteReloader.class);
 
+    /**
+     * TQL-CAMEL-3103: the route failed to compile during hot reload; a 500 stub serves the
+     * compile message on its endpoint until the file is fixed.
+     */
+    private static final String COMPILE_FAILED = "TQL-CAMEL-3103";
+
     private final CamelContext context;
     private final Path appHome;
     private final StudioService studio;
@@ -308,8 +314,9 @@ final class RouteReloader {
                                 org.apache.camel.Exchange.HTTP_RESPONSE_CODE, 500);
                         exchange.getMessage().setHeader(org.apache.camel.Exchange.CONTENT_TYPE,
                                 "application/json; charset=utf-8");
-                        exchange.getMessage().setBody("{\"error\":{\"code\":\"TQL-CAMEL-3103\","
-                                + "\"message\":\"Route failed to compile: " + message + "\"}}");
+                        exchange.getMessage().setBody("{\"error\":{\"code\":\"" + COMPILE_FAILED
+                                + "\",\"message\":\"Route failed to compile: " + message
+                                + "\"}}");
                     });
                 }
             });

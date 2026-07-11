@@ -23,6 +23,15 @@ import java.util.stream.Stream;
  */
 public final class AdmissionProfile {
 
+    /**
+     * TQL-ADM-4705: a governance violation — a review-worthy route with no valid approval —
+     * fails marketplace admission.
+     */
+    private static final String GOVERNANCE_VIOLATION = "TQL-ADM-4705";
+
+    /** TQL-ADM-4706: every linter error in the app tree is a marketplace admission failure. */
+    private static final String LINT_ERROR = "TQL-ADM-4706";
+
     private AdmissionProfile() {
     }
 
@@ -50,7 +59,7 @@ public final class AdmissionProfile {
         List<LintFinding> findings = new AppLinter().lint(appHome);
         List<LintFinding> lintErrors = findings.stream().filter(LintFinding::isError).toList();
         for (LintFinding finding : lintErrors) {
-            failures.add(new Finding("TQL-ADM-4706", finding.location(),
+            failures.add(new Finding(LINT_ERROR, finding.location(),
                     finding.code() + ": " + finding.message()));
         }
         findings.stream()
@@ -68,7 +77,8 @@ public final class AdmissionProfile {
         // every behavior is interpreted from the documents.
         GovernanceGate.Report governance = new GovernanceGate(manifest).check(manifest);
         for (GovernanceGate.Violation violation : governance.violations()) {
-            failures.add(new Finding("TQL-ADM-4705", violation.routeId(), violation.reason()));
+            failures.add(new Finding(GOVERNANCE_VIOLATION, violation.routeId(),
+                    violation.reason()));
         }
         for (RouteGovernance.Assessment assessment : governance.assessments()) {
             if ("advanced".equals(assessment.mode())) {

@@ -18,6 +18,7 @@ import javax.sql.DataSource;
  */
 public final class JdbcIdempotencyStore implements IdempotencyStore {
 
+    /** TQL-IDEM-5001: the idempotency store could not complete an operation. */
     private static final TqlErrorCode STORE_ERROR = new TqlErrorCode(TqlDomain.IDEM, 5001);
 
     private final DataSource dataSource;
