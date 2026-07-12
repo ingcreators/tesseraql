@@ -250,7 +250,16 @@ public final class RouteCompiler {
         }
         ProcessorDefinition<?> route = pipelineThroughSql(builder, routeFile)
                 .process(responseRenderer(routeFile.definition()));
+        applyHttpCache(route, routeFile.definition());
         applyIdempotencyComplete(route, routeFile.definition());
+    }
+
+    /** Declarative HTTP caching for query responses (docs/response-shaping.md). */
+    private void applyHttpCache(ProcessorDefinition<?> route, RouteDefinition definition) {
+        if (definition.cache() != null) {
+            route.process(new io.tesseraql.compiler.binding.HttpCacheProcessor(
+                    definition.cache()));
+        }
     }
 
     /** Each route's {@code response.onError} steering, keyed by route id (htmx error retarget). */
@@ -404,7 +413,7 @@ public final class RouteCompiler {
                     "command-json", java.util.Map.of(), null, security, null, null, null, command,
                     java.util.Map.of(), java.util.Map.of(), java.util.Map.of(), java.util.Map.of(),
                     null, null, null, null, null, null, workflowResponse(), null, null,
-                    null, null);
+                    null, null, null);
             String urlPath = basePath + "/{key}/" + transition.id();
             RouteFile routeFile = new RouteFile("POST", urlPath, workflowFile.source(),
                     synthesized);
@@ -461,7 +470,8 @@ public final class RouteCompiler {
                 "command-json", java.util.Map.of(), null, def.security(), null, null, null, null,
                 java.util.Map.of(), java.util.Map.of(), java.util.Map.of(), java.util.Map.of(),
                 null,
-                null, null, null, null, null, workflowResponse(), null, null, null, null);
+                null, null, null, null, null, workflowResponse(), null, null, null, null,
+                null);
         ProcessorDefinition<?> route = builder.from(direct).routeId(routeId);
         applySecurity(route, def.security());
         applyTenancy(route);
@@ -802,6 +812,7 @@ public final class RouteCompiler {
             route.process(new HtmlResponseRenderer(html, appHome, routeDir,
                     i18n.defaultTag(), viewBinding));
         }
+        applyHttpCache(route, routeFile.definition());
     }
 
     /** The POST route serving a path — a form view's {@code action:} target. */

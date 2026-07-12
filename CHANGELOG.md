@@ -27,6 +27,15 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **Declarative HTTP caching for query routes** (`cache:`): `Cache-Control` from
+  `maxAge`/`visibility`/`staleWhileRevalidate` (`private` default; `public` lints onto
+  `auth: public` routes only — an authenticated response is per-principal) and a strong
+  content `ETag` (on by default) answering a matching `If-None-Match` with `304` and no
+  body. Stateless by design — no server-side cache to invalidate, nothing to coordinate
+  across nodes; a 304 saves transfer, not compute. Query recipes only (`TQL-YAML-1025`).
+  The platform HTTP header filter now lets `Cache-Control` through for app routes (it
+  previously dropped it wholesale; request hop-by-hop headers still never echo back).
+
 - **Asynchronous attachment scanning** (`tesseraql.attachments.scan.mode: async`): uploads
   return immediately as `pending` and the existing non-clean download gate holds them back
   (`409`, "awaiting its malware scan") — fail-closed is preserved by construction; only the

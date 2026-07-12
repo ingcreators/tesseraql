@@ -87,3 +87,27 @@ the generated OpenAPI as a response entry.
   same way (`meta: page`)
 - [declarative-views.md](declarative-views.md) — declarative HTML rendering over the same
   route declarations
+
+## HTTP caching
+
+A query route can declare how clients and proxies may cache its response — stateless by
+design: there is no server-side cache to invalidate and nothing to coordinate across nodes.
+
+```yaml
+cache:
+  maxAge: 30s                 # Cache-Control: private, max-age=30 (private is the default)
+  visibility: public          # public lints onto auth: public routes only
+  staleWhileRevalidate: 60s   # optional
+  etag: true                  # the default
+```
+
+- **`Cache-Control`** comes straight from the block; `private` is the default, and
+  `visibility: public` is only legal on `auth: public` routes (`TQL-YAML-1025`) — an
+  authenticated response is per-principal by definition.
+- **`ETag`** (on by default) is a strong hash of the rendered body; a matching
+  `If-None-Match` answers `304` with no body. The render already happened, so a 304 saves
+  transfer, not compute — a stale validator on changed data simply gets fresh content with a
+  new tag.
+- `cache:` is a **query-recipe** key (`query-json`, `query-html`, `page`): a command's
+  response must never come from a cache. Streaming responses (`query-export`) are not hashed.
+

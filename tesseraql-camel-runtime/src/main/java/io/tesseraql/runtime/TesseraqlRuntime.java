@@ -303,6 +303,16 @@ public final class TesseraqlRuntime implements AutoCloseable {
         VertxPlatformHttpServerConfiguration httpConfig = new VertxPlatformHttpServerConfiguration();
         httpConfig.setBindHost("0.0.0.0");
         httpConfig.setBindPort(port);
+        // The default HTTP header filter drops response caching headers wholesale; declarative
+        // route caching (docs/response-shaping.md) needs Cache-Control on the wire, so the
+        // component-level strategy keeps the full default filter minus exactly that header —
+        // request hop-by-hop headers still never echo back.
+        org.apache.camel.http.base.HttpHeaderFilterStrategy httpHeaderFilter = new org.apache.camel.http.base.HttpHeaderFilterStrategy();
+        httpHeaderFilter.getOutFilter().removeIf("cache-control"::equalsIgnoreCase);
+        httpHeaderFilter.getInFilter().removeIf("cache-control"::equalsIgnoreCase);
+        context.getComponent("platform-http",
+                org.apache.camel.component.platform.http.PlatformHttpComponent.class)
+                .setHeaderFilterStrategy(httpHeaderFilter);
         // SSE endpoints register on the platform's Vert.x router, which exists only once
         // the context (and with it the HTTP server) has started — collected here, run
         // right after context.start() (see SseRoutes for why they are not Camel routes).

@@ -68,6 +68,8 @@ public record RouteDefinition(
         String datasource,
         // Named http: sources composed with SQL results on query routes (docs/connectors.md).
         Map<String, HttpSourceSpec> http,
+        // Declarative HTTP caching for query responses (docs/response-shaping.md).
+        CacheSpec cache,
         // Topics broadcast to live views after a successful command commit (docs/realtime.md);
         // a single string or a list in YAML.
         @com.fasterxml.jackson.annotation.JsonFormat(with = com.fasterxml.jackson.annotation.JsonFormat.Feature.ACCEPT_SINGLE_VALUE_AS_ARRAY) List<String> emit) {

@@ -20,6 +20,7 @@ Schema for TesseraQL Simple YAML documents: routes (web/**/<method>.yml), jobs (
 | `policy` | object | Row-authority policy binds for /*%scope*/ directives in the route's SQL. Documented in data-scoping.md. |
 | `outbox` | object | Transactional outbox event recorded with the command and delivered at-least-once after commit. Documented in notifications.md and messaging.md. |
 | `http` | map of [object](#http) | Named HTTP sources on a query route (docs/connectors.md, "HTTP sources"): each is a body-less GET against an external JSON API, executed through the outbound gateway (deny-by-default allowedHosts, named credentials, timeouts, circuit breaker) and composed with the SQL results in the response or view as <name>.rows / <name>.body. Query recipes only (TQL-YAML-1022). |
+| `cache` | [object](#cache) | Declarative HTTP caching for query responses (docs/response-shaping.md): Cache-Control from maxAge/visibility (private default; public lints onto auth: public only) and a content ETag answering If-None-Match with 304. Query recipes only (TQL-YAML-1025). |
 | `emit` | any | Topic(s) broadcast to live views after this command commits (docs/realtime.md). A name is lowercase dot/dash-separated segments; the event carries the topic name only, never data. |
 | `refreshOn` | string | List, detail, and dashboard views (not forms): refetch this view's refresh region whenever a command emits this topic (docs/realtime.md). |
 | `datasource` | string | The named connector under tesseraql.datasources the route's SQL runs on, defaulting to main. The name must be declared (TQL-YAML-1035); a non-main route cannot declare notify:/publish:/outbox: or sequence allocation - they ride the main connector (TQL-YAML-1036). |
@@ -70,6 +71,17 @@ Schema for TesseraQL Simple YAML documents: routes (web/**/<method>.yml), jobs (
 | `requestTimeout` | string |  |
 | `select` | string | Dotted path into the response JSON naming the rows array or object the source exposes. |
 | `onError` | enum: `fail` \| `empty` | fail (default) or empty: the source degrades to zero rows and the page still renders. |
+
+### cache
+
+Declarative HTTP caching for query responses (docs/response-shaping.md): Cache-Control from maxAge/visibility (private default; public lints onto auth: public only) and a content ETag answering If-None-Match with 304. Query recipes only (TQL-YAML-1025).
+
+| Property | Type | Description |
+| --- | --- | --- |
+| `maxAge` | string | How long a client may reuse the response (duration string such as 30s or 5m). |
+| `visibility` | enum: `private` \| `public` |  |
+| `etag` | boolean | Hash the rendered body and answer If-None-Match with 304 (default true). |
+| `staleWhileRevalidate` | string |  |
 
 ### webhook
 
