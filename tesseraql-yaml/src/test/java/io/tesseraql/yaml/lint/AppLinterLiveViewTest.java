@@ -82,8 +82,18 @@ class AppLinterLiveViewTest {
     }
 
     @Test
-    void refreshOnIsAListViewKey(@TempDir Path dir) throws Exception {
+    void detailAndDashboardTakeRefreshOnButFormsDoNot(@TempDir Path dir) throws Exception {
         writeApp(dir, "emit: orders.changed", "detail", "refreshOn: orders.changed");
+        assertThat(new AppLinter().lint(dir)).noneMatch(LintFinding::isError);
+
+        Files.writeString(dir.resolve("web/orders/orders.view.yml"), """
+                version: tesseraql/v1
+                kind: view
+                view: form
+                title: Orders
+                action: orders.approve
+                refreshOn: orders.changed
+                """);
         assertThat(new AppLinter().lint(dir)).anyMatch(finding -> finding.isError()
                 && "TQL-VIEW-3311".equals(finding.code()));
     }

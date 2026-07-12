@@ -82,6 +82,27 @@ class LiveViewIntegrationTest {
                 .contains("hx-select=\"#orders-table\"");
     }
 
+    /** Detail and dashboard views carry the same wiring on their <id>-view region. */
+    @Test
+    void detailAndDashboardViewsRenderTheLiveRefreshWiring() throws Exception {
+        HttpResponse<String> detail = get("/orders/1");
+        assertThat(detail.statusCode()).isEqualTo(200);
+        assertThat(detail.body())
+                .contains("id=\"order-view\"")
+                .contains("sse-connect=\"/_tesseraql/topics?topics=orders.changed\"")
+                .contains("hx-trigger=\"sse:orders.changed\"")
+                .contains("hx-get=\"/orders/1\"")
+                .contains("hx-select=\"#order-view\"");
+
+        HttpResponse<String> dashboard = get("/orders/stats");
+        assertThat(dashboard.statusCode()).isEqualTo(200);
+        assertThat(dashboard.body())
+                .contains("id=\"stats-view\"")
+                .contains("hx-trigger=\"sse:orders.changed\"")
+                .contains("hx-get=\"/orders/stats\"")
+                .contains("hx-select=\"#stats-view\"");
+    }
+
     /** A committed command's emit: lands as a named, data-free frame on the topic stream. */
     @Test
     void aCommittedCommandEmitsItsTopicToTheStream() throws Exception {
@@ -210,6 +231,69 @@ class LiveViewIntegrationTest {
                 response:
                   html:
                     view: orders.view.yml
+                """);
+        Files.writeString(orders.resolve("order.sql"), """
+                select
+                  o.id,
+                  o.status
+                from
+                  orders o
+                where
+                  o.id = /* id */ 1
+                """);
+        Files.writeString(orders.resolve("order.view.yml"), """
+                version: tesseraql/v1
+                kind: view
+                view: detail
+                title: Order
+                refreshOn: orders.changed
+                """);
+        Path detail = target.resolve("web/orders/{id}");
+        Files.createDirectories(detail);
+        Files.writeString(detail.resolve("get.yml"), """
+                version: tesseraql/v1
+                id: orders.detail
+                kind: route
+                recipe: query-html
+                security:
+                  auth: browser
+                sql:
+                  file: ../order.sql
+                response:
+                  html:
+                    view: ../order.view.yml
+                """);
+        Files.writeString(orders.resolve("stats.sql"), """
+                select
+                  count(*) as order_count
+                from
+                  orders
+                """);
+        Files.writeString(orders.resolve("stats.view.yml"), """
+                version: tesseraql/v1
+                kind: view
+                view: dashboard
+                title: Order stats
+                refreshOn: orders.changed
+                panels:
+                  - type: stat
+                    source: sql
+                    column: order_count
+                """);
+        Path stats = target.resolve("web/orders/stats");
+        Files.createDirectories(stats);
+        Files.writeString(stats.resolve("get.yml"), """
+                version: tesseraql/v1
+                id: orders.stats
+                kind: route
+                recipe: query-html
+                security:
+                  auth: browser
+                sql:
+                  file: ../stats.sql
+                response:
+                  html:
+                    view: ../stats.view.yml
                 """);
         Path approve = target.resolve("web/orders/approve");
         Files.createDirectories(approve);
