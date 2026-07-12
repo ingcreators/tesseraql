@@ -14,9 +14,9 @@ import java.util.List;
 final class NotifyingInboxStore implements InboxStore {
 
     private final InboxStore delegate;
-    private final InboxStreams streams;
+    private final LiveStreams streams;
 
-    NotifyingInboxStore(InboxStore delegate, InboxStreams streams) {
+    NotifyingInboxStore(InboxStore delegate, LiveStreams streams) {
         this.delegate = delegate;
         this.streams = streams;
     }
@@ -25,7 +25,7 @@ final class NotifyingInboxStore implements InboxStore {
     public void deliver(String eventId, String tenantId, String subject, String channel,
             String source, String title, String body) {
         delegate.deliver(eventId, tenantId, subject, channel, source, title, body);
-        streams.changed(tenantId, subject);
+        streams.signal(LiveStreams.inboxKey(tenantId, subject));
     }
 
     @Override
@@ -42,7 +42,7 @@ final class NotifyingInboxStore implements InboxStore {
     public boolean markRead(String tenantId, String subject, String eventId) {
         boolean changed = delegate.markRead(tenantId, subject, eventId);
         if (changed) {
-            streams.changed(tenantId, subject);
+            streams.signal(LiveStreams.inboxKey(tenantId, subject));
         }
         return changed;
     }
@@ -51,7 +51,7 @@ final class NotifyingInboxStore implements InboxStore {
     public int markAllRead(String tenantId, String subject) {
         int changed = delegate.markAllRead(tenantId, subject);
         if (changed > 0) {
-            streams.changed(tenantId, subject);
+            streams.signal(LiveStreams.inboxKey(tenantId, subject));
         }
         return changed;
     }

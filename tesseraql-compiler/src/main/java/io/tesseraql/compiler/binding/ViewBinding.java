@@ -176,7 +176,7 @@ public final class ViewBinding {
         boolean on = !topic.isEmpty();
         v.put("liveExt", on ? "sse" : "");
         v.put("liveConnect", on
-                ? "/_tesseraql/topics?topics=" + java.net.URLEncoder.encode(topic,
+                ? "/_tesseraql/events?topics=" + java.net.URLEncoder.encode(topic,
                         java.nio.charset.StandardCharsets.UTF_8)
                 : "");
         v.put("liveGet", on ? pagePath : "");

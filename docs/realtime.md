@@ -30,8 +30,9 @@ rolled-back command emits nothing.
 ## How it works — and what never leaves the server
 
 The wire carries **topic names, never data**. A committed `emit:` pushes one named,
-empty Server-Sent Event on `GET /_tesseraql/topics` (the same SSE transport as the
-[inbox bell](inbox.md#live-badge)); the browser side is the bundled htmx `sse` extension,
+empty Server-Sent Event on `GET /_tesseraql/events` — the same per-session stream that
+carries the [inbox bell](inbox.md#live-badge)'s badge, so one connection serves both; the
+browser side is the bundled htmx `sse` extension,
 which re-issues an ordinary `GET` of the page and swaps the view's refresh region in
 place (a list's table region — the same one the search box refreshes — or a detail's or
 dashboard's `#<view>-view` region). Because the refetch is a normal request, everything
@@ -64,13 +65,16 @@ re-fetch their own view of the data.
   are the deliberate exception (`TQL-VIEW-3311`): a live replacement would discard
   in-progress input. A topic no route emits is a lint warning (`TQL-VIEW-3312`), since
   that view would never refresh.
-- Signals are **per-node and best-effort**, matching the framework's
-  [per-node stance](deployment.md#safety-valves-and-multi-node-semantics): on a multi-node deployment, viewers
-  connected to another node converge on their next reload. Live refresh is a freshness
-  hint — reliable delivery is what the [outbox](notifications.md) is for.
-- The signal fires after commit on the node that served the command; there is no queue
-  and no replay. A page that was disconnected re-renders current data when it reconnects
-  or reloads, which is always correct — the data never rode the stream.
+- **Signals cross nodes on PostgreSQL**: a commit rides `pg_notify` over the shared main
+  database to every peer node, whose listener forwards it into that node's local hub — so
+  a viewer connected to any node behind the load balancer refreshes. On other databases,
+  signals stay per-node (the framework's
+  [coordination stance](deployment.md#safety-valves-and-multi-node-semantics)) and viewers
+  on other nodes converge on their next reload. Either way the signal is a best-effort
+  freshness hint — reliable delivery is what the [outbox](notifications.md) is for.
+- The signal fires after commit; there is no queue and no replay. A page that was
+  disconnected re-renders current data when it reconnects or reloads, which is always
+  correct — the data never rode the stream.
 
 ## Testing
 

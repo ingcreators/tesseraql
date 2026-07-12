@@ -24,7 +24,7 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
 
 /**
  * Live views end to end (docs/realtime.md): a command route's {@code emit:} signals the
- * {@code /_tesseraql/topics} stream after commit, the rendered list view carries the htmx sse
+ * {@code /_tesseraql/events} stream after commit, the rendered list view carries the htmx sse
  * wiring for its {@code refreshOn:} topic, and the stream is session-authenticated and
  * data-free (named events only).
  */
@@ -75,7 +75,7 @@ class LiveViewIntegrationTest {
         HttpResponse<String> page = get("/orders");
         assertThat(page.statusCode()).isEqualTo(200);
         assertThat(page.body())
-                .contains("sse-connect=\"/_tesseraql/topics?topics=orders.changed\"")
+                .contains("sse-connect=\"/_tesseraql/events?topics=orders.changed\"")
                 .contains("hx-trigger=\"sse:orders.changed\"")
                 .contains("hx-ext=\"sse\"")
                 .contains("hx-get=\"/orders\"")
@@ -94,7 +94,7 @@ class LiveViewIntegrationTest {
         assertThat(detail.statusCode()).isEqualTo(200);
         assertThat(detail.body())
                 .contains("id=\"order-view\"")
-                .contains("sse-connect=\"/_tesseraql/topics?topics=orders.changed\"")
+                .contains("sse-connect=\"/_tesseraql/events?topics=orders.changed\"")
                 .contains("hx-trigger=\"sse:orders.changed\"")
                 .contains("hx-get=\"/orders/1\"")
                 .contains("hx-select=\"#order-view\"");
@@ -113,7 +113,7 @@ class LiveViewIntegrationTest {
     void aCommittedCommandEmitsItsTopicToTheStream() throws Exception {
         HttpResponse<java.io.InputStream> stream = HttpClient.newHttpClient().send(
                 HttpRequest.newBuilder(URI.create("http://localhost:" + runtime.port()
-                        + "/_tesseraql/topics?topics=orders.changed"))
+                        + "/_tesseraql/events?topics=orders.changed"))
                         .header("Cookie", sessionCookie).build(),
                 HttpResponse.BodyHandlers.ofInputStream());
         assertThat(stream.statusCode()).isEqualTo(200);
@@ -137,7 +137,7 @@ class LiveViewIntegrationTest {
     void aFailedCommandEmitsNothing() throws Exception {
         HttpResponse<java.io.InputStream> stream = HttpClient.newHttpClient().send(
                 HttpRequest.newBuilder(URI.create("http://localhost:" + runtime.port()
-                        + "/_tesseraql/topics?topics=orders.changed"))
+                        + "/_tesseraql/events?topics=orders.changed"))
                         .header("Cookie", sessionCookie).build(),
                 HttpResponse.BodyHandlers.ofInputStream());
         try (var frames = new java.io.BufferedReader(new java.io.InputStreamReader(
@@ -159,7 +159,7 @@ class LiveViewIntegrationTest {
     void theTopicStreamRequiresASession() throws Exception {
         HttpResponse<String> refused = HttpClient.newHttpClient().send(
                 HttpRequest.newBuilder(URI.create("http://localhost:" + runtime.port()
-                        + "/_tesseraql/topics?topics=orders.changed")).build(),
+                        + "/_tesseraql/events?topics=orders.changed")).build(),
                 HttpResponse.BodyHandlers.ofString());
         assertThat(refused.statusCode()).isEqualTo(401);
     }
