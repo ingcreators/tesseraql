@@ -458,14 +458,23 @@ public final class TesseraqlRuntime implements AutoCloseable {
         // http-call steps here and the Studio copilot endpoint below.
         final io.tesseraql.yaml.http.HttpOutbound httpOutbound = io.tesseraql.yaml.http.HttpOutbound
                 .load(manifest.config());
+        // One outbound HTTP client gates every framework-issued call: http-call job steps
+        // and query routes' http: sources (docs/connectors.md) share the allow-list, the
+        // named credentials, the timeouts, and the per-host circuit breaker.
+        io.tesseraql.operations.http.HttpCallClient httpCallClient = new io.tesseraql.operations.http.HttpCallClient(
+                httpOutbound, manifest.config(), tracer);
         JobExecutor jobExecutor = new JobExecutor(jobRepository, tempStore, slowSqlLog, tracer)
                 .notificationOutbox(outboxStore)
                 // Recipient-aware notify steps honor per-user opt-outs (roadmap Phase 48).
                 .preferenceStore(preferences)
                 // Outbound REST for http-call pipeline steps (roadmap Phase 26): deny-by-default
                 // egress, secret-managed credentials, timeouts, and circuit breaking from config.
-                .httpCall(new io.tesseraql.operations.http.HttpCallClient(httpOutbound,
-                        manifest.config(), tracer));
+                .httpCall(httpCallClient);
+        if (manifest.routes().stream().anyMatch(route -> !route.definition().http().isEmpty())) {
+            context.getRegistry().bind(TesseraqlProperties.HTTP_SOURCE_GATEWAY_BEAN,
+                    (io.tesseraql.yaml.http.HttpSourceGateway) (spec,
+                            callContext) -> httpCallClient.call(spec, callContext, null));
+        }
         // Notification channels and operations alerts (roadmap Phase 20).
         io.tesseraql.yaml.notify.NotificationChannels notificationChannels = io.tesseraql.yaml.notify.NotificationChannels
                 .load(manifest.config());

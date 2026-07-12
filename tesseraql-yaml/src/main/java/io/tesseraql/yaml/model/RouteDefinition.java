@@ -66,6 +66,8 @@ public record RouteDefinition(
         ResponseSpec response,
         PageSpec page,
         String datasource,
+        // Named http: sources composed with SQL results on query routes (docs/connectors.md).
+        Map<String, HttpSourceSpec> http,
         // Topics broadcast to live views after a successful command commit (docs/realtime.md);
         // a single string or a list in YAML.
         @com.fasterxml.jackson.annotation.JsonFormat(with = com.fasterxml.jackson.annotation.JsonFormat.Feature.ACCEPT_SINGLE_VALUE_AS_ARRAY) List<String> emit) {
@@ -87,6 +89,9 @@ public record RouteDefinition(
                 : java.util.Collections
                         .unmodifiableMap(new java.util.LinkedHashMap<>(notifications));
         emit = emit == null ? List.of() : List.copyOf(emit);
+        http = http == null
+                ? Map.of()
+                : java.util.Collections.unmodifiableMap(new java.util.LinkedHashMap<>(http));
     }
 
     /** The input policy, or framework defaults (reject unknown / reject read-only). */

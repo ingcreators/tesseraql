@@ -117,16 +117,23 @@ public record TestSuite(List<TestCase> tests) {
 
     /**
      * An http-call target (roadmap Phase 26): the case plans a job's {@code http-call:} pipeline
-     * steps against the case's params, without issuing a network request. Each matching step is
-     * one row carrying {@code http} (its id), {@code method}, the resolved {@code url} and
+     * steps — or a query route's {@code http:} sources (docs/connectors.md) — against the case's
+     * params, without issuing a network request. Each matching step is one row carrying
+     * {@code http} (its id or source name), {@code method}, the resolved {@code url} and
      * {@code host}, {@code allowed} (whether the host is in the egress allow-list), and the
      * {@code credential} name. Query bindings resolve exactly as they would at runtime.
      *
-     * @param job the job id whose http-call steps are planned
-     * @param id  optional step id; unset, every http-call step of the job is planned
+     * @param job   the job id whose http-call steps are planned (exactly one of job/route)
+     * @param id    optional step id or source name; unset, every declaration is planned
+     * @param route the route id whose {@code http:} sources are planned
      */
     @JsonIgnoreProperties(ignoreUnknown = true)
-    public record HttpCallTarget(String job, String id) {
+    public record HttpCallTarget(String job, String id, String route) {
+
+        /** Convenience constructor for the job-only shape (pre http-source). */
+        public HttpCallTarget(String job, String id) {
+            this(job, id, null);
+        }
     }
 
     /**

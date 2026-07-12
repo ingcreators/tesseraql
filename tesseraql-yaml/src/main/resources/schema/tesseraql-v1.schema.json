@@ -48,6 +48,25 @@
     "idempotency": { "type": "object", "additionalProperties": true, "description": "Idempotent replay for commands: required, scope (default: the route id), ttl (default 24h). A replayed key returns the stored response; a reused key with a different body is TQL-IDEM-4090. Documented in transactional-writes.md." },
     "policy": { "type": "object", "additionalProperties": true, "description": "Row-authority policy binds for /*%scope*/ directives in the route's SQL. Documented in data-scoping.md." },
     "outbox": { "type": "object", "additionalProperties": true, "description": "Transactional outbox event recorded with the command and delivered at-least-once after commit. Documented in notifications.md and messaging.md." },
+    "http": {
+      "type": "object",
+      "description": "Named HTTP sources on a query route (docs/connectors.md, \"HTTP sources\"): each is a body-less GET against an external JSON API, executed through the outbound gateway (deny-by-default allowedHosts, named credentials, timeouts, circuit breaker) and composed with the SQL results in the response or view as <name>.rows / <name>.body. Query recipes only (TQL-YAML-1022).",
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "url": { "type": "string", "description": "Absolute http(s) URL; config placeholders resolve. The host must be in tesseraql.http.outbound.allowedHosts (TQL-SEC-4070)." },
+          "headers": { "type": "object", "additionalProperties": { "type": "string" } },
+          "query": { "type": "object", "additionalProperties": { "type": "string" }, "description": "Query-string bindings, each an expression over the execution context." },
+          "credential": { "type": "string", "description": "A named credential under tesseraql.http.outbound.credentials (TQL-SEC-4072)." },
+          "expectStatus": { "type": "integer" },
+          "connectTimeout": { "type": "string" },
+          "requestTimeout": { "type": "string" },
+          "select": { "type": "string", "description": "Dotted path into the response JSON naming the rows array or object the source exposes." },
+          "onError": { "type": "string", "enum": ["fail", "empty"], "description": "fail (default) or empty: the source degrades to zero rows and the page still renders." }
+        },
+        "additionalProperties": true
+      }
+    },
     "emit": {
       "description": "Topic(s) broadcast to live views after this command commits (docs/realtime.md). A name is lowercase dot/dash-separated segments; the event carries the topic name only, never data.",
       "oneOf": [

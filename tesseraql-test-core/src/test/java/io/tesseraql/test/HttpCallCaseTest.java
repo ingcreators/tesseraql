@@ -64,6 +64,28 @@ class HttpCallCaseTest {
                     http-call:
                       url: https://evil.example/v1/exfil
                 """);
+        // A query route with http: sources (docs/connectors.md) — planned by route target.
+        Files.createDirectories(appHome.resolve("web/orders"));
+        Files.writeString(appHome.resolve("web/orders/orders.sql"), "select 1 as id\n");
+        Files.writeString(appHome.resolve("web/orders/get.yml"), """
+                version: tesseraql/v1
+                id: orders.list
+                kind: route
+                recipe: query-json
+                sql:
+                  file: orders.sql
+                http:
+                  rates:
+                    url: https://api.partner.example/v1/rates
+                    credential: partner
+                  shadow:
+                    url: https://evil.example/v1/exfil
+                response:
+                  json:
+                    status: 200
+                    body:
+                      rows: sql.rows
+                """);
         runner = new TestRunner(null, appHome);
     }
 
@@ -107,5 +129,26 @@ class HttpCallCaseTest {
                 null, null, null, new HttpCallTarget("orders.unknown", null)));
 
         assertThat(unknownJob.results().get(0).passed()).isFalse();
+    }
+
+    /** A route target plans the route's http: sources with the same row shape as job steps. */
+    @Test
+    void plansARoutesHttpSourcesWithTheAllowListVerdict() {
+        TestReport report = run(new TestCase("route sources", null, null, Map.of(),
+                new Expectation(2, List.of(
+                        Map.of("http", "rates", "method", "GET", "allowed", true,
+                                "credential", "partner"),
+                        Map.of("http", "shadow", "allowed", false))),
+                null, null, null, new HttpCallTarget(null, null, "orders.list")));
+        assertThat(report.allPassed()).as(report.results().toString()).isTrue();
+    }
+
+    /** Exactly one of job/route: both or neither fails with a clear message. */
+    @Test
+    void aTargetNeedsExactlyOneOfJobOrRoute() {
+        TestReport neither = run(new TestCase("neither", null, null, Map.of(), null,
+                null, null, null, new HttpCallTarget(null, null, null)));
+        assertThat(neither.results().get(0).message())
+                .contains("exactly one of http-call.job or http-call.route");
     }
 }
