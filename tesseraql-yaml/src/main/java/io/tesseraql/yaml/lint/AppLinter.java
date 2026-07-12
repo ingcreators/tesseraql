@@ -294,9 +294,10 @@ public final class AppLinter {
     }
 
     /**
-     * refreshOn: lints (docs/realtime.md): live refresh is a list-view capability
-     * (TQL-VIEW-3311), and a topic no command emits will never fire — almost always a typo
-     * (TQL-VIEW-3312, a warning: another environment's routes may emit it).
+     * refreshOn: lints (docs/realtime.md): live refresh replaces the region wholesale, so a
+     * form — which would lose in-progress input — cannot declare it (TQL-VIEW-3311), and a
+     * topic no command emits will never fire — almost always a typo (TQL-VIEW-3312, a
+     * warning: another environment's routes may emit it).
      */
     private void lintRefreshOn(AppManifest manifest, String source,
             io.tesseraql.yaml.view.ViewSpec spec, List<LintFinding> findings) {
@@ -304,9 +305,10 @@ public final class AppLinter {
         if (topic == null || topic.isBlank()) {
             return;
         }
-        if (!io.tesseraql.yaml.view.ViewSpec.LIST.equals(spec.view())) {
+        if (io.tesseraql.yaml.view.ViewSpec.FORM.equals(spec.view())) {
             findings.add(new LintFinding("TQL-VIEW-3311", "error", source,
-                    "view " + spec.id() + ": refreshOn: is a list-view key"));
+                    "view " + spec.id() + ": refreshOn: is not a form-view key — a live"
+                            + " replacement would discard in-progress input"));
             return;
         }
         if (!TOPIC_NAME.matcher(topic.trim()).matches()) {

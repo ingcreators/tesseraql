@@ -32,8 +32,9 @@ rolled-back command emits nothing.
 The wire carries **topic names, never data**. A committed `emit:` pushes one named,
 empty Server-Sent Event on `GET /_tesseraql/topics` (the same SSE transport as the
 [inbox bell](inbox.md#live-badge)); the browser side is the bundled htmx `sse` extension,
-which re-issues an ordinary `GET` of the page and swaps the same `#<view>-table` region
-the search box already refreshes. Because the refetch is a normal request, everything
+which re-issues an ordinary `GET` of the page and swaps the view's refresh region in
+place (a list's table region — the same one the search box refreshes — or a detail's or
+dashboard's `#<view>-view` region). Because the refetch is a normal request, everything
 that guards the route guards the refresh: authentication, policies,
 [data scoping](data-scoping.md), tenancy. Two viewers with different row authority each
 re-fetch their own view of the data.
@@ -53,8 +54,11 @@ re-fetch their own view of the data.
 - `emit:` is a `command-json` key (a topic broadcast belongs to a committed write) and
   takes one topic or a list. Topic names are lowercase dot/dash-separated segments —
   `orders.changed`, `stock.low` — checked by lint (`TQL-YAML-1038`/`TQL-YAML-1039`).
-- `refreshOn:` is a **list-view** key today (`TQL-VIEW-3311`); a topic no route emits is
-  a lint warning (`TQL-VIEW-3312`), since that view would never refresh.
+- `refreshOn:` works on **list, detail, and dashboard** views — a list refreshes its
+  table region, a detail its fields and children, a dashboard its whole panel grid. Forms
+  are the deliberate exception (`TQL-VIEW-3311`): a live replacement would discard
+  in-progress input. A topic no route emits is a lint warning (`TQL-VIEW-3312`), since
+  that view would never refresh.
 - Signals are **per-node and best-effort**, matching the framework's
   [per-node stance](deployment.md#safety-valves-and-multi-node-semantics): on a multi-node deployment, viewers
   connected to another node converge on their next reload. Live refresh is a freshness

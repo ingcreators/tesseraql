@@ -20,7 +20,7 @@ Schema for TesseraQL Simple YAML documents: routes (web/**/<method>.yml), jobs (
 | `policy` | object | Row-authority policy binds for /*%scope*/ directives in the route's SQL. Documented in data-scoping.md. |
 | `outbox` | object | Transactional outbox event recorded with the command and delivered at-least-once after commit. Documented in notifications.md and messaging.md. |
 | `emit` | any | Topic(s) broadcast to live views after this command commits (docs/realtime.md). A name is lowercase dot/dash-separated segments; the event carries the topic name only, never data. |
-| `refreshOn` | string | List views only: refetch this view's table region whenever a command emits this topic (docs/realtime.md). |
+| `refreshOn` | string | List, detail, and dashboard views (not forms): refetch this view's refresh region whenever a command emits this topic (docs/realtime.md). |
 | `datasource` | string | The named connector under tesseraql.datasources the route's SQL runs on, defaulting to main. The name must be declared (TQL-YAML-1035); a non-main route cannot declare notify:/publish:/outbox: or sequence allocation - they ride the main connector (TQL-YAML-1036). |
 | `sql` | [sqlBinding](#sqlbinding) |  |
 | `steps` | map of [sqlBinding](#sqlbinding) |  |

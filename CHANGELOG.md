@@ -27,17 +27,19 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
-- **Live views** (`emit:` / `refreshOn:`): a list view can refresh itself the moment a
-  command commits. A `command-json` route declares `emit: <topic>`; a list view declares
-  `refreshOn: <topic>`; after a successful commit every open page watching the topic
-  re-fetches its table region through its own fully-authorized route. The new
+- **Live views** (`emit:` / `refreshOn:`): a list, detail, or dashboard view can refresh
+  itself the moment a command commits. A `command-json` route declares `emit: <topic>`;
+  the view declares `refreshOn: <topic>`; after a successful commit every open page
+  watching the topic re-fetches its refresh region through its own fully-authorized
+  route (forms are the deliberate exception — a live replacement would discard
+  in-progress input). The new
   session-authenticated `GET /_tesseraql/topics` SSE stream carries topic names only —
   never data — so authentication, policies, data scoping, and tenancy all apply to the
   refresh exactly as to any request, and a rolled-back command emits nothing. Topics are
   tenant-scoped; subscriptions are bounded with coalesced signals; signals are per-node
   best-effort (multi-node viewers converge on reload), matching the deployment doc's
   per-node stance. Lint checks the surface: `emit:` off command-json (`TQL-YAML-1038`),
-  malformed topic names (`TQL-YAML-1039`), `refreshOn:` off list views (`TQL-VIEW-3311`),
+  malformed topic names (`TQL-YAML-1039`), `refreshOn:` on form views (`TQL-VIEW-3311`),
   and a topic no route emits (`TQL-VIEW-3312`, warning). Documented in docs/realtime.md.
 
 - **Custom expression functions** (`ExpressionFunction` SPI): a one-class Java hook for the

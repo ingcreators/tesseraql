@@ -57,7 +57,7 @@
     },
     "refreshOn": {
       "type": "string",
-      "description": "List views only: refetch this view's table region whenever a command emits this topic (docs/realtime.md)."
+      "description": "List, detail, and dashboard views (not forms): refetch this view's refresh region whenever a command emits this topic (docs/realtime.md)."
     },
     "datasource": {
       "type": "string",

@@ -14,7 +14,11 @@
     <th:block th:insert="~{__${v.slots['header']}__}"/>
   </th:block>
 </div>
-<div class="hc-grid" th:fragment="view(v)">
+<!-- With refreshOn: (docs/realtime.md) the grid listens for the topic on the
+     /_tesseraql/topics stream and re-GETs the page itself, selecting this same region —
+     the SSE event carries no data. Empty values drop the attributes (plain dashboard). -->
+<div class="hc-grid" th:id="|${v.id}-view|" th:fragment="view(v)"
+     th:attr="hx-ext=${v.liveExt},sse-connect=${v.liveConnect},hx-get=${v.liveGet},hx-trigger=${v.liveTrigger},hx-select=${v.liveSelect},hx-target=${v.liveTarget},hx-swap=${v.liveSwap}">
   <section class="hc-card" th:each="p : ${v.panels}">
     <h3 th:text="${p.title}">Panel</h3>
     <th:block th:switch="${p.type}">
