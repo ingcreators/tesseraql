@@ -28,6 +28,8 @@ public final class JdbcTotpStore implements TotpStore {
         try {
             io.tesseraql.core.util.SqlScripts.applyForVendor(dataSource, JdbcTotpStore.class,
                     "/tesseraql/db/migration/totp/V1__user_totp.sql");
+            io.tesseraql.core.util.SqlScripts.applyForVendor(dataSource, JdbcTotpStore.class,
+                    "/tesseraql/db/migration/totp/V2__totp_recovery.sql");
         } catch (SQLException ex) {
             throw new IllegalStateException("Failed to create TOTP schema", ex);
         }
@@ -132,5 +134,83 @@ public final class JdbcTotpStore implements TotpStore {
 
     private static String tenant(String tenantId) {
         return tenantId == null ? "" : tenantId;
+    }
+
+    @Override
+    public void replaceRecoveryCodes(String tenantId, String subject,
+            java.util.List<String> codeHashes) {
+        try (Connection connection = dataSource.getConnection()) {
+            connection.setAutoCommit(false);
+            try (PreparedStatement wipe = connection.prepareStatement(
+                    "delete from tql_totp_recovery where tenant_id = ? and subject = ?")) {
+                wipe.setString(1, tenant(tenantId));
+                wipe.setString(2, subject);
+                wipe.executeUpdate();
+            }
+            try (PreparedStatement insert = connection.prepareStatement(
+                    "insert into tql_totp_recovery (tenant_id, subject, code_hash, created_at)"
+                            + " values (?, ?, ?, ?)")) {
+                for (String hash : codeHashes) {
+                    insert.setString(1, tenant(tenantId));
+                    insert.setString(2, subject);
+                    insert.setString(3, hash);
+                    insert.setTimestamp(4, java.sql.Timestamp.from(java.time.Instant.now()));
+                    insert.addBatch();
+                }
+                insert.executeBatch();
+            }
+            connection.commit();
+        } catch (SQLException ex) {
+            throw new IllegalStateException("Failed to store recovery codes", ex);
+        }
+    }
+
+    @Override
+    public boolean consumeRecoveryCode(String tenantId, String subject, String codeHash) {
+        try (Connection connection = dataSource.getConnection();
+                PreparedStatement consume = connection.prepareStatement(
+                        "delete from tql_totp_recovery where tenant_id = ? and subject = ?"
+                                + " and code_hash = ?")) {
+            consume.setString(1, tenant(tenantId));
+            consume.setString(2, subject);
+            consume.setString(3, codeHash);
+            // The DELETE is the single-use guarantee: only one caller wins the row.
+            return consume.executeUpdate() == 1;
+        } catch (SQLException ex) {
+            throw new IllegalStateException("Failed to consume a recovery code", ex);
+        }
+    }
+
+    @Override
+    public void storePendingRecovery(String tenantId, String subject, String plainCodes) {
+        try (Connection connection = dataSource.getConnection();
+                PreparedStatement update = connection.prepareStatement(
+                        "update tql_user_totp set pending_recovery = ?"
+                                + " where tenant_id = ? and subject = ?")) {
+            update.setString(1, plainCodes);
+            update.setString(2, tenant(tenantId));
+            update.setString(3, subject);
+            update.executeUpdate();
+        } catch (SQLException ex) {
+            throw new IllegalStateException("Failed to store pending recovery codes", ex);
+        }
+    }
+
+    @Override
+    public java.util.Optional<String> pendingRecovery(String tenantId, String subject) {
+        try (Connection connection = dataSource.getConnection();
+                PreparedStatement select = connection.prepareStatement(
+                        "select pending_recovery from tql_user_totp"
+                                + " where tenant_id = ? and subject = ?")) {
+            select.setString(1, tenant(tenantId));
+            select.setString(2, subject);
+            try (var row = select.executeQuery()) {
+                return row.next()
+                        ? java.util.Optional.ofNullable(row.getString(1))
+                        : java.util.Optional.empty();
+            }
+        } catch (SQLException ex) {
+            throw new IllegalStateException("Failed to read pending recovery codes", ex);
+        }
     }
 }

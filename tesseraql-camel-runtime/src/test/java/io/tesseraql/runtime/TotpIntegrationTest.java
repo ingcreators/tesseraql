@@ -89,8 +89,14 @@ class TotpIntegrationTest {
         TotpStore store = runtime.camelContext().getRegistry().lookupByNameAndType(
                 TesseraqlProperties.TOTP_STORE_BEAN, TotpStore.class);
         String secret = store.enrollment(null, "totp-user").orElseThrow().secret();
-        assertThat(get(cookie, "/_tesseraql/account").body())
-                .contains(secret).contains("otpauth://totp/");
+        String pendingPage = get(cookie, "/_tesseraql/account").body();
+        // The pending enrollment renders the QR, the manual secret, and the recovery codes
+        // (docs/credential-lifecycle.md) — all to the owner only, none enforced yet.
+        assertThat(pendingPage).contains(secret).contains("otpauth://totp/")
+                .contains("TOTP enrollment QR code").contains("Recovery codes");
+        String recoveryCode = store.pendingRecovery(null, "totp-user").orElseThrow()
+                .split(" ")[0];
+        assertThat(pendingPage).contains(recoveryCode);
         assertThat(loginCookie("totp-user", "FirstPass1", null)).isNotNull();
 
         // A wrong confirm code is refused and still nothing enforces.
@@ -102,8 +108,11 @@ class TotpIntegrationTest {
         long confirmStep = Totp.currentStep();
         assertThat(postForm(cookie, csrf, "/_tesseraql/account/totp/confirm",
                 "code=" + Totp.codeAt(secret, confirmStep)).statusCode()).isEqualTo(303);
+        // Confirmation activates the recovery codes (hashed at rest) and drops the plain
+        // pending copy: the page never shows them again.
         assertThat(get(cookie, "/_tesseraql/account").body())
-                .contains("Disable two-factor");
+                .contains("Disable two-factor").doesNotContain("Recovery codes");
+        assertThat(store.pendingRecovery(null, "totp-user")).isEmpty();
 
         // Missing and wrong codes fail exactly like a wrong password.
         assertThat(loginCookie("totp-user", "FirstPass1", null)).isNull();
@@ -122,6 +131,11 @@ class TotpIntegrationTest {
                     + (loginStep - 1) + " where subject = 'totp-user'");
         }
         assertThat(loginCookie("totp-user", "FirstPass1", code)).isNotNull();
+
+        // A recovery code signs in once when the authenticator is lost — and only once:
+        // consuming the hash is the single-use guarantee.
+        assertThat(loginCookie("totp-user", "FirstPass1", recoveryCode)).isNotNull();
+        assertThat(loginCookie("totp-user", "FirstPass1", recoveryCode)).isNull();
 
         // Disabling needs the password; wrong one changes nothing.
         assertThat(postForm(cookie, csrf, "/_tesseraql/account/totp/disable",

@@ -88,8 +88,17 @@ final class LoginRouteBuilder extends RouteBuilder {
             if (enrollment.isPresent()) {
                 long step = io.tesseraql.security.totp.Totp.matchedStep(
                         enrollment.get().secret(), str(body.get("otp")));
-                if (step < 0 || !totp.markUsedStep(principal.get().tenantId(),
-                        principal.get().subject(), step)) {
+                boolean accepted = step >= 0 && totp.markUsedStep(principal.get().tenantId(),
+                        principal.get().subject(), step);
+                // A recovery code signs in once when the authenticator is lost: consuming
+                // (deleting) the hash is the single-use guarantee, and a wrong code stays a
+                // wrong-password-shaped answer (docs/credential-lifecycle.md).
+                String otp = str(body.get("otp"));
+                if (!accepted && otp != null && !otp.isBlank()) {
+                    accepted = totp.consumeRecoveryCode(principal.get().tenantId(),
+                            principal.get().subject(), AccountViews.recoveryHash(otp));
+                }
+                if (!accepted) {
                     principal = Optional.empty();
                 }
             }

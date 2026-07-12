@@ -10,3 +10,4 @@ create table if not exists tql_user_totp (
   created_at timestamp not null,
   primary key (tenant_id, subject)
 );
+

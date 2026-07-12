@@ -104,8 +104,11 @@ With `required: true` (the default when tenancy is enabled), a request with no r
 is rejected with 400 (`TQL-TENANT-4001`) — deny-by-default. The resolved tenant is also recorded
 on the route's telemetry span.
 
-Resolution by host name or subdomain is not supported; put a gateway that maps host to header in
-front if you need it.
+Resolution by subdomain is the third resolver: `resolver.type: host` with
+`resolver.source: "{tenant}.example.com"` reads the request's `Host` header — the suffix must
+match exactly, the tenant is the single remaining label, and only slug labels (`[a-z0-9-]+`)
+resolve, so a crafted `Host` header can never smuggle an arbitrary tenant id. Anything else
+resolves nothing and, when required, rejects with `TQL-TENANT-4001`.
 
 ## The tenant in SQL
 

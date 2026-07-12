@@ -106,10 +106,15 @@ final class AccountViews {
                 totpModel.put("enrolled", enrollment.confirmed());
                 if (!enrollment.confirmed()) {
                     totpModel.put("pendingSecret", enrollment.secret());
-                    totpModel.put("otpauth", io.tesseraql.security.totp.Totp.otpauthUri(
+                    String otpauth = io.tesseraql.security.totp.Totp.otpauthUri(
                             issuer == null ? "TesseraQL" : issuer,
                             text(params.get("loginId"), subject(params)),
-                            enrollment.secret()));
+                            enrollment.secret());
+                    totpModel.put("otpauth", otpauth);
+                    totpModel.put("qrSvg", QrSvg.render(otpauth));
+                    totp.pendingRecovery(tenant(params), subject(params))
+                            .ifPresent(pending -> totpModel.put("recoveryCodes",
+                                    java.util.List.of(pending.split(" "))));
                 }
             });
         }
@@ -294,7 +299,46 @@ final class AccountViews {
         requireTotp(totp);
         totp.beginEnrollment(tenant(params), subject(params),
                 io.tesseraql.security.totp.Totp.generateSecret());
+        // Recovery codes are minted with the secret and shown while pending (the same
+        // exposure as the pending secret itself); confirmation hashes and activates them.
+        totp.storePendingRecovery(tenant(params), subject(params),
+                String.join(" ", generateRecoveryCodes()));
         return Map.of("ok", true);
+    }
+
+    /** Eight single-use codes, xxxx-xxxx over a confusion-free lowercase alphabet. */
+    private static java.util.List<String> generateRecoveryCodes() {
+        String alphabet = "abcdefghjkmnpqrstuvwxyz23456789";
+        java.security.SecureRandom random = new java.security.SecureRandom();
+        java.util.List<String> codes = new java.util.ArrayList<>();
+        for (int i = 0; i < 8; i++) {
+            StringBuilder code = new StringBuilder();
+            for (int c = 0; c < 8; c++) {
+                if (c == 4) {
+                    code.append('-');
+                }
+                code.append(alphabet.charAt(random.nextInt(alphabet.length())));
+            }
+            codes.add(code.toString());
+        }
+        return codes;
+    }
+
+    /** SHA-256 hex of a recovery code, normalized (dashes/spaces dropped, lower-cased). */
+    static String recoveryHash(String code) {
+        String normalized = code.replaceAll("[\\s-]", "")
+                .toLowerCase(java.util.Locale.ROOT);
+        try {
+            byte[] digest = java.security.MessageDigest.getInstance("SHA-256")
+                    .digest(normalized.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            StringBuilder hex = new StringBuilder();
+            for (byte b : digest) {
+                hex.append(String.format("%02x", b));
+            }
+            return hex.toString();
+        } catch (java.security.NoSuchAlgorithmException ex) {
+            throw new IllegalStateException(ex);
+        }
     }
 
     /** Confirms the pending enrollment with a valid code - nothing enforces until this. */
@@ -311,6 +355,14 @@ final class AccountViews {
                 || !totp.confirmEnrollment(tenant(params), subject(params))) {
             throw new TqlException(INVALID_VALUE, "That code did not match - try again");
         }
+        // Activate the recovery codes shown during enrollment: hash them at rest and drop
+        // the plain pending copy (docs/credential-lifecycle.md).
+        totp.pendingRecovery(tenant(params), subject(params)).ifPresent(pending -> {
+            totp.replaceRecoveryCodes(tenant(params), subject(params),
+                    java.util.Arrays.stream(pending.split(" "))
+                            .map(AccountViews::recoveryHash).toList());
+            totp.storePendingRecovery(tenant(params), subject(params), null);
+        });
         return Map.of("ok", true);
     }
 

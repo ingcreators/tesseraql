@@ -48,9 +48,11 @@ public final class SamlRuntimeExtension implements RuntimeExtension {
 
         String audience = config.requireString("tesseraql.saml.sp.audience");
         String recipient = config.getString("tesseraql.saml.sp.acsUrl").orElse(null);
-        // The pinned IdP signing key comes from IdP metadata when configured, else a key/cert file.
+        // The pinned IdP signing key comes from IdP metadata when configured — a file, or an
+        // https URL fetched at boot under the egress allow-list — else a key/cert file.
         java.security.PublicKey idpKey = config.getString("tesseraql.saml.idp.metadata")
-                .map(path -> IdpMetadata.signingKey(readBytes(manifest, path)))
+                .map(source -> IdpMetadata.signingKey(
+                        SamlMetadataSource.load(manifest, config, source)))
                 .orElseGet(() -> SamlKeys.publicKey(
                         readBytes(manifest, config.requireString("tesseraql.saml.idp.publicKey"))));
         // Allowed clock skew for the assertion's time-bound conditions; unset keeps the
