@@ -182,9 +182,16 @@ public final class ViewBinding {
         v.put("liveGet", on ? pagePath : "");
         v.put("liveTrigger", on ? "sse:" + topic : "");
         v.put("liveSelect", on ? "#" + region : "");
-        v.put("liveInclude", on && includeHiddenInputs
-                ? "#" + region + " input[type='hidden']"
-                : "");
+        // The refetch reads live DOM state, not the render-time URL: the hidden sort/dir
+        // inputs and the typed search term are the current truth (the search box swaps the
+        // region without navigating, so the URL can be stale). The search input sits outside
+        // the swapped region, so a live refresh never clobbers in-progress typing.
+        String include = !on || !includeHiddenInputs
+                ? ""
+                : spec.search() == null
+                        ? "#" + region + " input[type='hidden']"
+                        : "#" + region + " input[type='hidden'], #" + spec.id() + "-search";
+        v.put("liveInclude", include);
         v.put("liveTarget", on ? "this" : "");
         v.put("liveSwap", on ? "outerHTML" : "");
     }

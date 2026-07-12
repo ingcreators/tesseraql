@@ -79,7 +79,12 @@ class LiveViewIntegrationTest {
                 .contains("hx-trigger=\"sse:orders.changed\"")
                 .contains("hx-ext=\"sse\"")
                 .contains("hx-get=\"/orders\"")
-                .contains("hx-select=\"#orders-table\"");
+                .contains("hx-select=\"#orders-table\"")
+                // The refetch carries the live client state: the typed search term (the
+                // #orders-search input, outside the swapped region) and the sort/dir inputs.
+                .contains(
+                        "hx-include=\"#orders-table input[type=&#39;hidden&#39;], #orders-search\"")
+                .contains("id=\"orders-search\"");
     }
 
     /** Detail and dashboard views carry the same wiring on their <id>-view region. */
@@ -209,6 +214,11 @@ class LiveViewIntegrationTest {
                   o.status
                 from
                   orders o
+                where
+                  1 = 1
+                /*%if q != null && q != "" */
+                  and o.status like /* q */ 'PENDING'
+                /*%end*/
                 order by
                   o.id
                 """);
@@ -217,6 +227,7 @@ class LiveViewIntegrationTest {
                 kind: view
                 view: list
                 title: Orders
+                search: q
                 refreshOn: orders.changed
                 """);
         Files.writeString(orders.resolve("get.yml"), """

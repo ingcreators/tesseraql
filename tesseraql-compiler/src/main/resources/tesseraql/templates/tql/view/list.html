@@ -19,6 +19,7 @@
     </th:block>
   </div>
   <input th:if="${v.search != null}" class="hc-input" type="search"
+         th:id="|${v.id}-search|"
          th:name="${v.search.param}" th:value="${v.search.value}"
          th:placeholder="#{tql.view.search}"
          th:attr="hx-get=${v.path},hx-target=|#${v.id}-table|,hx-select=|#${v.id}-table|,hx-include=|#${v.id}-table input[type='hidden']|"
