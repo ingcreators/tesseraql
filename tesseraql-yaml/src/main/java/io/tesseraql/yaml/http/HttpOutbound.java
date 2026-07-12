@@ -196,6 +196,23 @@ public final class HttpOutbound {
             this.raw = raw;
         }
 
+        /**
+         * The request header(s) this credential contributes — bearer/basic Authorization or
+         * the declared custom header. One implementation serves the job http-call client, the
+         * query routes' http: sources, and the test runner's real-send mode, so the header on
+         * the wire is always built the same way.
+         */
+        public Map<String, String> authorizationHeaders() {
+            return switch (type()) {
+                case BEARER -> Map.of("Authorization", "Bearer " + require("token"));
+                case BASIC -> Map.of("Authorization", "Basic " + java.util.Base64.getEncoder()
+                        .encodeToString((require("username") + ":" + require("password"))
+                                .getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+                case HEADER -> Map.of(require("header"), require("value"));
+                default -> Map.of();
+            };
+        }
+
         public String name() {
             return name;
         }

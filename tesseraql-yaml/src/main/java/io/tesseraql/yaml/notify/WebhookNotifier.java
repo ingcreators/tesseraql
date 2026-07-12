@@ -1,4 +1,4 @@
-package io.tesseraql.runtime;
+package io.tesseraql.yaml.notify;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.tesseraql.core.error.TqlDomain;
@@ -6,8 +6,6 @@ import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
 import io.tesseraql.core.notify.HmacSignatures;
 import io.tesseraql.core.outbox.OutboxEvent;
-import io.tesseraql.yaml.notify.NotificationChannels;
-import io.tesseraql.yaml.notify.NotifyEvents;
 import java.net.ProxySelector;
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -24,7 +22,7 @@ import java.util.Map;
  * declares a {@code secret}. A non-2xx answer (or a transport failure) throws, so the outbox
  * dispatcher retries and eventually dead-letters the event.
  */
-final class WebhookNotifier {
+public final class WebhookNotifier {
 
     /** TQL-BATCH-5303: a webhook delivery was not accepted by the receiver. */
     private static final TqlErrorCode DELIVERY_FAILED = new TqlErrorCode(TqlDomain.BATCH, 5303);
@@ -37,9 +35,19 @@ final class WebhookNotifier {
             .build();
     private final ObjectMapper mapper = new ObjectMapper();
 
-    void send(NotificationChannels.Channel channel, NotifyEvents.Envelope envelope,
+    public void send(NotificationChannels.Channel channel, NotifyEvents.Envelope envelope,
             OutboxEvent event) throws Exception {
-        String url = channel.require("url");
+        send(channel, envelope, event, null);
+    }
+
+    /**
+     * Delivery with the destination overridden — the declarative test runner's real-send mode
+     * (docs/testing.md): the request, headers, and HMAC signature are built exactly as for the
+     * channel's own url, but the wire goes to the runner's capture server.
+     */
+    public void send(NotificationChannels.Channel channel, NotifyEvents.Envelope envelope,
+            OutboxEvent event, String urlOverride) throws Exception {
+        String url = urlOverride != null ? urlOverride : channel.require("url");
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("source", envelope.source());
         body.put("eventId", event.id());

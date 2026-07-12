@@ -112,7 +112,17 @@ public record TestSuite(List<TestCase> tests) {
      * @param id    optional notification/step id; unset, every declaration is evaluated
      */
     @JsonIgnoreProperties(ignoreUnknown = true)
-    public record NotifyTarget(String route, String job, String id) {
+    public record NotifyTarget(String route, String job, String id, Boolean send) {
+
+        /** Convenience constructor for the evaluate-only shape (pre real-send). */
+        public NotifyTarget(String route, String job, String id) {
+            this(route, job, id, null);
+        }
+
+        /** Whether webhook channels deliver for real against the runner's capture server. */
+        public boolean isSend() {
+            return Boolean.TRUE.equals(send);
+        }
     }
 
     /**
@@ -128,11 +138,21 @@ public record TestSuite(List<TestCase> tests) {
      * @param route the route id whose {@code http:} sources are planned
      */
     @JsonIgnoreProperties(ignoreUnknown = true)
-    public record HttpCallTarget(String job, String id, String route) {
+    public record HttpCallTarget(String job, String id, String route, Boolean send) {
 
         /** Convenience constructor for the job-only shape (pre http-source). */
         public HttpCallTarget(String job, String id) {
-            this(job, id, null);
+            this(job, id, null, null);
+        }
+
+        /** Convenience constructor for the plan-only shape (pre real-send). */
+        public HttpCallTarget(String job, String id, String route) {
+            this(job, id, route, null);
+        }
+
+        /** Whether the case performs the call for real against the runner's capture server. */
+        public boolean isSend() {
+            return Boolean.TRUE.equals(send);
         }
     }
 

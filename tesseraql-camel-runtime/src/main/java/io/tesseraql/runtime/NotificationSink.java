@@ -4,6 +4,7 @@ import io.tesseraql.core.outbox.OutboxEvent;
 import io.tesseraql.core.outbox.OutboxEventSink;
 import io.tesseraql.yaml.notify.NotificationChannels;
 import io.tesseraql.yaml.notify.NotifyEvents;
+import io.tesseraql.yaml.notify.WebhookNotifier;
 import java.nio.file.Path;
 import org.apache.camel.CamelContext;
 

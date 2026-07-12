@@ -121,7 +121,8 @@ response:
   GET, never a body.
 - An `http-call` **test case** plans a route's sources like a job's steps, without a network
   request: `http-call: {route: orders.list}` rows carry the resolved url, host, allow-list
-  verdict, and credential ([testing](testing.md)).
+  verdict, and credential — and `send: true` performs the call for real against the runner's
+  capture server ([testing](testing.md#real-send-cases)).
 
 ## Outbound policy
 

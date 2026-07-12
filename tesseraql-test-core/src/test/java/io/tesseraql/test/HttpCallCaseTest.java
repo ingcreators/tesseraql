@@ -41,6 +41,9 @@ class HttpCallCaseTest {
                         partner:
                           type: bearer
                           token: ${secret.env.PARTNER_TOKEN}
+                        ci:
+                          type: bearer
+                          token: live-token
                 """);
         Files.createDirectories(appHome.resolve("batch/sync"));
         Files.writeString(appHome.resolve("batch/sync/job.yml"), """
@@ -78,6 +81,9 @@ class HttpCallCaseTest {
                   rates:
                     url: https://api.partner.example/v1/rates
                     credential: partner
+                  live:
+                    url: https://api.partner.example/v1/rates?base=USD
+                    credential: ci
                   shadow:
                     url: https://evil.example/v1/exfil
                 response:
@@ -135,9 +141,10 @@ class HttpCallCaseTest {
     @Test
     void plansARoutesHttpSourcesWithTheAllowListVerdict() {
         TestReport report = run(new TestCase("route sources", null, null, Map.of(),
-                new Expectation(2, List.of(
+                new Expectation(3, List.of(
                         Map.of("http", "rates", "method", "GET", "allowed", true,
                                 "credential", "partner"),
+                        Map.of("http", "live", "allowed", true, "credential", "ci"),
                         Map.of("http", "shadow", "allowed", false))),
                 null, null, null, new HttpCallTarget(null, null, "orders.list")));
         assertThat(report.allPassed()).as(report.results().toString()).isTrue();
@@ -150,5 +157,25 @@ class HttpCallCaseTest {
                 null, null, null, new HttpCallTarget(null, null, null)));
         assertThat(neither.results().get(0).message())
                 .contains("exactly one of http-call.job or http-call.route");
+    }
+
+    /**
+     * Real-send mode (docs/testing.md): the request is built exactly as at runtime —
+     * credential header included — and crosses a real socket to the runner's capture server;
+     * the row carries the wire truth.
+     */
+    @Test
+    void sendPerformsTheCallAgainstTheCaptureServer() {
+        TestReport report = run(new TestCase("live source hits the wire", null, null, Map.of(),
+                new Expectation(1, List.of(Map.of(
+                        "http", "live",
+                        "method", "GET",
+                        "sent", true,
+                        "authorization", "Bearer live-token",
+                        "requestPath", "/v1/rates?base=USD",
+                        "responseStatus", 200))),
+                null, null, null,
+                new HttpCallTarget(null, "live", "orders.list", true)));
+        assertThat(report.allPassed()).as(report.results().toString()).isTrue();
     }
 }
