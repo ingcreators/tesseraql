@@ -32,7 +32,9 @@ All notable changes to TesseraQL are documented here. The format follows
   the view declares `refreshOn: <topic>`; after a successful commit every open page
   watching the topic re-fetches its refresh region through its own fully-authorized
   route (forms are the deliberate exception — a live replacement would discard
-  in-progress input). The new
+  in-progress input). A list's refetch carries the typed search term and current sort,
+  read from the live DOM, and never clobbers in-progress typing (the search box sits
+  outside the swapped region). The new
   session-authenticated `GET /_tesseraql/topics` SSE stream carries topic names only —
   never data — so authentication, policies, data scoping, and tenancy all apply to the
   refresh exactly as to any request, and a rolled-back command emits nothing. Topics are
