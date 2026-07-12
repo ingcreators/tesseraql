@@ -73,6 +73,56 @@ integration instead rides the transactional outbox as an HMAC-signed webhook (se
 at-least-once afterwards. Use `http-call` when a pipeline needs the **response** to drive
 subsequent steps; use a webhook notification for fire-and-forget delivery.
 
+## HTTP sources on query routes
+
+The read-side counterpart of `http-call`: a query route can compose an external JSON API with
+its SQL result **in one screen or one JSON response**, declaratively. Each named `http:`
+source is a body-less GET executed after the route's SQL, landing in the execution context
+exactly like a named query:
+
+```yaml
+# web/orders/get.yml
+version: tesseraql/v1
+id: orders.list
+kind: route
+recipe: query-json
+sql:
+  file: orders.sql
+http:
+  rates:
+    url: ${tesseraql.connectors.fx.baseUrl}/v1/rates
+    query:
+      base: query.currency          # expressions over the execution context
+    credential: fx-api              # tesseraql.http.outbound.credentials.fx-api
+    select: rates                   # dotted path to the rows array inside the JSON
+    onError: empty                  # a dead upstream degrades to zero rows
+response:
+  json:
+    status: 200
+    body:
+      orders: sql.rows
+      fx: rates.rows
+```
+
+- **`<name>.rows`** — the selected JSON as rows (an array is one row per element, an object is
+  a single row), so an HTML view composes it too: a detail child or a dashboard panel with
+  `source: rates` renders API rows through the same table pattern as SQL rows.
+- **`<name>.body`** — the selected JSON as-is, for scalar shaping (`rates.body.base`);
+  `<name>.status` carries the upstream status.
+- **`onError: empty`** (default `fail`) keeps a widget-shaped source from taking the page
+  down: the source yields zero rows plus `<name>.error`, and everything else renders.
+- **The same discipline as `http-call`**: sources execute through the one outbound gateway —
+  the deny-by-default `allowedHosts` list, named secret-managed credentials, connect/request
+  timeouts, and the per-host circuit breaker. Lint enforces the surface: query recipes only
+  and no shadowing of SQL result keys (`TQL-YAML-1022`), plus the same host/url/credential
+  checks as a job step (`TQL-SEC-4070/4071/4072`).
+- **Reads stay reads**: `http:` is not available on command routes — a transactional write
+  never blocks on a third party (the outbox is the write-side integration, above). Always
+  GET, never a body.
+- An `http-call` **test case** plans a route's sources like a job's steps, without a network
+  request: `http-call: {route: orders.list}` rows carry the resolved url, host, allow-list
+  verdict, and credential ([testing](testing.md)).
+
 ## Outbound policy
 
 All outbound HTTP is governed by `tesseraql.http.outbound`. Egress is **deny by default**: a

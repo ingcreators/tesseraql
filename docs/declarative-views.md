@@ -114,7 +114,9 @@ preserving the search and sort state ([pagination](pagination.md)).
 
 With `refreshOn: <topic>`, the list refreshes itself whenever a command that declares
 `emit: <topic>` commits — detail and dashboard views take the same key; see
-[live views](realtime.md).
+[live views](realtime.md). A child or panel `source:` can also name one of the route's
+[`http:` sources](connectors.md#http-sources-on-query-routes), rendering external API rows
+through the same table pattern as SQL rows.
 
 ## Form views: fields derive from the command route
 

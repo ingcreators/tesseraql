@@ -1057,6 +1057,7 @@ public final class AppLinter {
         lintOptimisticLocking(route, definition, source, findings);
         lintValidation(route, definition, source, findings);
         lintEmit(route, definition, source, findings);
+        lintHttpSources(config, definition, source, findings);
         lintNotify(config, definition, source, findings);
         lintWebhook(config, definition, source, findings);
         lintPublish(config, definition, source, findings);
@@ -2050,6 +2051,34 @@ public final class AppLinter {
             findings.add(new LintFinding("TQL-SQL-2103", "error", source,
                     "Referenced SQL file is missing: " + importSpec.sql().file()));
         }
+    }
+
+    /**
+     * http: source lints (docs/connectors.md, "HTTP sources"): sources belong to query
+     * recipes only — a command must stay a pure transactional write (TQL-YAML-1022); a
+     * source name must not shadow the {@code sql} result or a named query (the response
+     * composes them side by side); and each source clears the same egress checks as a job's
+     * http-call step (TQL-SEC-4070/4071/4072 via {@link #lintHttpCall}).
+     */
+    private void lintHttpSources(AppConfig config, RouteDefinition definition, String source,
+            List<LintFinding> findings) {
+        if (definition.http().isEmpty()) {
+            return;
+        }
+        String recipe = definition.recipe();
+        if (!"query-json".equals(recipe) && !"query-html".equals(recipe)
+                && !"page".equals(recipe)) {
+            findings.add(new LintFinding("TQL-YAML-1022", "error", source,
+                    "http: sources are only supported on query recipes"
+                            + " (query-json, query-html, page), not '" + recipe + "'"));
+        }
+        definition.http().forEach((name, spec) -> {
+            if ("sql".equals(name) || definition.queries().containsKey(name)) {
+                findings.add(new LintFinding("TQL-YAML-1022", "error", source,
+                        "http: source '" + name + "' shadows a SQL result key"));
+            }
+            lintHttpCall(config, name, spec.toCall(), source, findings);
+        });
     }
 
     /**

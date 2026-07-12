@@ -404,7 +404,7 @@ public final class RouteCompiler {
                     "command-json", java.util.Map.of(), null, security, null, null, null, command,
                     java.util.Map.of(), java.util.Map.of(), java.util.Map.of(), java.util.Map.of(),
                     null, null, null, null, null, null, workflowResponse(), null, null,
-                    null);
+                    null, null);
             String urlPath = basePath + "/{key}/" + transition.id();
             RouteFile routeFile = new RouteFile("POST", urlPath, workflowFile.source(),
                     synthesized);
@@ -461,7 +461,7 @@ public final class RouteCompiler {
                 "command-json", java.util.Map.of(), null, def.security(), null, null, null, null,
                 java.util.Map.of(), java.util.Map.of(), java.util.Map.of(), java.util.Map.of(),
                 null,
-                null, null, null, null, null, workflowResponse(), null, null, null);
+                null, null, null, null, null, workflowResponse(), null, null, null, null);
         ProcessorDefinition<?> route = builder.from(direct).routeId(routeId);
         applySecurity(route, def.security());
         applyTenancy(route);
@@ -851,6 +851,12 @@ public final class RouteCompiler {
             step = step
                     .process(new io.tesseraql.compiler.binding.NamedQueryBinder(entry.getValue()))
                     .to(executionUri(routeFile, entry.getValue(), entry.getKey()));
+        }
+        // http: sources run after the SQL, each keyed under its name like a named query
+        // (docs/connectors.md, "HTTP sources") — the response composes them, never the SQL.
+        for (var entry : definition.http().entrySet()) {
+            step = step.process(new io.tesseraql.compiler.binding.HttpSourceProcessor(
+                    entry.getKey(), entry.getValue()));
         }
         if (definition.page() != null) {
             step = step.process(new io.tesseraql.compiler.binding.PageHeaders());

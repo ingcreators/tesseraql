@@ -27,6 +27,19 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **HTTP sources on query routes** (`http:`): compose an external JSON API with SQL results
+  in one screen or one JSON response, declaratively. Each named source is a body-less GET
+  executed after the route's SQL and landed in the context like a named query —
+  `<name>.rows` (array → rows, object → one row, `select:` picks the array inside the JSON),
+  `<name>.body`, `<name>.status` — so JSON shaping, HTML views (child/panel `source:`), and
+  the docs portal all compose it. Sources run through the same outbound gateway as `http-call`
+  job steps: deny-by-default `allowedHosts`, named secret-managed credentials, timeouts, and
+  the per-host circuit breaker; `onError: empty` degrades a dead upstream to zero rows
+  instead of failing the page. Query recipes only — a transactional write never blocks on a
+  third party (`TQL-YAML-1022`; egress lints `TQL-SEC-4070/4071/4072` as for jobs). The
+  `http-call` test case gains a `route:` target planning a route's sources without a network
+  request. Documented in connectors.md ("HTTP sources on query routes").
+
 - **Live views** (`emit:` / `refreshOn:`): a list, detail, or dashboard view can refresh
   itself the moment a command commits. A `command-json` route declares `emit: <topic>`;
   the view declares `refreshOn: <topic>`; after a successful commit every open page

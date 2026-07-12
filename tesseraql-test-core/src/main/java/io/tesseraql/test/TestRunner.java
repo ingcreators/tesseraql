@@ -319,34 +319,58 @@ public final class TestRunner {
      */
     private List<Map<String, Object>> evaluateHttpCall(TestCase test) {
         TestSuite.HttpCallTarget target = test.httpCall();
-        if (target.job() == null || target.job().isBlank()) {
-            throw new IllegalArgumentException("An http-call case needs an http-call.job id");
+        boolean hasJob = target.job() != null && !target.job().isBlank();
+        boolean hasRoute = target.route() != null && !target.route().isBlank();
+        if (hasJob == hasRoute) {
+            throw new IllegalArgumentException(
+                    "An http-call case needs exactly one of http-call.job or http-call.route");
         }
-        io.tesseraql.yaml.manifest.JobFile job = job(target.job());
+        if (manifest == null) {
+            manifest = new ManifestLoader().load(appHome);
+        }
         io.tesseraql.yaml.http.HttpOutbound outbound = io.tesseraql.yaml.http.HttpOutbound
                 .load(manifest.config());
         List<Map<String, Object>> rows = new ArrayList<>();
-        for (io.tesseraql.yaml.model.PipelineStep step : job.definition().effectiveSteps()) {
-            io.tesseraql.yaml.model.HttpCallSpec spec = step.httpCall();
-            if (spec == null || (target.id() != null && !target.id().equals(step.id()))) {
-                continue;
+        if (hasJob) {
+            io.tesseraql.yaml.manifest.JobFile job = job(target.job());
+            for (io.tesseraql.yaml.model.PipelineStep step : job.definition().effectiveSteps()) {
+                io.tesseraql.yaml.model.HttpCallSpec spec = step.httpCall();
+                if (spec == null || (target.id() != null && !target.id().equals(step.id()))) {
+                    continue;
+                }
+                rows.add(planRow(step.id(), spec, test.params(), outbound));
             }
-            String url = resolveUrl(manifest.config(), spec, test.params());
-            String host = hostOf(url);
-            Map<String, Object> row = new LinkedHashMap<>();
-            row.put("http", step.id());
-            row.put("method", spec.effectiveMethod());
-            row.put("url", url);
-            row.put("host", host);
-            row.put("allowed", host != null && outbound.isHostAllowed(host));
-            row.put("credential", spec.credential());
-            rows.add(row);
+        } else {
+            // A query route's http: sources plan the same way a job's steps do
+            // (docs/connectors.md, "HTTP sources") — url, host, and the allow-list verdict.
+            RouteFile route = route(target.route());
+            route.definition().http().forEach((name, source) -> {
+                if (target.id() == null || target.id().equals(name)) {
+                    rows.add(planRow(name, source.toCall(), test.params(), outbound));
+                }
+            });
         }
         if (rows.isEmpty()) {
-            throw new IllegalArgumentException("'" + target.job() + "' declares no matching"
-                    + " http-call" + (target.id() == null ? "" : " '" + target.id() + "'"));
+            throw new IllegalArgumentException("'" + (hasJob ? target.job() : target.route())
+                    + "' declares no matching http-call"
+                    + (target.id() == null ? "" : " '" + target.id() + "'"));
         }
         return rows;
+    }
+
+    /** One planning row: the resolved url/host and the deny-by-default egress verdict. */
+    private Map<String, Object> planRow(String id, io.tesseraql.yaml.model.HttpCallSpec spec,
+            Map<String, Object> params, io.tesseraql.yaml.http.HttpOutbound outbound) {
+        String url = resolveUrl(manifest.config(), spec, params);
+        String host = hostOf(url);
+        Map<String, Object> row = new LinkedHashMap<>();
+        row.put("http", id);
+        row.put("method", spec.effectiveMethod());
+        row.put("url", url);
+        row.put("host", host);
+        row.put("allowed", host != null && outbound.isHostAllowed(host));
+        row.put("credential", spec.credential());
+        return row;
     }
 
     /** Resolves a step's url (config placeholders and bound query params) for a planning row. */
