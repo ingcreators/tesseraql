@@ -2054,14 +2054,6 @@ public final class AppLinter {
     }
 
     /**
-     * Statically checks an {@code http-call} step's egress (roadmap Phase 26): the target host
-     * must resolve to an allow-listed host ({@code TQL-SEC-4070}, deny by default), the url must be
-     * an absolute http/https URL ({@code TQL-SEC-4071}), and a referenced credential should be
-     * configured ({@code TQL-SEC-4072}, a warning since another environment may declare it). A url
-     * carrying an unresolved {@code ${...}} secret in its host cannot be checked statically and is
-     * left to the runtime's identical deny-by-default guard.
-     */
-    /**
      * http: source lints (docs/connectors.md, "HTTP sources"): sources belong to query
      * recipes only — a command must stay a pure transactional write (TQL-YAML-1022); a
      * source name must not shadow the {@code sql} result or a named query (the response
@@ -2089,6 +2081,14 @@ public final class AppLinter {
         });
     }
 
+    /**
+     * Statically checks an {@code http-call} step's egress (roadmap Phase 26): the target host
+     * must resolve to an allow-listed host ({@code TQL-SEC-4070}, deny by default), the url must be
+     * an absolute http/https URL ({@code TQL-SEC-4071}), and a referenced credential should be
+     * configured ({@code TQL-SEC-4072}, a warning since another environment may declare it). A url
+     * carrying an unresolved {@code ${...}} secret in its host cannot be checked statically and is
+     * left to the runtime's identical deny-by-default guard.
+     */
     private void lintHttpCall(AppConfig config, String id,
             io.tesseraql.yaml.model.HttpCallSpec spec, String source, List<LintFinding> findings) {
         String resolved = null;
