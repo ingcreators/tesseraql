@@ -84,8 +84,8 @@ expand/contract (backward compatible) - the same discipline the canary flow alre
 - Sessions, [scheduled-job](jobs.md) claims, [outbox](notifications.md) dispatch and file
   transfers are app- and node-safe on
   a shared database; adding a host is a `servers:` entry.
-- Generated export files live on the node that produced them: keep session affinity at
-  Cloudflare, or plug a shared TempStore implementation behind the SPI.
+- Generated export files follow you across nodes when you pick a shared temp store (below);
+  the `file` default keeps them on the producing node, which then needs session affinity.
 - Framework and app migrations take Flyway's lock, so concurrent node startups serialize.
 
 ## Embedded database lifecycle
@@ -191,6 +191,31 @@ remains node-local smoothing. Precision is bounded, not perfect: a volley stradd
 boundary can briefly see up to two windows' budget. When the ledger is unreachable the
 limiter degrades to the per-node budget for that window and logs with backoff — rate limiting
 protects resources; it must never become the outage itself.
+
+**Shared export files.** Spooled exports (`query-export`, `query-spool`, batch intermediate
+results) default to the producing node's local disk — fine for one node, but a download can
+then only be served where it was made. Pick the store per deployment:
+
+```yaml
+tesseraql:
+  temp:
+    store: db          # file (default) | db | blob
+    maxBytes: 67108864 # db only: per-spool cap, default 64 MB
+```
+
+- **`db`** — spools live in the `tql_temp_spool` table on the main database (created on
+  first use, like the inbox), so **any node serves any download**: no session affinity, no
+  shared filesystem, no new infrastructure. Writes and reads stage through a local scratch
+  file, so memory stays bounded and no pooled connection is pinned while a slow client
+  streams. Right for the modest export sizes LOB screens produce; a spool over
+  `tesseraql.temp.maxBytes` fails loudly and points at `blob`.
+- **`blob`** — spools ride the configured object store
+  (`tesseraql.object-storage.provider`, e.g. S3 via the opt-in `tesseraql-s3` module,
+  bucket named by `tesseraql.temp.bucket`): shared across nodes and right for heavy export
+  volumes. With the local `file` provider this is still node-local — the boot warns.
+- **`file`** — the default and the pre-cluster behavior: node-local under
+  `work/tmp/tesseraql`; keep session affinity at the load balancer, or point the directory
+  at a shared filesystem if you already run one.
 
 ## Metrics (Prometheus)
 
