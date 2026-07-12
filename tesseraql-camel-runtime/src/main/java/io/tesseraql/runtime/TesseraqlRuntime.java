@@ -393,7 +393,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
                 .map(Boolean::parseBoolean).orElse(true);
         // The locales the account surface's language picker offers — the same negotiated set
         // every route resolves against (Phase 22 semantics, one source of truth).
-        final List<String> accountLocales = io.tesseraql.compiler.binding.I18nSettings
+        final List<String> accountLocales = io.tesseraql.yaml.i18n.I18nSettings
                 .from(manifest.config(), appHome).supportedTags();
         // Inbound-webhook replay protection (roadmap Phase 26): a delivery is processed at most
         // once on any node sharing this database.

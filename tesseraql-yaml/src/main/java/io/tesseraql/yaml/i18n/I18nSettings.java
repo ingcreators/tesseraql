@@ -1,7 +1,6 @@
-package io.tesseraql.compiler.binding;
+package io.tesseraql.yaml.i18n;
 
 import io.tesseraql.yaml.config.AppConfig;
-import io.tesseraql.yaml.i18n.MessageCatalog;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.UncheckedIOException;

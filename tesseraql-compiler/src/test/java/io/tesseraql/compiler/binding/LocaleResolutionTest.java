@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import io.tesseraql.camel.TesseraqlProperties;
 import io.tesseraql.security.Principal;
+import io.tesseraql.yaml.i18n.I18nSettings;
 import io.tesseraql.yaml.i18n.MessageCatalog;
 import java.util.List;
 import java.util.Map;

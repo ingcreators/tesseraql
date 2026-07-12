@@ -50,7 +50,7 @@ public final class RouteCompiler {
     private AppManifest manifest;
     private java.nio.file.Path compiledAppHome;
     private io.tesseraql.compiler.binding.TenancySettings tenancy;
-    private io.tesseraql.compiler.binding.I18nSettings i18n;
+    private io.tesseraql.yaml.i18n.I18nSettings i18n;
     private io.tesseraql.yaml.webhook.WebhookVerifiers webhookVerifiers;
     private boolean mountRest = true;
     private String appName;
@@ -82,7 +82,7 @@ public final class RouteCompiler {
         this.manifest = manifest;
         this.compiledAppHome = manifest.appHome();
         this.tenancy = io.tesseraql.compiler.binding.TenancySettings.from(config);
-        this.i18n = io.tesseraql.compiler.binding.I18nSettings.from(config, manifest.appHome());
+        this.i18n = io.tesseraql.yaml.i18n.I18nSettings.from(config, manifest.appHome());
         this.mountRest = mountRest;
         if (this.appName == null) {
             this.appName = config.getString("tesseraql.app.name").orElse("app");

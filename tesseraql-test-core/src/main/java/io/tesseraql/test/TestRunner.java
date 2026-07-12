@@ -162,6 +162,15 @@ public final class TestRunner {
         return failure == null ? null : label + " (" + step.sql().file() + "): " + failure;
     }
 
+    /** Plain comma-joined address list, so a row column compares as a simple string. */
+    private static String addresses(jakarta.mail.Address[] list) {
+        if (list == null) {
+            return "";
+        }
+        return java.util.Arrays.stream(list).map(String::valueOf)
+                .collect(java.util.stream.Collectors.joining(", "));
+    }
+
     private TestResult assertExpectation(TestCase test, List<Map<String, Object>> rows) {
         String failure = assertOutcome(test.expect(), new SqlOutcome(rows, null));
         return failure == null
@@ -308,7 +317,7 @@ public final class TestRunner {
                 Map<String, Object> payload = notification.resolvePayload(test.params());
                 payload.forEach(row::putIfAbsent);
                 if (capture != null) {
-                    deliverWebhook(notification, payload, row, capture);
+                    deliver(notification, payload, row, capture);
                 }
                 rows.add(row);
             }
@@ -317,36 +326,69 @@ public final class TestRunner {
     }
 
     /**
-     * Real-send mode for a webhook-type channel (docs/testing.md): the production
-     * {@link io.tesseraql.yaml.notify.WebhookNotifier} builds and delivers the request — JSON
-     * body, timestamp header, HMAC signature — over a real socket to the capture server, and
-     * the row carries what hit the wire ({@code delivered}, {@code signature},
-     * {@code wireBody}). Non-webhook channels (mail, inbox) keep their evaluate-only row: the
-     * mail transport is a framework concern exercised by its own integration tests.
+     * Real-send mode (docs/testing.md): the production senders build and deliver over a real
+     * socket to the runner's capture servers — {@link io.tesseraql.yaml.notify.WebhookNotifier}
+     * for webhook channels (JSON body, timestamp header, HMAC signature; rows add
+     * {@code delivered}/{@code signature}/{@code wireBody}) and
+     * {@link io.tesseraql.yaml.notify.MailNotifier} for mail channels (rendered template body,
+     * inline subject, to/from resolution over real SMTP; rows add
+     * {@code delivered}/{@code to}/{@code from}/{@code subject}/{@code wireBody}). Inbox
+     * channels keep their evaluate-only row — delivery there is a database write the outbox
+     * integration tests own.
      */
-    private void deliverWebhook(io.tesseraql.yaml.notify.NotifyEvents.CompiledNotify notification,
+    private void deliver(io.tesseraql.yaml.notify.NotifyEvents.CompiledNotify notification,
             Map<String, Object> payload, Map<String, Object> row, CaptureServer capture) {
         io.tesseraql.yaml.notify.NotificationChannels channels = io.tesseraql.yaml.notify.NotificationChannels
                 .load(manifest.config());
         io.tesseraql.yaml.notify.NotificationChannels.Channel channel = channels
                 .require(notification.channel());
-        if (!io.tesseraql.yaml.notify.NotificationChannels.WEBHOOK.equals(channel.type())) {
-            return;
-        }
         io.tesseraql.core.outbox.OutboxEvent event = new io.tesseraql.core.outbox.OutboxEvent(
                 "test-" + java.util.UUID.randomUUID(), "notify", notification.id(), "notify",
                 null, "PENDING", 0, null, java.time.Instant.now(), null, "test");
+        io.tesseraql.yaml.notify.NotifyEvents.Envelope envelope = new io.tesseraql.yaml.notify.NotifyEvents.Envelope(
+                notification.channel(), notification.source(), payload);
+        if (io.tesseraql.yaml.notify.NotificationChannels.WEBHOOK.equals(channel.type())) {
+            try {
+                new io.tesseraql.yaml.notify.WebhookNotifier().send(channel, envelope, event,
+                        capture.url());
+                CaptureServer.Captured captured = capture.last();
+                row.put("delivered", true);
+                row.put("signature", captured.headers().get("x-tesseraql-signature"));
+                row.put("wireBody", captured.body());
+            } catch (Exception ex) {
+                throw new IllegalStateException("Webhook real-send failed: " + ex.getMessage(),
+                        ex);
+            }
+        } else if (io.tesseraql.yaml.notify.NotificationChannels.MAIL.equals(channel.type())) {
+            deliverMail(channel, envelope, event, row);
+        }
+    }
+
+    /** Mail real-send: the production sender delivers to an in-process SMTP capture. */
+    private void deliverMail(io.tesseraql.yaml.notify.NotificationChannels.Channel channel,
+            io.tesseraql.yaml.notify.NotifyEvents.Envelope envelope,
+            io.tesseraql.core.outbox.OutboxEvent event, Map<String, Object> row) {
+        com.icegreen.greenmail.util.GreenMail smtp = new com.icegreen.greenmail.util.GreenMail(
+                new com.icegreen.greenmail.util.ServerSetup(0, "127.0.0.1", "smtp"));
         try {
-            new io.tesseraql.yaml.notify.WebhookNotifier().send(channel,
-                    new io.tesseraql.yaml.notify.NotifyEvents.Envelope(notification.channel(),
-                            notification.source(), payload),
-                    event, capture.url());
-            CaptureServer.Captured captured = capture.last();
+            smtp.start();
+            new io.tesseraql.yaml.notify.MailNotifier(appHome).send(channel, envelope, event,
+                    "127.0.0.1", smtp.getSmtp().getPort());
+            jakarta.mail.internet.MimeMessage[] received = smtp.getReceivedMessages();
+            if (received.length == 0) {
+                throw new IllegalStateException("No message reached the SMTP capture");
+            }
+            jakarta.mail.internet.MimeMessage message = received[received.length - 1];
             row.put("delivered", true);
-            row.put("signature", captured.headers().get("x-tesseraql-signature"));
-            row.put("wireBody", captured.body());
+            row.put("to", addresses(message.getRecipients(
+                    jakarta.mail.Message.RecipientType.TO)));
+            row.put("from", addresses(message.getFrom()));
+            row.put("subject", message.getSubject());
+            row.put("wireBody", String.valueOf(message.getContent()).trim());
         } catch (Exception ex) {
-            throw new IllegalStateException("Webhook real-send failed: " + ex.getMessage(), ex);
+            throw new IllegalStateException("Mail real-send failed: " + ex.getMessage(), ex);
+        } finally {
+            smtp.stop();
         }
     }
 
