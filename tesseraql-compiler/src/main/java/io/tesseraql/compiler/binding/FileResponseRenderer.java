@@ -3,6 +3,7 @@ package io.tesseraql.compiler.binding;
 import io.tesseraql.camel.TesseraqlProperties;
 import io.tesseraql.core.expr.EvaluationContext;
 import io.tesseraql.yaml.model.ResponseSpec.FileResponse;
+import io.tesseraql.yaml.template.Templates;
 import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.LinkedHashMap;

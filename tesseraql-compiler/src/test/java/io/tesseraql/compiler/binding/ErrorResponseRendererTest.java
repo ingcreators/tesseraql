@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import io.tesseraql.core.error.TqlDomain;
 import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
+import io.tesseraql.yaml.i18n.I18nSettings;
 import io.tesseraql.yaml.model.ResponseSpec.OnError;
 import java.util.List;
 import java.util.Map;

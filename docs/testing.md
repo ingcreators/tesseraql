@@ -92,11 +92,14 @@ tests:
           responseStatus: 200
 ```
 
-- A **`notify` send** delivers webhook-type channels through the production sender: the JSON
-  body, the timestamp header, and the HMAC signature are built by the same code the outbox
-  dispatcher uses — only the destination is the capture server. `signature` and `wireBody`
-  columns carry the wire truth. Mail and inbox channels keep their evaluate-only rows: the
-  mail transport is a framework concern covered by the framework's own integration tests.
+- A **`notify` send** delivers through the production senders — only the destination is the
+  runner's capture. A **webhook** channel's JSON body, timestamp header, and HMAC signature
+  are built by the same code the outbox dispatcher uses (`signature` and `wireBody` columns
+  carry the wire truth). A **mail** channel renders its template and inline subject, resolves
+  `to`/`from`, and delivers over real SMTP to an in-process capture — the row carries the
+  rfc822 truth (`to`, `from`, `subject`, `wireBody`), and the channel's real host is never
+  touched. Inbox channels keep their evaluate-only rows: delivery there is a database write
+  the outbox integration tests own.
 - An **`http-call` send** performs the request — declared headers, the resolved credential
   header, the body — against the capture server, preserving the original path and query. The
   row keeps the plan columns (including the true `allowed` verdict for the *declared* host)

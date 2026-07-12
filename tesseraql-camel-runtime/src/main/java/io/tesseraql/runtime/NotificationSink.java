@@ -2,6 +2,7 @@ package io.tesseraql.runtime;
 
 import io.tesseraql.core.outbox.OutboxEvent;
 import io.tesseraql.core.outbox.OutboxEventSink;
+import io.tesseraql.yaml.notify.MailNotifier;
 import io.tesseraql.yaml.notify.NotificationChannels;
 import io.tesseraql.yaml.notify.NotifyEvents;
 import io.tesseraql.yaml.notify.WebhookNotifier;
@@ -25,7 +26,7 @@ final class NotificationSink implements OutboxEventSink {
     NotificationSink(NotificationChannels channels, Path appHome, CamelContext camelContext,
             io.tesseraql.core.inbox.InboxStore inbox) {
         this.channels = channels;
-        this.mail = new MailNotifier(appHome, camelContext);
+        this.mail = new MailNotifier(appHome);
         this.inbox = inbox;
     }
 

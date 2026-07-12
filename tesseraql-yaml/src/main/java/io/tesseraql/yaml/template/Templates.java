@@ -1,5 +1,6 @@
-package io.tesseraql.compiler.binding;
+package io.tesseraql.yaml.template;
 
+import io.tesseraql.yaml.i18n.I18nSettings;
 import java.nio.file.Path;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;

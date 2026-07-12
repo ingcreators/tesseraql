@@ -1,4 +1,4 @@
-package io.tesseraql.compiler.binding;
+package io.tesseraql.yaml.template;
 
 import io.tesseraql.yaml.i18n.MessageCatalog;
 import java.text.MessageFormat;

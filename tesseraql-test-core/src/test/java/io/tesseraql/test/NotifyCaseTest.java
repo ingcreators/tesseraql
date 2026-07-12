@@ -40,8 +40,15 @@ class NotifyCaseTest {
                         secret: test-signing-secret
                       member-mail:
                         type: mail
+                        host: mail.example.com
+                        from: noreply@example.com
                         to: ops@example.com
+                        subject: "Welcome [(${payload.email})]"
+                        template: templates/mail/confirmation.txt
                 """);
+        Files.createDirectories(appHome.resolve("templates/mail"));
+        Files.writeString(appHome.resolve("templates/mail/confirmation.txt"),
+                "Hello [(${payload.email})] - your registration is confirmed.\n");
         Files.createDirectories(appHome.resolve("web/members"));
         Files.writeString(appHome.resolve("web/members/post.yml"), """
                 version: tesseraql/v1
@@ -163,6 +170,28 @@ class NotifyCaseTest {
                         Map.of("notify", "audit", "channel", "audit-webhook",
                                 "delivered", true))),
                 null, new TestSuite.NotifyTarget("members.register", null, "audit", true),
+                null));
+        assertThat(report.allPassed()).as(report.results().toString()).isTrue();
+    }
+
+    /**
+     * Mail real-send (docs/testing.md): the production sender renders the channel template
+     * and subject and delivers over real SMTP to the runner's capture - the row carries the
+     * rfc822 truth (to/from/subject/body), and the wire never touches the channel's real host.
+     */
+    @Test
+    void sendDeliversMailChannelsToTheSmtpCapture() {
+        TestReport report = run(new TestCase("confirmation mail hits the wire", null, null,
+                Map.of("body", Map.of("email", "sato@example.com")),
+                new Expectation(1, List.of(Map.of(
+                        "notify", "confirmation",
+                        "channel", "member-mail",
+                        "delivered", true,
+                        "to", "ops@example.com",
+                        "from", "noreply@example.com",
+                        "subject", "Welcome sato@example.com",
+                        "wireBody", "Hello sato@example.com - your registration is confirmed."))),
+                null, new TestSuite.NotifyTarget("members.register", null, "confirmation", true),
                 null));
         assertThat(report.allPassed()).as(report.results().toString()).isTrue();
     }

@@ -39,6 +39,13 @@
       <artifactId>tesseraql-operations</artifactId>
       <version>${project.version}</version>
     </dependency>
+    <!-- The runner's SMTP capture for notify send: true on mail channels (docs/testing.md):
+         the production MailNotifier delivers over a real socket to an in-process GreenMail. -->
+    <dependency>
+      <groupId>com.icegreen</groupId>
+      <artifactId>greenmail</artifactId>
+      <version>${greenmail.version}</version>
+    </dependency>
 
     <dependency>
       <groupId>com.fasterxml.jackson.core</groupId>

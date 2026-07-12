@@ -2,6 +2,7 @@ package io.tesseraql.compiler.binding;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import io.tesseraql.yaml.template.Templates;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Locale;

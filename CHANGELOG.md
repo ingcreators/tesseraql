@@ -27,6 +27,17 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **Mail real-send test cases**: `notify` cases with `send: true` now deliver **mail**
+  channels too — the production sender renders the channel template and inline subject,
+  resolves `to`/`from`, and delivers over real SMTP to the runner's in-process capture;
+  the row carries the rfc822 truth (`to`, `from`, `subject`, `wireBody`) and the channel's
+  real host is never touched. Under the hood the mail channel's transport moved from the
+  Camel mail component to plain jakarta.mail — the same one-sender symmetry as the webhook
+  channel, byte-identical channel semantics (settings, template trust model, smtps,
+  credentials via the SecretResolver SPI), one dependency fewer, and the sender reusable
+  from the test runner. The shared Thymeleaf template engine (`Templates`) and i18n
+  settings moved from the compiler to `tesseraql-yaml` accordingly.
+
 - **Declarative HTTP caching for query routes** (`cache:`): `Cache-Control` from
   `maxAge`/`visibility`/`staleWhileRevalidate` (`private` default; `public` lints onto
   `auth: public` routes only — an authenticated response is per-principal) and a strong
