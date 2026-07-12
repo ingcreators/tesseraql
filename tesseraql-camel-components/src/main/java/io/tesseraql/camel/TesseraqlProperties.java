@@ -90,6 +90,8 @@ public final class TesseraqlProperties {
     /** Registry bean name for the in-app inbox store (roadmap Phase 49), if any inbox channel. */
     public static final String INBOX_STORE_BEAN = "tesseraqlInboxStore";
 
+    /** The shared lease ledger behind cluster-scoped rate limits (docs/deployment.md). */
+    public static final String RATE_BUDGET_BEAN = "tesseraqlRateBudget";
     /** The outbound gateway query routes' http: sources execute through (docs/connectors.md). */
     public static final String HTTP_SOURCE_GATEWAY_BEAN = "tesseraqlHttpSourceGateway";
     /** The live-view topic bus commands emit to after commit (docs/realtime.md). */

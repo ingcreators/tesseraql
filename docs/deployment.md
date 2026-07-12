@@ -165,13 +165,32 @@ by the driver instead of holding a pool connection forever.
 `maxLifetimeMillis`, `keepaliveTimeMillis`, and `leakDetectionThresholdMillis`. Unset keys
 keep Hikari's defaults.
 
-**Rate/concurrency limiters and lanes are per-node.** The route `policy:` block's
-`rateLimit`/`concurrency` guards and the `threading.lanes` bulkheads keep their state in
-process memory (token bucket, semaphores). On a multi-node deployment each node enforces its
-own budget: a route limited to N requests/second allows up to N × node-count cluster-wide,
-and lane saturation on one node does not shed load on another. Size the budgets per node (or
-enforce a cluster-wide budget at the load balancer); shared-state limiters are a deliberate
-non-goal until a coordination store earns its place.
+**Concurrency limiters and lanes are per-node — deliberately.** The `concurrency` guard and
+the `threading.lanes` bulkheads protect a node's own resources (threads, memory, its pool
+connections), so their budgets scale with the node count by design: lane saturation on one
+node does not shed load on another, and adding a node adds capacity.
+
+**Rate limits can be cluster-wide.** A `rateLimit` is usually a budget for something shared —
+the database behind the route, a partner API's contract quota — so per-node enforcement
+(N × node-count cluster-wide) defeats it. Declare the scope:
+
+```yaml
+policy:
+  rateLimit:
+    requestsPerSecond: 50
+    scope: cluster        # default: node
+```
+
+With `scope: cluster` the declared rate is one budget across every node sharing the main
+database. Enforcement stays a local token bucket — the request path never touches the
+database — but tokens are *leased* from a small `tql_rate_lease` ledger (one row per route
+per second-window, plain atomic updates, every supported dialect, created on first use like
+the inbox table). At most one lease claim runs per second per node per route; claims are
+first-come-first-served, so a quiet node leaves its share for the busy ones, and `burst`
+remains node-local smoothing. Precision is bounded, not perfect: a volley straddling a window
+boundary can briefly see up to two windows' budget. When the ledger is unreachable the
+limiter degrades to the per-node budget for that window and logs with backoff — rate limiting
+protects resources; it must never become the outage itself.
 
 ## Metrics (Prometheus)
 

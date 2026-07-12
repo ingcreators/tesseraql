@@ -470,6 +470,16 @@ public final class TesseraqlRuntime implements AutoCloseable {
                 // Outbound REST for http-call pipeline steps (roadmap Phase 26): deny-by-default
                 // egress, secret-managed credentials, timeouts, and circuit breaking from config.
                 .httpCall(httpCallClient);
+        // Cluster-scoped rate limits (docs/deployment.md): the lease ledger exists exactly
+        // when a route declares rateLimit.scope: cluster; limiters reach it via the registry.
+        if (manifest.routes().stream().anyMatch(route -> route.definition().policy() != null
+                && route.definition().policy().rateLimit() != null
+                && route.definition().policy().rateLimit().isCluster())) {
+            io.tesseraql.operations.rate.JdbcRateLeaseStore rateLeases = new io.tesseraql.operations.rate.JdbcRateLeaseStore(
+                    dataSource);
+            rateLeases.ensureSchema();
+            context.getRegistry().bind(TesseraqlProperties.RATE_BUDGET_BEAN, rateLeases);
+        }
         if (manifest.routes().stream().anyMatch(route -> !route.definition().http().isEmpty())) {
             context.getRegistry().bind(TesseraqlProperties.HTTP_SOURCE_GATEWAY_BEAN,
                     (io.tesseraql.yaml.http.HttpSourceGateway) (spec,
