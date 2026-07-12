@@ -81,7 +81,7 @@ fragment in htmx, and the rule is testable in a declarative suite.
 
 ### Phase 20 — notifications
 
-- A `notify:` step for command pipelines and jobs: SMTP mail (camel-mail) with templates
+- A `notify:` step for command pipelines and jobs: SMTP mail (plain jakarta.mail since 0.6.0) with templates
   rendered by the existing engine (template trust modes apply), credentials via the
   SecretResolver SPI.
 - Delivery rides the existing outbox: at-least-once, retries and dead-letters visible in
