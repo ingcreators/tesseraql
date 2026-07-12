@@ -265,15 +265,6 @@ public final class AppLinter {
         return arms;
     }
 
-    /**
-     * Validates declarative views (roadmap Phase 39, docs/declarative-views.md): the
-     * {@code response.html.view} reference resolves and parses ({@code TQL-VIEW-3301/3302}), is
-     * not combined with {@code template:} ({@code TQL-VIEW-3302}), a form's {@code action:} names
-     * a POST route with an {@code input:} block ({@code TQL-VIEW-3303}) whose fields the view's
-     * {@code fields:} entries actually declare ({@code TQL-VIEW-3304}) with known widgets
-     * ({@code TQL-VIEW-3305}); and an app's {@code templates/tql/view/*.html} pattern override
-     * carries the expected fragment signature ({@code TQL-VIEW-3307}, warning).
-     */
     /** A live-view topic name: lowercase dot/dash-separated segments (docs/realtime.md). */
     private static final java.util.regex.Pattern TOPIC_NAME = java.util.regex.Pattern
             .compile("[a-z0-9]+(?:[.-][a-z0-9]+)*");
@@ -333,6 +324,15 @@ public final class AppLinter {
         }
     }
 
+    /**
+     * Validates declarative views (roadmap Phase 39, docs/declarative-views.md): the
+     * {@code response.html.view} reference resolves and parses ({@code TQL-VIEW-3301/3302}), is
+     * not combined with {@code template:} ({@code TQL-VIEW-3302}), a form's {@code action:} names
+     * a POST route with an {@code input:} block ({@code TQL-VIEW-3303}) whose fields the view's
+     * {@code fields:} entries actually declare ({@code TQL-VIEW-3304}) with known widgets
+     * ({@code TQL-VIEW-3305}); and an app's {@code templates/tql/view/*.html} pattern override
+     * carries the expected fragment signature ({@code TQL-VIEW-3307}, warning).
+     */
     private void lintViews(Path appHome, AppManifest manifest, List<LintFinding> findings) {
         for (RouteFile route : manifest.routes()) {
             var response = route.definition().response();
