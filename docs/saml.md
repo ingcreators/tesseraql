@@ -63,9 +63,14 @@ tesseraql:
 | `requireSignedLogout` | no | Reject unsigned inbound logout requests (default `true`). |
 | `clockSkew` | no | Allowed clock skew for the assertion's time-bound conditions, as a duration string such as `5m` or `30s` (default `5m`). |
 
-Key and metadata paths are files **relative to the app home**, read at startup. Fetching IdP
-metadata from a URL is not currently supported — download it and ship the file with the app.
-A Studio wizard (**SAML SP**, under the IAM admin wizards) generates this config block.
+Key paths are files **relative to the app home**, read at startup. `idp.metadata` takes a
+file path or an **`https://` URL** fetched at boot: the metadata pins the IdP signing key, so
+a URL is held to the egress discipline — the host must be in
+`tesseraql.http.outbound.allowedHosts` (`TQL-SEC-4086`, deny by default) and plain `http://`
+is refused off loopback (`TQL-SEC-4087`). A successful fetch caches to
+`work/saml/idp-metadata.xml`; if the IdP's endpoint is down at a later boot, the cached copy
+serves with a warning, so an IdP outage never bricks the app. A Studio wizard (**SAML SP**,
+under the IAM admin wizards) generates this config block.
 
 ## Metadata exchange
 

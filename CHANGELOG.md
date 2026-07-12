@@ -27,6 +27,13 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **SAML IdP metadata from a URL**: `tesseraql.saml.idp.metadata` now takes an `https://`
+  URL as well as a file path. The metadata pins the IdP signing key, so the fetch obeys the
+  egress discipline (host in `tesseraql.http.outbound.allowedHosts`, `TQL-SEC-4086`; plain
+  `http://` refused off loopback, `TQL-SEC-4087`) and caches to
+  `work/saml/idp-metadata.xml` — an IdP metadata-endpoint outage at a later boot falls back
+  to the cached copy with a warning instead of failing the start.
+
 - **Real-send test cases** (`send: true` on `notify` and `http-call` cases): planning proves
   the declarations resolve; real-send proves the wire. The test runner starts a local capture
   server per case, delivers over a real socket, and the rows carry what actually arrived — no
