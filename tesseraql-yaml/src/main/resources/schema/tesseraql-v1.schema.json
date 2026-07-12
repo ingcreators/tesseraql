@@ -67,6 +67,17 @@
         "additionalProperties": true
       }
     },
+    "cache": {
+      "type": "object",
+      "description": "Declarative HTTP caching for query responses (docs/response-shaping.md): Cache-Control from maxAge/visibility (private default; public lints onto auth: public only) and a content ETag answering If-None-Match with 304. Query recipes only (TQL-YAML-1025).",
+      "properties": {
+        "maxAge": { "type": "string", "description": "How long a client may reuse the response (duration string such as 30s or 5m)." },
+        "visibility": { "type": "string", "enum": ["private", "public"] },
+        "etag": { "type": "boolean", "description": "Hash the rendered body and answer If-None-Match with 304 (default true)." },
+        "staleWhileRevalidate": { "type": "string" }
+      },
+      "additionalProperties": true
+    },
     "emit": {
       "description": "Topic(s) broadcast to live views after this command commits (docs/realtime.md). A name is lowercase dot/dash-separated segments; the event carries the topic name only, never data.",
       "oneOf": [
