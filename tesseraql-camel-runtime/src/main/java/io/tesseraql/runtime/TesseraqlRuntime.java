@@ -263,8 +263,41 @@ public final class TesseraqlRuntime implements AutoCloseable {
                     TesseraqlProperties.MTLS_AUTHENTICATOR_BEAN,
                     new io.tesseraql.security.mtls.MtlsAuthenticator(security.mtls()));
         }
-        io.tesseraql.core.spool.FileTempStore tempStore = new io.tesseraql.core.spool.FileTempStore(
-                appHome.resolve("work/tmp/tesseraql"));
+        // Spooled exports and large rowsets (design ch. 28.4; docs/deployment.md "Shared
+        // export files"): file (node-local default), db (the main database — any node serves
+        // the download), or blob (the configured object store, for heavy volumes).
+        String tempStoreKind = manifest.config().getString("tesseraql.temp.store")
+                .orElse("file");
+        java.nio.file.Path tempScratch = appHome.resolve("work/tmp/tesseraql");
+        io.tesseraql.core.spool.TempStore tempStore = switch (tempStoreKind) {
+            case "file" -> new io.tesseraql.core.spool.FileTempStore(tempScratch);
+            case "db" -> {
+                io.tesseraql.operations.spool.JdbcTempStore jdbcTemp = new io.tesseraql.operations.spool.JdbcTempStore(
+                        dataSource, tempScratch,
+                        manifest.config().getString("tesseraql.temp.maxBytes")
+                                .map(Long::parseLong)
+                                .orElse(io.tesseraql.operations.spool.JdbcTempStore.DEFAULT_MAX_BYTES));
+                jdbcTemp.ensureSchema();
+                yield jdbcTemp;
+            }
+            case "blob" -> {
+                io.tesseraql.core.blob.BlobStore blobStore = io.tesseraql.yaml.blob.BlobStores
+                        .create(manifest.config(), appHome);
+                if (blobStore instanceof io.tesseraql.core.blob.FileBlobStore) {
+                    LOG.warn("tesseraql.temp.store: blob with the local file provider is still"
+                            + " node-local; configure tesseraql.object-storage.provider (or use"
+                            + " store: db) for multi-node downloads");
+                }
+                yield new io.tesseraql.core.spool.BlobTempStore(blobStore,
+                        manifest.config().getString("tesseraql.temp.bucket")
+                                .orElse("tesseraql-temp"));
+            }
+            default -> throw new io.tesseraql.core.error.TqlException(
+                    new io.tesseraql.core.error.TqlErrorCode(
+                            io.tesseraql.core.error.TqlDomain.YAML, 1024),
+                    "tesseraql.temp.store must be 'file', 'db', or 'blob', got '"
+                            + tempStoreKind + "'");
+        };
         context.getRegistry().bind(TesseraqlProperties.TEMP_STORE_BEAN, tempStore);
 
         VertxPlatformHttpServerConfiguration httpConfig = new VertxPlatformHttpServerConfiguration();

@@ -27,6 +27,19 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **Shared export files** (`tesseraql.temp.store: db | blob`): a spooled export no longer
+  has to live on the node that produced it. `db` puts spools in a `tql_temp_spool` table on
+  the main database (created on first use; writes/reads stage through local scratch so
+  memory stays bounded and no connection is pinned during a slow download; per-spool
+  `tesseraql.temp.maxBytes` cap, default 64 MB) — any node serves any download with no
+  session affinity and no new infrastructure. `blob` spools through the configured object
+  store (S3 via the opt-in `tesseraql-s3` module; `tesseraql.temp.bucket`) for heavy export
+  volumes, warning at boot when the local file provider would keep it node-local anyway.
+  The default stays `file` (existing deployments byte-identical); an unknown store fails
+  the boot with `TQL-YAML-1024`. Every consumer of the TempStore SPI — `query-export`,
+  `query-spool`, batch intermediate results, transfer downloads — picks the store up with
+  no route changes.
+
 - **Cluster-wide rate limits** (`rateLimit.scope: cluster`): a route's declared
   requests-per-second becomes one budget across every node sharing the main database,
   instead of N × node-count. Enforcement stays a local token bucket — the request path
