@@ -27,6 +27,19 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **Real-send test cases** (`send: true` on `notify` and `http-call` cases): planning proves
+  the declarations resolve; real-send proves the wire. The test runner starts a local capture
+  server per case, delivers over a real socket, and the rows carry what actually arrived — no
+  external mock server to install. A `notify` send delivers webhook channels through the
+  production sender (same JSON body, timestamp header, and HMAC signature as the outbox
+  dispatcher; `delivered`/`signature`/`wireBody` columns), mail/inbox channels staying
+  evaluate-only. An `http-call` send performs the request — declared headers, the credential
+  header exactly as runtime builds it, the body — preserving the original path and query
+  (`sent`/`requestPath`/`authorization`/`requestBody`/`responseStatus` columns), while the
+  plan columns keep the true allow-list verdict for the declared host. Credential header
+  construction is now one shared implementation (`Credential.authorizationHeaders`) across
+  the job client, http: sources, and the runner.
+
 - **Shared export files** (`tesseraql.temp.store: db | blob`): a spooled export no longer
   has to live on the node that produced it. `db` puts spools in a `tql_temp_spool` table on
   the main database (created on first use; writes/reads stage through local scratch so

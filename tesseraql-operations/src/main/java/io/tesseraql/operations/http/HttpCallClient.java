@@ -22,7 +22,6 @@ import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Base64;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -188,21 +187,8 @@ public final class HttpCallClient {
         if (spec.credential() == null || spec.credential().isBlank()) {
             return;
         }
-        HttpOutbound.Credential credential = outbound.requireCredential(spec.credential());
-        switch (credential.type()) {
-            case HttpOutbound.BEARER ->
-                request.header("Authorization", "Bearer " + credential.require("token"));
-            case HttpOutbound.BASIC -> {
-                String pair = credential.require("username") + ":" + credential.require("password");
-                request.header("Authorization", "Basic "
-                        + Base64.getEncoder()
-                                .encodeToString(pair.getBytes(StandardCharsets.UTF_8)));
-            }
-            case HttpOutbound.HEADER ->
-                request.header(credential.require("header"), credential.require("value"));
-            default -> {
-                /* HttpOutbound.load already rejects unsupported types */ }
-        }
+        outbound.requireCredential(spec.credential()).authorizationHeaders()
+                .forEach(request::header);
     }
 
     private String buildUrl(HttpCallSpec spec, Map<String, Object> context) {

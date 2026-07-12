@@ -46,14 +46,61 @@ exactly as an omitted query parameter would at runtime.
 - **`notify`** — evaluates a route's or a job's `notify:` declarations
   (`notify: {route: ...}` or `notify: {job: ...}`, plus an optional `id`). Each notification
   that fires is one row with `notify` (its id), `channel`, `source`, and the resolved payload
-  columns. Guards and payload expressions evaluate exactly as at runtime, but no mail or
-  webhook is ever sent.
-- **`http-call`** — plans a job's outbound HTTP steps without a network request. Each matching
-  step is one row with `http` (its id), `method`, the resolved `url` and `host`, `allowed`
-  (whether the host is in the egress allow-list), and `credential`.
+  columns. Guards and payload expressions evaluate exactly as at runtime; by default no mail
+  or webhook is sent — add `send: true` for [real-send mode](#real-send-cases).
+- **`http-call`** — plans a job's outbound HTTP steps or a query route's
+  [`http:` sources](connectors.md#http-sources-on-query-routes)
+  (`http-call: {job: ...}` or `{route: ...}`, plus an optional `id`) without a network
+  request. Each matching step is one row with `http` (its id), `method`, the resolved `url`
+  and `host`, `allowed` (whether the host is in the egress allow-list), and `credential` —
+  add `send: true` for [real-send mode](#real-send-cases).
 - **`messages`** — resolves keys from the app's `messages/<locale>.yml` catalogs: one row per
   key with `key`, `locale`, and `text`. Omit `keys` to resolve every key the locale sees; an
   unresolvable key yields a null `text`, so the expectation fails visibly.
+
+## Real-send cases
+
+Planning and evaluation prove the declarations resolve; `send: true` proves the **wire**. The
+runner starts a local capture server for the case, delivers for real over a real socket, and
+the case's rows carry what actually arrived — no external mock server to install, nothing
+listening after the case ends:
+
+```yaml
+tests:
+  - name: the audit webhook is signed on the wire
+    notify:
+      route: users.apiProvision
+      id: audit
+      send: true
+    params:
+      body: {userName: sato}
+    expect:
+      rows:
+        - channel: audit-webhook
+          delivered: true      # plus `signature` (the HMAC header) and `wireBody`
+
+  - name: the rates call carries its credential
+    http-call:
+      route: orders.list
+      id: rates
+      send: true
+    expect:
+      rows:
+        - sent: true
+          authorization: Bearer live-token   # the credential exactly as runtime builds it
+          requestPath: /v1/rates?base=USD
+          responseStatus: 200
+```
+
+- A **`notify` send** delivers webhook-type channels through the production sender: the JSON
+  body, the timestamp header, and the HMAC signature are built by the same code the outbox
+  dispatcher uses — only the destination is the capture server. `signature` and `wireBody`
+  columns carry the wire truth. Mail and inbox channels keep their evaluate-only rows: the
+  mail transport is a framework concern covered by the framework's own integration tests.
+- An **`http-call` send** performs the request — declared headers, the resolved credential
+  header, the body — against the capture server, preserving the original path and query. The
+  row keeps the plan columns (including the true `allowed` verdict for the *declared* host)
+  and adds `sent`, `requestPath`, `authorization`, `requestBody`, and `responseStatus`.
 
 ## Expectations
 

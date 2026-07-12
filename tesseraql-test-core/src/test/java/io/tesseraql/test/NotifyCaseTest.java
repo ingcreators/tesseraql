@@ -32,6 +32,15 @@ class NotifyCaseTest {
                 tesseraql:
                   app:
                     name: members
+                  notifications:
+                    channels:
+                      audit-webhook:
+                        type: webhook
+                        url: https://audit.example/hooks/tesseraql
+                        secret: test-signing-secret
+                      member-mail:
+                        type: mail
+                        to: ops@example.com
                 """);
         Files.createDirectories(appHome.resolve("web/members"));
         Files.writeString(appHome.resolve("web/members/post.yml"), """
@@ -130,5 +139,31 @@ class NotifyCaseTest {
 
         assertThat(unknownRoute.results().get(0).passed()).isFalse();
         assertThat(bothTargets.results().get(0).passed()).isFalse();
+    }
+
+    /**
+     * Real-send mode (docs/testing.md): the webhook notification is delivered by the
+     * production sender over a real socket to the runner's capture server — the row carries
+     * the HMAC signature and the JSON body that actually hit the wire. The mail-channel
+     * notification keeps its evaluate-only row.
+     */
+    @Test
+    void sendDeliversWebhookChannelsToTheCaptureServer() {
+        TestReport report = run(new TestCase("audit hits the wire signed", null, null,
+                Map.of("body", Map.of("email", "a@example.com", "name", "sato")), null, null,
+                new TestSuite.NotifyTarget("members.register", null, null, true), null));
+
+        assertThat(report.allPassed()).as(report.results().toString()).isTrue();
+    }
+
+    @Test
+    void sendRowsCarryTheWireSignatureAndBody() {
+        TestReport report = run(new TestCase("wire fields", null, null,
+                Map.of("body", Map.of("name", "sato")), new Expectation(1, List.of(
+                        Map.of("notify", "audit", "channel", "audit-webhook",
+                                "delivered", true))),
+                null, new TestSuite.NotifyTarget("members.register", null, "audit", true),
+                null));
+        assertThat(report.allPassed()).as(report.results().toString()).isTrue();
     }
 }

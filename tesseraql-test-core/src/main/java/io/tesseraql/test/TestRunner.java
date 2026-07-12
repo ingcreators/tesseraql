@@ -296,18 +296,58 @@ public final class TestRunner {
                     + (target.id() == null ? "" : " '" + target.id() + "'"));
         }
         List<Map<String, Object>> rows = new ArrayList<>();
-        for (io.tesseraql.yaml.notify.NotifyEvents.CompiledNotify notification : compiled) {
-            if (!notification.fires(test.params())) {
-                continue;
+        try (CaptureServer capture = target.isSend() ? CaptureServer.start() : null) {
+            for (io.tesseraql.yaml.notify.NotifyEvents.CompiledNotify notification : compiled) {
+                if (!notification.fires(test.params())) {
+                    continue;
+                }
+                Map<String, Object> row = new LinkedHashMap<>();
+                row.put("notify", notification.id());
+                row.put("channel", notification.channel());
+                row.put("source", notification.source());
+                Map<String, Object> payload = notification.resolvePayload(test.params());
+                payload.forEach(row::putIfAbsent);
+                if (capture != null) {
+                    deliverWebhook(notification, payload, row, capture);
+                }
+                rows.add(row);
             }
-            Map<String, Object> row = new LinkedHashMap<>();
-            row.put("notify", notification.id());
-            row.put("channel", notification.channel());
-            row.put("source", notification.source());
-            notification.resolvePayload(test.params()).forEach(row::putIfAbsent);
-            rows.add(row);
         }
         return rows;
+    }
+
+    /**
+     * Real-send mode for a webhook-type channel (docs/testing.md): the production
+     * {@link io.tesseraql.yaml.notify.WebhookNotifier} builds and delivers the request — JSON
+     * body, timestamp header, HMAC signature — over a real socket to the capture server, and
+     * the row carries what hit the wire ({@code delivered}, {@code signature},
+     * {@code wireBody}). Non-webhook channels (mail, inbox) keep their evaluate-only row: the
+     * mail transport is a framework concern exercised by its own integration tests.
+     */
+    private void deliverWebhook(io.tesseraql.yaml.notify.NotifyEvents.CompiledNotify notification,
+            Map<String, Object> payload, Map<String, Object> row, CaptureServer capture) {
+        io.tesseraql.yaml.notify.NotificationChannels channels = io.tesseraql.yaml.notify.NotificationChannels
+                .load(manifest.config());
+        io.tesseraql.yaml.notify.NotificationChannels.Channel channel = channels
+                .require(notification.channel());
+        if (!io.tesseraql.yaml.notify.NotificationChannels.WEBHOOK.equals(channel.type())) {
+            return;
+        }
+        io.tesseraql.core.outbox.OutboxEvent event = new io.tesseraql.core.outbox.OutboxEvent(
+                "test-" + java.util.UUID.randomUUID(), "notify", notification.id(), "notify",
+                null, "PENDING", 0, null, java.time.Instant.now(), null, "test");
+        try {
+            new io.tesseraql.yaml.notify.WebhookNotifier().send(channel,
+                    new io.tesseraql.yaml.notify.NotifyEvents.Envelope(notification.channel(),
+                            notification.source(), payload),
+                    event, capture.url());
+            CaptureServer.Captured captured = capture.last();
+            row.put("delivered", true);
+            row.put("signature", captured.headers().get("x-tesseraql-signature"));
+            row.put("wireBody", captured.body());
+        } catch (Exception ex) {
+            throw new IllegalStateException("Webhook real-send failed: " + ex.getMessage(), ex);
+        }
     }
 
     /**
@@ -330,7 +370,7 @@ public final class TestRunner {
         }
         io.tesseraql.yaml.http.HttpOutbound outbound = io.tesseraql.yaml.http.HttpOutbound
                 .load(manifest.config());
-        List<Map<String, Object>> rows = new ArrayList<>();
+        List<Map.Entry<String, io.tesseraql.yaml.model.HttpCallSpec>> calls = new ArrayList<>();
         if (hasJob) {
             io.tesseraql.yaml.manifest.JobFile job = job(target.job());
             for (io.tesseraql.yaml.model.PipelineStep step : job.definition().effectiveSteps()) {
@@ -338,7 +378,7 @@ public final class TestRunner {
                 if (spec == null || (target.id() != null && !target.id().equals(step.id()))) {
                     continue;
                 }
-                rows.add(planRow(step.id(), spec, test.params(), outbound));
+                calls.add(Map.entry(step.id(), spec));
             }
         } else {
             // A query route's http: sources plan the same way a job's steps do
@@ -346,9 +386,25 @@ public final class TestRunner {
             RouteFile route = route(target.route());
             route.definition().http().forEach((name, source) -> {
                 if (target.id() == null || target.id().equals(name)) {
-                    rows.add(planRow(name, source.toCall(), test.params(), outbound));
+                    calls.add(Map.entry(name, source.toCall()));
                 }
             });
+        }
+        List<Map<String, Object>> rows = new ArrayList<>();
+        if (target.isSend()) {
+            // Real-send mode (docs/testing.md): the request — headers, credential, body — is
+            // built exactly as at runtime and goes over a real socket to the runner's capture
+            // server; the row carries what actually hit the wire.
+            try (CaptureServer capture = CaptureServer.start()) {
+                for (var call : calls) {
+                    rows.add(sendRow(call.getKey(), call.getValue(), test.params(), outbound,
+                            capture));
+                }
+            }
+        } else {
+            for (var call : calls) {
+                rows.add(planRow(call.getKey(), call.getValue(), test.params(), outbound));
+            }
         }
         if (rows.isEmpty()) {
             throw new IllegalArgumentException("'" + (hasJob ? target.job() : target.route())
@@ -356,6 +412,116 @@ public final class TestRunner {
                     + (target.id() == null ? "" : " '" + target.id() + "'"));
         }
         return rows;
+    }
+
+    /**
+     * One real-send row: everything the plan row reports, plus what actually crossed the wire
+     * to the capture server — the method and path+query, the credential's Authorization (or
+     * custom) header exactly as runtime delivery builds it, declared headers, and the body.
+     */
+    private Map<String, Object> sendRow(String id, io.tesseraql.yaml.model.HttpCallSpec spec,
+            Map<String, Object> params, io.tesseraql.yaml.http.HttpOutbound outbound,
+            CaptureServer capture) {
+        Map<String, Object> row = planRow(id, spec, params, outbound);
+        String url = (String) row.get("url");
+        java.net.URI original = java.net.URI.create(url);
+        String pathAndQuery = original.getRawPath()
+                + (original.getRawQuery() == null ? "" : "?" + original.getRawQuery());
+        java.net.http.HttpRequest.Builder request = java.net.http.HttpRequest
+                .newBuilder(java.net.URI.create(capture.url() + pathAndQuery))
+                .timeout(java.time.Duration.ofSeconds(10));
+        spec.headers().forEach(request::header);
+        if (spec.credential() != null && !spec.credential().isBlank()) {
+            outbound.requireCredential(spec.credential()).authorizationHeaders()
+                    .forEach(request::header);
+        }
+        request.method(spec.effectiveMethod(), spec.body() == null
+                ? java.net.http.HttpRequest.BodyPublishers.noBody()
+                : java.net.http.HttpRequest.BodyPublishers.ofString(spec.body()));
+        try {
+            java.net.http.HttpResponse<Void> response = java.net.http.HttpClient.newHttpClient()
+                    .send(request.build(),
+                            java.net.http.HttpResponse.BodyHandlers.discarding());
+            CaptureServer.Captured captured = capture.last();
+            row.put("sent", true);
+            row.put("requestPath", captured.pathAndQuery());
+            row.put("authorization", captured.headers().get("authorization"));
+            row.put("requestBody", captured.body());
+            row.put("responseStatus", response.statusCode());
+        } catch (java.io.IOException | InterruptedException ex) {
+            if (ex instanceof InterruptedException) {
+                Thread.currentThread().interrupt();
+            }
+            throw new IllegalStateException("Real-send failed: " + ex.getMessage(), ex);
+        }
+        return row;
+    }
+
+    /**
+     * The runner's per-case HTTP capture server (docs/testing.md, real-send mode): a local
+     * listener that records each request — method, path, headers, body — and answers 200, so a
+     * suite exercises the true wire without any external dependency.
+     */
+    static final class CaptureServer implements AutoCloseable {
+
+        /** One captured request; header names are lower-cased. */
+        record Captured(String method, String pathAndQuery, Map<String, String> headers,
+                String body) {
+        }
+
+        private final com.sun.net.httpserver.HttpServer server;
+        private final List<Captured> requests = java.util.Collections
+                .synchronizedList(new ArrayList<>());
+
+        private CaptureServer(com.sun.net.httpserver.HttpServer server) {
+            this.server = server;
+        }
+
+        static CaptureServer start() {
+            try {
+                com.sun.net.httpserver.HttpServer server = com.sun.net.httpserver.HttpServer
+                        .create(new java.net.InetSocketAddress("127.0.0.1", 0), 0);
+                CaptureServer capture = new CaptureServer(server);
+                server.createContext("/", exchange -> {
+                    Map<String, String> headers = new LinkedHashMap<>();
+                    exchange.getRequestHeaders().forEach((name, values) -> headers
+                            .put(name.toLowerCase(java.util.Locale.ROOT),
+                                    String.join(",", values)));
+                    String body = new String(exchange.getRequestBody().readAllBytes(),
+                            java.nio.charset.StandardCharsets.UTF_8);
+                    String query = exchange.getRequestURI().getRawQuery();
+                    capture.requests.add(new Captured(exchange.getRequestMethod(),
+                            exchange.getRequestURI().getRawPath()
+                                    + (query == null ? "" : "?" + query),
+                            headers, body));
+                    byte[] ok = "{}".getBytes(java.nio.charset.StandardCharsets.UTF_8);
+                    exchange.getResponseHeaders().set("Content-Type", "application/json");
+                    exchange.sendResponseHeaders(200, ok.length);
+                    exchange.getResponseBody().write(ok);
+                    exchange.close();
+                });
+                server.start();
+                return capture;
+            } catch (java.io.IOException ex) {
+                throw new java.io.UncheckedIOException(ex);
+            }
+        }
+
+        String url() {
+            return "http://127.0.0.1:" + server.getAddress().getPort();
+        }
+
+        Captured last() {
+            if (requests.isEmpty()) {
+                throw new IllegalStateException("No request reached the capture server");
+            }
+            return requests.get(requests.size() - 1);
+        }
+
+        @Override
+        public void close() {
+            server.stop(0);
+        }
     }
 
     /** One planning row: the resolved url/host and the deny-by-default egress verdict. */
