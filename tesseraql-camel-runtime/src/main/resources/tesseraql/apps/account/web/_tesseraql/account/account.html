@@ -237,9 +237,16 @@
     </th:block>
     <th:block th:unless="${profile.totp.enrolled}">
       <th:block th:if="${profile.totp.pendingSecret != null}">
-        <p>Add this secret to your authenticator app (manual entry), then confirm with the
-          code it shows. Nothing is enforced until the code confirms.</p>
+        <p>Scan the code with your authenticator app (or add the secret by manual entry),
+          then confirm with the code it shows. Nothing is enforced until the code confirms.</p>
+        <div th:utext="${profile.totp.qrSvg}"></div>
         <p><code th:text="${profile.totp.pendingSecret}">SECRET</code></p>
+        <th:block th:if="${profile.totp.recoveryCodes != null}">
+          <p><strong>Recovery codes</strong> — save these now; each signs you in once if you
+            lose the authenticator. They activate when you confirm and are never shown again.</p>
+          <p><code th:each="rc : ${profile.totp.recoveryCodes}"
+                   th:text="${rc}" style="margin-right: .75em">xxxx-xxxx</code></p>
+        </th:block>
         <p class="hc-text-muted" style="word-break: break-all"
            th:text="${profile.totp.otpauth}">otpauth://...</p>
         <form method="post" action="/_tesseraql/account/totp/confirm" class="hc-cluster">

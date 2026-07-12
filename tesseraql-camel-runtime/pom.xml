@@ -14,6 +14,13 @@
   <name>Tesseraql Camel Runtime</name>
 
   <dependencies>
+    <!-- QR rendering for the TOTP enrollment page (docs/credential-lifecycle.md): zxing core
+         only (the matrix); the SVG is assembled by QrSvg, so no imaging stack rides along. -->
+    <dependency>
+      <groupId>com.google.zxing</groupId>
+      <artifactId>core</artifactId>
+      <version>3.5.3</version>
+    </dependency>
     <dependency>
       <groupId>io.tesseraql</groupId>
       <artifactId>tesseraql-compiler</artifactId>

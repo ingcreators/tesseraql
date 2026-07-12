@@ -16,6 +16,26 @@ public interface TotpStore {
 
     Optional<Enrollment> enrollment(String tenantId, String subject);
 
+    /**
+     * Replaces the subject's recovery codes with the given SHA-256 hex hashes
+     * (docs/credential-lifecycle.md): the plain codes are shown exactly once at confirmation
+     * and never stored.
+     */
+    void replaceRecoveryCodes(String tenantId, String subject, java.util.List<String> codeHashes);
+
+    /** Consumes (deletes) one recovery code by hash — single-use; false when absent. */
+    boolean consumeRecoveryCode(String tenantId, String subject, String codeHash);
+
+    /**
+     * Stores (or, with null, clears) the pending enrollment's plain recovery codes — held only
+     * while unconfirmed, exactly like the pending secret in the same row, and shown to the
+     * owner until the confirming code activates them.
+     */
+    void storePendingRecovery(String tenantId, String subject, String plainCodes);
+
+    /** The pending enrollment's plain recovery codes, if any. */
+    Optional<String> pendingRecovery(String tenantId, String subject);
+
     /** Starts (or restarts) enrollment with a fresh secret, unconfirmed. */
     void beginEnrollment(String tenantId, String subject, String secret);
 

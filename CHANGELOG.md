@@ -27,6 +27,15 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **TOTP QR code and recovery codes**: enrollment now renders the `otpauth://` URI as a
+  server-side inline-SVG QR (zxing matrix only — no imaging stack, no client scripting)
+  next to the manual-entry secret, and mints eight single-use recovery codes shown while
+  the enrollment is pending (the same owner-only exposure as the pending secret).
+  Confirmation activates them — plain copies dropped, SHA-256 hashes at rest in
+  `tql_totp_recovery` — and at login a recovery code goes in the same field as the 6-digit
+  code, signs in exactly once, and fails like a wrong password when spent or wrong.
+  Re-enrolling replaces the set.
+
 - **Subdomain tenant resolution** (`tenancy.resolver.type: host`): the tenant resolves from
   the request's `Host` header against a `{tenant}.example.com` pattern — exact suffix match,
   single slug label only, deny-by-default (`TQL-TENANT-4001`) — so a wildcard-DNS deployment

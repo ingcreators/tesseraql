@@ -100,19 +100,23 @@ already-usable login refuses, so an invite can never take over an account.
 - `Totp` in `tesseraql-security`: RFC 6238 over `javax.crypto.Mac` (HmacSHA1, 6 digits,
   30 s steps, ±1 step window) plus a small Base32 codec — no new dependency.
 - Enrollment lives on the account page ([account surface](account.md)): generate a
-  secret, show the `otpauth://` URI and the Base32 text (QR rendering is deliberately
-  out of scope — JDK-only has no QR; authenticators accept manual entry), and
-  **confirm with a valid code** before anything is stored in
-  `tql_user_totp(subject, secret, confirmed_at, last_used_step)`. Disabling requires
-  the current password (`TQL-ACCOUNT-4804` on mismatch).
+  secret, render it as a **QR code** (a server-side inline SVG over the `otpauth://`
+  URI — zxing computes the matrix, no imaging stack, no client scripting) alongside
+  the Base32 text for manual entry, and **confirm with a valid code** before anything
+  is stored in `tql_user_totp(subject, secret, confirmed_at, last_used_step)`.
+  Disabling requires the current password (`TQL-ACCOUNT-4804` on mismatch).
 - Login: the password form (and the JSON login) gains an optional **code** field. A
   confirmed enrollment makes it required — wrong or missing code fails exactly like a
   wrong password (one neutral message; no "password ok, code wrong" oracle). The
   accepted step is recorded and codes at or before `last_used_step` are refused — a
   captured code cannot replay inside its window.
-- Recovery codes are not currently supported: an operator removes the enrollment row
-  to restore access (self-service recovery codes are a possible later addition).
-  Documented, not implied.
+- **Recovery codes**: eight single-use codes are minted with the pending secret and
+  shown on the enrollment page — the same owner-only exposure as the pending secret
+  itself — with the instruction to save them now. Confirmation activates them: the
+  plain copies are dropped and only SHA-256 hashes live in `tql_totp_recovery`. At the
+  login prompt a recovery code goes in the same field as the 6-digit code and signs in
+  **once** (consuming the hash is the single-use guarantee); wrong or spent codes fail
+  exactly like a wrong password. Re-enrolling mints a fresh set, replacing the old.
 
 ## Security posture
 
