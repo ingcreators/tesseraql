@@ -507,6 +507,17 @@ public final class TesseraqlRuntime implements AutoCloseable {
             inboxStreams = null;
             inboxStore = null;
         }
+        // Live views (docs/realtime.md): the topic bus and its /_tesseraql/topics stream exist
+        // exactly when a route declares emit: - no topics, no endpoint. Commands reach the bus
+        // through the registry (TopicEmitProcessor), so hot-reloaded routes keep working.
+        java.util.Set<String> declaredTopics = new java.util.TreeSet<>();
+        manifest.routes().forEach(route -> declaredTopics.addAll(route.definition().emit()));
+        if (!declaredTopics.isEmpty()) {
+            TopicStreams topicStreams = new TopicStreams();
+            context.getRegistry().bind(TesseraqlProperties.TOPIC_BUS_BEAN, topicStreams);
+            java.util.Set<String> topics = java.util.Set.copyOf(declaredTopics);
+            sseEndpoints.add(() -> TopicEvents.register(context, port, topicStreams, topics));
+        }
         // Invitations (roadmap Phase 50 slice 2): configured when both the accept-link base
         // and a mail channel are named; anything half-set fails the boot (SEC 4120). The
         // one-time token store is shared with password recovery and built when either flow

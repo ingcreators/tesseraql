@@ -23,7 +23,11 @@
          th:placeholder="#{tql.view.search}"
          th:attr="hx-get=${v.path},hx-target=|#${v.id}-table|,hx-select=|#${v.id}-table|,hx-include=|#${v.id}-table input[type='hidden']|"
          hx-trigger="input changed delay:300ms, search" hx-swap="outerHTML">
-  <div th:id="|${v.id}-table|">
+  <!-- With refreshOn: (docs/realtime.md) the table region listens for the topic on the
+       /_tesseraql/topics stream and re-GETs the page itself, selecting this same region —
+       the SSE event carries no data. Empty values drop the attributes (plain list). -->
+  <div th:id="|${v.id}-table|"
+       th:attr="hx-ext=${v.liveExt},sse-connect=${v.liveConnect},hx-get=${v.liveGet},hx-trigger=${v.liveTrigger},hx-select=${v.liveSelect},hx-include=${v.liveInclude},hx-target=${v.liveTarget},hx-swap=${v.liveSwap}">
     <input type="hidden" name="sort" th:if="${v.sort != ''}" th:value="${v.sort}">
     <input type="hidden" name="dir" th:if="${v.dir != ''}" th:value="${v.dir}">
     <th:block th:insert="~{tql/view/table :: table(|${v.id}-table|, ${v.columns}, ${v.rows})}"/>

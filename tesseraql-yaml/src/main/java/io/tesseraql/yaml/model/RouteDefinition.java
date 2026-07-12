@@ -1,6 +1,7 @@
 package io.tesseraql.yaml.model;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -64,7 +65,10 @@ public record RouteDefinition(
         ConsumeSpec consume,
         ResponseSpec response,
         PageSpec page,
-        String datasource) {
+        String datasource,
+        // Topics broadcast to live views after a successful command commit (docs/realtime.md);
+        // a single string or a list in YAML.
+        @com.fasterxml.jackson.annotation.JsonFormat(with = com.fasterxml.jackson.annotation.JsonFormat.Feature.ACCEPT_SINGLE_VALUE_AS_ARRAY) List<String> emit) {
 
     public RouteDefinition {
         input = input == null ? Map.of() : Map.copyOf(input);
@@ -82,6 +86,7 @@ public record RouteDefinition(
                 ? Map.of()
                 : java.util.Collections
                         .unmodifiableMap(new java.util.LinkedHashMap<>(notifications));
+        emit = emit == null ? List.of() : List.copyOf(emit);
     }
 
     /** The input policy, or framework defaults (reject unknown / reject read-only). */

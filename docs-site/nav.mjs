@@ -22,6 +22,7 @@ export const SECTIONS = [
       'transactional-writes',
       'declarative-validation',
       'declarative-views',
+      'realtime',
       'pagination',
       'response-shaping',
       'hypermedia-ui',

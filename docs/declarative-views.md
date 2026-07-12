@@ -112,6 +112,9 @@ input of the route, and sortable columns require the route to declare the `sort`
 On a paginated route, the list renders the kit's `hc-pagination` nav, with links
 preserving the search and sort state ([pagination](pagination.md)).
 
+With `refreshOn: <topic>`, the list refreshes itself whenever a command that declares
+`emit: <topic>` commits — see [live views](realtime.md).
+
 ## Form views: fields derive from the command route
 
 A form view does not redeclare its fields. `action:` names the command route the form

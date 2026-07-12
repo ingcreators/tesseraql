@@ -161,6 +161,29 @@ public final class ViewBinding {
         return model(context, locale, "");
     }
 
+    /**
+     * The live-view attribute set (docs/realtime.md): with {@code refreshOn:}, the list's table
+     * region carries the htmx sse wiring — connect to {@code /_tesseraql/topics} for the one
+     * topic, and on that named event re-GET the page itself, selecting the same region the
+     * search box already refreshes (the stream carries no data; the refetch is the ordinary,
+     * fully-authorized route). Empty strings drop the attributes entirely via {@code th:attr}.
+     */
+    private void live(Map<String, Object> v, String pagePath) {
+        String topic = spec.refreshOn() == null ? "" : spec.refreshOn().trim();
+        boolean on = !topic.isEmpty();
+        v.put("liveExt", on ? "sse" : "");
+        v.put("liveConnect", on
+                ? "/_tesseraql/topics?topics=" + java.net.URLEncoder.encode(topic,
+                        java.nio.charset.StandardCharsets.UTF_8)
+                : "");
+        v.put("liveGet", on ? pagePath : "");
+        v.put("liveTrigger", on ? "sse:" + topic : "");
+        v.put("liveSelect", on ? "#" + spec.id() + "-table" : "");
+        v.put("liveInclude", on ? "#" + spec.id() + "-table input[type='hidden']" : "");
+        v.put("liveTarget", on ? "this" : "");
+        v.put("liveSwap", on ? "outerHTML" : "");
+    }
+
     /** {@code pagePath} is the request path sort/search links resolve against. */
     public Map<String, Object> model(Map<String, Object> context, Locale locale,
             String pagePath) {
@@ -271,6 +294,7 @@ public final class ViewBinding {
             List<ViewSpec.Column> columns = columnsOf(spec.columns(), rows);
             Map<String, Object> params = params(context);
             v.put("path", pagePath);
+            live(v, pagePath);
             v.put("page", pager(context, params, pagePath));
             String sort = str(params.get("sort"));
             String dir = str(params.get("dir"));

@@ -23,7 +23,7 @@ import java.util.Map;
  */
 public record ViewSpec(String id, String view, String title, String action, String source,
         String search, List<Field> fields, List<Column> columns, List<Child> children,
-        List<Panel> panels, Map<String, String> slots, String template) {
+        List<Panel> panels, Map<String, String> slots, String template, String refreshOn) {
 
     /** Structurally invalid view document (docs/declarative-views.md, TQL-VIEW-3301). */
     public static final TqlErrorCode INVALID_VIEW = new TqlErrorCode(TqlDomain.VIEW, 3301);
@@ -142,7 +142,8 @@ public record ViewSpec(String id, String view, String title, String action, Stri
                 str(tree.get("search")),
                 parseFields(name, tree.get("fields")), parseColumns(name, tree.get("columns")),
                 parseChildren(name, tree.get("children")), parsePanels(name, tree.get("panels")),
-                parseSlots(name, tree.get("slots")), str(tree.get("template")));
+                parseSlots(name, tree.get("slots")), str(tree.get("template")),
+                str(tree.get("refreshOn")));
     }
 
     private static List<Panel> parsePanels(String source, Object raw) {
