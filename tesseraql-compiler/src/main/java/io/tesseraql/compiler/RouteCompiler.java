@@ -1167,7 +1167,14 @@ public final class RouteCompiler {
         if (rateLimit != null && rateLimit.requestsPerSecond() != null) {
             int rps = rateLimit.requestsPerSecond();
             int burst = rateLimit.burst() != null ? rateLimit.burst() : rps;
-            route.process(new RateLimiter(rps, burst).acquire());
+            if (rateLimit.isCluster()) {
+                // One budget across every node sharing the main database, leased from the
+                // tql_rate_lease ledger (docs/deployment.md, "Cluster rate limits").
+                route.process(new io.tesseraql.compiler.binding.ClusterRateLimiter(
+                        appName + "|" + definition.id(), rps, rateLimit.burst()).acquire());
+            } else {
+                route.process(new RateLimiter(rps, burst).acquire());
+            }
         }
         PolicySpec.Concurrency concurrency = definition.policy().concurrency();
         if (concurrency != null && concurrency.maxInFlight() != null) {

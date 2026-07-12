@@ -27,6 +27,18 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **Cluster-wide rate limits** (`rateLimit.scope: cluster`): a route's declared
+  requests-per-second becomes one budget across every node sharing the main database,
+  instead of N × node-count. Enforcement stays a local token bucket — the request path
+  never touches the database — with tokens leased from a small `tql_rate_lease` ledger
+  (one atomic claim per second per node per route, plain portable SQL, table created on
+  first use). Claims are first-come-first-served across nodes; `burst` remains node-local
+  smoothing; an unreachable ledger degrades to the per-node budget for that window with
+  backoff logging — the limiter never becomes the outage. Default stays `scope: node`
+  (existing apps unchanged); concurrency limits and lanes stay per-node deliberately, since
+  they protect a node's own resources. Lint `TQL-YAML-1023` rejects unknown scopes.
+  Documented in deployment.md ("Rate limits can be cluster-wide").
+
 - **HTTP sources on query routes** (`http:`): compose an external JSON API with SQL results
   in one screen or one JSON response, declaratively. Each named source is a body-less GET
   executed after the route's SQL and landed in the context like a named query —

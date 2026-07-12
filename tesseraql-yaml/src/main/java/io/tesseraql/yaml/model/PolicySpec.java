@@ -24,12 +24,20 @@ public record PolicySpec(Concurrency concurrency, RateLimit rateLimit, String la
     }
 
     /**
-     * Token-bucket rate limit (design ch. 36.1).
+     * Token-bucket rate limit (design ch. 36.1; docs/deployment.md "Cluster rate limits").
      *
      * @param requestsPerSecond sustained request rate
      * @param burst             bucket capacity; defaults to requestsPerSecond
+     * @param scope             {@code node} (default: each node enforces its own budget) or
+     *                          {@code cluster} (the rate is one budget across every node
+     *                          sharing the main database, leased in per-second windows)
      */
     @JsonIgnoreProperties(ignoreUnknown = true)
-    public record RateLimit(Integer requestsPerSecond, Integer burst) {
+    public record RateLimit(Integer requestsPerSecond, Integer burst, String scope) {
+
+        /** Whether the budget is shared across the cluster rather than per node. */
+        public boolean isCluster() {
+            return "cluster".equals(scope);
+        }
     }
 }

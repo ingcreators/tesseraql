@@ -1058,6 +1058,7 @@ public final class AppLinter {
         lintValidation(route, definition, source, findings);
         lintEmit(route, definition, source, findings);
         lintHttpSources(config, definition, source, findings);
+        lintRateLimitScope(definition, source, findings);
         lintNotify(config, definition, source, findings);
         lintWebhook(config, definition, source, findings);
         lintPublish(config, definition, source, findings);
@@ -2050,6 +2051,20 @@ public final class AppLinter {
                 job.source().getParent().resolve(importSpec.sql().file()))) {
             findings.add(new LintFinding("TQL-SQL-2103", "error", source,
                     "Referenced SQL file is missing: " + importSpec.sql().file()));
+        }
+    }
+
+    /** rateLimit.scope is {@code node} or {@code cluster} (docs/deployment.md) — TQL-YAML-1023. */
+    private void lintRateLimitScope(RouteDefinition definition, String source,
+            List<LintFinding> findings) {
+        var policy = definition.policy();
+        if (policy == null || policy.rateLimit() == null) {
+            return;
+        }
+        String scope = policy.rateLimit().scope();
+        if (scope != null && !"node".equals(scope) && !"cluster".equals(scope)) {
+            findings.add(new LintFinding("TQL-YAML-1023", "error", source,
+                    "rateLimit.scope must be 'node' or 'cluster', got '" + scope + "'"));
         }
     }
 
