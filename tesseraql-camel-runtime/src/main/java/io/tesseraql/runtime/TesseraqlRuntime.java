@@ -501,15 +501,22 @@ public final class TesseraqlRuntime implements AutoCloseable {
                         100);
                 long scanPeriod = io.tesseraql.core.util.Durations.toMillis(manifest.config()
                         .getString("tesseraql.attachments.scan.interval").orElse("10s"));
-                context.addRoutes(new org.apache.camel.builder.RouteBuilder() {
-                    @Override
-                    public void configure() {
-                        from("timer:tql-attachment-scan?period=" + scanPeriod + "&delay="
-                                + scanPeriod)
-                                .routeId("system.attachments.scan")
-                                .process(exchange -> scanSweeper.sweep());
-                    }
-                });
+                try {
+                    context.addRoutes(new org.apache.camel.builder.RouteBuilder() {
+                        @Override
+                        public void configure() {
+                            from("timer:tql-attachment-scan?period=" + scanPeriod + "&delay="
+                                    + scanPeriod)
+                                    .routeId("system.attachments.scan")
+                                    .process(exchange -> scanSweeper.sweep());
+                        }
+                    });
+                } catch (Exception ex) {
+                    // Without the sweep, async uploads would stay pending forever - fail the
+                    // boot loudly rather than hold every attachment back silently.
+                    throw new IllegalStateException(
+                            "Failed to start the attachment scan sweep", ex);
+                }
             }
         }
         // The outbound egress policy (roadmap Phase 26): deny-by-default allow-list, named
