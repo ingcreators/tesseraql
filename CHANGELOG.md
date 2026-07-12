@@ -34,13 +34,16 @@ All notable changes to TesseraQL are documented here. The format follows
   route (forms are the deliberate exception — a live replacement would discard
   in-progress input). A list's refetch carries the typed search term and current sort,
   read from the live DOM, and never clobbers in-progress typing (the search box sits
-  outside the swapped region). The new
-  session-authenticated `GET /_tesseraql/topics` SSE stream carries topic names only —
+  outside the swapped region). The
+  session-authenticated `GET /_tesseraql/events` SSE stream (shared with the inbox
+  bell) carries topic names only —
   never data — so authentication, policies, data scoping, and tenancy all apply to the
   refresh exactly as to any request, and a rolled-back command emits nothing. Topics are
-  tenant-scoped; subscriptions are bounded with coalesced signals; signals are per-node
-  best-effort (multi-node viewers converge on reload), matching the deployment doc's
-  per-node stance. Lint checks the surface: `emit:` off command-json (`TQL-YAML-1038`),
+  tenant-scoped; subscriptions are bounded with coalesced signals. On PostgreSQL a commit
+  rides `pg_notify` across every node sharing the main database, so viewers behind a load
+  balancer refresh regardless of which node served the write; on other databases signals
+  stay per-node best-effort (viewers converge on reload), matching the deployment doc's
+  coordination stance. Lint checks the surface: `emit:` off command-json (`TQL-YAML-1038`),
   malformed topic names (`TQL-YAML-1039`), `refreshOn:` on form views (`TQL-VIEW-3311`),
   and a topic no route emits (`TQL-VIEW-3312`, warning). Documented in docs/realtime.md.
 

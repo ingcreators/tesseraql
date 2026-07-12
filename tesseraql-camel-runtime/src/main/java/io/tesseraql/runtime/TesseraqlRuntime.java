@@ -478,11 +478,18 @@ public final class TesseraqlRuntime implements AutoCloseable {
         // The in-app inbox (roadmap Phase 49): the store exists exactly when a channel of
         // type inbox is declared - no channel, no table, no bell. ensureSchema is the only
         // owner of tql_user_notification (deliberately outside the Flyway component set).
-        final io.tesseraql.core.inbox.InboxStore inboxStore;
-        final InboxStreams inboxStreams;
-        if (notificationChannels.names().stream()
+        // The one live-event hub (docs/inbox.md "Live badge", docs/realtime.md): the inbox
+        // badge and the live-view topics share it, and /_tesseraql/events serves both.
+        java.util.Set<String> declaredTopics = new java.util.TreeSet<>();
+        manifest.routes().forEach(route -> declaredTopics.addAll(route.definition().emit()));
+        boolean inboxConfigured = notificationChannels.names().stream()
                 .anyMatch(name -> io.tesseraql.yaml.notify.NotificationChannels.INBOX
-                        .equals(notificationChannels.require(name).type()))) {
+                        .equals(notificationChannels.require(name).type()));
+        final LiveStreams liveStreams = inboxConfigured || !declaredTopics.isEmpty()
+                ? new LiveStreams()
+                : null;
+        final io.tesseraql.core.inbox.InboxStore inboxStore;
+        if (inboxConfigured) {
             io.tesseraql.operations.inbox.JdbcInboxStore jdbcInbox = new io.tesseraql.operations.inbox.JdbcInboxStore(
                     dataSource,
                     java.time.Duration.ofDays(manifest.config()
@@ -494,29 +501,37 @@ public final class TesseraqlRuntime implements AutoCloseable {
             // signals the subject's open /_tesseraql/events streams (docs/inbox.md, "Live
             // badge") — the sink, the pages, and the mark-read routes all share the same
             // wrapper, so every mutation pushes a fresh badge with no per-caller wiring.
-            inboxStreams = new InboxStreams();
             inboxStore = new NotifyingInboxStore(
-                    new io.tesseraql.core.inbox.CachingInboxStore(jdbcInbox), inboxStreams);
+                    new io.tesseraql.core.inbox.CachingInboxStore(jdbcInbox), liveStreams);
             context.getRegistry().bind(TesseraqlProperties.INBOX_STORE_BEAN, inboxStore);
-            // The live-badge stream exists exactly when the bell does (docs/inbox.md).
-            final InboxStreams streams = inboxStreams;
-            final io.tesseraql.core.inbox.InboxStore inboxForEvents = inboxStore;
-            sseEndpoints.add(() -> InboxEvents.register(context, port, streams,
-                    inboxForEvents));
         } else {
-            inboxStreams = null;
             inboxStore = null;
         }
-        // Live views (docs/realtime.md): the topic bus and its /_tesseraql/topics stream exist
-        // exactly when a route declares emit: - no topics, no endpoint. Commands reach the bus
-        // through the registry (TopicEmitProcessor), so hot-reloaded routes keep working.
-        java.util.Set<String> declaredTopics = new java.util.TreeSet<>();
-        manifest.routes().forEach(route -> declaredTopics.addAll(route.definition().emit()));
-        if (!declaredTopics.isEmpty()) {
-            TopicStreams topicStreams = new TopicStreams();
-            context.getRegistry().bind(TesseraqlProperties.TOPIC_BUS_BEAN, topicStreams);
+        if (liveStreams != null) {
+            // Live views (docs/realtime.md): commands reach the bus through the registry
+            // (TopicEmitProcessor), so hot-reloaded routes keep working. On PostgreSQL the
+            // bus rides pg_notify across nodes and the bridge forwards peers' signals into
+            // this node's hub; on other databases signals stay per-node (documented).
+            if (!declaredTopics.isEmpty()) {
+                boolean postgres = "postgresql".equals(
+                        io.tesseraql.core.util.DatabaseVendors.vendor(dataSource).orElse(null));
+                context.getRegistry().bind(TesseraqlProperties.TOPIC_BUS_BEAN, postgres
+                        ? new CrossNodeTopicBus(liveStreams, dataSource)
+                        : liveStreams);
+                if (postgres) {
+                    try {
+                        context.addService(new TopicNotifyBridge(dataSource, liveStreams));
+                    } catch (Exception ex) {
+                        // The bridge is a freshness hint: without it this node still signals
+                        // locally, so a wiring failure must not stop the boot.
+                        LOG.warn("Cross-node topic bridge not started: {}", ex.getMessage());
+                    }
+                }
+            }
+            final io.tesseraql.core.inbox.InboxStore inboxForEvents = inboxStore;
             java.util.Set<String> topics = java.util.Set.copyOf(declaredTopics);
-            sseEndpoints.add(() -> TopicEvents.register(context, port, topicStreams, topics));
+            sseEndpoints.add(() -> LiveEvents.register(context, port, liveStreams,
+                    inboxForEvents, topics));
         }
         // Invitations (roadmap Phase 50 slice 2): configured when both the accept-link base
         // and a mail channel are named; anything half-set fails the boot (SEC 4120). The

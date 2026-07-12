@@ -88,9 +88,10 @@ bundled `sse` extension — the same `SseRoutes` transport that carries the
 [copilot](copilot.md#the-sse-transport)'s streaming replies.
 
 - **`GET /_tesseraql/events`** — browser-session-authenticated SSE, mounted exactly when
-  an inbox channel is configured (like the bell). One named event today, `inbox:badge`,
-  whose payload is the badge fragment; idle `ping` frames double as heartbeats. Named
-  events are the wire contract, so later live surfaces ride the same stream.
+  an inbox channel is configured (like the bell) or any route declares `emit:`. Named
+  events are the wire contract: `inbox:badge` carries the badge fragment, each
+  [live-view topic](realtime.md) the page asks for is one named data-free event, and idle
+  `ping` frames double as heartbeats — one connection serves every live surface.
 - **One choke point** — the runtime binds the inbox store wrapped in a notifying layer:
   outbox delivery, mark-read, and mark-all-read all signal the subject's open streams
   automatically. Signals coalesce per stream; the caching layer sits underneath, and a
