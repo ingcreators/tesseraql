@@ -27,6 +27,17 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **Asynchronous attachment scanning** (`tesseraql.attachments.scan.mode: async`): uploads
+  return immediately as `pending` and the existing non-clean download gate holds them back
+  (`409`, "awaiting its malware scan") — fail-closed is preserved by construction; only the
+  verdict moves off the request path. A cluster-safe sweep claims pending objects by
+  compare-and-set (one scanner per attachment across nodes; a dead node's claims release
+  when the lease ages out), runs the installed `AttachmentScanner`, and records the verdict
+  with the same `onInfected: quarantine | delete` policy; failures retry to
+  `scan.maxAttempts` and then record `error` — still never served, visible to the operator.
+  Default stays `sync` (existing apps byte-identical); the `AttachmentScanner` SPI is
+  unchanged.
+
 - **TOTP QR code and recovery codes**: enrollment now renders the `otpauth://` URI as a
   server-side inline-SVG QR (zxing matrix only — no imaging stack, no client scripting)
   next to the manual-entry secret, and mints eight single-use recovery codes shown while

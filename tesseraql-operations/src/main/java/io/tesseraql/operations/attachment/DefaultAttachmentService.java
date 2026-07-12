@@ -45,19 +45,31 @@ public final class DefaultAttachmentService implements AttachmentService {
     private final BlobStore blobStore;
     private final AttachmentStore store;
     private final AttachmentScanner scanner;
+    private final boolean asyncScan;
     private final boolean deleteInfected;
 
     /** Slice-1 constructor: the no-op scanner, quarantine policy. */
     public DefaultAttachmentService(BlobStore blobStore, AttachmentStore store) {
-        this(blobStore, store, new NoopAttachmentScanner(), "quarantine");
+        this(blobStore, store, new NoopAttachmentScanner(), "quarantine", false);
     }
 
     public DefaultAttachmentService(BlobStore blobStore, AttachmentStore store,
             AttachmentScanner scanner, String onInfected) {
+        this(blobStore, store, scanner, onInfected, false);
+    }
+
+    /**
+     * @param asyncScan record uploads {@code pending} and leave the verdict to the scan sweep
+     *                  (docs/attachments.md) — the existing non-clean download gate holds
+     *                  pending objects back, so async never weakens the fail-closed posture
+     */
+    public DefaultAttachmentService(BlobStore blobStore, AttachmentStore store,
+            AttachmentScanner scanner, String onInfected, boolean asyncScan) {
         this.blobStore = blobStore;
         this.store = store;
         this.scanner = scanner;
         this.deleteInfected = "delete".equalsIgnoreCase(onInfected);
+        this.asyncScan = asyncScan;
     }
 
     @Override
@@ -67,7 +79,9 @@ public final class DefaultAttachmentService implements AttachmentService {
             safeDelete(ref);
             throw new TqlException(EMPTY_UPLOAD, "attachment upload carried no content");
         }
-        String scanStatus = scan(ref);
+        // Async mode returns immediately: the upload is pending until the sweep's verdict,
+        // and the download gate already refuses anything non-clean.
+        String scanStatus = asyncScan ? "pending" : scan(ref);
         try {
             return store.insert(new AttachmentStore.NewAttachment(request.entity(),
                     request.entityId(), request.filename(), request.contentType(), ref.byteSize(),
@@ -150,9 +164,14 @@ public final class DefaultAttachmentService implements AttachmentService {
             return Optional.empty();
         }
         if (!CLEAN.equalsIgnoreCase(a.scanStatus())) {
-            // Never serve an object that did not pass scanning (infected or quarantined).
-            throw new TqlException(INFECTED_DOWNLOAD,
-                    "attachment " + a.id() + " did not pass malware scanning");
+            // Never serve an object that is not clean: infected/error stay refused, and a
+            // pending async scan holds the object back until its verdict — same gate, same
+            // fail-closed posture (docs/attachments.md).
+            boolean pending = "pending".equalsIgnoreCase(a.scanStatus())
+                    || "scanning".equalsIgnoreCase(a.scanStatus());
+            throw new TqlException(INFECTED_DOWNLOAD, pending
+                    ? "attachment " + a.id() + " is awaiting its malware scan - retry shortly"
+                    : "attachment " + a.id() + " did not pass malware scanning");
         }
         BlobRef ref = new BlobRef(a.storageKey(), a.contentType(), a.byteSize(), a.checksum(),
                 a.createdAt());

@@ -235,6 +235,25 @@ class DefaultAttachmentServiceTest {
 
     /** A minimal in-memory {@link AttachmentStore} so the service can be tested without a database. */
     private static class InMemoryStore implements AttachmentStore {
+
+        private final java.util.Map<String, Integer> scanAttempts = new java.util.HashMap<>();
+
+        @Override
+        public java.util.List<Attachment> claimForScan(int limit,
+                java.time.Instant leaseCutoff) {
+            return java.util.List.of();
+        }
+
+        @Override
+        public void recordScanVerdict(String id, String scanStatus) {
+            // scan state is not part of this fake's concern
+        }
+
+        @Override
+        public int recordScanFailure(String id) {
+            return scanAttempts.merge(id, 1, Integer::sum);
+        }
+
         final List<Attachment> rows = new ArrayList<>();
 
         @Override

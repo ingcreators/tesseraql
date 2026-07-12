@@ -59,6 +59,22 @@ class RetentionSweeperAttachmentsTest {
     }
 
     private record StubAttachmentStore(List<String> keys) implements AttachmentStore {
+
+        @Override
+        public List<Attachment> claimForScan(int limit, java.time.Instant leaseCutoff) {
+            return List.of();
+        }
+
+        @Override
+        public void recordScanVerdict(String id, String scanStatus) {
+            // scan state is not part of this stub's concern
+        }
+
+        @Override
+        public int recordScanFailure(String id) {
+            return 1;
+        }
+
         @Override
         public Attachment insert(NewAttachment attachment) {
             throw new UnsupportedOperationException();
