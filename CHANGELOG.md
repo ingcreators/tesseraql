@@ -27,6 +27,11 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **Subdomain tenant resolution** (`tenancy.resolver.type: host`): the tenant resolves from
+  the request's `Host` header against a `{tenant}.example.com` pattern — exact suffix match,
+  single slug label only, deny-by-default (`TQL-TENANT-4001`) — so a wildcard-DNS deployment
+  no longer needs a gateway mapping host to header.
+
 - **SAML IdP metadata from a URL**: `tesseraql.saml.idp.metadata` now takes an `https://`
   URL as well as a file path. The metadata pins the IdP signing key, so the fetch obeys the
   egress discipline (host in `tesseraql.http.outbound.allowedHosts`, `TQL-SEC-4086`; plain

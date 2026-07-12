@@ -35,6 +35,7 @@ public final class TenantResolution implements Processor {
         String tenantId = switch (settings.resolver()) {
             case HEADER -> exchange.getMessage().getHeader(settings.source(), String.class);
             case CLAIM -> fromPrincipal(exchange);
+            case HOST -> fromHost(exchange);
         };
 
         if (tenantId == null || tenantId.isBlank()) {
@@ -53,6 +54,30 @@ public final class TenantResolution implements Processor {
         if (span != null) {
             span.attribute("tenant", tenant.id());
         }
+    }
+
+    /**
+     * Subdomain resolution (docs/multi-tenancy.md): the request's {@code Host} header is
+     * matched against the configured {@code {tenant}.example.com} pattern — the suffix must
+     * match exactly, the tenant is the single remaining label, and it must be a slug
+     * ({@code [a-z0-9-]+}). Anything else resolves nothing (deny-by-default 4001 when
+     * required): a crafted Host header can never smuggle an arbitrary tenant id.
+     */
+    private String fromHost(Exchange exchange) {
+        String host = exchange.getMessage().getHeader("Host", String.class);
+        if (host == null || host.isBlank()) {
+            return null;
+        }
+        int colon = host.indexOf(':');
+        host = (colon >= 0 ? host.substring(0, colon) : host)
+                .toLowerCase(java.util.Locale.ROOT);
+        String suffix = settings.source().substring("{tenant}.".length())
+                .toLowerCase(java.util.Locale.ROOT);
+        if (!host.endsWith("." + suffix)) {
+            return null;
+        }
+        String label = host.substring(0, host.length() - suffix.length() - 1);
+        return label.matches("[a-z0-9-]+") ? label : null;
     }
 
     private String fromPrincipal(Exchange exchange) {

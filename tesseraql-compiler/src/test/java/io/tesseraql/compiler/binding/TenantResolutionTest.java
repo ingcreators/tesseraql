@@ -105,4 +105,28 @@ class TenantResolutionTest {
         assertThat(exchange.getProperty(TesseraqlProperties.TENANT, TenantContext.class).id())
                 .isEqualTo("initech");
     }
+
+    /** Subdomain resolution (docs/multi-tenancy.md): {tenant}.example.com, deny-by-default. */
+    @Test
+    void resolvesTenantFromTheHostSubdomain() {
+        TenancySettings settings = new TenancySettings(
+                true, "shared-schema", ResolverType.HOST, "{tenant}.example.com", true);
+        TenantResolution resolution = new TenantResolution(settings);
+
+        Exchange exchange = exchange();
+        exchange.getMessage().setHeader("Host", "Acme.example.com:8443");
+        resolution.process(exchange);
+        assertThat(exchange.getProperty(TesseraqlProperties.TENANT, TenantContext.class).id())
+                .isEqualTo("acme");
+
+        // A non-matching suffix, a nested label, and an invalid label all resolve nothing.
+        for (String host : List.of("acme.other.com", "a.b.example.com", "ac_me.example.com",
+                "example.com")) {
+            Exchange denied = exchange();
+            denied.getMessage().setHeader("Host", host);
+            assertThatThrownBy(() -> resolution.process(denied))
+                    .isInstanceOf(TqlException.class)
+                    .hasMessageContaining("TQL-TENANT-4001");
+        }
+    }
 }
