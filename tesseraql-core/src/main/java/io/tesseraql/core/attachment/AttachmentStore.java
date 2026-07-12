@@ -29,6 +29,24 @@ public interface AttachmentStore {
      */
     List<String> deleteOlderThan(Instant cutoff);
 
+    /**
+     * Claims up to {@code limit} attachments for asynchronous scanning (docs/attachments.md):
+     * {@code pending} rows plus {@code scanning} rows whose lease ({@code claimed_at}) is older
+     * than {@code leaseCutoff} — a node that died mid-scan releases its claims by aging out.
+     * The claim is a compare-and-set, so across nodes each attachment has one scanner.
+     */
+    List<Attachment> claimForScan(int limit, Instant leaseCutoff);
+
+    /** Records the scan verdict ({@code clean}/{@code infected}/{@code error}) and stamps it. */
+    void recordScanVerdict(String id, String scanStatus);
+
+    /**
+     * Records a failed scan attempt: increments the attempt count and returns the claim to
+     * {@code pending} for a retry. Returns the new attempt count, so the caller can apply the
+     * retry cap.
+     */
+    int recordScanFailure(String id);
+
     /** A metadata row to insert; the id and timestamp are assigned by the store. */
     record NewAttachment(String entity, String entityId, String filename, String contentType,
             long byteSize, String checksum, String storageKey, String scanStatus,

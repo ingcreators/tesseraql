@@ -160,8 +160,21 @@ an app enables real scanning by adding a scanner module — no config flag.
 The verdict is recorded as `scan_status`. A `clean` object is served normally; an `infected`
 object is **never served** (the download gate refuses any non-clean object with `409`) and is
 kept or removed per `tesseraql.attachments.scan.onInfected: quarantine | delete` (default
-`quarantine`); a scanner error fails the upload closed (`503`). An asynchronous
-`pending → scanned` model is not currently supported; synchronous keeps the gate simple.
+`quarantine`); in the default synchronous mode a scanner error fails the upload closed
+(`503`).
+
+**Asynchronous scanning** (`tesseraql.attachments.scan.mode: async`, default `sync`) frees the
+upload from the scan: the request returns immediately with `scan_status = pending`, and the
+same non-clean download gate holds the object back (`409`, "awaiting its malware scan") — so
+async never weakens the fail-closed posture; it only moves the verdict off the request path.
+A cluster-safe sweep (`scan.interval`, default `10s`) claims pending objects by compare-and-set
+on the shared database — each attachment has exactly one scanner across nodes, and a node that
+dies mid-scan releases its claims when the lease (`scan.lease`, default `5m`) ages out — runs
+the installed scanner, and records the verdict; `onInfected` applies exactly as in synchronous
+mode. A failing scanner retries up to `scan.maxAttempts` (default `5`) and then records
+`error`: still non-clean, still never served, and visible to the operator instead of a silent
+retry loop. Use async when the engine is slow (ICAP round-trips, cloud scan services, large
+files) or when a scanner outage must not block uploads.
 
 ### Retention
 

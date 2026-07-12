@@ -481,10 +481,36 @@ public final class TesseraqlRuntime implements AutoCloseable {
             // served (the download gate refuses a non-clean object).
             String onInfected = io.tesseraql.yaml.attachment.AttachmentSettings
                     .from(manifest.config()).onInfected();
+            io.tesseraql.core.scan.AttachmentScanner scanner = io.tesseraql.core.scan.AttachmentScanners
+                    .discover();
+            // Asynchronous scanning (docs/attachments.md): uploads record pending and return
+            // immediately; the sweep claims, scans, and records the verdict — the existing
+            // non-clean download gate holds pending objects back, so fail-closed is intact.
+            boolean asyncScan = "async".equalsIgnoreCase(manifest.config()
+                    .getString("tesseraql.attachments.scan.mode").orElse("sync"));
             context.getRegistry().bind(TesseraqlProperties.ATTACHMENT_SERVICE_BEAN,
                     new io.tesseraql.operations.attachment.DefaultAttachmentService(blobStore,
-                            attachmentStore, io.tesseraql.core.scan.AttachmentScanners.discover(),
-                            onInfected));
+                            attachmentStore, scanner, onInfected, asyncScan));
+            if (asyncScan) {
+                io.tesseraql.operations.attachment.AttachmentScanSweeper scanSweeper = new io.tesseraql.operations.attachment.AttachmentScanSweeper(
+                        blobStore, attachmentStore, scanner, onInfected,
+                        manifest.config().getString("tesseraql.attachments.scan.maxAttempts")
+                                .map(Integer::parseInt).orElse(5),
+                        io.tesseraql.core.util.Durations.parse(manifest.config()
+                                .getString("tesseraql.attachments.scan.lease").orElse("5m")),
+                        100);
+                long scanPeriod = io.tesseraql.core.util.Durations.toMillis(manifest.config()
+                        .getString("tesseraql.attachments.scan.interval").orElse("10s"));
+                context.addRoutes(new org.apache.camel.builder.RouteBuilder() {
+                    @Override
+                    public void configure() {
+                        from("timer:tql-attachment-scan?period=" + scanPeriod + "&delay="
+                                + scanPeriod)
+                                .routeId("system.attachments.scan")
+                                .process(exchange -> scanSweeper.sweep());
+                    }
+                });
+            }
         }
         // The outbound egress policy (roadmap Phase 26): deny-by-default allow-list, named
         // credentials, timeouts. One instance gates every framework-issued outbound call —

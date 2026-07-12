@@ -42,6 +42,8 @@ public final class JdbcAttachmentStore implements AttachmentStore {
         try {
             SqlScripts.applyForVendor(dataSource, JdbcAttachmentStore.class,
                     "/tesseraql/db/migration/attachment/V1__attachment.sql");
+            SqlScripts.applyForVendor(dataSource, JdbcAttachmentStore.class,
+                    "/tesseraql/db/migration/attachment/V2__attachment_async_scan.sql");
         } catch (SQLException ex) {
             throw error("Failed to create attachment schema", ex);
         }
@@ -146,5 +148,80 @@ public final class JdbcAttachmentStore implements AttachmentStore {
     private static TqlException error(String message, SQLException ex) {
         return TqlException.builder(STORE_ERROR).message(message + ": " + ex.getMessage()).cause(ex)
                 .build();
+    }
+
+    @Override
+    public List<Attachment> claimForScan(int limit, java.time.Instant leaseCutoff) {
+        List<Attachment> claimed = new java.util.ArrayList<>();
+        try (Connection connection = dataSource.getConnection()) {
+            List<String> candidates = new java.util.ArrayList<>();
+            try (PreparedStatement select = connection.prepareStatement(
+                    "select attachment_id from tql_attachment where scan_status = 'pending'"
+                            + " or (scan_status = 'scanning' and claimed_at < ?)"
+                            + " order by created_at")) {
+                // setMaxRows keeps the page portable across dialects (no LIMIT variants).
+                select.setMaxRows(limit);
+                select.setTimestamp(1, java.sql.Timestamp.from(leaseCutoff));
+                try (ResultSet rows = select.executeQuery()) {
+                    while (rows.next()) {
+                        candidates.add(rows.getString(1));
+                    }
+                }
+            }
+            for (String id : candidates) {
+                try (PreparedStatement claim = connection.prepareStatement(
+                        "update tql_attachment set scan_status = 'scanning', claimed_at = ?"
+                                + " where attachment_id = ? and (scan_status = 'pending'"
+                                + " or (scan_status = 'scanning' and claimed_at < ?))")) {
+                    claim.setTimestamp(1, java.sql.Timestamp.from(java.time.Instant.now()));
+                    claim.setString(2, id);
+                    claim.setTimestamp(3, java.sql.Timestamp.from(leaseCutoff));
+                    // Only the compare-and-set winner scans this attachment.
+                    if (claim.executeUpdate() == 1) {
+                        find(id).ifPresent(claimed::add);
+                    }
+                }
+            }
+            return claimed;
+        } catch (SQLException ex) {
+            throw new IllegalStateException("Failed to claim attachments for scanning", ex);
+        }
+    }
+
+    @Override
+    public void recordScanVerdict(String id, String scanStatus) {
+        try (Connection connection = dataSource.getConnection();
+                PreparedStatement update = connection.prepareStatement(
+                        "update tql_attachment set scan_status = ?, scanned_at = ?,"
+                                + " claimed_at = null where attachment_id = ?")) {
+            update.setString(1, scanStatus);
+            update.setTimestamp(2, java.sql.Timestamp.from(java.time.Instant.now()));
+            update.setString(3, id);
+            update.executeUpdate();
+        } catch (SQLException ex) {
+            throw new IllegalStateException("Failed to record a scan verdict", ex);
+        }
+    }
+
+    @Override
+    public int recordScanFailure(String id) {
+        try (Connection connection = dataSource.getConnection()) {
+            try (PreparedStatement update = connection.prepareStatement(
+                    "update tql_attachment set scan_attempts = scan_attempts + 1,"
+                            + " scan_status = 'pending', claimed_at = null"
+                            + " where attachment_id = ?")) {
+                update.setString(1, id);
+                update.executeUpdate();
+            }
+            try (PreparedStatement read = connection.prepareStatement(
+                    "select scan_attempts from tql_attachment where attachment_id = ?")) {
+                read.setString(1, id);
+                try (ResultSet row = read.executeQuery()) {
+                    return row.next() ? row.getInt(1) : Integer.MAX_VALUE;
+                }
+            }
+        } catch (SQLException ex) {
+            throw new IllegalStateException("Failed to record a scan failure", ex);
+        }
     }
 }
