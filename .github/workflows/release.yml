@@ -70,10 +70,12 @@ jobs:
   # Keep the Homebrew tap and Scoop bucket pointing at this release. The formula
   # tracks the fat-jar dist (uploaded by the release job above); the manifest
   # tracks the Windows app image, which jpackage.yml attaches asynchronously —
-  # so poll the release assets until both digests are available. Soft-skips
-  # while the DIST_REPOS_TOKEN secret (fine-grained PAT, contents:write on
-  # ingcreators/homebrew-tap + ingcreators/scoop-bucket) is not configured, so
-  # a missing secret never fails a release.
+  # so poll the release assets until both digests are available. Cross-repo
+  # writes use a short-lived installation token from the org-owned GitHub App
+  # (Contents read/write, installed on ingcreators/homebrew-tap +
+  # ingcreators/scoop-bucket). Soft-skips while the DIST_APP_ID /
+  # DIST_APP_PRIVATE_KEY secrets are not configured, so missing credentials
+  # never fail a release.
   bump-package-managers:
     name: Bump Homebrew tap and Scoop bucket
     runs-on: ubuntu-latest
@@ -81,17 +83,30 @@ jobs:
     if: github.event_name == 'push'
 
     steps:
-      - name: Check for the cross-repo token
+      - name: Check for the cross-repo app credentials
         id: token
         env:
-          DIST_REPOS_TOKEN: ${{ secrets.DIST_REPOS_TOKEN }}
+          DIST_APP_ID: ${{ secrets.DIST_APP_ID }}
+          DIST_APP_PRIVATE_KEY: ${{ secrets.DIST_APP_PRIVATE_KEY }}
         run: |
-          if [ -z "$DIST_REPOS_TOKEN" ]; then
-            echo "DIST_REPOS_TOKEN is not configured - skipping the package-manager bump." >&2
+          if [ -z "$DIST_APP_ID" ] || [ -z "$DIST_APP_PRIVATE_KEY" ]; then
+            echo "DIST_APP_ID / DIST_APP_PRIVATE_KEY are not configured - skipping the package-manager bump." >&2
             echo "present=false" >> "$GITHUB_OUTPUT"
           else
             echo "present=true" >> "$GITHUB_OUTPUT"
           fi
+
+      - name: Mint an installation token
+        if: steps.token.outputs.present == 'true'
+        id: app-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ secrets.DIST_APP_ID }}
+          private-key: ${{ secrets.DIST_APP_PRIVATE_KEY }}
+          owner: ingcreators
+          repositories: |
+            homebrew-tap
+            scoop-bucket
 
       - name: Wait for both release assets and collect their digests
         if: steps.token.outputs.present == 'true'
@@ -126,11 +141,11 @@ jobs:
       - name: Bump the Homebrew formula
         if: steps.token.outputs.present == 'true'
         env:
-          DIST_REPOS_TOKEN: ${{ secrets.DIST_REPOS_TOKEN }}
+          APP_TOKEN: ${{ steps.app-token.outputs.token }}
           VERSION: ${{ steps.assets.outputs.version }}
           DIST_SHA: ${{ steps.assets.outputs.dist_sha }}
         run: |
-          git clone --depth 1 "https://x-access-token:${DIST_REPOS_TOKEN}@github.com/ingcreators/homebrew-tap.git" tap
+          git clone --depth 1 "https://x-access-token:${APP_TOKEN}@github.com/ingcreators/homebrew-tap.git" tap
           cd tap
           sed -i -E \
             -e "s|/releases/download/v[^/]+/tesseraql-cli-[^\"]+-dist\.tar\.gz|/releases/download/v${VERSION}/tesseraql-cli-${VERSION}-dist.tar.gz|" \
@@ -149,11 +164,11 @@ jobs:
       - name: Bump the Scoop manifest
         if: steps.token.outputs.present == 'true'
         env:
-          DIST_REPOS_TOKEN: ${{ secrets.DIST_REPOS_TOKEN }}
+          APP_TOKEN: ${{ steps.app-token.outputs.token }}
           VERSION: ${{ steps.assets.outputs.version }}
           WIN_SHA: ${{ steps.assets.outputs.win_sha }}
         run: |
-          git clone --depth 1 "https://x-access-token:${DIST_REPOS_TOKEN}@github.com/ingcreators/scoop-bucket.git" bucket-repo
+          git clone --depth 1 "https://x-access-token:${APP_TOKEN}@github.com/ingcreators/scoop-bucket.git" bucket-repo
           cd bucket-repo
           jq --indent 4 \
             --arg v "$VERSION" --arg h "$WIN_SHA" \
