@@ -1,0 +1,22 @@
+/*
+ * Brand typography: Sora, self-hosted via @fontsource-variable/sora
+ * (imported in astro.config.mjs customCss — no external font requests).
+ * Matches the wordmark stack in brand/README.md; the header site title
+ * mirrors the wordmark lockup (Sora 700, -0.03em) next to the mark.
+ */
+:root {
+  --sl-font: 'Sora Variable', -apple-system, BlinkMacSystemFont, 'Segoe UI',
+    system-ui, sans-serif;
+}
+
+.site-title {
+  font-weight: 700;
+  letter-spacing: -0.03em;
+}
+
+/* Subtle brand echo on content headings without hurting long-form reading */
+.sl-markdown-content h1,
+.sl-markdown-content h2,
+.sl-markdown-content h3 {
+  letter-spacing: -0.025em;
+}
