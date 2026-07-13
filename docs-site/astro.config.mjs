@@ -19,6 +19,8 @@ export default defineConfig({
         src: './src/assets/tesseraql-icon.svg',
         alt: 'TesseraQL',
       },
+      // Self-hosted brand font (SIL OFL): Sora Variable + brand overrides.
+      customCss: ['@fontsource-variable/sora', './src/styles/custom.css'],
       description:
         'A SQL-first framework for hypermedia business applications: YAML routes, 2-way SQL, and server-rendered HTML on Apache Camel.',
       plugins: [
