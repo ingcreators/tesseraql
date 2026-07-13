@@ -26,6 +26,15 @@
     <url>https://github.com/ingcreators</url>
   </organization>
 
+  <!-- Required by Maven Central's POM validation. -->
+  <developers>
+    <developer>
+      <name>Naoki Ichimura</name>
+      <organization>ingcreators</organization>
+      <organizationUrl>https://github.com/ingcreators</organizationUrl>
+    </developer>
+  </developers>
+
   <scm>
     <url>https://github.com/ingcreators/tesseraql</url>
     <connection>scm:git:https://github.com/ingcreators/tesseraql.git</connection>
@@ -33,7 +42,8 @@
     <tag>HEAD</tag>
   </scm>
 
-  <!-- Publish to GitHub Packages first (internal audience); Maven Central is a later step
+  <!-- GitHub Packages is the default deploy target (internal audience, SNAPSHOTs). Release
+       tags additionally publish to Maven Central via the 'central' profile below
        (docs/release.md, docs/app-developer-distribution.md). The 'github' id is mapped to
        credentials by the release workflow's settings.xml. -->
   <distributionManagement>
@@ -553,4 +563,89 @@
       </plugin>
     </plugins>
   </build>
+
+  <profiles>
+    <!-- Maven Central publishing (docs/app-developer-distribution.md): activated only by the
+         release workflow on version tags. Central requires sources + javadoc jars and a
+         detached PGP signature (.asc) on every artifact; the signing key is the org-wide
+         'ingcreators Release <release@ingcreators.com>' key (public key on
+         keyserver.ubuntu.com), private key + passphrase in the workflow's secrets. The
+         central-publishing plugin (extensions=true) replaces the default deploy with a
+         Portal bundle upload; GitHub Packages deploys stay on the profile-less build. -->
+    <profile>
+      <id>central</id>
+      <build>
+        <plugins>
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-source-plugin</artifactId>
+            <version>3.3.1</version>
+            <executions>
+              <execution>
+                <id>attach-sources</id>
+                <goals>
+                  <goal>jar-no-fork</goal>
+                </goals>
+              </execution>
+            </executions>
+          </plugin>
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-javadoc-plugin</artifactId>
+            <version>3.12.0</version>
+            <executions>
+              <execution>
+                <id>attach-javadocs</id>
+                <goals>
+                  <goal>jar</goal>
+                </goals>
+              </execution>
+            </executions>
+            <configuration>
+              <!-- The compiler's -Xlint doclint gate keeps javadoc well-formed; the javadoc
+                   tool's stricter reference checks stay advisory so a Central release never
+                   fails on a cross-module @link the compile gate accepts. -->
+              <doclint>all,-reference</doclint>
+              <failOnWarnings>false</failOnWarnings>
+              <quiet>true</quiet>
+            </configuration>
+          </plugin>
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-gpg-plugin</artifactId>
+            <version>3.2.8</version>
+            <executions>
+              <execution>
+                <id>sign-artifacts</id>
+                <phase>verify</phase>
+                <goals>
+                  <goal>sign</goal>
+                </goals>
+              </execution>
+            </executions>
+            <configuration>
+              <!-- Headless CI: the passphrase arrives via MAVEN_GPG_PASSPHRASE. -->
+              <gpgArguments>
+                <arg>--pinentry-mode</arg>
+                <arg>loopback</arg>
+              </gpgArguments>
+            </configuration>
+          </plugin>
+          <plugin>
+            <groupId>org.sonatype.central</groupId>
+            <artifactId>central-publishing-maven-plugin</artifactId>
+            <version>0.11.0</version>
+            <extensions>true</extensions>
+            <configuration>
+              <publishingServerId>central</publishingServerId>
+              <autoPublish>true</autoPublish>
+              <!-- Return once Portal validation passes; the actual sync to Central
+                   proceeds asynchronously (can take a while) without holding CI. -->
+              <waitUntil>validated</waitUntil>
+            </configuration>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
+  </profiles>
 </project>
