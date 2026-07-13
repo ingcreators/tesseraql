@@ -134,8 +134,14 @@ Audience is "both internal and public", so phase it:
 
 - **Now (internal):** publish to GitHub Packages; distribute the CLI as a container image / Dev
   Container feature (host needs only Docker) and/or a jpackage image.
-- **Later (public):** Maven Central + a polished installer (brew/scoop) built from the same
-  jpackage/jlink image.
+- **Now (public):** package managers on top of the release assets — a Homebrew tap
+  ([`ingcreators/homebrew-tap`](https://github.com/ingcreators/homebrew-tap): the portable jar
+  dist on Homebrew's OpenJDK, covering macOS Intel/ARM and Linux; the macOS app image is
+  arm64-only) and a Scoop bucket
+  ([`ingcreators/scoop-bucket`](https://github.com/ingcreators/scoop-bucket): the Windows app
+  image with its bundled JRE). `release.yml` bumps both on each release once the
+  `DIST_REPOS_TOKEN` secret (contents:write on the two repos) is configured.
+- **Later (public):** Maven Central.
 
 Studio and the pdf/excel codecs are **bundled inside** the runtime/CLI; they add no separate
 distribution channel. In a Docker-less environment the container channel is unavailable, so use
@@ -276,9 +282,10 @@ today.
 
 ## Open decisions
 
-- Final CLI distribution channel mix (jpackage vs container vs fat jar) — recommended: jpackage
-  image as the base, container/Dev Container feature for Docker-centric and Docker-less-host
-  cases.
+- ~~Final CLI distribution channel mix (jpackage vs container vs fat jar).~~ **Resolved: they
+  coexist** — jpackage app images and the fat-jar dist ship on every release, the demo container
+  image covers Docker-centric hosts, and the Homebrew tap / Scoop bucket sit on top as the
+  polished installers.
 - Maven Central timing and signing setup.
 - `tesseraql.modules` key name and `modules.lock` format.
 - ~~Whether `identity-schema` folds into `migrate` or stays a separate command.~~ **Resolved:

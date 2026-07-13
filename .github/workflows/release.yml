@@ -67,6 +67,110 @@ jobs:
             tesseraql-cli/target/tesseraql-cli-*-dist.zip \
             tesseraql-cli/target/tesseraql-cli-*-dist.tar.gz
 
+  # Keep the Homebrew tap and Scoop bucket pointing at this release. The formula
+  # tracks the fat-jar dist (uploaded by the release job above); the manifest
+  # tracks the Windows app image, which jpackage.yml attaches asynchronously —
+  # so poll the release assets until both digests are available. Soft-skips
+  # while the DIST_REPOS_TOKEN secret (fine-grained PAT, contents:write on
+  # ingcreators/homebrew-tap + ingcreators/scoop-bucket) is not configured, so
+  # a missing secret never fails a release.
+  bump-package-managers:
+    name: Bump Homebrew tap and Scoop bucket
+    runs-on: ubuntu-latest
+    needs: release
+    if: github.event_name == 'push'
+
+    steps:
+      - name: Check for the cross-repo token
+        id: token
+        env:
+          DIST_REPOS_TOKEN: ${{ secrets.DIST_REPOS_TOKEN }}
+        run: |
+          if [ -z "$DIST_REPOS_TOKEN" ]; then
+            echo "DIST_REPOS_TOKEN is not configured - skipping the package-manager bump." >&2
+            echo "present=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Wait for both release assets and collect their digests
+        if: steps.token.outputs.present == 'true'
+        id: assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          DIST="tesseraql-cli-${VERSION}-dist.tar.gz"
+          WIN="tesseraql-${VERSION}-windows-x86_64.zip"
+          # The Windows jpackage job takes ~10 minutes; poll up to 20.
+          for i in $(seq 1 60); do
+            JSON=$(gh release view "$GITHUB_REF_NAME" -R "$GITHUB_REPOSITORY" --json assets)
+            DIST_SHA=$(printf '%s' "$JSON" | jq -r --arg n "$DIST" \
+              '.assets[] | select(.name == $n) | .digest // empty' | sed 's/^sha256://')
+            WIN_SHA=$(printf '%s' "$JSON" | jq -r --arg n "$WIN" \
+              '.assets[] | select(.name == $n) | .digest // empty' | sed 's/^sha256://')
+            if [ -n "$DIST_SHA" ] && [ -n "$WIN_SHA" ]; then
+              {
+                echo "version=$VERSION"
+                echo "dist_sha=$DIST_SHA"
+                echo "win_sha=$WIN_SHA"
+              } >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            echo "Waiting for release assets ($i/60)..."
+            sleep 20
+          done
+          echo "Timed out waiting for $DIST and/or $WIN on release $GITHUB_REF_NAME" >&2
+          exit 1
+
+      - name: Bump the Homebrew formula
+        if: steps.token.outputs.present == 'true'
+        env:
+          DIST_REPOS_TOKEN: ${{ secrets.DIST_REPOS_TOKEN }}
+          VERSION: ${{ steps.assets.outputs.version }}
+          DIST_SHA: ${{ steps.assets.outputs.dist_sha }}
+        run: |
+          git clone --depth 1 "https://x-access-token:${DIST_REPOS_TOKEN}@github.com/ingcreators/homebrew-tap.git" tap
+          cd tap
+          sed -i -E \
+            -e "s|/releases/download/v[^/]+/tesseraql-cli-[^\"]+-dist\.tar\.gz|/releases/download/v${VERSION}/tesseraql-cli-${VERSION}-dist.tar.gz|" \
+            -e "s|^(  sha256 )\"[0-9a-f]{64}\"|\1\"${DIST_SHA}\"|" \
+            Formula/tesseraql.rb
+          grep -q "$DIST_SHA" Formula/tesseraql.rb || { echo "formula sed did not apply" >&2; exit 1; }
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if git diff --quiet; then
+            echo "Formula already at ${VERSION}; nothing to bump."
+          else
+            git commit -am "tesseraql ${VERSION}"
+            git push
+          fi
+
+      - name: Bump the Scoop manifest
+        if: steps.token.outputs.present == 'true'
+        env:
+          DIST_REPOS_TOKEN: ${{ secrets.DIST_REPOS_TOKEN }}
+          VERSION: ${{ steps.assets.outputs.version }}
+          WIN_SHA: ${{ steps.assets.outputs.win_sha }}
+        run: |
+          git clone --depth 1 "https://x-access-token:${DIST_REPOS_TOKEN}@github.com/ingcreators/scoop-bucket.git" bucket-repo
+          cd bucket-repo
+          jq --indent 4 \
+            --arg v "$VERSION" --arg h "$WIN_SHA" \
+            '.version = $v
+             | .url = "https://github.com/ingcreators/tesseraql/releases/download/v\($v)/tesseraql-\($v)-windows-x86_64.zip"
+             | .hash = $h' \
+            bucket/tesseraql.json > bucket/tesseraql.json.new
+          mv bucket/tesseraql.json.new bucket/tesseraql.json
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if git diff --quiet; then
+            echo "Manifest already at ${VERSION}; nothing to bump."
+          else
+            git commit -am "tesseraql ${VERSION}"
+            git push
+          fi
+
   # A prebuilt demo image so the five-minute demo is one docker run, no source
   # build: ghcr.io/<owner>/tesseraql-demo:{version,latest}. Rebuilds from the tag
   # inside Docker (Dockerfile.demo is multi-stage), so it needs nothing from the
