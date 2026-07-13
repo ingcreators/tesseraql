@@ -1,0 +1,49 @@
+<!--
+  TesseraQL — master icon.
+
+  BRAND NARRATIVE
+  A TesseraQL application is a mosaic: small declarative tiles
+  (routes, views, queries — tesserae) joined into a whole. The mark
+  is the letter T assembled from tiles:
+
+    GREEN  = the data you already have — lower/left, behind you
+    PURPLE = the application ahead — right, what users see
+    BLUE   = TesseraQL — the joint that bridges data to app
+
+  The blue element is the only shape that crosses a grout line: it
+  runs the full height of the crossbar between the green and purple
+  tiles and continues down into the stem. Annot expresses the
+  "blue bridges green and purple" rule as a crossbar, ingcreators
+  as an arc — TesseraQL expresses it as the mosaic joint itself.
+
+  SYSTEMIC RULES (shared family grammar — see ingcreators/annot brand/)
+  • Palette: exactly 3 brand colors — no grey, no accent.
+      blue   #7c9cff  (connector / anchor)
+      green  #7ef0c5  (left / trailing)
+      purple #b391ff  (right / leading)
+  • Container: rect 48×48 rx=10 fill #0f1730.
+  • Color grammar: left = green, right = purple, connector = blue.
+
+  GEOMETRY (48×48 viewBox)
+    Green tile   x=8  y=11 12×12 rx=2   #7ef0c5
+    Purple tile  x=28 y=11 12×12 rx=2   #b391ff
+    Joint bar    x=22 y=11  4×16 rx=1.5 #7c9cff  (overlaps stem tile by 2)
+    Stem tile    x=18 y=25 12×12 rx=2   #7c9cff
+    Grout: 2px between every tile edge; only the blue joint crosses it.
+
+  For rendering at ≤24 px, use tesseraql-icon-16.svg (joint bar
+  removed, tiles enlarged so the T silhouette survives).
+-->
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 48 48" fill="none">
+  <rect width="48" height="48" rx="10" fill="#0f1730"/>
+
+  <!-- Data you already have (trailing, left) -->
+  <rect x="8" y="11" width="12" height="12" rx="2" fill="#7ef0c5"/>
+
+  <!-- The application ahead (leading, right) -->
+  <rect x="28" y="11" width="12" height="12" rx="2" fill="#b391ff"/>
+
+  <!-- TesseraQL: the joint — bridges green and purple, becomes the stem -->
+  <rect x="22" y="11" width="4" height="16" rx="1.5" fill="#7c9cff"/>
+  <rect x="18" y="25" width="12" height="12" rx="2" fill="#7c9cff"/>
+</svg>

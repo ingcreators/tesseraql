@@ -13,6 +13,12 @@ export default defineConfig({
   integrations: [
     starlight({
       title: 'TesseraQL',
+      // Brand mark follows the ingcreators family grammar (see brand/tesseraql-icon.svg);
+      // public/favicon.svg is the ≤24px variant, picked up by Starlight's default path.
+      logo: {
+        src: './src/assets/tesseraql-icon.svg',
+        alt: 'TesseraQL',
+      },
       description:
         'A SQL-first framework for hypermedia business applications: YAML routes, 2-way SQL, and server-rendered HTML on Apache Camel.',
       plugins: [
