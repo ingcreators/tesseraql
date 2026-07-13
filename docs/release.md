@@ -77,8 +77,16 @@ declaring the BOM. Consumers add the repository to their `~/.m2/settings.xml` (G
 requires authentication even for reads). The BOM version-manages the opt-in JDBC drivers
 (`ojdbc11`, `mssql-jdbc`, `mysql-connector-j`) so a consumer specifies bare coordinates.
 
-## Publishing to Maven Central (later)
+## Publishing to Maven Central
 
-Central publication needs `<developers>` metadata, javadoc/source jars, and PGP signing on
-top of this procedure; it is intentionally out of scope for 0.1.0, which releases as a git
-tag, a GitHub release, and GitHub Packages artifacts.
+Release tags also publish the reactor to Maven Central: the `central-publish` job in
+`release.yml` rebuilds from the tag with the root POM's `central` profile, which attaches
+sources + javadoc jars, signs every artifact with the org-wide
+`ingcreators Release <release@ingcreators.com>` PGP key (public key on
+`keyserver.ubuntu.com`), and uploads the bundle through the Central Portal
+(`central-publishing-maven-plugin`, auto-publish after validation). Credentials are the
+`CENTRAL_TOKEN_USERNAME`/`CENTRAL_TOKEN_PASSWORD` Portal user token and the
+`GPG_PRIVATE_KEY`/`GPG_PASSPHRASE` secrets; the job soft-skips while any of them are
+missing, so a release never fails on absent Central credentials. Namespaces `io.tesseraql`
+and `com.ingcreators` are DNS-verified on the Portal account. GitHub Packages remains the
+deploy target for the profile-less build (SNAPSHOTs and internal consumption).

@@ -18,8 +18,10 @@
     `mvn -q -pl tesseraql-docs-reference exec:java`.</description>
 
   <properties>
-    <!-- A build tool, not a library: nothing to deploy. -->
+    <!-- A build tool, not a library: nothing to deploy (and nothing to publish to
+         Maven Central - skipPublishing is the central-publishing plugin's flag). -->
     <maven.deploy.skip>true</maven.deploy.skip>
+    <skipPublishing>true</skipPublishing>
   </properties>
 
   <dependencies>

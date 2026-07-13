@@ -67,6 +67,60 @@ jobs:
             tesseraql-cli/target/tesseraql-cli-*-dist.zip \
             tesseraql-cli/target/tesseraql-cli-*-dist.tar.gz
 
+  # Publish the reactor to Maven Central (docs/app-developer-distribution.md): rebuilds
+  # from the tag with the 'central' profile (sources + javadoc jars, PGP signatures, the
+  # central-publishing bundle upload). Runs as its own job so a Portal-side failure never
+  # blocks the GitHub release, the demo image, or the package-manager bumps - but still
+  # shows up red. Soft-skips while the Central token / GPG secrets are not configured.
+  central-publish:
+    name: Publish to Maven Central
+    runs-on: ubuntu-latest
+    needs: release
+    if: github.event_name == 'push'
+
+    steps:
+      - name: Check for the Central credentials
+        id: creds
+        env:
+          CENTRAL_TOKEN_USERNAME: ${{ secrets.CENTRAL_TOKEN_USERNAME }}
+          CENTRAL_TOKEN_PASSWORD: ${{ secrets.CENTRAL_TOKEN_PASSWORD }}
+          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+        run: |
+          if [ -z "$CENTRAL_TOKEN_USERNAME" ] || [ -z "$CENTRAL_TOKEN_PASSWORD" ] \
+            || [ -z "$GPG_PRIVATE_KEY" ] || [ -z "$GPG_PASSPHRASE" ]; then
+            echo "Central token and/or GPG secrets are not configured - skipping the Maven Central publish." >&2
+            echo "present=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Checkout
+        if: steps.creds.outputs.present == 'true'
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Set up Java
+        if: steps.creds.outputs.present == 'true'
+        uses: actions/setup-java@1bcf9fb12cf4aa7d266a90ae39939e61372fe520 # v5
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+
+      - name: Import the release signing key
+        if: steps.creds.outputs.present == 'true'
+        env:
+          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+        run: printf '%s' "$GPG_PRIVATE_KEY" | gpg --batch --import
+
+      - name: Publish to Maven Central
+        if: steps.creds.outputs.present == 'true'
+        env:
+          CENTRAL_TOKEN_USERNAME: ${{ secrets.CENTRAL_TOKEN_USERNAME }}
+          CENTRAL_TOKEN_PASSWORD: ${{ secrets.CENTRAL_TOKEN_PASSWORD }}
+          MAVEN_GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+        run: ./mvnw -B -ntp -DskipTests -s .github/central-settings.xml -Pcentral deploy
+
   # Keep the Homebrew tap and Scoop bucket pointing at this release. The formula
   # tracks the fat-jar dist (uploaded by the release job above); the manifest
   # tracks the Windows app image, which jpackage.yml attaches asynchronously —

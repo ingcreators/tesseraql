@@ -142,7 +142,10 @@ Audience is "both internal and public", so phase it:
   image with its bundled JRE). `release.yml` bumps both on each release via a short-lived
   installation token from the org-owned GitHub App (Contents read/write, installed on the two
   repos) once the `DIST_APP_ID` / `DIST_APP_PRIVATE_KEY` secrets are configured.
-- **Later (public):** Maven Central.
+- **Now (public):** Maven Central — release tags run the `central-publish` job
+  (root-POM `central` profile: sources/javadoc jars, PGP signing with the org-wide
+  release key, Central Portal bundle upload; see [release.md](release.md)). Namespaces
+  `io.tesseraql` and `com.ingcreators` are DNS-verified.
 
 Studio and the pdf/excel codecs are **bundled inside** the runtime/CLI; they add no separate
 distribution channel. In a Docker-less environment the container channel is unavailable, so use
@@ -287,7 +290,6 @@ today.
   coexist** — jpackage app images and the fat-jar dist ship on every release, the demo container
   image covers Docker-centric hosts, and the Homebrew tap / Scoop bucket sit on top as the
   polished installers.
-- Maven Central timing and signing setup.
 - `tesseraql.modules` key name and `modules.lock` format.
 - ~~Whether `identity-schema` folds into `migrate` or stays a separate command.~~ **Resolved:
   stays a separate command** (`tesseraql identity-schema`) — admin seeding and the file/env-only
