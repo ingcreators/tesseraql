@@ -139,8 +139,9 @@ Audience is "both internal and public", so phase it:
   dist on Homebrew's OpenJDK, covering macOS Intel/ARM and Linux; the macOS app image is
   arm64-only) and a Scoop bucket
   ([`ingcreators/scoop-bucket`](https://github.com/ingcreators/scoop-bucket): the Windows app
-  image with its bundled JRE). `release.yml` bumps both on each release once the
-  `DIST_REPOS_TOKEN` secret (contents:write on the two repos) is configured.
+  image with its bundled JRE). `release.yml` bumps both on each release via a short-lived
+  installation token from the org-owned GitHub App (Contents read/write, installed on the two
+  repos) once the `DIST_APP_ID` / `DIST_APP_PRIVATE_KEY` secrets are configured.
 - **Later (public):** Maven Central.
 
 Studio and the pdf/excel codecs are **bundled inside** the runtime/CLI; they add no separate
