@@ -1,0 +1,54 @@
+<!--
+  TesseraQL — master icon.
+
+  BRAND NARRATIVE
+  A TesseraQL application is a mosaic: small declarative tiles
+  (routes, views, queries — tesserae) joined into a whole. The mark
+  is the letter T:
+
+    GREEN  = the data you already have — left, behind you
+    PURPLE = the application ahead — right, what users see
+    BLUE   = TesseraQL — the joint that bridges data to app
+
+  The tiles are discrete; the blue stem is the only continuous
+  element, running between them and down through the whole mark.
+  That is the product's actual shape: your app is small tiles,
+  the framework is the one piece that holds every tile together.
+  Annot expresses the "blue bridges green and purple" rule as a
+  crossbar, ingcreators as an arc — TesseraQL expresses it as the
+  mosaic joint that becomes the stem of the T.
+
+  SYSTEMIC RULES (shared family grammar — see ingcreators/annot brand/)
+  • Palette: exactly 3 brand colors — no grey, no accent.
+      blue   #7c9cff  (connector / anchor)
+      green  #7ef0c5  (left / trailing)
+      purple #b391ff  (right / leading)
+  • Container: rect 48×48 rx=10 fill #0f1730.
+  • Color grammar: left = green, right = purple, connector = blue.
+
+  GEOMETRY (48×48 viewBox)
+    Green tile   x=7  y=8 12×12 rx=2  #7ef0c5
+    Purple tile  x=29 y=8 12×12 rx=2  #b391ff
+    Stem         x=21 y=8  6×32 rx=3  #7c9cff  (pill, y=8..40)
+    Grout: 2px between stem and each tile; letter 34×32, margins 7/8.
+
+  Rejected explorations (squat 2-row v1, all-tile stems, placed-tile
+  asymmetry, 4° stem tilt) are kept in _archive/ — do not ship them.
+  The placed-tile variant (B) is reserved as a possible hero-image
+  motif where motion is welcome; never as the icon.
+
+  For rendering at ≤24 px, use tesseraql-icon-16.svg (stem pill
+  replaced by a tile so the silhouette survives).
+-->
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 48 48" fill="none">
+  <rect width="48" height="48" rx="10" fill="#0f1730"/>
+
+  <!-- Data you already have (trailing, left) -->
+  <rect x="7" y="8" width="12" height="12" rx="2" fill="#7ef0c5"/>
+
+  <!-- The application ahead (leading, right) -->
+  <rect x="29" y="8" width="12" height="12" rx="2" fill="#b391ff"/>
+
+  <!-- TesseraQL: the continuous joint — bridges the tiles, becomes the stem -->
+  <rect x="21" y="8" width="6" height="32" rx="3" fill="#7c9cff"/>
+</svg>

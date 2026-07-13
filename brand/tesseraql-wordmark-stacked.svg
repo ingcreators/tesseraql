@@ -1,0 +1,35 @@
+<!--
+  TesseraQL stacked wordmark — icon + "TesseraQL" + "by ingcreators" tagline.
+  Two-line brand lockup for places that benefit from the parent-org context
+  (e.g. store listings, doc headers, footer lockups).
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 56" fill="none" role="img" aria-label="TesseraQL by ingcreators">
+  <!-- Icon vertically centered: viewBox height 56, icon 48 → offset 4 -->
+  <g transform="translate(0 4)">
+    <rect width="48" height="48" rx="10" fill="#0f1730"/>
+    <rect x="7" y="8" width="12" height="12" rx="2" fill="#7ef0c5"/>
+    <rect x="29" y="8" width="12" height="12" rx="2" fill="#b391ff"/>
+    <rect x="21" y="8" width="6" height="32" rx="3" fill="#7c9cff"/>
+  </g>
+
+  <!-- Primary: product name -->
+  <text x="62" y="30"
+        fill="#0f1730"
+        font-family="Sora, -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif"
+        font-weight="700"
+        font-size="22"
+        letter-spacing="-0.025em">TesseraQL</text>
+
+  <!--
+    Secondary: org line (subdued, smaller).
+    Color is a muted navy derived from the brand blue (#7c9cff) —
+    not a neutral grey. "ingcreators" is the blue "i" network, so
+    its attribution line is rendered in the color of that network.
+  -->
+  <text x="62" y="46"
+        fill="#4e5ea0"
+        font-family="Sora, -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif"
+        font-weight="500"
+        font-size="11"
+        letter-spacing="0.02em">by ingcreators</text>
+</svg>

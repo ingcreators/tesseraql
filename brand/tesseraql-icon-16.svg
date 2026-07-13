@@ -1,0 +1,29 @@
+<!--
+  TesseraQL 16px-optimized variant — for favicons and small UI.
+
+  Stripped down from the master mark so the T silhouette survives
+  16px rendering.
+
+  Changed at small size:
+    • Stem pill (6×32) replaced by a square tile — a 6px-wide bar
+      is 2px at 16px and smears; a tile keeps the T blocky and
+      readable, and stays true to the tessera idiom.
+    • Tiles enlarged 12×12 → 14×14 (4.67px at 16px — clearly square)
+    • Grout widened at the crossbar center (8px) so green/purple
+      stay separate tiles, not one smeared band.
+
+  Geometry (48×48 viewBox):
+    Green tile   x=6  y=8  14×14 rx=2.5
+    Purple tile  x=28 y=8  14×14 rx=2.5
+    Stem tile    x=17 y=26 14×14 rx=2.5  blue, centered on x=24
+
+  Use at 16/20/24 px. At 25 px and above, use tesseraql-icon.svg
+  (includes the blue joint bar).
+-->
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 48 48" fill="none">
+  <rect width="48" height="48" rx="10" fill="#0f1730"/>
+
+  <rect x="6" y="8" width="14" height="14" rx="2.5" fill="#7ef0c5"/>
+  <rect x="28" y="8" width="14" height="14" rx="2.5" fill="#b391ff"/>
+  <rect x="17" y="26" width="14" height="14" rx="2.5" fill="#7c9cff"/>
+</svg>

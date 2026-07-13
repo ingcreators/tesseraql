@@ -2,8 +2,13 @@
   "name": "tesseraql-vscode",
   "displayName": "TesseraQL",
   "description": "TesseraQL application authoring: real lint findings in the Problems panel, the CLI verbs as commands, and an app explorer.",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "publisher": "ingcreators",
+  "icon": "images/icon.png",
+  "galleryBanner": {
+    "color": "#0f1730",
+    "theme": "dark"
+  },
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
