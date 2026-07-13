@@ -22,6 +22,11 @@ from your installed CLI, it is newer than that release — check the release not
 
 ## Install the CLI
 
+- **Homebrew (macOS / Linux)** — `brew install ingcreators/tap/tesseraql`. Installs the jar
+  distribution on Homebrew's OpenJDK; no separate JDK setup.
+- **Scoop (Windows)** — `scoop bucket add ingcreators https://github.com/ingcreators/scoop-bucket`,
+  then `scoop install tesseraql`. Ships the Windows app image with a bundled Java runtime; no
+  JDK required.
 - **Distribution archive** — download `tesseraql-cli-<version>-dist.zip` (or `.tar.gz`) from a
   [GitHub release](https://github.com/ingcreators/tesseraql/releases), unpack it, and put its
   `bin/` on your `PATH`. It is a fat jar plus `tesseraql`/`tesseraql.cmd` launchers (JDK 21+ on
