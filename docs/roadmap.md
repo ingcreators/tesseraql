@@ -957,6 +957,44 @@ compile-time guard `TQL-CAMEL-3112`, proven by
 a republished business key never doubles the projection). **Phase 53 is complete
 and milestone M18 is met.**
 
+### Phase 58 — files as SQL sources: the embedded DuckDB analytics engine
+
+Named 2026-07-21; the accepted design is [docs/duckdb.md](duckdb.md). Business
+applications keep meeting data that arrives as files — CSV drops, Parquet extracts —
+and today the only honest answer is "import it first". A new datasource kind embeds
+the DuckDB engine in-process and makes files queryable with plain SQL through the
+same `datasource:` word Phase 53 opened, under one stance: **DuckDB is a query
+engine, never a system of record** — no migrations, no framework tables, no state
+another node would miss; durable results land on `main` or in the blob store. The
+surface reuses what exists: a `duckdb` dialect inferred from the URL; the driver via
+the module channel (never the fat jar — the artifact bundles native libraries); file
+access only through **scopes** (declared roots, tenant-partitioned, traversal-proof
+— the redirect-placeholder discipline) and **datasets** (a catalog on `main` carrying
+owner/roles/tenant and the attachment-scan gate, resolved under the caller's
+identity, bridged from the blob store by zero-copy, content-hash spool, or presigned
+`httpfs` read). Engine extensions are **offline-first**: an allow-list per
+datasource, loaded from a local cache in DuckDB's own repository layout, provisioned
+by `tesseraql duckdb install-extensions` (mirror and air-gap `--bundle` flags),
+version-pinned to the bundled driver with a boot guard and `info` surfacing — the
+embedded-PostgreSQL binary discipline; the runtime never downloads and unsigned
+extensions never load. The `postgres` extension enables framework-managed
+`attach:` of declared datasources (credentials injected at connection setup,
+read-only default, write mode admission-visible), which turns file reads into
+one-statement pull ETL on the cluster-safe job scheduler; continuous push stays the
+Phase 53 projection pattern, and DuckDB is never a projection target. Three slices:
+the engine (dialect, datasource kind, scopes, reads); extensions + attach + ETL and
+exports; the dataset catalog + blob-store bridges.
+
+**Milestone M23** — on a gallery app with an `analytics` DuckDB datasource: the
+DuckDB driver arrives via `tesseraql modules add`; extensions are provisioned from
+an air-gap bundle with outbound network blocked; a dashboard renders one widget from
+`main` beside one aggregating a tenant's Parquet drop through a scope (another
+tenant's request cannot reach it); a scheduled job joins that Parquet against the
+attached `main` and upserts a summary table, safe to re-run; an export route writes
+a Parquet result through the blob store, and a second route queries it back through
+a `dataset:` reference that resolves only for its owner — with every framework
+table still on `main` and the runtime having made no network fetch.
+
 ## CLI distribution and upgrade delivery (cross-cutting)
 
 ### Phase 38 — CLI distribution and upgrade delivery
@@ -1231,3 +1269,14 @@ None block Phase 18; flagged for the maintainer as their horizons approach.
     — while the customization ladder keeps app control real (shell/pattern overrides,
     `menu.yml`, `preferences.yml`, and a kill switch for apps that own the surface
     themselves). See [docs/account.md](account.md).
+11. **Analytics engine placement** (Phase 58): embed DuckDB in-process as a datasource kind
+    vs lean on PostgreSQL-side extensions (pg_duckdb, FDWs). Resolved 2026-07-21 at design
+    time in favour of **embedding**: managed PostgreSQL offerings allow-list their
+    extensions (pg_duckdb is rarely installable), FDW-style file reads happen on the
+    database server's filesystem — the app node's files stay out of reach — and the zonky
+    embedded dev database cannot load third-party extensions, so the `--embedded-db` loop
+    would diverge from production; embedding also matches the self-contained-CLI grain
+    (JDK-only choices, module-channel drivers). Server-side extensions remain available to
+    operators through pass-through SQL — a documented recipe, never a framework dependency
+    — and the DuckDB `postgres` extension covers the reverse bridge under the
+    framework-managed, read-only-default `attach:`. See [docs/duckdb.md](duckdb.md).
