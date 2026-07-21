@@ -9,6 +9,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Stream;
 
 /**
  * The duckdb datasource kind (docs/duckdb.md): an in-process analytics engine over CSV/Parquet
@@ -147,6 +148,16 @@ final class DuckDbDatasources {
                 .toAbsolutePath();
     }
 
+    /** The dataset spool directory — the one bridge directory the fence admits beyond scopes. */
+    static Path spoolDirectory(AppConfig config, Path appHome) {
+        Path base = appHome == null ? Path.of(".") : appHome;
+        return config.getString("tesseraql.duckdb.spoolDirectory")
+                .map(base::resolve)
+                .orElseGet(() -> base.resolve("work/duckdb-spool"))
+                .normalize()
+                .toAbsolutePath();
+    }
+
     /** Resolves a declared scope root against the app home; roots must stay traversal-free. */
     static Path resolveRoot(Path appHome, String root) {
         Path resolved = (appHome == null ? Path.of(".") : appHome).resolve(root).normalize()
@@ -184,14 +195,15 @@ final class DuckDbDatasources {
         } else {
             hikari.addDataSourceProperty("enable_external_access", "false");
         }
-        List<String> roots = fileScopes(config, name).values().stream()
-                .map(scope -> resolveRoot(appHome, scope.root()) + "/")
+        // The engine may read the declared scope roots plus the dataset spool — nothing else.
+        List<String> roots = Stream.concat(
+                fileScopes(config, name).values().stream()
+                        .map(scope -> resolveRoot(appHome, scope.root()) + "/"),
+                Stream.of(spoolDirectory(config, appHome) + "/"))
                 .distinct()
                 .toList();
-        if (!roots.isEmpty()) {
-            hikari.addDataSourceProperty("allowed_directories",
-                    "[" + String.join(",", roots.stream().map(r -> "'" + r + "'").toList()) + "]");
-        }
+        hikari.addDataSourceProperty("allowed_directories",
+                "[" + String.join(",", roots.stream().map(r -> "'" + r + "'").toList()) + "]");
         config.getString(prefix + "duckdb.memoryLimit")
                 .ifPresent(limit -> hikari.addDataSourceProperty("memory_limit", limit));
         config.getString(prefix + "duckdb.threads")

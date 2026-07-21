@@ -34,10 +34,14 @@ public interface FilePathResolver {
      * Resolves a file placeholder for the request context.
      *
      * @param channel {@code scope} or {@code dataset}
-     * @param name    the scope name or dataset parameter named by the placeholder
+     * @param name    for the scope channel, the declared scope name; for the dataset channel, the
+     *                <em>evaluated</em> dataset reference (the renderer resolves the named
+     *                parameter against the bind map first, so the resolver authorizes the
+     *                caller-supplied id — {@code null} when the parameter bound nothing)
      * @param suffix  the parser-validated relative path after the placeholder ({@code /a/b.parquet}
-     *                or empty)
-     * @param context the request execution context (it carries {@code tenant} and {@code params})
+     *                or empty; always empty for the dataset channel)
+     * @param context the request execution context (it carries {@code tenant} and
+     *                {@code principal})
      * @return the absolute path to bind
      */
     String resolve(String channel, String name, String suffix, Map<String, Object> context);

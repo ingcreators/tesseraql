@@ -2156,10 +2156,13 @@ public final class AppLinter {
                                 + " this SQL runs on '" + datasource + "'",
                         filePath.sourceLine(), null));
             } else if ("dataset".equals(filePath.channel())) {
-                findings.add(new LintFinding("TQL-SQL-2111", "error", source,
-                        "${dataset.*} placeholders resolve through the dataset catalog, which is"
-                                + " not currently supported",
-                        filePath.sourceLine(), null));
+                Map<String, String> params = sql.params() == null ? Map.of() : sql.params();
+                if (!params.containsKey(filePath.name())) {
+                    findings.add(new LintFinding("TQL-SQL-2111", "error", source,
+                            "${dataset." + filePath.name() + "} needs a params: entry named '"
+                                    + filePath.name() + "' binding the dataset reference",
+                            filePath.sourceLine(), null));
+                }
             } else if (!(config.navigate("tesseraql.datasources." + datasource
                     + ".duckdb.fileScopes") instanceof java.util.Map<?, ?> scopeMap)
                     || !scopeMap.containsKey(filePath.name())) {

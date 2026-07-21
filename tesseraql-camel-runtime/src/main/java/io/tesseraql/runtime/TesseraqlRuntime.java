@@ -492,6 +492,10 @@ public final class TesseraqlRuntime implements AutoCloseable {
                     dataSource);
             attachmentStore.ensureSchema();
             context.getRegistry().bind(TesseraqlProperties.ATTACHMENT_STORE_BEAN, attachmentStore);
+            // Scan-passed attachments become owner-gated ${dataset.*} references on duckdb
+            // datasources, bridged into the fence's one spool directory (docs/duckdb.md).
+            fileScopes.wireDatasets(attachmentStore, new DatasetSpool(blobStore,
+                    DuckDbDatasources.spoolDirectory(manifest.config(), appHome)));
             // Malware scanning (roadmap Phase 30 slice 3): the installed AttachmentScanner (the
             // no-op default unless a scanner module is on the classpath) runs on upload; an infected
             // object is quarantined or deleted per tesseraql.attachments.scan.onInfected and is never
