@@ -2116,6 +2116,45 @@ public final class AppLinter {
                                 + " [ducklake, postgres] declared, so offline cache provisioning"
                                 + " covers them"));
             }
+            if (data != null && data.startsWith("s3://")) {
+                if (!(lakeExtensions instanceof java.util.List<?> remoteList)
+                        || !remoteList.contains("httpfs")) {
+                    findings.add(new LintFinding("TQL-YAML-1040", "error", configSource,
+                            "a remote duckdb lake on datasource '" + name
+                                    + "' needs httpfs in extensions:"));
+                }
+                if (!data.endsWith("/")) {
+                    findings.add(new LintFinding("TQL-YAML-1040", "error", configSource,
+                            "duckdb lake data: on datasource '" + name + "' must be an s3://"
+                                    + " prefix ending in '/' (the scoped secret covers exactly"
+                                    + " this prefix)"));
+                }
+                Object credentials = config.navigate(
+                        "tesseraql.datasources." + name + ".duckdb.lake.credentials");
+                boolean keyed = credentials instanceof java.util.Map<?, ?> map
+                        && map.containsKey("keyId") && map.containsKey("secret");
+                boolean chain = "instance".equals(config.getString(
+                        "tesseraql.datasources." + name + ".duckdb.lake.credentials")
+                        .orElse(null));
+                if (!keyed && !chain) {
+                    findings.add(new LintFinding("TQL-YAML-1040", "error", configSource,
+                            "a remote duckdb lake on datasource '" + name + "' needs"
+                                    + " credentials: {keyId, secret} secret references or"
+                                    + " 'instance' for the AWS credential chain"));
+                }
+                if (config.navigate("tesseraql.datasources." + name
+                        + ".duckdb.fileScopes") instanceof java.util.Map<?, ?>) {
+                    findings.add(new LintFinding("TQL-YAML-1040", "error", configSource,
+                            "datasource '" + name + "' declares a remote lake and fileScopes:"
+                                    + " - a remote-lake datasource has no governed local-file"
+                                    + " surface; compose across two duckdb datasources"));
+                }
+            } else if (data != null && data.contains("://")) {
+                findings.add(new LintFinding("TQL-YAML-1040", "error", configSource,
+                        "duckdb lake data: on datasource '" + name + "' must be a local"
+                                + " directory or an s3:// prefix (S3-compatible stores use"
+                                + " s3:// plus endpoint:)"));
+            }
         }
         Object attach = config.navigate("tesseraql.datasources." + name + ".duckdb.attach");
         if (!(attach instanceof java.util.List<?> entries)) {
@@ -2220,6 +2259,16 @@ public final class AppLinter {
             }
         }
         if (duckDb) {
+            for (SqlNode.FilePath filePath : filePaths) {
+                if (remoteLake(config, datasource)) {
+                    findings.add(new LintFinding("TQL-SQL-2111", "error", source,
+                            "A remote-lake datasource has no governed local-file surface;"
+                                    + " ${scope.*}/${dataset.*} resolve on a local duckdb"
+                                    + " datasource - compose across two datasources",
+                            filePath.sourceLine(), null));
+                }
+            }
+            lintEngineManagementStatements(text, source, findings);
             Matcher matcher = FILE_FUNCTION.matcher(text);
             while (matcher.find()) {
                 // A placeholder site starts with the 2-way comment: `read_parquet(/* ${...} */ ...`.
@@ -2247,6 +2296,39 @@ public final class AppLinter {
         }
     }
 
+    /**
+     * App SQL on a duckdb datasource must be plain queries: engine-management statements are
+     * init-time concerns the runtime owns. The local tier's fence refuses them at runtime
+     * anyway; on the remote tier this rule is the load-bearing control (docs/duckdb.md,
+     * decision point 13), so it errors at build time on both.
+     */
+    private void lintEngineManagementStatements(String text, String source,
+            List<LintFinding> findings) {
+        int offset = 0;
+        for (String statement : text.split(";")) {
+            String stripped = statement
+                    .replaceAll("(?s)/\\*.*?\\*/", " ")
+                    .replaceAll("(?m)--.*$", " ")
+                    .strip()
+                    .toUpperCase(java.util.Locale.ROOT);
+            boolean management = stripped.startsWith("ATTACH") || stripped.startsWith("DETACH")
+                    || stripped.startsWith("INSTALL") || stripped.startsWith("FORCE INSTALL")
+                    || stripped.startsWith("LOAD ") || stripped.equals("LOAD")
+                    || stripped.startsWith("SET ") || stripped.startsWith("RESET")
+                    || stripped.startsWith("PRAGMA")
+                    || stripped.matches("CREATE\\s+(OR\\s+REPLACE\\s+)?(PERSISTENT\\s+)?SECRET.*")
+                    || stripped.startsWith("DROP SECRET");
+            if (management) {
+                findings.add(new LintFinding("TQL-SQL-2111", "error", source,
+                        "App SQL on a duckdb datasource must be plain queries -"
+                                + " ATTACH/DETACH/INSTALL/LOAD/CREATE SECRET/SET/PRAGMA are"
+                                + " init-time concerns the runtime owns (docs/duckdb.md)",
+                        lineAt(text, offset), null));
+            }
+            offset += statement.length() + 1;
+        }
+    }
+
     /** The 1-based line of a character offset in {@code text}. */
     private static int lineAt(String text, int offset) {
         int line = 1;
@@ -2256,6 +2338,15 @@ public final class AppLinter {
             }
         }
         return line;
+    }
+
+    /** Whether the named duckdb datasource declares a lake on object storage. */
+    private static boolean remoteLake(AppConfig config, String name) {
+        return duckDbDatasource(config, name)
+                && config.navigate("tesseraql.datasources." + name
+                        + ".duckdb.lake") instanceof java.util.Map<?, ?>
+                && config.getString("tesseraql.datasources." + name + ".duckdb.lake.data")
+                        .orElse("").startsWith("s3://");
     }
 
     /** Whether the named datasource resolves to the duckdb dialect (mirrors the compiler). */

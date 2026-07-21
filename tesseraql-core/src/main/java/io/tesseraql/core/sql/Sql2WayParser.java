@@ -63,6 +63,20 @@ public final class Sql2WayParser {
         pendingTerminator = null;
 
         while (pos < length) {
+            if (pos + 1 < length && source.charAt(pos) == '-' && source.charAt(pos + 1) == '-') {
+                // A -- line comment is opaque non-directive text (the documented convention);
+                // an apostrophe inside one (-- don't ...) must not open a string literal.
+                while (pos < length && source.charAt(pos) != '\n') {
+                    text.append(consume());
+                }
+                continue;
+            }
+            if (pos < length && source.charAt(pos) == '\'') {
+                // A quoted SQL string is opaque: a /* inside it (a glob like 's3://x/**', a LIKE
+                // pattern) is content, not a directive. '' stays the escape for a literal quote.
+                consumeStringLiteral(text);
+                continue;
+            }
             if (peekCommentStart()) {
                 flushText(nodes, text, textStartLine);
                 Directive directive = readComment();
@@ -271,6 +285,23 @@ public final class Sql2WayParser {
             nodes.add(new SqlNode.Text(text.toString(), startLine));
             text.setLength(0);
         }
+    }
+
+    /** Consumes a complete {@code '...'} literal (with {@code ''} escapes) into {@code text}. */
+    private void consumeStringLiteral(StringBuilder text) {
+        text.append(consume());
+        while (pos < length) {
+            char c = consume();
+            text.append(c);
+            if (c == '\'') {
+                if (pos < length && source.charAt(pos) == '\'') {
+                    text.append(consume());
+                    continue;
+                }
+                return;
+            }
+        }
+        throw error("Unterminated string literal");
     }
 
     private boolean peekCommentStart() {

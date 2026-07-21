@@ -216,6 +216,13 @@
       <artifactId>duckdb_jdbc</artifactId>
       <scope>test</scope>
     </dependency>
+    <!-- Remote-lake ITs (docs/duckdb.md "Remote data paths") run against Adobe S3Mock —
+         the same permissive-license S3-compatible fixture the tesseraql-s3 module uses. -->
+    <dependency>
+      <groupId>com.adobe.testing</groupId>
+      <artifactId>s3mock-testcontainers</artifactId>
+      <scope>test</scope>
+    </dependency>
     <dependency>
       <groupId>com.oracle.database.jdbc</groupId>
       <artifactId>ojdbc11</artifactId>
