@@ -65,6 +65,24 @@ class FilePathPlaceholderTest {
     }
 
     @Test
+    void quotedStringsAreOpaqueToCommentScanning() {
+        // Glob patterns and LIKE patterns legally carry /* inside string literals; '' escapes.
+        List<SqlNode> nodes = Sql2WayParser.parse(
+                "select * from glob('s3://x/**') where a like '%/*%' and b = 'it''s'");
+        assertThat(nodes).hasSize(1);
+        assertThat(nodes.get(0)).isInstanceOf(SqlNode.Text.class);
+
+        BoundSql bound = SqlRenderer.render(Sql2WayParser.parse(
+                "select /* q */ 'dummy' from t where u = 'a/*b'"), Map.of("q", "v"));
+        assertThat(bound.sql()).contains("where u = 'a/*b'");
+        assertThat(bound.parameters()).hasSize(1);
+
+        assertThatThrownBy(() -> Sql2WayParser.parse("select 'unterminated"))
+                .isInstanceOf(TqlException.class)
+                .hasMessageContaining("Unterminated string literal");
+    }
+
+    @Test
     void rejectsPlaceholderWithoutResolver() {
         assertThatThrownBy(() -> SqlRenderer.render(Sql2WayParser.parse(SQL), Map.of()))
                 .isInstanceOf(TqlException.class)

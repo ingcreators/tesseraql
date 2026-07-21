@@ -40,7 +40,22 @@ final class DuckDbDatasources {
     }
 
     /** A declared DuckLake attach (docs/duckdb.md "Lake tables"): catalog, schema, data, alias. */
-    record Lake(String catalog, String schema, String data, String alias, boolean readWrite) {
+    record Lake(String catalog, String schema, String data, String alias, boolean readWrite,
+            Remote remote) {
+
+        /** Whether the Parquet data lives on object storage rather than a local directory. */
+        boolean isRemote() {
+            return remote != null;
+        }
+    }
+
+    /**
+     * Object-storage coordinates for a remote lake (docs/duckdb.md "Remote data paths"):
+     * S3 or any S3-compatible store; {@code instanceChain} selects the AWS credential chain
+     * instead of static keys.
+     */
+    record Remote(String region, String endpoint, boolean pathStyle, boolean useSsl,
+            String keyId, String secret, boolean instanceChain) {
     }
 
     private DuckDbDatasources() {
@@ -172,7 +187,43 @@ final class DuckDbDatasources {
                     + ".duckdb.lake needs extensions: [ducklake, postgres] declared, so the"
                     + " offline cache provisioning covers them (docs/duckdb.md)");
         }
-        return new Lake(catalog, schema, data, alias, "readwrite".equals(mode));
+        Remote remote = null;
+        if (data.startsWith("s3://")) {
+            if (!data.endsWith("/")) {
+                throw new IllegalStateException(prefix + "data must be an s3:// PREFIX ending"
+                        + " in '/' (the scoped secret covers exactly this prefix)");
+            }
+            if (!extensions.contains("httpfs")) {
+                throw new IllegalStateException("tesseraql.datasources." + name
+                        + ".duckdb.lake on object storage needs httpfs in extensions:, so the"
+                        + " offline cache provisioning covers it (docs/duckdb.md)");
+            }
+            Object credentials = config.navigate(prefix.substring(0, prefix.length() - 1)
+                    + ".credentials");
+            String keyId = null;
+            String secretKey = null;
+            boolean instanceChain = false;
+            if (credentials instanceof Map) {
+                keyId = config.requireString(prefix + "credentials.keyId");
+                secretKey = config.requireString(prefix + "credentials.secret");
+            } else if ("instance".equals(config.getString(prefix + "credentials").orElse(null))) {
+                instanceChain = true;
+            } else {
+                throw new IllegalStateException(prefix + "credentials must be a"
+                        + " {keyId, secret} mapping of secret references, or the string"
+                        + " 'instance' for the AWS credential chain");
+            }
+            remote = new Remote(
+                    config.getString(prefix + "region").orElse(null),
+                    config.getString(prefix + "endpoint").orElse(null),
+                    "path".equals(config.getString(prefix + "urlStyle").orElse("vhost")),
+                    config.getString(prefix + "useSsl").map(Boolean::parseBoolean).orElse(true),
+                    keyId, secretKey, instanceChain);
+        } else if (data.contains("://")) {
+            throw new IllegalStateException(prefix + "data must be a local directory or an"
+                    + " s3:// prefix (S3-compatible stores use s3:// plus endpoint:)");
+        }
+        return new Lake(catalog, schema, data, alias, "readwrite".equals(mode), remote);
     }
 
     /** A string value of an attach-entry key, with config placeholders resolved. */
@@ -239,7 +290,13 @@ final class DuckDbDatasources {
             hikari.addDataSourceProperty("enable_external_access", "false");
         }
         Lake lake = lake(config, name);
-        if (lake != null) {
+        if (lake != null && lake.isRemote() && !fileScopes(config, name).isEmpty()) {
+            throw new IllegalStateException("tesseraql.datasources." + name + " declares a"
+                    + " remote lake and fileScopes: - a remote-lake datasource has no governed"
+                    + " local-file surface; compose across two duckdb datasources instead"
+                    + " (docs/duckdb.md)");
+        }
+        if (lake != null && !lake.isRemote()) {
             // The data directory must exist before the first connection attaches; creating it
             // here keeps a fresh checkout bootable (the metadata catalog needs no such help —
             // DuckLake creates its schema on the catalog datasource itself).
@@ -296,14 +353,22 @@ final class DuckDbDatasources {
                     + (attach.readWrite() ? "" : ", READ_ONLY") + ")");
         }
         if (lake != null) {
+            if (lake.isRemote()) {
+                statements.add(lakeSecret(lake));
+            }
             statements.add("ATTACH 'ducklake:postgres:"
                     + conninfo(config, lake.catalog(), override).replace("'", "''")
                     + "' AS " + lake.alias()
-                    + " (DATA_PATH '" + resolveRoot(appHome, lake.data()) + "/'"
-                    + ", METADATA_SCHEMA '" + lake.schema() + "'"
+                    + " (DATA_PATH '" + (lake.isRemote()
+                            ? lake.data()
+                            : resolveRoot(appHome, lake.data()) + "/")
+                    + "', METADATA_SCHEMA '" + lake.schema() + "'"
                     + (lake.readWrite() ? "" : ", READ_ONLY") + ")");
         }
-        if (loadsAtInit) {
+        if (loadsAtInit && (lake == null || !lake.isRemote())) {
+            // The remote tier keeps external access on (httpfs needs it); its engine-hard
+            // controls are the lock and the prefix-scoped secret, and the statement rules
+            // move to lint (docs/duckdb.md "Remote data paths", decision point 13).
             statements.add("SET enable_external_access=false");
         }
         statements.add("SET GLOBAL lock_configuration=true");
@@ -347,6 +412,37 @@ final class DuckDbDatasources {
             conninfo.append(" password=").append(quote(password));
         }
         return conninfo.toString();
+    }
+
+    /**
+     * The prefix-scoped engine secret for a remote lake: credentials answer only for the
+     * declared {@code data:} prefix, and SQL never carries them — this statement runs at
+     * connection setup, before the configuration locks.
+     */
+    private static String lakeSecret(Lake lake) {
+        Remote remote = lake.remote();
+        StringBuilder secret = new StringBuilder("CREATE SECRET tql_lake (TYPE s3");
+        if (remote.instanceChain()) {
+            secret.append(", PROVIDER credential_chain");
+        } else {
+            secret.append(", KEY_ID '").append(remote.keyId().replace("'", "''")).append('\'');
+            secret.append(", SECRET '").append(remote.secret().replace("'", "''")).append('\'');
+        }
+        if (remote.region() != null) {
+            secret.append(", REGION '").append(remote.region().replace("'", "''")).append('\'');
+        }
+        if (remote.endpoint() != null) {
+            secret.append(", ENDPOINT '").append(remote.endpoint().replace("'", "''"))
+                    .append('\'');
+        }
+        if (remote.pathStyle()) {
+            secret.append(", URL_STYLE 'path'");
+        }
+        if (!remote.useSsl()) {
+            secret.append(", USE_SSL false");
+        }
+        secret.append(", SCOPE '").append(lake.data().replace("'", "''")).append("')");
+        return secret.toString();
     }
 
     /** A single-quoted libpq conninfo value ({@code \} and {@code '} backslash-escaped). */

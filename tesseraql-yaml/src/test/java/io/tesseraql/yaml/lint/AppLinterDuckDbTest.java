@@ -208,6 +208,75 @@ class AppLinterDuckDbTest {
     }
 
     @Test
+    void refusesEngineManagementStatementsInAppSql(@TempDir Path dir) throws Exception {
+        writeConfig(dir, SCOPES);
+        writeAnalyticsRoute(dir, """
+                -- a data query may mention attach in words; statements are the rule
+                select attached_at, load_count from read_parquet(
+                  /* ${scope.sales}/m.parquet */ 'd.parquet');
+                ATTACH 'dbname=x' AS rogue (TYPE postgres);
+                install spatial;
+                SET memory_limit='1TB';
+                create secret sneaky (TYPE s3, KEY_ID 'a', SECRET 'b')
+                """);
+
+        List<LintFinding> findings = new AppLinter().lint(dir);
+
+        assertThat(findings.stream().filter(f -> f.code().equals("TQL-SQL-2111")
+                && f.message().contains("plain queries"))).hasSize(4);
+    }
+
+    @Test
+    void flagsRemoteLakeMisdeclarations(@TempDir Path dir) throws Exception {
+        Files.createDirectories(dir.resolve("config"));
+        Files.writeString(dir.resolve("config/tesseraql.yml"), """
+                tesseraql:
+                  app:
+                    name: t
+                  datasources:
+                    main:
+                      jdbcUrl: jdbc:postgresql://localhost/main
+                    analytics:
+                      jdbcUrl: "jdbc:duckdb:"
+                      duckdb:
+                        extensions: [ducklake, postgres]
+                        lake:
+                          catalog: main
+                          data: s3://lake/history
+                        fileScopes:
+                          drops:
+                            root: data/drops
+                """);
+        Path route = dir.resolve("web/api/h");
+        Files.createDirectories(route);
+        Files.writeString(route.resolve("h.sql"),
+                "select * from read_parquet(/* ${scope.drops}/m.parquet */ 'd.parquet')\n");
+        Files.writeString(route.resolve("get.yml"), """
+                version: tesseraql/v1
+                id: h.read
+                kind: route
+                recipe: query-json
+                datasource: analytics
+                sql:
+                  file: h.sql
+                  mode: query
+                """);
+
+        List<LintFinding> findings = new AppLinter().lint(dir);
+
+        assertThat(findings).anyMatch(f -> f.code().equals("TQL-YAML-1040") && f.isError()
+                && f.message().contains("needs httpfs"));
+        assertThat(findings).anyMatch(f -> f.code().equals("TQL-YAML-1040") && f.isError()
+                && f.message().contains("ending in '/'"));
+        assertThat(findings).anyMatch(f -> f.code().equals("TQL-YAML-1040") && f.isError()
+                && f.message().contains("credentials"));
+        assertThat(findings).anyMatch(f -> f.code().equals("TQL-YAML-1040") && f.isError()
+                && f.message().contains("remote lake and fileScopes"));
+        assertThat(findings).anyMatch(f -> f.code().equals("TQL-SQL-2111") && f.isError()
+                && f.message().contains("no governed local-file surface"));
+    }
+
+    @Test
     void appliesTheSqlRulesToBatchJobs(@TempDir Path dir) throws Exception {
         writeConfig(dir, SCOPES);
         Path job = dir.resolve("batch/sales");
