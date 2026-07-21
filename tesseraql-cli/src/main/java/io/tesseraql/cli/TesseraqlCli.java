@@ -153,6 +153,10 @@ public final class TesseraqlCli implements Runnable {
             // classloader, so routes parse and evaluate with the full function set from boot.
             io.tesseraql.core.expr.ExpressionFunctions
                     .install(Thread.currentThread().getContextClassLoader());
+            // JDBC drivers arriving as module jars register through a base-classpath shim;
+            // DriverManager refuses drivers whose class the caller's classloader cannot see.
+            io.tesseraql.cli.modules.ModuleDrivers
+                    .register(Thread.currentThread().getContextClassLoader());
 
             // Optionally start an embedded PostgreSQL and point the runtime's main datasource at it,
             // so the app runs with no external database. An empty value (the option given without a

@@ -23,7 +23,21 @@ public final class DataSources {
 
     /** Creates a HikariCP pool for the datasource named {@code name} under {@code tesseraql.datasources}. */
     public static HikariDataSource create(AppConfig config, String name) {
-        return create(config, "tesseraql-" + name, "tesseraql.datasources." + name + ".");
+        return create(config, name, (java.nio.file.Path) null);
+    }
+
+    /**
+     * Like {@link #create(AppConfig, String)}, with the app home a duckdb datasource resolves its
+     * declared file-scope roots against (docs/duckdb.md).
+     */
+    public static HikariDataSource create(AppConfig config, String name,
+            java.nio.file.Path appHome) {
+        String prefix = "tesseraql.datasources." + name + ".";
+        HikariConfig hikari = base(config, "tesseraql-" + name, prefix);
+        if (DuckDbDatasources.isDuckDb(config, name)) {
+            DuckDbDatasources.configure(hikari, config, name, prefix, appHome);
+        }
+        return new HikariDataSource(hikari);
     }
 
     /** Creates the {@code main} HikariCP pool from an explicit override rather than config. */
@@ -54,6 +68,15 @@ public final class DataSources {
      */
     public static java.util.LinkedHashMap<String, HikariDataSource> createAll(AppConfig config,
             MainDatasourceOverride override) {
+        return createAll(config, override, null);
+    }
+
+    /**
+     * Like {@link #createAll(AppConfig, MainDatasourceOverride)}, with the app home a duckdb
+     * datasource resolves its declared file-scope roots against (docs/duckdb.md).
+     */
+    public static java.util.LinkedHashMap<String, HikariDataSource> createAll(AppConfig config,
+            MainDatasourceOverride override, java.nio.file.Path appHome) {
         java.util.LinkedHashMap<String, HikariDataSource> pools = new java.util.LinkedHashMap<>();
         Object declared = config.navigate("tesseraql.datasources");
         if (declared instanceof java.util.Map<?, ?> map) {
@@ -61,7 +84,7 @@ public final class DataSources {
                 String poolName = String.valueOf(name);
                 pools.put(poolName, override != null && "main".equals(poolName)
                         ? create(override)
-                        : create(config, poolName));
+                        : create(config, poolName, appHome));
             }
         }
         if (!pools.containsKey("main")) {
@@ -78,6 +101,11 @@ public final class DataSources {
 
     /** Creates a HikariCP pool from the {@code jdbcUrl}/{@code username}/{@code password} keys at {@code prefix}. */
     public static HikariDataSource create(AppConfig config, String poolName, String prefix) {
+        return new HikariDataSource(base(config, poolName, prefix));
+    }
+
+    /** The shared Hikari knob mapping every pool builds from. */
+    private static HikariConfig base(AppConfig config, String poolName, String prefix) {
         HikariConfig hikari = new HikariConfig();
         hikari.setPoolName(poolName);
         hikari.setJdbcUrl(config.requireString(prefix + "jdbcUrl"));
@@ -108,6 +136,6 @@ public final class DataSources {
         config.getString(prefix + "leakDetectionThresholdMillis")
                 .map(Long::parseLong)
                 .ifPresent(hikari::setLeakDetectionThreshold);
-        return new HikariDataSource(hikari);
+        return hikari;
     }
 }

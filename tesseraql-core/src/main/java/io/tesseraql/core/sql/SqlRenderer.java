@@ -36,13 +36,15 @@ public final class SqlRenderer {
     private final EvaluationContext context;
     private final ScopeResolver scopeResolver;
     private final Map<String, Object> scopeContext;
+    private final FilePathResolver filePathResolver;
 
     private SqlRenderer(Map<String, Object> params, ScopeResolver scopeResolver,
-            Map<String, Object> scopeContext) {
+            Map<String, Object> scopeContext, FilePathResolver filePathResolver) {
         this.scope = new HashMap<>(params);
         this.context = new EvaluationContext(scope);
         this.scopeResolver = scopeResolver;
         this.scopeContext = scopeContext;
+        this.filePathResolver = filePathResolver;
     }
 
     /** Parses and renders a 2-way SQL template against the given parameters. */
@@ -62,7 +64,19 @@ public final class SqlRenderer {
      */
     public static BoundSql render(List<SqlNode> nodes, Map<String, Object> params,
             ScopeResolver scopeResolver, Map<String, Object> scopeContext) {
-        SqlRenderer renderer = new SqlRenderer(params, scopeResolver, scopeContext);
+        return render(nodes, params, scopeResolver, scopeContext, FilePathResolver.UNSUPPORTED);
+    }
+
+    /**
+     * Renders a node tree that may additionally carry {@code ${scope.*}}/{@code ${dataset.*}} file
+     * placeholders, resolved through {@code filePathResolver} (docs/duckdb.md). Only the analytics
+     * execution path passes a real resolver; everywhere else a file placeholder fails loudly.
+     */
+    public static BoundSql render(List<SqlNode> nodes, Map<String, Object> params,
+            ScopeResolver scopeResolver, Map<String, Object> scopeContext,
+            FilePathResolver filePathResolver) {
+        SqlRenderer renderer = new SqlRenderer(params, scopeResolver, scopeContext,
+                filePathResolver);
         renderer.renderNodes(nodes);
         return new BoundSql(
                 renderer.out.toString(),
@@ -82,8 +96,23 @@ public final class SqlRenderer {
                 case SqlNode.If ifNode -> renderIf(ifNode);
                 case SqlNode.For forNode -> renderFor(forNode);
                 case SqlNode.Scope scopeNode -> renderScope(scopeNode);
+                case SqlNode.FilePath filePath -> appendFilePath(filePath);
             }
         }
+    }
+
+    /**
+     * Emits a file placeholder as an ordinary {@code ?} bound to the resolver's absolute path —
+     * never interpolated text — so path values ride the same parameter channel as every other bind.
+     */
+    private void appendFilePath(SqlNode.FilePath filePath) {
+        String resolved = filePathResolver.resolve(filePath.channel(), filePath.name(),
+                filePath.suffix(), scopeContext);
+        mapToSource("?", filePath.sourceLine());
+        parameters.add(new BoundParameter(
+                "${" + filePath.channel() + "." + filePath.name() + "}" + filePath.suffix(),
+                resolved, filePath.sourceLine()));
+        coverage.coverLine(filePath.sourceLine());
     }
 
     /**

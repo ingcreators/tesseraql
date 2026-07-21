@@ -15,7 +15,10 @@ public enum Dialect {
                             new DialectCapabilities(false, true, "merge", "\"",
                                     "columns")), SQLSERVER("sqlserver",
                                             new DialectCapabilities(false, true, "merge", "\"",
-                                                    "auto"));
+                                                    "auto")), DUCKDB("duckdb",
+                                                            new DialectCapabilities(true, true,
+                                                                    "on-conflict", "\"",
+                                                                    "columns"));
 
     private final String id;
     private final DialectCapabilities capabilities;
@@ -63,6 +66,9 @@ public enum Dialect {
         }
         if (url.startsWith("jdbc:sqlserver")) {
             return Optional.of(SQLSERVER);
+        }
+        if (url.startsWith("jdbc:duckdb")) {
+            return Optional.of(DUCKDB);
         }
         return Optional.empty();
     }

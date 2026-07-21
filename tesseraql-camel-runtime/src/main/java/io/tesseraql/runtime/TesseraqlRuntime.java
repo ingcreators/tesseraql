@@ -157,7 +157,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
         // Every datasource declared under tesseraql.datasources gets a pool, registered by name
         // so routes, contracts and per-datasource migrations can address it (design ch. 5.2).
         Map<String, HikariDataSource> dataSources = DataSources.createAll(manifest.config(),
-                override);
+                override, appHome);
         HikariDataSource dataSource = dataSources.get("main");
         dataSources.forEach((name, pool) -> context.getRegistry().bind(name, pool));
 
@@ -247,6 +247,13 @@ public final class TesseraqlRuntime implements AutoCloseable {
             context.getRegistry().bind(TesseraqlProperties.SCOPE_RESOLVER_BEAN,
                     new io.tesseraql.compiler.binding.CompiledScopeResolver(
                             manifest.scopes(), datasourceDialect(manifest.config())));
+        }
+        // Analytics file scopes (docs/duckdb.md): ${scope.*} placeholders resolve only when a
+        // duckdb datasource is declared; everywhere else the SQL producer's reject-any-placeholder
+        // default applies.
+        FileScopes fileScopes = FileScopes.fromConfig(appHome, manifest.config());
+        if (fileScopes.anyDuckDbDatasource()) {
+            context.getRegistry().bind(TesseraqlProperties.FILE_PATH_RESOLVER_BEAN, fileScopes);
         }
         if (security.jwt() != null) {
             context.getRegistry().bind(

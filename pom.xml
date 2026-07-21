@@ -130,6 +130,9 @@
     <s3mock.version>4.12.4</s3mock.version>
     <ojdbc.version>23.26.2.0.0</ojdbc.version>
     <mssql-jdbc.version>13.4.0.jre11</mssql-jdbc.version>
+    <!-- DuckDB analytics engine (docs/duckdb.md): MIT licensed, module-channel only — the jar
+         bundles per-platform native libraries and never ships in the CLI fat jar. -->
+    <duckdb.version>1.3.1.0</duckdb.version>
     <greenmail.version>2.1.3</greenmail.version>
     <h2.version>2.3.232</h2.version>
     <!-- Embedded PostgreSQL for the serve embedded-db option (run a tqlapp with no external DB).
@@ -388,6 +391,11 @@
         <groupId>com.microsoft.sqlserver</groupId>
         <artifactId>mssql-jdbc</artifactId>
         <version>${mssql-jdbc.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.duckdb</groupId>
+        <artifactId>duckdb_jdbc</artifactId>
+        <version>${duckdb.version}</version>
       </dependency>
       <!-- The standard template engine (design ch. 12): natural HTML templates with first-class
            fragments/layouts, plus TEXT mode for generated file responses. -->

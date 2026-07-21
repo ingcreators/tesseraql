@@ -23,6 +23,8 @@ public final class StreamingProfiles {
             case "postgres", "postgresql" -> new StreamingProfile(1000, true);
             case "mysql", "mariadb" -> new StreamingProfile(Integer.MIN_VALUE, false);
             case "oracle", "sqlserver" -> new StreamingProfile(1000, false);
+            // In-process engine: results stream natively, no cursor-mode autocommit dance.
+            case "duckdb" -> new StreamingProfile(1000, false);
             default -> DEFAULT;
         };
     }

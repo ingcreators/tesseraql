@@ -197,6 +197,13 @@
         <artifactId>mysql-connector-j</artifactId>
         <version>${mysql.version}</version>
       </dependency>
+      <!-- DuckDB analytics engine (docs/duckdb.md): MIT licensed, module-channel only (the jar
+           bundles per-platform native libraries; a bare coordinate resolves to this version). -->
+      <dependency>
+        <groupId>org.duckdb</groupId>
+        <artifactId>duckdb_jdbc</artifactId>
+        <version>${duckdb.version}</version>
+      </dependency>
       <dependency>
         <groupId>org.webjars.npm</groupId>
         <artifactId>hypermedia-components__core</artifactId>

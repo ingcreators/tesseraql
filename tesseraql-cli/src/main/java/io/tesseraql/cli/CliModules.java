@@ -1,5 +1,6 @@
 package io.tesseraql.cli;
 
+import io.tesseraql.cli.modules.ModuleDrivers;
 import io.tesseraql.cli.modules.ModulesInstaller;
 import io.tesseraql.core.expr.ExpressionFunctions;
 import io.tesseraql.yaml.manifest.ManifestLoader;
@@ -71,6 +72,7 @@ public final class CliModules {
                 Thread.currentThread().getContextClassLoader());
         Thread.currentThread().setContextClassLoader(loader);
         ExpressionFunctions.install(loader);
+        ModuleDrivers.register(loader);
     }
 
     /** The {@code *.jar} files in {@code modulesDir} as URLs, sorted for a stable classpath order. */

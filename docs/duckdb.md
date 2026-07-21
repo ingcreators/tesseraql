@@ -43,18 +43,25 @@ tesseraql:
   legal but node-local and disposable — cache semantics, never shared between nodes,
   never backed up. A `db/<name>/migration` tree for a DuckDB datasource is refused at
   build time: there is nothing durable to migrate.
+- **Each pooled connection is its own in-memory database** (a property of the DuckDB
+  JDBC driver this design leans into: nothing shared, nothing durable). The pool
+  defaults to `maximumPoolSize: 4` so a deployment cannot silently multiply engine
+  memory by the connection-pool default; `duckdb.memoryLimit` and `duckdb.threads`
+  pass through as per-connection engine settings.
 - Local tables are correspondingly scratch space: an ETL statement may stage into
   them freely, but anything worth keeping leaves through an attached datasource or an
   export before the process ends.
 
 ## Reading files through scopes
 
-SQL never names raw filesystem paths dynamically. Exactly two placeholder channels
-resolve to a path — **file scopes** (below) and **datasets** (later section) — and
-everything else must be a static literal under a declared scope root; string
-concatenation or any other expression in a file-function argument is refused at lint
-time. This is the same discipline the redirect placeholders follow: user input never
-reaches a path position.
+SQL never names raw filesystem paths. Exactly two placeholder channels resolve to a
+path — **file scopes** (below) and **datasets** (later section) — and a file-reading
+function taking anything else (a literal, concatenation, any expression) is refused
+at lint time; the connection fence refuses it again at runtime, under a locked
+configuration, as defense in depth. This is the same discipline the redirect
+placeholders follow: user input never reaches a path position. (Raw literals are not
+merely discouraged: under the fence a relative path has no defined base directory,
+so the placeholder channel is the only portable form.)
 
 A scope declares a root directory; `partitionBy: tenant` inserts the resolved tenant
 of the request between root and file, so one declaration isolates every tenant's

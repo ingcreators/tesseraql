@@ -43,6 +43,8 @@ final class AppMigrations {
 
     private static final Logger LOG = LoggerFactory.getLogger(AppMigrations.class);
     private static final TqlErrorCode UNKNOWN_DATASOURCE = new TqlErrorCode(TqlDomain.APP, 4201);
+    /** TQL-APP-4203: a migration tree targets a duckdb datasource, which holds nothing durable. */
+    private static final TqlErrorCode DUCKDB_MIGRATIONS = new TqlErrorCode(TqlDomain.APP, 4203);
 
     private AppMigrations() {
     }
@@ -77,6 +79,11 @@ final class AppMigrations {
             if (dataSource == null) {
                 throw new TqlException(UNKNOWN_DATASOURCE, "db/" + datasource
                         + "/migration has no matching tesseraql.datasources." + datasource);
+            }
+            if (DuckDbDatasources.isDuckDb(config, datasource)) {
+                throw new TqlException(DUCKDB_MIGRATIONS, "db/" + datasource + "/migration: a"
+                        + " duckdb datasource is a query engine with nothing durable to migrate"
+                        + " (docs/duckdb.md)");
             }
             total += run(migrations, historyTable(appName) + "__" + sanitize(datasource),
                     dataSource, appName, datasource);
