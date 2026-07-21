@@ -78,7 +78,7 @@ class AppLinterDuckDbTest {
         assertThat(findings).anyMatch(f -> f.code().equals("TQL-SQL-2111") && f.isError()
                 && f.message().contains("raw argument"));
         assertThat(findings).anyMatch(f -> f.code().equals("TQL-SQL-2111") && f.isError()
-                && f.message().contains("dataset catalog"));
+                && f.message().contains("needs a params: entry"));
     }
 
     @Test

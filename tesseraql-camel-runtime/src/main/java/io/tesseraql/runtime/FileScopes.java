@@ -22,9 +22,22 @@ final class FileScopes implements DatasourceFilePathResolver {
     }
 
     private final Map<String, Map<String, ResolvedScope>> byDatasource;
+    private volatile io.tesseraql.core.attachment.AttachmentStore attachmentStore;
+    private volatile DatasetSpool spool;
 
     private FileScopes(Map<String, Map<String, ResolvedScope>> byDatasource) {
         this.byDatasource = byDatasource;
+    }
+
+    /**
+     * Wires the dataset channel (docs/duckdb.md): attachments become addressable as datasets once
+     * the managed attachment store and the spool exist. Left unwired, every {@code ${dataset.*}}
+     * fails loudly.
+     */
+    void wireDatasets(io.tesseraql.core.attachment.AttachmentStore attachmentStore,
+            DatasetSpool spool) {
+        this.attachmentStore = attachmentStore;
+        this.spool = spool;
     }
 
     /** Builds the resolver over every duckdb datasource's declared scopes (may be empty). */
@@ -56,10 +69,8 @@ final class FileScopes implements DatasourceFilePathResolver {
     @Override
     public String resolve(String datasource, String channel, String name, String suffix,
             Map<String, Object> context) {
-        if (!"scope".equals(channel)) {
-            throw new TqlException(FilePathResolver.UNSUPPORTED_CODE,
-                    "${dataset.*} placeholders resolve through the dataset catalog, which is not"
-                            + " available on this deployment");
+        if ("dataset".equals(channel)) {
+            return resolveDataset(name, context);
         }
         Map<String, ResolvedScope> scopes = byDatasource.getOrDefault(datasource, Map.of());
         ResolvedScope scope = scopes.get(name);
@@ -81,6 +92,34 @@ final class FileScopes implements DatasourceFilePathResolver {
                     "File scope '" + name + "' resolved outside its root");
         }
         return normalized.toString();
+    }
+
+    /**
+     * Resolves a dataset reference — an attachment id the caller supplied — under the caller's
+     * identity: the attachment must exist, belong to the authenticated principal, and have passed
+     * the scanners. Every refusal is the same neutral message, so the channel never confirms
+     * whether a guessed id exists.
+     */
+    private String resolveDataset(String reference, Map<String, Object> context) {
+        if (attachmentStore == null || spool == null) {
+            throw new TqlException(FilePathResolver.UNSUPPORTED_CODE,
+                    "${dataset.*} placeholders need managed attachments"
+                            + " (tesseraql.attachments.mode: managed)");
+        }
+        String subject = context.get(
+                "principal") instanceof io.tesseraql.security.Principal principal
+                        ? principal.subject()
+                        : null;
+        io.tesseraql.core.attachment.AttachmentStore.Attachment attachment = reference == null
+                || reference.isBlank() || subject == null
+                        ? null
+                        : attachmentStore.find(reference).orElse(null);
+        if (attachment == null || !subject.equals(attachment.createdBy())
+                || !"clean".equals(attachment.scanStatus())) {
+            throw new TqlException(FilePathResolver.UNSUPPORTED_CODE,
+                    "Dataset is not available to this caller");
+        }
+        return spool.localize(attachment).toString();
     }
 
     /** The current tenant as a single path segment; a tenant-partitioned scope requires one. */

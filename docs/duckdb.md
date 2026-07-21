@@ -186,13 +186,15 @@ Exports run the other way: `COPY (…) TO` a scratch file, stored through the
 ## Datasets: files with an owner
 
 Scopes cover directory-shaped data (tenant drops, operator-managed report files).
-When files need per-user grants — uploads a user analyzes, reports shared to a role
-— the reference moves up a level: a **dataset catalog on `main`** maps an id to a
-blob (or scoped path) plus its owner, allowed roles, tenant, and scan state. Routes
-declare a `type: dataset` input; the runtime resolves the id through the catalog
-*under the caller's identity*, refuses anything the caller cannot see, and never
-resolves an upload the [attachment scanners](attachments.md) have not passed. The
-SQL sees only the second placeholder channel:
+When files need per-user gating — uploads a user analyzes — the reference moves up
+a level: **every managed [attachment](attachments.md) is addressable as a dataset
+by its id**, and the attachment metadata on `main` is the catalog: owner
+(`created_by`), scan state, checksum, blob key. A route binds the caller-supplied
+reference through an ordinary `params:` entry; the runtime resolves it *under the
+caller's identity* — the attachment must exist, belong to the authenticated
+principal, and have passed the scanners, and every refusal is the same neutral
+answer, so the channel never confirms whether a guessed id exists. The SQL sees
+only the second placeholder channel:
 
 ```sql
 SELECT * FROM read_parquet(/* ${dataset.report} */ 'dummy.parquet') LIMIT 100
@@ -203,25 +205,23 @@ subject or tenant, or an entitlement join against the attached `main` (with
 `filename=true`, a glob's matched files join like any column) — the same
 responsibility split as tables.
 
-How the bytes reach the engine is the runtime's choice per blob-store backend:
-
-- **Filesystem store: zero copy.** The blob is already a local file; its exact path
-  is handed to the engine read-only.
-- **Any store: spool.** The blob streams into the scratch directory once,
-  content-hash keyed, single-flight under concurrency, size-capped and TTL-swept —
-  the temp-store machinery, reused.
-- **S3-compatible store: presigned read.** With `httpfs` enabled, the store's
-  short-lived presigned GET URL is read directly — the engine holds no S3
-  credentials, and Parquet's column/row-group pushdown fetches only the bytes the
-  query needs. Egress stays inside the outbound allow-list the admission profile
-  already checks (`TQL-ADM-4703`); without `httpfs`, the spool path serves the same
-  query unchanged — offline deployments lose nothing but the pushdown.
+How the bytes reach the engine is one mechanism for every blob-store backend: the
+**dataset spool** (`work/duckdb-spool`, relocatable via
+`tesseraql.duckdb.spoolDirectory`) — the blob streams to a local content-addressed
+file once, written atomically so concurrent localizations converge, touched on
+every hit and swept least-recently-used past a cap. The spool is the one directory
+the fence admits beyond the scope roots, which is exactly why it is the only
+bridge: a filesystem blob store could serve zero-copy, and an S3 store could serve
+a presigned `httpfs` read with Parquet range pushdown, but the first would open the
+whole blob root to SQL and the second cannot coexist with
+`enable_external_access=false` — both are recorded as possible future tiers, not
+current behavior.
 
 ## The security stance
 
 - **No network at runtime**: extensions are pre-provisioned, signed, and loaded from
-  the local cache; `httpfs`, when enabled, reads only presigned URLs for cataloged
-  datasets under the egress allow-list.
+  the local cache, and dataset bytes reach the engine through the local spool — the
+  engine itself never opens a network connection beyond its declared attaches.
 - **No dynamic paths outside the two channels**; scope resolution is
   traversal-proof, and the engine's filesystem view is fenced to scope roots plus
   scratch.

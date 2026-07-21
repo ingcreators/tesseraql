@@ -106,7 +106,15 @@ public final class SqlRenderer {
      * never interpolated text — so path values ride the same parameter channel as every other bind.
      */
     private void appendFilePath(SqlNode.FilePath filePath) {
-        String resolved = filePathResolver.resolve(filePath.channel(), filePath.name(),
+        // The scope channel passes the declared scope name; the dataset channel evaluates the
+        // named parameter here (against the same bind map every ordinary bind uses) and passes
+        // the caller-supplied reference — the resolver authorizes it before any path exists.
+        String reference = filePath.name();
+        if ("dataset".equals(filePath.channel())) {
+            Object value = context.resolve(List.of(filePath.name()));
+            reference = value == null ? null : String.valueOf(value);
+        }
+        String resolved = filePathResolver.resolve(filePath.channel(), reference,
                 filePath.suffix(), scopeContext);
         mapToSource("?", filePath.sourceLine());
         parameters.add(new BoundParameter(
