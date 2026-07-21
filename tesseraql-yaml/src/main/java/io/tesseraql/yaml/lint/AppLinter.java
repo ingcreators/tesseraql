@@ -2070,6 +2070,53 @@ public final class AppLinter {
                 }
             }
         }
+        if (config.navigate(
+                "tesseraql.datasources." + name + ".duckdb.lake") instanceof java.util.Map<?, ?>) {
+            String prefix = "tesseraql.datasources." + name + ".duckdb.lake.";
+            String catalog = config.getString(prefix + "catalog").orElse("main");
+            String schema = config.getString(prefix + "schema").orElse("ducklake");
+            String data = config.getString(prefix + "data").orElse(null);
+            String alias = config.getString(prefix + "as").orElse("lake");
+            String mode = config.getString(prefix + "mode").orElse("readonly");
+            if (data == null || data.isBlank()) {
+                findings.add(new LintFinding("TQL-YAML-1040", "error", configSource,
+                        "duckdb lake on datasource '" + name + "' declares no data: directory"));
+            } else if (data.contains("..") || data.indexOf('\'') >= 0 || data.indexOf('\\') >= 0) {
+                findings.add(new LintFinding("TQL-YAML-1040", "error", configSource,
+                        "duckdb lake data: on datasource '" + name + "' must be a plain"
+                                + " directory path without '..', quotes, or backslashes"));
+            }
+            if (!"main".equals(catalog)
+                    && config.navigate("tesseraql.datasources." + catalog) == null) {
+                findings.add(new LintFinding("TQL-YAML-1035", "error", configSource,
+                        "datasource '" + catalog + "' is not declared under"
+                                + " tesseraql.datasources"));
+            }
+            if (duckDbDatasource(config, catalog)) {
+                findings.add(new LintFinding("TQL-YAML-1040", "error", configSource,
+                        "duckdb lake catalog '" + catalog + "' must be a PostgreSQL datasource"
+                                + " holding the lake metadata"));
+            }
+            if (!schema.matches("[A-Za-z_][A-Za-z0-9_]*")
+                    || !alias.matches("[A-Za-z_][A-Za-z0-9_]*") || "main".equals(alias)) {
+                findings.add(new LintFinding("TQL-YAML-1040", "error", configSource,
+                        "duckdb lake schema/as on datasource '" + name + "' must be plain"
+                                + " identifiers, and as: never 'main'"));
+            }
+            if (!"readonly".equals(mode) && !"readwrite".equals(mode)) {
+                findings.add(new LintFinding("TQL-YAML-1040", "error", configSource,
+                        "duckdb lake mode must be readonly or readwrite, not '" + mode + "'"));
+            }
+            Object lakeExtensions = config.navigate(
+                    "tesseraql.datasources." + name + ".duckdb.extensions");
+            if (!(lakeExtensions instanceof java.util.List<?> lakeList)
+                    || !lakeList.contains("ducklake") || !lakeList.contains("postgres")) {
+                findings.add(new LintFinding("TQL-YAML-1040", "error", configSource,
+                        "duckdb lake on datasource '" + name + "' needs extensions:"
+                                + " [ducklake, postgres] declared, so offline cache provisioning"
+                                + " covers them"));
+            }
+        }
         Object attach = config.navigate("tesseraql.datasources." + name + ".duckdb.attach");
         if (!(attach instanceof java.util.List<?> entries)) {
             return;

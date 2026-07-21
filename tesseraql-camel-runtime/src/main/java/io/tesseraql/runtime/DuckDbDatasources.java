@@ -39,6 +39,10 @@ final class DuckDbDatasources {
     record Attach(String datasource, String alias, boolean readWrite) {
     }
 
+    /** A declared DuckLake attach (docs/duckdb.md "Lake tables"): catalog, schema, data, alias. */
+    record Lake(String catalog, String schema, String data, String alias, boolean readWrite) {
+    }
+
     private DuckDbDatasources() {
     }
 
@@ -132,6 +136,45 @@ final class DuckDbDatasources {
         return attaches;
     }
 
+    /** The declared lake block of a duckdb datasource, or {@code null} (validated shape). */
+    static Lake lake(AppConfig config, String name) {
+        String prefix = "tesseraql.datasources." + name + ".duckdb.lake.";
+        if (!(config.navigate("tesseraql.datasources." + name + ".duckdb.lake") instanceof Map)) {
+            return null;
+        }
+        String catalog = config.getString(prefix + "catalog").orElse("main");
+        String schema = config.getString(prefix + "schema").orElse("ducklake");
+        String data = config.requireString(prefix + "data");
+        String alias = config.getString(prefix + "as").orElse("lake");
+        String mode = config.getString(prefix + "mode").orElse("readonly");
+        if (!"readonly".equals(mode) && !"readwrite".equals(mode)) {
+            throw new IllegalStateException(prefix + "mode must be readonly or readwrite, not '"
+                    + mode + "'");
+        }
+        if (!schema.matches("[A-Za-z_][A-Za-z0-9_]*")) {
+            throw new IllegalStateException(prefix + "schema must be a plain identifier");
+        }
+        if (!alias.matches("[A-Za-z_][A-Za-z0-9_]*") || "main".equals(alias)) {
+            throw new IllegalStateException(prefix + "as must be a plain identifier other than"
+                    + " 'main' (DuckDB's own default schema is named main)");
+        }
+        if (data.contains("..") || data.indexOf('\'') >= 0) {
+            throw new IllegalStateException(prefix + "data must be a plain directory path"
+                    + " without '..' or quotes");
+        }
+        if (isDuckDb(config, catalog)) {
+            throw new IllegalStateException(prefix + "catalog '" + catalog
+                    + "' must be a PostgreSQL datasource holding the lake metadata");
+        }
+        List<String> extensions = extensions(config, name);
+        if (!extensions.contains("ducklake") || !extensions.contains("postgres")) {
+            throw new IllegalStateException("tesseraql.datasources." + name
+                    + ".duckdb.lake needs extensions: [ducklake, postgres] declared, so the"
+                    + " offline cache provisioning covers them (docs/duckdb.md)");
+        }
+        return new Lake(catalog, schema, data, alias, "readwrite".equals(mode));
+    }
+
     /** A string value of an attach-entry key, with config placeholders resolved. */
     private static String entryValue(AppConfig config, Map<?, ?> entry, String key) {
         Object value = entry.get(key);
@@ -195,11 +238,16 @@ final class DuckDbDatasources {
         } else {
             hikari.addDataSourceProperty("enable_external_access", "false");
         }
-        // The engine may read the declared scope roots plus the dataset spool — nothing else.
-        List<String> roots = Stream.concat(
+        Lake lake = lake(config, name);
+        // The engine may read the declared scope roots, the dataset spool, and — when a lake is
+        // declared — its Parquet data directory. Nothing else.
+        List<String> roots = Stream.concat(Stream.concat(
                 fileScopes(config, name).values().stream()
                         .map(scope -> resolveRoot(appHome, scope.root()) + "/"),
-                Stream.of(spoolDirectory(config, appHome) + "/"))
+                Stream.of(spoolDirectory(config, appHome) + "/")),
+                lake == null
+                        ? Stream.empty()
+                        : Stream.of(resolveRoot(appHome, lake.data()) + "/"))
                 .distinct()
                 .toList();
         hikari.addDataSourceProperty("allowed_directories",
@@ -213,7 +261,8 @@ final class DuckDbDatasources {
         if (config.getString(prefix + "maximumPoolSize").isEmpty()) {
             hikari.setMaximumPoolSize(4);
         }
-        hikari.setConnectionInitSql(initSql(config, extensions, attaches, loadsAtInit, override));
+        hikari.setConnectionInitSql(
+                initSql(config, name, extensions, attaches, lake, loadsAtInit, override, appHome));
     }
 
     /**
@@ -222,8 +271,9 @@ final class DuckDbDatasources {
      * drop external access (when it was needed for the loads) and lock the configuration — the
      * last statements every pooled connection runs before any app SQL.
      */
-    private static String initSql(AppConfig config, List<String> extensions, List<Attach> attaches,
-            boolean loadsAtInit, DataSources.MainDatasourceOverride override) {
+    private static String initSql(AppConfig config, String name, List<String> extensions,
+            List<Attach> attaches, Lake lake, boolean loadsAtInit,
+            DataSources.MainDatasourceOverride override, Path appHome) {
         List<String> statements = new ArrayList<>();
         for (String extension : extensions) {
             statements.add("LOAD " + extension);
@@ -233,6 +283,14 @@ final class DuckDbDatasources {
                     .replace("'", "''")
                     + "' AS " + attach.alias() + " (TYPE postgres"
                     + (attach.readWrite() ? "" : ", READ_ONLY") + ")");
+        }
+        if (lake != null) {
+            statements.add("ATTACH 'ducklake:postgres:"
+                    + conninfo(config, lake.catalog(), override).replace("'", "''")
+                    + "' AS " + lake.alias()
+                    + " (DATA_PATH '" + resolveRoot(appHome, lake.data()) + "/'"
+                    + ", METADATA_SCHEMA '" + lake.schema() + "'"
+                    + (lake.readWrite() ? "" : ", READ_ONLY") + ")");
         }
         if (loadsAtInit) {
             statements.add("SET enable_external_access=false");

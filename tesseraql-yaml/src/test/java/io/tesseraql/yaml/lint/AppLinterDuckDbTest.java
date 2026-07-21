@@ -173,6 +173,41 @@ class AppLinterDuckDbTest {
     }
 
     @Test
+    void flagsLakeMisdeclarations(@TempDir Path dir) throws Exception {
+        Files.createDirectories(dir.resolve("config"));
+        Files.writeString(dir.resolve("config/tesseraql.yml"), """
+                tesseraql:
+                  app:
+                    name: t
+                  datasources:
+                    main:
+                      jdbcUrl: jdbc:postgresql://localhost/main
+                    analytics:
+                      jdbcUrl: "jdbc:duckdb:"
+                      duckdb:
+                        extensions: [postgres]
+                        lake:
+                          catalog: ghost
+                          data: ../outside
+                          as: main
+                          mode: sometimes
+                """);
+
+        List<LintFinding> findings = new AppLinter().lint(dir);
+
+        assertThat(findings).anyMatch(f -> f.code().equals("TQL-YAML-1035") && f.isError()
+                && f.message().contains("'ghost'"));
+        assertThat(findings).anyMatch(f -> f.code().equals("TQL-YAML-1040") && f.isError()
+                && f.message().contains("lake data:"));
+        assertThat(findings).anyMatch(f -> f.code().equals("TQL-YAML-1040") && f.isError()
+                && f.message().contains("as: never 'main'"));
+        assertThat(findings).anyMatch(f -> f.code().equals("TQL-YAML-1040") && f.isError()
+                && f.message().contains("lake mode must be readonly or readwrite"));
+        assertThat(findings).anyMatch(f -> f.code().equals("TQL-YAML-1040") && f.isError()
+                && f.message().contains("needs extensions: [ducklake, postgres]"));
+    }
+
+    @Test
     void appliesTheSqlRulesToBatchJobs(@TempDir Path dir) throws Exception {
         writeConfig(dir, SCOPES);
         Path job = dir.resolve("batch/sales");
