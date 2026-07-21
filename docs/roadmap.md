@@ -1056,6 +1056,25 @@ the `ducklake` schema on `main` holds the metadata and Flyway never touches it;
 an expiry job prunes old snapshots and removes their files; and the fence still
 refuses undeclared attaches, loads, and out-of-root reads throughout.
 
+Delivered 2026-07-21 in the two designed slices. The lake attach (#381): the
+`duckdb.lake:` block (catalog/schema/data/as/mode), framework-managed under the
+proven init order with the catalog conninfo following the `--embedded-db`
+override, `METADATA_SCHEMA` confining the catalog tables, the data directory
+fence-admitted and auto-created, `extensions: [ducklake, postgres]` required so
+offline provisioning covers them, lint mirroring every runtime check, and a
+read-only lake refusing writes with the engine's own error — held green by
+`DuckLakeIntegrationTest`. The milestone (#382): the inventory app's nightly
+pricing job now also appends each run to `lake.price_history` (snapshot per run)
+and ships a weekly `pricing.pruneHistory` job (expire 7-day-old snapshots, then
+`ducklake_cleanup_old_files`; the `CALL`s run as query-mode steps — they return
+rows). `InventoryLakeIntegrationTest` runs M24 against a copy of the real app:
+current history beside `AT (VERSION => 2)` time travel; concurrent writers on two
+separate engine instances both committing through the catalog on `main`; a full
+runtime restart re-attaching beside Flyway; the test's aggressive prune variant
+(retire → expire-now → cleanup) strictly reducing the Parquet file count; and the
+fence refusing out-of-root reads to the end. **Phase 59 is complete and milestone
+M24 is met.**
+
 ## CLI distribution and upgrade delivery (cross-cutting)
 
 ### Phase 38 — CLI distribution and upgrade delivery

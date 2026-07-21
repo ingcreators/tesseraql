@@ -19,9 +19,15 @@ tesseraql:
     analytics:
       jdbcUrl: "jdbc:duckdb:"
       duckdb:
-        extensions: [postgres]
+        extensions: [ducklake, postgres]
         attach:
           - { datasource: main, as: app, mode: readwrite }
+        # Lake tables (docs/duckdb.md): price history as ACID snapshots over Parquet,
+        # metadata on main in the self-managed ducklake schema.
+        lake:
+          catalog: main
+          data: data/lake
+          mode: readwrite
         fileScopes:
           drops:
             root: data/drops

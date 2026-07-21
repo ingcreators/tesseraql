@@ -225,6 +225,7 @@ class InventoryAnalyticsIntegrationTest {
         try (Connection duck = DriverManager.getConnection("jdbc:duckdb:", props);
                 Statement statement = duck.createStatement()) {
             statement.execute("INSTALL postgres");
+            statement.execute("INSTALL ducklake");
         }
         Path bundle = Files.createTempDirectory("duckdb-bundle").resolve("duckdb-ext.zip");
         zipDirectory(connected, bundle);

@@ -13,3 +13,9 @@ pipeline:
     sql: { file: clear-price-summary.sql, mode: update }
   - id: load
     sql: { file: load-price-summary.sql, mode: update }
+  # Every run also lands in the lake's history table - one snapshot per run,
+  # time-travelable (docs/duckdb.md "Lake tables").
+  - id: ensureHistory
+    sql: { file: ensure-price-history.sql, mode: update }
+  - id: appendHistory
+    sql: { file: append-price-history.sql, mode: update }
