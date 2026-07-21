@@ -995,6 +995,38 @@ a Parquet result through the blob store, and a second route queries it back thro
 a `dataset:` reference that resolves only for its owner — with every framework
 table still on `main` and the runtime having made no network fetch.
 
+Delivered 2026-07-21 in the three designed slices plus the milestone proof. The
+engine (#376): the `DUCKDB` dialect; the per-connection fence proven against DuckDB
+1.3.1 (autoinstall/autoload off, external access disabled, `allowed_directories` =
+scope roots + the spool, `lock_configuration` first — and per-connection in-memory
+databases, which the nothing-durable stance leans into); `${scope.*}` placeholders
+as a new 2-way SQL `FilePath` node, shape-validated at parse (`TQL-SQL-2102`) and
+bound as ordinary `?` parameters (DuckDB 1.3 accepts them in table functions);
+`TQL-YAML-1040`/`TQL-SQL-2111` lint; and the `ModuleDrivers`/`DriverShim` bridge
+that finally makes module-channel JDBC drivers visible to `DriverManager` — a gap
+that had also affected the documented MySQL/Oracle path. Extensions + attach +
+ETL (#377): `duckdb.extensions:` loaded per connection from the local cache
+(`TQL-APP-4204` names the fix when missing); `tesseraql duckdb install-extensions`
+riding the engine's own `INSTALL` with `--repository`, zip `--bundle`, and
+offline `--from-bundle`; framework-managed `attach:` (credentials injected,
+`READ_ONLY` default, alias never `main`, PostgreSQL targets) under the probed init
+order LOAD → ATTACH → drop access → lock, where established attaches keep working
+and everything else is refused; jobs gained `datasource:` and render through the
+file-placeholder channel. Datasets (#378): scan-passed managed attachments
+addressable as `${dataset.*}` — owner-only, neutrally refused otherwise — bridged
+by the one content-addressed spool directory (zero-copy and presigned `httpfs`
+recorded as future tiers, the latter incompatible with the disabled-access fence).
+The milestone ran against the REAL inventory gallery app
+(`InventoryAnalyticsIntegrationTest`): the driver rides the app's committed
+`tesseraql.modules`/`modules.lock`; the extension cache is populated from an
+air-gap zip and the runtime never fetches; the supplier-price dashboard composes
+`main` beside the tenant's Parquet drop through a tenant-partitioned scope with
+per-tenant isolation asserted both ways; the nightly pricing job lands and
+re-lands its summary on the attached `main`; and a Parquet report uploaded
+through the app's own attachment route — the blob-store write path — is queried
+back through `${dataset.*}` by its owner and neutrally refused to another
+authenticated caller. **Phase 58 is complete and milestone M23 is met.**
+
 ## CLI distribution and upgrade delivery (cross-cutting)
 
 ### Phase 38 — CLI distribution and upgrade delivery

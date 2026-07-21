@@ -1,4 +1,6 @@
 tesseraql:
+  modules:
+    - org.duckdb:duckdb_jdbc:1.3.1.0
   app:
     name: inventory
 
@@ -11,6 +13,23 @@ tesseraql:
       jdbcUrl: ${db.main.url}
       username: ${db.main.username}
       password: ${db.main.password}
+    # The embedded analytics engine (docs/duckdb.md): supplier price drops (CSV/Parquet files
+    # under data/drops) become queryable with plain SQL beside the live inventory, and the
+    # nightly pricing job lands its summary back on main through the managed attach.
+    analytics:
+      jdbcUrl: "jdbc:duckdb:"
+      duckdb:
+        extensions: [postgres]
+        attach:
+          - { datasource: main, as: app, mode: readwrite }
+        fileScopes:
+          drops:
+            root: data/drops
+          # Per-tenant drop directories (data/drops/<tenant>/...) for tenant-enabled
+          # deployments; the single-tenant demo leaves this scope unused.
+          tenantDrops:
+            root: data/drops
+            partitionBy: tenant
 
   security:
     jwt:

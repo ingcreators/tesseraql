@@ -1,0 +1,10 @@
+version: tesseraql/v1
+id: reports
+kind: attachment
+basePath: /reports/{reportId}/files
+record: { entity: report, key: reportId }
+limits:
+  maxBytes: 25MB
+security:
+  auth: bearer
+  policy: inv.write

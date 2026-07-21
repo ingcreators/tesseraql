@@ -1,0 +1,8 @@
+{
+  "lockfileVersion" : 1,
+  "modules" : [ "org.duckdb:duckdb_jdbc:1.3.1.0" ],
+  "artifacts" : [ {
+    "coordinate" : "org.duckdb:duckdb_jdbc:1.3.1.0",
+    "sha256" : "612c1e55e45fb496902b8ec7f9bb957a404813e6d1fc1c4531df000d1bab2d07"
+  } ]
+}

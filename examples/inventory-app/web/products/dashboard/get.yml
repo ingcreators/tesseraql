@@ -16,6 +16,11 @@ queries:
     file: by-category.sql
   lowStock:
     file: low-stock.sql
+  # Supplier price drops, read straight off the CSV files by the analytics engine
+  # (docs/duckdb.md) — one response composing the live database and the file drop.
+  supplierPrices:
+    file: supplier-prices.sql
+    datasource: analytics
 
 response:
   html:

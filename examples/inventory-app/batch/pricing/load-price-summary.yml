@@ -1,0 +1,15 @@
+version: tesseraql/v1
+id: pricing.loadSummary
+kind: job
+recipe: batch-pipeline
+datasource: analytics
+
+trigger:
+  schedule:
+    cron: "0 0 4 * * ?"
+
+pipeline:
+  - id: clear
+    sql: { file: clear-price-summary.sql, mode: update }
+  - id: load
+    sql: { file: load-price-summary.sql, mode: update }

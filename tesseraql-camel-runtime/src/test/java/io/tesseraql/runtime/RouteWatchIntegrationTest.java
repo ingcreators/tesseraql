@@ -75,9 +75,8 @@ class RouteWatchIntegrationTest {
                 "select 'v2' as version\n");
         assertThat(await("/api/ping", response -> response.body().contains("v2")).body())
                 .contains("v2");
-        assertThat(WATCH_LINES).anySatisfy(line -> assertThat(line)
-                .contains("Watch: reloaded routes (1 changed)")
-                .contains("web/api/ping/ping.sql changed"));
+        awaitWatchLine(line -> line.contains("Watch: reloaded routes (1 changed)")
+                && line.contains("web/api/ping/ping.sql changed"));
 
         // A brand-new route directory joins the watch as it appears and mounts on save.
         Path pong = appHome.resolve("web/api/pong");
@@ -97,8 +96,8 @@ class RouteWatchIntegrationTest {
         assertThat(stub.statusCode()).isEqualTo(500);
         assertThat(stub.body()).contains("TQL-CAMEL-3103").contains("no-such-recipe");
         assertThat(get("/api/pong").statusCode()).isEqualTo(200);
-        assertThat(WATCH_LINES).anySatisfy(line -> assertThat(line)
-                .contains("failed to compile").contains("no-such-recipe"));
+        awaitWatchLine(line -> line.contains("failed to compile")
+                && line.contains("no-such-recipe"));
 
         // Fixing the file in place recovers on the next save — the watcher is still alive.
         Files.writeString(appHome.resolve("web/api/ping/ping.sql"),
@@ -113,6 +112,19 @@ class RouteWatchIntegrationTest {
         Files.delete(pong);
         assertThat(await("/api/pong", response -> response.statusCode() == 404).statusCode())
                 .isEqualTo(404);
+    }
+
+    /**
+     * Polls until a watch line matching {@code expected} arrives (or 10s elapse). The route swap
+     * is observable over HTTP before the watcher publishes its line, so asserting the list
+     * immediately after the HTTP flip races the callback.
+     */
+    private static void awaitWatchLine(Predicate<String> expected) throws Exception {
+        long deadline = System.nanoTime() + Duration.ofSeconds(10).toNanos();
+        while (WATCH_LINES.stream().noneMatch(expected) && System.nanoTime() < deadline) {
+            Thread.sleep(100);
+        }
+        assertThat(WATCH_LINES).anySatisfy(line -> assertThat(expected.test(line)).isTrue());
     }
 
     /** Polls {@code path} until the response satisfies {@code until} (or 30s elapse). */

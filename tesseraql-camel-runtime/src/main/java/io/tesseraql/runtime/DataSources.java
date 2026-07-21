@@ -32,12 +32,22 @@ public final class DataSources {
      */
     public static HikariDataSource create(AppConfig config, String name,
             java.nio.file.Path appHome) {
+        return create(config, name, appHome, null);
+    }
+
+    /**
+     * Like {@link #create(AppConfig, String, java.nio.file.Path)}, additionally carrying the
+     * {@code --embedded-db} main override so a duckdb {@code attach: main} follows the effective
+     * main coordinates rather than the declared ones.
+     */
+    public static HikariDataSource create(AppConfig config, String name,
+            java.nio.file.Path appHome, MainDatasourceOverride override) {
         String prefix = "tesseraql.datasources." + name + ".";
         HikariConfig hikari = base(config, "tesseraql-" + name, prefix);
         if (!DuckDbDatasources.isDuckDb(config, name)) {
             return new HikariDataSource(hikari);
         }
-        DuckDbDatasources.configure(hikari, config, name, prefix, appHome);
+        DuckDbDatasources.configure(hikari, config, name, prefix, appHome, override);
         try {
             return new HikariDataSource(hikari);
         } catch (RuntimeException failure) {
@@ -108,7 +118,7 @@ public final class DataSources {
                 String poolName = String.valueOf(name);
                 pools.put(poolName, override != null && "main".equals(poolName)
                         ? create(override)
-                        : create(config, poolName, appHome));
+                        : create(config, poolName, appHome, override));
             }
         }
         if (!pools.containsKey("main")) {

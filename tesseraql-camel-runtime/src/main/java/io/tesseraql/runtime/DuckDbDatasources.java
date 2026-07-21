@@ -176,7 +176,7 @@ final class DuckDbDatasources {
      * by design, and a duckdb datasource holds nothing durable.
      */
     static void configure(HikariConfig hikari, AppConfig config, String name, String prefix,
-            Path appHome) {
+            Path appHome, DataSources.MainDatasourceOverride override) {
         if ("main".equals(name)) {
             throw new IllegalStateException("tesseraql.datasources.main cannot be a duckdb"
                     + " datasource: the engine holds nothing durable and framework tables live on"
@@ -213,7 +213,7 @@ final class DuckDbDatasources {
         if (config.getString(prefix + "maximumPoolSize").isEmpty()) {
             hikari.setMaximumPoolSize(4);
         }
-        hikari.setConnectionInitSql(initSql(config, extensions, attaches, loadsAtInit));
+        hikari.setConnectionInitSql(initSql(config, extensions, attaches, loadsAtInit, override));
     }
 
     /**
@@ -223,13 +223,14 @@ final class DuckDbDatasources {
      * last statements every pooled connection runs before any app SQL.
      */
     private static String initSql(AppConfig config, List<String> extensions, List<Attach> attaches,
-            boolean loadsAtInit) {
+            boolean loadsAtInit, DataSources.MainDatasourceOverride override) {
         List<String> statements = new ArrayList<>();
         for (String extension : extensions) {
             statements.add("LOAD " + extension);
         }
         for (Attach attach : attaches) {
-            statements.add("ATTACH '" + conninfo(config, attach.datasource()).replace("'", "''")
+            statements.add("ATTACH '" + conninfo(config, attach.datasource(), override)
+                    .replace("'", "''")
                     + "' AS " + attach.alias() + " (TYPE postgres"
                     + (attach.readWrite() ? "" : ", READ_ONLY") + ")");
         }
@@ -245,23 +246,37 @@ final class DuckDbDatasources {
      * never see credentials, and only PostgreSQL-dialect targets are attachable (postgres_scanner
      * is the one bridge the design ships).
      */
-    static String conninfo(AppConfig config, String target) {
+    static String conninfo(AppConfig config, String target,
+            DataSources.MainDatasourceOverride override) {
+        // `serve --embedded-db` replaces main's coordinates outside config; an attach on main
+        // must follow the EFFECTIVE pool, not the declared one.
+        if ("main".equals(target) && override != null) {
+            return conninfoOf(override.jdbcUrl(), override.username(), override.password());
+        }
         String prefix = "tesseraql.datasources." + target + ".";
         String jdbcUrl = config.requireString(prefix + "jdbcUrl");
         if (Dialect.fromJdbcUrl(jdbcUrl).filter(d -> d == Dialect.POSTGRES).isEmpty()) {
             throw new IllegalStateException("duckdb attach target '" + target
                     + "' must be a PostgreSQL datasource; its jdbcUrl is " + jdbcUrl);
         }
+        return conninfoOf(jdbcUrl, config.getString(prefix + "username").orElse(null),
+                config.getString(prefix + "password").orElse(null));
+    }
+
+    /** A libpq conninfo from explicit PostgreSQL coordinates. */
+    private static String conninfoOf(String jdbcUrl, String username, String password) {
         URI uri = URI.create(jdbcUrl.substring("jdbc:".length()));
         String database = uri.getPath() == null ? "" : uri.getPath().replaceFirst("^/", "");
         StringBuilder conninfo = new StringBuilder();
         conninfo.append("host=").append(quote(uri.getHost()));
         conninfo.append(" port=").append(uri.getPort() > 0 ? uri.getPort() : 5432);
         conninfo.append(" dbname=").append(quote(database));
-        config.getString(prefix + "username")
-                .ifPresent(user -> conninfo.append(" user=").append(quote(user)));
-        config.getString(prefix + "password")
-                .ifPresent(password -> conninfo.append(" password=").append(quote(password)));
+        if (username != null) {
+            conninfo.append(" user=").append(quote(username));
+        }
+        if (password != null) {
+            conninfo.append(" password=").append(quote(password));
+        }
         return conninfo.toString();
     }
 

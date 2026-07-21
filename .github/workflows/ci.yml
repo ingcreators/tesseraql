@@ -66,6 +66,9 @@ jobs:
           TQL=$(echo "$RUNNER_TEMP"/tesseraql-*/bin/tesseraql)
           "$TQL" lint --app examples/inventory-app
           "$TQL" admission --app examples/inventory-app
+          # The documented operator step for the app's analytics engine (docs/duckdb.md):
+          # provision the offline extension cache before first boot.
+          "$TQL" duckdb install-extensions --app examples/inventory-app
           "$TQL" serve --app examples/inventory-app --embedded-db > serve.log 2>&1 &
           SERVE_PID=$!
           READY=0
