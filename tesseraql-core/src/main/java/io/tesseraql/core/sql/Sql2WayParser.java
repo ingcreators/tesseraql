@@ -102,6 +102,9 @@ public final class Sql2WayParser {
     }
 
     private SqlNode parseBind(Directive directive) {
+        if (directive.content().trim().startsWith("${")) {
+            return parseFilePath(directive);
+        }
         boolean list = skipWhitespacePeek() == '(';
         skipDummy(list);
         String expr = directive.content().trim();
@@ -111,6 +114,57 @@ public final class Sql2WayParser {
         return list
                 ? new SqlNode.ListBind(expr, ExpressionParser.parse(expr), directive.sourceLine())
                 : new SqlNode.Bind(expr, ExpressionParser.parse(expr), directive.sourceLine());
+    }
+
+    /**
+     * A file-reference site: {@code ${scope.name}/rel/path} or {@code ${dataset.param}}
+     * (docs/duckdb.md). Shape-validated here so a traversal or meta-character never reaches the
+     * renderer; the dummy literal that follows is consumed like any bind's.
+     */
+    private SqlNode parseFilePath(Directive directive) {
+        skipDummy(false);
+        String content = directive.content().trim();
+        int close = content.indexOf('}');
+        if (!content.startsWith("${") || close < 0) {
+            throw error("Malformed file placeholder '" + content + "': expected ${scope.name} or"
+                    + " ${dataset.param}");
+        }
+        String reference = content.substring(2, close);
+        String suffix = content.substring(close + 1);
+        int dot = reference.indexOf('.');
+        String channel = dot < 0 ? reference : reference.substring(0, dot);
+        String name = dot < 0 ? "" : reference.substring(dot + 1);
+        if (!("scope".equals(channel) || "dataset".equals(channel))
+                || !name.matches("[A-Za-z0-9_-]+")) {
+            throw error("Unknown file placeholder '" + content
+                    + "': only ${scope.<name>} and ${dataset.<param>} resolve to files");
+        }
+        if ("dataset".equals(channel) && !suffix.isEmpty()) {
+            throw error("A ${dataset.*} placeholder names a whole file; '" + suffix
+                    + "' cannot follow it");
+        }
+        if ("scope".equals(channel) && !validScopeSuffix(suffix)) {
+            throw error("File placeholder path '" + suffix + "' must be /-separated relative"
+                    + " segments of [A-Za-z0-9._*-] with no '..'");
+        }
+        return new SqlNode.FilePath(channel, name, suffix, directive.sourceLine());
+    }
+
+    /** {@code /seg/seg} where each segment is safe charset, non-empty, and never {@code ..}. */
+    private static boolean validScopeSuffix(String suffix) {
+        if (suffix.isEmpty()) {
+            return true;
+        }
+        if (!suffix.startsWith("/")) {
+            return false;
+        }
+        for (String segment : suffix.substring(1).split("/", -1)) {
+            if (segment.isEmpty() || segment.equals(".") || segment.equals("..")
+                    || !segment.matches("[A-Za-z0-9._*-]+")) {
+                return false;
+            }
+        }
+        return true;
     }
 
     private SqlNode parseIf(Directive first) {

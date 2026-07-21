@@ -93,4 +93,17 @@ public sealed interface SqlNode {
      */
     record Scope(String name, String alias, boolean asBoolean, int sourceLine) implements SqlNode {
     }
+
+    /**
+     * A file-reference site for an analytics datasource: {@code /* ${scope.name}/rel/path *}{@code
+     * / 'dummy'} or {@code /* ${dataset.param} *}{@code / 'dummy'} (docs/duckdb.md). The dummy
+     * literal keeps the template runnable in a plain SQL tool; at render time a
+     * {@link FilePathResolver} maps the channel + name (+ relative suffix, already shape-validated
+     * by the parser) to an absolute path under a declared root, bound as an ordinary {@code ?}
+     * parameter — SQL text never carries a dynamic path.
+     */
+    record FilePath(String channel, String name, String suffix, int sourceLine)
+            implements
+                SqlNode {
+    }
 }

@@ -222,6 +222,9 @@ public final class RouteSpecGenerator {
                     // An embedded variable interpolates into the SQL text, not a ? bind, and adds no
                     // control structure; its placeholders are surfaced through the route's inputs.
                 }
+                case SqlNode.FilePath filePath -> binds.add(
+                        "${" + filePath.channel() + "." + filePath.name() + "}"
+                                + filePath.suffix());
             }
         }
     }

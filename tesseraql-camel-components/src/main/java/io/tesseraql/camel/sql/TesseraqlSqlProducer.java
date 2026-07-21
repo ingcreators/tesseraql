@@ -88,7 +88,7 @@ public class TesseraqlSqlProducer extends DefaultProducer {
             Map<String, Object> scopeContext = exchange.getProperty(
                     TesseraqlProperties.CONTEXT, Map.of(), Map.class);
             BoundSql bound = SqlRenderer.render(nodes, params, scopeResolver(exchange),
-                    scopeContext);
+                    scopeContext, filePathResolver(exchange));
             DataSource dataSource = dataSource(exchange);
 
             if ("query-export".equals(mode)) {
@@ -180,6 +180,26 @@ public class TesseraqlSqlProducer extends DefaultProducer {
         ScopeResolver resolver = exchange.getContext().getRegistry()
                 .lookupByNameAndType(TesseraqlProperties.SCOPE_RESOLVER_BEAN, ScopeResolver.class);
         return resolver != null ? resolver : ScopeResolver.UNSUPPORTED;
+    }
+
+    /**
+     * The file-scope resolver bound by the runtime (docs/duckdb.md), narrowed to this endpoint's
+     * datasource. File placeholders only resolve on a duckdb endpoint — on any other dialect, and
+     * when no resolver is bound, the renderer's reject-any-placeholder default applies, so a
+     * {@code ${scope.*}} outside an analytics datasource fails loudly.
+     */
+    private io.tesseraql.core.sql.FilePathResolver filePathResolver(Exchange exchange) {
+        if (!"duckdb".equals(endpoint.getDialect())) {
+            return io.tesseraql.core.sql.FilePathResolver.UNSUPPORTED;
+        }
+        DatasourceFilePathResolver resolver = exchange.getContext().getRegistry()
+                .lookupByNameAndType(TesseraqlProperties.FILE_PATH_RESOLVER_BEAN,
+                        DatasourceFilePathResolver.class);
+        if (resolver == null) {
+            return io.tesseraql.core.sql.FilePathResolver.UNSUPPORTED;
+        }
+        return (channel, name, suffix, context) -> resolver.resolve(
+                endpoint.getDatasource(), channel, name, suffix, context);
     }
 
     private io.tesseraql.core.diag.SqlExecutionLog slowSqlLog(Exchange exchange) {

@@ -14,6 +14,7 @@ class DialectTest {
         assertThat(Dialect.fromJdbcUrl("jdbc:postgresql://h/db")).contains(Dialect.POSTGRES);
         assertThat(Dialect.fromJdbcUrl("jdbc:mysql://h/db")).contains(Dialect.MYSQL);
         assertThat(Dialect.fromJdbcUrl("jdbc:mariadb://h/db")).contains(Dialect.MYSQL);
+        assertThat(Dialect.fromJdbcUrl("jdbc:duckdb:")).contains(Dialect.DUCKDB);
         assertThat(Dialect.fromJdbcUrl("jdbc:unknown://h")).isEmpty();
     }
 

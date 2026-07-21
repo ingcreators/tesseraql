@@ -34,6 +34,7 @@ public final class SqlCoverableLines {
                         .forEach(branch -> collect(branch.body(), out));
                 case SqlNode.For loop -> collect(loop.body(), out);
                 case SqlNode.Scope scope -> out.add(scope.sourceLine());
+                case SqlNode.FilePath filePath -> out.add(filePath.sourceLine());
             }
         }
     }

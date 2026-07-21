@@ -126,6 +126,7 @@ public final class AppLinter {
         lintAttachments(appHome, manifest, findings);
         lintObjectStorageEgress(appHome, manifest, findings);
         lintViews(appHome, manifest, findings);
+        lintDuckDb(appHome, manifest, findings);
         for (RouteFile route : manifest.routes()) {
             lintInputs(appHome, route, findings);
         }
@@ -1930,6 +1931,203 @@ public final class AppLinter {
         findings.add(new LintFinding("TQL-YAML-1035", "error", source,
                 "datasource '" + name + "' is not declared under tesseraql.datasources",
                 lineOf(sourceFile, "datasource:"), null));
+    }
+
+    /**
+     * The duckdb datasource kind (docs/duckdb.md) is a query engine, never a system of record —
+     * {@code TQL-YAML-1040} holds the structural constraints: {@code main} can never be duckdb,
+     * a duckdb datasource has no migration tree, its {@code fileScopes} must declare
+     * traversal-free roots (with {@code partitionBy} limited to {@code tenant}), it is never a
+     * projection target, and route pipelines on it are read-shaped. {@code TQL-SQL-2111} holds the
+     * SQL-content rules: file placeholders only on duckdb SQL, only naming declared scopes, and
+     * file-reading functions never taking a raw argument.
+     */
+    private void lintDuckDb(Path appHome, AppManifest manifest, List<LintFinding> findings) {
+        AppConfig config = manifest.config();
+        String configSource = "config/tesseraql.yml";
+        if (duckDbDatasource(config, "main")) {
+            findings.add(new LintFinding("TQL-YAML-1040", "error", configSource,
+                    "tesseraql.datasources.main cannot be a duckdb datasource - the engine holds"
+                            + " nothing durable and framework tables live on main"));
+        }
+        if (config.navigate("tesseraql.datasources") instanceof java.util.Map<?, ?> datasources) {
+            for (Object nameKey : datasources.keySet()) {
+                String name = String.valueOf(nameKey);
+                if (!duckDbDatasource(config, name)) {
+                    continue;
+                }
+                lintFileScopes(config, name, configSource, findings);
+                if (Files.isDirectory(appHome.resolve("db").resolve(name).resolve("migration"))) {
+                    findings.add(new LintFinding("TQL-YAML-1040", "error",
+                            "db/" + name + "/migration",
+                            "a duckdb datasource is a query engine with nothing durable to"
+                                    + " migrate - remove db/" + name + "/migration"));
+                }
+            }
+        }
+        for (RouteFile route : manifest.routes()) {
+            lintDuckDbRoute(appHome, config, route, findings);
+        }
+        for (RouteFile consumer : manifest.consumers()) {
+            String datasource = consumer.definition().datasource();
+            if (declaredDatasource(datasource) && duckDbDatasource(config, datasource)) {
+                findings.add(new LintFinding("TQL-YAML-1040", "error",
+                        appHome.relativize(consumer.source()).toString().replace('\\', '/'),
+                        "a duckdb datasource is not a projection target - it holds nothing"
+                                + " durable; project into a server datasource instead"));
+            }
+        }
+    }
+
+    /** Validates a duckdb datasource's declared {@code fileScopes} block. */
+    private void lintFileScopes(AppConfig config, String name, String configSource,
+            List<LintFinding> findings) {
+        Object scopes = config.navigate("tesseraql.datasources." + name + ".duckdb.fileScopes");
+        if (!(scopes instanceof java.util.Map<?, ?> scopeMap)) {
+            return;
+        }
+        for (Object scopeKey : scopeMap.keySet()) {
+            String scopeName = String.valueOf(scopeKey);
+            String prefix = "tesseraql.datasources." + name + ".duckdb.fileScopes." + scopeName
+                    + ".";
+            String root = config.getString(prefix + "root").orElse(null);
+            if (root == null || root.isBlank()) {
+                findings.add(new LintFinding("TQL-YAML-1040", "error", configSource,
+                        "file scope '" + scopeName + "' on datasource '" + name
+                                + "' declares no root: directory"));
+            } else if (root.contains("..") || root.indexOf('\'') >= 0 || root.indexOf('\\') >= 0) {
+                findings.add(new LintFinding("TQL-YAML-1040", "error", configSource,
+                        "file scope '" + scopeName + "' on datasource '" + name
+                                + "' must declare a plain directory root without '..', quotes,"
+                                + " or backslashes"));
+            }
+            String partitionBy = config.getString(prefix + "partitionBy").orElse(null);
+            if (partitionBy != null && !"tenant".equals(partitionBy)) {
+                findings.add(new LintFinding("TQL-YAML-1040", "error", configSource,
+                        "file scope '" + scopeName + "' on datasource '" + name
+                                + "' partitionBy must be 'tenant', not '" + partitionBy + "'"));
+            }
+        }
+    }
+
+    /** The per-route duckdb rules: read-shaped pipelines and the SQL-content file rules. */
+    private void lintDuckDbRoute(Path appHome, AppConfig config, RouteFile route,
+            List<LintFinding> findings) {
+        RouteDefinition definition = route.definition();
+        String source = appHome.relativize(route.source()).toString().replace('\\', '/');
+        String routeDatasource = declaredDatasource(definition.datasource())
+                ? definition.datasource()
+                : "main";
+        if (duckDbDatasource(config, routeDatasource)
+                && !READ_DATASOURCE_RECIPES.contains(definition.recipe())) {
+            findings.add(new LintFinding("TQL-YAML-1040", "error", source,
+                    "a duckdb datasource serves reads - the '" + definition.recipe()
+                            + "' recipe carries durable state and belongs on a server"
+                            + " datasource"));
+        }
+        lintDuckDbSql(config, route, definition.sql(), routeDatasource, source, findings);
+        definition.queries().forEach((name, query) -> lintDuckDbSql(config, route, query,
+                declaredDatasource(query.datasource()) ? query.datasource() : routeDatasource,
+                source, findings));
+    }
+
+    /** Functions that read a file; on duckdb SQL their argument must be a file placeholder. */
+    private static final Pattern FILE_FUNCTION = Pattern.compile(
+            "\\b(?:read_csv_auto|read_csv|read_parquet|read_json_auto|read_json|read_text"
+                    + "|read_blob|parquet_scan|glob)\\s*\\(\\s*([^\\s])");
+
+    /** The SQL-content file rules for one binding, against its effective datasource. */
+    private void lintDuckDbSql(AppConfig config, RouteFile route, SqlBinding sql,
+            String datasource, String source, List<LintFinding> findings) {
+        if (sql == null || sql.isContract() || sql.file() == null) {
+            return;
+        }
+        Path sqlFile = route.source().getParent().resolve(sql.file());
+        if (!Files.isRegularFile(sqlFile)) {
+            return; // missing-file is reported separately
+        }
+        boolean duckDb = duckDbDatasource(config, datasource);
+        String text;
+        List<SqlNode> nodes;
+        try {
+            text = Files.readString(sqlFile);
+            nodes = Sql2WayParser.parse(text);
+        } catch (Exception ignored) {
+            return; // SQL syntax / IO errors surface through other checks
+        }
+        List<SqlNode.FilePath> filePaths = new ArrayList<>();
+        collectFilePaths(nodes, filePaths);
+        for (SqlNode.FilePath filePath : filePaths) {
+            String reference = "${" + filePath.channel() + "." + filePath.name() + "}";
+            if (!duckDb) {
+                findings.add(new LintFinding("TQL-SQL-2111", "error", source,
+                        "File placeholder " + reference + " only resolves on a duckdb datasource;"
+                                + " this SQL runs on '" + datasource + "'",
+                        filePath.sourceLine(), null));
+            } else if ("dataset".equals(filePath.channel())) {
+                findings.add(new LintFinding("TQL-SQL-2111", "error", source,
+                        "${dataset.*} placeholders resolve through the dataset catalog, which is"
+                                + " not currently supported",
+                        filePath.sourceLine(), null));
+            } else if (!(config.navigate("tesseraql.datasources." + datasource
+                    + ".duckdb.fileScopes") instanceof java.util.Map<?, ?> scopeMap)
+                    || !scopeMap.containsKey(filePath.name())) {
+                findings.add(new LintFinding("TQL-SQL-2111", "error", source,
+                        "File scope '" + filePath.name() + "' is not declared under"
+                                + " tesseraql.datasources." + datasource + ".duckdb.fileScopes",
+                        filePath.sourceLine(), null));
+            }
+        }
+        if (duckDb) {
+            Matcher matcher = FILE_FUNCTION.matcher(text);
+            while (matcher.find()) {
+                // A placeholder site starts with the 2-way comment: `read_parquet(/* ${...} */ ...`.
+                if (!"/".equals(matcher.group(1))) {
+                    findings.add(new LintFinding("TQL-SQL-2111", "error", source,
+                            "A file-reading function on a duckdb datasource must take a"
+                                    + " ${scope.*} file placeholder, not a raw argument",
+                            lineAt(text, matcher.start()), null));
+                }
+            }
+        }
+    }
+
+    private static void collectFilePaths(List<SqlNode> nodes, List<SqlNode.FilePath> out) {
+        for (SqlNode node : nodes) {
+            switch (node) {
+                case SqlNode.FilePath filePath -> out.add(filePath);
+                case SqlNode.If conditional -> conditional.branches()
+                        .forEach(branch -> collectFilePaths(branch.body(), out));
+                case SqlNode.For loop -> collectFilePaths(loop.body(), out);
+                default -> {
+                    // Text/Bind/ListBind/Embedded/Scope carry no file placeholders.
+                }
+            }
+        }
+    }
+
+    /** The 1-based line of a character offset in {@code text}. */
+    private static int lineAt(String text, int offset) {
+        int line = 1;
+        for (int i = 0; i < offset && i < text.length(); i++) {
+            if (text.charAt(i) == '\n') {
+                line++;
+            }
+        }
+        return line;
+    }
+
+    /** Whether the named datasource resolves to the duckdb dialect (mirrors the compiler). */
+    private static boolean duckDbDatasource(AppConfig config, String name) {
+        String prefix = "tesseraql.datasources." + name + ".";
+        String dialect = config.getString(prefix + "dialect").orElse(null);
+        if (dialect != null) {
+            return "duckdb".equalsIgnoreCase(dialect);
+        }
+        return config.getString(prefix + "jdbcUrl")
+                .flatMap(io.tesseraql.core.dialect.Dialect::fromJdbcUrl)
+                .filter(d -> d == io.tesseraql.core.dialect.Dialect.DUCKDB)
+                .isPresent();
     }
 
     /**
