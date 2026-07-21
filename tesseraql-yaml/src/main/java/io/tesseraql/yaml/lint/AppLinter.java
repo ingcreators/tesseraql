@@ -2156,6 +2156,37 @@ public final class AppLinter {
                                 + " s3:// plus endpoint:)"));
             }
         }
+        if (config.navigate("tesseraql.datasources." + name
+                + ".duckdb.remotes") instanceof java.util.Map<?, ?> remotes) {
+            for (Object remoteName : remotes.keySet()) {
+                String prefix = "tesseraql.datasources." + name + ".duckdb.remotes."
+                        + remoteName + ".";
+                String url = config.getString(prefix + "url").orElse("");
+                if (!url.startsWith("s3://") || !url.endsWith("/")) {
+                    findings.add(new LintFinding("TQL-YAML-1040", "error", configSource,
+                            "duckdb remote '" + remoteName + "' on datasource '" + name
+                                    + "' needs url: an s3:// prefix ending in '/'"));
+                }
+                boolean keyed = config.navigate(prefix.substring(0, prefix.length() - 1)
+                        + ".credentials") instanceof java.util.Map<?, ?> map
+                        && map.containsKey("keyId") && map.containsKey("secret");
+                boolean chain = "instance".equals(
+                        config.getString(prefix + "credentials").orElse(null));
+                if (!keyed && !chain) {
+                    findings.add(new LintFinding("TQL-YAML-1040", "error", configSource,
+                            "duckdb remote '" + remoteName + "' on datasource '" + name
+                                    + "' needs credentials: {keyId, secret} or 'instance'"));
+                }
+            }
+            Object remoteExtensions = config.navigate(
+                    "tesseraql.datasources." + name + ".duckdb.extensions");
+            if (!(remoteExtensions instanceof java.util.List<?> extList)
+                    || !extList.contains("httpfs")) {
+                findings.add(new LintFinding("TQL-YAML-1040", "error", configSource,
+                        "duckdb remotes: on datasource '" + name
+                                + "' need httpfs in extensions:"));
+            }
+        }
         Object attach = config.navigate("tesseraql.datasources." + name + ".duckdb.attach");
         if (!(attach instanceof java.util.List<?> entries)) {
             return;
@@ -2249,9 +2280,10 @@ public final class AppLinter {
                                     + filePath.name() + "' binding the dataset reference",
                             filePath.sourceLine(), null));
                 }
-            } else if (!(config.navigate("tesseraql.datasources." + datasource
-                    + ".duckdb.fileScopes") instanceof java.util.Map<?, ?> scopeMap)
-                    || !scopeMap.containsKey(filePath.name())) {
+            } else if ("scope".equals(filePath.channel())
+                    && (!(config.navigate("tesseraql.datasources." + datasource
+                            + ".duckdb.fileScopes") instanceof java.util.Map<?, ?> scopeMap)
+                            || !scopeMap.containsKey(filePath.name()))) {
                 findings.add(new LintFinding("TQL-SQL-2111", "error", source,
                         "File scope '" + filePath.name() + "' is not declared under"
                                 + " tesseraql.datasources." + datasource + ".duckdb.fileScopes",
@@ -2260,9 +2292,19 @@ public final class AppLinter {
         }
         if (duckDb) {
             for (SqlNode.FilePath filePath : filePaths) {
-                if (remoteLake(config, datasource)) {
+                if ("remote".equals(filePath.channel())) {
+                    if (!(config.navigate("tesseraql.datasources." + datasource
+                            + ".duckdb.remotes") instanceof java.util.Map<?, ?> remoteMap)
+                            || !remoteMap.containsKey(filePath.name())) {
+                        findings.add(new LintFinding("TQL-SQL-2111", "error", source,
+                                "Remote '" + filePath.name() + "' is not declared under"
+                                        + " tesseraql.datasources." + datasource
+                                        + ".duckdb.remotes",
+                                filePath.sourceLine(), null));
+                    }
+                } else if (remoteTier(config, datasource)) {
                     findings.add(new LintFinding("TQL-SQL-2111", "error", source,
-                            "A remote-lake datasource has no governed local-file surface;"
+                            "A remote-tier datasource has no governed local-file surface;"
                                     + " ${scope.*}/${dataset.*} resolve on a local duckdb"
                                     + " datasource - compose across two datasources",
                             filePath.sourceLine(), null));
@@ -2338,6 +2380,14 @@ public final class AppLinter {
             }
         }
         return line;
+    }
+
+    /** Whether the named duckdb datasource runs the remote tier (remote lake or remotes). */
+    private static boolean remoteTier(AppConfig config, String name) {
+        return remoteLake(config, name)
+                || (duckDbDatasource(config, name)
+                        && config.navigate("tesseraql.datasources." + name
+                                + ".duckdb.remotes") instanceof java.util.Map<?, ?>);
     }
 
     /** Whether the named duckdb datasource declares a lake on object storage. */

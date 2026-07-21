@@ -277,6 +277,63 @@ class AppLinterDuckDbTest {
     }
 
     @Test
+    void resolvesRemoteChannelOnlyAgainstDeclaredRemotes(@TempDir Path dir) throws Exception {
+        Files.createDirectories(dir.resolve("config"));
+        Files.writeString(dir.resolve("config/tesseraql.yml"), """
+                tesseraql:
+                  app:
+                    name: t
+                  datasources:
+                    main:
+                      jdbcUrl: jdbc:postgresql://localhost/main
+                    analytics:
+                      jdbcUrl: "jdbc:duckdb:"
+                      duckdb:
+                        extensions: [ducklake, postgres, httpfs]
+                        remotes:
+                          drops:
+                            url: s3://lake/drops/
+                            credentials:
+                              keyId: k
+                              secret: s
+                """);
+        Path route = dir.resolve("web/api/d");
+        Files.createDirectories(route);
+        Files.writeString(route.resolve("ok.sql"),
+                "select * from read_parquet(/* ${remote.drops}/m.parquet */ 'd.parquet')\n");
+        Files.writeString(route.resolve("get.yml"), """
+                version: tesseraql/v1
+                id: d.ok
+                kind: route
+                recipe: query-json
+                datasource: analytics
+                sql:
+                  file: ok.sql
+                  mode: query
+                """);
+        Path ghost = dir.resolve("web/api/g");
+        Files.createDirectories(ghost);
+        Files.writeString(ghost.resolve("g.sql"),
+                "select * from read_parquet(/* ${remote.ghost}/m.parquet */ 'd.parquet')\n");
+        Files.writeString(ghost.resolve("get.yml"), """
+                version: tesseraql/v1
+                id: d.ghost
+                kind: route
+                recipe: query-json
+                datasource: analytics
+                sql:
+                  file: g.sql
+                  mode: query
+                """);
+
+        List<LintFinding> findings = new AppLinter().lint(dir);
+
+        assertThat(findings).noneMatch(f -> f.isError() && f.source().contains("web/api/d/"));
+        assertThat(findings).anyMatch(f -> f.code().equals("TQL-SQL-2111") && f.isError()
+                && f.message().contains("Remote 'ghost'"));
+    }
+
+    @Test
     void appliesTheSqlRulesToBatchJobs(@TempDir Path dir) throws Exception {
         writeConfig(dir, SCOPES);
         Path job = dir.resolve("batch/sales");

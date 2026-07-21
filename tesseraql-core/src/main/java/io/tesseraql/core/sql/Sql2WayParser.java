@@ -148,16 +148,16 @@ public final class Sql2WayParser {
         int dot = reference.indexOf('.');
         String channel = dot < 0 ? reference : reference.substring(0, dot);
         String name = dot < 0 ? "" : reference.substring(dot + 1);
-        if (!("scope".equals(channel) || "dataset".equals(channel))
-                || !name.matches("[A-Za-z0-9_-]+")) {
-            throw error("Unknown file placeholder '" + content
-                    + "': only ${scope.<name>} and ${dataset.<param>} resolve to files");
+        if (!("scope".equals(channel) || "dataset".equals(channel)
+                || "remote".equals(channel)) || !name.matches("[A-Za-z0-9_-]+")) {
+            throw error("Unknown file placeholder '" + content + "': only ${scope.<name>},"
+                    + " ${dataset.<param>}, and ${remote.<name>} resolve to files");
         }
         if ("dataset".equals(channel) && !suffix.isEmpty()) {
             throw error("A ${dataset.*} placeholder names a whole file; '" + suffix
                     + "' cannot follow it");
         }
-        if ("scope".equals(channel) && !validScopeSuffix(suffix)) {
+        if (!"dataset".equals(channel) && !validScopeSuffix(suffix)) {
             throw error("File placeholder path '" + suffix + "' must be /-separated relative"
                     + " segments of [A-Za-z0-9._*-] with no '..'");
         }

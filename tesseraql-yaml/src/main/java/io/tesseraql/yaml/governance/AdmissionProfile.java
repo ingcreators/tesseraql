@@ -11,6 +11,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Stream;
 
 /**
@@ -40,7 +41,8 @@ public final class AdmissionProfile {
     }
 
     /** The full admission outcome; {@code admitted()} is true only with zero failures. */
-    public record Report(List<Finding> failures, List<LintFinding> lintErrors,
+    public record Report(List<Finding> failures, List<Finding> notes,
+            List<LintFinding> lintErrors,
             List<GovernanceGate.Violation> governanceViolations) {
 
         public boolean admitted() {
@@ -141,7 +143,46 @@ public final class AdmissionProfile {
 
         failures.sort(java.util.Comparator.comparing(Finding::code)
                 .thenComparing(Finding::subject));
-        return new Report(failures, lintErrors, governance.violations());
+        // Informational NOTEs (never failures): where the analytics engine talks beyond the
+        // app tree — write-mode attaches, remote lakes with their endpoints, ad-hoc remote
+        // prefixes (docs/duckdb.md). Marketplace review and deployment egress control read
+        // these; they carry no TQL- code because they are not errors.
+        List<Finding> notes = new ArrayList<>();
+        if (manifest.config().navigate("tesseraql.datasources") instanceof Map<?, ?> sources) {
+            for (Object nameKey : sources.keySet()) {
+                String datasource = String.valueOf(nameKey);
+                String duck = "tesseraql.datasources." + datasource + ".duckdb.";
+                if (manifest.config().navigate(duck + "attach") instanceof List<?> attaches) {
+                    for (Object entry : attaches) {
+                        if (entry instanceof Map<?, ?> attach
+                                && "readwrite".equals(String.valueOf(attach.get("mode")))) {
+                            notes.add(new Finding("NOTE-ATTACH-READWRITE", datasource,
+                                    "attaches '" + attach.get("datasource")
+                                            + "' in readwrite mode"));
+                        }
+                    }
+                }
+                String lakeData = manifest.config().getString(duck + "lake.data").orElse("");
+                if (lakeData.startsWith("s3://")) {
+                    notes.add(new Finding("NOTE-REMOTE-LAKE", datasource,
+                            "lake data on " + lakeData
+                                    + manifest.config().getString(duck + "lake.endpoint")
+                                            .map(e -> " via endpoint " + e).orElse("")));
+                }
+                if (manifest.config().navigate(duck + "remotes") instanceof Map<?, ?> remotes) {
+                    for (Object remoteName : remotes.keySet()) {
+                        notes.add(new Finding("NOTE-REMOTE-READ", datasource,
+                                "${remote." + remoteName + "} reads "
+                                        + manifest.config().getString(duck + "remotes."
+                                                + remoteName + ".url").orElse("?")
+                                        + manifest.config().getString(duck + "remotes."
+                                                + remoteName + ".endpoint")
+                                                .map(e -> " via endpoint " + e).orElse("")));
+                    }
+                }
+            }
+        }
+        return new Report(failures, notes, lintErrors, governance.violations());
     }
 
     private static String relative(Path appHome, Path path) {

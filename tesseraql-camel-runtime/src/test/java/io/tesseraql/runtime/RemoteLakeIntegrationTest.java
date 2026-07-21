@@ -115,6 +115,12 @@ class RemoteLakeIntegrationTest {
             poolsB.values().forEach(HikariDataSource::close);
         }
 
+        // The ad-hoc ${remote.*} read: a Parquet object PUT into the declared prefix is
+        // queryable through the placeholder, under its own scoped secret.
+        HttpResponse<String> adhoc = get("/api/drop");
+        assertThat(adhoc.statusCode()).isEqualTo(200);
+        assertThat(adhoc.body()).contains("widgets");
+
         // The prefix-scoped secret answers only for the declared prefix.
         assertThat(get("/api/outofscope").statusCode()).isEqualTo(500);
 
@@ -123,6 +129,10 @@ class RemoteLakeIntegrationTest {
         assertThat(runtime.runJob("pricing.pruneNow", Map.of()).status().name())
                 .isEqualTo("COMPLETED");
         assertThat(storedObjects()).isLessThan(objectsBefore);
+    }
+
+    private static void assertThatPut(int status) {
+        assertThat(status).isBetween(200, 299);
     }
 
     /** Objects under the lake prefix, counted straight off the store's list API. */
@@ -178,8 +188,18 @@ class RemoteLakeIntegrationTest {
                             keyId: test-key
                             secret: test-secret
                           mode: readwrite
+                        remotes:
+                          drops:
+                            url: s3://lake/drops/
+                            region: us-east-1
+                            endpoint: %s
+                            urlStyle: path
+                            useSsl: false
+                            credentials:
+                              keyId: test-key
+                              secret: test-secret
                 """.formatted(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(),
-                POSTGRES.getPassword(), endpoint));
+                POSTGRES.getPassword(), endpoint, endpoint));
 
         Path cache = home.resolve("work/duckdb-extensions");
         Files.createDirectories(cache);
@@ -264,6 +284,49 @@ class RemoteLakeIntegrationTest {
                 "select sku, best_price from lake.price_history order by loaded_at, sku\n");
         Files.writeString(board.resolve("first-run.sql"),
                 "select sku, best_price from lake.price_history at (version => 2) order by sku\n");
+
+        // An ad-hoc drop the ${remote.*} channel reads back: a Parquet object PUT straight
+        // into the store (no engine involved on the write side).
+        Path drop = Files.createTempFile("drop", ".parquet");
+        try (Connection duck = DriverManager.getConnection("jdbc:duckdb:");
+                Statement statement = duck.createStatement()) {
+            Files.delete(drop);
+            statement.execute("""
+                    COPY (SELECT * FROM (VALUES ('widgets', 300), ('gadgets', 120))
+                          AS t(category, total))
+                    TO '%s' (FORMAT parquet)
+                    """.formatted(drop));
+        }
+        HttpResponse<String> put = HttpClient.newHttpClient().send(
+                HttpRequest.newBuilder(URI.create(S3MOCK.getHttpEndpoint()
+                        + "/lake/drops/monthly.parquet"))
+                        .PUT(HttpRequest.BodyPublishers.ofByteArray(Files.readAllBytes(drop)))
+                        .build(),
+                HttpResponse.BodyHandlers.ofString());
+        assertThatPut(put.statusCode());
+        Files.delete(drop);
+
+        Path adhoc = home.resolve("web/api/drop");
+        Files.createDirectories(adhoc);
+        Files.writeString(adhoc.resolve("get.yml"), """
+                version: tesseraql/v1
+                id: drop.read
+                kind: route
+                recipe: query-json
+                datasource: analytics
+                sql:
+                  file: drop.sql
+                  mode: query
+                response:
+                  json:
+                    body:
+                      data: sql.rows
+                """);
+        Files.writeString(adhoc.resolve("drop.sql"), """
+                select category, total
+                from read_parquet(/* ${remote.drops}/monthly.parquet */ 'dummy.parquet')
+                order by total desc
+                """);
 
         Path outOfScope = home.resolve("web/api/outofscope");
         Files.createDirectories(outOfScope);

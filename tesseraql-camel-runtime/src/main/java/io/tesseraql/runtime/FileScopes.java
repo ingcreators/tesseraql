@@ -23,13 +23,16 @@ final class FileScopes implements DatasourceFilePathResolver {
 
     private final Map<String, Map<String, ResolvedScope>> byDatasource;
     private final java.util.Set<String> remoteLakes;
+    private final Map<String, Map<String, String>> remotesByDatasource;
     private volatile io.tesseraql.core.attachment.AttachmentStore attachmentStore;
     private volatile DatasetSpool spool;
 
     private FileScopes(Map<String, Map<String, ResolvedScope>> byDatasource,
-            java.util.Set<String> remoteLakes) {
+            java.util.Set<String> remoteLakes,
+            Map<String, Map<String, String>> remotesByDatasource) {
         this.byDatasource = byDatasource;
         this.remoteLakes = remoteLakes;
+        this.remotesByDatasource = remotesByDatasource;
     }
 
     /**
@@ -47,6 +50,7 @@ final class FileScopes implements DatasourceFilePathResolver {
     static FileScopes fromConfig(Path appHome, AppConfig config) {
         Map<String, Map<String, ResolvedScope>> byDatasource = new LinkedHashMap<>();
         java.util.Set<String> remoteLakes = new java.util.LinkedHashSet<>();
+        Map<String, Map<String, String>> remotesByDatasource = new LinkedHashMap<>();
         Object declared = config.navigate("tesseraql.datasources");
         if (declared instanceof Map<?, ?> datasources) {
             for (Object name : datasources.keySet()) {
@@ -54,8 +58,12 @@ final class FileScopes implements DatasourceFilePathResolver {
                 if (!DuckDbDatasources.isDuckDb(config, datasource)) {
                     continue;
                 }
+                Map<String, String> remotes = new LinkedHashMap<>();
+                DuckDbDatasources.remoteReads(config, datasource)
+                        .forEach(read -> remotes.put(read.name(), read.url()));
+                remotesByDatasource.put(datasource, remotes);
                 DuckDbDatasources.Lake lake = DuckDbDatasources.lake(config, datasource);
-                if (lake != null && lake.isRemote()) {
+                if ((lake != null && lake.isRemote()) || !remotes.isEmpty()) {
                     remoteLakes.add(datasource);
                     byDatasource.put(datasource, Map.of());
                     continue;
@@ -68,7 +76,7 @@ final class FileScopes implements DatasourceFilePathResolver {
                 byDatasource.put(datasource, scopes);
             }
         }
-        return new FileScopes(byDatasource, remoteLakes);
+        return new FileScopes(byDatasource, remoteLakes, remotesByDatasource);
     }
 
     /** Whether any duckdb datasource is declared (the runtime binds the resolver only then). */
@@ -79,6 +87,15 @@ final class FileScopes implements DatasourceFilePathResolver {
     @Override
     public String resolve(String datasource, String channel, String name, String suffix,
             Map<String, Object> context) {
+        if ("remote".equals(channel)) {
+            String url = remotesByDatasource.getOrDefault(datasource, Map.of()).get(name);
+            if (url == null) {
+                throw new TqlException(FilePathResolver.UNSUPPORTED_CODE,
+                        "Remote '" + name + "' is not declared under tesseraql.datasources."
+                                + datasource + ".duckdb.remotes");
+            }
+            return suffix.isEmpty() ? url : url + suffix.substring(1);
+        }
         if ("dataset".equals(channel)) {
             if (remoteLakes.contains(datasource)) {
                 throw new TqlException(FilePathResolver.UNSUPPORTED_CODE,
