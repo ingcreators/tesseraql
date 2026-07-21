@@ -1957,6 +1957,7 @@ public final class AppLinter {
                     continue;
                 }
                 lintFileScopes(config, name, configSource, findings);
+                lintDuckDbEngineConfig(config, name, configSource, findings);
                 if (Files.isDirectory(appHome.resolve("db").resolve(name).resolve("migration"))) {
                     findings.add(new LintFinding("TQL-YAML-1040", "error",
                             "db/" + name + "/migration",
@@ -1967,6 +1968,26 @@ public final class AppLinter {
         }
         for (RouteFile route : manifest.routes()) {
             lintDuckDbRoute(appHome, config, route, findings);
+        }
+        for (io.tesseraql.yaml.manifest.JobFile job : manifest.jobs()) {
+            String source = appHome.relativize(job.source()).toString().replace('\\', '/');
+            String datasource = declaredDatasource(job.definition().datasource())
+                    ? job.definition().datasource()
+                    : "main";
+            if (declaredDatasource(job.definition().datasource())
+                    && !"main".equals(job.definition().datasource())
+                    && config.navigate(
+                            "tesseraql.datasources." + job.definition().datasource()) == null) {
+                findings.add(new LintFinding("TQL-YAML-1035", "error", source,
+                        "datasource '" + job.definition().datasource()
+                                + "' is not declared under tesseraql.datasources"));
+            }
+            for (io.tesseraql.yaml.model.PipelineStep step : job.definition().effectiveSteps()) {
+                if (step.sql() != null) {
+                    lintDuckDbSql(config, job.source().getParent(), step.sql(), datasource,
+                            source, findings);
+                }
+            }
         }
         for (RouteFile consumer : manifest.consumers()) {
             String datasource = consumer.definition().datasource();
@@ -2025,10 +2046,80 @@ public final class AppLinter {
                             + "' recipe carries durable state and belongs on a server"
                             + " datasource"));
         }
-        lintDuckDbSql(config, route, definition.sql(), routeDatasource, source, findings);
-        definition.queries().forEach((name, query) -> lintDuckDbSql(config, route, query,
+        lintDuckDbSql(config, route.source().getParent(), definition.sql(), routeDatasource,
+                source, findings);
+        definition.queries().forEach((name, query) -> lintDuckDbSql(config,
+                route.source().getParent(), query,
                 declaredDatasource(query.datasource()) ? query.datasource() : routeDatasource,
                 source, findings));
+    }
+
+    /**
+     * Validates a duckdb datasource's {@code extensions:} and {@code attach:} declarations so a
+     * misdeclaration is a lint error here, not a boot failure — mirroring the runtime's checks.
+     */
+    private void lintDuckDbEngineConfig(AppConfig config, String name, String configSource,
+            List<LintFinding> findings) {
+        Object extensions = config.navigate("tesseraql.datasources." + name + ".duckdb.extensions");
+        if (extensions instanceof java.util.List<?> list) {
+            for (Object entry : list) {
+                if (!String.valueOf(entry).matches("[a-z0-9_]+")) {
+                    findings.add(new LintFinding("TQL-YAML-1040", "error", configSource,
+                            "duckdb extension '" + entry + "' on datasource '" + name
+                                    + "' is not a plain extension name"));
+                }
+            }
+        }
+        Object attach = config.navigate("tesseraql.datasources." + name + ".duckdb.attach");
+        if (!(attach instanceof java.util.List<?> entries)) {
+            return;
+        }
+        for (int i = 0; i < entries.size(); i++) {
+            if (!(entries.get(i) instanceof java.util.Map<?, ?> entry)) {
+                findings.add(new LintFinding("TQL-YAML-1040", "error", configSource,
+                        "duckdb attach entry " + i + " on datasource '" + name
+                                + "' must be a mapping with datasource:"));
+                continue;
+            }
+            String target = entry.get("datasource") == null
+                    ? null
+                    : config.resolve(String.valueOf(entry.get("datasource")));
+            String alias = entry.get("as") == null
+                    ? target
+                    : config.resolve(String.valueOf(entry.get("as")));
+            String mode = entry.get("mode") == null
+                    ? "readonly"
+                    : config.resolve(String.valueOf(entry.get("mode")));
+            if (target == null || target.isBlank()) {
+                findings.add(new LintFinding("TQL-YAML-1040", "error", configSource,
+                        "duckdb attach entry " + i + " on datasource '" + name
+                                + "' declares no datasource:"));
+                continue;
+            }
+            if (!"main".equals(target)
+                    && config.navigate("tesseraql.datasources." + target) == null) {
+                findings.add(new LintFinding("TQL-YAML-1035", "error", configSource,
+                        "datasource '" + target + "' is not declared under"
+                                + " tesseraql.datasources"));
+            }
+            if (duckDbDatasource(config, target)) {
+                findings.add(new LintFinding("TQL-YAML-1040", "error", configSource,
+                        "duckdb attach target '" + target + "' is itself a duckdb datasource;"
+                                + " attach targets are server datasources"));
+            }
+            if (alias == null || !alias.matches("[A-Za-z_][A-Za-z0-9_]*")
+                    || "main".equals(alias)) {
+                findings.add(new LintFinding("TQL-YAML-1040", "error", configSource,
+                        "duckdb attach '" + target + "' on datasource '" + name
+                                + "' needs as: a plain identifier other than 'main' (DuckDB's"
+                                + " own default schema is named main)"));
+            }
+            if (!"readonly".equals(mode) && !"readwrite".equals(mode)) {
+                findings.add(new LintFinding("TQL-YAML-1040", "error", configSource,
+                        "duckdb attach '" + target + "' mode must be readonly or readwrite,"
+                                + " not '" + mode + "'"));
+            }
+        }
     }
 
     /** Functions that read a file; on duckdb SQL their argument must be a file placeholder. */
@@ -2037,12 +2128,12 @@ public final class AppLinter {
                     + "|read_blob|parquet_scan|glob)\\s*\\(\\s*([^\\s])");
 
     /** The SQL-content file rules for one binding, against its effective datasource. */
-    private void lintDuckDbSql(AppConfig config, RouteFile route, SqlBinding sql,
+    private void lintDuckDbSql(AppConfig config, Path sourceDir, SqlBinding sql,
             String datasource, String source, List<LintFinding> findings) {
         if (sql == null || sql.isContract() || sql.file() == null) {
             return;
         }
-        Path sqlFile = route.source().getParent().resolve(sql.file());
+        Path sqlFile = sourceDir.resolve(sql.file());
         if (!Files.isRegularFile(sqlFile)) {
             return; // missing-file is reported separately
         }

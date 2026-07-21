@@ -34,10 +34,34 @@ public final class DataSources {
             java.nio.file.Path appHome) {
         String prefix = "tesseraql.datasources." + name + ".";
         HikariConfig hikari = base(config, "tesseraql-" + name, prefix);
-        if (DuckDbDatasources.isDuckDb(config, name)) {
-            DuckDbDatasources.configure(hikari, config, name, prefix, appHome);
+        if (!DuckDbDatasources.isDuckDb(config, name)) {
+            return new HikariDataSource(hikari);
         }
-        return new HikariDataSource(hikari);
+        DuckDbDatasources.configure(hikari, config, name, prefix, appHome);
+        try {
+            return new HikariDataSource(hikari);
+        } catch (RuntimeException failure) {
+            // TQL-APP-4204: the duckdb engine refused its init sequence — most commonly a
+            // declared extension missing from the offline cache. Name the fix.
+            throw new io.tesseraql.core.error.TqlException(
+                    new io.tesseraql.core.error.TqlErrorCode(
+                            io.tesseraql.core.error.TqlDomain.APP, 4204),
+                    "duckdb datasource '" + name + "' failed to initialize: "
+                            + rootMessage(failure) + ". If a declared extension is missing from"
+                            + " the local cache, provision it offline-first with"
+                            + " 'tesseraql duckdb install-extensions --app <dir>'"
+                            + " (docs/duckdb.md)",
+                    failure);
+        }
+    }
+
+    /** The innermost cause message — the engine's own words, not Hikari's wrapper. */
+    private static String rootMessage(Throwable failure) {
+        Throwable cause = failure;
+        while (cause.getCause() != null) {
+            cause = cause.getCause();
+        }
+        return String.valueOf(cause.getMessage()).replace('\n', ' ');
     }
 
     /** Creates the {@code main} HikariCP pool from an explicit override rather than config. */

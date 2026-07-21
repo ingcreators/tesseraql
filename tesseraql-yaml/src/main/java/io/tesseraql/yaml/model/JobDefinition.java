@@ -28,6 +28,7 @@ public record JobDefinition(
         String id,
         String kind,
         String recipe,
+        String datasource,
         TriggerSpec trigger,
         Map<String, InputField> params,
         SqlBinding sql,
@@ -40,11 +41,19 @@ public record JobDefinition(
         pipeline = pipeline == null ? List.of() : List.copyOf(pipeline);
     }
 
+    /** Convenience constructor for a job on the main datasource (the pre-duckdb shape). */
+    public JobDefinition(String version, String id, String kind, String recipe, TriggerSpec trigger,
+            Map<String, InputField> params, SqlBinding sql, List<PipelineStep> pipeline,
+            boolean perTenant, ImportSpec fileImport) {
+        this(version, id, kind, recipe, null, trigger, params, sql, pipeline, perTenant,
+                fileImport);
+    }
+
     /** Convenience constructor for a job without an {@code import:} block (the pre-Phase-26 shape). */
     public JobDefinition(String version, String id, String kind, String recipe, TriggerSpec trigger,
             Map<String, InputField> params, SqlBinding sql, List<PipelineStep> pipeline,
             boolean perTenant) {
-        this(version, id, kind, recipe, trigger, params, sql, pipeline, perTenant, null);
+        this(version, id, kind, recipe, null, trigger, params, sql, pipeline, perTenant, null);
     }
 
     /** Returns the steps to run: the explicit pipeline, or a single synthetic step for a tasklet. */

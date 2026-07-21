@@ -552,7 +552,14 @@ public final class TesseraqlRuntime implements AutoCloseable {
                 .preferenceStore(preferences)
                 // Outbound REST for http-call pipeline steps (roadmap Phase 26): deny-by-default
                 // egress, secret-managed credentials, timeouts, and circuit breaking from config.
-                .httpCall(httpCallClient);
+                .httpCall(httpCallClient)
+                // ETL job SQL on a duckdb datasource resolves ${scope.*} placeholders through the
+                // same declared file scopes as routes (docs/duckdb.md).
+                .filePathResolvers(datasourceName -> datasourceName != null
+                        && DuckDbDatasources.isDuckDb(manifest.config(), datasourceName)
+                                ? (channel, scopeName, suffix, ctx) -> fileScopes.resolve(
+                                        datasourceName, channel, scopeName, suffix, ctx)
+                                : io.tesseraql.core.sql.FilePathResolver.UNSUPPORTED);
         // Cluster-scoped rate limits (docs/deployment.md): the lease ledger exists exactly
         // when a route declares rateLimit.scope: cluster; limiters reach it via the registry.
         if (manifest.routes().stream().anyMatch(route -> route.definition().policy() != null
@@ -710,6 +717,20 @@ public final class TesseraqlRuntime implements AutoCloseable {
                 throw new IllegalArgumentException("Unknown job: " + jobId);
             }
             String owner = jobOwners.getOrDefault(jobId, appName);
+            // A job's declared datasource: (docs/duckdb.md ETL) wins over main; per-tenant pool
+            // routing applies only to main-datasource jobs (a duckdb engine is one per node,
+            // tenant isolation there comes from tenant-partitioned file scopes).
+            String declared = jobFile.definition().datasource();
+            javax.sql.DataSource jobPool;
+            if (declared == null || declared.isBlank() || "main".equals(declared)) {
+                jobPool = dataSource;
+            } else {
+                jobPool = dataSources.get(declared);
+                if (jobPool == null) {
+                    throw new IllegalArgumentException(
+                            "Job datasource '" + declared + "' is not declared");
+                }
+            }
             if (jobFile.definition().perTenant()) {
                 List<String> tenants = TenantRegistry.tenantIds(runtimeConfig, dataSource,
                         tenantPools);
@@ -717,14 +738,16 @@ public final class TesseraqlRuntime implements AutoCloseable {
                     JobExecution last = null;
                     for (String tenantId : tenants) {
                         last = jobExecutor.run(jobFile,
-                                tenantPools.dataSourceFor(tenantId, dataSource),
+                                jobPool == dataSource
+                                        ? tenantPools.dataSourceFor(tenantId, dataSource)
+                                        : jobPool,
                                 io.tesseraql.core.tenant.TenantContext.of(tenantId),
                                 owner, params, "manual");
                     }
                     return last;
                 }
             }
-            return jobExecutor.run(jobFile, dataSource, owner, params, "manual");
+            return jobExecutor.run(jobFile, jobPool, owner, params, "manual");
         };
 
         io.tesseraql.core.outbox.OutboxEventSink outboxSink;
@@ -3316,7 +3339,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
         if (jobFile == null) {
             throw new IllegalArgumentException("Unknown job: " + jobId);
         }
-        return jobExecutor.run(jobFile, mainDataSource,
+        return jobExecutor.run(jobFile, jobDataSource(jobFile),
                 jobOwners.getOrDefault(jobId, appName), params, "manual");
     }
 
@@ -3330,14 +3353,31 @@ public final class TesseraqlRuntime implements AutoCloseable {
             throw new IllegalArgumentException("Unknown job: " + jobId);
         }
         List<JobExecution> executions = new java.util.ArrayList<>();
+        javax.sql.DataSource jobPool = jobDataSource(jobFile);
         for (String tenantId : TenantRegistry.tenantIds(config, mainDataSource,
                 tenantDataSources)) {
             executions.add(jobExecutor.run(jobFile,
-                    tenantDataSources.dataSourceFor(tenantId, mainDataSource),
+                    jobPool == mainDataSource
+                            ? tenantDataSources.dataSourceFor(tenantId, mainDataSource)
+                            : jobPool,
                     io.tesseraql.core.tenant.TenantContext.of(tenantId),
                     jobOwners.getOrDefault(jobId, appName), params, "manual"));
         }
         return executions;
+    }
+
+    /** The pool a job's declared {@code datasource:} selects; {@code main} absent a declaration. */
+    private javax.sql.DataSource jobDataSource(JobFile jobFile) {
+        String declared = jobFile.definition().datasource();
+        if (declared == null || declared.isBlank() || "main".equals(declared)) {
+            return mainDataSource;
+        }
+        javax.sql.DataSource pool = dataSources.get(declared);
+        if (pool == null) {
+            throw new IllegalArgumentException("Job datasource '" + declared
+                    + "' is not declared");
+        }
+        return pool;
     }
 
     public JobRepository jobRepository() {
