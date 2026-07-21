@@ -1027,6 +1027,35 @@ through the app's own attachment route — the blob-store write path — is quer
 back through `${dataset.*}` by its owner and neutrally refused to another
 authenticated caller. **Phase 58 is complete and milestone M23 is met.**
 
+### Phase 59 — lake tables: DuckLake under the fence
+
+Named 2026-07-21; the accepted design is the "Lake tables" section of
+[docs/duckdb.md](duckdb.md). DuckLake's whole premise — lakehouse metadata as
+ordinary rows in a SQL database — is the Phase 58 stance meeting itself: the
+catalog lives on a declared PostgreSQL datasource (`main` by default, confined to
+a named schema the extension self-manages), Parquet data under a declared
+directory, and **the engine stays stateless** while lake tables become the
+governed durable tier between raw file scopes and the system of record. Probed on
+DuckDB 1.3.1 before naming: the `ducklake` extension rides the offline cache; the
+attach survives the full fence (access dropped, configuration locked) for reads,
+writes, `AT (VERSION => n)` time travel, and the expiry/cleanup calls; and
+commits from separate engine instances serialize through the catalog — one
+connection's committed insert is immediately visible to another, lifting the
+single-writer constraint for lake tables specifically. The surface is one
+`duckdb.lake:` block (catalog / schema / data / as / mode), the attach
+framework-managed with credentials injected and the `--embedded-db` override
+honored; maintenance is an app-declared batch job; multi-node deployments need
+node-shared `data:` storage until the S3 tier (the recorded successor). Two
+slices: the lake attach + reads/ETL writes; maintenance + the concurrency proof.
+
+**Milestone M24** — on the inventory gallery app: the nightly pricing job also
+appends each run to a `lake.price_history` table, every run a snapshot; a
+dashboard reads the current history beside a time-traveled prior version; two
+concurrent connections write and both land, serialized by the catalog on `main`;
+the `ducklake` schema on `main` holds the metadata and Flyway never touches it;
+an expiry job prunes old snapshots and removes their files; and the fence still
+refuses undeclared attaches, loads, and out-of-root reads throughout.
+
 ## CLI distribution and upgrade delivery (cross-cutting)
 
 ### Phase 38 — CLI distribution and upgrade delivery
@@ -1312,3 +1341,15 @@ None block Phase 18; flagged for the maintainer as their horizons approach.
     operators through pass-through SQL — a documented recipe, never a framework dependency
     — and the DuckDB `postgres` extension covers the reverse bridge under the
     framework-managed, read-only-default `attach:`. See [docs/duckdb.md](duckdb.md).
+12. **Lake-table durability** (Phase 59): bless DuckLake tables as a durable tier vs keep the
+    analytics engine strictly stateless. Resolved 2026-07-21 at design time in favour of the
+    carve-out **with the stance narrowed to the engine**: the engine holds nothing durable,
+    while lake-table metadata is ordinary rows on the declared catalog datasource (`main`,
+    in a self-managed schema — backed up, migrated around, and operated like everything
+    else there) and lake data is Parquet under a declared, fence-admitted directory.
+    Probes on DuckDB 1.3.1 settled the risk questions before naming: full fence
+    compatibility, cross-engine snapshot serialization through the catalog, time travel,
+    and explicit expiry. The multi-node write constraint lifts for lake tables; the
+    remaining constraint — node-shared `data:` storage — is recorded, with S3 data paths
+    deferred to the inverted-fence lake tier that DuckLake now justifies building for
+    governed writes rather than ad-hoc reads.
