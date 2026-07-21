@@ -315,6 +315,38 @@ profile](admission.md) surfaces every remote lake with its endpoint, so
 marketplace review and deployment egress control see exactly where the engine
 talks.
 
+### Ad-hoc remote reads: `${remote.*}`
+
+Beyond lake tables, a remote-tier datasource may declare **remotes** — named
+object-storage prefixes for ad-hoc Parquet/CSV reads, each with its own
+prefix-scoped secret:
+
+```yaml
+      duckdb:
+        extensions: [ducklake, postgres, httpfs]
+        remotes:
+          drops:
+            url: s3://acme-lake/drops/
+            region: ap-northeast-1
+            endpoint: minio.internal:9000   # same coordinate surface as the lake
+            credentials: { keyId: ${secret.env.DROPS_KEY}, secret: ${secret.env.DROPS_SECRET} }
+```
+
+```sql
+SELECT category, sum(total) AS total
+FROM read_parquet(/* ${remote.drops}/2026/*/orders-*.parquet */ 'dummy.parquet',
+                  hive_partitioning = true)
+GROUP BY category
+```
+
+`${remote.<name>}` is the third — and last — file-placeholder channel: the
+declared prefix plus a parser-validated relative suffix (globs welcome), bound
+as an ordinary parameter, raw URLs refused at lint time. Parquet range reads
+work over the store, so a query fetches only the columns and row groups it
+needs. Declaring any remote puts the datasource on the remote tier with
+everything that entails above, and each remote appears in the admission report
+with its URL and endpoint.
+
 ## The security stance
 
 - **No network at runtime**: extensions are pre-provisioned, signed, and loaded from

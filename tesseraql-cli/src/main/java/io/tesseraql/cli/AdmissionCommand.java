@@ -20,6 +20,9 @@ public final class AdmissionCommand implements Callable<Integer> {
     @Override
     public Integer call() {
         AdmissionProfile.Report report = AdmissionProfile.check(app);
+        for (AdmissionProfile.Finding note : report.notes()) {
+            System.out.println("NOTE [" + note.subject() + "] " + note.reason());
+        }
         for (AdmissionProfile.Finding failure : report.failures()) {
             System.err.println(failure.code() + " " + failure.subject() + ": "
                     + failure.reason());

@@ -58,6 +58,10 @@ final class DuckDbDatasources {
             String keyId, String secret, boolean instanceChain) {
     }
 
+    /** A declared ad-hoc read prefix (docs/duckdb.md): {@code ${remote.<name>}} resolves under it. */
+    record RemoteRead(String name, String url, Remote coordinates) {
+    }
+
     private DuckDbDatasources() {
     }
 
@@ -198,27 +202,7 @@ final class DuckDbDatasources {
                         + ".duckdb.lake on object storage needs httpfs in extensions:, so the"
                         + " offline cache provisioning covers it (docs/duckdb.md)");
             }
-            Object credentials = config.navigate(prefix.substring(0, prefix.length() - 1)
-                    + ".credentials");
-            String keyId = null;
-            String secretKey = null;
-            boolean instanceChain = false;
-            if (credentials instanceof Map) {
-                keyId = config.requireString(prefix + "credentials.keyId");
-                secretKey = config.requireString(prefix + "credentials.secret");
-            } else if ("instance".equals(config.getString(prefix + "credentials").orElse(null))) {
-                instanceChain = true;
-            } else {
-                throw new IllegalStateException(prefix + "credentials must be a"
-                        + " {keyId, secret} mapping of secret references, or the string"
-                        + " 'instance' for the AWS credential chain");
-            }
-            remote = new Remote(
-                    config.getString(prefix + "region").orElse(null),
-                    config.getString(prefix + "endpoint").orElse(null),
-                    "path".equals(config.getString(prefix + "urlStyle").orElse("vhost")),
-                    config.getString(prefix + "useSsl").map(Boolean::parseBoolean).orElse(true),
-                    keyId, secretKey, instanceChain);
+            remote = remoteCoordinates(config, prefix);
         } else if (data.contains("://")) {
             throw new IllegalStateException(prefix + "data must be a local directory or an"
                     + " s3:// prefix (S3-compatible stores use s3:// plus endpoint:)");
@@ -230,6 +214,61 @@ final class DuckDbDatasources {
     private static String entryValue(AppConfig config, Map<?, ?> entry, String key) {
         Object value = entry.get(key);
         return value == null ? null : config.resolve(String.valueOf(value));
+    }
+
+    /** Parses the shared object-storage coordinate + credential block at {@code prefix}. */
+    private static Remote remoteCoordinates(AppConfig config, String prefix) {
+        Object credentials = config.navigate(prefix.substring(0, prefix.length() - 1)
+                + ".credentials");
+        String keyId = null;
+        String secretKey = null;
+        boolean instanceChain = false;
+        if (credentials instanceof Map) {
+            keyId = config.requireString(prefix + "credentials.keyId");
+            secretKey = config.requireString(prefix + "credentials.secret");
+        } else if ("instance".equals(config.getString(prefix + "credentials").orElse(null))) {
+            instanceChain = true;
+        } else {
+            throw new IllegalStateException(prefix + "credentials must be a"
+                    + " {keyId, secret} mapping of secret references, or the string"
+                    + " 'instance' for the AWS credential chain");
+        }
+        return new Remote(
+                config.getString(prefix + "region").orElse(null),
+                config.getString(prefix + "endpoint").orElse(null),
+                "path".equals(config.getString(prefix + "urlStyle").orElse("vhost")),
+                config.getString(prefix + "useSsl").map(Boolean::parseBoolean).orElse(true),
+                keyId, secretKey, instanceChain);
+    }
+
+    /** The declared ad-hoc read prefixes of a duckdb datasource (docs/duckdb.md), maybe empty. */
+    static List<RemoteRead> remoteReads(AppConfig config, String name) {
+        List<RemoteRead> reads = new ArrayList<>();
+        Object declared = config.navigate("tesseraql.datasources." + name + ".duckdb.remotes");
+        if (!(declared instanceof Map<?, ?> map)) {
+            return reads;
+        }
+        for (Object remoteName : map.keySet()) {
+            String prefix = "tesseraql.datasources." + name + ".duckdb.remotes." + remoteName
+                    + ".";
+            String url = config.requireString(prefix + "url");
+            if (!url.startsWith("s3://") || !url.endsWith("/")) {
+                throw new IllegalStateException(prefix + "url must be an s3:// prefix ending"
+                        + " in '/' (the scoped secret covers exactly this prefix)");
+            }
+            if (!String.valueOf(remoteName).matches("[A-Za-z0-9_-]+")) {
+                throw new IllegalStateException(prefix + " name must be a plain identifier");
+            }
+            reads.add(new RemoteRead(String.valueOf(remoteName), url,
+                    remoteCoordinates(config, prefix)));
+        }
+        return reads;
+    }
+
+    /** Whether the datasource runs the remote tier (a remote lake or declared remotes). */
+    static boolean isRemoteTier(AppConfig config, String name) {
+        Lake lake = lake(config, name);
+        return (lake != null && lake.isRemote()) || !remoteReads(config, name).isEmpty();
     }
 
     /** The pre-provisioned extension cache directory (docs/duckdb.md, offline-first). */
@@ -290,11 +329,18 @@ final class DuckDbDatasources {
             hikari.addDataSourceProperty("enable_external_access", "false");
         }
         Lake lake = lake(config, name);
-        if (lake != null && lake.isRemote() && !fileScopes(config, name).isEmpty()) {
+        List<RemoteRead> remoteReads = remoteReads(config, name);
+        boolean remoteTier = (lake != null && lake.isRemote()) || !remoteReads.isEmpty();
+        if (remoteTier && !fileScopes(config, name).isEmpty()) {
             throw new IllegalStateException("tesseraql.datasources." + name + " declares a"
-                    + " remote lake and fileScopes: - a remote-lake datasource has no governed"
-                    + " local-file surface; compose across two duckdb datasources instead"
-                    + " (docs/duckdb.md)");
+                    + " remote tier (remote lake or remotes:) and fileScopes: - a remote-tier"
+                    + " datasource has no governed local-file surface; compose across two duckdb"
+                    + " datasources instead (docs/duckdb.md)");
+        }
+        if (remoteTier && !extensions(config, name).contains("httpfs")) {
+            throw new IllegalStateException("tesseraql.datasources." + name
+                    + " runs the remote tier and needs httpfs in extensions:, so the offline"
+                    + " cache provisioning covers it (docs/duckdb.md)");
         }
         if (lake != null && !lake.isRemote()) {
             // The data directory must exist before the first connection attaches; creating it
@@ -329,8 +375,8 @@ final class DuckDbDatasources {
         if (config.getString(prefix + "maximumPoolSize").isEmpty()) {
             hikari.setMaximumPoolSize(4);
         }
-        hikari.setConnectionInitSql(
-                initSql(config, name, extensions, attaches, lake, loadsAtInit, override, appHome));
+        hikari.setConnectionInitSql(initSql(config, name, extensions, attaches, lake,
+                remoteReads, loadsAtInit, override, appHome));
     }
 
     /**
@@ -340,11 +386,15 @@ final class DuckDbDatasources {
      * last statements every pooled connection runs before any app SQL.
      */
     private static String initSql(AppConfig config, String name, List<String> extensions,
-            List<Attach> attaches, Lake lake, boolean loadsAtInit,
+            List<Attach> attaches, Lake lake, List<RemoteRead> remoteReads, boolean loadsAtInit,
             DataSources.MainDatasourceOverride override, Path appHome) {
         List<String> statements = new ArrayList<>();
         for (String extension : extensions) {
             statements.add("LOAD " + extension);
+        }
+        for (RemoteRead read : remoteReads) {
+            statements.add(remoteSecret("tql_remote_" + read.name(), read.url(),
+                    read.coordinates()));
         }
         for (Attach attach : attaches) {
             statements.add("ATTACH '" + conninfo(config, attach.datasource(), override)
@@ -365,7 +415,7 @@ final class DuckDbDatasources {
                     + "', METADATA_SCHEMA '" + lake.schema() + "'"
                     + (lake.readWrite() ? "" : ", READ_ONLY") + ")");
         }
-        if (loadsAtInit && (lake == null || !lake.isRemote())) {
+        if (loadsAtInit && (lake == null || !lake.isRemote()) && remoteReads.isEmpty()) {
             // The remote tier keeps external access on (httpfs needs it); its engine-hard
             // controls are the lock and the prefix-scoped secret, and the statement rules
             // move to lint (docs/duckdb.md "Remote data paths", decision point 13).
@@ -420,8 +470,13 @@ final class DuckDbDatasources {
      * connection setup, before the configuration locks.
      */
     private static String lakeSecret(Lake lake) {
-        Remote remote = lake.remote();
-        StringBuilder secret = new StringBuilder("CREATE SECRET tql_lake (TYPE s3");
+        return remoteSecret("tql_lake", lake.data(), lake.remote());
+    }
+
+    /** A prefix-scoped engine secret: the credentials answer only for {@code scope}. */
+    private static String remoteSecret(String secretName, String scope, Remote remote) {
+        StringBuilder secret = new StringBuilder(
+                "CREATE SECRET " + secretName + " (TYPE s3");
         if (remote.instanceChain()) {
             secret.append(", PROVIDER credential_chain");
         } else {
@@ -441,7 +496,7 @@ final class DuckDbDatasources {
         if (!remote.useSsl()) {
             secret.append(", USE_SSL false");
         }
-        secret.append(", SCOPE '").append(lake.data().replace("'", "''")).append("')");
+        secret.append(", SCOPE '").append(scope.replace("'", "''")).append("')");
         return secret.toString();
     }
 

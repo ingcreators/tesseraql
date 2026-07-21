@@ -1108,6 +1108,26 @@ authentication; a `${remote.*}` ad-hoc Parquet read works under the same scoped
 credentials while raw URLs and engine-management statements are lint errors —
 and the admission report names the lake's endpoint.
 
+Delivered 2026-07-21 in the two designed slices. The remote attach (#384):
+`lake.data:` as an s3:// prefix with endpoint/region/urlStyle/useSsl coordinates
+(S3-compatible stores first-class; S3Mock exercises the path-style shape in CI),
+credentials as secret references or `instance`, a prefix-scoped engine secret
+created at connection setup (an out-of-scope bucket fails authentication —
+asserted), the split control model landed as designed (statement lint on every
+duckdb datasource; scope/dataset placeholders refused on the remote tier), and
+two real 2-way parser bugs found by glob literals fixed with tests (quoted
+strings and `--` line comments are now opaque to directive scanning). The
+milestone (#385): `${remote.*}` — the third and last file-placeholder channel —
+resolves declared object-storage prefixes with per-remote scoped secrets;
+admission gained an informational NOTE surface (`Report.notes()`) naming every
+readwrite attach, remote lake endpoint, and remote URL; and
+`RemoteLakeIntegrationTest` runs milestone M25 end to end on real PostgreSQL +
+S3Mock: history snapshots as objects under the prefix from two concurrent engine
+instances, time travel, an ad-hoc `${remote.*}` read of an object PUT straight
+into the store, the out-of-scope 403, and retire → expire → cleanup strictly
+reducing the stored object count off the store's own list API. **Phase 60 is
+complete and milestone M25 is met.**
+
 ## CLI distribution and upgrade delivery (cross-cutting)
 
 ### Phase 38 — CLI distribution and upgrade delivery

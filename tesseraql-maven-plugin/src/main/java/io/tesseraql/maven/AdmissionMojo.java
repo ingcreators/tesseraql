@@ -21,6 +21,9 @@ public final class AdmissionMojo extends AbstractMojo {
     @Override
     public void execute() throws MojoFailureException {
         AdmissionProfile.Report report = AdmissionProfile.check(appHome.toPath());
+        for (AdmissionProfile.Finding note : report.notes()) {
+            getLog().info("NOTE [" + note.subject() + "] " + note.reason());
+        }
         for (AdmissionProfile.Finding failure : report.failures()) {
             getLog().error(failure.code() + " " + failure.subject() + ": "
                     + failure.reason());
