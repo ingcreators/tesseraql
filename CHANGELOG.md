@@ -4,6 +4,66 @@ All notable changes to TesseraQL are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [Semantic Versioning](https://semver.org/).
 
+## 0.7.0 - 2026-07-21
+
+### Added
+
+- **DuckDB analytics datasources** (docs/duckdb.md): CSV and Parquet files become queryable
+  with plain SQL through a new `duckdb` datasource kind — an in-process engine that is a
+  query engine, never a system of record. Every pooled connection starts behind a proven
+  fence (extension autoinstall/autoload off, external access disabled, allowed directories
+  = the declared roots, configuration locked), and dynamic file paths exist only as
+  placeholder channels: tenant-partitionable **`${scope.*}`** file scopes and owner-gated
+  **`${dataset.*}`** reads over scan-passed managed attachments, bridged by a
+  content-addressed local spool. Engine extensions are provisioned **offline-first** with
+  `tesseraql duckdb install-extensions` / `info` (DuckDB's own repository layout and
+  signature verification, corporate `--repository` mirrors, air-gap zip `--bundle` /
+  `--from-bundle`); a managed **`attach:`** surfaces declared PostgreSQL datasources inside
+  the engine (credentials injected, `READ_ONLY` default, the `--embedded-db` override
+  honored), and batch jobs gain **`datasource:`** for one-statement pull ETL. The BOM now
+  version-manages `org.duckdb:duckdb_jdbc` (module channel only — the driver never enters
+  the CLI fat jar), and the inventory gallery app dogfoods the whole surface.
+- **Lake tables — DuckLake under the fence** (docs/duckdb.md): `duckdb.lake:` attaches a
+  [DuckLake](https://ducklake.select) lakehouse whose **metadata lives on `main`** (confined
+  to a self-managed schema) with Parquet data under a fence-admitted directory — ACID
+  snapshots, `AT (VERSION => n)` time travel, and commits from separate engine instances
+  serialized through the catalog, so lake-table writes are multi-node safe. Retention is an
+  app-declared job over `ducklake_expire_snapshots` / `ducklake_cleanup_old_files` (the
+  `CALL`s return rows: run them as query-mode steps).
+- **Remote lakes and ad-hoc remote reads, S3-compatible from day one** (docs/duckdb.md):
+  `lake.data:` takes an `s3://` prefix — AWS or any S3-compatible store via
+  `endpoint`/`region`/`urlStyle`/`useSsl`, credentials as secret references or `instance`
+  (AWS credential chain) — lifting the shared-storage constraint: every node reads and
+  writes the same lake. **`${remote.*}`**, the third and last file-placeholder channel,
+  resolves declared object-storage prefixes for ad-hoc Parquet/CSV reads (globs and Hive
+  partitioning welcome). Each lake and remote gets a **prefix-scoped engine secret** — an
+  out-of-scope bucket fails authentication — and on every duckdb datasource app SQL must be
+  plain queries: `ATTACH`/`INSTALL`/`LOAD`/`CREATE SECRET`/`SET`/`PRAGMA` are lint errors
+  (`TQL-SQL-2111`). The admission report gains informational **NOTEs** naming every
+  readwrite attach, remote lake endpoint, and remote URL.
+- **Module-channel JDBC drivers now reach `DriverManager`**: drivers arriving as
+  `tesseraql.modules` jars (DuckDB, MySQL, Oracle, SQL Server) register through a
+  base-classpath shim at boot and in the authoring commands — previously only the bundled
+  PostgreSQL driver was visible, and module-declared drivers required baking into the image.
+- **Distribution**: release tags now publish the reactor to **Maven Central** (signed, with
+  sources and javadoc) alongside GitHub Packages; Homebrew and Scoop channels are documented
+  and auto-bumped on release; the TesseraQL brand mark ships across the CLI, docs site, and
+  VS Code extension.
+
+### Changed
+
+- **`AdmissionProfile.Report` carries `notes()`** (pre-1.0 API change for Java consumers):
+  the record gained an informational component beside `failures()`; the CLI `admission`
+  command and the Maven mojo print the NOTEs.
+
+### Fixed
+
+- **2-way SQL parser: quoted strings and `--` comments are opaque**: a string literal
+  containing `/*` (a glob like `'s3://x/**'`, a `LIKE '%/*%'` pattern) no longer opens a
+  directive comment, and an apostrophe inside a `--` line comment (`-- don't`) no longer
+  opens a string. Both shapes previously failed to parse, so no behavior changed for
+  templates that compiled before.
+
 ## 0.6.0 - 2026-07-12
 
 ### Changed
