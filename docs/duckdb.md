@@ -263,11 +263,57 @@ proven against DuckDB 1.3.1 with the fence locked:
   on the catalog datasource; app migrations must not touch it, and Flyway never
   will (it manages only `db/migration` trees).
 
-One honest constraint stands until the S3 tier ships: in a multi-node deployment
-the `data:` directory must be storage every node can read — shared storage, or a
-single analytics node. Remote (S3) data paths arrive with the inverted-fence lake
-tier, which DuckLake makes worth building: it turns that tier from ad-hoc reads
-into governed, transactional writes on object storage.
+With a local `data:` directory, one constraint stands: in a multi-node deployment
+it must be storage every node can read — shared storage, or a single analytics
+node. Remote data paths lift it.
+
+### Remote data paths: the lake on object storage
+
+`data:` may be an `s3://` prefix — on AWS or any S3-compatible store (MinIO,
+Cloudflare R2, S3Mock in tests) via explicit endpoint coordinates:
+
+```yaml
+        lake:
+          catalog: main                  # metadata stays on main, unchanged
+          data: s3://acme-lake/inventory/
+          region: ap-northeast-1
+          endpoint: minio.internal:9000  # S3-compatible stores; omit for AWS
+          urlStyle: path                 # path | vhost (default vhost, the AWS form)
+          useSsl: false                  # default true
+          credentials:                   # secret references, like any datasource
+            keyId: ${secret.env.LAKE_KEY_ID}
+            secret: ${secret.env.LAKE_SECRET}
+          mode: readwrite
+```
+
+`credentials: instance` selects the AWS credential chain instead (instance
+profile / IRSA — no static keys anywhere). At connection setup the runtime loads
+`httpfs` (which must join `extensions:`), creates a **prefix-scoped secret**
+(`SCOPE 's3://acme-lake/inventory/'` — the credentials answer for the declared
+prefix and nothing else; an out-of-scope URL fails authentication), attaches the
+lake, and locks the configuration. Every node then writes and reads the same lake
+with no shared filesystem: commits still serialize through the catalog on `main`,
+and snapshot cleanup deletes the S3 objects no surviving snapshot references.
+S3 uploads buffer multipart blocks in memory — do not starve a remote-lake
+datasource with a tiny `duckdb.memoryLimit` (its writes need headroom in the
+hundreds of megabytes).
+
+**The remote tier's control model is different, and documented honestly.** The
+local tier's hard fence (`enable_external_access=false`) cannot coexist with
+`httpfs`, and disabling the local filesystem outright was probed and rejected —
+DuckLake commits and query spilling both need local scratch. What remains
+engine-hard: the locked configuration, the prefix-scoped secret, and
+autoinstall/autoload off. What moves to **build time**: on every duckdb
+datasource, app SQL must be plain queries — `ATTACH`, `DETACH`, `INSTALL`,
+`LOAD`, `CREATE SECRET`, `SET`, and `PRAGMA` statements are lint errors
+(`TQL-SQL-2111`; the local tier's engine fence refuses them at runtime anyway,
+so the rule only fronts what production already enforced). On a remote-lake
+datasource, `${scope.*}` and `${dataset.*}` placeholders are additionally
+refused — there is no governed local-file surface there; compose across two
+duckdb datasources when an app needs both. The [admission
+profile](admission.md) surfaces every remote lake with its endpoint, so
+marketplace review and deployment egress control see exactly where the engine
+talks.
 
 ## The security stance
 

@@ -1075,6 +1075,39 @@ runtime restart re-attaching beside Flyway; the test's aggressive prune variant
 fence refusing out-of-root reads to the end. **Phase 59 is complete and milestone
 M24 is met.**
 
+### Phase 60 — remote lakes: object storage from day one
+
+Named 2026-07-21; the accepted design is the "Remote data paths" section of
+[docs/duckdb.md](duckdb.md). `lake.data:` becomes an `s3://` prefix — AWS or any
+S3-compatible store (MinIO, R2; S3Mock in CI) via explicit
+endpoint/region/urlStyle/useSsl coordinates, credentials as secret references or
+`instance` for the AWS credential chain — and the multi-node constraint on lake
+tables disappears: every node reads and writes the same object-storage lake,
+commits still serialized by the catalog on `main`. Probed three rounds on DuckDB
+1.3.1 against S3Mock before naming, and the probes REVERSED the sketched design:
+`disabled_filesystems='LocalFileSystem'` kills DuckLake commits and query
+spilling, so there is no engine-hard local fence on this tier. The accepted
+control model: engine-hard where the engine can hold (locked configuration;
+**prefix-scoped secrets** — an out-of-scope URL fails authentication, proven;
+autoinstall/autoload off; a documented memory floor for multipart upload
+buffers), and **build-time-hard for statements** — a new lint rule refuses
+`ATTACH`/`DETACH`/`INSTALL`/`LOAD`/`CREATE SECRET`/`SET`/`PRAGMA` in app SQL on
+every duckdb datasource (the local tier's runtime fence already refused them;
+the rule fronts it), with `${scope.*}`/`${dataset.*}` additionally refused on
+remote-lake datasources and every remote lake surfaced by admission with its
+endpoint. Two slices: the remote attach (coordinates, scoped secrets, statement
+lint, S3Mock IT); then `${remote.*}` ad-hoc reads + admission NOTEs + the
+milestone.
+
+**Milestone M25** — on a deployment with an S3-compatible store (S3Mock in CI):
+an app declares a remote lake; the pricing-shaped job writes history snapshots
+that land as objects under the declared prefix from two separate engine
+instances concurrently; time travel reads a prior version; retire + expire +
+cleanup strictly reduces the object count; an out-of-scope bucket read fails
+authentication; a `${remote.*}` ad-hoc Parquet read works under the same scoped
+credentials while raw URLs and engine-management statements are lint errors —
+and the admission report names the lake's endpoint.
+
 ## CLI distribution and upgrade delivery (cross-cutting)
 
 ### Phase 38 — CLI distribution and upgrade delivery
@@ -1372,3 +1405,15 @@ None block Phase 18; flagged for the maintainer as their horizons approach.
     remaining constraint — node-shared `data:` storage — is recorded, with S3 data paths
     deferred to the inverted-fence lake tier that DuckLake now justifies building for
     governed writes rather than ad-hoc reads.
+13. **The remote tier's control model** (Phase 60): the sketched "inverted fence"
+    (`disabled_filesystems='LocalFileSystem'`) was probed and REJECTED — DuckLake commits
+    and query spilling both need local scratch, and the setting cannot block `ATTACH`
+    anyway. Resolved 2026-07-21 in favour of a split model: engine-hard controls where
+    the engine can hold them (locked configuration, prefix-scoped secrets — proven to
+    fail out-of-scope URLs with 403, autoinstall/autoload off, a documented memory floor
+    for S3 multipart buffers) and build-time-hard statement discipline where it cannot
+    (lint refuses engine-management statements in app SQL on every duckdb datasource;
+    the local tier's runtime fence already refused them, so the rule fronts production
+    behavior). The honest residual — authored SQL on a remote-lake datasource is
+    lint-governed rather than engine-caged — is recorded in docs/duckdb.md and surfaced
+    per-lake by admission.
