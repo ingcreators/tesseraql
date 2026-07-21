@@ -3,28 +3,39 @@ package io.tesseraql.runtime;
 import com.zaxxer.hikari.HikariConfig;
 import io.tesseraql.core.dialect.Dialect;
 import io.tesseraql.yaml.config.AppConfig;
+import java.net.URI;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
 /**
  * The duckdb datasource kind (docs/duckdb.md): an in-process analytics engine over CSV/Parquet
- * files, never a system of record. This class owns detection, the declared file scopes, and the
- * connection fence — every setting DuckDB must hold before app SQL runs on a pooled connection.
+ * files, never a system of record. This class owns detection, the declared file scopes, declared
+ * engine extensions, framework-managed attaches, and the connection fence — every setting DuckDB
+ * must hold before app SQL runs on a pooled connection.
  *
- * <p>The fence, proven against DuckDB 1.3: external access is disabled at database creation with
- * the scope roots (only) carved out via {@code allowed_directories}; extension autoinstall and
- * autoload are off; and the first statement on every connection locks the configuration, so app
- * SQL can never widen any of it. {@code enable_external_access} cannot be re-enabled on a running
- * database even before the lock. Each {@code jdbc:duckdb:} connection is its own in-memory
- * database, so the fence properties apply per pooled connection and local tables are per-connection
- * scratch — exactly the nothing-durable, nothing-shared stance the design commits to.
+ * <p>The fence, proven against DuckDB 1.3: extension autoinstall and autoload are off and the
+ * extension directory is a local pre-provisioned cache (the runtime never downloads); declared
+ * extensions are {@code LOAD}ed and declared attaches established at connection setup; then
+ * external access is disabled — queries through an established attach keep working, while new
+ * {@code ATTACH}, further {@code LOAD}/{@code INSTALL}, and out-of-root file access are refused —
+ * with the scope roots (only) carved out via {@code allowed_directories}; and the configuration is
+ * locked, so app SQL can never widen any of it. {@code enable_external_access} cannot be
+ * re-enabled on a running database even before the lock. Each {@code jdbc:duckdb:} connection is
+ * its own in-memory database, so the sequence applies per pooled connection and local tables are
+ * per-connection scratch — exactly the nothing-durable, nothing-shared stance the design commits
+ * to.
  */
 final class DuckDbDatasources {
 
     /** A declared file scope: a root directory and an optional per-tenant partition. */
     record FileScope(String root, boolean partitionByTenant) {
+    }
+
+    /** A declared attach: a named server datasource surfaced under an alias, read-only default. */
+    record Attach(String datasource, String alias, boolean readWrite) {
     }
 
     private DuckDbDatasources() {
@@ -64,9 +75,82 @@ final class DuckDbDatasources {
         return scopes;
     }
 
+    /** The declared engine extensions of a duckdb datasource (validated names, may be empty). */
+    static List<String> extensions(AppConfig config, String name) {
+        List<String> extensions = new ArrayList<>();
+        Object declared = config.navigate("tesseraql.datasources." + name + ".duckdb.extensions");
+        if (declared instanceof List<?> list) {
+            for (Object entry : list) {
+                String extension = String.valueOf(entry);
+                if (!extension.matches("[a-z0-9_]+")) {
+                    throw new IllegalStateException("tesseraql.datasources." + name
+                            + ".duckdb.extensions entry '" + extension
+                            + "' is not a plain extension name");
+                }
+                extensions.add(extension);
+            }
+        }
+        return extensions;
+    }
+
+    /** The declared attaches of a duckdb datasource (validated shape, may be empty). */
+    static List<Attach> attaches(AppConfig config, String name) {
+        List<Attach> attaches = new ArrayList<>();
+        Object declared = config.navigate("tesseraql.datasources." + name + ".duckdb.attach");
+        if (!(declared instanceof List<?> list)) {
+            return attaches;
+        }
+        for (int i = 0; i < list.size(); i++) {
+            String prefix = "tesseraql.datasources." + name + ".duckdb.attach[" + i + "] ";
+            if (!(list.get(i) instanceof Map<?, ?> entry)) {
+                throw new IllegalStateException(prefix + "must be a mapping with datasource:");
+            }
+            String target = entryValue(config, entry, "datasource");
+            if (target == null || target.isBlank()) {
+                throw new IllegalStateException(prefix + "declares no datasource:");
+            }
+            String alias = entryValue(config, entry, "as");
+            alias = alias == null ? target : alias;
+            String mode = entryValue(config, entry, "mode");
+            mode = mode == null ? "readonly" : mode;
+            if (!"readonly".equals(mode) && !"readwrite".equals(mode)) {
+                throw new IllegalStateException(prefix + "mode must be readonly or readwrite,"
+                        + " not '" + mode + "'");
+            }
+            if (!alias.matches("[A-Za-z_][A-Za-z0-9_]*") || "main".equals(alias)) {
+                throw new IllegalStateException(prefix + "as must be a plain identifier other"
+                        + " than 'main' (DuckDB's own default schema is named main); attaching"
+                        + " the main datasource requires an explicit as:");
+            }
+            if (isDuckDb(config, target)) {
+                throw new IllegalStateException(prefix + "datasource '" + target
+                        + "' is a duckdb datasource; attach targets are server datasources");
+            }
+            attaches.add(new Attach(target, alias, "readwrite".equals(mode)));
+        }
+        return attaches;
+    }
+
+    /** A string value of an attach-entry key, with config placeholders resolved. */
+    private static String entryValue(AppConfig config, Map<?, ?> entry, String key) {
+        Object value = entry.get(key);
+        return value == null ? null : config.resolve(String.valueOf(value));
+    }
+
+    /** The pre-provisioned extension cache directory (docs/duckdb.md, offline-first). */
+    static Path extensionDirectory(AppConfig config, Path appHome) {
+        Path base = appHome == null ? Path.of(".") : appHome;
+        return config.getString("tesseraql.duckdb.extensionDirectory")
+                .map(base::resolve)
+                .orElseGet(() -> base.resolve("work/duckdb-extensions"))
+                .normalize()
+                .toAbsolutePath();
+    }
+
     /** Resolves a declared scope root against the app home; roots must stay traversal-free. */
     static Path resolveRoot(Path appHome, String root) {
-        Path resolved = appHome.resolve(root).normalize().toAbsolutePath();
+        Path resolved = (appHome == null ? Path.of(".") : appHome).resolve(root).normalize()
+                .toAbsolutePath();
         if (root.contains("..") || resolved.toString().indexOf('\'') >= 0) {
             throw new IllegalStateException(
                     "A duckdb file-scope root must be a plain directory path without '..' or"
@@ -87,12 +171,21 @@ final class DuckDbDatasources {
                     + " datasource: the engine holds nothing durable and framework tables live on"
                     + " main (docs/duckdb.md)");
         }
+        List<String> extensions = extensions(config, name);
+        List<Attach> attaches = attaches(config, name);
+        boolean loadsAtInit = !extensions.isEmpty() || !attaches.isEmpty();
         hikari.addDataSourceProperty("autoinstall_known_extensions", "false");
         hikari.addDataSourceProperty("autoload_known_extensions", "false");
-        hikari.addDataSourceProperty("enable_external_access", "false");
+        if (loadsAtInit) {
+            // LOAD and ATTACH need external access during connection setup; the init statements
+            // below drop it (irreversibly for the database's lifetime) once they are done.
+            hikari.addDataSourceProperty("extension_directory",
+                    extensionDirectory(config, appHome).toString());
+        } else {
+            hikari.addDataSourceProperty("enable_external_access", "false");
+        }
         List<String> roots = fileScopes(config, name).values().stream()
-                .map(scope -> resolveRoot(appHome == null ? Path.of(".") : appHome, scope.root())
-                        + "/")
+                .map(scope -> resolveRoot(appHome, scope.root()) + "/")
                 .distinct()
                 .toList();
         if (!roots.isEmpty()) {
@@ -108,8 +201,61 @@ final class DuckDbDatasources {
         if (config.getString(prefix + "maximumPoolSize").isEmpty()) {
             hikari.setMaximumPoolSize(4);
         }
-        // The first statement on every pooled connection freezes the configuration; nothing app
-        // SQL runs afterwards can change a setting on this database instance.
-        hikari.setConnectionInitSql("SET GLOBAL lock_configuration=true");
+        hikari.setConnectionInitSql(initSql(config, extensions, attaches, loadsAtInit));
+    }
+
+    /**
+     * The per-connection init sequence: LOAD declared extensions from the local cache, establish
+     * declared attaches with credentials injected from the target datasource's declaration, then
+     * drop external access (when it was needed for the loads) and lock the configuration — the
+     * last statements every pooled connection runs before any app SQL.
+     */
+    private static String initSql(AppConfig config, List<String> extensions, List<Attach> attaches,
+            boolean loadsAtInit) {
+        List<String> statements = new ArrayList<>();
+        for (String extension : extensions) {
+            statements.add("LOAD " + extension);
+        }
+        for (Attach attach : attaches) {
+            statements.add("ATTACH '" + conninfo(config, attach.datasource()).replace("'", "''")
+                    + "' AS " + attach.alias() + " (TYPE postgres"
+                    + (attach.readWrite() ? "" : ", READ_ONLY") + ")");
+        }
+        if (loadsAtInit) {
+            statements.add("SET enable_external_access=false");
+        }
+        statements.add("SET GLOBAL lock_configuration=true");
+        return String.join("; ", statements);
+    }
+
+    /**
+     * The libpq conninfo for an attach target, derived from the declared datasource — SQL authors
+     * never see credentials, and only PostgreSQL-dialect targets are attachable (postgres_scanner
+     * is the one bridge the design ships).
+     */
+    static String conninfo(AppConfig config, String target) {
+        String prefix = "tesseraql.datasources." + target + ".";
+        String jdbcUrl = config.requireString(prefix + "jdbcUrl");
+        if (Dialect.fromJdbcUrl(jdbcUrl).filter(d -> d == Dialect.POSTGRES).isEmpty()) {
+            throw new IllegalStateException("duckdb attach target '" + target
+                    + "' must be a PostgreSQL datasource; its jdbcUrl is " + jdbcUrl);
+        }
+        URI uri = URI.create(jdbcUrl.substring("jdbc:".length()));
+        String database = uri.getPath() == null ? "" : uri.getPath().replaceFirst("^/", "");
+        StringBuilder conninfo = new StringBuilder();
+        conninfo.append("host=").append(quote(uri.getHost()));
+        conninfo.append(" port=").append(uri.getPort() > 0 ? uri.getPort() : 5432);
+        conninfo.append(" dbname=").append(quote(database));
+        config.getString(prefix + "username")
+                .ifPresent(user -> conninfo.append(" user=").append(quote(user)));
+        config.getString(prefix + "password")
+                .ifPresent(password -> conninfo.append(" password=").append(quote(password)));
+        return conninfo.toString();
+    }
+
+    /** A single-quoted libpq conninfo value ({@code \} and {@code '} backslash-escaped). */
+    private static String quote(String value) {
+        String escaped = String.valueOf(value).replace("\\", "\\\\").replace("'", "\\'");
+        return "'" + escaped + "'";
     }
 }

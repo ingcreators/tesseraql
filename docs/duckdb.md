@@ -104,19 +104,23 @@ missing from the cache fails the boot fast, naming the command that fixes it.
 
 ```console
 tesseraql duckdb install-extensions --app .              # resolve + verify into the cache
-tesseraql duckdb install-extensions --app . --bundle duckdb-ext.tar.gz   # air-gap bundle
+tesseraql duckdb install-extensions --app . --bundle duckdb-ext.zip       # write an air-gap bundle
+tesseraql duckdb install-extensions --app . --from-bundle duckdb-ext.zip  # populate offline from one
 ```
 
 - The command derives the DuckDB version and platform from the bundled driver — the
   single source of truth — so a driver upgrade with a stale cache is caught at boot,
-  and `tesseraql info` reports the pin (the embedded-PostgreSQL binary discipline).
+  and `tesseraql duckdb info` reports the pin and the cache contents (the
+  embedded-PostgreSQL binary discipline).
 - The cache uses DuckDB's own repository layout
-  (`<version>/<platform>/<name>.duckdb_extension`), so no repackaging exists to
-  drift; integrity is DuckDB's offline signature verification, not a parallel
-  checksum scheme.
-- `--repository <url>` points the fetch at a corporate mirror; `--bundle` writes a
-  portable archive to carry across an air gap, unpacked at
-  `tesseraql.duckdb.extensionDirectory` on the target.
+  (`<version>/<platform>/<name>.duckdb_extension`, default
+  `work/duckdb-extensions`, relocatable via `tesseraql.duckdb.extensionDirectory`),
+  and installation runs through the engine's own `INSTALL` — so no repackaging
+  exists to drift, and integrity is DuckDB's offline signature verification, not a
+  parallel checksum scheme.
+- `--repository <url>` points the fetch at a corporate mirror; `--bundle` writes the
+  cache as a portable zip to carry across an air gap, and `--from-bundle` populates
+  the cache from one with no network at all.
 
 ## Attaching other datasources
 
@@ -138,20 +142,22 @@ The attach is what turns file reads into one-statement ETL. The pull-shaped batc
 DuckDB datasource writing through the attach:
 
 ```yaml
-# jobs/sales/load-summary.yml
+# batch/sales/load-summary.yml
 version: tesseraql/v1
 id: sales.loadSummary
 kind: job
-recipe: batch-tasklet
+recipe: batch-pipeline
 datasource: analytics
 
 trigger:
   schedule:
     cron: "0 0 4 * * ?"
 
-sql:
-  file: load-summary.sql
-  mode: update
+pipeline:
+  - id: clear
+    sql: { file: clear-summary.sql, mode: update }
+  - id: load
+    sql: { file: load-summary.sql, mode: update }
 ```
 
 ```sql
@@ -160,6 +166,9 @@ SELECT category, sum(amount), now()
 FROM read_parquet(/* ${scope.sales}/monthly.parquet */ 'data/sales/acme/monthly.parquet')
 GROUP BY category
 ```
+
+(The `clear` step deletes the window `load` re-fills — the replace-the-window shape
+the transaction note below demands.)
 
 The scheduler is cluster-safe, so the job runs on one node and the single-writer
 constraint is satisfied by construction; the durable result lands on `main`. A

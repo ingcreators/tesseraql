@@ -138,6 +138,68 @@ class AppLinterDuckDbTest {
     }
 
     @Test
+    void flagsAttachMisdeclarations(@TempDir Path dir) throws Exception {
+        Files.createDirectories(dir.resolve("config"));
+        Files.writeString(dir.resolve("config/tesseraql.yml"), """
+                tesseraql:
+                  app:
+                    name: t
+                  datasources:
+                    main:
+                      jdbcUrl: jdbc:postgresql://localhost/main
+                    analytics:
+                      jdbcUrl: "jdbc:duckdb:"
+                      duckdb:
+                        extensions: [postgres, "bad name"]
+                        attach:
+                          - { datasource: main }
+                          - { datasource: ghost, as: g }
+                          - { datasource: analytics, as: self }
+                          - { datasource: main, as: app, mode: sometimes }
+                """);
+
+        List<LintFinding> findings = new AppLinter().lint(dir);
+
+        assertThat(findings).anyMatch(f -> f.code().equals("TQL-YAML-1040") && f.isError()
+                && f.message().contains("'bad name'"));
+        assertThat(findings).anyMatch(f -> f.code().equals("TQL-YAML-1040") && f.isError()
+                && f.message().contains("other than 'main'"));
+        assertThat(findings).anyMatch(f -> f.code().equals("TQL-YAML-1035") && f.isError()
+                && f.message().contains("'ghost'"));
+        assertThat(findings).anyMatch(f -> f.code().equals("TQL-YAML-1040") && f.isError()
+                && f.message().contains("itself a duckdb datasource"));
+        assertThat(findings).anyMatch(f -> f.code().equals("TQL-YAML-1040") && f.isError()
+                && f.message().contains("mode must be readonly or readwrite"));
+    }
+
+    @Test
+    void appliesTheSqlRulesToBatchJobs(@TempDir Path dir) throws Exception {
+        writeConfig(dir, SCOPES);
+        Path job = dir.resolve("batch/sales");
+        Files.createDirectories(job);
+        Files.writeString(job.resolve("load.yml"), """
+                version: tesseraql/v1
+                id: sales.load
+                kind: job
+                recipe: batch-tasklet
+                datasource: analytics
+                trigger:
+                  schedule:
+                    cron: "0 0 4 * * ?"
+                sql:
+                  file: load.sql
+                  mode: update
+                """);
+        Files.writeString(job.resolve("load.sql"),
+                "insert into t select * from read_parquet(/* ${scope.ghost}/m.parquet */ 'd')\n");
+
+        List<LintFinding> findings = new AppLinter().lint(dir);
+
+        assertThat(findings).anyMatch(f -> f.code().equals("TQL-SQL-2111") && f.isError()
+                && f.message().contains("File scope 'ghost'"));
+    }
+
+    @Test
     void flagsTransactionalRecipesAndProjectionTargets(@TempDir Path dir) throws Exception {
         writeConfig(dir, SCOPES);
         Path commandDir = dir.resolve("web/api/load");

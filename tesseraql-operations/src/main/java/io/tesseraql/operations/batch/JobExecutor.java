@@ -62,6 +62,7 @@ public final class JobExecutor {
     private io.tesseraql.operations.http.HttpCallClient httpCallClient;
     private io.tesseraql.core.account.PreferenceStore preferenceStore;
     private FailureListener failureListener;
+    private java.util.function.Function<String, io.tesseraql.core.sql.FilePathResolver> filePathResolvers;
 
     public JobExecutor(JobRepository repository, TempStore tempStore) {
         this(repository, tempStore, io.tesseraql.core.diag.NoopSqlExecutionLog.INSTANCE);
@@ -106,6 +107,17 @@ public final class JobExecutor {
     /** Wires the failure listener raising job-failure alerts (roadmap Phase 20). */
     public JobExecutor onFailure(FailureListener listener) {
         this.failureListener = listener;
+        return this;
+    }
+
+    /**
+     * Wires the per-datasource file-scope resolver factory (docs/duckdb.md), so ETL job SQL on a
+     * duckdb datasource can carry {@code ${scope.*}} placeholders. Absent (or for a datasource the
+     * factory does not cover) a file placeholder fails loudly with the renderer's reject default.
+     */
+    public JobExecutor filePathResolvers(
+            java.util.function.Function<String, io.tesseraql.core.sql.FilePathResolver> factory) {
+        this.filePathResolvers = factory;
         return this;
     }
 
@@ -267,7 +279,14 @@ public final class JobExecutor {
         Path sqlPath = jobFile.source().getParent().resolve(step.sql().file()).normalize();
         String source = read(sqlPath);
         Map<String, Object> sqlParams = resolveParams(step, context);
-        BoundSql bound = SqlRenderer.render(source, sqlParams);
+        // File placeholders (docs/duckdb.md) resolve against the job's datasource; the job
+        // context doubles as the resolver context, so a perTenant run's tenant partitions scopes.
+        io.tesseraql.core.sql.FilePathResolver filePathResolver = filePathResolvers == null
+                ? io.tesseraql.core.sql.FilePathResolver.UNSUPPORTED
+                : filePathResolvers.apply(jobFile.definition().datasource());
+        BoundSql bound = SqlRenderer.render(io.tesseraql.core.sql.Sql2WayParser.parse(source),
+                sqlParams, io.tesseraql.core.sql.ScopeResolver.UNSUPPORTED, context,
+                filePathResolver);
         String mode = step.sql().effectiveMode();
 
         io.tesseraql.core.telemetry.Span span = tracer.start("tesseraql.sql.execute", parentContext)

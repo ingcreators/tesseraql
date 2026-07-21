@@ -41,6 +41,7 @@ import picocli.CommandLine.Option;
         VerifyCommand.class,
         ModulesCommand.class,
         EmbeddedDbCommand.class,
+        DuckDbCommand.class,
         McpCommand.class
 })
 public final class TesseraqlCli implements Runnable {
