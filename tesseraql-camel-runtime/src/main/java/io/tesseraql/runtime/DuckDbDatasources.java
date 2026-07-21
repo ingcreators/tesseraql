@@ -239,6 +239,17 @@ final class DuckDbDatasources {
             hikari.addDataSourceProperty("enable_external_access", "false");
         }
         Lake lake = lake(config, name);
+        if (lake != null) {
+            // The data directory must exist before the first connection attaches; creating it
+            // here keeps a fresh checkout bootable (the metadata catalog needs no such help —
+            // DuckLake creates its schema on the catalog datasource itself).
+            try {
+                java.nio.file.Files.createDirectories(resolveRoot(appHome, lake.data()));
+            } catch (java.io.IOException failure) {
+                throw new IllegalStateException(
+                        "Could not create the lake data directory " + lake.data(), failure);
+            }
+        }
         // The engine may read the declared scope roots, the dataset spool, and — when a lake is
         // declared — its Parquet data directory. Nothing else.
         List<String> roots = Stream.concat(Stream.concat(

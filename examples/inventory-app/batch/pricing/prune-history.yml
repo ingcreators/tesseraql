@@ -1,0 +1,17 @@
+version: tesseraql/v1
+id: pricing.pruneHistory
+kind: job
+recipe: batch-pipeline
+datasource: analytics
+
+trigger:
+  schedule:
+    cron: "0 30 4 * * ?"
+
+# Retention is the app's decision (docs/duckdb.md): expire snapshots older than a
+# week, then remove the Parquet files no surviving snapshot references.
+pipeline:
+  - id: expire
+    sql: { file: expire-snapshots.sql, mode: query }
+  - id: cleanup
+    sql: { file: cleanup-files.sql, mode: query }
