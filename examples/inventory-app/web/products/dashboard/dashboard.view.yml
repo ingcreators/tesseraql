@@ -20,3 +20,10 @@ panels:
       - { name: name }
       - { name: stock }
       - { name: reorder_level, label: Reorder at }
+  - type: table
+    source: supplierPrices
+    title: Supplier price drop (files)
+    columns:
+      - { name: sku, label: SKU }
+      - { name: best_price, label: Best price }
+      - { name: suppliers }

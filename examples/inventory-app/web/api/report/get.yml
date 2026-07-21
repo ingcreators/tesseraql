@@ -1,0 +1,23 @@
+version: tesseraql/v1
+id: report.read
+kind: route
+recipe: query-json
+datasource: analytics
+
+security:
+  auth: bearer
+  policy: inv.read
+
+input:
+  id: { type: string, required: true }
+
+sql:
+  file: report.sql
+  mode: query
+  params:
+    report: query.id
+
+response:
+  json:
+    body:
+      data: sql.rows
