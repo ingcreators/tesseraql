@@ -217,6 +217,58 @@ whole blob root to SQL and the second cannot coexist with
 `enable_external_access=false` — both are recorded as possible future tiers, not
 current behavior.
 
+## Lake tables: DuckLake under the fence
+
+Scopes read files as they land and datasets gate uploads; **lake tables** are the
+managed middle: real tables over Parquet, with ACID snapshots, schema evolution,
+and time travel — via [DuckLake](https://ducklake.select), whose whole design is
+that lakehouse *metadata lives in an ordinary SQL database*. That database is a
+declared PostgreSQL datasource (`main` by default), which keeps the framework's
+stance intact where it matters: **the engine stays stateless**; what becomes
+durable is ordinary rows on a datasource operations already governs, plus Parquet
+files under a declared directory.
+
+```yaml
+    analytics:
+      jdbcUrl: "jdbc:duckdb:"
+      duckdb:
+        extensions: [ducklake, postgres]
+        lake:
+          catalog: main          # the PostgreSQL datasource holding the metadata
+          schema: ducklake       # its tables, confined to this schema on the catalog
+          data: data/lake        # Parquet files, fence-admitted like a scope root
+          as: lake
+          mode: readwrite        # readonly for reporting-only deployments
+```
+
+The runtime performs the DuckLake attach at connection setup — credentials from
+the catalog datasource's declaration (following the `--embedded-db` override, like
+any managed attach), the metadata confined to the named schema, the data directory
+joining `allowed_directories` — and then the same fence drops. Everything below is
+proven against DuckDB 1.3.1 with the fence locked:
+
+- **Writes are multi-connection safe.** Every pooled connection (and so every
+  node) is its own engine, yet commits serialize through the catalog: one
+  connection's committed insert is immediately visible to another, and concurrent
+  writers both land as consecutive snapshots. The single-writer constraint that
+  shapes plain duckdb ETL does not apply to lake tables.
+- **Every job run is a snapshot.** `AT (VERSION => n)` reads a prior state — a
+  dashboard can render "as of the last close" beside "now" — and
+  `ducklake_snapshots('lake')` lists the history.
+- **Maintenance is explicit.** `ducklake_expire_snapshots` and
+  `ducklake_cleanup_old_files` run as an app-declared batch job on the same
+  datasource; retention policy belongs to the app, and nothing expires by
+  default.
+- **The catalog schema is self-managed.** The extension owns the `ducklake` schema
+  on the catalog datasource; app migrations must not touch it, and Flyway never
+  will (it manages only `db/migration` trees).
+
+One honest constraint stands until the S3 tier ships: in a multi-node deployment
+the `data:` directory must be storage every node can read — shared storage, or a
+single analytics node. Remote (S3) data paths arrive with the inverted-fence lake
+tier, which DuckLake makes worth building: it turns that tier from ad-hoc reads
+into governed, transactional writes on object storage.
+
 ## The security stance
 
 - **No network at runtime**: extensions are pre-provisioned, signed, and loaded from
