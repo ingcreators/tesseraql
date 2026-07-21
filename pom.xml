@@ -5,7 +5,7 @@
 
   <groupId>io.tesseraql</groupId>
   <artifactId>tesseraql-parent</artifactId>
-  <version>0.7.0</version>
+  <version>0.7.1</version>
   <packaging>pom</packaging>
 
   <name>TesseraQL Parent</name>
@@ -159,6 +159,16 @@
         <version>${camel.version}</version>
         <type>pom</type>
         <scope>import</scope>
+      </dependency>
+      <!-- camel-bom 4.18.0 manages the retired camel-test artifact at 4.18.0-SNAPSHOT (an
+           upstream slip); Maven Central refuses published POMs whose effective
+           dependencyManagement carries any SNAPSHOT (the v0.7.0 central-publish failure).
+           Nothing here depends on camel-test — this override only pins the entry to a
+           release version so the published POMs validate. -->
+      <dependency>
+        <groupId>org.apache.camel</groupId>
+        <artifactId>camel-test</artifactId>
+        <version>${camel.version}</version>
       </dependency>
 
       <!-- Jackson (imported BOM) -->

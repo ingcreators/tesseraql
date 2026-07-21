@@ -4,6 +4,17 @@ All notable changes to TesseraQL are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [Semantic Versioning](https://semver.org/).
 
+## 0.7.1 - 2026-07-21
+
+### Fixed
+
+- **Maven Central publishing**: the imported `camel-bom` 4.18.0 manages the retired
+  `org.apache.camel:camel-test` artifact at a SNAPSHOT version, and Central refuses any
+  published POM whose effective dependency management carries a SNAPSHOT — the v0.7.0
+  `central-publish` job failed on exactly this (every other 0.7.0 channel — GitHub
+  Packages, the GHCR image, the GitHub release, Homebrew/Scoop — shipped normally). The
+  parent POM now pins the entry to the release version; nothing depends on the artifact.
+
 ## 0.7.0 - 2026-07-21
 
 ### Added
