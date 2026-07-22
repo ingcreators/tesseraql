@@ -206,7 +206,8 @@ final class AccountViews {
      * the registry so SSO-only deployments answer with the honest 4803 instead of a stub.
      */
     static Map<String, Object> changePassword(Map<String, Object> params,
-            IdentityService identity, RealmConfig realm, boolean passwordEnabled) {
+            IdentityService identity, RealmConfig realm, boolean passwordEnabled,
+            SessionStore sessions) {
         if (!passwordEnabled || identity == null || realm == null) {
             throw new TqlException(PASSWORD_UNAVAILABLE,
                     "Credentials are managed by your identity provider");
@@ -223,6 +224,14 @@ final class AccountViews {
                 "loginId", loginId,
                 "passwordHash", encoder.encode(next),
                 "passwordParams", encoder.defaultParams()));
+        // A credential change ends every session of the subject (the same posture a password
+        // reset already takes): an attacker holding a parallel session is evicted, and the
+        // caller re-authenticates with the new password (docs/security-hardening.md, ASVS V3).
+        // The service cannot re-issue the current session cookie from here, so the flow signs
+        // out and lands on the login page rather than silently rotating in place.
+        if (sessions != null) {
+            sessions.invalidateOthersFor(subject(params), "");
+        }
         return Map.of("ok", true);
     }
 

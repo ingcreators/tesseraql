@@ -153,9 +153,10 @@ Carried forward, none an actively-exploitable hole in a correctly-configured dep
 - **A forgot-to-scope write guard** — the scope mechanism works; the automatic check that a
   write which *should* be scoped carries the predicate is a planned defense-in-depth
   enhancement.
-- **Session id rotation on privilege elevation** — the fixation case is handled at login and a
-  password reset invalidates every session; the residual is a role change applied to a live
-  session.
+- **Session id rotation in place on a non-credential elevation** — the fixation case is handled
+  at login, and both a password reset and a self-service password change now end the subject's
+  sessions; the residual is re-issuing the current id in place on a non-credential elevation
+  (e.g. MFA enrollment), which the service layer signs out for instead.
 - **Curated-marketplace provenance** — signature and publisher verification for shared
   packages, beyond today's hash pinning and the declarative-only admission gate.
 - **This model is living.** Each new surface — a new recipe, a new egress path, a new parser —

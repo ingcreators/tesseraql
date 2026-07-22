@@ -160,7 +160,8 @@ reviewer can check each claim against the source.
 | Server-side session with an unpredictable id | met | `SessionStore` (`tesseraql_sid`), in-memory or shared JDBC store |
 | No session fixation | met | `BrowserAuthenticator.create()` mints a fresh id at login; no pre-auth session is adopted |
 | Logout and "sign out others" invalidate server-side | met | `invalidate()` / `invalidateOthersFor()`; a consumed password reset drops every session of the subject |
-| Session id re-issued on privilege change | gap | no explicit mid-session id rotation on elevation — a verify item carried forward |
+| Sessions ended on a credential change | met | a self-service password change ends every session of the subject and returns the caller to the login page — an attacker's parallel session is evicted |
+| Session id re-issued in place on other elevations | partial | credential changes end sessions; rotating the current id in place on a non-credential elevation (e.g. MFA enrollment) is a smaller follow-up (the service layer cannot re-issue the cookie, so it signs out instead) |
 
 #### V4 Access control
 
@@ -248,9 +249,11 @@ reviewer can check each claim against the source.
 The honest shortfalls, none blocking for the current pre-1.0 posture:
 
 1. **A full threat-model refresh** (V1) — this assessment is the first artifact.
-2. **Session id rotation on privilege elevation** (V3) — not explicit today; the fixation
-   case is handled (a fresh id at login) and a password reset invalidates every session, so
-   the residual is a role change applied to a live session.
+2. **Session id rotation in place on a non-credential elevation** (V3) — a fresh id is minted
+   at login (fixation), and both a password reset and a self-service password change now end
+   the subject's sessions; the residual is re-issuing the *current* id in place on a
+   non-credential elevation (e.g. MFA enrollment), which the service layer cannot do without
+   cookie plumbing, so it signs out instead.
 3. **Argon2id as the shipped default KDF** (V2) — a deliberate choice, not a shortfall:
    PBKDF2 (100k iterations) is an ASVS-approved KDF and keeps the default JDK-only, where
    Argon2id would require a non-JDK dependency; Argon2id remains available behind

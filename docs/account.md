@@ -103,9 +103,11 @@ writes, and they ride the existing telemetry/audit surfaces like any route. The 
   `POST /_tesseraql/logout-others` beside login/logout (CSRF-checked there explicitly).
   Session ids never reach the template, which is also why no row is marked "this
   device" — the trade for keeping ids out of the page model.
-- **Password**: local-realm credential change (current password verified first). When
-  sign-in is SSO-only the page states that credentials are managed by the identity
-  provider.
+- **Password**: local-realm credential change (current password verified first). A
+  successful change ends every session of the account and returns to the login page, so an
+  attacker holding a parallel session is evicted and the account signs in again with the new
+  password. When sign-in is SSO-only the page states that credentials are managed by the
+  identity provider.
 
 ## Locale and theme wiring
 
