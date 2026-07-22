@@ -13,6 +13,10 @@ fail closed. The parsers are the framework's widest attack surface — 2-way SQL
 expressions, YAML, and SCIM filters all turn bytes into structure — so their robustness
 is assessed with evidence, not assertion.
 
+Its companion is the [threat model](threat-model.md): where this page maps controls to
+ASVS chapters, the threat model works the other way — a STRIDE pass over each surface,
+naming the threats and the control that mitigates each, with the residual risk stated.
+
 ## Parser robustness
 
 ### The invariant

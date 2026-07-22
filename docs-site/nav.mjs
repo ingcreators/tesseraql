@@ -64,6 +64,7 @@ export const SECTIONS = [
       'delegation',
       'admission',
       'security-hardening',
+      'threat-model',
     ],
   },
   {
