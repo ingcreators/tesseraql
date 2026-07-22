@@ -170,7 +170,7 @@ reviewer can check each claim against the source.
 | Deny-by-default authorization | met | `PolicyEngine.authorize()` — no principal → `TQL-SEC-4011` (401), undefined/unsatisfied policy → `TQL-SEC-4031` (403) |
 | Field- and row-level enforcement | met | `FieldPolicyApplier` (role-conditional column masking + row `unmaskWhen`); the `/*%scope*/` data-scoping directive fails closed (`TQL-SQL-2106/2107`) |
 | Multi-tenant isolation | met | shared-schema / schema-per-tenant / db-per-tenant, tenant resolved per request and enforced in SQL; `TQL-TENANT` lint |
-| Write-scope enforcement | gap | `TQL-SEC-4100` (write-scope bypass) is documented as planned, not yet implemented |
+| Write-scope guard | met | a lint (`TQL-SEC-4100`, warning) flags an `UPDATE`/`DELETE` on a scope-governed table that carries no `/*%scope … */` predicate — defense-in-depth over the scoping mechanism the author already uses |
 
 #### V5 Validation, sanitization, encoding, injection
 
@@ -258,11 +258,11 @@ The honest shortfalls, none blocking for the current pre-1.0 posture:
    PBKDF2 (100k iterations) is an ASVS-approved KDF and keeps the default JDK-only, where
    Argon2id would require a non-JDK dependency; Argon2id remains available behind
    `PasswordVerifier` for deployments that add it.
-4. **Write-scope enforcement** (V4) — the scoping mechanism *works* for writes (a
-   `/*%scope*/` predicate in an `UPDATE`/`DELETE` `WHERE` confines it, see
-   [data scoping](data-scoping.md)); what is planned (`TQL-SEC-4100`) is a defense-in-depth
-   guard that flags a write which *should* be scoped but omits the directive — an
-   enhancement, not an open hole.
+4. **Write-scope guard** (V4) — *now implemented*: `TQL-SEC-4100` (warning) flags an
+   `UPDATE`/`DELETE` on a table the app scopes elsewhere that omits its own `/*%scope … */`
+   predicate. The scoping mechanism always confined writes when used ([data
+   scoping](data-scoping.md)); the guard is the defense-in-depth check that catches a
+   forgotten one.
 
 Two shortfalls recorded here were closed in this pass: the edge TLS/HSTS operator
 expectations are now stated in [deployment](deployment.md), and `SECURITY.md` carries a

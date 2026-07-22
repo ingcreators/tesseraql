@@ -41,9 +41,63 @@ class AppLinterScopeTest {
                 """);
     }
 
+    /** A write (command-json, update mode) on {@code orders}, at a distinct route path. */
+    private static void writeCommandRoute(Path dir, String sql) throws Exception {
+        Files.createDirectories(dir.resolve("web/orders/adjust"));
+        Files.writeString(dir.resolve("web/orders/adjust/adjust.sql"), sql);
+        Files.writeString(dir.resolve("web/orders/adjust/post.yml"), """
+                version: tesseraql/v1
+                id: orders.adjust
+                kind: route
+                recipe: command-json
+                sql:
+                  file: adjust.sql
+                  mode: update
+                response:
+                  json:
+                    status: 200
+                """);
+    }
+
     private static List<String> scopeCodes(List<LintFinding> findings) {
         return findings.stream().map(LintFinding::code).filter(c -> c.startsWith("TQL-SCOPE"))
                 .toList();
+    }
+
+    private static List<String> writeScopeCodes(List<LintFinding> findings) {
+        return findings.stream().map(LintFinding::code).filter("TQL-SEC-4100"::equals).toList();
+    }
+
+    @Test
+    void unscopedWriteOnAScopeGovernedTableWarns(@TempDir Path dir) throws Exception {
+        writeScope(dir);
+        // The read scopes `orders`, marking it scope-governed for the app…
+        writeRoute(dir, "select * from orders o where /*%scope orders_scope on o */ (1=1)\n");
+        // …but this write on the same table carries no scope predicate.
+        writeCommandRoute(dir,
+                "update orders set status = /* status */ 'shipped' where id = /* id */ 1\n");
+        List<LintFinding> findings = new AppLinter().lint(dir);
+        assertThat(writeScopeCodes(findings)).containsExactly("TQL-SEC-4100");
+        assertThat(findings).anyMatch(f -> f.code().equals("TQL-SEC-4100")
+                && "warning".equals(f.severity()) && f.message().contains("orders"));
+    }
+
+    @Test
+    void scopedWriteOnAScopeGovernedTableIsClean(@TempDir Path dir) throws Exception {
+        writeScope(dir);
+        writeRoute(dir, "select * from orders o where /*%scope orders_scope on o */ (1=1)\n");
+        writeCommandRoute(dir, "update orders o set status = /* status */ 'shipped'"
+                + " where o.id = /* id */ 1 and /*%scope orders_scope on o */ (1=1)\n");
+        assertThat(writeScopeCodes(new AppLinter().lint(dir))).isEmpty();
+    }
+
+    @Test
+    void writeOnATableTheAppNeverScopesIsClean(@TempDir Path dir) throws Exception {
+        writeScope(dir);
+        writeRoute(dir, "select * from orders o where /*%scope orders_scope on o */ (1=1)\n");
+        // A write on a different, ungoverned table draws no warning.
+        writeCommandRoute(dir, "delete from audit_log where created_at < /* cutoff */ now()\n");
+        assertThat(writeScopeCodes(new AppLinter().lint(dir))).isEmpty();
     }
 
     @Test
