@@ -28,8 +28,17 @@ public final class ExpressionParser {
 
     private static final TqlErrorCode SYNTAX_ERROR = new TqlErrorCode(TqlDomain.SQL, 2101);
 
+    /**
+     * The most expression nesting — parenthesized groups, call arguments, and unary chains — a
+     * directive may carry. Far above any real expression, far below the recursion that overflows
+     * the stack: hostile deep nesting gets a coded syntax error here instead of a fatal
+     * {@link StackOverflowError} (docs/security-hardening.md).
+     */
+    private static final int MAX_DEPTH = 250;
+
     private final List<Token> tokens;
     private int position;
+    private int depth;
 
     private ExpressionParser(List<Token> tokens) {
         this.tokens = tokens;
@@ -47,11 +56,23 @@ public final class ExpressionParser {
     }
 
     private Expr or() {
-        Expr left = and();
-        while (match(TokenType.OR)) {
-            left = new Expr.Logical(Expr.Logical.Operator.OR, left, and());
+        enter();
+        try {
+            Expr left = and();
+            while (match(TokenType.OR)) {
+                left = new Expr.Logical(Expr.Logical.Operator.OR, left, and());
+            }
+            return left;
+        } finally {
+            depth--;
         }
-        return left;
+    }
+
+    /** Bounds recursion at every re-entry point (parens/call args via {@code or}, unary chains). */
+    private void enter() {
+        if (++depth > MAX_DEPTH) {
+            throw error("Expression nesting too deep (over " + MAX_DEPTH + ")");
+        }
     }
 
     private Expr and() {
@@ -121,13 +142,18 @@ public final class ExpressionParser {
     }
 
     private Expr unary() {
-        if (match(TokenType.NOT)) {
-            return new Expr.Not(unary());
+        enter();
+        try {
+            if (match(TokenType.NOT)) {
+                return new Expr.Not(unary());
+            }
+            if (match(TokenType.MINUS)) {
+                return new Expr.Negate(unary());
+            }
+            return primary();
+        } finally {
+            depth--;
         }
-        if (match(TokenType.MINUS)) {
-            return new Expr.Negate(unary());
-        }
-        return primary();
     }
 
     private Expr primary() {
@@ -195,11 +221,18 @@ public final class ExpressionParser {
         }
     }
 
-    private static Object parseNumber(String text) {
-        if (text.indexOf('.') >= 0) {
-            return Double.parseDouble(text);
+    private Object parseNumber(String text) {
+        // The lexer accepts number-shaped tokens the JDK parsers still reject (an integer past
+        // long's range, a malformed exponent): fail closed with a coded syntax error, never a
+        // raw NumberFormatException (docs/security-hardening.md).
+        try {
+            if (text.indexOf('.') >= 0) {
+                return Double.parseDouble(text);
+            }
+            return Long.parseLong(text);
+        } catch (NumberFormatException ex) {
+            throw error("Invalid number literal '" + text + "'");
         }
-        return Long.parseLong(text);
     }
 
     private boolean match(TokenType type) {

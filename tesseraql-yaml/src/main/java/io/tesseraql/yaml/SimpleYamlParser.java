@@ -1,7 +1,6 @@
 package io.tesseraql.yaml;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
 import io.tesseraql.core.error.TqlDomain;
 import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
@@ -25,54 +24,60 @@ public final class SimpleYamlParser {
     private static final TqlErrorCode SCHEMA_ERROR = new TqlErrorCode(TqlDomain.YAML, 1001);
     private static final String EXPECTED_VERSION = "tesseraql/v1";
 
-    private final ObjectMapper mapper = new ObjectMapper(new YAMLFactory());
+    private final ObjectMapper mapper = YamlMappers.constrained();
+
+    /**
+     * Reads a file's text, mapping a genuine read failure (a missing or unreadable file — an
+     * internal error, not malformed input) to {@link UncheckedIOException}. Parse failures are a
+     * separate concern handled by each caller, and always surface as a coded {@code TQL-YAML-1001}.
+     */
+    private static String readFile(Path file) {
+        try {
+            return Files.readString(file);
+        } catch (IOException ex) {
+            throw new UncheckedIOException(ex);
+        }
+    }
+
+    /**
+     * The one malformed-YAML rejection: whether the failure came from Jackson (an
+     * {@link IOException}), SnakeYAML's resource limits (a {@code RuntimeException}), or a
+     * structural check, every parse path lands here as {@code TQL-YAML-1001} — so a caller (a
+     * boot loader or a runtime editor endpoint) never sees a raw library exception.
+     */
+    private static TqlException schemaError(String what, String source, Throwable ex) {
+        return TqlException.builder(SCHEMA_ERROR)
+                .message("Failed to parse " + what + " YAML: " + ex.getMessage())
+                .source(source)
+                .cause(ex)
+                .build();
+    }
 
     /** Parses a route YAML file. */
     public RouteDefinition parseRoute(Path file) {
-        try {
-            String content = Files.readString(file);
-            return validate(mapper.readValue(content, RouteDefinition.class), file.toString());
-        } catch (IOException ex) {
-            throw new UncheckedIOException(ex);
-        } catch (TqlException ex) {
-            throw ex;
-        } catch (RuntimeException ex) {
-            throw TqlException.builder(SCHEMA_ERROR)
-                    .message("Failed to parse route YAML: " + ex.getMessage())
-                    .source(file.toString())
-                    .cause(ex)
-                    .build();
-        }
+        return parseRoute(readFile(file), file.toString());
     }
 
     /** Parses a route YAML string (mainly for tests). */
     public RouteDefinition parseRoute(String yaml, String source) {
         try {
             return validate(mapper.readValue(yaml, RouteDefinition.class), source);
-        } catch (IOException ex) {
-            throw TqlException.builder(SCHEMA_ERROR)
-                    .message("Failed to parse route YAML: " + ex.getMessage())
-                    .source(source)
-                    .cause(ex)
-                    .build();
+        } catch (TqlException ex) {
+            throw ex;
+        } catch (IOException | RuntimeException ex) {
+            throw schemaError("route", source, ex);
         }
     }
 
     /** Parses a job YAML file. */
     public JobDefinition parseJob(Path file) {
+        String content = readFile(file);
         try {
-            JobDefinition job = mapper.readValue(Files.readString(file), JobDefinition.class);
-            return validateJob(job, file.toString());
-        } catch (IOException ex) {
-            throw new UncheckedIOException(ex);
+            return validateJob(mapper.readValue(content, JobDefinition.class), file.toString());
         } catch (TqlException ex) {
             throw ex;
-        } catch (RuntimeException ex) {
-            throw TqlException.builder(SCHEMA_ERROR)
-                    .message("Failed to parse job YAML: " + ex.getMessage())
-                    .source(file.toString())
-                    .cause(ex)
-                    .build();
+        } catch (IOException | RuntimeException ex) {
+            throw schemaError("job", file.toString(), ex);
         }
     }
 
@@ -93,20 +98,14 @@ public final class SimpleYamlParser {
 
     /** Parses a scope YAML file (roadmap Phase 29). */
     public io.tesseraql.yaml.model.ScopeDefinition parseScope(Path file) {
+        String content = readFile(file);
         try {
-            io.tesseraql.yaml.model.ScopeDefinition scope = mapper.readValue(
-                    Files.readString(file), io.tesseraql.yaml.model.ScopeDefinition.class);
-            return validateScope(scope, file.toString());
-        } catch (IOException ex) {
-            throw new UncheckedIOException(ex);
+            return validateScope(mapper.readValue(
+                    content, io.tesseraql.yaml.model.ScopeDefinition.class), file.toString());
         } catch (TqlException ex) {
             throw ex;
-        } catch (RuntimeException ex) {
-            throw TqlException.builder(SCHEMA_ERROR)
-                    .message("Failed to parse scope YAML: " + ex.getMessage())
-                    .source(file.toString())
-                    .cause(ex)
-                    .build();
+        } catch (IOException | RuntimeException ex) {
+            throw schemaError("scope", file.toString(), ex);
         }
     }
 
@@ -127,20 +126,14 @@ public final class SimpleYamlParser {
 
     /** Parses an attachment YAML file (roadmap Phase 30). */
     public io.tesseraql.yaml.model.AttachmentDefinition parseAttachment(Path file) {
+        String content = readFile(file);
         try {
-            io.tesseraql.yaml.model.AttachmentDefinition attachment = mapper.readValue(
-                    Files.readString(file), io.tesseraql.yaml.model.AttachmentDefinition.class);
-            return validateAttachment(attachment, file.toString());
-        } catch (IOException ex) {
-            throw new UncheckedIOException(ex);
+            return validateAttachment(mapper.readValue(
+                    content, io.tesseraql.yaml.model.AttachmentDefinition.class), file.toString());
         } catch (TqlException ex) {
             throw ex;
-        } catch (RuntimeException ex) {
-            throw TqlException.builder(SCHEMA_ERROR)
-                    .message("Failed to parse attachment YAML: " + ex.getMessage())
-                    .source(file.toString())
-                    .cause(ex)
-                    .build();
+        } catch (IOException | RuntimeException ex) {
+            throw schemaError("attachment", file.toString(), ex);
         }
     }
 
@@ -161,20 +154,14 @@ public final class SimpleYamlParser {
 
     /** Parses a workflow YAML file (roadmap Phase 28). */
     public io.tesseraql.yaml.model.WorkflowDefinition parseWorkflow(Path file) {
+        String content = readFile(file);
         try {
-            io.tesseraql.yaml.model.WorkflowDefinition workflow = mapper.readValue(
-                    Files.readString(file), io.tesseraql.yaml.model.WorkflowDefinition.class);
-            return validateWorkflow(workflow, file.toString());
-        } catch (IOException ex) {
-            throw new UncheckedIOException(ex);
+            return validateWorkflow(mapper.readValue(
+                    content, io.tesseraql.yaml.model.WorkflowDefinition.class), file.toString());
         } catch (TqlException ex) {
             throw ex;
-        } catch (RuntimeException ex) {
-            throw TqlException.builder(SCHEMA_ERROR)
-                    .message("Failed to parse workflow YAML: " + ex.getMessage())
-                    .source(file.toString())
-                    .cause(ex)
-                    .build();
+        } catch (IOException | RuntimeException ex) {
+            throw schemaError("workflow", file.toString(), ex);
         }
     }
 
@@ -209,16 +196,18 @@ public final class SimpleYamlParser {
 
     /** Parses an arbitrary YAML document into a nested map (for config files). */
     public Map<String, Object> parseTree(Path file) {
+        String content = readFile(file);
+        if (content.isBlank()) {
+            return Map.of();
+        }
         try {
-            String content = Files.readString(file);
-            if (content.isBlank()) {
-                return Map.of();
-            }
             @SuppressWarnings("unchecked")
             Map<String, Object> tree = mapper.readValue(content, Map.class);
             return tree == null ? Map.of() : tree;
-        } catch (IOException ex) {
-            throw new UncheckedIOException(ex);
+        } catch (TqlException ex) {
+            throw ex;
+        } catch (IOException | RuntimeException ex) {
+            throw schemaError("config", file.toString(), ex);
         }
     }
 
@@ -236,8 +225,10 @@ public final class SimpleYamlParser {
             @SuppressWarnings("unchecked")
             Map<String, Object> tree = mapper.readValue(yaml, Map.class);
             return tree == null ? Map.of() : tree;
-        } catch (IOException ex) {
-            throw error("Failed to parse YAML: " + ex.getMessage(), "<string>");
+        } catch (TqlException ex) {
+            throw ex;
+        } catch (IOException | RuntimeException ex) {
+            throw schemaError("config", "<string>", ex);
         }
     }
 

@@ -34,10 +34,19 @@ public final class Sql2WayParser {
     /** TQL-SQL-2102: a 2-way SQL file could not be parsed; the message names the offending line. */
     private static final TqlErrorCode PARSE_ERROR = new TqlErrorCode(TqlDomain.SQL, 2102);
 
+    /**
+     * The most directive nesting ({@code /*%if*}{@code /} / {@code /*%for*}{@code /} /
+     * {@code /*%scope*}{@code /}) a template may carry. Far above any real template, far below
+     * the recursion depth that overflows the stack: a hostile deep-nested template gets a coded
+     * parse rejection here instead of a fatal {@link StackOverflowError} (docs/security-hardening.md).
+     */
+    private static final int MAX_NESTING_DEPTH = 200;
+
     private final String source;
     private final int length;
     private int pos;
     private int line = 1;
+    private int depth;
     private Directive pendingTerminator;
 
     private Sql2WayParser(String source) {
@@ -57,6 +66,17 @@ public final class Sql2WayParser {
     }
 
     private List<SqlNode> parseBlock() {
+        if (++depth > MAX_NESTING_DEPTH) {
+            throw error("Directive nesting too deep (over " + MAX_NESTING_DEPTH + ")");
+        }
+        try {
+            return parseBlockBody();
+        } finally {
+            depth--;
+        }
+    }
+
+    private List<SqlNode> parseBlockBody() {
         List<SqlNode> nodes = new ArrayList<>();
         StringBuilder text = new StringBuilder();
         int textStartLine = line;

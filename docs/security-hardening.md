@@ -45,6 +45,12 @@ safe:
 - **Expressions: deep nesting overflows the stack.** `((((…))))` grouping or a `!!!!…`
   unary chain past roughly the same depth overflows `ExpressionParser`. Same class, same
   fix.
+- **Expressions: a number-shaped token the JDK rejects leaks a raw exception.** The
+  fuzz harness (not the hand probes) surfaced this: the lexer accepts number tokens the
+  JDK's `Long.parseLong`/`Double.parseDouble` still reject — an integer past `long`'s
+  range, a malformed exponent — so `ExpressionParser` raised an uncoded
+  `NumberFormatException` instead of a parse error. Now wrapped as a coded rejection; the
+  find is exactly the off-contract-exception class the harness exists to catch.
 - **YAML resource limits are the library's defaults, and the error contract is
   inconsistent.** Jackson/SnakeYAML *do* cap nesting (1000) and document size (~3 MB code
   points) by default, so an alias bomb or deep document is rejected — but the framework
