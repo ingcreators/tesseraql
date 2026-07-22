@@ -441,6 +441,23 @@ taxonomy.
 Threat-model refresh, a hardening checklist pass (OWASP ASVS), fuzzing the parsers (2-way
 SQL, YAML, SCIM filters), and a supported-versions/LTS statement in SECURITY.md.
 
+Two of these legs were named 2026-07-22 and the accepted design is
+[docs/security-hardening.md](security-hardening.md): the **OWASP ASVS hardening
+checklist** (a maintainer self-assessment mapping ASVS L1/L2 to real mechanisms, gaps
+flagged) and **parser fuzzing** (2-way SQL, expressions, YAML, SCIM filters). Adversarial
+probes preceded the design and found two real defects — deep directive nesting overflows
+the 2-way SQL parser's stack (`StackOverflowError` past ~1500 levels) and deep grouping/
+unary nesting overflows `ExpressionParser` the same way — plus a YAML error-contract
+asymmetry (file parses surface a raw `UncheckedIOException`, string parses a coded
+`TQL-YAML-1001`) and confirmed the SCIM filter regex safe (no ReDoS, no recursion). The
+hardening: depth guards that convert the overflows into coded `TqlException`s, explicit
+YAML `StreamReadConstraints` with one harmonized error contract, and a **deterministic
+generative fuzz harness** that runs in ordinary CI and asserts every parser fails closed
+(decision point 14 — a coverage-guided Jazzer campaign stays gated-ready, off the per-PR
+path, per the JDK-only/reproducible-build grain). The threat-model refresh and the
+SECURITY.md supported-versions statement remain the phase's open legs. Two slices: parser
+robustness + fuzz harnesses; then the ASVS assessment filled in.
+
 **Milestone M11** — 1.0 GA on Maven Central with a documentation site and a compatibility
 contract.
 
@@ -1437,3 +1454,13 @@ None block Phase 18; flagged for the maintainer as their horizons approach.
     behavior). The honest residual — authored SQL on a remote-lake datasource is
     lint-governed rather than engine-caged — is recorded in docs/duckdb.md and surfaced
     per-lake by admission.
+14. **Fuzzing engine** (Phase 36): a coverage-guided native fuzzer (Jazzer/libFuzzer) vs
+    deterministic generative property tests in ordinary CI. Resolved 2026-07-22 in favour
+    of **deterministic generative fuzzing**: a seeded PRNG driving structure-aware
+    generators + corpus mutation, a fixed iteration budget, run on every build, asserting
+    the fail-closed invariant (the only Throwable a parser may raise is its declared coded
+    type). Jazzer explores deeper but adds a native, non-deterministic dependency on the
+    per-PR path — against the JDK-only/reproducible-build grain — so the harness is written
+    so its entry points can be wrapped by a gated Jazzer campaign later (the dialect-suite
+    precedent), when the depth is worth the dependency. Deterministic generation already
+    found the two StackOverflow defects, so it earns its place before any heavier tool.
