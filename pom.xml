@@ -99,7 +99,7 @@
     <camel.version>4.18.0</camel.version>
     <jackson.version>2.22.0</jackson.version>
     <hikaricp.version>7.1.0</hikaricp.version>
-    <postgresql.version>42.7.11</postgresql.version>
+    <postgresql.version>42.7.12</postgresql.version>
     <mysql.version>9.1.0</mysql.version>
     <picocli.version>4.7.7</picocli.version>
     <slf4j.version>2.0.18</slf4j.version>
