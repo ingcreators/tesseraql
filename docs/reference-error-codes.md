@@ -427,7 +427,7 @@ All 336 `TQL-*` codes, scanned from the framework sources on every refresh and g
 
 | Code | Meaning | Documented in | Raised in |
 | --- | --- | --- | --- |
-| `TQL-YAML-1001` | Failed to parse route YAML: … | — | [SimpleYamlParser.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-yaml/src/main/java/io/tesseraql/yaml/SimpleYamlParser.java) |
+| `TQL-YAML-1001` | Failed to parse route YAML: … | [security-hardening](security-hardening.md) | [SimpleYamlParser.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-yaml/src/main/java/io/tesseraql/yaml/SimpleYamlParser.java) |
 | `TQL-YAML-1002` | Unknown route recipe '…' | — | [AppLinter.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-yaml/src/main/java/io/tesseraql/yaml/lint/AppLinter.java) |
 | `TQL-YAML-1003` | validate: is only supported on command-json routes, not '…' | [declarative-validation](declarative-validation.md) | [AppLinter.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-yaml/src/main/java/io/tesseraql/yaml/lint/AppLinter.java) |
 | `TQL-YAML-1004` | notify: is only supported on command-json routes, not '…' | [notifications](notifications.md) | [AppLinter.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-yaml/src/main/java/io/tesseraql/yaml/lint/AppLinter.java) |
