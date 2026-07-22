@@ -477,8 +477,14 @@ TLS/HSTS operator expectations are now stated in [docs/deployment.md](deployment
 hardening page. Reassessed on evidence, Argon2id-as-default is a deliberate JDK-only choice
 rather than a shortfall (PBKDF2 is ASVS-approved) and write-scope's mechanism already works
 for writes (`TQL-SEC-4100` is a defense-in-depth "forgot to scope" guard, not an open hole).
-**The full threat-model refresh remains the substantive open leg toward M11**, with
-session-id rotation on elevation and the write-scope guard as smaller follow-ups.
+The full threat-model refresh landed 2026-07-22 as [docs/threat-model.md](threat-model.md):
+a STRIDE pass over each surface — authentication/sessions, access control, input/injection,
+egress/SSRF, files, secrets/errors/repudiation, and the shared-app boundary — with the
+actors, the trust boundaries, and every threat mapped to its control and residual risk,
+companion to the ASVS control map. **With it every named security-review-and-support leg is
+delivered except the SECURITY.md leg's forward part (a defined 1.x support window, due at
+1.0), leaving two small engineering follow-ups toward M11**: session-id rotation on
+privilege elevation, and the forgot-to-scope write guard.
 
 **Milestone M11** — 1.0 GA on Maven Central with a documentation site and a compatibility
 contract.
