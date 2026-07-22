@@ -2,8 +2,22 @@
 
 ## Supported versions
 
-Security fixes target the latest 0.x release. Until 1.0.0 there are no maintenance branches;
-upgrade to the newest release to receive fixes.
+| Version line | Status | Security fixes |
+| --- | --- | --- |
+| The latest released `0.x` | Supported | Yes — fixes ship in the next `0.x` release |
+| Any earlier `0.x` | Not supported | No — upgrade to the latest release |
+
+Before 1.0.0, TesseraQL follows a **latest-release-only** policy: there are no maintenance
+branches and no backports, so the way to receive a security fix is to upgrade to the newest
+release (the [releases page](https://github.com/ingcreators/tesseraql/releases) lists the
+current one). Minor `0.x` releases may change APIs and YAML contracts; such changes are
+called out in [`CHANGELOG.md`](CHANGELOG.md). The runtime supports the Java baseline (21) and
+compatibility target (25) documented in `AGENTS.md`; older JDKs are not supported.
+
+At **1.0.0** this policy tightens into a defined support window (a supported `1.x` line with a
+stated maintenance duration); the statement here will be updated to name it at that release.
+A framework security review and hardening self-assessment is maintained at
+[`docs/security-hardening.md`](docs/security-hardening.md).
 
 ## Reporting vulnerabilities
 

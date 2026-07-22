@@ -205,7 +205,7 @@ reviewer can check each claim against the source.
 
 | Requirement | Status | Evidence |
 | --- | --- | --- |
-| TLS in transit | partial | TLS termination is the deployment edge's responsibility (reverse proxy); the framework provides mTLS client-cert auth and assumes HTTPS at the boundary — documented as an operator expectation |
+| TLS in transit | met | TLS termination is the deployment edge's responsibility (reverse proxy / ingress), stated in the operator guide ([deployment](deployment.md), "Transport security"): HTTPS forwarded to the runtime, HSTS set at the edge, mTLS client-cert forwarding, and outbound cert verification kept on |
 
 #### V11 Business logic and anti-automation
 
@@ -237,22 +237,30 @@ reviewer can check each claim against the source.
 | Deny-by-default egress | met | `tesseraql.http.outbound.allowedHosts` (and the copilot endpoint, `TQL-SEC-4085`); a bare `*` is rejected at marketplace admission (`TQL-ADM-4703`) |
 | A hardening gate for shared apps | met | the admission profile enforces declarative-only, defined policies, bounded egress, and CSP before publish |
 | Secret hygiene in development | met | `SECURITY.md` — never commit secrets; do not bind-mount host credential directories into the Dev Container |
-| A published security policy surfaced to users | gap | `SECURITY.md` exists at the repo root but is not linked from the documentation site, and the supported-versions/LTS statement is still thin — follow-up work |
+| A published security policy surfaced to users | met | [`SECURITY.md`](https://github.com/ingcreators/tesseraql/blob/main/SECURITY.md) states the supported-versions policy (latest-release-only pre-1.0, tightening to a support window at 1.0), private vulnerability reporting, and dev-secret hygiene; linked from this page |
 
 #### Gaps carried forward
 
 The honest shortfalls, none blocking for the current pre-1.0 posture:
 
 1. **A full threat-model refresh** (V1) — this assessment is the first artifact.
-2. **Session id rotation on privilege elevation** (V3) — not explicit today.
-3. **Argon2id as the shipped default KDF** (V2) — PBKDF2 is the default; Argon2id is
-   available behind the SPI.
-4. **Write-scope enforcement** (V4) — `TQL-SEC-4100` is planned, not implemented; do not
-   rely on it as a live control.
-5. **Edge TLS/HSTS expectations** (V9) — a deployment responsibility that should be stated
-   in the operator guide.
-6. **A user-surfaced security policy** (V14) — `SECURITY.md` needs a supported-versions
-   statement and a link from the site.
+2. **Session id rotation on privilege elevation** (V3) — not explicit today; the fixation
+   case is handled (a fresh id at login) and a password reset invalidates every session, so
+   the residual is a role change applied to a live session.
+3. **Argon2id as the shipped default KDF** (V2) — a deliberate choice, not a shortfall:
+   PBKDF2 (100k iterations) is an ASVS-approved KDF and keeps the default JDK-only, where
+   Argon2id would require a non-JDK dependency; Argon2id remains available behind
+   `PasswordVerifier` for deployments that add it.
+4. **Write-scope enforcement** (V4) — the scoping mechanism *works* for writes (a
+   `/*%scope*/` predicate in an `UPDATE`/`DELETE` `WHERE` confines it, see
+   [data scoping](data-scoping.md)); what is planned (`TQL-SEC-4100`) is a defense-in-depth
+   guard that flags a write which *should* be scoped but omits the directive — an
+   enhancement, not an open hole.
+
+Two shortfalls recorded here were closed in this pass: the edge TLS/HSTS operator
+expectations are now stated in [deployment](deployment.md), and `SECURITY.md` carries a
+proper supported-versions policy and is linked above. A full threat-model refresh remains
+the substantive follow-up.
 
 ## Deliberately out of scope (documented, not implied)
 
