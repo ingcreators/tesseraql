@@ -321,6 +321,29 @@ class AccountSurfaceIntegrationTest {
         }
     }
 
+    /** A password change ends the caller's existing sessions (ASVS V3 hardening). */
+    @Test
+    void passwordChangeSignsOutExistingSessions() throws Exception {
+        String cookie = loginCookie("pw-user", "originalPass1");
+        assertThat(cookie).isNotNull();
+        try {
+            // The session authenticates before the change.
+            assertThat(get(runtime, cookie, "/_tesseraql/account").statusCode()).isEqualTo(200);
+
+            assertThat(postForm(runtime, cookie, "/_tesseraql/account/password",
+                    "current=originalPass1&next=rotatedPass3").statusCode()).isEqualTo(303);
+
+            // The same session no longer authenticates.
+            assertThat(get(runtime, cookie, "/_tesseraql/account").statusCode()).isEqualTo(401);
+        } finally {
+            String cookieNow = loginCookie("pw-user", "rotatedPass3");
+            if (cookieNow != null) {
+                postForm(runtime, cookieNow, "/_tesseraql/account/password",
+                        "current=rotatedPass3&next=originalPass1");
+            }
+        }
+    }
+
     /** Slice 4: a wrong current password is refused (TQL-ACCOUNT-4804) and nothing rotates. */
     @Test
     void aWrongCurrentPasswordIsRefused() throws Exception {

@@ -1047,7 +1047,10 @@ public final class TesseraqlRuntime implements AutoCloseable {
                                     context.getRegistry().lookupByNameAndType(
                                             TesseraqlProperties.IDENTITY_REALM_BEAN,
                                             io.tesseraql.identity.RealmConfig.class),
-                                    passwordLoginEnabled));
+                                    passwordLoginEnabled,
+                                    context.getRegistry().lookupByNameAndType(
+                                            TesseraqlProperties.SESSION_STORE_BEAN,
+                                            io.tesseraql.security.session.SessionStore.class)));
             context.getRegistry().bind(TesseraqlProperties.SERVICE_PROVIDERS_BEAN,
                     serviceProviders);
             Map<String, String> claimKeys = new LinkedHashMap<>();
