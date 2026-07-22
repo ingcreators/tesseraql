@@ -88,6 +88,33 @@ expand/contract (backward compatible) - the same discipline the canary flow alre
   the `file` default keeps them on the producing node, which then needs session affinity.
 - Framework and app migrations take Flyway's lock, so concurrent node startups serialize.
 
+## Transport security (TLS and HSTS)
+
+TesseraQL serves HTTP and **assumes TLS terminates at the deployment edge** — a reverse
+proxy, ingress controller, or load balancer in front of the runtime. This is a deliberate
+boundary, not a gap: the edge is where certificate lifecycle, cipher policy, and HTTP
+security headers already live in a production deployment. The operator's responsibilities:
+
+- **Terminate TLS at the edge and forward only HTTPS traffic** to the runtime. The browser
+  session cookie and the CSRF token are secured on the assumption that the transport is
+  HTTPS in production; do not expose the plain-HTTP port to clients.
+- **Set HSTS at the edge** (`Strict-Transport-Security`) so browsers refuse to downgrade.
+  Per-route response headers (CSP, `X-Content-Type-Options`, `X-Frame-Options`,
+  `Referrer-Policy`) are declared in the app and emitted by the runtime; HSTS is a
+  connection-level header that belongs on the terminating proxy.
+- **`auth: mtls`** authenticates a client certificate for service-to-service calls
+  ([authentication](authentication.md)): the edge performs the TLS client-cert handshake and
+  forwards the verified certificate (subject DN / SAN / SHA-256) in a header the runtime
+  reads. Configure the proxy to set that header only from a verified handshake and to strip
+  any client-supplied copy.
+- **Outbound** calls (`http-call`, connectors, the analytics engine's remote tier) use HTTPS
+  by their configured URLs and are bounded by the deny-by-default egress allow-list; the
+  runtime does not disable certificate verification.
+
+The framework does not ship a TLS listener or manage certificates itself, so a deployment
+that exposes the runtime directly without an HTTPS edge is misconfigured. See the
+[security hardening](security-hardening.md) self-assessment (ASVS V9) for the control map.
+
 ## Embedded database lifecycle
 
 `tesseraql serve --embedded-db [dir]` runs a real PostgreSQL inside the process — for

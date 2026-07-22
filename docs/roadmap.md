@@ -470,10 +470,15 @@ filters) runs on every build and asserts the fail-closed invariant; SCIM was con
 ReDoS-safe and locked in. The ASVS assessment (this leg): the L1/L2 self-assessment in
 [docs/security-hardening.md](security-hardening.md) maps every relevant chapter (V1–V14) to
 the real mechanisms with met/partial/gap status and code citations, and records six honest
-gaps carried forward — a full threat-model refresh, session-id rotation on elevation,
-Argon2id as the default KDF, write-scope enforcement (`TQL-SEC-4100`, still planned), edge
-TLS/HSTS expectations, and a user-surfaced `SECURITY.md`. Those, plus the SECURITY.md
-supported-versions/LTS statement, remain the phase's open legs toward M11.
+gaps carried forward. Two of those were closed in a follow-up pass 2026-07-22: the edge
+TLS/HSTS operator expectations are now stated in [docs/deployment.md](deployment.md)
+("Transport security"), and `SECURITY.md` carries a proper supported-versions policy
+(latest-release-only pre-1.0, tightening to a support window at 1.0) linked from the
+hardening page. Reassessed on evidence, Argon2id-as-default is a deliberate JDK-only choice
+rather than a shortfall (PBKDF2 is ASVS-approved) and write-scope's mechanism already works
+for writes (`TQL-SEC-4100` is a defense-in-depth "forgot to scope" guard, not an open hole).
+**The full threat-model refresh remains the substantive open leg toward M11**, with
+session-id rotation on elevation and the write-scope guard as smaller follow-ups.
 
 **Milestone M11** — 1.0 GA on Maven Central with a documentation site and a compatibility
 contract.
