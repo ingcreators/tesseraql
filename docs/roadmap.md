@@ -458,6 +458,23 @@ path, per the JDK-only/reproducible-build grain). The threat-model refresh and t
 SECURITY.md supported-versions statement remain the phase's open legs. Two slices: parser
 robustness + fuzz harnesses; then the ASVS assessment filled in.
 
+Both named legs delivered 2026-07-22. Parser robustness (#395): depth guards convert the
+two StackOverflow defects into coded `TqlException`s (`Sql2WayParser` MAX 200,
+`ExpressionParser` MAX 250 at every re-entry point), `parseNumber` wraps the JDK's
+`NumberFormatException` — a third defect the fuzz harness itself surfaced — and the YAML
+mapper gained explicit `StreamReadConstraints` plus one harmonized error contract (every
+parse path, the runtime Studio endpoints included, codes malformed YAML as `TQL-YAML-1001`
+rather than a raw `UncheckedIOException` or SnakeYAML exception). The deterministic
+generative fuzz harness (`ParserFuzz` + suites over 2-way SQL, expressions, YAML, and SCIM
+filters) runs on every build and asserts the fail-closed invariant; SCIM was confirmed
+ReDoS-safe and locked in. The ASVS assessment (this leg): the L1/L2 self-assessment in
+[docs/security-hardening.md](security-hardening.md) maps every relevant chapter (V1–V14) to
+the real mechanisms with met/partial/gap status and code citations, and records six honest
+gaps carried forward — a full threat-model refresh, session-id rotation on elevation,
+Argon2id as the default KDF, write-scope enforcement (`TQL-SEC-4100`, still planned), edge
+TLS/HSTS expectations, and a user-surfaced `SECURITY.md`. Those, plus the SECURITY.md
+supported-versions/LTS statement, remain the phase's open legs toward M11.
+
 **Milestone M11** — 1.0 GA on Maven Central with a documentation site and a compatibility
 contract.
 
