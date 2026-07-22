@@ -124,8 +124,135 @@ detail is filled in the [assessment](#asvs-assessment) below.
 
 ### ASVS assessment
 
-*Authored alongside this page; each chapter above expands to its requirement-level
-met/partial/gap findings with code citations, and the gaps carried into follow-up work.*
+The requirement-level view, by chapter. Status is **met** (a control implements it),
+**partial** (implemented with a caveat or a deployment dependency), **gap** (a known
+shortfall, carried into follow-up work), or **n/a** (outside the framework's
+responsibility). Citations name the class or the doc; this is a self-assessment, so a
+reviewer can check each claim against the source.
+
+#### V1 Architecture, design, threat modeling
+
+| Requirement | Status | Evidence |
+| --- | --- | --- |
+| Deny-by-default security posture | met | routes require an auth mode and a policy unless `auth: public`; egress, uploads, and marketplace admission all default closed |
+| Trust boundaries and component isolation | met | module boundaries hold (`tesseraql-core` dependency-free); heavy/optional capabilities sit behind SPIs (`FileCodec`, `BlobStore`, `SecretResolver`, `PasswordVerifier`); the DuckDB engine runs behind a per-connection fence |
+| A documented threat model | gap | this page is the first hardening artifact; a full threat-model refresh is follow-up work |
+
+#### V2 Authentication
+
+| Requirement | Status | Evidence |
+| --- | --- | --- |
+| Passwords stored with an approved KDF | met | `Pbkdf2PasswordEncoder` — PBKDF2 (100k iterations, 256-bit key, 16-byte random salt); Argon2id/bcrypt plug in behind `PasswordVerifier` |
+| Credentials verified in constant time | met | `ApiKeyAuthenticator` SHA-256-hashes the presented key and constant-time compares; the raw key is never stored or logged |
+| Token/signature verification is sound | met | `JwtAuthenticator` (JDK-only HS256/RS256 with JWKS) rejects algorithm confusion by design; SAML pins the IdP key with XXE off and a DB replay guard; OIDC is authorization-code + PKCE |
+| A second factor is available | met | RFC 6238 TOTP (`Totp`) with recovery codes and a last-used-step replay block |
+| Anti-enumeration on credential flows | met | reset/invite/login return neutral responses end to end (credential-lifecycle) |
+| Memory-hard KDF at L2 | partial | PBKDF2 is the default (ASVS-acceptable); Argon2id is available but not the shipped default |
+
+#### V3 Session management
+
+| Requirement | Status | Evidence |
+| --- | --- | --- |
+| Server-side session with an unpredictable id | met | `SessionStore` (`tesseraql_sid`), in-memory or shared JDBC store |
+| No session fixation | met | `BrowserAuthenticator.create()` mints a fresh id at login; no pre-auth session is adopted |
+| Logout and "sign out others" invalidate server-side | met | `invalidate()` / `invalidateOthersFor()`; a consumed password reset drops every session of the subject |
+| Session id re-issued on privilege change | gap | no explicit mid-session id rotation on elevation — a verify item carried forward |
+
+#### V4 Access control
+
+| Requirement | Status | Evidence |
+| --- | --- | --- |
+| Deny-by-default authorization | met | `PolicyEngine.authorize()` — no principal → `TQL-SEC-4011` (401), undefined/unsatisfied policy → `TQL-SEC-4031` (403) |
+| Field- and row-level enforcement | met | `FieldPolicyApplier` (role-conditional column masking + row `unmaskWhen`); the `/*%scope*/` data-scoping directive fails closed (`TQL-SQL-2106/2107`) |
+| Multi-tenant isolation | met | shared-schema / schema-per-tenant / db-per-tenant, tenant resolved per request and enforced in SQL; `TQL-TENANT` lint |
+| Write-scope enforcement | gap | `TQL-SEC-4100` (write-scope bypass) is documented as planned, not yet implemented |
+
+#### V5 Validation, sanitization, encoding, injection
+
+| Requirement | Status | Evidence |
+| --- | --- | --- |
+| SQL injection prevented structurally | met | 2-way SQL bind values are always parameterized; the only text-interpolating path (embedded `{var}`) is enum-gated for request inputs (`TQL-SQL-2109`) |
+| Output encoding / XSS | met | HTML renders through Thymeleaf context-aware auto-escaping; every HTML page must carry a CSP (`TQL-ADM-4704`) |
+| Declared input validation | met | declarative input constraints + `validate:` rules ([declarative validation](declarative-validation.md)) |
+| Parsers fail closed on hostile input | met | depth guards + explicit YAML constraints + the deterministic fuzz harness (this page) — three defects found and fixed |
+
+#### V6 Cryptography
+
+| Requirement | Status | Evidence |
+| --- | --- | --- |
+| Approved primitives, no home-rolled crypto | met | JDK-only crypto throughout (JCA); no custom cipher/MAC construction |
+| Keys and secrets out of source | met | `SecretResolver` SPI (`${secret.*}`, env/file/vault); resolved lazily per use, never written to logs or generated artifacts |
+| Randomness for security tokens | met | `SecureRandom` for salts, session ids, PKCE verifiers, reset tokens |
+
+#### V7 Errors and logging
+
+| Requirement | Status | Evidence |
+| --- | --- | --- |
+| Errors don't leak internals | met | `ErrorResponseRenderer` returns generic bodies; SAML/OIDC failures are generic 401/400, contents never echoed |
+| A structured, greppable error taxonomy | met | 336 `TQL-<DOMAIN>-<NNNN>` codes across 33 domains, generated into the reference and drift-guarded |
+| Audit trail without sensitive data | met | `tql_route_audit` records who/what/when over *declared* inputs only, and excludes any field marked `mask:`/`classification:` wholesale |
+| Log correlation | met | MDC bridges the OTel `traceId`/`spanId` into logs |
+
+#### V8 Data protection
+
+| Requirement | Status | Evidence |
+| --- | --- | --- |
+| Sensitive fields masked/classified | met | field masking + `classification:` drive both response shaping and audit exclusion |
+| Uploads gated before release | met | the attachment download gate refuses any non-clean object, including `pending` in async scan mode — fail-closed |
+| At-rest encryption | n/a | a database/storage-layer concern; the framework stores blobs through a pluggable store and never mandates cleartext |
+
+#### V9 Communications
+
+| Requirement | Status | Evidence |
+| --- | --- | --- |
+| TLS in transit | partial | TLS termination is the deployment edge's responsibility (reverse proxy); the framework provides mTLS client-cert auth and assumes HTTPS at the boundary — documented as an operator expectation |
+
+#### V11 Business logic and anti-automation
+
+| Requirement | Status | Evidence |
+| --- | --- | --- |
+| Rate limiting | met | per-node token bucket (`RateLimiter`) and a cluster-wide leased budget (`ClusterRateLimiter`, `TQL-RATE-4291`) that degrades to per-node |
+| Sequential/idempotent business flows | met | the transactional command engine (single-connection commit) + at-least-once messaging with idempotency keys; workflow transition guards |
+
+#### V12 Files and resources
+
+| Requirement | Status | Evidence |
+| --- | --- | --- |
+| Untrusted files handled safely | met | attachment scanning (fail-closed gate); the DuckDB fence confines engine file access to declared roots with a traversal-proof path-placeholder discipline |
+| Object-store egress bounded | met | `BlobStore` S3 access is deny-by-default via `allowedBuckets`; the DuckDB remote tier uses prefix-scoped secrets |
+| Resource-exhaustion parsing bounded | met | the parser depth guards and explicit YAML read constraints (this page) |
+
+#### V13 API and web service
+
+| Requirement | Status | Evidence |
+| --- | --- | --- |
+| Authentication on every service endpoint | met | SCIM and MCP routes gate on bearer + a policy; REST recipes carry the same `security:` contract |
+| CSRF protection for browser sessions | met | `CsrfValidator` — state-changing `auth: browser` requests must present `X-CSRF-Token` matching the per-session token (`TQL-SEC-4032`) |
+| Untrusted query input parsed safely | met | the SCIM `?filter=` parser is anchored and fuzz-verified ReDoS-safe (this page) |
+
+#### V14 Configuration
+
+| Requirement | Status | Evidence |
+| --- | --- | --- |
+| Deny-by-default egress | met | `tesseraql.http.outbound.allowedHosts` (and the copilot endpoint, `TQL-SEC-4085`); a bare `*` is rejected at marketplace admission (`TQL-ADM-4703`) |
+| A hardening gate for shared apps | met | the admission profile enforces declarative-only, defined policies, bounded egress, and CSP before publish |
+| Secret hygiene in development | met | `SECURITY.md` — never commit secrets; do not bind-mount host credential directories into the Dev Container |
+| A published security policy surfaced to users | gap | `SECURITY.md` exists at the repo root but is not linked from the documentation site, and the supported-versions/LTS statement is still thin — follow-up work |
+
+#### Gaps carried forward
+
+The honest shortfalls, none blocking for the current pre-1.0 posture:
+
+1. **A full threat-model refresh** (V1) — this assessment is the first artifact.
+2. **Session id rotation on privilege elevation** (V3) — not explicit today.
+3. **Argon2id as the shipped default KDF** (V2) — PBKDF2 is the default; Argon2id is
+   available behind the SPI.
+4. **Write-scope enforcement** (V4) — `TQL-SEC-4100` is planned, not implemented; do not
+   rely on it as a live control.
+5. **Edge TLS/HSTS expectations** (V9) — a deployment responsibility that should be stated
+   in the operator guide.
+6. **A user-surfaced security policy** (V14) — `SECURITY.md` needs a supported-versions
+   statement and a link from the site.
 
 ## Deliberately out of scope (documented, not implied)
 
