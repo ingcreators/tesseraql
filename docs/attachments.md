@@ -196,7 +196,7 @@ job history, gated by `tesseraql.retention.attachments`:
 The attachment surface is machine-checkable like every other recipe. The attachment document has
 its own lint family (`TQL-ATTACH-34xx`, mirroring the `TQL-WORKFLOW`/`TQL-SCOPE` per-kind
 families rather than crowding the `TQL-YAML` loader-error number space); object-storage egress
-takes `TQL-SEC-411x` (`TQL-SEC-4100` is reserved for the write-scope bypass check in
+takes `TQL-SEC-411x` (`TQL-SEC-4100` is the write-scope guard in
 [data scoping](data-scoping.md)):
 
 | Code | Severity | Meaning |

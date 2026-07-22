@@ -87,7 +87,7 @@ Each table reads: **threat → vector → control → residual**. Controls are c
 | Elevation (missing authorization) | calling a route without rights | deny-by-default `PolicyEngine` — no principal → 401, unsatisfied/undefined policy → 403 | a policy the app forgot to define fails closed, not open |
 | Elevation (tenant crossover) | reading another tenant's rows | tenant resolved per request and enforced in SQL; shared-schema queries lint-warned if unscoped | correctness of the tenant predicate is the author's, backed by lint |
 | Information disclosure (field) | reading a masked column | role-conditional column masking + row `unmaskWhen` | — |
-| Tampering (unscoped write) | an `UPDATE`/`DELETE` that omits its scope predicate | the `/*%scope*/` mechanism confines writes when used | a *forgot-to-scope* guard is a planned defense-in-depth enhancement, not yet a runtime check |
+| Tampering (unscoped write) | an `UPDATE`/`DELETE` that omits its scope predicate | the `/*%scope*/` mechanism confines writes when used, and a lint (`TQL-SEC-4100`) warns when a scope-governed table is written without one | correctness of the predicate is the author's; the guard is a warning, not a hard block |
 
 ### Input handling and injection
 
@@ -150,9 +150,9 @@ The model holds only where these hold:
 
 Carried forward, none an actively-exploitable hole in a correctly-configured deployment:
 
-- **A forgot-to-scope write guard** — the scope mechanism works; the automatic check that a
-  write which *should* be scoped carries the predicate is a planned defense-in-depth
-  enhancement.
+- **Write-scope guard** — *now implemented* as `TQL-SEC-4100` (a warning when a scope-governed
+  table is written without a scope predicate); the residual is only that it is a heuristic
+  warning, not a hard block, since a deliberately-unscoped admin write is legitimate.
 - **Session id rotation in place on a non-credential elevation** — the fixation case is handled
   at login, and both a password reset and a self-service password change now end the subject's
   sessions; the residual is re-issuing the current id in place on a non-credential elevation

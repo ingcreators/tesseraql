@@ -223,14 +223,20 @@ Lint catches a misdeclared or unreferenceable scope before it ships:
 | `TQL-SCOPE-3012` | error | a scope definition is malformed: an arm declares neither/both of `apply` and `file`, an unknown `apply` value, a missing fragment file, or a `when` setting more than one of role/permission/claim (or a `claim` with no `equals`) |
 | `TQL-SCOPE-3013` | error | a directive's `on <alias>` is not a valid SQL identifier |
 | `TQL-SCOPE-3020` | error | `tesseraql.orgunit.mode` is set to something other than `managed` or `app` |
+| `TQL-SEC-4100` | warning | an `UPDATE`/`DELETE` writes a **scope-governed** table (one the app scopes elsewhere with `/*%scope … */`) but carries no scope predicate of its own — confirm the write cannot reach rows outside the caller's scope |
 
 The runtime fails closed: a directive rendered without a scope resolver configured is `TQL-SQL-2106`,
 and a directive naming an undeclared scope is `TQL-SQL-2107` — a scope can never silently no-op.
 
-Planned but not currently implemented: `TQL-SCOPE-3001` (a scope-governed table queried with no
-scope predicate, mirroring `TQL-TENANT-3001`), `TQL-SCOPE-3010` (a future route-level scope
-declaration naming an undeclared scope), and `TQL-SEC-4100` (a write route bypassing a governed
-scope without an explicit bypass policy).
+`TQL-SEC-4100` warns when a write bypasses a governed scope: a table the app scopes on reads is
+`UPDATE`/`DELETE`d without a `/*%scope … */` predicate. It is a defense-in-depth nudge, not a hard
+rule — the set of scope-governed tables is inferred from where scope directives are actually used,
+so it fires only on a genuine read/write inconsistency within one app and stays a warning
+(non-blocking; a deliberately-unscoped admin write is answered by confirming the intent).
+
+Still planned but not currently implemented: the read-side symmetry `TQL-SCOPE-3001` (a
+scope-governed table *queried* with no scope predicate, mirroring `TQL-TENANT-3001`) and
+`TQL-SCOPE-3010` (a future route-level scope declaration naming an undeclared scope).
 
 The **`data-scope`** coverage kind declares one item per scope under `scope/`; a scope counts as
 covered when a declarative suite exercises a route (or consumer) whose SQL applies it through a

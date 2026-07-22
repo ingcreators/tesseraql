@@ -1221,6 +1221,121 @@ public final class AppLinter {
         for (RouteFile consumer : manifest.consumers()) {
             lintScopeDirectives(appHome, consumer, declared, findings);
         }
+        lintWriteScope(appHome, manifest, findings);
+    }
+
+    private static final Pattern SCOPED_TABLE_ALIASED = Pattern.compile(
+            "(?is)\\b(?:from|join|into|update)\\s+([A-Za-z_][\\w.]*)\\s+(?:as\\s+)?ALIAS\\b");
+    private static final Pattern WRITE_TARGET = Pattern.compile(
+            "(?is)^\\s*(?:update|delete\\s+from)\\s+([A-Za-z_][\\w.]*)");
+
+    /**
+     * A defense-in-depth guard (docs/data-scoping.md, docs/security-hardening.md): if the app scopes
+     * a table's reads with {@code /*%scope … *}{@code /} but an {@code UPDATE}/{@code DELETE} on the
+     * same table carries no scope predicate, the write can reach rows outside the authorized set.
+     * The set of scope-governed tables is inferred from where scope directives are actually used
+     * (there is no manifest-level table→scope map), so this warns only on a genuine read/write
+     * inconsistency within one app — never on a table the app does not scope at all.
+     */
+    private void lintWriteScope(Path appHome, AppManifest manifest, List<LintFinding> findings) {
+        if (manifest.scopes().isEmpty()) {
+            return;
+        }
+        Set<String> scopedTables = new HashSet<>();
+        for (RouteFile route : allScopeRoutes(manifest)) {
+            for (Path sqlFile : routeSqlFiles(route)) {
+                if (Files.isRegularFile(sqlFile)) {
+                    collectScopedTables(readQuietly(sqlFile), scopedTables);
+                }
+            }
+        }
+        if (scopedTables.isEmpty()) {
+            return;
+        }
+        for (RouteFile route : allScopeRoutes(manifest)) {
+            String source = relative(appHome, route.source());
+            String id = route.definition().id();
+            for (Map.Entry<String, SqlBinding> entry : writeBindings(route.definition())) {
+                Path sqlFile = route.source().getParent().resolve(entry.getValue().file());
+                if (!Files.isRegularFile(sqlFile)) {
+                    continue;
+                }
+                String sql = readQuietly(sqlFile);
+                Matcher target = WRITE_TARGET.matcher(sql);
+                if (!target.find()) {
+                    continue; // not an UPDATE/DELETE (an INSERT adds rows, nothing to over-reach)
+                }
+                String table = lastSegment(target.group(1));
+                if (scopedTables.contains(table) && !SCOPE_DIRECTIVE.matcher(sql).find()) {
+                    findings.add(new LintFinding("TQL-SEC-4100", "warning", source,
+                            "route '" + id + "' writes scope-governed table '" + table
+                                    + "' with no /*%scope … */ predicate; confirm the write cannot"
+                                    + " reach rows outside the caller's scope"));
+                }
+            }
+        }
+    }
+
+    /** The routes + consumers a scope directive or scoped write can live on. */
+    private static List<RouteFile> allScopeRoutes(AppManifest manifest) {
+        List<RouteFile> routes = new ArrayList<>(manifest.routes());
+        routes.addAll(manifest.consumers());
+        return routes;
+    }
+
+    /** Adds every table a {@code /*%scope … on alias *}{@code /} (or aliasless) directive governs. */
+    private static void collectScopedTables(String sql, Set<String> out) {
+        Matcher directive = SCOPE_DIRECTIVE.matcher(sql);
+        while (directive.find()) {
+            String content = stripAsBoolean(directive.group(1).trim());
+            int on = content.indexOf(" on ");
+            if (on >= 0) {
+                String alias = content.substring(on + " on ".length()).trim();
+                if (SQL_IDENTIFIER.matcher(alias).matches()) {
+                    Matcher aliased = Pattern.compile(SCOPED_TABLE_ALIASED.pattern()
+                            .replace("ALIAS", Pattern.quote(alias))).matcher(sql);
+                    if (aliased.find()) {
+                        out.add(lastSegment(aliased.group(1)));
+                    }
+                }
+            } else {
+                // Aliasless scope: the statement's single write/from target is the scoped table.
+                Matcher write = WRITE_TARGET.matcher(sql);
+                if (write.find()) {
+                    out.add(lastSegment(write.group(1)));
+                } else {
+                    Matcher from = Pattern.compile("(?is)\\bfrom\\s+([A-Za-z_][\\w.]*)")
+                            .matcher(sql);
+                    if (from.find()) {
+                        out.add(lastSegment(from.group(1)));
+                    }
+                }
+            }
+        }
+    }
+
+    /** The {@code (name, binding)} pairs of a route whose SQL runs in write ({@code update}) mode. */
+    private static List<Map.Entry<String, SqlBinding>> writeBindings(RouteDefinition definition) {
+        Map<String, SqlBinding> bindings = new LinkedHashMap<>();
+        if (definition.sql() != null) {
+            bindings.put("sql", definition.sql());
+        }
+        bindings.putAll(definition.steps());
+        List<Map.Entry<String, SqlBinding>> writes = new ArrayList<>();
+        for (Map.Entry<String, SqlBinding> entry : bindings.entrySet()) {
+            SqlBinding binding = entry.getValue();
+            if (binding != null && !binding.isContract() && binding.file() != null
+                    && "update".equals(binding.effectiveMode())) {
+                writes.add(entry);
+            }
+        }
+        return writes;
+    }
+
+    /** The last dotted segment of a possibly schema-qualified table name, lowercased. */
+    private static String lastSegment(String table) {
+        int dot = table.lastIndexOf('.');
+        return (dot < 0 ? table : table.substring(dot + 1)).toLowerCase(java.util.Locale.ROOT);
     }
 
     private void lintAttachments(Path appHome, AppManifest manifest, List<LintFinding> findings) {
