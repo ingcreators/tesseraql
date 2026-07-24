@@ -18,8 +18,15 @@ import java.util.Optional;
  */
 final class EmbeddedDbMarker {
 
-    /** The marker file, relative to the app home. */
+    /** The marker's conventional location, for messages; resolution honors tesseraql.app.work. */
     static final String RELATIVE_PATH = "work/embedded-db.jdbc";
+
+    /** The marker file under the app's resolved work home (docs/config-consumers.md). */
+    static java.nio.file.Path marker(Path appHome) {
+        return io.tesseraql.yaml.config.WorkHome
+                .resolve(appHome, io.tesseraql.yaml.manifest.ManifestLoader.configOnly(appHome))
+                .resolve("embedded-db.jdbc");
+    }
 
     /** How {@link #pick} checks whether a candidate datasource answers a trivial connection. */
     @FunctionalInterface
@@ -35,7 +42,7 @@ final class EmbeddedDbMarker {
      * convenience hand-off, so a write failure warns on stderr rather than failing {@code serve}.
      */
     static void write(Path appHome, String jdbcUrl) {
-        Path marker = appHome.resolve(RELATIVE_PATH);
+        Path marker = marker(appHome);
         try {
             Files.createDirectories(marker.getParent());
             Files.writeString(marker, jdbcUrl + System.lineSeparator());
@@ -47,7 +54,7 @@ final class EmbeddedDbMarker {
     /** Best-effort removal of the marker on graceful shutdown (a leftover is tolerated by {@link #pick}). */
     static void delete(Path appHome) {
         try {
-            Files.deleteIfExists(appHome.resolve(RELATIVE_PATH));
+            Files.deleteIfExists(marker(appHome));
         } catch (IOException ex) {
             // Best-effort by contract: a stale marker fails the freshness probe on the next read.
         }
@@ -55,7 +62,7 @@ final class EmbeddedDbMarker {
 
     /** The marker's JDBC URL, or empty when the file is missing or blank. */
     static Optional<String> read(Path appHome) {
-        Path marker = appHome.resolve(RELATIVE_PATH);
+        Path marker = marker(appHome);
         if (!Files.isRegularFile(marker)) {
             return Optional.empty();
         }

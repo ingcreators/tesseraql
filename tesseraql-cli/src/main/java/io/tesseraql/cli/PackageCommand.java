@@ -31,10 +31,12 @@ final class PackageCommand implements Callable<Integer> {
     @Override
     public Integer call() throws Exception {
         Path home = app.toAbsolutePath().normalize();
+        Path work = io.tesseraql.yaml.config.WorkHome.resolve(home,
+                io.tesseraql.yaml.manifest.ManifestLoader.configOnly(home));
         Path output = out != null
                 ? out
-                : home.resolve("work").resolve(home.getFileName() + ".tqlapp");
-        Path docs = generated != null ? generated : home.resolve("work/generated/docs");
+                : work.resolve(home.getFileName() + ".tqlapp");
+        Path docs = generated != null ? generated : work.resolve("generated/docs");
         Path generatedDocs = Files.isDirectory(docs) ? docs : null;
         new AppPackager().pack(home, generatedDocs, output);
         // The sibling checksum lets installs verify package integrity (design ch. 49, 50).

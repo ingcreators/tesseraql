@@ -276,7 +276,8 @@ final class DuckDbDatasources {
         Path base = appHome == null ? Path.of(".") : appHome;
         return config.getString("tesseraql.duckdb.extensionDirectory")
                 .map(base::resolve)
-                .orElseGet(() -> base.resolve("work/duckdb-extensions"))
+                .orElseGet(() -> io.tesseraql.yaml.config.WorkHome.resolve(base, config)
+                        .resolve("duckdb-extensions"))
                 .normalize()
                 .toAbsolutePath();
     }

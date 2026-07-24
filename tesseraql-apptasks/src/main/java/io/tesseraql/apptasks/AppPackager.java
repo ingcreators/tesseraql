@@ -39,7 +39,8 @@ public final class AppPackager {
      */
     public Path pack(Path appHome, Path generatedDocs, Path output) throws IOException {
         Path home = appHome.toAbsolutePath().normalize();
-        Path work = home.resolve("work");
+        Path work = io.tesseraql.yaml.config.WorkHome.resolve(home,
+                io.tesseraql.yaml.manifest.ManifestLoader.configOnly(home));
         Path reserved = home.resolve(".tesseraql");
         // Entry name -> source file, sorted by name so the archive order is deterministic across
         // both the source tree and the merged generated docs. The reserved .tesseraql/ namespace is

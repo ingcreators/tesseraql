@@ -56,7 +56,10 @@ final class CoverageCommand implements Callable<Integer> {
         CliModules.installAppExtensions(app, modules);
         AppManifest manifest = new ManifestLoader().load(app);
         DriverManagerDataSource dataSource = datasource.resolve(manifest.config());
-        Path reports = reportDir != null ? reportDir : app.resolve("work").resolve("reports");
+        Path reports = reportDir != null
+                ? reportDir
+                : io.tesseraql.yaml.config.WorkHome.resolve(app, manifest.config())
+                        .resolve("reports");
         Files.createDirectories(reports);
 
         AppTestRunner.RunResult result = new AppTestRunner().run(app, dataSource,

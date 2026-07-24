@@ -65,7 +65,8 @@ public final class ModulesInstaller {
             });
         }
 
-        Path cache = appHome.resolve("work").resolve("modules");
+        Path cache = io.tesseraql.yaml.config.WorkHome.resolve(appHome, config)
+                .resolve("modules");
         copyToCache(resolved, cache);
         boolean wroteLock = false;
         if (writeLock) {

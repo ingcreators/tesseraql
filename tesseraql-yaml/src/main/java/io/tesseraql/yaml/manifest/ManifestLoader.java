@@ -42,6 +42,15 @@ public final class ManifestLoader {
 
     private final SimpleYamlParser parser = new SimpleYamlParser();
 
+    /**
+     * Loads just the merged app configuration (application.yml + tesseraql.yml + the active
+     * environment overlay) without parsing routes — for tools that only need config, such as
+     * work-home resolution during packaging.
+     */
+    public static AppConfig configOnly(Path appHome) {
+        return new ManifestLoader().loadConfig(appHome.toAbsolutePath().normalize());
+    }
+
     /** Loads the manifest rooted at {@code appHome}. */
     public AppManifest load(Path appHome) {
         return load(appHome, null);
@@ -95,7 +104,7 @@ public final class ManifestLoader {
         List<WorkflowFile> workflows = loadWorkflows(home);
         List<AttachmentFile> attachments = loadAttachments(home);
         List<MigrationFile> migrations = loadMigrations(home);
-        ManifestIndex index = buildIndex(home);
+        ManifestIndex index = buildIndex(home, config);
         return new AppManifest(home, config, routes, jobs, tools, resources, uiResources, consumers,
                 scopes, workflows, attachments, migrations, prompts, index);
     }
@@ -549,7 +558,7 @@ public final class ManifestLoader {
     /** Marker file PostgreSQL writes at the root of every initialized data directory. */
     private static final String PG_DATA_MARKER = "PG_VERSION";
 
-    private ManifestIndex buildIndex(Path home) {
+    private ManifestIndex buildIndex(Path home, AppConfig config) {
         Map<String, String> checksums = new TreeMap<>();
         // The index tracks source files only: skip the runtime scratch dir and the reserved
         // .tesseraql dir a packaged app carries build-generated artifacts in (e.g. docs/spec.json),
@@ -558,7 +567,7 @@ public final class ManifestLoader {
         // app home (serve --embedded-db=<dir>): its files are non-deterministic runtime state, not
         // source, and on Windows the running postgres holds OS locks on them, so reading them to
         // hash would fail the load. We prune whole subtrees so the locked files are never read.
-        Path work = home.resolve("work");
+        Path work = io.tesseraql.yaml.config.WorkHome.resolve(home, config);
         Path generated = home.resolve(".tesseraql");
         try {
             Files.walkFileTree(home, new SimpleFileVisitor<Path>() {
