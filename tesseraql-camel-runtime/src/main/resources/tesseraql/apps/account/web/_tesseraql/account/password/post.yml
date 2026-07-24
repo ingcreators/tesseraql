@@ -19,10 +19,6 @@ input:
     minLength: 8
     maxLength: 256
 
-security:
-  auth: browser
-  csrf: true
-
 sql:
   service: account.password.change
   params:

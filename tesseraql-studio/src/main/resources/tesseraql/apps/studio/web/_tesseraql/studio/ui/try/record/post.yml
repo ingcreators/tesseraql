@@ -20,10 +20,6 @@ input:
     type: string
     required: false
 
-security:
-  auth: browser
-  csrf: true
-
 sql:
   service: studio.tryRecord
   params:

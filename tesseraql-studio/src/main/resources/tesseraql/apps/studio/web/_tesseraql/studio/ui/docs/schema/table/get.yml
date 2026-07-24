@@ -11,9 +11,6 @@ input:
     type: string
     required: true
 
-security:
-  auth: browser
-
 sql:
   service: docs.table
   params:

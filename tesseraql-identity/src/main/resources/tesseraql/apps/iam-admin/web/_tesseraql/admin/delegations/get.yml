@@ -7,7 +7,6 @@ recipe: query-html
 # covers, until when - the answer to "why did this land with X?". Read-only.
 
 security:
-  auth: browser
   policy: iam.admin.view
 
 sql:

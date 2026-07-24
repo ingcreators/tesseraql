@@ -3,9 +3,6 @@ id: tql.studio.wizards
 kind: route
 recipe: page
 
-security:
-  auth: browser
-
 response:
   html:
     template: wizard-index.html

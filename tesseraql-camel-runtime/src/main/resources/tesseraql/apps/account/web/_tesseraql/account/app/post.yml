@@ -17,10 +17,6 @@ input:
     required: false
     maxLength: 2000
 
-security:
-  auth: browser
-  csrf: true
-
 sql:
   service: account.app.save
   params:

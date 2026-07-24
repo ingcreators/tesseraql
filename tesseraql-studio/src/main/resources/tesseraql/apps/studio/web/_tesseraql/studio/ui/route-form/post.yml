@@ -120,10 +120,6 @@ input:
   in9enum: { type: string, required: false }
   in9domain: { type: string, required: false }
 
-security:
-  auth: browser
-  csrf: true
-
 sql:
   service: studio.routeForm.save
   params:

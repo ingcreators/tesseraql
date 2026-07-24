@@ -1,5 +1,13 @@
 tesseraql:
   security:
+    # Path-matched route security defaults (docs/route-defaults.md): every page and
+    # fragment of this bundled app is a browser-session surface with CSRF on writes;
+    # the deliberately public routes keep their explicit auth: public.
+    defaults:
+      routes:
+        - match: /**
+          auth: browser
+          csrf: auto
     # The security header block every HTML page of this bundled app sends
     # (docs/response-shaping.md "Default response headers"). This is the one config key the
     # mount honors from a bundled app (SystemApps whitelist): the app owns its pages' headers,

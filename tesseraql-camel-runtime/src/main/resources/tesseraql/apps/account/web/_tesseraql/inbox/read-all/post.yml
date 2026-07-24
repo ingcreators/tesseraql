@@ -5,10 +5,6 @@ recipe: command-json
 
 # Marks all of the caller's messages read (roadmap Phase 49). Idempotent by design.
 
-security:
-  auth: browser
-  csrf: true
-
 sql:
   service: account.inbox.readAll
   params:

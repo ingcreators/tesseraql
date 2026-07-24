@@ -5,9 +5,6 @@ recipe: command-json
 
 # Discards every pending draft at once (Studio Drafts bulk actions). Edit-gated in the provider;
 # the UI guards it behind an hc-confirm modal. Redirects back to the (now empty) Drafts list.
-security:
-  auth: browser
-  csrf: true
 
 sql:
   service: studio.draftsDiscardAll

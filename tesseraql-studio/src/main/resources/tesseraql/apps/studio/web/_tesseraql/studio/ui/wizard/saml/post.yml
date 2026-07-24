@@ -35,9 +35,6 @@ input:
     type: string
     default: "false"
 
-security:
-  auth: browser
-
 response:
   file:
     template: wizard-saml.yml.tpl
