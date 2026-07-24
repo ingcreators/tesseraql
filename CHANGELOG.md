@@ -106,6 +106,13 @@ All notable changes to TesseraQL are documented here. The format follows
   and fails the build on an unregistered key ("wire it or don't emit it"), with an honesty
   probe on each registered consumer file.
 
+- **Bundled apps rely on the security defaults** (docs/route-defaults.md, closing the design):
+  Studio, account, IAM-admin, and ops-console declare one `security.defaults.routes` rule each
+  and their 112 route-file `auth:`/`csrf:` lines are gone; deliberately public routes keep
+  their explicit declarations, auth-ui stays fully explicit, and
+  `BundledAppSecurityPostureTest` pins every bundled route to an explicit effective auth mode
+  with CSRF on browser writes.
+
 ### Changed
 
 - **The gallery apps rely on the default response headers**: all five example apps declare

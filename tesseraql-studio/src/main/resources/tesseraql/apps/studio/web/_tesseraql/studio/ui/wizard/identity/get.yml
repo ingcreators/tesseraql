@@ -3,9 +3,6 @@ id: tql.studio.wizard.identity.form
 kind: route
 recipe: page
 
-security:
-  auth: browser
-
 response:
   html:
     template: wizard-identity.html

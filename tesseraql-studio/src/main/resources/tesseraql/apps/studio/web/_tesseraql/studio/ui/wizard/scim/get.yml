@@ -3,9 +3,6 @@ id: tql.studio.wizard.scim.form
 kind: route
 recipe: page
 
-security:
-  auth: browser
-
 response:
   html:
     template: wizard-scim.html

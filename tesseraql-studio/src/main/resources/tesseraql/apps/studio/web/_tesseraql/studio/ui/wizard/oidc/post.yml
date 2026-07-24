@@ -23,9 +23,6 @@ input:
     type: string
     default: "false"
 
-security:
-  auth: browser
-
 response:
   file:
     template: wizard-oidc.yml.tpl

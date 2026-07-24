@@ -8,9 +8,6 @@ input:
     type: string
     required: true
 
-security:
-  auth: browser
-
 sql:
   service: studio.scaffold.preview
   params:

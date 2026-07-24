@@ -7,9 +7,6 @@ recipe: query-html
 # bell. The subject is always the session principal's - the route maps principal.* into the
 # service params, so the page can only ever list the caller's messages.
 
-security:
-  auth: browser
-
 sql:
   service: account.inbox.view
   params:

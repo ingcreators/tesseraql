@@ -17,10 +17,6 @@ input:
     type: string
     required: false
 
-security:
-  auth: browser
-  csrf: true
-
 sql:
   service: studio.wizard.scim.apply
   params:

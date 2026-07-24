@@ -16,10 +16,6 @@ input:
     required: false
     maxLength: 200
 
-security:
-  auth: browser
-  csrf: true
-
 sql:
   service: account.pins.toggle
   params:

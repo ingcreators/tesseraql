@@ -3,9 +3,6 @@ id: tql.studio.migration
 kind: route
 recipe: query-html
 
-security:
-  auth: browser
-
 sql:
   service: studio.migration.new
   params:

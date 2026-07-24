@@ -8,9 +8,6 @@ recipe: query-html
 # principal's — the route maps principal.* into the service params, so the page can only
 # ever describe the caller.
 
-security:
-  auth: browser
-
 sql:
   service: account.settings.view
   params:

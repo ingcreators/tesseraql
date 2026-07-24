@@ -23,8 +23,6 @@ input:
     maxLength: 320
 
 security:
-  auth: browser
-  csrf: true
   policy: iam.admin.write
 
 sql:

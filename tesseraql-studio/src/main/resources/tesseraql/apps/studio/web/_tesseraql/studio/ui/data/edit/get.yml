@@ -26,9 +26,6 @@ input:
     type: string
     required: false
 
-security:
-  auth: browser
-
 sql:
   service: studio.data.editForm
   params:

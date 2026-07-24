@@ -9,8 +9,11 @@
 > off the per-route header blocks — a mounted app declares its block once in its own
 > `config/tesseraql.yml`, the one key the mount honors (SystemApps whitelist), so a host config
 > can neither weaken nor restyle a bundled app's pages while third-party apps stay unable to
-> touch host datasources or policies. One planned slice remains: the bundled apps adopting
-> `security.defaults.routes` for their own `auth:` lines (below).
+> touch host datasources or policies. The bundled apps now also adopt
+> `security.defaults.routes`: 112 explicit `auth:`/`csrf:` lines across
+> Studio/account/IAM-admin/ops-console replaced by one rule per app, pinned by
+> `BundledAppSecurityPostureTest` (auth-ui stays fully explicit — every route deliberately
+> public). This design is COMPLETE.
 
 **Route defaults** let the application declare, once in `config/tesseraql.yml`, the per-route
 settings that are the same for every route of a kind — and let route files state only what
@@ -108,7 +111,7 @@ The scaffolder stops pasting the four-header block into routes and emits the
 `security.responseHeaders` default once per app. Hardening the whole app becomes a one-line
 config edit.
 
-## Planned: bundled apps adopt the security defaults
+## Shipped: bundled apps adopt the security defaults
 
 The response-header migration gave every bundled app its own `config/tesseraql.yml`, and the
 mount resolves **security defaults from that config**: `SystemApps` loads each mounted app with

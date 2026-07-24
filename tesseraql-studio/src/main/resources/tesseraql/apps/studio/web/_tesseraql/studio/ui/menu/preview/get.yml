@@ -13,9 +13,6 @@ input:
     type: string
     required: false
 
-security:
-  auth: browser
-
 sql:
   service: studio.menu.preview
   params:

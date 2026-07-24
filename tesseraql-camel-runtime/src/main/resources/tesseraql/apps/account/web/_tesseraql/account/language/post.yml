@@ -13,10 +13,6 @@ input:
     required: true
     maxLength: 35
 
-security:
-  auth: browser
-  csrf: true
-
 sql:
   service: account.language.save
   params:
