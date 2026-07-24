@@ -4,6 +4,27 @@ All notable changes to TesseraQL are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [Semantic Versioning](https://semver.org/).
 
+## Unreleased
+
+### Added
+
+- **Path-matched route security defaults** (docs/authentication.md "Route security defaults"):
+  `tesseraql.security.defaults.routes` declares firewall-style rules (`match` glob over the
+  served URL path, first match wins) that fill a route's `auth`, `csrf`, and `policy` when the
+  route leaves them out; route-local keys always win, a `public` route never inherits a policy
+  (`TQL-SEC-4131` flags the combination), and `csrf: auto` requires CSRF exactly on browser
+  writes. Resolution happens at manifest load, so the compiler, linter, coverage, and Studio all
+  see effective values. A malformed rule fails the load (`TQL-SEC-4132`).
+
+### Changed
+
+- **Retired the kind-keyed `security.defaults.api`/`htmx` config shape** — it was emitted by the
+  scaffolder and documented, but never read by any compiler code, and it is not decidable
+  (`command-json` serves both browser and API writes; the URL path is the framework's
+  discriminator). Apps still carrying it get lint `TQL-SEC-4130`; the scaffolder now emits the
+  path-matched `security.defaults.routes` shape instead. No effective behavior changes: the old
+  shape did nothing.
+
 ## 0.7.1 - 2026-07-21
 
 ### Fixed

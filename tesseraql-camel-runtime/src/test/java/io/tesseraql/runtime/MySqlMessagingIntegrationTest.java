@@ -164,6 +164,11 @@ class MySqlMessagingIntegrationTest {
                 id: orders.create
                 kind: route
                 recipe: command-json
+                # Deliberately open: this fixture tests messaging, not authentication, and the
+                # copied gallery config now declares security defaults that would otherwise
+                # require a session here.
+                security:
+                  auth: public
                 input:
                   orderId:
                     type: string

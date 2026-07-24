@@ -1,7 +1,9 @@
 # Route defaults
 
-> **Status: design.** This document precedes implementation. Nothing described here is part of
-> the released YAML surface yet; it is the agreed target for review.
+> **Status: partially shipped.** The path-matched security defaults below are implemented
+> (`tesseraql.security.defaults.routes`, documented user-facing in
+> [authentication.md](authentication.md#route-security-defaults)). The default response security
+> headers remain design-stage.
 
 **Route defaults** let the application declare, once in `config/tesseraql.yml`, the per-route
 settings that are the same for every route of a kind — and let route files state only what
@@ -11,15 +13,6 @@ security block (`Content-Security-Policy`, `X-Content-Type-Options`, `X-Frame-Op
 copies of it, with the first divergent CSP variants already present. A security control that lives
 in ninety places is edited in eighty-seven of them.
 
-This design covers three defaults, in increasing order of ambition:
-
-1. **Wiring `security.defaults`** — the config key already exists and is documented, but the
-   compiler does not read it; every route still spells out `auth:` and `csrf:`. The first slice
-   is closing that gap, not adding surface.
-2. **Default response security headers** — an app-level header set merged into every HTML/file
-   response.
-3. **Path-prefix policy defaults** — an authorization policy applied to a route subtree.
-
 It builds on:
 
 - **[Security hardening](security-hardening.md)** — the headers being centralized and the
@@ -27,31 +20,59 @@ It builds on:
 - **[Response shaping](response-shaping.md)** — `response.html.headers`, the per-route map the
   default merges into.
 - **The central policy table** ([authentication](authentication.md)) — `security.policies` is
-  already declare-once/reference-by-name; path-prefix defaults extend where a policy *applies*,
+  already declare-once/reference-by-name; path-matched defaults extend where a policy *applies*,
   not what it *is*.
 
-## 1. `security.defaults` — finish the wiring
+## Shipped: path-matched security defaults
 
-The scaffolder emits, and the docs describe, per-kind defaults:
+The original design here had two mechanisms: wiring the kind-keyed `security.defaults.api`/`htmx`
+config shape (which the scaffolder emitted but no compiler code ever read), and a separate
+path-prefix policy default. Implementation collapsed them into one, because the kind-keyed shape
+is not decidable: `command-json` serves both browser htmx writes and bearer API writes, so
+nothing in a route file says which family it belongs to. What does discriminate — by explicit
+framework convention ("API vs page vs fragment is a URL convention, not a folder rule") — is the
+served URL path. The retired shape is flagged by lint (`TQL-SEC-4130`) and was dropped outright
+(pre-1.0, no compatibility shims).
+
+The shipped mechanism, declared once:
 
 ```yaml
-security:
-  defaults:
-    htmx: { auth: browser, csrf: auto }
-    api:  { auth: bearer }
+tesseraql:
+  security:
+    defaults:
+      routes:
+        - match: /api/**
+          auth: bearer
+        - match: /**
+          auth: browser
+          csrf: auto
 ```
 
-Today no compiler code consumes this block, which makes it documentation of an intention. The
-slice: the route compiler resolves a route's effective `security:` as *route-local value, else
-kind default, else the framework's current built-in behavior*. Routes may then drop their
-`auth:`/`csrf:` lines; the scaffolder stops emitting them. A route can still opt out explicitly
-(`auth: public`) — explicit always beats ambient.
+Semantics (full user-facing description in
+[authentication.md](authentication.md#route-security-defaults)):
 
-Because the key already ships in scaffolded apps, wiring it must not change the effective posture
-of an app whose routes all state `auth:` explicitly — which is every app today. The slice is
-behavior-adding only for routes that omit the key.
+- Rules are evaluated in declaration order against the served URL path; the **first matching
+  rule** contributes defaults — firewall-style, decidable by reading top to bottom. (The draft's
+  "most specific match wins" was dropped: specificity over globs is ill-defined; order is not.)
+- `*` matches within a segment, `**` across segments, a trailing `/**` also matches the bare
+  prefix.
+- Merge is per key; **route-local keys always win**. A rule can default `auth`, `csrf`
+  (`auto`/`true`/`false`), and `policy`.
+- A route whose effective auth is `public` never inherits a policy; the combination of an
+  explicit `public` under a policy-carrying rule is linted (`TQL-SEC-4131`, warning).
+- `csrf: auto` resolves to required exactly when effective auth is `browser` and the method is
+  not `GET`.
+- Resolution happens at **manifest load**: the compiler, linter, coverage, OpenAPI, and Studio
+  all see fully explicit effective values; generated artifacts stay reproducible and reviewable.
+- A malformed rule fails the load (`TQL-SEC-4132`, error) — a mis-typed security control must
+  not silently no-op, which is exactly how the kind-keyed shape failed.
 
-## 2. Default response headers
+The scaffolder now emits this shape in new apps' config. Migrating the gallery apps to *rely* on
+the defaults (deleting their per-route `auth:`/`csrf:` lines) and slimming the scaffolder's
+per-route emission is the follow-up slice, so the mechanism and the mass migration review
+separately.
+
+## Design: default response headers
 
 ```yaml
 security:
@@ -78,41 +99,6 @@ The scaffolder stops pasting the four-header block into routes and emits the
 `security.responseHeaders` default once per app. Hardening the whole app becomes a one-line
 config edit.
 
-## 3. Path-prefix policy defaults
-
-```yaml
-security:
-  defaults:
-    paths:
-      - match: web/admin/**
-        policy: iam.admin.view
-      - match: web/api/**
-        auth: bearer
-```
-
-- `match` is an ant-style path pattern over the route file's app-home path — the same identity
-  the route id derives from, so the mapping is reviewable without running anything.
-- The **most specific matching prefix** contributes defaults; route-local keys still win.
-- A path default never weakens: if both a path default and a route declare a policy, the route's
-  policy is used, but a route under a policy-defaulted prefix that declares `auth: public` gets a
-  warning-level lint — that combination is either deliberate (annotate to acknowledge) or the
-  exact mistake the default exists to catch.
-
-## Resolution is compile-time
-
-Like [field domains](field-domains.md), all three defaults resolve in the route compiler. The
-compiled route carries fully explicit values: the runtime, the operations console, and the docs
-portal see effective settings, and generated artifacts remain reproducible — a config default
-change produces a visible diff in every affected compiled route, which is exactly what a security
-reviewer wants to see.
-
-## Lint
-
-Final numbers are assigned against the registry at implementation, in the `TQL-SEC-*` family:
-identical-restatement (info), weakened-header override (warning), `auth: public` under a
-policy-defaulted prefix (warning), unknown policy name in a path default (error — same check
-route-local policies get today).
-
 ## Out of scope
 
 - Defaults for non-security blocks (`page:`, `inputPolicy:`, `cache:`). The model defaults
@@ -120,13 +106,16 @@ route-local policies get today).
   shows no duplication worth new surface.
 - Per-environment default sets. Environment overlays are [deployment](deployment.md) territory;
   this design keeps one default set per app.
+- Method-scoped `match` rules (`match: POST /api/**`). Policies that differ between read and
+  write on the same path stay route-local; adding a method dimension to rules doubles the
+  reasoning surface for little corpus evidence.
 
-## Open questions
+## Open questions (response headers)
 
 1. Does `null`-suppression read clearly in YAML, or should suppression be an explicit marker
    (`X-Frame-Options: unset`)? `null` round-trips awkwardly through some editors.
-2. Should the acknowledgment for a deliberate `auth: public` under a defaulted prefix reuse the
-   existing lint-suppression comment convention, or a dedicated `security.acknowledge:` key?
+2. Should the acknowledgment for a deliberate weakened header reuse the existing
+   lint-suppression comment convention, or a dedicated `security.acknowledge:` key?
 
 ## Related designs
 

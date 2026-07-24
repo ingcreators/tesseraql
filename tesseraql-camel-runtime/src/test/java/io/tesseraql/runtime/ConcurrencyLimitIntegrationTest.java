@@ -121,23 +121,29 @@ class ConcurrencyLimitIntegrationTest {
         // A public, deliberately slow route limited to one in-flight request.
         Path slowDir = target.resolve("web/api/slow");
         Files.createDirectories(slowDir);
-        Files.writeString(slowDir.resolve("get.yml"), """
-                version: tesseraql/v1
-                id: slow.query
-                kind: route
-                recipe: query-json
-                policy:
-                  concurrency:
-                    maxInFlight: 1
-                sql:
-                  file: slow.sql
-                  mode: query
-                response:
-                  json:
-                    status: 200
-                    body:
-                      ok: sql.rowCount
-                """);
+        Files.writeString(slowDir.resolve("get.yml"),
+                """
+                        version: tesseraql/v1
+                        id: slow.query
+                        kind: route
+                        recipe: query-json
+                        # Deliberately open: this fixture tests concurrency limits, not authentication, and the
+                        # copied gallery config now declares security defaults that would otherwise
+                        # require a session here.
+                        security:
+                          auth: public
+                        policy:
+                          concurrency:
+                            maxInFlight: 1
+                        sql:
+                          file: slow.sql
+                          mode: query
+                        response:
+                          json:
+                            status: 200
+                            body:
+                              ok: sql.rowCount
+                        """);
         Files.writeString(slowDir.resolve("slow.sql"), "select pg_sleep(0.5) as slept\n");
 
         // A public route rate-limited to one request per second (bucket capacity 1).
@@ -148,6 +154,11 @@ class ConcurrencyLimitIntegrationTest {
                 id: rated.query
                 kind: route
                 recipe: query-json
+                # Deliberately open: this fixture tests rate limits, not authentication, and the
+                # copied gallery config now declares security defaults that would otherwise
+                # require a session here.
+                security:
+                  auth: public
                 policy:
                   rateLimit:
                     requestsPerSecond: 1
