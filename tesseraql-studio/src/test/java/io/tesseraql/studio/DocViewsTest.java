@@ -20,7 +20,7 @@ class DocViewsTest {
         RouteSpec.Input limit = new RouteSpec.Input("limit", "integer", false, 50,
                 new java.math.BigDecimal(1),
                 new java.math.BigDecimal(200), null,
-                List.of(), null);
+                List.of(), null, null);
         RouteSpec.SqlStatement sql = new RouteSpec.SqlStatement("sql", "search.sql", null, null,
                 "query", "select 1", List.of("q", "limit"),
                 List.of(new RouteSpec.Control("if", "q != null", 0)));
@@ -36,6 +36,15 @@ class DocViewsTest {
                 new RouteSpec.Security("bearer", null, null, false), List.of(), List.of(),
                 new RouteSpec.Response("json", 200, null, null, null), List.of());
         return new RouteEntry(route, List.of());
+    }
+
+    @Test
+    void aDomainReferenceLeadsTheConstraintChips() {
+        RouteSpec.Input sku = new RouteSpec.Input("sku", "string", true, null,
+                null, null, 40, java.util.List.of(), null, "sku");
+        assertThat(DocViews.constraints(sku))
+                .startsWith("domain sku")
+                .contains("maxLength 40");
     }
 
     @Test

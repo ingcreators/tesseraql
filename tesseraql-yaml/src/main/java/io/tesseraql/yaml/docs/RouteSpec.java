@@ -56,7 +56,9 @@ public record RouteSpec(
      */
     public record Input(String name, String type, boolean required, Object defaultValue,
             java.math.BigDecimal min, java.math.BigDecimal max, Integer maxLength,
-            List<String> enumValues, String format) {
+            List<String> enumValues, String format,
+            // The referenced field domain (docs/field-domains.md), or null.
+            String domain) {
 
         public Input {
             enumValues = enumValues == null ? List.of() : List.copyOf(enumValues);

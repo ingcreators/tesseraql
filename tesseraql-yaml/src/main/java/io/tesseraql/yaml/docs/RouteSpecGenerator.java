@@ -74,7 +74,8 @@ public final class RouteSpecGenerator {
     private RouteSpec.Input input(String name, InputField field) {
         return new RouteSpec.Input(name, field.type() == null ? "string" : field.type(),
                 field.required(), field.defaultValue(), field.min(), field.max(),
-                field.maxLength(), field.enumValues(), field.format());
+                field.maxLength(), field.enumValues(), field.format(),
+                field.domain());
     }
 
     private RouteSpec.Security security(RouteDefinition definition) {
