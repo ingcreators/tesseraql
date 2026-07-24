@@ -67,10 +67,11 @@ Semantics (full user-facing description in
 - A malformed rule fails the load (`TQL-SEC-4132`, error) — a mis-typed security control must
   not silently no-op, which is exactly how the kind-keyed shape failed.
 
-The scaffolder now emits this shape in new apps' config. Migrating the gallery apps to *rely* on
-the defaults (deleting their per-route `auth:`/`csrf:` lines) and slimming the scaffolder's
-per-route emission is the follow-up slice, so the mechanism and the mass migration review
-separately.
+The scaffolder emits this shape in new apps' config, the CRUD scaffolder generates slim
+security blocks (policy only) when the target app's defaults cover its pages, and all five
+gallery apps rely on the defaults — their route files state only `policy:` and the two
+deliberately public shells. A posture test pins every gallery route to an explicit effective
+auth mode so the defaults cannot silently stop covering a route.
 
 ## Design: default response headers
 

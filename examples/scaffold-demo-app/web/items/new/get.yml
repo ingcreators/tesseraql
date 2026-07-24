@@ -1,4 +1,4 @@
-# tesseraql-scaffold-checksum: sha256:f23e1a075bb0bee4f096bf469aef9d2cd4e842b7a35563697ebb19bb1db96a92
+# tesseraql-scaffold-checksum: sha256:ef156690a15e0edbd568b915c9acdaf93689e2c6549780dd789b5af04358f07d
 # Scaffolded create form page for the items table.
 version: tesseraql/v1
 id: items.new
@@ -6,7 +6,6 @@ kind: route
 recipe: page
 
 security:
-  auth: browser
   policy: app.read
 
 response:

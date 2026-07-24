@@ -9,6 +9,12 @@ tesseraql:
       password: ${db.main.password}
 
   security:
+    # Path-matched route security defaults (docs/route-defaults.md): every route in this
+    # API-shaped app authenticates with a bearer token.
+    defaults:
+      routes:
+        - match: /**
+          auth: bearer
     jwt:
       secret: ${JWT_SECRET:dev-only-secret-change-me-in-production}
       rolesClaim: roles

@@ -5,7 +5,6 @@ recipe: query-json
 datasource: analytics
 
 security:
-  auth: bearer
   policy: inv.read
 
 input:

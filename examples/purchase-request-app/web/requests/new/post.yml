@@ -14,7 +14,6 @@ input:
     min: 0.01
 
 security:
-  auth: bearer
   policy: pr.write
 
 sql:

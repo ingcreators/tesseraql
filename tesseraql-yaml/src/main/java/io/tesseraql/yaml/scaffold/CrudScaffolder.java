@@ -3,6 +3,8 @@ package io.tesseraql.yaml.scaffold;
 import io.tesseraql.core.error.TqlDomain;
 import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
+import io.tesseraql.yaml.config.SecurityDefaults;
+import io.tesseraql.yaml.model.SecuritySpec;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -28,9 +30,27 @@ import java.util.Optional;
  *
  * <p>The generated security blocks reference the {@code app.read} / {@code app.write} policies
  * the {@code tesseraql new} skeleton defines; apps with their own policy names edit the generated
- * blocks (edit detection then leaves those files alone).
+ * blocks (edit detection then leaves those files alone). When the target app's path-matched
+ * security defaults (docs/route-defaults.md) already give these pages {@code auth: browser} and
+ * CSRF on writes, the generated routes state only their {@code policy:} — the defaults carry the
+ * rest.
  */
 public final class CrudScaffolder {
+
+    private final SecurityDefaults securityDefaults;
+
+    /** A scaffolder that spells out every security key (no app config to defer to). */
+    public CrudScaffolder() {
+        this(null);
+    }
+
+    /**
+     * A scaffolder deferring to the target app's declared security defaults where they cover the
+     * generated routes; {@code null} means none.
+     */
+    public CrudScaffolder(SecurityDefaults securityDefaults) {
+        this.securityDefaults = securityDefaults;
+    }
 
     private static final TqlErrorCode UNSUPPORTED_TABLE = new TqlErrorCode(TqlDomain.APP, 5203);
     private static final String CSP_HEADERS = """
@@ -72,7 +92,40 @@ public final class CrudScaffolder {
                 deleteSql(table, names)));
         files.add(new ScaffoldedFile("tests/" + names.table() + "-crud-test.yml",
                 testSuite(table, names)));
+        if (defaultsCoverBrowserPages(names)) {
+            files.replaceAll(CrudScaffolder::slimSecurity);
+        }
         return List.copyOf(files);
+    }
+
+    /**
+     * Whether the app's security defaults give the generated pages {@code auth: browser} and
+     * CSRF on their writes — checked against the actual URLs this table scaffolds, so a
+     * bearer-only or partially-matching rule set keeps the explicit blocks.
+     */
+    private boolean defaultsCoverBrowserPages(Names names) {
+        if (securityDefaults == null || securityDefaults.isEmpty()) {
+            return false;
+        }
+        String base = "/" + names.table();
+        SecuritySpec read = securityDefaults.resolve("GET", base, null);
+        SecuritySpec write = securityDefaults.resolve("POST", base + "/create", null);
+        return read != null && "browser".equals(read.auth())
+                && write != null && "browser".equals(write.auth())
+                && Boolean.TRUE.equals(write.csrf());
+    }
+
+    /**
+     * Drops the security keys the app defaults reproduce — exactly {@code auth: browser} and
+     * {@code csrf: true} — from a generated route document; {@code policy:} stays route-local.
+     */
+    private static ScaffoldedFile slimSecurity(ScaffoldedFile file) {
+        if (!file.path().endsWith(".yml")) {
+            return file;
+        }
+        return new ScaffoldedFile(file.path(), file.content()
+                .replace("security:\n  auth: browser\n", "security:\n")
+                .replace("  csrf: true\n", ""));
     }
 
     /** Derived, deterministic naming for one table. */

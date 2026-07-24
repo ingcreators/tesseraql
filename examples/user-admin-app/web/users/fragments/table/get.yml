@@ -9,7 +9,6 @@ input:
     required: false
 
 security:
-  auth: browser
   policy: users.read
 
 sql:

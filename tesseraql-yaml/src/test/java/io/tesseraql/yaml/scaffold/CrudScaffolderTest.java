@@ -5,6 +5,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import io.tesseraql.core.error.TqlException;
 import io.tesseraql.yaml.SimpleYamlParser;
+import io.tesseraql.yaml.config.AppConfig;
+import io.tesseraql.yaml.config.SecurityDefaults;
 import io.tesseraql.yaml.manifest.AppManifest;
 import io.tesseraql.yaml.manifest.ManifestLoader;
 import io.tesseraql.yaml.model.RouteDefinition;
@@ -208,6 +210,45 @@ class CrudScaffolderTest {
             assertThat(parser.parseRoute(content(files, route), route).security().csrf())
                     .as(route).isTrue();
         }
+    }
+
+    @Test
+    void securityDefaultsSlimTheGeneratedBlocksToTheirPolicy() {
+        // The app's declared defaults give /items pages browser auth and CSRF on writes
+        // (docs/route-defaults.md), so the generated routes state only their policy.
+        SecurityDefaults defaults = SecurityDefaults.from(new AppConfig(Map.of("tesseraql",
+                Map.of("security", Map.of("defaults", Map.of("routes", List.of(
+                        Map.of("match", "/**", "auth", "browser", "csrf", "auto")))))),
+                name -> null));
+        List<ScaffoldedFile> files = new CrudScaffolder(defaults).scaffold(items());
+
+        var list = parser.parseRoute(content(files, "web/items/get.yml"), "get.yml").security();
+        assertThat(list.auth()).isNull();
+        assertThat(list.policy()).isEqualTo("app.read");
+        var create = parser.parseRoute(content(files, "web/items/create/post.yml"), "post.yml")
+                .security();
+        assertThat(create.auth()).isNull();
+        assertThat(create.csrf()).isNull();
+        assertThat(create.policy()).isEqualTo("app.write");
+        // The shared frags keep the CSRF form token: the runtime still enforces it via the
+        // resolved defaults.
+        assertThat(content(files, "web/items/frags.html"))
+                .contains("<input type=\"hidden\" name=\"_csrf\" th:value=\"${_csrf}\">");
+    }
+
+    @Test
+    void bearerOnlyDefaultsKeepTheExplicitBrowserBlocks() {
+        // Defaults that would NOT reproduce the browser+CSRF posture leave the routes explicit.
+        SecurityDefaults defaults = SecurityDefaults.from(new AppConfig(Map.of("tesseraql",
+                Map.of("security", Map.of("defaults", Map.of("routes", List.of(
+                        Map.of("match", "/**", "auth", "bearer")))))),
+                name -> null));
+        List<ScaffoldedFile> files = new CrudScaffolder(defaults).scaffold(items());
+
+        assertThat(parser.parseRoute(content(files, "web/items/get.yml"), "get.yml")
+                .security().auth()).isEqualTo("browser");
+        assertThat(parser.parseRoute(content(files, "web/items/create/post.yml"), "post.yml")
+                .security().csrf()).isTrue();
     }
 
     @Test

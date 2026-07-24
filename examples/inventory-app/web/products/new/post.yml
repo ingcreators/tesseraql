@@ -11,9 +11,7 @@ input:
   reorder_level: { type: integer, required: false, min: 0 }
 
 security:
-  auth: browser
   policy: inv.write
-  csrf: true
 
 sql:
   file: create.sql

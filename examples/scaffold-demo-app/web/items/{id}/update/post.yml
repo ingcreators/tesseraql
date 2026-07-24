@@ -1,4 +1,4 @@
-# tesseraql-scaffold-checksum: sha256:70ff0fe0b0dcc32dcbea025a81bfb50ed118db546db257981f3bb8eade30de09
+# tesseraql-scaffold-checksum: sha256:0ff78515c3ca0b4b429e59ec395181c95e13ab2a9de6dbe1cbdc1554d0fba815
 # Scaffolded update command for the items table: optimistic locking turns a stale edit into 409 Conflict.
 version: tesseraql/v1
 id: items.update
@@ -35,9 +35,7 @@ inputPolicy:
   unknownFields: reject
 
 security:
-  auth: browser
   policy: app.write
-  csrf: true
 
 errors:
   constraints:

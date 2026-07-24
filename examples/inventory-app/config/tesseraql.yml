@@ -38,6 +38,15 @@ tesseraql:
             partitionBy: tenant
 
   security:
+    # Path-matched route security defaults (docs/route-defaults.md): the API surface is
+    # bearer, everything else is a browser page/fragment with CSRF on writes.
+    defaults:
+      routes:
+        - match: /api/**
+          auth: bearer
+        - match: /**
+          auth: browser
+          csrf: auto
     jwt:
       secret: ${JWT_SECRET:dev-only-secret-change-me-in-production}
       rolesClaim: roles

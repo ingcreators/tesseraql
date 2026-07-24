@@ -12,7 +12,6 @@ inputPolicy:
   unknownFields: reject
 
 security:
-  auth: bearer
   policy: users.write
 
 outbox:

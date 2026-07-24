@@ -4,7 +4,6 @@ kind: route
 recipe: command-json
 
 security:
-  auth: bearer
   policy: users.write
 
 sql:

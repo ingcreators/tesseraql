@@ -35,6 +35,14 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Changed
 
+- **The gallery apps rely on the security defaults**: all five example apps declare
+  `security.defaults.routes` and their route files stopped restating `auth:`/`csrf:` the
+  defaults reproduce (34 files; `policy:` stays route-local). Effective posture is unchanged and
+  now pinned by a test asserting every gallery route resolves an explicit auth mode. The CRUD
+  scaffolder emits the slim form when the target app's defaults cover its pages (explicit
+  otherwise), and the `tesseraql new` skeleton's sample API route defers to the generated
+  defaults. Workflow and attachment documents keep their explicit `security:` blocks.
+
 - **Retired the kind-keyed `security.defaults.api`/`htmx` config shape** — it was emitted by the
   scaffolder and documented, but never read by any compiler code, and it is not decidable
   (`command-json` serves both browser and API writes; the URL path is the framework's

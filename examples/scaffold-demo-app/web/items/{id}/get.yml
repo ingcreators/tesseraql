@@ -1,4 +1,4 @@
-# tesseraql-scaffold-checksum: sha256:0a0d178e66f527e12947c7f235a6c3821120a551f59e4515173b80149b2e0c55
+# tesseraql-scaffold-checksum: sha256:e971ce50667dc819c7436782462fb7b9782aa10c935a7bfed1cfe2b4aa32a37d
 # Scaffolded detail and edit page for the items table.
 version: tesseraql/v1
 id: items.detail
@@ -11,7 +11,6 @@ input:
     required: true
 
 security:
-  auth: browser
   policy: app.read
 
 sql:

@@ -4,7 +4,6 @@ kind: route
 recipe: query-export
 
 security:
-  auth: bearer
   policy: users.read
 
 sql:

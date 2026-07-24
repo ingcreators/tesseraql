@@ -72,7 +72,12 @@ class ScaffoldDogfoodIntegrationTest {
         try (Connection connection = dataSource.getConnection()) {
             schema = new TableIntrospector().introspect(connection, "items");
         }
-        List<ScaffoldedFile> crud = new CrudScaffolder().scaffold(schema);
+        // Mirror the CLI: the CRUD scaffolder defers to the skeleton's declared security
+        // defaults, so the gallery carries the slim security blocks.
+        io.tesseraql.yaml.config.AppConfig config = new io.tesseraql.yaml.manifest.ManifestLoader()
+                .load(bootstrap).config();
+        List<ScaffoldedFile> crud = new CrudScaffolder(
+                io.tesseraql.yaml.config.SecurityDefaults.from(config)).scaffold(schema);
 
         Map<String, String> files = new LinkedHashMap<>();
         skeleton.forEach(file -> files.put(file.path(), file.content()));

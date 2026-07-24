@@ -24,7 +24,6 @@ inputPolicy:
   unknownFields: reject
 
 security:
-  auth: bearer
   policy: users.write
 
 # Declarative validation (roadmap Phase 19): the user being provisioned must already exist.

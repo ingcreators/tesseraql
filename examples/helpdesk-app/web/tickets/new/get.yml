@@ -4,7 +4,6 @@ kind: route
 recipe: query-html
 
 security:
-  auth: bearer
   policy: help.read
 
 sql:

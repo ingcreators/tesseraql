@@ -8,7 +8,6 @@ input:
   priority: { type: string, required: false, enum: [low, normal, high], default: normal }
 
 security:
-  auth: bearer
   policy: help.read
 
 sql:

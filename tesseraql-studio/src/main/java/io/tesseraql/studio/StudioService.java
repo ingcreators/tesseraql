@@ -11,6 +11,7 @@ import io.tesseraql.core.sql.Sql2WayParser;
 import io.tesseraql.core.sql.SqlRenderer;
 import io.tesseraql.yaml.SimpleYamlParser;
 import io.tesseraql.yaml.config.AppConfig;
+import io.tesseraql.yaml.config.SecurityDefaults;
 import io.tesseraql.yaml.flags.FlagsSpec;
 import io.tesseraql.yaml.i18n.MessageCatalog;
 import io.tesseraql.yaml.lint.AppLinter;
@@ -609,6 +610,14 @@ public final class StudioService {
     }
 
     /**
+     * The scaffolder preview and apply share — built over the app's declared security defaults so
+     * both emit byte-identical files (and match the CLI, which resolves the same config).
+     */
+    private CrudScaffolder crudScaffolder() {
+        return new CrudScaffolder(SecurityDefaults.from(manifest.config()));
+    }
+
+    /**
      * Previews the CRUD slice the scaffold would generate for an introspected table (Studio backlog
      * B3, roadmap Phase 23) without writing anything: every generated file with its content and the
      * disposition an {@link io.tesseraql.yaml.scaffold.ScaffoldWriter} apply would give it. Studio
@@ -626,7 +635,7 @@ public final class StudioService {
         List<ScaffoldFile> files = new ArrayList<>();
         int writes = 0;
         int conflicts = 0;
-        for (ScaffoldedFile file : new CrudScaffolder().scaffold(table)) {
+        for (ScaffoldedFile file : crudScaffolder().scaffold(table)) {
             String status = scaffoldStatus(file);
             files.add(new ScaffoldFile(file.path(), file.content(), status));
             if ("new".equals(status) || "regenerate".equals(status)) {
@@ -662,7 +671,7 @@ public final class StudioService {
         if (readOnly) {
             throw new TqlException(READ_ONLY, "Studio is read-only; scaffolding is disabled");
         }
-        List<ScaffoldedFile> files = new CrudScaffolder().scaffold(table);
+        List<ScaffoldedFile> files = crudScaffolder().scaffold(table);
         Set<String> existingRoutes = manifest.routes().stream()
                 .map(route -> relative(route.source()))
                 .collect(java.util.stream.Collectors.toSet());

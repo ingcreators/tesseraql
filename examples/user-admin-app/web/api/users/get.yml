@@ -21,7 +21,6 @@ input:
     min: 0
 
 security:
-  auth: bearer
   policy: users.read
 
 sql:

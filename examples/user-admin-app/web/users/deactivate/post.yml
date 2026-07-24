@@ -14,9 +14,7 @@ inputPolicy:
   readOnlyFieldBehavior: reject
 
 security:
-  auth: browser
   policy: users.write
-  csrf: true
 
 idempotency:
   required: false

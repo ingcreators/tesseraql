@@ -60,6 +60,10 @@ than silently defaulting a security control.
 verifier — the compiler rejects a webhook route without one), so a browser/bearer default would
 demand a session no sender has.
 
+Defaults cover the HTTP routes under `web/`. Workflow documents and attachment documents mount
+their own HTTP surfaces and keep their explicit `security:` blocks — a document that governs
+transitions or files should say so on its face.
+
 ## Bearer JWT
 
 A `bearer` route reads the `Authorization: Bearer <jwt>` header, verifies the signature, validates
