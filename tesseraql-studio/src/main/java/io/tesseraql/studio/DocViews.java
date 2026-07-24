@@ -587,7 +587,22 @@ public final class DocViews {
     }
 
     /** Human-readable constraint chips for an input (only the constraints it declares). */
-    private static List<String> constraints(RouteSpec.Input input) {
+    static List<String> constraints(RouteSpec.Input input) {
+        List<String> lead = domainChip(input);
+        if (!lead.isEmpty()) {
+            List<String> chips = new ArrayList<>(lead);
+            chips.addAll(plainConstraints(input));
+            return chips;
+        }
+        return plainConstraints(input);
+    }
+
+    /** The field-domain chip (docs/field-domains.md), leading so shared identity reads first. */
+    private static List<String> domainChip(RouteSpec.Input input) {
+        return input.domain() == null ? List.of() : List.of("domain " + input.domain());
+    }
+
+    private static List<String> plainConstraints(RouteSpec.Input input) {
         List<String> chips = new ArrayList<>();
         if (input.defaultValue() != null) {
             chips.add("default " + input.defaultValue());

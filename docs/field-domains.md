@@ -3,13 +3,15 @@
 > **Status: core shipped.** The `domains/` documents, the `domain:` reference with
 > load-time merge, the constraint catalog, and the lint family are implemented (user-facing
 > docs in [declarative-validation.md](declarative-validation.md#field-domains)). Remaining
-> slices: Studio surfacing. The scaffolder slice is shipped: `scaffold crud` generates
-> `domains/<table>.yml` from column metadata and routes that reference it, so the
+> slices: the remaining Studio authoring surfaces (validation builder / schema overlay
+> selection and a domains index page). The scaffolder slice is shipped: `scaffold crud`
+> generates `domains/<table>.yml` from column metadata and routes that reference it, so the
 > DDL→validation link is live, and the inventory gallery app hand-adopts a shared `sku` domain
 > that had already drifted across two routes. OpenAPI emission is shipped: a pure `domain:`
 > reference becomes a named component schema (`domain.<name>`, `$ref`'d from every operation),
 > while a route that tightens a domain key keeps its inline schema so the contract never hides
-> an override.
+> an override. The documentation portal's route pages surface the reference: each input's
+> constraint chips lead with its `domain`, and the route-spec JSON carries the field.
 
 A **field domain** is a named, application-level definition of a business field — its type,
 constraints, format, and data classification — declared once and referenced from any route's

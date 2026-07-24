@@ -62,6 +62,10 @@ All notable changes to TesseraQL are documented here. The format follows
   field — one business field, one schema; a route that tightens a domain key keeps its inline
   schema so the contract never hides an override.
 
+- **Field domains on the documentation portal** (docs/field-domains.md): a route input's
+  constraint chips lead with its `domain` reference, and the route-spec JSON carries the field —
+  the shared identity reads first wherever a route's contract is browsed.
+
 ### Changed
 
 - **The gallery apps rely on the default response headers**: all five example apps declare
