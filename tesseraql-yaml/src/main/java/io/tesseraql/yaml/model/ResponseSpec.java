@@ -184,5 +184,17 @@ public record ResponseSpec(JsonResponse json, HtmlResponse html, StreamResponse 
         public int effectiveStatus() {
             return status == null ? 200 : status;
         }
+
+        /**
+         * A copy carrying the effective header map — how the compiler merges the app-wide
+         * default response headers (docs/route-defaults.md) under the route's own entries.
+         */
+        public HtmlResponse withHeaders(java.util.Map<String, Object> effective) {
+            if (effective.equals(headers)) {
+                return this;
+            }
+            return new HtmlResponse(status, template, view, model, effective, headersWhen,
+                    statusWhen);
+        }
     }
 }

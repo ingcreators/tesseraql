@@ -33,6 +33,13 @@ All notable changes to TesseraQL are documented here. The format follows
   loosening overrides (`TQL-FIELD-4610`) and unreferenced domains (`TQL-FIELD-4611`); duplicate
   names and unknown references fail the load (`TQL-FIELD-4600`/`4601`).
 
+- **App-wide default response headers** (docs/response-shaping.md "Default response headers"):
+  `tesseraql.security.responseHeaders` declares the security header block once; the compiler
+  merges it under every HTML response (pages, fragments, MCP UI resources), route entries win by
+  name, and the literal value `unset` suppresses a default. Lint flags identical restatements
+  (`TQL-SEC-4133`) and suppressed or wildcard-broadened defaults (`TQL-SEC-4134`); a malformed
+  declaration is `TQL-SEC-4135`.
+
 ### Changed
 
 - **The gallery apps rely on the security defaults**: all five example apps declare
@@ -939,7 +946,6 @@ All notable changes to TesseraQL are documented here. The format follows
 
 - The `tql/view/table` pattern's contract is now `table(tableId, columns, rows)` (the id anchors
   the htmx sort/search swap region), and non-sortable header labels render inside a `<span>`.
-
 
 - **Declarative views: detail, relations, slots, and eject** (roadmap Phase 39, slice 2; see
   [docs/declarative-views.md](docs/declarative-views.md)). A `view: detail` renders a labelled

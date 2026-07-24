@@ -554,6 +554,7 @@ public final class AppLinter {
         lintOidcConfig(config, findings);
         lintSecurityDefaults(appHome, manifest, config, findings);
         lintFieldDomains(appHome, manifest, findings);
+        lintResponseHeaderDefaults(appHome, manifest, config, findings);
     }
 
     /**
@@ -618,6 +619,61 @@ public final class AppLinter {
             ways.add("enum adds values outside the domain's set");
         }
         return ways;
+    }
+
+    /**
+     * Lints routes against the app-wide default response headers (docs/route-defaults.md): a
+     * route restating a default identically is leftover copy-paste the default replaces, and a
+     * route suppressing or wildcard-broadening one is weakening a security control — either
+     * deliberate (own the override) or the drift the defaults exist to end. Only routes are
+     * compared; with no declared defaults there is nothing to lint.
+     */
+    private void lintResponseHeaderDefaults(Path appHome, AppManifest manifest, AppConfig config,
+            List<LintFinding> findings) {
+        io.tesseraql.yaml.config.ResponseHeaderDefaults defaults;
+        try {
+            defaults = io.tesseraql.yaml.config.ResponseHeaderDefaults.from(config);
+        } catch (io.tesseraql.core.error.TqlException ex) {
+            // The manifest loader does not parse this key; surface the malformed map here.
+            findings.add(new LintFinding("TQL-SEC-4135", "error", "config", ex.getMessage()));
+            return;
+        }
+        if (defaults.isEmpty()) {
+            return;
+        }
+        for (RouteFile route : manifest.routes()) {
+            var response = route.definition().response();
+            if (response == null || response.html() == null
+                    || response.html().headers().isEmpty()) {
+                continue;
+            }
+            String source = appHome.relativize(route.source()).toString();
+            for (var entry : response.html().headers().entrySet()) {
+                String name = entry.getKey();
+                String declared = String.valueOf(entry.getValue());
+                String fallback = defaults.headers().get(name);
+                if (fallback == null) {
+                    continue;
+                }
+                if (declared.equals(fallback)) {
+                    findings.add(new LintFinding("TQL-SEC-4133", "warning", source,
+                            "Route '" + route.definition().id() + "' restates the default"
+                                    + " response header '" + name + "' — the app default"
+                                    + " already sends it"));
+                } else if (io.tesseraql.yaml.config.ResponseHeaderDefaults.UNSET
+                        .equals(declared)) {
+                    findings.add(new LintFinding("TQL-SEC-4134", "warning", source,
+                            "Route '" + route.definition().id() + "' suppresses the default"
+                                    + " response header '" + name + "' — confirm the page must"
+                                    + " not send it"));
+                } else if (declared.contains("*") && !fallback.contains("*")) {
+                    findings.add(new LintFinding("TQL-SEC-4134", "warning", source,
+                            "Route '" + route.definition().id() + "' overrides the default"
+                                    + " response header '" + name + "' with a wildcard the"
+                                    + " default does not carry — confirm the broadening"));
+                }
+            }
+        }
     }
 
     /**

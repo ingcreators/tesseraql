@@ -1,9 +1,11 @@
 # Route defaults
 
-> **Status: partially shipped.** The path-matched security defaults below are implemented
-> (`tesseraql.security.defaults.routes`, documented user-facing in
-> [authentication.md](authentication.md#route-security-defaults)). The default response security
-> headers remain design-stage.
+> **Status: shipped (mechanisms).** The path-matched security defaults
+> (`tesseraql.security.defaults.routes`, user-facing docs in
+> [authentication.md](authentication.md#route-security-defaults)) and the default response
+> headers (`tesseraql.security.responseHeaders`, user-facing docs in
+> [response-shaping.md](response-shaping.md#default-response-headers)) are implemented. The
+> remaining slice is the gallery/scaffolder migration off the per-route header blocks.
 
 **Route defaults** let the application declare, once in `config/tesseraql.yml`, the per-route
 settings that are the same for every route of a kind — and let route files state only what
@@ -73,7 +75,7 @@ gallery apps rely on the defaults — their route files state only `policy:` and
 deliberately public shells. A posture test pins every gallery route to an explicit effective
 auth mode so the defaults cannot silently stop covering a route.
 
-## Design: default response headers
+## Shipped: default response headers
 
 ```yaml
 security:
@@ -88,9 +90,10 @@ Merge rules, per header name:
 
 - The default set is merged into every HTML, file, and stream response at compile time.
 - A route-local `response.html.headers` entry **overrides** the default for that header name.
-- A route sets a header to `null` to **suppress** a default it must not send (rare; the case is a
-  route embedded by an external page needing a different `frame-ancestors`).
-- Route-locally restating a header **identically** to the default is an info-level lint — it is
+- A route declares a header with the literal value `unset` to **suppress** a default it must not
+  send (rare; the case is a route embedded by an external page needing a different
+  `frame-ancestors`).
+- Route-locally restating a header **identically** to the default is a warning-level lint — it is
   the leftover copy-paste this feature deletes.
 - Overriding a default with a **weaker** value (removing `X-Frame-Options`, relaxing CSP) is a
   warning-level lint. The lint cannot judge every CSP delta; it flags removal and
@@ -111,12 +114,14 @@ config edit.
   write on the same path stay route-local; adding a method dimension to rules doubles the
   reasoning surface for little corpus evidence.
 
-## Open questions (response headers)
+## Resolved questions (response headers)
 
-1. Does `null`-suppression read clearly in YAML, or should suppression be an explicit marker
-   (`X-Frame-Options: unset`)? `null` round-trips awkwardly through some editors.
-2. Should the acknowledgment for a deliberate weakened header reuse the existing
-   lint-suppression comment convention, or a dedicated `security.acknowledge:` key?
+1. Suppression is the explicit marker `X-Frame-Options: unset` — YAML `null` cannot reach the
+   response model (header maps reject null values), and the marker reads unambiguously.
+2. A deliberate weakened header is owned by carrying the warning (`TQL-SEC-4134`); no dedicated
+   acknowledgment surface until the warning proves noisy in practice.
+3. The draft's "route sets a header to `null`" merge rule shipped as `unset`; info-level lint
+   severity shipped as warning (the linter has two severities by design).
 
 ## Related designs
 

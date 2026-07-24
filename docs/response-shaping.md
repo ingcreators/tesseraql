@@ -81,6 +81,33 @@ The first truthy arm wins (else the declared `status`). Works on `response.html`
 conditions are pre-compiled at build (`TQL-YAML-1020`), and each arm's status rides into
 the generated OpenAPI as a response entry.
 
+## Default response headers
+
+An HTML response's `headers:` map sends per-route headers (`HX-Trigger` toasts, cache hints).
+The security header block every page sends identically — `Content-Security-Policy`,
+`X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy` — is declared once, app-wide:
+
+```yaml
+tesseraql:
+  security:
+    responseHeaders:
+      Content-Security-Policy: "default-src 'self'; style-src 'self' 'unsafe-inline'; frame-ancestors 'none'"
+      X-Content-Type-Options: nosniff
+      X-Frame-Options: DENY
+      Referrer-Policy: no-referrer
+```
+
+The compiler merges the defaults under every HTML response; the merge is per header name and the
+route always wins. A route that must not send a default declares it with the literal value
+`unset`, which removes the header entirely (and draws lint `TQL-SEC-4134`, so a suppressed
+security header is owned, not accidental). Restating a default identically is flagged as leftover
+copy-paste (`TQL-SEC-4133`); overriding one with a wildcard the default does not carry is flagged
+as a broadening (`TQL-SEC-4134`). Hardening the whole app — tightening CSP, adding a new header —
+becomes a one-line config edit instead of an edit per page.
+
+Defaults apply to HTML responses (pages, fragments, and MCP UI resources). JSON, stream, and
+generated-file responses do not carry a `headers:` map and are unaffected.
+
 ## Where to go next
 
 - [pagination.md](pagination.md) — the `page` context entry maps into shaped bodies the
