@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import io.tesseraql.core.error.TqlException;
 import io.tesseraql.yaml.SimpleYamlParser;
 import io.tesseraql.yaml.config.AppConfig;
+import io.tesseraql.yaml.config.ResponseHeaderDefaults;
 import io.tesseraql.yaml.config.SecurityDefaults;
 import io.tesseraql.yaml.manifest.AppManifest;
 import io.tesseraql.yaml.manifest.ManifestLoader;
@@ -220,7 +221,7 @@ class CrudScaffolderTest {
                 Map.of("security", Map.of("defaults", Map.of("routes", List.of(
                         Map.of("match", "/**", "auth", "browser", "csrf", "auto")))))),
                 name -> null));
-        List<ScaffoldedFile> files = new CrudScaffolder(defaults).scaffold(items());
+        List<ScaffoldedFile> files = new CrudScaffolder(defaults, null).scaffold(items());
 
         var list = parser.parseRoute(content(files, "web/items/get.yml"), "get.yml").security();
         assertThat(list.auth()).isNull();
@@ -243,12 +244,30 @@ class CrudScaffolderTest {
                 Map.of("security", Map.of("defaults", Map.of("routes", List.of(
                         Map.of("match", "/**", "auth", "bearer")))))),
                 name -> null));
-        List<ScaffoldedFile> files = new CrudScaffolder(defaults).scaffold(items());
+        List<ScaffoldedFile> files = new CrudScaffolder(defaults, null).scaffold(items());
 
         assertThat(parser.parseRoute(content(files, "web/items/get.yml"), "get.yml")
                 .security().auth()).isEqualTo("browser");
         assertThat(parser.parseRoute(content(files, "web/items/create/post.yml"), "post.yml")
                 .security().csrf()).isTrue();
+    }
+
+    @Test
+    void declaredResponseHeaderDefaultsDropThePerRouteHeaderBlock() {
+        // Without app defaults every page carries the security header block; with them, the
+        // app-wide declaration sends it and the generated routes stay clean.
+        assertThat(content(scaffolder.scaffold(items()), "web/items/get.yml"))
+                .contains("Content-Security-Policy");
+
+        ResponseHeaderDefaults headerDefaults = ResponseHeaderDefaults.from(new AppConfig(
+                Map.of("tesseraql", Map.of("security", Map.of("responseHeaders",
+                        Map.of("X-Frame-Options", "DENY")))),
+                name -> null));
+        List<ScaffoldedFile> slim = new CrudScaffolder(null, headerDefaults).scaffold(items());
+        assertThat(content(slim, "web/items/get.yml"))
+                .doesNotContain("Content-Security-Policy")
+                .doesNotContain("headers:");
+        assertThat(content(slim, "web/items/new/get.yml")).doesNotContain("headers:");
     }
 
     @Test

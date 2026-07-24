@@ -1,6 +1,7 @@
 package io.tesseraql.cli;
 
 import io.tesseraql.yaml.config.AppConfig;
+import io.tesseraql.yaml.config.ResponseHeaderDefaults;
 import io.tesseraql.yaml.config.SecurityDefaults;
 import io.tesseraql.yaml.manifest.ManifestLoader;
 import io.tesseraql.yaml.scaffold.CrudScaffolder;
@@ -63,7 +64,8 @@ final class ScaffoldCommand implements Runnable {
         public Integer call() throws Exception {
             AppConfig config = new ManifestLoader().load(app).config();
             TableSchema schema = introspect(config);
-            List<ScaffoldedFile> files = new CrudScaffolder(SecurityDefaults.from(config))
+            List<ScaffoldedFile> files = new CrudScaffolder(SecurityDefaults.from(config),
+                    ResponseHeaderDefaults.from(config))
                     .scaffold(schema);
             ScaffoldWriter.Report report = new ScaffoldWriter().apply(app, files, force);
 

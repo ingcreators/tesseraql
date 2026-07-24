@@ -125,15 +125,28 @@ public final class AdmissionProfile {
 
         // 5. CSP intact on every HTML PAGE the app serves. Fragment routes (the documented
         // /fragments/ URL convention, design ch. 4.2) are exempt: a fragment swaps into a
-        // page whose own CSP already governs the document.
+        // page whose own CSP already governs the document. The app-wide default response
+        // headers (docs/route-defaults.md) count: the compiler merges them under every HTML
+        // response, so a page passes when either layer sends CSP — unless the route
+        // suppresses the default with `unset`, which re-exposes it here.
+        boolean appWideCsp = io.tesseraql.yaml.config.ResponseHeaderDefaults
+                .from(manifest.config()).headers().keySet().stream()
+                .anyMatch("Content-Security-Policy"::equalsIgnoreCase);
         for (RouteFile route : manifest.routes()) {
             ResponseSpec response = route.definition().response();
             ResponseSpec.HtmlResponse html = response == null ? null : response.html();
             if (html == null || route.urlPath().contains("/fragments/")) {
                 continue;
             }
-            boolean hasCsp = html.headers() != null && html.headers().keySet().stream()
-                    .anyMatch("Content-Security-Policy"::equalsIgnoreCase);
+            String declared = html.headers() == null
+                    ? null
+                    : html.headers().entrySet().stream()
+                            .filter(e -> "Content-Security-Policy".equalsIgnoreCase(e.getKey()))
+                            .map(e -> String.valueOf(e.getValue()))
+                            .findFirst().orElse(null);
+            boolean suppressed = io.tesseraql.yaml.config.ResponseHeaderDefaults.UNSET
+                    .equals(declared);
+            boolean hasCsp = !suppressed && (declared != null || appWideCsp);
             if (!hasCsp) {
                 failures.add(new Finding("TQL-ADM-4704",
                         relative(appHome, route.source()),

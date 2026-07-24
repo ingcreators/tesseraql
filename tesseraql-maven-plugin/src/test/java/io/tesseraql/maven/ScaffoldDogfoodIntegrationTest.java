@@ -77,7 +77,8 @@ class ScaffoldDogfoodIntegrationTest {
         io.tesseraql.yaml.config.AppConfig config = new io.tesseraql.yaml.manifest.ManifestLoader()
                 .load(bootstrap).config();
         List<ScaffoldedFile> crud = new CrudScaffolder(
-                io.tesseraql.yaml.config.SecurityDefaults.from(config)).scaffold(schema);
+                io.tesseraql.yaml.config.SecurityDefaults.from(config),
+                io.tesseraql.yaml.config.ResponseHeaderDefaults.from(config)).scaffold(schema);
 
         Map<String, String> files = new LinkedHashMap<>();
         skeleton.forEach(file -> files.put(file.path(), file.content()));

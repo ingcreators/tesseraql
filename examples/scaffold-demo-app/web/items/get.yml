@@ -1,4 +1,4 @@
-# tesseraql-scaffold-checksum: sha256:eb7e5bf409601a4813156713c19a62a4ae597d582e54557a8ef745d388f02797
+# tesseraql-scaffold-checksum: sha256:dd6f451ef3a147b6b3eb4ab760a998a81ff971d9906d7e5950990773424149db
 # Scaffolded list page for the items table (tesseraql scaffold crud --table items):
 # renders through the tql/view/list pattern (docs/declarative-views.md).
 version: tesseraql/v1
@@ -39,8 +39,3 @@ page:
 response:
   html:
     view: list.view.yml
-    headers:
-      Content-Security-Policy: "default-src 'self'; style-src 'self' 'unsafe-inline'; frame-ancestors 'none'"
-      X-Content-Type-Options: nosniff
-      X-Frame-Options: DENY
-      Referrer-Policy: no-referrer

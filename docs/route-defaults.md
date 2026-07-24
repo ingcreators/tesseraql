@@ -5,7 +5,8 @@
 > [authentication.md](authentication.md#route-security-defaults)) and the default response
 > headers (`tesseraql.security.responseHeaders`, user-facing docs in
 > [response-shaping.md](response-shaping.md#default-response-headers)) are implemented. The
-> remaining slice is the gallery/scaffolder migration off the per-route header blocks.
+> gallery apps and scaffolder are migrated off the per-route header blocks; the bundled
+> Studio/IAM/ops apps (module resources) are the remaining copies.
 
 **Route defaults** let the application declare, once in `config/tesseraql.yml`, the per-route
 settings that are the same for every route of a kind — and let route files state only what
