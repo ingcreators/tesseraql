@@ -109,7 +109,7 @@ All 351 `TQL-*` codes, scanned from the framework sources on every refresh and g
 | `TQL-FIELD-4602` | Domain '…' (…) declares '…' — a domain describes the… field itself; required/default/writable belong to each route's… use of it | [declarative-validation](declarative-validation.md) | [SimpleYamlParser.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-yaml/src/main/java/io/tesseraql/yaml/SimpleYamlParser.java), [FieldDomains.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-yaml/src/main/java/io/tesseraql/yaml/domain/FieldDomains.java) |
 | `TQL-FIELD-4603` | Domains document … must be a map | — | [SimpleYamlParser.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-yaml/src/main/java/io/tesseraql/yaml/SimpleYamlParser.java) |
 | `TQL-FIELD-4610` | Field '…' loosens domain '…': … — a loosened copy is the drift domains exist to prevent | [declarative-validation](declarative-validation.md) | [AppLinter.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-yaml/src/main/java/io/tesseraql/yaml/lint/AppLinter.java) |
-| `TQL-FIELD-4611` | Domain '…' is declared but never referenced | [declarative-validation](declarative-validation.md) | [AppLinter.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-yaml/src/main/java/io/tesseraql/yaml/lint/AppLinter.java) |
+| `TQL-FIELD-4611` | Domain '…' is declared but never referenced | [declarative-validation](declarative-validation.md) | [DocViews.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-studio/src/main/java/io/tesseraql/studio/DocViews.java), [AppLinter.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-yaml/src/main/java/io/tesseraql/yaml/lint/AppLinter.java) |
 
 ## GOV
 

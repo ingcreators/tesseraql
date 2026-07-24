@@ -1436,6 +1436,9 @@ public final class TesseraqlRuntime implements AutoCloseable {
                             java.util.List<String> policyIds = studio.securityPolicies().stream()
                                     .map(policy -> String.valueOf(policy.get("id"))).toList();
                             model.put("policyOptions", policyIds);
+                            // Field domains (docs/field-domains.md): reference one instead of
+                            // restating the field's constraints per route.
+                            model.put("domainOptions", studio.domainNames());
                             model.put("slots", ROUTE_FORM_INPUT_SLOTS);
                             return model;
                         })
@@ -1453,7 +1456,8 @@ public final class TesseraqlRuntime implements AutoCloseable {
                                         str(params, "in" + i + "maxlen"),
                                         str(params, "in" + i + "minlen"),
                                         str(params, "in" + i + "pattern"),
-                                        str(params, "in" + i + "enum")));
+                                        str(params, "in" + i + "enum"),
+                                        str(params, "in" + i + "domain")));
                             }
                             studio.routeFormSave(path, str(params, "recipe"),
                                     str(params, "auth"), str(params, "policy"),
@@ -2311,7 +2315,11 @@ public final class TesseraqlRuntime implements AutoCloseable {
                         // Pure text generation to copy into the route — no side effect.
                         .register("studio.validationBuilder",
                                 params -> Map.of("editable",
-                                        studioAccess.canEdit(params.get("roles"))))
+                                        studioAccess.canEdit(params.get("roles")),
+                                        // Input-level constraints may already belong to a field
+                                        // domain (docs/field-domains.md); the builder page
+                                        // points at them before a cross-field rule is written.
+                                        "domains", studio.domainNames()))
                         .register("studio.validationBuilder.build", params -> Map.of("snippet",
                                 io.tesseraql.studio.ValidationRuleBuilder.generate(
                                         str(params, "operation"), str(params, "source"),
@@ -2580,12 +2588,16 @@ public final class TesseraqlRuntime implements AutoCloseable {
                                 return Map.of("notFound", true, "name", name, "datasource", ds);
                             }
                             Map<String, Object> model = io.tesseraql.studio.DocViews.table(ds,
-                                    table, doc.routesForTable(name));
+                                    table, doc.routesForTable(name), doc.domainsForTable(name));
                             if (shareLinks.enabled()) {
                                 model.put("shareUrl", shareLinks.mintTable(ds, name));
                             }
                             return model;
                         })
+                        // Field domains reference (docs/field-domains.md): every declared
+                        // domain, its constraint chips, and the routes referencing it.
+                        .register("docs.domains", params -> io.tesseraql.studio.DocViews.domains(
+                                doc.appName(), doc.domains(), doc.constraintCatalog()))
                         // Export/share (documentation portal F8): the OpenAPI document and the htmx
                         // contract, generated live from the manifest by the canonical generators and
                         // streamed as downloadable JSON (the download routes' response.file emits the

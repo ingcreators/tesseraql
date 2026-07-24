@@ -22,6 +22,7 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
@@ -310,6 +311,74 @@ public final class DocService {
             }
         }
         return null;
+    }
+
+    /** One declared field domain with the routes referencing it (docs/field-domains.md). */
+    public record DomainEntry(String name, io.tesseraql.yaml.model.InputField definition,
+            List<RouteRef> referencedBy) {
+    }
+
+    /**
+     * The app's field domains, each with the routes whose {@code input:} references it — drawn
+     * from the same loader the manifest resolves with, so the page and the runtime agree.
+     */
+    public List<DomainEntry> domains() {
+        io.tesseraql.yaml.domain.FieldDomains declared = io.tesseraql.yaml.domain.FieldDomains
+                .load(appHome);
+        List<DomainEntry> entries = new ArrayList<>();
+        declared.domains().forEach((name, definition) -> {
+            List<RouteRef> refs = new ArrayList<>();
+            for (RouteEntry entry : spec().routes()) {
+                RouteSpec route = entry.route();
+                if (route == null) {
+                    continue;
+                }
+                if (route.inputs().stream().anyMatch(in -> name.equals(in.domain()))) {
+                    refs.add(new RouteRef(route.id(), route.method(), routeUrl(route.id())));
+                }
+            }
+            entries.add(new DomainEntry(name, definition, refs));
+        });
+        entries.sort(java.util.Comparator.comparing(DomainEntry::name));
+        return entries;
+    }
+
+    /** The app-level constraint catalog (docs/field-domains.md): DB constraint name to mapping. */
+    public Map<String, io.tesseraql.yaml.model.ErrorsSpec.ConstraintMapping> constraintCatalog() {
+        return io.tesseraql.yaml.domain.FieldDomains.load(appHome).constraints();
+    }
+
+    /**
+     * Column name to domain name for one table, via the scaffolder's {@code <table>.<field>}
+     * naming convention — the table page chips each column that has a live domain.
+     */
+    public Map<String, String> domainsForTable(String tableName) {
+        Set<String> declared = io.tesseraql.yaml.domain.FieldDomains.load(appHome).domains()
+                .keySet();
+        Map<String, String> byColumn = new LinkedHashMap<>();
+        if (tableName == null) {
+            return byColumn;
+        }
+        String prefix = tableName.toLowerCase(Locale.ROOT) + ".";
+        for (String name : declared) {
+            if (name.startsWith(prefix)) {
+                byColumn.put(snake(name.substring(prefix.length())), name);
+            }
+        }
+        return byColumn;
+    }
+
+    /** camelCase field name back to its snake_case column (the scaffolder's forward mapping). */
+    private static String snake(String camel) {
+        StringBuilder out = new StringBuilder();
+        for (char c : camel.toCharArray()) {
+            if (Character.isUpperCase(c)) {
+                out.append('_').append(Character.toLowerCase(c));
+            } else {
+                out.append(c);
+            }
+        }
+        return out.toString();
     }
 
     /**
