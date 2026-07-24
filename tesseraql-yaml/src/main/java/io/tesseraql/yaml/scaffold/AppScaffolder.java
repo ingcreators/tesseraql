@@ -373,8 +373,8 @@ public final class AppScaffolder {
                 default: 0
                 min: 0
 
+            # auth comes from the app's security defaults (/api/** -> bearer, config/tesseraql.yml).
             security:
-              auth: bearer
               policy: app.read
 
             sql:

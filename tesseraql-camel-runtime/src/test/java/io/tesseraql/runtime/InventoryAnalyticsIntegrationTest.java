@@ -181,6 +181,11 @@ class InventoryAnalyticsIntegrationTest {
                 id: tenantboard.view
                 kind: route
                 recipe: query-html
+                # Deliberately open: this fixture tests analytics reads, not authentication,
+                # and the gallery config now declares security defaults that would otherwise
+                # require a session here.
+                security:
+                  auth: public
                 sql:
                   file: totals.sql
                   mode: query

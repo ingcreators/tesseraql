@@ -182,6 +182,11 @@ class InventoryLakeIntegrationTest {
                 id: lakeboard.read
                 kind: route
                 recipe: query-json
+                # Deliberately open: this fixture tests analytics reads, not authentication,
+                # and the gallery config now declares security defaults that would otherwise
+                # require a session here.
+                security:
+                  auth: public
                 datasource: analytics
                 sql:
                   file: current.sql
@@ -230,6 +235,11 @@ class InventoryLakeIntegrationTest {
                 id: outsideLake.read
                 kind: route
                 recipe: query-json
+                # Deliberately open: this fixture tests analytics reads, not authentication,
+                # and the gallery config now declares security defaults that would otherwise
+                # require a session here.
+                security:
+                  auth: public
                 datasource: analytics
                 sql:
                   file: outside.sql

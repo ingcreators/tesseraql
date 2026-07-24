@@ -12,7 +12,6 @@ input:
   dir: { type: string, required: false, enum: [asc, desc] }
 
 security:
-  auth: bearer
   policy: pr.read
 
 page:
