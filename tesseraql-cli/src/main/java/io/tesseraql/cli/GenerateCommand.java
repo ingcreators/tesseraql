@@ -29,7 +29,10 @@ final class GenerateCommand implements Callable<Integer> {
     @Override
     public Integer call() throws Exception {
         AppManifest manifest = new ManifestLoader().load(app);
-        Path target = out != null ? out : app.resolve("work").resolve("generated");
+        Path target = out != null
+                ? out
+                : io.tesseraql.yaml.config.WorkHome.resolve(app, manifest.config())
+                        .resolve("generated");
         Files.createDirectories(target);
         Path openapi = target.resolve("openapi.json");
         Files.writeString(openapi, new OpenApiGenerator().toJson(manifest));

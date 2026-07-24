@@ -1,10 +1,12 @@
 # Scaffolded-config consumer audit
 
-> **Status: dispositions landing.** The retire set is shipped (the scaffold no longer emits
-> `runtime.engine`, `runtime.profile`, `java.baseline/compatibility`, or
-> `datasources.main.type`, and the gallery configs are cleaned), and `db.main.maximumPoolSize`
-> is wired through to the pool. Remaining: the `app.work` resolver, the component guard
-> ([component-guard.md](component-guard.md)), and the drift test. This document defines the
+> **Status: complete.** The retire set is shipped, `db.main.maximumPoolSize` is wired through
+> to the pool, the component guard is enforced ([component-guard.md](component-guard.md)),
+> `tesseraql.app.work` is honored everywhere through the shared `WorkHome` resolver (manifest
+> index pruning, mounted-app materialization, packaging, reports, module and extension caches,
+> the embedded-db marker), and the scaffold⇄consumer drift test (`ScaffoldedConfigKeys` +
+> `ScaffoldedConfigKeysTest`) renders the real templates and fails the build on any emitted key
+> without a registered, honesty-probed consumer. This document defines the
 > guard that makes "emitted but never read" configuration unrepresentable, and records the
 > audit that motivated it. Two prior instances shipped and were caught late — the kind-keyed
 > `security.defaults` ([route-defaults.md](route-defaults.md)) and

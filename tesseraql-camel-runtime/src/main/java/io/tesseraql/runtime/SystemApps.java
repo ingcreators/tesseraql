@@ -48,7 +48,8 @@ final class SystemApps {
 
     /** Loads every enabled app source as a manifest sharing the main app's config. */
     static List<MountedApp> load(AppConfig mainConfig, Path mainAppHome) {
-        Path workRoot = mainAppHome.resolve("work/apps");
+        Path workRoot = io.tesseraql.yaml.config.WorkHome.resolve(mainAppHome, mainConfig)
+                .resolve("apps");
         List<MountedApp> apps = new ArrayList<>();
         for (AppSource source : AppSources.discover(mainConfig)) {
             Path root = source.materialize(workRoot);

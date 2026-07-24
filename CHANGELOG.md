@@ -97,6 +97,15 @@ All notable changes to TesseraQL are documented here. The format follows
   beyond the framework's own components, and a re-allow attempt is ignored and linted
   (`TQL-SEC-4139`). The scaffold emits guidance instead of the dead lists.
 
+- **`tesseraql.app.work` honored everywhere; scaffold⇄consumer drift test**
+  (docs/config-consumers.md): the shared `WorkHome` resolver relocates the work tree for the
+  manifest index pruner, mounted-app materialization, packaging output, test/coverage reports,
+  module and DuckDB-extension caches, and the embedded-db marker — previously the key and
+  `TESSERAQL_WORK_HOME` were read by nothing. `ScaffoldedConfigKeys` registers a consumer for
+  every key the `tesseraql new` templates emit, and its drift test renders the real templates
+  and fails the build on an unregistered key ("wire it or don't emit it"), with an honesty
+  probe on each registered consumer file.
+
 ### Changed
 
 - **The gallery apps rely on the default response headers**: all five example apps declare

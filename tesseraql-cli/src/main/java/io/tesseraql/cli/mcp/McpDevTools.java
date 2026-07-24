@@ -192,7 +192,8 @@ public final class McpDevTools {
     private McpToolResult runTests(JsonNode args, McpCallContext context) throws Exception {
         Datasource ds = resolve(args, config());
         String realm = textOr(args, "realm", "local");
-        Path reportDir = appHome.resolve("work/mcp/reports");
+        Path reportDir = io.tesseraql.yaml.config.WorkHome.resolve(appHome, config())
+                .resolve("mcp/reports");
         Files.createDirectories(reportDir);
         AppTestRunner.RunResult result = new AppTestRunner().run(appHome,
                 new DriverManagerDataSource(ds.url(), ds.user(), ds.password()),
