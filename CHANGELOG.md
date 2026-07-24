@@ -90,6 +90,13 @@ All notable changes to TesseraQL are documented here. The format follows
   into `datasources.main.maximumPoolSize`, the key `DataSources` reads); previously the value
   was silently ignored. Gallery configs cleaned to match.
 
+- **Camel component guard** (docs/component-guard.md): the previously unread
+  `tesseraql.camel.components` block is now enforced. A built-in baseline refuses
+  `exec`/`script`/`groovy`/`class`/`language`/`bean` at component-registration time — config or
+  not — failing boot with `TQL-SEC-4138`; `denied:` adds to the baseline, `allowed:` narrows
+  beyond the framework's own components, and a re-allow attempt is ignored and linted
+  (`TQL-SEC-4139`). The scaffold emits guidance instead of the dead lists.
+
 ### Changed
 
 - **The gallery apps rely on the default response headers**: all five example apps declare

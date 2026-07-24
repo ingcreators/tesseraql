@@ -103,6 +103,23 @@ portability suites run out of the per-change path), the day the depth of explora
 worth the dependency. Until then, deterministic generation catches the whole class of
 crash bug — it already found the two above — while staying green and reproducible.
 
+## Camel component guard
+
+Application YAML never carries a raw Camel endpoint URI — recipes construct every endpoint — so
+component exposure comes from the classpath, not from routes. The runtime guards it anyway:
+every component registration on the CamelContext passes a policy, and a refused component fails
+app boot (`TQL-SEC-4138`) naming the component and the reason.
+
+- **A built-in baseline refuses `exec`, `script`, `groovy`, `class`, `language`, and `bean`**
+  with or without configuration — a dependency upgrade or a plugin JAR that drags a scripting
+  component onto the classpath cannot quietly arm it.
+- `tesseraql.camel.components.denied` adds to the baseline; `allowed:` narrows further, and
+  governs only what the application adds beyond the framework's own components. Config narrows,
+  never widens: an `allowed:` entry naming a baseline-denied component is ignored and linted
+  (`TQL-SEC-4139`).
+
+Details and the threat model: docs/component-guard.md (design record).
+
 ## ASVS control map
 
 A self-assessment against [OWASP ASVS](https://owasp.org/www-project-application-security-verification-standard/)

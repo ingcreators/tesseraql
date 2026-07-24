@@ -209,23 +209,13 @@ public final class AppScaffolder {
                 enabled: ${TESSERAQL_STUDIO_ENABLED:true}
                 readOnly: ${TESSERAQL_STUDIO_READONLY:false}
 
-              camel:
-                components:
-                  allowed:
-                    - direct
-                    - platform-http
-                    - timer
-                    - quartz
-                    - file
-                    - log
-                    - tesseraql-sql
-                    - tesseraql-auth
-                    - tesseraql-html
-                  denied:
-                    - exec
-                    - script
-                    - groovy
-                    - class
+              # Camel components: dangerous ones (exec, script, groovy, class, ...) are refused
+              # by a built-in baseline whether or not anything is configured
+              # (docs/component-guard.md). To NARROW further, declare an allow list:
+              #
+              # camel:
+              #   components:
+              #     allowed: [smtp]   # beyond the framework's own components
 
               security:
                 # Path-matched route security defaults (docs/route-defaults.md): first matching

@@ -154,6 +154,9 @@ public final class TesseraqlRuntime implements AutoCloseable {
             io.tesseraql.core.telemetry.Tracer tracer, io.tesseraql.core.telemetry.Meter meter,
             DataSources.MainDatasourceOverride override) {
         DefaultCamelContext context = new DefaultCamelContext();
+        // The component policy guards every registration from here on
+        // (docs/component-guard.md): baseline-denied components fail boot, config or not.
+        ComponentGuard.install(context, manifest);
         // Every datasource declared under tesseraql.datasources gets a pool, registered by name
         // so routes, contracts and per-datasource migrations can address it (design ch. 5.2).
         Map<String, HikariDataSource> dataSources = DataSources.createAll(manifest.config(),

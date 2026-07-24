@@ -508,6 +508,19 @@ class StudioIntegrationTest {
     }
 
     @Test
+    void everyRegisteredComponentSatisfiesTheComponentPolicy() {
+        // The floor drift-check (docs/component-guard.md): this boot mounts the main app and
+        // every bundled app, so the registered component set is the framework's real footprint.
+        // A component neither framework-implicit nor declared by the app config would have
+        // failed boot already; this assertion keeps the failure readable when the floor drifts.
+        io.tesseraql.yaml.config.ComponentPolicy policy = io.tesseraql.yaml.config.ComponentPolicy
+                .from(new io.tesseraql.yaml.manifest.ManifestLoader().load(appHome).config());
+        for (String name : runtime.camelContext().getComponentNames()) {
+            assertThat(policy.refusal(name)).as(name).isEmpty();
+        }
+    }
+
+    @Test
     void docsDomainsPageRendersAndTheFormOffersDomains() throws Exception {
         // Order-independent: a sibling scaffold test may have written domains/items.yml into
         // the shared app home, so the page legitimately shows either its empty-state guidance
