@@ -91,8 +91,8 @@ public final class ManifestLoader {
             throw new TqlException(LOAD_ERROR, "App home is not a directory: " + home);
         }
         AppConfig config = loadConfig(home);
-        List<RouteFile> routes = applyFieldDomains(home,
-                applySecurityDefaults(config, loadRoutes(home, brokenSink)));
+        List<RouteFile> routes = applyRuleSets(home, applyFieldDomains(home,
+                applySecurityDefaults(config, loadRoutes(home, brokenSink))));
         List<JobFile> jobs = loadJobs(home);
         List<ToolFile> tools = new ArrayList<>();
         List<ResourceFile> resources = new ArrayList<>();
@@ -398,6 +398,33 @@ public final class ManifestLoader {
             }
             resolved.add(new RouteFile(route.httpMethod(), route.urlPath(), route.source(),
                     def.withInputAndErrors(input, errors)));
+        }
+        return resolved;
+    }
+
+    /**
+     * Resolves shared validation-rule references (docs/validation-rule-sets.md) so execution,
+     * coverage, and tooling see plain rules; an unknown reference or a bind-contract mismatch
+     * fails the load.
+     */
+    private List<RouteFile> applyRuleSets(Path home, List<RouteFile> routes) {
+        io.tesseraql.yaml.rules.ValidationRuleSets sets = io.tesseraql.yaml.rules.ValidationRuleSets
+                .load(home, parser);
+        if (sets.isEmpty()) {
+            return routes;
+        }
+        List<RouteFile> resolved = new ArrayList<>(routes.size());
+        for (RouteFile route : routes) {
+            RouteDefinition def = route.definition();
+            if (def.validate().values().stream().noneMatch(rule -> rule.use() != null)) {
+                resolved.add(route);
+                continue;
+            }
+            Map<String, io.tesseraql.yaml.model.ValidationRule> merged = new java.util.LinkedHashMap<>();
+            def.validate().forEach((id, rule) -> merged.put(id, sets.resolve(id, rule,
+                    route.source().getParent(), route.source().toString())));
+            resolved.add(new RouteFile(route.httpMethod(), route.urlPath(), route.source(),
+                    def.withValidate(merged)));
         }
         return resolved;
     }

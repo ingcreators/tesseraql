@@ -557,6 +557,32 @@ public final class AppLinter {
         lintResponseHeaderDefaults(appHome, manifest, config, findings);
         lintAmbientPrincipal(appHome, manifest, findings);
         lintComponentPolicy(config, findings);
+        lintRuleSets(appHome, manifest, findings);
+    }
+
+    /**
+     * Lints shared validation rules (docs/validation-rule-sets.md): a rule nothing references
+     * is either dead or a missed reference. Unknown references, bind-contract mismatches, and
+     * duplicates already failed the manifest load (TQL-FIELD-4604..4608).
+     */
+    private void lintRuleSets(Path appHome, AppManifest manifest, List<LintFinding> findings) {
+        io.tesseraql.yaml.rules.ValidationRuleSets sets = io.tesseraql.yaml.rules.ValidationRuleSets
+                .load(appHome, new io.tesseraql.yaml.SimpleYamlParser());
+        if (sets.isEmpty()) {
+            return;
+        }
+        Set<String> referenced = new HashSet<>();
+        for (RouteFile route : manifest.routes()) {
+            route.definition().validate().values().forEach(rule -> {
+                if (rule.use() != null) {
+                    referenced.add(rule.use());
+                }
+            });
+        }
+        sets.rules().keySet().stream()
+                .filter(name -> !referenced.contains(name))
+                .forEach(name -> findings.add(new LintFinding("TQL-FIELD-4612", "warning",
+                        "rules", "Rule '" + name + "' is declared but never referenced")));
     }
 
     /**

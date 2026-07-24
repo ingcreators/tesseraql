@@ -24,10 +24,27 @@ import java.util.Map;
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public record ValidationRule(String when, String rule, String file, Map<String, String> params,
-        String field, String code, String message) {
+        String field, String code, String message,
+        // Reference to a shared rule set entry (docs/validation-rule-sets.md); the manifest
+        // loader merges the referenced rule underneath, keeping this reference for tooling.
+        String use) {
 
     public ValidationRule {
         params = params == null ? Map.of() : Map.copyOf(params);
+    }
+
+    /**
+     * This reference with the shared rule merged underneath (docs/validation-rule-sets.md):
+     * the rule's substance (expression or SQL, default code/message) comes from the set, the
+     * operational keys (when/params/field and code/message overrides) stay local. {@code file}
+     * arrives already rewritten relative to the referencing route.
+     */
+    public ValidationRule mergedWith(String sharedRule, String routeRelativeFile,
+            String sharedCode, String sharedMessage) {
+        return new ValidationRule(when, sharedRule, routeRelativeFile, params, field,
+                code != null ? code : sharedCode,
+                message != null ? message : sharedMessage,
+                use);
     }
 
     /** Whether this is a cross-field expression rule. */

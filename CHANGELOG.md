@@ -113,6 +113,15 @@ All notable changes to TesseraQL are documented here. The format follows
   `BundledAppSecurityPostureTest` pins every bundled route to an explicit effective auth mode
   with CSRF on browser writes.
 
+- **Shared validation rule sets** (docs/declarative-validation.md "Shared rule sets"): a
+  cross-field or SQL rule is declared once under `rules/` with a bind contract and referenced
+  from any `validate:` block via `use:` — the reference wires its own `params:` (checked
+  against the contract exactly), `field:`, and `when:`, while the rule's substance and default
+  `code`/`message` live in the set. `scaffold crud` generates the per-unique-index `…IsFree`
+  rule shared by create and update (self-exclusion via a conditional directive, portable across
+  dialects), exercised end-to-end by the dogfood suites. Load errors `TQL-FIELD-4604..4608`;
+  unreferenced rules lint `TQL-FIELD-4612`.
+
 ### Changed
 
 - **The gallery apps rely on the default response headers**: all five example apps declare
