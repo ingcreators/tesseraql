@@ -206,6 +206,10 @@ parenthesized dummy reads as `(1=1)`; at runtime the named scope — declared on
 qualify the column in a join and `as boolean` to render a per-row flag instead of a filter.
 The full model, examples, and its lint rules are in [data-scoping.md](data-scoping.md).
 
+Two lints guard the principal namespace: a `principal.*` bind on a route that never carries an
+authenticated principal is an error (`TQL-SEC-4136`), and a `params:` entry that merely renames
+an ambient field draws a nudge toward the ambient spelling (`TQL-SEC-4137`).
+
 ## Staying tool-runnable
 
 A few rules keep every file executable as-is:
