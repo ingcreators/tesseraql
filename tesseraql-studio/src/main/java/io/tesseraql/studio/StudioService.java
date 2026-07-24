@@ -713,7 +713,7 @@ public final class StudioService {
 
     /** One structured input row of the form-driven route editor (Track J1). */
     public record FormInput(String name, String type, boolean required, String min, String max,
-            String maxLength, String minLength, String pattern, String enumCsv) {
+            String maxLength, String minLength, String pattern, String enumCsv, String domain) {
     }
 
     /**
@@ -724,6 +724,15 @@ public final class StudioService {
      */
     public record RouteForm(String path, String id, String recipe, String auth, String policy,
             boolean csrf, List<FormInput> inputs, boolean fromDraft, String error) {
+    }
+
+    /**
+     * The app's declared field-domain names (docs/field-domains.md), sorted — the route form's
+     * domain select and the docs portal draw from the same loader the manifest resolves with.
+     */
+    public List<String> domainNames() {
+        return io.tesseraql.yaml.domain.FieldDomains.load(appHome).domains().keySet().stream()
+                .sorted().toList();
     }
 
     /** Loads the structured form model for a route document (Track J1). */
@@ -741,7 +750,7 @@ public final class StudioService {
                         Boolean.TRUE.equals(field.get("required")), scalar(field.get("min")),
                         scalar(field.get("max")), scalar(field.get("maxLength")),
                         scalar(field.get("minLength")), scalar(field.get("pattern")),
-                        csvOf(field.get("enum"))));
+                        csvOf(field.get("enum")), scalar(field.get("domain"))));
             });
             return new RouteForm(relativePath, scalar(tree.get("id")), scalar(tree.get("recipe")),
                     scalar(security.get("auth")), scalar(security.get("policy")),
@@ -797,6 +806,9 @@ public final class StudioService {
             }
             // Surviving fields keep their unmanaged attributes (writable, mask, format, ...).
             Map<String, Object> field = new LinkedHashMap<>(anyMap(existing.get(name)));
+            // A field domain reference (docs/field-domains.md) leads the entry; the row's own
+            // keys then tighten it (route-local always wins at manifest load).
+            putOrRemove(field, "domain", trimToNull(row.domain()));
             putOrRemove(field, "type", trimToNull(row.type()));
             if (row.required()) {
                 field.put("required", true);

@@ -1,0 +1,17 @@
+version: tesseraql/v1
+id: tql.studio.docs.domains
+kind: route
+recipe: query-html
+
+security:
+  auth: browser
+
+sql:
+  service: docs.domains
+
+response:
+  html:
+    status: 200
+    template: domains.html
+    model:
+      dom: sql

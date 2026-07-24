@@ -191,9 +191,9 @@ class StudioServiceTest {
         studio.routeFormSave("web/api/x/get.yml", "query-json", "browser", "app.read", true,
                 java.util.List.of(
                         new StudioService.FormInput("q", "string", true, null, null, "40", null,
-                                null, null),
+                                null, null, null),
                         new StudioService.FormInput("age", "integer", false, "18", "130", null,
-                                null, null, null)));
+                                null, null, null, null)));
 
         String draft = studio.readDraft("web/api/x/get.yml");
         assertThat(draft).contains("auth: \"browser\"").doesNotContain("bearer");
@@ -230,13 +230,13 @@ class StudioServiceTest {
         // A row whose name is cleared simply does not survive the rebuild.
         studio.routeFormSave("web/api/x/get.yml", null, null, null, false, java.util.List.of(
                 new StudioService.FormInput("", "string", false, null, null, null, null, null,
-                        null)));
+                        null, null)));
         assertThat(studio.readDraft("web/api/x/get.yml")).doesNotContain("gone")
                 .doesNotContain("input:");
 
         assertThatThrownBy(() -> studio.routeFormSave("web/api/x/get.yml", null, null, null,
                 false, java.util.List.of(new StudioService.FormInput("n", "integer", false,
-                        "not-a-number", null, null, null, null, null))))
+                        "not-a-number", null, null, null, null, null, null))))
                 .isInstanceOf(io.tesseraql.core.error.TqlException.class)
                 .hasMessageContaining("must be a number");
         assertThatThrownBy(() -> studio.routeForm("config/tesseraql.yml"))

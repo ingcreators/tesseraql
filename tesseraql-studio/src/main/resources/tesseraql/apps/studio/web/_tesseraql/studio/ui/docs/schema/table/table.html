@@ -66,7 +66,7 @@
     <section class="hc-card" id="sec-columns">
       <h2>Columns</h2>
       <table class="hc-table">
-        <thead><tr><th>Column</th><th>Type</th><th>Nullable</th><th>Default</th><th>Key</th></tr></thead>
+        <thead><tr><th>Column</th><th>Type</th><th>Nullable</th><th>Default</th><th>Key</th><th>Domain</th></tr></thead>
         <tbody>
           <tr th:each="c : ${tbl.columns}">
             <td th:text="${c.name}"></td>
@@ -79,6 +79,11 @@
             <td>
               <span class="hc-badge" th:if="${c.primaryKey}" data-variant="success">PK</span>
               <span class="hc-badge" th:if="${c.autoincrement}" data-variant="info">auto</span>
+            </td>
+            <td>
+              <!-- The live field domain (docs/field-domains.md) scaffolded for this column. -->
+              <a class="hc-badge" th:if="${c.domain}" href="/_tesseraql/studio/ui/docs/domains" th:text="${c.domain}"></a>
+              <span th:unless="${c.domain}">&mdash;</span>
             </td>
           </tr>
         </tbody>

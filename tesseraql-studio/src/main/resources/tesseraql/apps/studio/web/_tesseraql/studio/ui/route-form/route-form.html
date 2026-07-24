@@ -71,7 +71,7 @@
         <div style="overflow-x: auto">
           <table class="hc-table">
             <thead>
-            <tr><th>Name</th><th>Type</th><th>Required</th><th>Min</th><th>Max</th>
+            <tr><th>Name</th><th>Domain</th><th>Type</th><th>Required</th><th>Min</th><th>Max</th>
               <th>Max len</th><th>Min len</th><th>Pattern</th><th>Enum (csv)</th></tr>
             </thead>
             <tbody>
@@ -79,6 +79,15 @@
                 th:with="row=${i < rf.form.inputs.size() ? rf.form.inputs[i] : null}">
               <td><input class="hc-input" data-size="sm" th:name="|in${i}name|"
                          th:value="${row == null ? null : row.name}"></td>
+              <td>
+                <!-- A field domain (docs/field-domains.md) declares the field once; the row's
+                     own keys then tighten it. Empty when the app declares no domains. -->
+                <select class="hc-select" data-size="sm" th:name="|in${i}domain|">
+                  <option value="">(none)</option>
+                  <option th:each="d : ${rf.domainOptions}"
+                          th:value="${d}" th:text="${d}" th:selected="${row != null && d == row.domain}"></option>
+                </select>
+              </td>
               <td>
                 <select class="hc-select" data-size="sm" th:name="|in${i}type|">
                   <option value="">(default)</option>

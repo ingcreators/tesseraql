@@ -497,7 +497,7 @@ class StudioIntegrationTest {
                     .contains(">Explorer<").contains(">Overview<").contains(">Coverage<")
                     .contains(">Schema<").contains(">Scaffold<").contains(">Migration<")
                     .contains(">SQL builder<").contains(">Drafts<").contains(">Audit<")
-                    .contains(">Wizards<")
+                    .contains(">Wizards<").contains(">Domains<")
                     // the system apps stay reachable from Studio's sidebar
                     .contains(">Operations<").contains(">IAM Admin<")
                     // icons via the self-hosted sprite, and the collapse-rail + hamburger plumbing
@@ -505,6 +505,21 @@ class StudioIntegrationTest {
                     .contains("hc-shell__label").contains("data-collapsible")
                     .contains("hc-shell__toggle");
         }
+    }
+
+    @Test
+    void docsDomainsPageRendersAndTheFormOffersDomains() throws Exception {
+        // Order-independent: a sibling scaffold test may have written domains/items.yml into
+        // the shared app home, so the page legitimately shows either its empty-state guidance
+        // or the scaffolded domain rows (docs/field-domains.md Studio surfacing).
+        String body = get("/_tesseraql/studio/ui/docs/domains", true).body();
+        assertThat(body).contains("Field domains");
+        assertThat(body).containsAnyOf("No field domains declared yet", "items.name");
+
+        // The route form carries the per-slot domain select.
+        String form = get("/_tesseraql/studio/ui/route-form?path="
+                + enc("web/api/users/get.yml"), true).body();
+        assertThat(form).contains("in0domain");
     }
 
     @Test

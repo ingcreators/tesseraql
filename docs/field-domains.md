@@ -1,10 +1,13 @@
 # Field domains
 
-> **Status: core shipped.** The `domains/` documents, the `domain:` reference with
-> load-time merge, the constraint catalog, and the lint family are implemented (user-facing
-> docs in [declarative-validation.md](declarative-validation.md#field-domains)). Remaining
-> slices: the remaining Studio authoring surfaces (validation builder / schema overlay
-> selection and a domains index page). The scaffolder slice is shipped: `scaffold crud`
+> **Status: complete.** The `domains/` documents, the `domain:` reference with load-time
+> merge, the constraint catalog, and the lint family are implemented (user-facing docs in
+> [declarative-validation.md](declarative-validation.md#field-domains)); every follow-up slice
+> has shipped — including the Studio authoring surfaces: a Domains reference page in the
+> documentation portal (declarations, constraint chips, referencing routes, the constraint
+> catalog, and an unreferenced marker mirroring `TQL-FIELD-4611`), a per-column domain chip on
+> the schema table pages, a domain select in the route form, and the validation builder
+> pointing single-field constraints at domains before a cross-field rule is written. The scaffolder slice is shipped: `scaffold crud`
 > generates `domains/<table>.yml` from column metadata and routes that reference it, so the
 > DDL→validation link is live, and the inventory gallery app hand-adopts a shared `sku` domain
 > that had already drifted across two routes. OpenAPI emission is shipped: a pure `domain:`

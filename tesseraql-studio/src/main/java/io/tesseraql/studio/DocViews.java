@@ -369,6 +369,16 @@ public final class DocViews {
      */
     public static Map<String, Object> table(String datasource, CatalogSchema.Table table,
             DocService.RouteUsage usage) {
+        return table(datasource, table, usage, Map.of());
+    }
+
+    /**
+     * As {@link #table(String, CatalogSchema.Table, DocService.RouteUsage)}, with each column
+     * chipped by its live field domain (docs/field-domains.md) when one exists under the
+     * scaffolder's {@code <table>.<field>} naming — the DDL→domain link made visible.
+     */
+    public static Map<String, Object> table(String datasource, CatalogSchema.Table table,
+            DocService.RouteUsage usage, Map<String, String> columnDomains) {
         Set<String> pk = new HashSet<>(table.primaryKey());
         Map<String, Object> model = new LinkedHashMap<>();
         model.put("datasource", datasource);
@@ -387,6 +397,7 @@ public final class DocViews {
             row.put("autoincrement", column.autoincrement());
             row.put("defaultValue", column.defaultValue());
             row.put("primaryKey", pk.contains(column.name()));
+            row.put("domain", columnDomains.get(column.name()));
             columns.add(row);
         }
         model.put("columns", columns);
@@ -431,6 +442,86 @@ public final class DocViews {
             rows.add(row);
         }
         return rows;
+    }
+
+    /** The domains-page url, for cross-links from other portal pages. */
+    public static final String DOMAINS_URL = "/_tesseraql/studio/ui/docs/domains";
+
+    /**
+     * The field-domains reference page (docs/field-domains.md): every declared domain with its
+     * constraint chips and the routes whose {@code input:} references it, plus the app-level
+     * constraint catalog. An unreferenced domain is marked — the same signal as lint
+     * {@code TQL-FIELD-4611}, made visible where authors browse.
+     */
+    public static Map<String, Object> domains(String appName,
+            List<DocService.DomainEntry> entries,
+            Map<String, io.tesseraql.yaml.model.ErrorsSpec.ConstraintMapping> catalog) {
+        Map<String, Object> model = new LinkedHashMap<>();
+        model.put("appName", appName);
+        List<Map<String, Object>> rows = new ArrayList<>();
+        for (DocService.DomainEntry entry : entries) {
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("name", entry.name());
+            row.put("chips", domainChips(entry.definition()));
+            List<Map<String, Object>> refs = new ArrayList<>();
+            for (DocService.RouteRef ref : entry.referencedBy()) {
+                refs.add(Map.of("id", ref.id(), "method", ref.method(), "url", ref.url()));
+            }
+            row.put("referencedBy", refs);
+            row.put("unreferenced", refs.isEmpty());
+            rows.add(row);
+        }
+        model.put("domains", rows);
+        model.put("hasDomains", !rows.isEmpty());
+        List<Map<String, Object>> catalogRows = new ArrayList<>();
+        catalog.forEach((name, mapping) -> {
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("name", name);
+            row.put("field", mapping.field());
+            row.put("code", mapping.code());
+            row.put("message", mapping.message());
+            catalogRows.add(row);
+        });
+        catalogRows.sort(java.util.Comparator.comparing(r -> String.valueOf(r.get("name"))));
+        model.put("catalog", catalogRows);
+        model.put("hasCatalog", !catalogRows.isEmpty());
+        return model;
+    }
+
+    /** Human-readable chips for a domain's declared keys (only what it declares). */
+    private static List<String> domainChips(io.tesseraql.yaml.model.InputField field) {
+        List<String> chips = new ArrayList<>();
+        if (field.type() != null) {
+            chips.add(field.type());
+        }
+        if (field.min() != null) {
+            chips.add("min " + field.min());
+        }
+        if (field.max() != null) {
+            chips.add("max " + field.max());
+        }
+        if (field.minLength() != null) {
+            chips.add("minLength " + field.minLength());
+        }
+        if (field.maxLength() != null) {
+            chips.add("maxLength " + field.maxLength());
+        }
+        if (field.pattern() != null) {
+            chips.add("pattern " + field.pattern());
+        }
+        if (field.format() != null) {
+            chips.add("format " + field.format());
+        }
+        if (field.enumValues() != null && !field.enumValues().isEmpty()) {
+            chips.add("enum " + String.join("|", field.enumValues()));
+        }
+        if (field.classification() != null) {
+            chips.add("classification " + field.classification());
+        }
+        if (field.mask() != null) {
+            chips.add("mask " + field.mask());
+        }
+        return chips;
     }
 
     /** A readable column type: the SQL type name, with a length appended for character types. */

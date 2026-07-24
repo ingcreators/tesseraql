@@ -73,6 +73,14 @@ All notable changes to TesseraQL are documented here. The format follows
   datasources or policies) — and their 72 route files drop the copy-pasted header block (pages
   needing a different CSP or `Cache-Control` keep just that override).
 
+- **Field domains in Studio** (docs/field-domains.md, closing the design): a Domains reference
+  page in the documentation portal (declarations with constraint chips, the routes referencing
+  each, the constraint catalog, and an `unreferenced` marker mirroring `TQL-FIELD-4611`); a
+  per-column domain chip on schema table pages via the scaffolder's `<table>.<field>` naming;
+  a domain select per input row in the route form (saved as `domain:` ahead of the row's own
+  tightening keys); and the validation builder points single-field constraints at domains
+  before a cross-field rule is written.
+
 ### Changed
 
 - **The gallery apps rely on the default response headers**: all five example apps declare

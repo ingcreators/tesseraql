@@ -8,6 +8,16 @@
   </div>
 </th:block>
 <div id="page-content" class="hc-stack">
+  <section class="hc-card" th:if="${vb.domains != null && !vb.domains.isEmpty()}">
+    <h2>Field domains</h2>
+    <p class="hc-field__message">Single-field constraints (type, bounds, pattern, enum) belong in
+      a <a href="/_tesseraql/studio/ui/docs/domains">field domain</a> referenced from
+      <code>input:</code> &mdash; this builder is for cross-field and SQL rules that a domain
+      cannot express.</p>
+    <div class="hc-cluster">
+      <span class="hc-badge" th:each="d : ${vb.domains}" th:text="${d}"></span>
+    </div>
+  </section>
   <section class="hc-card">
     <h2>Validation builder</h2>
     <p class="hc-field__message">Generate a route's <code>validate:</code> block for one rule, then

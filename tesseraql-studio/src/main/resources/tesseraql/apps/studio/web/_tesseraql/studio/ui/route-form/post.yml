@@ -28,6 +28,7 @@ input:
   in0minlen: { type: string, required: false }
   in0pattern: { type: string, required: false }
   in0enum: { type: string, required: false }
+  in0domain: { type: string, required: false }
   in1name: { type: string, required: false }
   in1type: { type: string, required: false }
   in1req: { type: string, required: false }
@@ -37,6 +38,7 @@ input:
   in1minlen: { type: string, required: false }
   in1pattern: { type: string, required: false }
   in1enum: { type: string, required: false }
+  in1domain: { type: string, required: false }
   in2name: { type: string, required: false }
   in2type: { type: string, required: false }
   in2req: { type: string, required: false }
@@ -46,6 +48,7 @@ input:
   in2minlen: { type: string, required: false }
   in2pattern: { type: string, required: false }
   in2enum: { type: string, required: false }
+  in2domain: { type: string, required: false }
   in3name: { type: string, required: false }
   in3type: { type: string, required: false }
   in3req: { type: string, required: false }
@@ -55,6 +58,7 @@ input:
   in3minlen: { type: string, required: false }
   in3pattern: { type: string, required: false }
   in3enum: { type: string, required: false }
+  in3domain: { type: string, required: false }
   in4name: { type: string, required: false }
   in4type: { type: string, required: false }
   in4req: { type: string, required: false }
@@ -64,6 +68,7 @@ input:
   in4minlen: { type: string, required: false }
   in4pattern: { type: string, required: false }
   in4enum: { type: string, required: false }
+  in4domain: { type: string, required: false }
   in5name: { type: string, required: false }
   in5type: { type: string, required: false }
   in5req: { type: string, required: false }
@@ -73,6 +78,7 @@ input:
   in5minlen: { type: string, required: false }
   in5pattern: { type: string, required: false }
   in5enum: { type: string, required: false }
+  in5domain: { type: string, required: false }
   in6name: { type: string, required: false }
   in6type: { type: string, required: false }
   in6req: { type: string, required: false }
@@ -82,6 +88,7 @@ input:
   in6minlen: { type: string, required: false }
   in6pattern: { type: string, required: false }
   in6enum: { type: string, required: false }
+  in6domain: { type: string, required: false }
   in7name: { type: string, required: false }
   in7type: { type: string, required: false }
   in7req: { type: string, required: false }
@@ -91,6 +98,7 @@ input:
   in7minlen: { type: string, required: false }
   in7pattern: { type: string, required: false }
   in7enum: { type: string, required: false }
+  in7domain: { type: string, required: false }
   in8name: { type: string, required: false }
   in8type: { type: string, required: false }
   in8req: { type: string, required: false }
@@ -100,6 +108,7 @@ input:
   in8minlen: { type: string, required: false }
   in8pattern: { type: string, required: false }
   in8enum: { type: string, required: false }
+  in8domain: { type: string, required: false }
   in9name: { type: string, required: false }
   in9type: { type: string, required: false }
   in9req: { type: string, required: false }
@@ -109,6 +118,7 @@ input:
   in9minlen: { type: string, required: false }
   in9pattern: { type: string, required: false }
   in9enum: { type: string, required: false }
+  in9domain: { type: string, required: false }
 
 security:
   auth: browser
