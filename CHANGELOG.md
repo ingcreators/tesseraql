@@ -57,6 +57,11 @@ All notable changes to TesseraQL are documented here. The format follows
   `sql.service:` invocations — service params are the service's arguments, not SQL binds (the
   bundled Studio/account apps wire `principal.*` into services exactly this way, by design).
 
+- **Field domains in the OpenAPI contract** (docs/field-domains.md): a pure `domain:` reference
+  emits a named component schema (`domain.<name>`) `$ref`'d from every operation accepting the
+  field — one business field, one schema; a route that tightens a domain key keeps its inline
+  schema so the contract never hides an override.
+
 ### Changed
 
 - **The gallery apps rely on the default response headers**: all five example apps declare
