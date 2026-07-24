@@ -3,6 +3,12 @@ id: app.home
 kind: route
 recipe: page
 
+# The unauthenticated shell: a static page skeleton whose data fragments all authenticate.
+# Explicit so the app-level security defaults (config: security.defaults.routes) cannot
+# silently change its posture.
+security:
+  auth: public
+
 response:
   html:
     template: index.html

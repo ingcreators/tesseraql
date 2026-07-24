@@ -93,11 +93,12 @@ tesseraql:
 
   security:
     defaults:
-      api:
-        auth: bearer
-      htmx:
-        auth: browser
-        csrf: auto
+      routes:
+        - match: /api/**
+          auth: bearer
+        - match: /**
+          auth: browser
+          csrf: auto
 
     jwt:
       secret: ${JWT_SECRET:dev-only-secret-change-me-in-production}

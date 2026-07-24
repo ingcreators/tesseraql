@@ -96,6 +96,21 @@ public record RouteDefinition(
                 : java.util.Collections.unmodifiableMap(new java.util.LinkedHashMap<>(http));
     }
 
+    /**
+     * A copy of this definition carrying a resolved {@code security:} block — how the manifest
+     * loader stamps app-level security defaults (docs/route-defaults.md) into the route, so every
+     * downstream consumer sees effective values.
+     */
+    public RouteDefinition withSecurity(SecuritySpec effective) {
+        if (effective == security) {
+            return this;
+        }
+        return new RouteDefinition(version, id, kind, recipe, input, inputPolicy, effective,
+                idempotency, policy, outbox, sql, steps, queries, validate, notifications, errors,
+                fileImport, fileExport, webhook, publish, consume, response, page, datasource,
+                http, cache, emit);
+    }
+
     /** The input policy, or framework defaults (reject unknown / reject read-only). */
     public InputPolicy effectiveInputPolicy() {
         return inputPolicy == null ? InputPolicy.defaults() : inputPolicy;

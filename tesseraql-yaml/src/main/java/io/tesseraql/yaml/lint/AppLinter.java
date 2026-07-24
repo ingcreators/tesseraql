@@ -552,6 +552,47 @@ public final class AppLinter {
         lintApiKeyConfig(appHome, manifest, config, findings);
         lintMtlsConfig(appHome, manifest, config, findings);
         lintOidcConfig(config, findings);
+        lintSecurityDefaults(appHome, manifest, config, findings);
+    }
+
+    /**
+     * Lints the path-matched route security defaults (docs/route-defaults.md): the retired
+     * kind-keyed {@code defaults.api}/{@code defaults.htmx} shape never had a consumer and is
+     * flagged toward {@code defaults.routes}, and a route left {@code public} under a rule that
+     * declares a policy is either deliberate (declare the route's own security) or the exact
+     * mistake the default exists to catch.
+     */
+    private void lintSecurityDefaults(Path appHome, AppManifest manifest, AppConfig config,
+            List<LintFinding> findings) {
+        Object legacy = config.navigate("tesseraql.security.defaults");
+        if (legacy instanceof Map<?, ?> map && (map.containsKey("api")
+                || map.containsKey("htmx"))) {
+            findings.add(new LintFinding("TQL-SEC-4130", "warning", "config",
+                    "tesseraql.security.defaults.api/htmx is replaced by the path-matched"
+                            + " security.defaults.routes rules and has no effect"));
+        }
+        // A malformed rule list already failed the manifest load (TQL-SEC-4132) before lint ran.
+        io.tesseraql.yaml.config.SecurityDefaults defaults = io.tesseraql.yaml.config.SecurityDefaults
+                .from(config);
+        if (defaults.isEmpty()) {
+            return;
+        }
+        for (RouteFile route : manifest.routes()) {
+            var security = route.definition().security();
+            if (security == null || !"public".equals(security.auth())) {
+                continue;
+            }
+            defaults.matchedRule(route.urlPath()).ifPresent(rule -> {
+                if (rule.policy() != null) {
+                    findings.add(new LintFinding("TQL-SEC-4131", "warning",
+                            appHome.relativize(route.source()).toString(),
+                            "Route '" + route.definition().id() + "' is public, but the security"
+                                    + " default rule '" + rule.match() + "' declares policy '"
+                                    + rule.policy() + "' for its path — confirm the route is"
+                                    + " deliberately open"));
+                }
+            });
+        }
     }
 
     /**

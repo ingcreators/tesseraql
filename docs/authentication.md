@@ -20,6 +20,46 @@ here. Browser-session *usage patterns* (forms, CSRF in templates) are in
 All JWT and API-key crypto is JDK-only — there is no JOSE/JWT third-party dependency, matching the
 SAML module's supply-chain posture.
 
+## Route security defaults
+
+Routes of the same kind almost always share the same `security:` choices — every `/api/**` route
+is `bearer`, every page is `browser` with CSRF on writes. Instead of restating them per route,
+declare path-matched defaults once under `tesseraql.security.defaults.routes`:
+
+```yaml
+tesseraql:
+  security:
+    defaults:
+      routes:
+        - match: /api/**       # first matching rule wins, firewall-style
+          auth: bearer
+        - match: /**
+          auth: browser
+          csrf: auto           # required exactly on browser writes (non-GET)
+```
+
+Rules are evaluated **in declaration order against the served URL path**, and the first match
+contributes defaults, so the effective rule for any path is decidable by reading the list top to
+bottom. In a `match` pattern `*` stays within one path segment, `**` crosses segments, and a
+trailing `/**` also matches the bare prefix (`/api/**` matches `/api`).
+
+The merge is per key and **route-local keys always win**: a route may declare only its `policy:`
+and inherit `auth`/`csrf`, or override everything. Two guardrails keep the merge safe:
+
+- A route whose effective auth is `public` never inherits a `policy` from a rule — public means
+  fully open. Under a rule that declares a policy, the combination is flagged
+  (`TQL-SEC-4131`) so a deliberately open route is confirmed, not accidental.
+- `csrf: auto` resolves to required exactly when the effective auth is `browser` and the method
+  is state-changing — bearer/API-key routes never inherit CSRF.
+
+Resolution happens when the app manifest loads: the compiler, linter, coverage, and Studio all
+see the fully explicit effective values. A malformed rule fails the load (`TQL-SEC-4132`) rather
+than silently defaulting a security control.
+
+`recipe: webhook` routes are exempt: webhook deliveries authenticate by signature (the declared
+verifier — the compiler rejects a webhook route without one), so a browser/bearer default would
+demand a session no sender has.
+
 ## Bearer JWT
 
 A `bearer` route reads the `Authorization: Bearer <jwt>` header, verifies the signature, validates
@@ -332,6 +372,9 @@ Returned at request time (distinct from the lint codes below, which are static c
 | `TQL-SEC-4063` | error | An mTLS client declares more than one certificate matcher; set exactly one. |
 | `TQL-SEC-4064` | warning | An mTLS client grants no roles or permissions (least-privilege hint). |
 | `TQL-SEC-4065` | warning | mTLS declares no `trustBundle`; the runtime does not independently validate the chain. |
+| `TQL-SEC-4130` | warning | The retired kind-keyed `security.defaults.api`/`htmx` shape is present; it has no effect — use the path-matched `security.defaults.routes` rules. |
+| `TQL-SEC-4131` | warning | A route is `public` while a matching security default rule declares a policy for its path — confirm the route is deliberately open. |
+| `TQL-SEC-4132` | error | A `security.defaults.routes` rule is malformed (missing `match`, invalid `csrf`, or an empty rule); the app fails to load. |
 
 The lint reads raw config — it never resolves secret placeholders — so it runs without a live
 secret store.

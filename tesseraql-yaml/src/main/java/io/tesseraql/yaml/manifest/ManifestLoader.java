@@ -5,7 +5,9 @@ import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
 import io.tesseraql.yaml.SimpleYamlParser;
 import io.tesseraql.yaml.config.AppConfig;
+import io.tesseraql.yaml.config.SecurityDefaults;
 import io.tesseraql.yaml.model.RouteDefinition;
+import io.tesseraql.yaml.model.SecuritySpec;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
@@ -80,7 +82,7 @@ public final class ManifestLoader {
             throw new TqlException(LOAD_ERROR, "App home is not a directory: " + home);
         }
         AppConfig config = loadConfig(home);
-        List<RouteFile> routes = loadRoutes(home, brokenSink);
+        List<RouteFile> routes = applySecurityDefaults(config, loadRoutes(home, brokenSink));
         List<JobFile> jobs = loadJobs(home);
         List<ToolFile> tools = new ArrayList<>();
         List<ResourceFile> resources = new ArrayList<>();
@@ -321,6 +323,34 @@ public final class ManifestLoader {
                 base.put(entry.getKey(), newValue);
             }
         }
+    }
+
+    /**
+     * Stamps app-level route security defaults (docs/route-defaults.md) into each HTTP route, so
+     * the compiler, linter, and every other manifest consumer see effective values. Queue
+     * consumers have no HTTP surface and are not touched.
+     */
+    private static List<RouteFile> applySecurityDefaults(AppConfig config,
+            List<RouteFile> routes) {
+        SecurityDefaults defaults = SecurityDefaults.from(config);
+        if (defaults.isEmpty()) {
+            return routes;
+        }
+        List<RouteFile> resolved = new ArrayList<>(routes.size());
+        for (RouteFile route : routes) {
+            // Webhook deliveries authenticate by signature, not by a principal: the compiler
+            // already rejects a webhook route without a verifier, and defaulting browser/bearer
+            // auth onto one would demand a session no sender has.
+            if ("webhook".equals(route.definition().recipe())) {
+                resolved.add(route);
+                continue;
+            }
+            SecuritySpec effective = defaults.resolve(route.httpMethod(), route.urlPath(),
+                    route.definition().security());
+            resolved.add(new RouteFile(route.httpMethod(), route.urlPath(), route.source(),
+                    route.definition().withSecurity(effective)));
+        }
+        return resolved;
     }
 
     private List<RouteFile> loadRoutes(Path home, List<BrokenRoute> brokenSink) {

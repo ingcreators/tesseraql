@@ -234,12 +234,15 @@ public final class AppScaffolder {
                     - class
 
               security:
+                # Path-matched route security defaults (docs/route-defaults.md): first matching
+                # rule fills auth/csrf/policy a route leaves out; route-local keys always win.
                 defaults:
-                  api:
-                    auth: bearer
-                  htmx:
-                    auth: browser
-                    csrf: auto
+                  routes:
+                    - match: /api/**
+                      auth: bearer
+                    - match: /**
+                      auth: browser
+                      csrf: auto
 
                 jwt:
                   secret: ${JWT_SECRET:dev-only-secret-change-me-in-production}
@@ -310,6 +313,12 @@ public final class AppScaffolder {
             id: app.home
             kind: route
             recipe: page
+
+            # The unauthenticated shell: a static page skeleton whose data fragments all authenticate.
+            # Explicit so the app-level security defaults (config: security.defaults.routes) cannot
+            # silently change its posture.
+            security:
+              auth: public
 
             response:
               html:
