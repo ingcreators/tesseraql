@@ -111,6 +111,22 @@ public record RouteDefinition(
                 http, cache, emit);
     }
 
+    /**
+     * A copy carrying resolved {@code input:} fields and error mapping — how the manifest loader
+     * stamps field-domain references and the app constraint catalog (docs/field-domains.md) into
+     * the route, so every downstream consumer sees effective values.
+     */
+    public RouteDefinition withInputAndErrors(Map<String, InputField> effectiveInput,
+            ErrorsSpec effectiveErrors) {
+        if (effectiveInput == input && effectiveErrors == errors) {
+            return this;
+        }
+        return new RouteDefinition(version, id, kind, recipe, effectiveInput, inputPolicy,
+                security, idempotency, policy, outbox, sql, steps, queries, validate,
+                notifications, effectiveErrors, fileImport, fileExport, webhook, publish, consume,
+                response, page, datasource, http, cache, emit);
+    }
+
     /** The input policy, or framework defaults (reject unknown / reject read-only). */
     public InputPolicy effectiveInputPolicy() {
         return inputPolicy == null ? InputPolicy.defaults() : inputPolicy;

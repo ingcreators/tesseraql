@@ -17,7 +17,7 @@ class InputBinderTest {
 
     private static InputField field(String type, String format) {
         return new InputField(type, true, null, null, null, null, null, null, null, null,
-                format, null, null, null, null);
+                format, null, null, null, null, null);
     }
 
     private static Function<String, String> value(String raw) {
@@ -72,7 +72,8 @@ class InputBinderTest {
     @Test
     void requiredAndRangeViolationsCarryTheirParams() {
         InputField qty = new InputField("integer", true, null, new BigDecimal(1),
-                new BigDecimal(99), null, null, null, null, null, null, null, null, null, null);
+                new BigDecimal(99), null, null, null, null, null, null, null, null, null, null,
+                null);
 
         assertThatThrownBy(() -> InputBinder.bind(Map.of("qty", qty), value(null),
                 Locale.ENGLISH))
@@ -93,7 +94,8 @@ class InputBinderTest {
     @Test
     void enumViolationsListTheOptions() {
         InputField status = new InputField("string", true, null, null, null, null,
-                List.of("open", "closed"), null, null, null, null, null, null, null, null);
+                List.of("open", "closed"), null, null, null, null, null, null, null, null,
+                null);
 
         assertThatThrownBy(() -> InputBinder.bind(Map.of("status", status), value("other"),
                 Locale.ENGLISH))
@@ -106,7 +108,8 @@ class InputBinderTest {
     @Test
     void decimalBoundsAreExactAndFractional() {
         InputField price = new InputField("number", true, null, new BigDecimal("0.5"),
-                new BigDecimal("5"), null, null, null, null, null, null, null, null, null, null);
+                new BigDecimal("5"), null, null, null, null, null, null, null, null, null, null,
+                null);
 
         // 5.9 violates max: 5 (the old long truncation admitted it), and min: 0.5 is declarable.
         assertThatThrownBy(() -> InputBinder.bind(Map.of("price", price), value("5.9"),
@@ -123,7 +126,7 @@ class InputBinderTest {
                 .containsEntry("price", 0.5d);
 
         InputField zeroFloor = new InputField("number", true, null, new BigDecimal(0), null,
-                null, null, null, null, null, null, null, null, null, null);
+                null, null, null, null, null, null, null, null, null, null, null);
         // -0.9 truncated to 0 under the old comparison and slipped past min: 0.
         assertThatThrownBy(() -> InputBinder.bind(Map.of("delta", zeroFloor), value("-0.9"),
                 Locale.ENGLISH))
@@ -135,7 +138,7 @@ class InputBinderTest {
     @Test
     void patternAndMinLengthGateStrings() {
         InputField code = new InputField("string", true, null, null, null, null, null, null,
-                null, null, null, null, "[A-Z]{2}-\\d+", 4, null);
+                null, null, null, null, "[A-Z]{2}-\\d+", 4, null, null);
 
         assertThat(InputBinder.bind(Map.of("code", code), value("AB-12"), Locale.ENGLISH))
                 .containsEntry("code", "AB-12");

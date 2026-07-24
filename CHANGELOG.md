@@ -24,6 +24,15 @@ All notable changes to TesseraQL are documented here. The format follows
   parameter named `principal` shadows it entirely, and a public route seeds nothing so a
   `principal.*` bind fails loudly as an unbound parameter.
 
+- **Field domains** (docs/declarative-validation.md "Field domains"): named app-level field
+  definitions under `domains/` — type, bounds, pattern, format, enum, classification, mask —
+  referenced from any route's `input:` via `domain:`, plus an app-level `constraints:` catalog
+  mapping database constraint names once. The manifest loader merges references at load time
+  (route keys win; operational keys are rejected inside a domain, `TQL-FIELD-4602`), so binding,
+  the error model, OpenAPI, and coverage consume fully-populated fields unchanged. Lint flags
+  loosening overrides (`TQL-FIELD-4610`) and unreferenced domains (`TQL-FIELD-4611`); duplicate
+  names and unknown references fail the load (`TQL-FIELD-4600`/`4601`).
+
 ### Changed
 
 - **Retired the kind-keyed `security.defaults.api`/`htmx` config shape** — it was emitted by the
