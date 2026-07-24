@@ -66,6 +66,13 @@ All notable changes to TesseraQL are documented here. The format follows
   constraint chips lead with its `domain` reference, and the route-spec JSON carries the field —
   the shared identity reads first wherever a route's contract is browsed.
 
+- **Bundled apps rely on the default response headers** (docs/route-defaults.md): the
+  Studio/IAM-admin/ops-console/account/auth-ui bundled apps declare `security.responseHeaders`
+  once in their own `config/tesseraql.yml` — the one whitelisted key a mounted app's config
+  contributes (everything else stays inert, so a third-party app can never override host
+  datasources or policies) — and their 72 route files drop the copy-pasted header block (pages
+  needing a different CSP or `Cache-Control` keep just that override).
+
 ### Changed
 
 - **The gallery apps rely on the default response headers**: all five example apps declare

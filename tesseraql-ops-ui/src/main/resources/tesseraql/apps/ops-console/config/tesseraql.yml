@@ -1,0 +1,11 @@
+tesseraql:
+  security:
+    # The security header block every HTML page of this bundled app sends
+    # (docs/response-shaping.md "Default response headers"). This is the one config key the
+    # mount honors from a bundled app (SystemApps whitelist): the app owns its pages' headers,
+    # and pages needing a different CSP override that one header route-locally.
+    responseHeaders:
+      Content-Security-Policy: "default-src 'self'; style-src 'self' 'unsafe-inline'; frame-ancestors 'none'"
+      X-Content-Type-Options: nosniff
+      X-Frame-Options: DENY
+      Referrer-Policy: no-referrer

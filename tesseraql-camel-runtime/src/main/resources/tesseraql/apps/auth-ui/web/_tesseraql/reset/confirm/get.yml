@@ -35,8 +35,4 @@ response:
       invalid: params.invalid
       error: params.error
     headers:
-      Content-Security-Policy: "default-src 'self'; style-src 'self' 'unsafe-inline'; frame-ancestors 'none'"
-      X-Content-Type-Options: nosniff
-      X-Frame-Options: DENY
-      Referrer-Policy: no-referrer
       Cache-Control: "no-store"

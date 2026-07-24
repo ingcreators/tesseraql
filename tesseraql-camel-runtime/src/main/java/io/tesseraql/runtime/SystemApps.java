@@ -26,9 +26,13 @@ import org.slf4j.LoggerFactory;
  * {@link ManifestLoader}, so system apps are plain yaml/sql/template trees compiled by the same
  * route compiler as user apps.
  *
- * <p>Mounted apps run with the main app's configuration (datasources, security policies, dialect);
- * their own {@code config/} directory is reserved for future default merging. Route ids and
- * method+path pairs must be unique across all mounted apps.
+ * <p>Mounted apps run with the main app's configuration (datasources, security policies,
+ * dialect). One whitelisted subtree of their own {@code config/} is honored:
+ * {@code tesseraql.security.responseHeaders} (docs/route-defaults.md) — a bundled app owns its
+ * pages' security header block, and a host config can neither weaken nor accidentally restyle
+ * it. The whitelist grows deliberately; everything else in a mounted {@code config/} stays
+ * inert, so a third-party app can never override the host's datasources or policies. Route ids
+ * and method+path pairs must be unique across all mounted apps.
  */
 final class SystemApps {
 
@@ -49,7 +53,8 @@ final class SystemApps {
         for (AppSource source : AppSources.discover(mainConfig)) {
             Path root = source.materialize(workRoot);
             AppManifest loaded = new ManifestLoader().load(root);
-            apps.add(new MountedApp(source.name(), new AppManifest(loaded.appHome(), mainConfig,
+            AppConfig mounted = withOwnResponseHeaders(mainConfig, loaded.config());
+            apps.add(new MountedApp(source.name(), new AppManifest(loaded.appHome(), mounted,
                     loaded.routes(), loaded.jobs(), loaded.tools(), loaded.resources(),
                     loaded.uiResources(), loaded.consumers(), loaded.scopes(), loaded.workflows(),
                     loaded.attachments(), loaded.migrations(), loaded.prompts(), loaded.index())));
@@ -57,6 +62,44 @@ final class SystemApps {
                     source.name(), root, loaded.routes().size(), loaded.jobs().size());
         }
         return apps;
+    }
+
+    /**
+     * The host config with the mounted app's own {@code tesseraql.security.responseHeaders}
+     * grafted over it — the one whitelisted key of a mounted {@code config/}. The compiler merges
+     * response headers from the manifest's config (docs/response-shaping.md), so this is what
+     * lets a bundled app declare its header block once instead of per page.
+     */
+    static AppConfig withOwnResponseHeaders(AppConfig main, AppConfig own) {
+        Object headers = own.navigate("tesseraql.security.responseHeaders");
+        if (headers == null) {
+            return main;
+        }
+        Map<String, Object> root = deepCopy(main.root());
+        Map<String, Object> tesseraql = childMap(root, "tesseraql");
+        Map<String, Object> security = childMap(tesseraql, "security");
+        security.put("responseHeaders", headers);
+        return new AppConfig(root);
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Map<String, Object> childMap(Map<String, Object> parent, String key) {
+        Object child = parent.get(key);
+        if (child instanceof Map<?, ?> map) {
+            return (Map<String, Object>) map;
+        }
+        Map<String, Object> created = new HashMap<>();
+        parent.put(key, created);
+        return created;
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Map<String, Object> deepCopy(Map<String, Object> tree) {
+        Map<String, Object> copy = new HashMap<>();
+        tree.forEach((key, value) -> copy.put(key, value instanceof Map<?, ?> map
+                ? deepCopy((Map<String, Object>) map)
+                : value));
+        return copy;
     }
 
     /**

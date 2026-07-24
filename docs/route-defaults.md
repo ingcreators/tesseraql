@@ -5,8 +5,11 @@
 > [authentication.md](authentication.md#route-security-defaults)) and the default response
 > headers (`tesseraql.security.responseHeaders`, user-facing docs in
 > [response-shaping.md](response-shaping.md#default-response-headers)) are implemented. The
-> gallery apps and scaffolder are migrated off the per-route header blocks; the bundled
-> Studio/IAM/ops apps (module resources) are the remaining copies.
+> gallery apps, scaffolder, and the bundled Studio/IAM/ops/account/auth apps are all migrated
+> off the per-route header blocks — a mounted app declares its block once in its own
+> `config/tesseraql.yml`, the one key the mount honors (SystemApps whitelist), so a host config
+> can neither weaken nor restyle a bundled app's pages while third-party apps stay unable to
+> touch host datasources or policies.
 
 **Route defaults** let the application declare, once in `config/tesseraql.yml`, the per-route
 settings that are the same for every route of a kind — and let route files state only what
