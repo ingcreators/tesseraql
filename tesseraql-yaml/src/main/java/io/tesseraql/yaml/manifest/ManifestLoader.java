@@ -82,7 +82,8 @@ public final class ManifestLoader {
             throw new TqlException(LOAD_ERROR, "App home is not a directory: " + home);
         }
         AppConfig config = loadConfig(home);
-        List<RouteFile> routes = applySecurityDefaults(config, loadRoutes(home, brokenSink));
+        List<RouteFile> routes = applyFieldDomains(home,
+                applySecurityDefaults(config, loadRoutes(home, brokenSink)));
         List<JobFile> jobs = loadJobs(home);
         List<ToolFile> tools = new ArrayList<>();
         List<ResourceFile> resources = new ArrayList<>();
@@ -349,6 +350,45 @@ public final class ManifestLoader {
                     route.definition().security());
             resolved.add(new RouteFile(route.httpMethod(), route.urlPath(), route.source(),
                     route.definition().withSecurity(effective)));
+        }
+        return resolved;
+    }
+
+    /**
+     * Resolves field-domain references and merges the app constraint catalog
+     * (docs/field-domains.md) into each route, so the binder, linter, OpenAPI, and coverage see
+     * fully-populated inputs. An unknown domain reference fails the load: a typo must not
+     * silently drop the constraints it names.
+     */
+    private static List<RouteFile> applyFieldDomains(Path home, List<RouteFile> routes) {
+        io.tesseraql.yaml.domain.FieldDomains domains = io.tesseraql.yaml.domain.FieldDomains
+                .load(home);
+        if (domains.isEmpty()) {
+            return routes;
+        }
+        List<RouteFile> resolved = new ArrayList<>(routes.size());
+        for (RouteFile route : routes) {
+            RouteDefinition def = route.definition();
+            Map<String, io.tesseraql.yaml.model.InputField> input = def.input();
+            if (input.values().stream().anyMatch(field -> field.domain() != null)) {
+                Map<String, io.tesseraql.yaml.model.InputField> merged = new java.util.LinkedHashMap<>();
+                input.forEach((name, field) -> merged.put(name, field.domain() == null
+                        ? field
+                        : field.mergedWith(
+                                domains.require(field.domain(), route.source().toString()))));
+                input = merged;
+            }
+            io.tesseraql.yaml.model.ErrorsSpec errors = def.errors();
+            if (!domains.constraints().isEmpty()) {
+                Map<String, io.tesseraql.yaml.model.ErrorsSpec.ConstraintMapping> catalog = new java.util.LinkedHashMap<>(
+                        domains.constraints());
+                if (errors != null) {
+                    catalog.putAll(errors.constraints());
+                }
+                errors = new io.tesseraql.yaml.model.ErrorsSpec(catalog);
+            }
+            resolved.add(new RouteFile(route.httpMethod(), route.urlPath(), route.source(),
+                    def.withInputAndErrors(input, errors)));
         }
         return resolved;
     }

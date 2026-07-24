@@ -1,7 +1,10 @@
 # Field domains
 
-> **Status: design.** This document precedes implementation. Nothing described here is part of
-> the released YAML surface yet; it is the agreed target for review.
+> **Status: core shipped.** The `domains/` documents, the `domain:` reference with
+> load-time merge, the constraint catalog, and the lint family are implemented (user-facing
+> docs in [declarative-validation.md](declarative-validation.md#field-domains)). Remaining
+> slices: OpenAPI named-component emission, scaffolder domain generation from column metadata,
+> and Studio surfacing.
 
 A **field domain** is a named, application-level definition of a business field — its type,
 constraints, format, and data classification — declared once and referenced from any route's

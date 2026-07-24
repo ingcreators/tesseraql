@@ -553,6 +553,71 @@ public final class AppLinter {
         lintMtlsConfig(appHome, manifest, config, findings);
         lintOidcConfig(config, findings);
         lintSecurityDefaults(appHome, manifest, config, findings);
+        lintFieldDomains(appHome, manifest, findings);
+    }
+
+    /**
+     * Lints field domains (docs/field-domains.md): a route override that loosens a domain
+     * constraint is exactly the drift domains exist to prevent, and a domain nothing references
+     * is either dead or a missed reference. Duplicate names, unknown references, and operational
+     * keys inside a domain already failed the manifest load (TQL-FIELD-4600..4603).
+     */
+    private void lintFieldDomains(Path appHome, AppManifest manifest,
+            List<LintFinding> findings) {
+        io.tesseraql.yaml.domain.FieldDomains domains = io.tesseraql.yaml.domain.FieldDomains
+                .load(appHome);
+        if (domains.isEmpty()) {
+            return;
+        }
+        Set<String> referenced = new HashSet<>();
+        for (RouteFile route : manifest.routes()) {
+            String source = appHome.relativize(route.source()).toString();
+            route.definition().input().forEach((name, field) -> {
+                if (field.domain() == null) {
+                    return;
+                }
+                referenced.add(field.domain());
+                InputField domain = domains.domains().get(field.domain());
+                if (domain == null) {
+                    return;
+                }
+                loosened(name, field, domain).forEach(what -> findings.add(new LintFinding(
+                        "TQL-FIELD-4610", "warning", source,
+                        "Field '" + name + "' loosens domain '" + field.domain() + "': " + what
+                                + " — a loosened copy is the drift domains exist to prevent")));
+            });
+        }
+        domains.domains().keySet().stream()
+                .filter(name -> !referenced.contains(name))
+                .forEach(name -> findings.add(new LintFinding("TQL-FIELD-4611", "warning",
+                        "domains",
+                        "Domain '" + name + "' is declared but never referenced")));
+    }
+
+    /** The ways the merged field is looser than its domain, as human-readable clauses. */
+    private static List<String> loosened(String name, InputField merged, InputField domain) {
+        List<String> ways = new ArrayList<>();
+        if (domain.maxLength() != null && merged.maxLength() != null
+                && merged.maxLength() > domain.maxLength()) {
+            ways.add("maxLength " + merged.maxLength() + " > " + domain.maxLength());
+        }
+        if (domain.minLength() != null && merged.minLength() != null
+                && merged.minLength() < domain.minLength()) {
+            ways.add("minLength " + merged.minLength() + " < " + domain.minLength());
+        }
+        if (domain.min() != null && merged.min() != null
+                && merged.min().compareTo(domain.min()) < 0) {
+            ways.add("min " + merged.min() + " < " + domain.min());
+        }
+        if (domain.max() != null && merged.max() != null
+                && merged.max().compareTo(domain.max()) > 0) {
+            ways.add("max " + merged.max() + " > " + domain.max());
+        }
+        if (domain.enumValues() != null && merged.enumValues() != null
+                && !domain.enumValues().containsAll(merged.enumValues())) {
+            ways.add("enum adds values outside the domain's set");
+        }
+        return ways;
     }
 
     /**

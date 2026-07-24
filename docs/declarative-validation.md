@@ -50,6 +50,59 @@ input:
   `minimum`/`maximum`, `format: email|uuid|uri`, enums) — the contract and the
   enforcement are one declaration.
 
+## Field domains
+
+The same business field crosses many operations, and restating "an SKU is an uppercase code of at
+most 40 characters" in every route invites drift. A **field domain** declares the field once,
+app-wide, under `domains/`; routes reference it and state only what is operational:
+
+```yaml
+# domains/catalog.yml
+version: tesseraql/v1
+domains:
+  sku:
+    type: string
+    maxLength: 40
+    pattern: "[A-Z0-9-]+"
+  email:
+    type: string
+    format: email
+    maxLength: 254
+    classification: personal
+    mask: fixed
+```
+
+```yaml
+# web/products/adjust/post.yml
+input:
+  sku: { domain: sku, required: true }
+```
+
+The line between the two is enforced, not conventional: a domain may carry the field itself
+(`type`, bounds, `pattern`, `format`, `enum`, `items`, `classification`, `mask`), and is rejected
+if it declares the operational keys (`required`, `requiredWhen`, `default`, `writable` —
+`TQL-FIELD-4602`), so a domain can never silently make a field mandatory across the application.
+A route may restate a domain key to specialize it; tightening is silent, loosening draws lint
+`TQL-FIELD-4610`. Unknown references fail the load (`TQL-FIELD-4601`), duplicate names across
+files fail the load (`TQL-FIELD-4600`), and a domain nothing references is flagged
+(`TQL-FIELD-4611`).
+
+Resolution happens when the app manifest loads: routes carry fully-populated fields afterwards,
+so binding, this page's error model, OpenAPI emission, and validation coverage are unchanged.
+
+A domains document may also carry the app-level **constraint catalog** — database constraint
+names mapped once instead of per route:
+
+```yaml
+constraints:
+  uq_products_sku:
+    field: sku
+    code: duplicate
+```
+
+Every route inherits the catalog; a route-local `errors.constraints` entry overrides the
+catalog's mapping by name. One rename in a migration is one edit in one file.
+
 ## The validate block
 
 ```yaml

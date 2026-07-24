@@ -69,6 +69,59 @@ public final class SimpleYamlParser {
         }
     }
 
+    /** The keys a field domain may carry (docs/field-domains.md): the field itself, never the
+     * operation's use of it. */
+    private static final java.util.Set<String> DOMAIN_KEYS = java.util.Set.of("type", "min",
+            "max", "minLength", "maxLength", "pattern", "format", "enum", "items",
+            "classification", "mask");
+
+    private static final TqlErrorCode DOMAIN_OPERATIONAL_KEY = new TqlErrorCode(
+            io.tesseraql.core.error.TqlDomain.FIELD, 4602);
+    private static final TqlErrorCode DOMAIN_MALFORMED = new TqlErrorCode(
+            io.tesseraql.core.error.TqlDomain.FIELD, 4603);
+
+    /**
+     * Parses one {@code domains/*.yml} document (docs/field-domains.md) into its declared
+     * domains and constraint-catalog entries, rejecting operational keys inside a domain
+     * ({@code TQL-FIELD-4602}) — a domain describes the field itself; {@code required},
+     * {@code default}, and {@code writable} belong to each route's use of it.
+     */
+    public io.tesseraql.yaml.model.DomainsDocument parseDomains(Path file) {
+        com.fasterxml.jackson.databind.JsonNode tree;
+        try {
+            tree = mapper.readTree(readFile(file));
+        } catch (IOException | RuntimeException ex) {
+            throw schemaError("domains", file.toString(), ex);
+        }
+        if (tree == null || !tree.isObject()) {
+            throw new TqlException(DOMAIN_MALFORMED,
+                    "Domains document " + file + " must be a map");
+        }
+        if (!EXPECTED_VERSION.equals(tree.path("version").asText(null))) {
+            throw new TqlException(DOMAIN_MALFORMED, "Domains document " + file
+                    + " must declare version: " + EXPECTED_VERSION);
+        }
+        java.util.Map<String, io.tesseraql.yaml.model.InputField> domains = new java.util.LinkedHashMap<>();
+        for (var entry : tree.path("domains").properties()) {
+            for (String key : (Iterable<String>) () -> entry.getValue().fieldNames()) {
+                if (!DOMAIN_KEYS.contains(key)) {
+                    throw new TqlException(DOMAIN_OPERATIONAL_KEY, "Domain '" + entry.getKey()
+                            + "' (" + file + ") declares '" + key + "' — a domain describes the"
+                            + " field itself; required/default/writable belong to each route's"
+                            + " use of it");
+                }
+            }
+            domains.put(entry.getKey(), mapper.convertValue(entry.getValue(),
+                    io.tesseraql.yaml.model.InputField.class));
+        }
+        java.util.Map<String, io.tesseraql.yaml.model.ErrorsSpec.ConstraintMapping> constraints = new java.util.LinkedHashMap<>();
+        for (var entry : tree.path("constraints").properties()) {
+            constraints.put(entry.getKey(), mapper.convertValue(entry.getValue(),
+                    io.tesseraql.yaml.model.ErrorsSpec.ConstraintMapping.class));
+        }
+        return new io.tesseraql.yaml.model.DomainsDocument(domains, constraints);
+    }
+
     /** Parses a job YAML file. */
     public JobDefinition parseJob(Path file) {
         String content = readFile(file);
