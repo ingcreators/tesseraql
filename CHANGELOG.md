@@ -53,6 +53,10 @@ All notable changes to TesseraQL are documented here. The format follows
   shared `sku` domain that had already drifted across its two write routes (only one carried the
   pattern).
 
+- **`TQL-SEC-4137` scopes to SQL-file params**: the ambient-spelling nudge no longer fires on
+  `sql.service:` invocations — service params are the service's arguments, not SQL binds (the
+  bundled Studio/account apps wire `principal.*` into services exactly this way, by design).
+
 ### Changed
 
 - **The gallery apps rely on the default response headers**: all five example apps declare
