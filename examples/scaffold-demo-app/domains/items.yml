@@ -1,0 +1,30 @@
+# tesseraql-scaffold-checksum: sha256:89beb50b13bf0db5aaf59e46a878e778aa36c8d1bc2719bae306e88bfdd17c39
+# Scaffolded field domains for the items table (tesseraql scaffold crud --table items):
+# every route's input: references these, so the DDL-derived knowledge lives once
+# (docs/field-domains.md). Route-operational keys (required) stay in the routes.
+version: tesseraql/v1
+
+domains:
+  items.id:
+    type: integer
+  items.version:
+    type: integer
+  items.name:
+    type: string
+    maxLength: 200
+  items.quantity:
+    type: integer
+  items.unitPrice:
+    type: number
+  items.dueDate:
+    type: date
+    format: yyyy-MM-dd
+  items.active:
+    type: boolean
+  items.note:
+    type: string
+    maxLength: 1000
+
+constraints:
+  uq_items_name:
+    field: name

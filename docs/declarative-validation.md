@@ -90,6 +90,10 @@ files fail the load (`TQL-FIELD-4600`), and a domain nothing references is flagg
 Resolution happens when the app manifest loads: routes carry fully-populated fields afterwards,
 so binding, this page's error model, OpenAPI emission, and validation coverage are unchanged.
 
+The CRUD scaffolder generates `domains/<table>.yml` from column metadata (VARCHAR size →
+`maxLength`, temporal parse formats) and routes that reference it — re-scaffolding after a
+schema change updates the domains file, not every route.
+
 A domains document may also carry the app-level **constraint catalog** — database constraint
 names mapped once instead of per route:
 

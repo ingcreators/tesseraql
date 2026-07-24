@@ -82,6 +82,8 @@ public final class CrudScaffolder {
                         + " key to scaffold (composite or missing keys are not supported)"));
         Names names = new Names(table, pk);
         List<ScaffoldedFile> files = new ArrayList<>();
+        files.add(new ScaffoldedFile("domains/" + names.table() + ".yml",
+                domainsFile(table, names)));
         files.add(new ScaffoldedFile(names.dir() + "/get.yml", listRoute(table, names)));
         files.add(new ScaffoldedFile(names.dir() + "/list.view.yml", listView(table, names)));
         files.add(new ScaffoldedFile(names.dir() + "/search.sql", searchSql(table, names)));
@@ -425,7 +427,7 @@ public final class CrudScaffolder {
                 recipe: command-json
 
                 """.formatted(names.table(), names.entity()));
-        route.append(inputBlock(formColumns(table, names)));
+        route.append(inputBlock(names, formColumns(table, names)));
         route.append("""
 
                 inputPolicy:
@@ -436,7 +438,6 @@ public final class CrudScaffolder {
                   policy: app.write
                   csrf: true
                 """);
-        route.append(constraintsBlock(table));
         if (generatedKey) {
             route.append("""
 
@@ -530,7 +531,7 @@ public final class CrudScaffolder {
                   html:
                     view: edit.view.yml
                 %s""".formatted(names.table(), names.entity(),
-                inputBlock(List.of(names.pk())) + "\n", names.pkField(), names.pkField(),
+                inputBlock(names, List.of(names.pk())) + "\n", names.pkField(), names.pkField(),
                 cspHeaders());
     }
 
@@ -600,7 +601,7 @@ public final class CrudScaffolder {
         }
         inputs.addAll(formColumns(table, names));
         table.versionColumn().ifPresent(inputs::add);
-        route.append(inputBlock(inputs));
+        route.append(inputBlock(names, inputs));
         route.append("""
 
                 inputPolicy:
@@ -611,7 +612,6 @@ public final class CrudScaffolder {
                   policy: app.write
                   csrf: true
                 """);
-        route.append(constraintsBlock(table));
         route.append("""
 
                 sql:
@@ -688,7 +688,7 @@ public final class CrudScaffolder {
         List<TableSchema.Column> inputs = new ArrayList<>();
         inputs.add(names.pk());
         table.versionColumn().ifPresent(inputs::add);
-        route.append(inputBlock(inputs));
+        route.append(inputBlock(names, inputs));
         route.append("""
 
                 inputPolicy:
@@ -804,25 +804,67 @@ public final class CrudScaffolder {
         return columns;
     }
 
-    private static String inputBlock(List<TableSchema.Column> columns) {
+    /**
+     * Route inputs reference the table's scaffolded field domains (docs/field-domains.md) and
+     * state only the operational choice — whether this operation requires the field. The field
+     * itself (type, size, parse format) lives once in {@code domains/<table>.yml}, so a schema
+     * change re-scaffolds one file, not every route.
+     */
+    private static String inputBlock(Names names, List<TableSchema.Column> columns) {
         StringBuilder input = new StringBuilder("input:\n");
         for (TableSchema.Column column : columns) {
             input.append("  ").append(Names.field(column)).append(":\n");
-            input.append("    type: ").append(column.inputType()).append('\n');
+            input.append("    domain: ").append(names.table()).append('.')
+                    .append(Names.field(column)).append('\n');
             if (!column.nullable()) {
                 input.append("    required: true\n");
             }
+        }
+        return input.toString();
+    }
+
+    /**
+     * The table's field domains and constraint catalog: the DDL-derived knowledge, declared once
+     * (docs/field-domains.md). Re-scaffolding after a schema change updates this file; the
+     * routes referencing the domains stay untouched.
+     */
+    private static String domainsFile(TableSchema table, Names names) {
+        StringBuilder yml = new StringBuilder();
+        yml.append("""
+                # Scaffolded field domains for the %s table (tesseraql scaffold crud --table %s):
+                # every route's input: references these, so the DDL-derived knowledge lives once
+                # (docs/field-domains.md). Route-operational keys (required) stay in the routes.
+                version: tesseraql/v1
+
+                domains:
+                """.formatted(names.table(), names.table()));
+        java.util.LinkedHashSet<TableSchema.Column> columns = new java.util.LinkedHashSet<>();
+        columns.add(names.pk());
+        table.versionColumn().ifPresent(columns::add);
+        columns.addAll(table.dataColumns());
+        for (TableSchema.Column column : columns) {
+            yml.append("  ").append(names.table()).append('.').append(Names.field(column))
+                    .append(":\n");
+            yml.append("    type: ").append(column.inputType()).append('\n');
             if (column.isCharacter() && column.size() > 0) {
-                input.append("    maxLength: ").append(column.size()).append('\n');
+                yml.append("    maxLength: ").append(column.size()).append('\n');
             }
             switch (column.inputType()) {
-                case "date" -> input.append("    format: yyyy-MM-dd\n");
-                case "datetime" -> input.append("    format: \"yyyy-MM-dd'T'HH:mm\"\n");
+                case "date" -> yml.append("    format: yyyy-MM-dd\n");
+                case "datetime" -> yml.append("    format: \"yyyy-MM-dd'T'HH:mm\"\n");
                 default -> {
                 }
             }
         }
-        return input.toString();
+        if (!table.uniqueIndexes().isEmpty()) {
+            yml.append("\nconstraints:\n");
+            table.uniqueIndexes().forEach((index, column) -> {
+                yml.append("  ").append(index.toLowerCase(Locale.ROOT)).append(":\n");
+                yml.append("    field: ")
+                        .append(Names.camel(column.toLowerCase(Locale.ROOT))).append('\n');
+            });
+        }
+        return yml.toString();
     }
 
     /**
@@ -836,20 +878,6 @@ public final class CrudScaffolder {
                     .append(Names.field(column)).append('\n');
         }
         return params.toString();
-    }
-
-    /** Maps single-column unique indexes to field-level constraint errors (Phase 18). */
-    private static String constraintsBlock(TableSchema table) {
-        if (table.uniqueIndexes().isEmpty()) {
-            return "";
-        }
-        StringBuilder errors = new StringBuilder("\nerrors:\n  constraints:\n");
-        table.uniqueIndexes().forEach((index, column) -> {
-            errors.append("    ").append(index.toLowerCase(Locale.ROOT)).append(":\n");
-            errors.append("      field: ")
-                    .append(Names.camel(column.toLowerCase(Locale.ROOT))).append('\n');
-        });
-        return errors.toString();
     }
 
     private static String auditBind(TableSchema.Column column) {
