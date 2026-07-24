@@ -159,11 +159,13 @@ meta-characters (quotes, `;`, comment markers, control characters) with `TQL-SQL
 the `enum` allowlist is the real guarantee. See the worked sortable-list example in
 [transactional-writes.md](transactional-writes.md).
 
-## Audit binds
+## Ambient binds
 
-In command routes, `/* audit.user */` and `/* audit.now */` are always available without being
-declared: the caller's identity (login id, falling back to the subject) and a single clock
-reading per command, so every statement in one transaction stamps the same instant:
+Two bind namespaces resolve from the request context without being declared under `params:`.
+
+**Audit binds** — in command routes, `/* audit.user */` and `/* audit.now */` carry the caller's
+identity (login id, falling back to the subject) and a single clock reading per command, so every
+statement in one transaction stamps the same instant:
 
 ```sql
 update orders
@@ -173,8 +175,28 @@ set status = /* status */'APPROVED',
 where id = /* id */1
 ```
 
-Audit columns stay explicit in the SQL — nothing is injected behind the template's back. The
-bind name `audit` is reserved; declaring it under `params:` fails at route build time.
+**Principal binds** — in any authenticated statement (query, command step, named query, or
+validation SQL), the `principal.*` namespace binds the authenticated caller directly, replacing
+the `actor: principal.loginId` / `tenantId: principal.tenantId` wiring that would otherwise be
+restated per route:
+
+```sql
+select sku, qty
+from   products
+where  tenant_id = /* principal.tenantId */'t-demo'
+```
+
+The namespace is **closed and read-only**: exactly `subject`, `loginId`, `tenantId`, `roles`,
+`permissions`, and `groups` resolve (the list namespaces bind as IN-lists like any declared list
+parameter). There is no raw-claim passthrough — a claim goes through explicit `params:` wiring
+where it is visible and reviewable. `audit.user` remains the blessed spelling in write
+statements' audit columns.
+
+Everything stays explicit in the SQL — nothing is injected behind the template's back. The bind
+name `audit` is reserved (declaring it under `params:` fails at route build time); a declared
+parameter named `principal` shadows the ambient namespace entirely, so explicit wiring always
+wins. A route without an authenticated principal seeds nothing: a `principal.*` bind on a public
+route fails loudly as an unbound parameter instead of binding null.
 
 ## The scope directive
 

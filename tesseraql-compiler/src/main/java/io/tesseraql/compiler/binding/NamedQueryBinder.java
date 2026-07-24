@@ -32,6 +32,8 @@ public final class NamedQueryBinder implements Processor {
         Map<String, Object> params = new LinkedHashMap<>();
         binding.params().forEach((bindName, sourceExpr) -> params.put(bindName,
                 evaluation.resolve(Arrays.asList(sourceExpr.split("\\.")))));
+        // Ambient principal.* binds (docs/ambient-params.md); declared params win by name.
+        io.tesseraql.core.sql.AmbientBinds.seed(params, evaluation);
         exchange.setProperty(TesseraqlProperties.SQL_PARAMS, params);
     }
 }

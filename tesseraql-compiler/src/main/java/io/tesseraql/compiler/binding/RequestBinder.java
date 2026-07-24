@@ -255,6 +255,8 @@ public final class RequestBinder implements Processor {
             route.sql().params().forEach((bindName, sourceExpr) -> sqlParams.put(bindName,
                     evaluation.resolve(Arrays.asList(sourceExpr.split("\\.")))));
         }
+        // Ambient principal.* binds (docs/ambient-params.md); declared params win by name.
+        io.tesseraql.core.sql.AmbientBinds.seed(sqlParams, evaluation);
         return sqlParams;
     }
 }
