@@ -1,21 +1,26 @@
 # Camel component guard
 
-> **Status: design.** This document precedes implementation. It resolves the fate of the
-> `tesseraql.camel.components` config block, which the scaffolder emits and two gallery apps
-> carry but **no framework code reads** — the same emitted-but-dead shape the retired
-> kind-keyed `security.defaults` was ([route-defaults.md](route-defaults.md)), rediscovered by
-> the [config consumer audit](config-consumers.md).
+> **Status: shipped.** `ComponentPolicy` (baseline + narrowing config) is enforced at
+> registration time by `ComponentGuard` via the context lifecycle strategy; a refused component
+> fails boot with `TQL-SEC-4138`, re-allow attempts are linted (`TQL-SEC-4139`), and the
+> framework floor is the `FRAMEWORK_FLOOR` set plus the `tesseraql-*` namespace, drift-checked
+> by the runtime integration suites (the guard immediately caught the floor missing
+> `tesseraql-iam` during implementation). The `bean` open question resolved empirically: the
+> full IT suite passes with it baseline-denied. A poll-triggered job's declared `source:` (sftp/ftp/…) is the app's
+> structured component intent, so a narrowing `allowed:` list never restates it — the deny
+> sets still win, so a job cannot resurrect a baseline-denied component (the sftp poll suite
+> caught this interplay during implementation). The scaffold now emits guidance instead of the
+> dead lists. User-facing docs: security-hardening.md "Camel component guard".
 
 The scaffolder writes an allow/deny list into every new app:
 
 ```yaml
 tesseraql:
-  runtime:
-    camel:
-      components:
-        allowed: [direct, platform-http, timer, quartz, file, log,
-                  tesseraql-sql, tesseraql-auth, tesseraql-html, smtp]
-        denied: [exec, script, groovy, class]
+  camel:
+    components:
+      allowed: [direct, platform-http, timer, quartz, file, log,
+                tesseraql-sql, tesseraql-auth, tesseraql-html, smtp]
+      denied: [exec, script, groovy, class]
 ```
 
 Nothing consumes it. A security control that exists only as YAML is worse than none: it
