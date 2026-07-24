@@ -16,6 +16,14 @@ All notable changes to TesseraQL are documented here. The format follows
   writes. Resolution happens at manifest load, so the compiler, linter, coverage, and Studio all
   see effective values. A malformed rule fails the load (`TQL-SEC-4132`).
 
+- **Ambient `principal.*` SQL binds** (docs/two-way-sql.md "Ambient binds"): queries, command
+  steps, named queries, and validation SQL can bind the authenticated caller directly —
+  `/* principal.loginId */`, `/* principal.tenantId */`, `/* principal.roles */` — without
+  per-route `params:` wiring, generalizing the `audit.*` precedent. The namespace is closed
+  (subject, loginId, tenantId, roles, permissions, groups; no raw-claim passthrough), a declared
+  parameter named `principal` shadows it entirely, and a public route seeds nothing so a
+  `principal.*` bind fails loudly as an unbound parameter.
+
 ### Changed
 
 - **Retired the kind-keyed `security.defaults.api`/`htmx` config shape** — it was emitted by the

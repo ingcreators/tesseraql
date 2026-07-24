@@ -1,7 +1,10 @@
 # Ambient parameters
 
-> **Status: design.** This document precedes implementation. Nothing described here is part of
-> the released YAML surface yet; it is the agreed target for review.
+> **Status: core shipped.** The `principal.*` ambient bind namespace is implemented across
+> query, command-step, named-query, and validation-SQL parameter resolution (user-facing docs in
+> [two-way-sql.md](two-way-sql.md#ambient-binds)). Remaining slices: the gallery migration off
+> the hand-written `params:` wiring (which the integration suites then exercise end-to-end) and
+> the public-route lint.
 
 An **ambient parameter** is a SQL bind resolved from the authenticated request context rather
 than from per-route `params:` wiring. TesseraQL already has two ambient families: the canonical

@@ -648,6 +648,9 @@ public final class TransactionalCommandProcessor implements Processor {
         Map<String, Object> params = new LinkedHashMap<>();
         step.params().forEach((bindName, sourceExpr) -> params.put(bindName,
                 evaluation.resolve(Arrays.asList(sourceExpr.split("\\.")))));
+        // Ambient principal.* binds (docs/ambient-params.md); declared params win by name,
+        // and the audit namespace stays reserved.
+        io.tesseraql.core.sql.AmbientBinds.seed(params, evaluation);
         params.put(AUDIT, audit);
         BoundSql bound = SqlRenderer.render(step.nodes(), params);
 
