@@ -106,4 +106,7 @@ export const EXCLUDED = [
   'field-domains.md',
   'route-defaults.md',
   'ambient-params.md',
+  'component-guard.md',
+  'config-consumers.md',
+  'validation-rule-sets.md',
 ];
