@@ -47,6 +47,7 @@ public final class RouteCompiler {
     private static final long DEFAULT_IDEMPOTENCY_TTL = java.time.Duration.ofHours(24).toMillis();
 
     private AppConfig config;
+    private io.tesseraql.yaml.config.ResponseHeaderDefaults responseHeaders;
     private AppManifest manifest;
     private java.nio.file.Path compiledAppHome;
     private io.tesseraql.compiler.binding.TenancySettings tenancy;
@@ -82,6 +83,7 @@ public final class RouteCompiler {
         this.manifest = manifest;
         this.compiledAppHome = manifest.appHome();
         this.tenancy = io.tesseraql.compiler.binding.TenancySettings.from(config);
+        this.responseHeaders = io.tesseraql.yaml.config.ResponseHeaderDefaults.from(config);
         this.i18n = io.tesseraql.yaml.i18n.I18nSettings.from(config, manifest.appHome());
         this.mountRest = mountRest;
         if (this.appName == null) {
@@ -809,8 +811,8 @@ public final class RouteCompiler {
                             ? io.tesseraql.compiler.binding.ViewBinding.of(appHome, routeDir,
                                     html.view(), routeFile.definition(), this::postRouteByPath)
                             : null;
-            route.process(new HtmlResponseRenderer(html, appHome, routeDir,
-                    i18n.defaultTag(), viewBinding));
+            route.process(new HtmlResponseRenderer(withDefaultHeaders(html), appHome,
+                    routeDir, i18n.defaultTag(), viewBinding));
         }
         applyHttpCache(route, routeFile.definition());
     }
@@ -999,8 +1001,8 @@ public final class RouteCompiler {
                     .to(executionUri(uiDir, entry.getValue(), entry.getKey(),
                             definition.effectiveDatasource()));
         }
-        step.process(new HtmlResponseRenderer(definition.response().html(), appHome, uiDir,
-                i18n.defaultTag()));
+        step.process(new HtmlResponseRenderer(withDefaultHeaders(definition.response().html()),
+                appHome, uiDir, i18n.defaultTag()));
     }
 
     /** A tool's result renderer: its declared JSON shape, or the raw SQL/command result. */
@@ -1236,6 +1238,19 @@ public final class RouteCompiler {
             return sql.materialize().onOverflow();
         }
         return config.getString("tesseraql.resultMaterialization.onOverflow").orElse("fail");
+    }
+
+    /**
+     * The response with the app-wide default response headers merged under its own
+     * (docs/route-defaults.md): route entries win by name, and a route entry valued
+     * {@code unset} removes the header entirely.
+     */
+    private io.tesseraql.yaml.model.ResponseSpec.HtmlResponse withDefaultHeaders(
+            io.tesseraql.yaml.model.ResponseSpec.HtmlResponse html) {
+        if (html == null) {
+            return null;
+        }
+        return html.withHeaders(responseHeaders.mergeUnder(html.headers()));
     }
 
     /** Inserts authenticate/authorize steps before binding when the route declares security. */
