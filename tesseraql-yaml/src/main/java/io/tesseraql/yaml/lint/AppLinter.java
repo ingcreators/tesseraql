@@ -597,24 +597,30 @@ public final class AppLinter {
         }
     }
 
-    /** Every SQL-bound {@code params:} map of a route, labeled for the finding message. */
+    /**
+     * Every {@code params:} map feeding a 2-way SQL <em>file</em>, labeled for the finding
+     * message. Service invocations ({@code sql.service:}) are excluded: their params are the
+     * service's arguments, not SQL binds, so the ambient namespace does not replace them — the
+     * bundled Studio/account apps wire {@code principal.*} into services exactly this way, by
+     * design.
+     */
     private static Map<String, Map<String, String>> sqlParamMaps(RouteDefinition def) {
         Map<String, Map<String, String>> maps = new LinkedHashMap<>();
-        if (def.sql() != null && def.sql().params() != null) {
+        if (def.sql() != null && def.sql().file() != null && def.sql().params() != null) {
             maps.put("sql.params", def.sql().params());
         }
         def.steps().forEach((name, step) -> {
-            if (step.params() != null) {
+            if (step.file() != null && step.params() != null) {
                 maps.put("step '" + name + "'", step.params());
             }
         });
         def.queries().forEach((name, query) -> {
-            if (query.params() != null) {
+            if (query.file() != null && query.params() != null) {
                 maps.put("query '" + name + "'", query.params());
             }
         });
         def.validate().forEach((name, rule) -> {
-            if (rule.params() != null) {
+            if (rule.file() != null && rule.params() != null) {
                 maps.put("validation rule '" + name + "'", rule.params());
             }
         });

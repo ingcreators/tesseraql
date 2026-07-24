@@ -66,6 +66,34 @@ class AppLinterAmbientPrincipalTest {
     }
 
     @Test
+    void serviceInvocationParamsNeverDrawTheNudge(@TempDir Path dir) throws Exception {
+        Files.createDirectories(dir.resolve("config"));
+        Files.writeString(dir.resolve("config/tesseraql.yml"), "tesseraql:\n  app:\n    name: t\n");
+        Files.createDirectories(dir.resolve("web/api/prefs"));
+        Files.writeString(dir.resolve("web/api/prefs/post.yml"), """
+                version: tesseraql/v1
+                id: prefs.save
+                kind: route
+                recipe: command-json
+                security:
+                  auth: bearer
+                sql:
+                  service: account.app.save
+                  params:
+                    subject: principal.subject
+                response:
+                  json:
+                    body:
+                      ok: "true"
+                """);
+
+        List<LintFinding> findings = new AppLinter().lint(dir);
+
+        // Service params are the service's arguments, not SQL binds.
+        assertThat(findings).noneMatch(f -> f.code().equals("TQL-SEC-4137"));
+    }
+
+    @Test
     void anAuthenticatedAmbientBindLintsClean(@TempDir Path dir) throws Exception {
         List<LintFinding> findings = new AppLinter().lint(app(dir,
                 "security:\n  auth: bearer",

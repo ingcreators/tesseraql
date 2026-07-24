@@ -1,12 +1,13 @@
 # Ambient parameters
 
-> **Status: core shipped.** The `principal.*` ambient bind namespace is implemented across
-> query, command-step, named-query, and validation-SQL parameter resolution (user-facing docs in
-> [two-way-sql.md](two-way-sql.md#ambient-binds)). Remaining slices: the gallery migration off
-> the hand-written `params:` wiring (which the integration suites then exercise end-to-end) and
-> the public-route lint (now shipped: `TQL-SEC-4136`/`4137`). The gallery apps' own trees
-> turned out to carry no migratable SQL principal wiring — the corpus counts live in the bundled
-> Studio/IAM/ops apps, which migrate with their module resources.
+> **Status: shipped; migration slice closed as not-applicable.** The `principal.*` ambient bind
+> namespace is implemented across query, command-step, named-query, and validation-SQL parameter
+> resolution (user-facing docs in [two-way-sql.md](two-way-sql.md#ambient-binds)), with the
+> guard lints `TQL-SEC-4136`/`4137`. The migration survey closed the loop: the gallery apps'
+> own principal expressions are outbox/notify payloads, and the bundled apps' 114 `params:`
+> lines all feed `sql.service:` invocations (Java services), not 2-way SQL binds — both are the
+> legitimate explicit wiring this design deliberately keeps. New SQL simply uses the ambient
+> spelling directly; the `TQL-SEC-4137` nudge covers any future SQL-file rename wiring.
 
 An **ambient parameter** is a SQL bind resolved from the authenticated request context rather
 than from per-route `params:` wiring. TesseraQL already has two ambient families: the canonical
