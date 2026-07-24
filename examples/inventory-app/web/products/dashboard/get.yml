@@ -25,8 +25,3 @@ response:
   html:
     status: 200
     view: dashboard.view.yml
-    headers:
-      Content-Security-Policy: "default-src 'self'; style-src 'self' 'unsafe-inline'; frame-ancestors 'none'"
-      X-Content-Type-Options: nosniff
-      X-Frame-Options: DENY
-      Referrer-Policy: no-referrer

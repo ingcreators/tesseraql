@@ -25,6 +25,7 @@ import io.tesseraql.report.CoverageThresholdResolver;
 import io.tesseraql.report.DriverManagerDataSource;
 import io.tesseraql.studio.StudioService;
 import io.tesseraql.yaml.config.AppConfig;
+import io.tesseraql.yaml.config.ResponseHeaderDefaults;
 import io.tesseraql.yaml.config.SecurityDefaults;
 import io.tesseraql.yaml.lint.AppLinter;
 import io.tesseraql.yaml.lint.LintFinding;
@@ -277,8 +278,8 @@ public final class McpDevTools {
                     try (Connection connection = connect(args, config())) {
                         schema = new TableIntrospector().introspect(connection, table);
                     }
-                    List<ScaffoldedFile> files = new CrudScaffolder(
-                            SecurityDefaults.from(config())).scaffold(schema);
+                    List<ScaffoldedFile> files = new CrudScaffolder(SecurityDefaults.from(config()),
+                            ResponseHeaderDefaults.from(config())).scaffold(schema);
                     ScaffoldWriter.Report report = new ScaffoldWriter().apply(appHome, files,
                             force);
                     return McpToolResult.json(obj(

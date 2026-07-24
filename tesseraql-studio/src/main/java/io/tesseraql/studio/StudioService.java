@@ -11,6 +11,7 @@ import io.tesseraql.core.sql.Sql2WayParser;
 import io.tesseraql.core.sql.SqlRenderer;
 import io.tesseraql.yaml.SimpleYamlParser;
 import io.tesseraql.yaml.config.AppConfig;
+import io.tesseraql.yaml.config.ResponseHeaderDefaults;
 import io.tesseraql.yaml.config.SecurityDefaults;
 import io.tesseraql.yaml.flags.FlagsSpec;
 import io.tesseraql.yaml.i18n.MessageCatalog;
@@ -614,7 +615,8 @@ public final class StudioService {
      * both emit byte-identical files (and match the CLI, which resolves the same config).
      */
     private CrudScaffolder crudScaffolder() {
-        return new CrudScaffolder(SecurityDefaults.from(manifest.config()));
+        return new CrudScaffolder(SecurityDefaults.from(manifest.config()),
+                ResponseHeaderDefaults.from(manifest.config()));
     }
 
     /**

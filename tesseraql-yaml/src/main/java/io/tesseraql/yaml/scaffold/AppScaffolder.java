@@ -243,6 +243,13 @@ public final class AppScaffolder {
                     - match: /**
                       auth: browser
                       csrf: auto
+                # The security header block every HTML response sends
+                # (docs/response-shaping.md "Default response headers").
+                responseHeaders:
+                  Content-Security-Policy: "default-src 'self'; style-src 'self' 'unsafe-inline'; frame-ancestors 'none'"
+                  X-Content-Type-Options: nosniff
+                  X-Frame-Options: DENY
+                  Referrer-Policy: no-referrer
 
                 jwt:
                   secret: ${JWT_SECRET:dev-only-secret-change-me-in-production}
@@ -323,11 +330,6 @@ public final class AppScaffolder {
             response:
               html:
                 template: index.html
-                headers:
-                  Content-Security-Policy: "default-src 'self'; style-src 'self' 'unsafe-inline'; frame-ancestors 'none'"
-                  X-Content-Type-Options: nosniff
-                  X-Frame-Options: DENY
-                  Referrer-Policy: no-referrer
             """;
 
     private static final String HOME_PAGE_HTML = """

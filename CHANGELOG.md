@@ -42,6 +42,12 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Changed
 
+- **The gallery apps rely on the default response headers**: all five example apps declare
+  `security.responseHeaders` and their HTML routes dropped the copy-pasted four-header block
+  (18 files). The `tesseraql new` skeleton declares the block once in config, and the CRUD
+  scaffolder omits per-route headers when the target app declares response-header defaults.
+  The bundled Studio/IAM/ops apps migrate separately with their module resources.
+
 - **The gallery apps rely on the security defaults**: all five example apps declare
   `security.defaults.routes` and their route files stopped restating `auth:`/`csrf:` the
   defaults reproduce (34 files; `policy:` stays route-local). Effective posture is unchanged and

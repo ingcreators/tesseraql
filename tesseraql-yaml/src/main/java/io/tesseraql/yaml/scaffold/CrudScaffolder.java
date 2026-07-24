@@ -3,6 +3,7 @@ package io.tesseraql.yaml.scaffold;
 import io.tesseraql.core.error.TqlDomain;
 import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
+import io.tesseraql.yaml.config.ResponseHeaderDefaults;
 import io.tesseraql.yaml.config.SecurityDefaults;
 import io.tesseraql.yaml.model.SecuritySpec;
 import java.util.ArrayList;
@@ -38,18 +39,21 @@ import java.util.Optional;
 public final class CrudScaffolder {
 
     private final SecurityDefaults securityDefaults;
+    private final ResponseHeaderDefaults responseHeaderDefaults;
 
     /** A scaffolder that spells out every security key (no app config to defer to). */
     public CrudScaffolder() {
-        this(null);
+        this(null, null);
     }
 
     /**
-     * A scaffolder deferring to the target app's declared security defaults where they cover the
-     * generated routes; {@code null} means none.
+     * A scaffolder deferring to the target app's declared security and response-header defaults
+     * where they cover the generated routes; {@code null} means none.
      */
-    public CrudScaffolder(SecurityDefaults securityDefaults) {
+    public CrudScaffolder(SecurityDefaults securityDefaults,
+            ResponseHeaderDefaults responseHeaderDefaults) {
         this.securityDefaults = securityDefaults;
+        this.responseHeaderDefaults = responseHeaderDefaults;
     }
 
     private static final TqlErrorCode UNSUPPORTED_TABLE = new TqlErrorCode(TqlDomain.APP, 5203);
@@ -60,6 +64,16 @@ public final class CrudScaffolder {
                   X-Frame-Options: DENY
                   Referrer-Policy: no-referrer
             """;
+
+    /**
+     * The per-route security header block, or nothing when the app's declared
+     * {@code security.responseHeaders} already sends one app-wide.
+     */
+    private String cspHeaders() {
+        return responseHeaderDefaults != null && !responseHeaderDefaults.isEmpty()
+                ? ""
+                : CSP_HEADERS;
+    }
 
     /** Generates the CRUD file set for the table (paths relative to the app home). */
     public List<ScaffoldedFile> scaffold(TableSchema table) {
@@ -208,7 +222,7 @@ public final class CrudScaffolder {
 
     // ---------------------------------------------------------------- list page
 
-    private static String listRoute(TableSchema table, Names names) {
+    private String listRoute(TableSchema table, Names names) {
         // One route serves the whole list: the search/sort inputs feed the SQL, and the
         // tql/view/list pattern re-renders its own table region over htmx (no fragment route).
         StringBuilder yml = new StringBuilder();
@@ -254,7 +268,7 @@ public final class CrudScaffolder {
                         ? "  q:\n    type: string\n    required: false\n    maxLength: 200\n"
                         : "",
                 sortEnum(table, names), names.pkColumn(),
-                names.searchColumn().isPresent() ? "    q: query.q\n" : "", CSP_HEADERS));
+                names.searchColumn().isPresent() ? "    q: query.q\n" : "", cspHeaders()));
         return yml.toString();
     }
 
@@ -364,7 +378,7 @@ public final class CrudScaffolder {
                         names.entity(), names.entity(), deleteVersion);
     }
 
-    private static String newRoute(Names names) {
+    private String newRoute(Names names) {
         // Browser-authed so the create form's page carries the CSRF meta tag.
         return """
                 # Scaffolded create form page for the %s table.
@@ -380,7 +394,7 @@ public final class CrudScaffolder {
                 response:
                   html:
                     view: new.view.yml
-                %s""".formatted(names.table(), names.entity(), CSP_HEADERS);
+                %s""".formatted(names.table(), names.entity(), cspHeaders());
     }
 
     /** The create form view: every field derives from the create route's input: block. */
@@ -492,7 +506,7 @@ public final class CrudScaffolder {
 
     // ---------------------------------------------------------------- detail / edit
 
-    private static String detailRoute(TableSchema table, Names names) {
+    private String detailRoute(TableSchema table, Names names) {
         // The path parameter is declared as a typed input: raw path values are strings, and the
         // coerced params.* view is what binds cleanly against a typed key column.
         return """
@@ -517,7 +531,7 @@ public final class CrudScaffolder {
                     view: edit.view.yml
                 %s""".formatted(names.table(), names.entity(),
                 inputBlock(List.of(names.pk())) + "\n", names.pkField(), names.pkField(),
-                CSP_HEADERS);
+                cspHeaders());
     }
 
     private static String selectSql(TableSchema table, Names names) {
