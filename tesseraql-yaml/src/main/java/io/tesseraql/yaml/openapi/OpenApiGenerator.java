@@ -36,8 +36,15 @@ public final class OpenApiGenerator {
             "csv", "text/csv; charset=utf-8",
             "excel", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
 
+    /** The app's declared field domains, and the subset the emitted schemas referenced. */
+    private Map<String, InputField> declaredDomains = Map.of();
+    private final Map<String, InputField> referencedDomains = new TreeMap<>();
+
     /** Builds the OpenAPI document tree (deterministically ordered). */
     public Map<String, Object> generate(AppManifest manifest) {
+        declaredDomains = io.tesseraql.yaml.domain.FieldDomains.load(manifest.appHome())
+                .domains();
+        referencedDomains.clear();
         Map<String, Object> doc = new LinkedHashMap<>();
         doc.put("openapi", "3.0.3");
 
@@ -85,7 +92,7 @@ public final class OpenApiGenerator {
             // A path parameter declared under input: carries its typed schema (Phase 40).
             InputField declared = definition.input().get(matcher.group(1));
             parameters.add(parameter(matcher.group(1), "path", true,
-                    declared != null ? fieldSchema(declared) : Map.of("type", "string")));
+                    declared != null ? schemaOrRef(declared) : Map.of("type", "string")));
         }
         // Declarative pagination (roadmap Phase 41): the framework-owned paging parameters
         // and the automatic response headers ride into the contract.
@@ -115,7 +122,7 @@ public final class OpenApiGenerator {
                 || "DELETE".equalsIgnoreCase(route.httpMethod());
         if (queryInputs) {
             new TreeMap<>(definition.input()).forEach((name, field) -> parameters
-                    .add(parameter(name, "query", field.required(), fieldSchema(field))));
+                    .add(parameter(name, "query", field.required(), schemaOrRef(field))));
         }
         if (!parameters.isEmpty()) {
             operation.put("parameters", parameters);
@@ -264,11 +271,11 @@ public final class OpenApiGenerator {
     }
 
     /** A JSON request body whose object schema mirrors the route's declared inputs. */
-    private static Map<String, Object> jsonBody(RouteDefinition definition) {
+    private Map<String, Object> jsonBody(RouteDefinition definition) {
         Map<String, Object> properties = new TreeMap<>();
         List<String> required = new ArrayList<>();
         new TreeMap<>(definition.input()).forEach((name, field) -> {
-            properties.put(name, fieldSchema(field));
+            properties.put(name, schemaOrRef(field));
             if (field.required()) {
                 required.add(name);
             }
@@ -329,6 +336,22 @@ public final class OpenApiGenerator {
     }
 
     /**
+     * The input's schema, or a {@code $ref} to its field domain's named component
+     * (docs/field-domains.md) when the route restates nothing — a route that tightens a domain
+     * key keeps its own inline schema, so the contract never hides an override.
+     */
+    private Map<String, Object> schemaOrRef(InputField field) {
+        if (field.domain() != null) {
+            InputField domain = declaredDomains.get(field.domain());
+            if (domain != null && fieldSchema(domain).equals(fieldSchema(field))) {
+                referencedDomains.put(field.domain(), domain);
+                return ref("domain." + field.domain());
+            }
+        }
+        return fieldSchema(field);
+    }
+
+    /**
      * An input's full parameter/property schema (roadmap Phase 40): the declared constraints
      * ride into the contract — enum, length and value bounds, the regex pattern, and the
      * semantic string formats ({@code url} maps to OpenAPI's {@code uri}). Deterministic key
@@ -371,7 +394,7 @@ public final class OpenApiGenerator {
         };
     }
 
-    private static Map<String, Object> components() {
+    private Map<String, Object> components() {
         Map<String, Object> bearer = new LinkedHashMap<>();
         bearer.put("type", "http");
         bearer.put("scheme", "bearer");
@@ -404,6 +427,10 @@ public final class OpenApiGenerator {
         Map<String, Object> schemas = new TreeMap<>();
         schemas.put("TransferAccepted", ordered("type", "object", "properties", accepted));
         schemas.put("TransferStatus", ordered("type", "object", "properties", statusProperties));
+        // Referenced field domains become named component schemas (docs/field-domains.md), so
+        // one business field is one schema across every operation that accepts it.
+        referencedDomains
+                .forEach((name, domain) -> schemas.put("domain." + name, fieldSchema(domain)));
 
         Map<String, Object> components = new LinkedHashMap<>();
         components.put("securitySchemes", securitySchemes);
