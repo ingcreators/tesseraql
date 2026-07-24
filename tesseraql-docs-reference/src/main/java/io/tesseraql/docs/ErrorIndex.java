@@ -414,7 +414,8 @@ final class ErrorIndex {
      */
     private static final Set<String> INTERNAL_DOCS = Set.of("roadmap.md", "docs-site.md",
             "studio-backlog.md", "hc-briefs.md", "release.md", "build.md",
-            "development-environment.md", "app-developer-distribution.md");
+            "development-environment.md", "app-developer-distribution.md",
+            "field-domains.md", "route-defaults.md", "ambient-params.md");
 
     /**
      * Marks each code with the cookbook pages whose markdown mentions it — every

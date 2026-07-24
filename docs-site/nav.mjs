@@ -102,4 +102,8 @@ export const EXCLUDED = [
   'build.md',
   'development-environment.md',
   'app-developer-distribution.md',
+  // Design documents that precede implementation; published once the feature ships.
+  'field-domains.md',
+  'route-defaults.md',
+  'ambient-params.md',
 ];
