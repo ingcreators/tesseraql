@@ -40,6 +40,11 @@ All notable changes to TesseraQL are documented here. The format follows
   (`TQL-SEC-4133`) and suppressed or wildcard-broadened defaults (`TQL-SEC-4134`); a malformed
   declaration is `TQL-SEC-4135`.
 
+- **Ambient principal lint pair** (docs/ambient-params.md): a `principal.*` bind on a route
+  that never carries an authenticated principal — public, no effective security, or a webhook —
+  is an error (`TQL-SEC-4136`); a `params:` entry that merely renames an ambient field draws a
+  migration nudge toward the ambient spelling (`TQL-SEC-4137`).
+
 ### Changed
 
 - **The gallery apps rely on the default response headers**: all five example apps declare

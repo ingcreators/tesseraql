@@ -555,6 +555,130 @@ public final class AppLinter {
         lintSecurityDefaults(appHome, manifest, config, findings);
         lintFieldDomains(appHome, manifest, findings);
         lintResponseHeaderDefaults(appHome, manifest, config, findings);
+        lintAmbientPrincipal(appHome, manifest, findings);
+    }
+
+    /** The ambient {@code principal.*} bind fields (docs/two-way-sql.md "Ambient binds"). */
+    private static final Pattern AMBIENT_PRINCIPAL = Pattern
+            .compile("principal\\.(subject|loginId|tenantId|roles|permissions|groups)");
+
+    /**
+     * Lints the ambient {@code principal.*} binds (docs/ambient-params.md): a bind on a route
+     * that never carries an authenticated principal — {@code auth: public}, no effective
+     * security at all, or a signature-authenticated webhook — can only fail at runtime as an
+     * unbound parameter, so it is an error here ({@code TQL-SEC-4136}). A {@code params:} entry
+     * that merely renames an ambient field is flagged toward the ambient spelling
+     * ({@code TQL-SEC-4137}) — a migration nudge, not a rule.
+     */
+    private void lintAmbientPrincipal(Path appHome, AppManifest manifest,
+            List<LintFinding> findings) {
+        for (RouteFile route : manifest.routes()) {
+            RouteDefinition def = route.definition();
+            String source = appHome.relativize(route.source()).toString().replace('\\', '/');
+            boolean noPrincipal = "webhook".equals(def.recipe())
+                    || def.security() == null
+                    || "public".equals(def.security().auth());
+            if (noPrincipal) {
+                for (String bind : principalBinds(route)) {
+                    findings.add(new LintFinding("TQL-SEC-4136", "error", source,
+                            "Route '" + def.id() + "' binds '" + bind + "' but never carries an"
+                                    + " authenticated principal — the bind can only fail as an"
+                                    + " unbound parameter at runtime"));
+                }
+            }
+            sqlParamMaps(def).forEach((where, params) -> params.forEach((bindName, expr) -> {
+                if (expr != null && AMBIENT_PRINCIPAL.matcher(expr).matches()) {
+                    findings.add(new LintFinding("TQL-SEC-4137", "warning", source,
+                            "Route '" + def.id() + "' " + where + " wires '" + bindName + ": "
+                                    + expr + "' — the ambient bind /* " + expr + " */ makes the"
+                                    + " wiring unnecessary"));
+                }
+            }));
+        }
+    }
+
+    /** Every SQL-bound {@code params:} map of a route, labeled for the finding message. */
+    private static Map<String, Map<String, String>> sqlParamMaps(RouteDefinition def) {
+        Map<String, Map<String, String>> maps = new LinkedHashMap<>();
+        if (def.sql() != null && def.sql().params() != null) {
+            maps.put("sql.params", def.sql().params());
+        }
+        def.steps().forEach((name, step) -> {
+            if (step.params() != null) {
+                maps.put("step '" + name + "'", step.params());
+            }
+        });
+        def.queries().forEach((name, query) -> {
+            if (query.params() != null) {
+                maps.put("query '" + name + "'", query.params());
+            }
+        });
+        def.validate().forEach((name, rule) -> {
+            if (rule.params() != null) {
+                maps.put("validation rule '" + name + "'", rule.params());
+            }
+        });
+        return maps;
+    }
+
+    /** The distinct {@code principal.*} bind expressions across a route's parseable SQL files. */
+    private Set<String> principalBinds(RouteFile route) {
+        Set<String> found = new LinkedHashSet<>();
+        Path dir = route.source().getParent();
+        List<String> files = new ArrayList<>();
+        RouteDefinition def = route.definition();
+        if (def.sql() != null && def.sql().file() != null) {
+            files.add(def.sql().file());
+        }
+        def.steps().values().forEach(step -> {
+            if (step.file() != null) {
+                files.add(step.file());
+            }
+        });
+        def.queries().values().forEach(query -> {
+            if (query.file() != null) {
+                files.add(query.file());
+            }
+        });
+        def.validate().values().forEach(rule -> {
+            if (rule.file() != null) {
+                files.add(rule.file());
+            }
+        });
+        for (String file : files) {
+            Path sqlFile = dir.resolve(file).normalize();
+            if (!Files.isRegularFile(sqlFile)) {
+                continue;
+            }
+            try {
+                collectPrincipalBinds(Sql2WayParser.parse(Files.readString(sqlFile)), found);
+            } catch (Exception ignored) {
+                // Unparseable SQL is its own lint's concern.
+            }
+        }
+        return found;
+    }
+
+    private static void collectPrincipalBinds(List<SqlNode> nodes, Set<String> found) {
+        for (SqlNode node : nodes) {
+            switch (node) {
+                case SqlNode.Bind bind -> {
+                    if (AMBIENT_PRINCIPAL.matcher(bind.expressionSource().trim()).matches()) {
+                        found.add(bind.expressionSource().trim());
+                    }
+                }
+                case SqlNode.ListBind bind -> {
+                    if (AMBIENT_PRINCIPAL.matcher(bind.expressionSource().trim()).matches()) {
+                        found.add(bind.expressionSource().trim());
+                    }
+                }
+                case SqlNode.If cond -> cond.branches()
+                        .forEach(branch -> collectPrincipalBinds(branch.body(), found));
+                case SqlNode.For loop -> collectPrincipalBinds(loop.body(), found);
+                default -> {
+                }
+            }
+        }
     }
 
     /**

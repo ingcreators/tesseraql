@@ -4,7 +4,9 @@
 > query, command-step, named-query, and validation-SQL parameter resolution (user-facing docs in
 > [two-way-sql.md](two-way-sql.md#ambient-binds)). Remaining slices: the gallery migration off
 > the hand-written `params:` wiring (which the integration suites then exercise end-to-end) and
-> the public-route lint.
+> the public-route lint (now shipped: `TQL-SEC-4136`/`4137`). The gallery apps' own trees
+> turned out to carry no migratable SQL principal wiring — the corpus counts live in the bundled
+> Studio/IAM/ops apps, which migrate with their module resources.
 
 An **ambient parameter** is a SQL bind resolved from the authenticated request context rather
 than from per-route `params:` wiring. TesseraQL already has two ambient families: the canonical
@@ -55,9 +57,11 @@ every existing example and the scaffolder's output.
 2. **Closed, read-only namespace.** Only the fields in the table above resolve. There is no
    expression evaluation inside a bind comment, no `claims.*` passthrough — a raw-claim need goes
    through explicit `params:` wiring where it is visible and reviewable.
-3. **No principal, no compile.** A `principal.*` bind in a route whose effective auth is `public`
-   is a compile-time error (`TQL-PRINCIPAL-*` family; numbers assigned at implementation). The
-   binder never silently binds null for an absent principal.
+3. **No principal, no bind.** A `principal.*` bind in a route that never carries an
+   authenticated principal — `auth: public`, no effective security, or a signature-authenticated
+   webhook — is an error-severity lint (`TQL-SEC-4136`; shipped in the SEC registry rather than
+   a new `TQL-PRINCIPAL-*` family), and the binder seeds nothing without a principal, so the
+   bind fails loudly as an unbound parameter at runtime rather than binding null.
 4. **Explicit wiring still wins.** A route-local `params:` entry with the same SQL parameter name
    shadows the ambient resolution for that statement. `params:` remains the mechanism for
    renames, non-principal values, and anything computed.
@@ -65,8 +69,9 @@ every existing example and the scaffolder's output.
 ## What this replaces, and a nudge
 
 Existing `params:` lines of the form `x: principal.y` keep working; ambient binds make them
-unnecessary rather than invalid. An info-level lint flags a `params:` entry that is a pure rename
-of an ambient field, pointing at the ambient spelling — a migration nudge, not a rule. The
+unnecessary rather than invalid. A warning-level lint (`TQL-SEC-4137`; the linter has two
+severities by design) flags a `params:` entry that is a pure rename of an ambient field, pointing
+at the ambient spelling — a migration nudge, not a rule. The
 scaffolder and the Studio SQL builder emit ambient binds directly; the naming-variant drift
 (`principalRoles:` vs `roles:`) disappears because the SQL names the field itself.
 
