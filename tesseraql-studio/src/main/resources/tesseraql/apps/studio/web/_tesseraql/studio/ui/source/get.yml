@@ -36,6 +36,3 @@ response:
       # backlog A1); its srcdoc inherits this policy, so the rendered output may load same-origin
       # styles only. The empty sandbox runs no script, even though default-src would block it.
       Content-Security-Policy: "default-src 'self'; style-src 'self' 'unsafe-inline'; frame-src 'self' data:; frame-ancestors 'none'"
-      X-Content-Type-Options: nosniff
-      X-Frame-Options: DENY
-      Referrer-Policy: no-referrer

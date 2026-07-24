@@ -1,20 +1,21 @@
 # The bundled account surface (roadmap Phase 48): the signed-in user's profile and
 # self-service settings, served at /_tesseraql/account. Session-only by design.
-web/_tesseraql/account/get.yml
+config/tesseraql.yml
 web/_tesseraql/account/account.html
-web/_tesseraql/account/language/post.yml
+web/_tesseraql/account/app/post.yml
 web/_tesseraql/account/appearance/post.yml
+web/_tesseraql/account/delegation/clear/post.yml
+web/_tesseraql/account/delegation/post.yml
+web/_tesseraql/account/get.yml
+web/_tesseraql/account/language/post.yml
 web/_tesseraql/account/notifications/post.yml
 web/_tesseraql/account/password/post.yml
-web/_tesseraql/account/app/post.yml
-web/_tesseraql/inbox/get.yml
-web/_tesseraql/inbox/inbox.html
-web/_tesseraql/inbox/read/post.yml
-web/_tesseraql/inbox/read-all/post.yml
+web/_tesseraql/account/pins/toggle/post.yml
+web/_tesseraql/account/shortcuts/remove/post.yml
 web/_tesseraql/account/totp/begin/post.yml
 web/_tesseraql/account/totp/confirm/post.yml
 web/_tesseraql/account/totp/disable/post.yml
-web/_tesseraql/account/delegation/post.yml
-web/_tesseraql/account/delegation/clear/post.yml
-web/_tesseraql/account/pins/toggle/post.yml
-web/_tesseraql/account/shortcuts/remove/post.yml
+web/_tesseraql/inbox/get.yml
+web/_tesseraql/inbox/inbox.html
+web/_tesseraql/inbox/read-all/post.yml
+web/_tesseraql/inbox/read/post.yml

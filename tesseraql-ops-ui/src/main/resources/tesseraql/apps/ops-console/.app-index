@@ -1,12 +1,13 @@
-# Operations console app (design ch. 26.11): served by the runtime as a mounted system app.
 # Each route folder is the complete unit: yml + colocated template.
+# Operations console app (design ch. 26.11): served by the runtime as a mounted system app.
+config/tesseraql.yml
+web/_tesseraql/ops/console/executions/{id}/execution.html
+web/_tesseraql/ops/console/executions/{id}/get.yml
 web/_tesseraql/ops/console/get.yml
+web/_tesseraql/ops/console/outbox/get.yml
+web/_tesseraql/ops/console/outbox/outbox.html
 web/_tesseraql/ops/console/overview.html
 web/_tesseraql/ops/console/traces/get.yml
 web/_tesseraql/ops/console/traces/traces.html
 web/_tesseraql/ops/console/transfers/get.yml
 web/_tesseraql/ops/console/transfers/transfers.html
-web/_tesseraql/ops/console/outbox/get.yml
-web/_tesseraql/ops/console/outbox/outbox.html
-web/_tesseraql/ops/console/executions/{id}/get.yml
-web/_tesseraql/ops/console/executions/{id}/execution.html
