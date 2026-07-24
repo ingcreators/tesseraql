@@ -185,21 +185,15 @@ public final class AppScaffolder {
                 home: ${TESSERAQL_APP_HOME:.}
                 work: ${TESSERAQL_WORK_HOME:${TESSERAQL_APP_HOME}/work}
 
-              runtime:
-                engine: camel
-                profile: ${TESSERAQL_PROFILE:local}
-
-              java:
-                baseline: 21
-                compatibility:
-                  - 25
+              # Environment profiles overlay this file from config/env/<profile>.yml, selected
+              # by TESSERAQL_ENV (or -Dtesseraql.env) — see docs/deployment.md.
 
               datasources:
                 main:
-                  type: hikari
                   jdbcUrl: ${db.main.url}
                   username: ${db.main.username}
                   password: ${db.main.password}
+                  maximumPoolSize: ${db.main.maximumPoolSize:10}
 
               identity:
                 defaultRealm: local

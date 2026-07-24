@@ -1,6 +1,10 @@
 # Scaffolded-config consumer audit
 
-> **Status: design, with the initial audit executed (2026-07-24).** This document defines the
+> **Status: dispositions landing.** The retire set is shipped (the scaffold no longer emits
+> `runtime.engine`, `runtime.profile`, `java.baseline/compatibility`, or
+> `datasources.main.type`, and the gallery configs are cleaned), and `db.main.maximumPoolSize`
+> is wired through to the pool. Remaining: the `app.work` resolver, the component guard
+> ([component-guard.md](component-guard.md)), and the drift test. This document defines the
 > guard that makes "emitted but never read" configuration unrepresentable, and records the
 > audit that motivated it. Two prior instances shipped and were caught late — the kind-keyed
 > `security.defaults` ([route-defaults.md](route-defaults.md)) and

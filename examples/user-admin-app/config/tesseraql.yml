@@ -4,15 +4,6 @@ tesseraql:
     home: ${TESSERAQL_APP_HOME:.}
     work: ${TESSERAQL_WORK_HOME:${TESSERAQL_APP_HOME}/work}
 
-  runtime:
-    engine: camel
-    profile: ${TESSERAQL_PROFILE:local}
-
-  java:
-    baseline: 21
-    compatibility:
-      - 25
-
   # Phase 22 internationalization: the app serves English and Japanese. The request locale
   # resolves from the ?lang= query parameter (handy for a language toggle), then the signed-in
   # user's locale claim, then Accept-Language, then the default. Catalogs live in
@@ -26,10 +17,10 @@ tesseraql:
 
   datasources:
     main:
-      type: hikari
       jdbcUrl: ${db.main.url}
       username: ${db.main.username}
       password: ${db.main.password}
+      maximumPoolSize: ${db.main.maximumPoolSize:10}
 
   # Phase 20 notification channels: notify: declarations reference these by name.
   # Credentials would ride the SecretResolver SPI (${secret.env.SMTP_PASSWORD}); the local

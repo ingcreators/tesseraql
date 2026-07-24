@@ -81,6 +81,15 @@ All notable changes to TesseraQL are documented here. The format follows
   tightening keys); and the validation builder points single-field constraints at domains
   before a cross-field rule is written.
 
+- **Dead scaffolded config retired; pool size wired** (docs/config-consumers.md): the
+  `tesseraql new` skeleton no longer emits `runtime.engine`, `runtime.profile`
+  (`TESSERAQL_PROFILE` was a misleading twin of the real `TESSERAQL_ENV` +
+  `config/env/<profile>.yml` overlay mechanism, which the template now points at),
+  `java.baseline/compatibility`, or the inert `datasources.main.type` — none had a consumer.
+  `db.main.maximumPoolSize` now actually reaches the connection pool (the scaffold maps it
+  into `datasources.main.maximumPoolSize`, the key `DataSources` reads); previously the value
+  was silently ignored. Gallery configs cleaned to match.
+
 ### Changed
 
 - **The gallery apps rely on the default response headers**: all five example apps declare
