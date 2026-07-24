@@ -9,7 +9,8 @@
 > off the per-route header blocks — a mounted app declares its block once in its own
 > `config/tesseraql.yml`, the one key the mount honors (SystemApps whitelist), so a host config
 > can neither weaken nor restyle a bundled app's pages while third-party apps stay unable to
-> touch host datasources or policies.
+> touch host datasources or policies. One planned slice remains: the bundled apps adopting
+> `security.defaults.routes` for their own `auth:` lines (below).
 
 **Route defaults** let the application declare, once in `config/tesseraql.yml`, the per-route
 settings that are the same for every route of a kind — and let route files state only what
@@ -106,6 +107,24 @@ Merge rules, per header name:
 The scaffolder stops pasting the four-header block into routes and emits the
 `security.responseHeaders` default once per app. Hardening the whole app becomes a one-line
 config edit.
+
+## Planned: bundled apps adopt the security defaults
+
+The response-header migration gave every bundled app its own `config/tesseraql.yml`, and the
+mount resolves **security defaults from that config**: `SystemApps` loads each mounted app with
+the standard `ManifestLoader` *before* swapping in the host config, so
+`security.defaults.routes` declared by a bundled app already applies to its own routes today —
+no new mechanism. (This is deliberately different from response headers, which merge at compile
+time from the swapped-in config and therefore needed the one-key whitelist graft.)
+
+The remaining migration mirrors the gallery's (#407): the bundled apps' route files still carry
+their `auth:` lines — measured across module resources: Studio ×85 `auth: browser`, account
+×16, IAM-admin ×6, ops-console ×5, plus Studio's four explicit `auth: public` shells — about
+**112 removable lines** under one `- match: /** → auth: browser` rule per app. auth-ui stays
+fully explicit (all `public`, each deliberate), and every deliberately public page keeps its
+explicit declaration exactly as the gallery shells do. The posture is pinned the same way: a
+mounted-app counterpart of `ExampleAppSecurityPostureTest` asserts every bundled route resolves
+an explicit effective auth mode, so a defaults change can never silently open a Studio page.
 
 ## Out of scope
 
