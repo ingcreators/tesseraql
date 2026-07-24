@@ -3,8 +3,11 @@
 > **Status: core shipped.** The `domains/` documents, the `domain:` reference with
 > load-time merge, the constraint catalog, and the lint family are implemented (user-facing
 > docs in [declarative-validation.md](declarative-validation.md#field-domains)). Remaining
-> slices: OpenAPI named-component emission, scaffolder domain generation from column metadata,
-> and Studio surfacing.
+> slices: OpenAPI named-component emission and Studio surfacing. The scaffolder slice is
+> shipped: `scaffold crud` generates `domains/<table>.yml` from column metadata and routes that
+> reference it, so the DDL→validation link is live (re-scaffolding updates one file, not N
+> routes); the inventory gallery app hand-adopts a shared `sku` domain that had already drifted
+> across two routes.
 
 A **field domain** is a named, application-level definition of a business field — its type,
 constraints, format, and data classification — declared once and referenced from any route's

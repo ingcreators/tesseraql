@@ -45,6 +45,14 @@ All notable changes to TesseraQL are documented here. The format follows
   is an error (`TQL-SEC-4136`); a `params:` entry that merely renames an ambient field draws a
   migration nudge toward the ambient spelling (`TQL-SEC-4137`).
 
+- **Scaffolded field domains** (docs/field-domains.md): `scaffold crud` now generates
+  `domains/<table>.yml` — the DDL-derived field knowledge (types, VARCHAR sizes, temporal parse
+  formats) plus the unique-constraint catalog — and routes that reference the domains with only
+  their operational `required:` choice. Re-scaffolding after a schema change updates one file,
+  not every route; the scaffold-demo gallery is regenerated, and the inventory app hand-adopts a
+  shared `sku` domain that had already drifted across its two write routes (only one carried the
+  pattern).
+
 ### Changed
 
 - **The gallery apps rely on the default response headers**: all five example apps declare

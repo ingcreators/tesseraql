@@ -1,4 +1,4 @@
-# tesseraql-scaffold-checksum: sha256:bef141eac8a9453ecc812df18c90ba08224843528c987f63c14f05c835e53f56
+# tesseraql-scaffold-checksum: sha256:39c824b24bda7ee063ff28b9eff300aeb779dffc2b8622443ce56e787999da10
 # Scaffolded delete command for the items table.
 version: tesseraql/v1
 id: items.delete
@@ -7,10 +7,10 @@ recipe: command-json
 
 input:
   id:
-    type: integer
+    domain: items.id
     required: true
   version:
-    type: integer
+    domain: items.version
     required: true
 
 inputPolicy:

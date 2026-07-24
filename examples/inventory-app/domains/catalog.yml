@@ -1,0 +1,10 @@
+# The product catalog's shared field knowledge (docs/field-domains.md): the SKU crosses the
+# create form and the stock adjustment, and before domains the two declarations had already
+# drifted (only one carried the pattern). Declared once, referenced from both.
+version: tesseraql/v1
+
+domains:
+  sku:
+    type: string
+    maxLength: 40
+    pattern: "[A-Z]{2}-[0-9]+"

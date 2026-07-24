@@ -67,6 +67,7 @@ class CrudScaffolderTest {
         List<ScaffoldedFile> files = scaffolder.scaffold(items());
 
         assertThat(files).extracting(ScaffoldedFile::path).containsExactly(
+                "domains/items.yml",
                 "web/items/get.yml",
                 "web/items/list.view.yml",
                 "web/items/search.sql",
@@ -85,6 +86,7 @@ class CrudScaffolderTest {
                 "tests/items-crud-test.yml");
         files.stream().filter(file -> file.path().endsWith(".yml"))
                 .filter(file -> !file.path().startsWith("tests/"))
+                .filter(file -> !file.path().startsWith("domains/"))
                 .filter(file -> !file.path().endsWith(".view.yml"))
                 .forEach(file -> parser.parseRoute(file.content(), file.path()));
     }
@@ -97,12 +99,16 @@ class CrudScaffolderTest {
                 "post.yml");
         assertThat(create.steps()).containsKey("record");
         assertThat(create.steps().get("record").keys()).containsExactly("id");
-        assertThat(create.errors().constraints()).containsKey("uq_items_name");
+        // The constraint mapping lives once in the table's domains file, not per route.
+        assertThat(create.errors()).isNull();
         assertThat(create.response().redirect().location())
                 .isEqualTo("/items/{steps.record.keys.id}");
         assertThat(create.input()).containsKeys("name", "quantity", "unitPrice", "dueDate",
                 "active", "note");
-        assertThat(create.input().get("dueDate").format()).isEqualTo("yyyy-MM-dd");
+        // The field itself lives in the domain; the route states only its operational choice.
+        assertThat(create.input().get("dueDate").domain()).isEqualTo("items.dueDate");
+        assertThat(create.input().get("dueDate").format()).isNull();
+        assertThat(create.input().get("name").required()).isTrue();
 
         String insert = content(files, "web/items/create/insert.sql");
         assertThat(insert).doesNotContain("  id,");
@@ -122,7 +128,7 @@ class CrudScaffolderTest {
         // Binds read the coerced params.* view: raw body/path values are strings (Phase 22).
         assertThat(update.sql().params()).containsEntry("version", "params.version")
                 .containsEntry("id", "params.id");
-        assertThat(update.input().get("id").type()).isEqualTo("integer");
+        assertThat(update.input().get("id").domain()).isEqualTo("items.id");
         assertThat(update.input().get("version").required()).isTrue();
 
         String sql = content(files, "web/items/{id}/update/update.sql");
@@ -268,6 +274,34 @@ class CrudScaffolderTest {
                 .doesNotContain("Content-Security-Policy")
                 .doesNotContain("headers:");
         assertThat(content(slim, "web/items/new/get.yml")).doesNotContain("headers:");
+    }
+
+    @Test
+    void theDomainsFileCarriesTheDdlDerivedKnowledgeOnce() {
+        List<ScaffoldedFile> files = scaffolder.scaffold(items());
+
+        String domains = content(files, "domains/items.yml");
+        assertThat(domains)
+                .contains("items.name:")
+                .contains("maxLength: 200")
+                .contains("items.dueDate:")
+                .contains("format: yyyy-MM-dd")
+                .contains("items.version:")
+                // The constraint catalog moved here from the per-route errors blocks.
+                .contains("constraints:")
+                .contains("uq_items_name:")
+                .contains("field: name");
+
+        // Every emitted domain is referenced by at least one generated route (no TQL-FIELD-4611).
+        String allRoutes = files.stream()
+                .filter(file -> file.path().endsWith(".yml") && file.path().startsWith("web/"))
+                .map(ScaffoldedFile::content)
+                .reduce("", String::concat);
+        java.util.regex.Matcher names = java.util.regex.Pattern.compile("  (items\\.\\w+):")
+                .matcher(domains);
+        while (names.find()) {
+            assertThat(allRoutes).as(names.group(1)).contains("domain: " + names.group(1));
+        }
     }
 
     @Test
