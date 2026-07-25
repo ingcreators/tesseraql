@@ -360,14 +360,18 @@ else re-derives.
    `ErrorResponseRenderer` now carries the app's `security.responseHeaders` and applies them to
    both HTML surfaces it produces (the custom error page and the htmx error fragment). An
    integration test pins it, confirmed to fail without the change.
-   **What is left needs a different mechanism, not more of this one.** The design leaned toward
-   applying the block at the platform-http layer so even a 404 from an unmounted path carries it,
-   but `VertxPlatformHttpServerConfiguration` exposes no handler hook beyond a body handler —
-   reaching every response means either a Camel `RoutePolicyFactory` on the context (which covers
-   mounted routes only, and whose `onExchangeDone` fires *after* an SSE stream has already
-   started, too late to set headers) or reaching into Vert.x directly. SSE additionally needs its
-   headers before the first frame, so it cannot use a completion hook at all. Decide the
-   mechanism with the surface registry in slice 5, where each surface declares its posture.
+   **SSE and assets are shipped too, and the mechanism is the opposite of the one considered.**
+   The design leaned toward a response-wide hook at the platform-http layer, and there is none:
+   `VertxPlatformHttpServerConfiguration` exposes nothing beyond a body handler, a Camel
+   `RoutePolicyFactory` covers mounted routes only, and its `onExchangeDone` fires *after* a
+   stream has begun — too late for SSE, which needs its headers before the first frame. Chasing a
+   single late hook was the wrong shape.
+   What these two surfaces have in common is not their timing but their authorship: they write
+   their own responses, outside anything the compiler produces. So each applies the block where it
+   writes its headers, reading it from the registry (`RESPONSE_HEADERS_BEAN`) rather than through
+   two constructors. The remaining gap is genuinely narrow and named: a 404 from a path nothing
+   mounts still answers without the block, because no code of ours runs.
+   An integration test pins the asset case and was confirmed to fail without the change.
 4. ~~**The session-store default.**~~ **Shipped, the first half.** The in-memory store expires on
    read and prunes on write, with a 50,000-session ceiling behind that, and
    `tesseraql.sessions.ttl` is read once and handed to whichever store is selected — the key had

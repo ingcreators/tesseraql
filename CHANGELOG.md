@@ -158,6 +158,14 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Fixed
 
+- **Static assets and SSE streams carry the app's `security.responseHeaders`**
+  (docs/response-shaping.md): the block was applied by the HTML render, so the two surfaces that
+  write their own responses — a hand-written asset route and the Vert.x SSE streams — left without
+  it. An asset served without a CSP is a place to host what the CSP was written to prevent, and a
+  stream cannot be given headers by a completion hook at all, since they must precede the first
+  frame. Both now read the block from the registry and apply it where they write their headers. A
+  404 from a path nothing mounts still answers without it, because no code of ours runs.
+
 - **An ambient `principal.*` bind with no principal now fails** (docs/ambient-params.md,
   `TQL-SQL-2112`): the documentation promised it "fails loudly as an unbound parameter instead of
   binding null", and it bound null. A missing path segment evaluates to null like any other, so
