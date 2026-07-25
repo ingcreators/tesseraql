@@ -416,7 +416,10 @@ final class ErrorIndex {
             "studio-backlog.md", "hc-briefs.md", "release.md", "build.md",
             "development-environment.md", "app-developer-distribution.md",
             "field-domains.md", "route-defaults.md", "ambient-params.md",
-            "component-guard.md", "config-consumers.md", "validation-rule-sets.md");
+            "component-guard.md", "config-consumers.md", "validation-rule-sets.md",
+            "route-governance-parity.md", "poll-connector-hardening.md",
+            "shared-definitions-reach.md", "framework-surface-parity.md",
+            "yaml-surface-consumers.md");
 
     /**
      * Marks each code with the cookbook pages whose markdown mentions it — every
