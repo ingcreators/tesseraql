@@ -158,6 +158,14 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Fixed
 
+- **A declared array input keeps its elements, and they are validated** (docs/reference-yaml-surface.md):
+  the binder read every request value as text, so a JSON body's list became `String.valueOf(list)`
+  — `[{productId=10, quantity=1}]` — as the input's effective value, and any binding reading
+  `params.<name>` put that text into SQL. Routes that read `body.<name>` saw the real list, which
+  is why this went unnoticed. `items:` is now honored too: elements are coerced to the declared
+  item type and checked against an element enum, naming the offending index, and a non-list value
+  for a declared array is refused rather than stringified.
+
 - **A remote poll source without a credential is refused** (docs/connectors.md, `TQL-SEC-4088`):
   it was accepted and produced an endpoint URI with no username and no password, so SFTP failed at
   connect with a message about the server while FTPS could succeed as an anonymous session — a poll

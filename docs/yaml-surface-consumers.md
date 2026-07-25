@@ -192,7 +192,16 @@ you have made it fail; this one passed on the first run and was already incapabl
    already required.
 3. **`jobs: params:` wiring** — the larger of the two, since it introduces job input validation and
    touches the operations API, the scheduler, and Studio's job page.
-4. **`items` wiring** — array coercion, element validation, OpenAPI `items`, MCP array type.
+4. ~~**`items` wiring**~~ **— the binding half is shipped.** Element coercion and validation now
+   run, and a declared array keeps its elements.
+   *Worse than the audit recorded, as it turned out.* The finding said `items` was unread; the
+   binder also read every request value as text, so a JSON body's list arrived as
+   `String.valueOf(list)` — `[{productId=10, quantity=1}]` — and any binding reading
+   `params.<name>` put that text into SQL. Not unvalidated but corrupted, and quietly, because
+   `body.<name>` kept the real list and most routes happened to read that instead. A non-list
+   value for a declared array is now refused rather than stringified.
+   **Still open:** OpenAPI `items` and the MCP array type, which describe the surface rather than
+   enforce it.
 5. **`DISPLAY_ONLY` in the generated reference** (guard step 4).
 
 ## Lint and tooling

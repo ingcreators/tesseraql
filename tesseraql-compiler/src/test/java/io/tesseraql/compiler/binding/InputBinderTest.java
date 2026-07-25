@@ -24,6 +24,61 @@ class InputBinderTest {
         return name -> raw;
     }
 
+    private static InputField arrayOf(InputField.InputItems items) {
+        return new InputField("array", false, null, null, null, null, null, null, null, null,
+                null, items, null, null, null, null);
+    }
+
+    /**
+     * A declared array keeps its elements instead of becoming their {@code toString()}.
+     *
+     * <p>The binder read every request value as text, so a JSON body's list arrived as
+     * {@code String.valueOf(list)} — {@code [{productId=10, quantity=1}]} — and any binding
+     * reading {@code params.<name>} put that into SQL. Not merely unvalidated: corrupted, and
+     * quietly, because {@code body.<name>} kept the real list and most routes read that instead.
+     */
+    @Test
+    void anArrayInputKeepsItsElements() {
+        Map<String, Object> bound = InputBinder.bind(
+                Map.of("lines", arrayOf(null)),
+                value(null), name -> List.of(Map.of("productId", 10)), Locale.ENGLISH);
+
+        assertThat(bound.get("lines")).isInstanceOf(List.class);
+        List<Object> lines = new java.util.ArrayList<>((List<?>) bound.get("lines"));
+        assertThat(lines).containsExactly(Map.of("productId", 10));
+    }
+
+    @Test
+    void elementsAreCoercedToTheDeclaredItemType() {
+        Map<String, Object> bound = InputBinder.bind(
+                Map.of("ids", arrayOf(new InputField.InputItems("integer", null))),
+                value(null), name -> List.of("1", "2"), Locale.ENGLISH);
+
+        List<Object> ids = new java.util.ArrayList<>((List<?>) bound.get("ids"));
+        assertThat(ids).containsExactly(1L, 2L);
+    }
+
+    @Test
+    void anElementOutsideTheItemEnumIsRejected() {
+        Map<String, InputField> inputs = Map.of("codes",
+                arrayOf(new InputField.InputItems("string", List.of("A", "B"))));
+
+        assertThatThrownBy(() -> InputBinder.bind(inputs, value(null),
+                name -> List.of("A", "Z"), Locale.ENGLISH))
+                .isInstanceOf(TqlException.class)
+                .hasMessageContaining("codes[1]");
+    }
+
+    @Test
+    void aNonArrayValueForAnArrayInputIsRejected() {
+        Map<String, InputField> inputs = Map.of("lines", arrayOf(null));
+
+        assertThatThrownBy(() -> InputBinder.bind(inputs, value(null),
+                name -> "not a list", Locale.ENGLISH))
+                .isInstanceOf(TqlException.class)
+                .hasMessageContaining("must be an array");
+    }
+
     @Test
     void datesParseWithTheDeclaredPatternAndLocale() {
         Map<String, Object> bound = InputBinder.bind(

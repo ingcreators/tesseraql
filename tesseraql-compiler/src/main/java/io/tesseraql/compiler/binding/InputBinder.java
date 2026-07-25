@@ -47,10 +47,47 @@ public final class InputBinder {
      */
     public static Map<String, Object> bind(Map<String, InputField> inputs,
             Function<String, String> rawLookup, Locale locale) {
+        return bind(inputs, rawLookup, name -> null, locale);
+    }
+
+    /**
+     * Binds with a structured lookup beside the raw one, for values a request carries as
+     * something other than text.
+     *
+     * <p>A JSON body's array arrived here as {@code String.valueOf(list)}, so a declared
+     * {@code type: array} input produced the list's {@code toString()} —
+     * {@code [{productId=10, quantity=1}]} — as its effective value, and any binding reading
+     * {@code params.<name>} put that text into SQL. Not merely unvalidated: corrupted, and
+     * silently, because {@code body.<name>} kept the real list and most routes happened to read
+     * that instead.
+     *
+     * @param structuredLookup resolves a value that is already a list or map, or null
+     */
+    public static Map<String, Object> bind(Map<String, InputField> inputs,
+            Function<String, String> rawLookup, Function<String, Object> structuredLookup,
+            Locale locale) {
         Map<String, Object> effective = new LinkedHashMap<>();
         for (Map.Entry<String, InputField> entry : inputs.entrySet()) {
             String name = entry.getKey();
             InputField field = entry.getValue();
+
+            if ("array".equals(field.type())) {
+                Object structured = structuredLookup.apply(name);
+                if (structured instanceof java.util.List<?> list) {
+                    effective.put(name, validateElements(name, field, list));
+                    continue;
+                }
+                if (structured == null && field.required()) {
+                    throw reject(name, "required", Map.of(),
+                            "Missing required input '" + name + "'");
+                }
+                if (structured == null) {
+                    continue;
+                }
+                throw reject(name, "type", Map.of("type", "array"),
+                        "Input '" + name + "' must be an array");
+            }
+
             String raw = rawLookup.apply(name);
 
             if (raw == null || raw.isEmpty()) {
@@ -78,6 +115,47 @@ public final class InputBinder {
             case "boolean" -> Boolean.parseBoolean(raw);
             case "date", "datetime" -> parseFormatted(name, field, type, raw, locale);
             default -> raw;
+        };
+    }
+
+    /**
+     * Checks each element against {@code items:}, which nothing read before.
+     *
+     * <p>An app declaring {@code items: {type: integer}} or an element enum believed the elements
+     * were checked; they were not, and the declaration was documented with a shipped example.
+     */
+    private static java.util.List<Object> validateElements(String name, InputField field,
+            java.util.List<?> values) {
+        InputField.InputItems items = field.items();
+        java.util.List<Object> checked = new java.util.ArrayList<>(values.size());
+        for (int i = 0; i < values.size(); i++) {
+            Object element = values.get(i);
+            if (items == null || element == null) {
+                checked.add(element);
+                continue;
+            }
+            String at = name + "[" + i + "]";
+            if (items.type() != null) {
+                element = coerceElement(at, items.type(), element);
+            }
+            if (!items.enumValues().isEmpty()
+                    && !items.enumValues().contains(String.valueOf(element))) {
+                throw reject(name, "enum", Map.of("allowed", items.enumValues()),
+                        "Element " + at + " is not one of " + items.enumValues());
+            }
+            checked.add(element);
+        }
+        return java.util.List.copyOf(checked);
+    }
+
+    /** Element coercion mirrors the scalar rules; an unparseable element names its index. */
+    private static Object coerceElement(String at, String type, Object element) {
+        String text = String.valueOf(element);
+        return switch (type) {
+            case "integer" -> parseLong(at, text);
+            case "number" -> parseDouble(at, text);
+            case "boolean" -> Boolean.parseBoolean(text);
+            default -> element;
         };
     }
 
