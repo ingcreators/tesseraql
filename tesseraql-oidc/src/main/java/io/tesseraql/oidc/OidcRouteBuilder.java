@@ -1,7 +1,11 @@
 package io.tesseraql.oidc;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.tesseraql.compiler.binding.ErrorResponseRenderer;
+import io.tesseraql.core.error.TqlErrorCode;
+import io.tesseraql.core.error.TqlException;
 import io.tesseraql.security.Principal;
+import io.tesseraql.security.federation.FederationErrors;
 import io.tesseraql.security.session.LoginRedirects;
 import io.tesseraql.security.session.SessionStore;
 import java.net.URI;
@@ -22,6 +26,9 @@ import org.apache.camel.builder.RouteBuilder;
  * without leaking the code, token, or secret. Mirrors the SAML SP route builder.
  */
 final class OidcRouteBuilder extends RouteBuilder {
+
+    private static final org.slf4j.Logger LOG = org.slf4j.LoggerFactory
+            .getLogger(OidcRouteBuilder.class);
 
     private final ObjectMapper mapper = new ObjectMapper();
     private final OidcConfig config;
@@ -199,17 +206,33 @@ final class OidcRouteBuilder extends RouteBuilder {
     }
 
     private void unauthorized(Exchange exchange) {
-        respondError(exchange, 401, "OIDC authentication failed");
+        respondError(exchange, FederationErrors.UNAUTHENTICATED, "OIDC authentication failed");
     }
 
+    /**
+     * The catch-all, which used to answer 400 for everything.
+     *
+     * <p>{@code onException(Exception.class)} covers a malformed callback and a broken IdP alike,
+     * and collapsing both into 400 told an operator their request was wrong when the truth was
+     * that the server failed. A {@link TqlException} keeps its own code and status; anything else
+     * is a server-side failure and says so.
+     */
     private void badRequest(Exchange exchange) {
-        respondError(exchange, 400, "Invalid OIDC request");
+        Throwable cause = exchange.getProperty(Exchange.EXCEPTION_CAUGHT, Throwable.class);
+        if (cause instanceof TqlException tql) {
+            respondError(exchange, tql.code(), "OIDC request refused");
+            return;
+        }
+        LOG.warn("OIDC request failed", cause);
+        respondError(exchange, FederationErrors.FAILED, "OIDC request failed");
     }
 
-    private void respondError(Exchange exchange, int status, String message) {
-        exchange.getMessage().setHeader(Exchange.HTTP_RESPONSE_CODE, status);
+    /** The framework envelope, so a federation error reads like every other error. */
+    private void respondError(Exchange exchange, TqlErrorCode code, String message) {
+        exchange.getMessage().setHeader(Exchange.HTTP_RESPONSE_CODE,
+                ErrorResponseRenderer.httpStatus(code));
         exchange.getMessage().setHeader(Exchange.CONTENT_TYPE, "application/json; charset=utf-8");
-        exchange.getMessage().setBody("{\"error\":\"" + message + "\"}");
+        exchange.getMessage().setBody(FederationErrors.body(code, message));
     }
 
     private static String header(Exchange exchange, String name) {

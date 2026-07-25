@@ -283,6 +283,11 @@ because they are established.
   session.
 - OIDC and SAML return `{"error": "<string>"}` rather than the framework envelope, carrying no
   `TQL-SEC-*` code, and collapse genuine 500s into 400 via `onException(Exception.class)`.
+  **Shipped:** both answer the framework envelope through a shared `FederationErrors`, an
+  authentication failure keeps `TQL-SEC-4011`, and the catch-all now distinguishes a `TqlException`
+  (its own code and status) from an unexpected failure (`TQL-SEC-4140`, 500) — because at a
+  federation boundary, whose fault it is happens to be the most useful thing the answer carries,
+  and 400-for-everything asserted it was always the caller's.
 - `POST /_tesseraql/login` and `POST /_tesseraql/reset` have no rate limit, attempt counter, or
   lockout — the compiled-route `policy.rateLimit` feature these Java routes do not use. Reset also
   queues an outbox mail per call.

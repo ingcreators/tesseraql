@@ -158,6 +158,14 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Fixed
 
+- **OIDC and SAML answer the framework error envelope** (docs/framework-surface-parity.md): both
+  returned `{"error": "<string>"}` — a shape no other endpoint uses, carrying no code an operator
+  could search for — and both wrapped every failure in `onException(Exception.class)` that answered
+  400, so a broken IdP, an unreachable JWKS endpoint and a genuinely malformed callback were all
+  reported as the caller's fault. They now share `FederationErrors`: an authentication failure is
+  `TQL-SEC-4011` (401), a `TqlException` keeps its own code and status, and an unexpected failure
+  is `TQL-SEC-4140` (500) with the detail in the log rather than the response.
+
 - **The multi-app gateway releases its client and executor on close** (docs/multi-app.md): it
   stopped the HTTP server and closed the hosted app, and left behind the outbound `HttpClient` —
   its connection pool and selector thread — along with the virtual-thread executor created inline
