@@ -158,6 +158,12 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Fixed
 
+- **MCP sessions expire and are capped** (docs/mcp.md): the handler kept session ids in a set that
+  `initialize` added to and only an explicit `DELETE` removed from, so a client that reconnects
+  instead of closing — which is what a crashed or restarted one does — grew it for the life of the
+  process. Sessions now carry an idle TTL (two hours) with a 10,000 ceiling behind it, and use
+  refreshes the window rather than total age counting against it.
+
 - **An invalidated session ends an already-open SSE stream** (docs/security-hardening.md): the
   stream authenticated once at connect and never looked again, so "sign out others" and a password
   change left an open stream delivering data for up to its fifteen-minute lifetime — against the
