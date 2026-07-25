@@ -120,6 +120,66 @@ class PollingRouteBuilderTest {
                 .hasMessageContaining("needs a credential");
     }
 
+    /**
+     * SFTP authenticates with a key when the credential declares one.
+     *
+     * <p>Only a password was ever emitted, so an operator who wrote {@code privateKeyFile:} got a
+     * URI with no key and an error about a missing password — the failure named the wrong thing,
+     * which is the worst kind of error message to debug against.
+     */
+    @Test
+    void sftpAuthenticatesWithADeclaredPrivateKey() {
+        String uri = builderWith(Map.of("username", "svc", "privateKeyFile", "/keys/id_ed25519",
+                "privateKeyPassphrase", "pp")).endpointUri(sftp());
+
+        assertThat(uri).contains("privateKeyFile=RAW(/keys/id_ed25519)");
+        assertThat(uri).contains("privateKeyPassphrase=RAW(pp)");
+        assertThat(uri).doesNotContain("password=");
+    }
+
+    @Test
+    void declaringBothAPasswordAndAKeyIsRefused() {
+        PollingRouteBuilder builder = builderWith(Map.of("username", "svc", "password", "s3cr3t",
+                "privateKeyFile", "/keys/id_ed25519"));
+
+        // Which one wins is exactly the question a deployment should never answer by experiment.
+        assertThatThrownBy(() -> builder.endpointUri(sftp()))
+                .isInstanceOf(io.tesseraql.core.error.TqlException.class)
+                .hasMessageContaining("TQL-SEC-4089")
+                .hasMessageContaining("both");
+    }
+
+    @Test
+    void aCredentialWithNoMethodIsRefused() {
+        PollingRouteBuilder builder = builderWith(Map.of("username", "svc"));
+
+        assertThatThrownBy(() -> builder.endpointUri(sftp()))
+                .isInstanceOf(io.tesseraql.core.error.TqlException.class)
+                .hasMessageContaining("neither");
+    }
+
+    @Test
+    void aPrivateKeyOnAnFtpsSourceIsRefused() {
+        PollingRouteBuilder builder = builderWith(Map.of("username", "svc",
+                "privateKeyFile", "/keys/id_ed25519"));
+
+        assertThatThrownBy(() -> builder.endpointUri(ftps()))
+                .isInstanceOf(io.tesseraql.core.error.TqlException.class)
+                .hasMessageContaining("only an sftp source");
+    }
+
+    /** A builder whose single credential is spelled by the caller. */
+    private PollingRouteBuilder builderWith(Map<String, Object> credential) {
+        Map<String, Object> poll = new java.util.LinkedHashMap<>();
+        poll.put("allowedHosts", List.of("sftp.partner.example", "ftps.partner.example"));
+        poll.put("trustStore", Map.of("file", "/etc/tql/partner.p12", "password", "p"));
+        poll.put("credentials", Map.of("partner", credential));
+        AppConfig config = new AppConfig(
+                Map.of("tesseraql", Map.of("connectors", Map.of("poll", poll))), name -> null);
+        return new PollingRouteBuilder(List.of(), PollConnectors.load(config), "app", Map.of(),
+                home, home.resolve("work"));
+    }
+
     @Test
     void aLocalPathIsAnchoredUnderADeclaredRoot() {
         String uri = builder(Map.of("allowedPaths", List.of("inbox")))

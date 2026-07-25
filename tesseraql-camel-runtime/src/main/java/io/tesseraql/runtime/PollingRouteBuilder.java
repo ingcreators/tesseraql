@@ -33,6 +33,9 @@ final class PollingRouteBuilder extends RouteBuilder {
     private static final TqlErrorCode REMOTE_NEEDS_CREDENTIAL = new TqlErrorCode(TqlDomain.SEC,
             4088);
 
+    /** A poll credential declaring no authentication method, or more than one. */
+    private static final TqlErrorCode CREDENTIAL_METHOD = new TqlErrorCode(TqlDomain.SEC, 4089);
+
     private static final System.Logger LOG = System
             .getLogger(PollingRouteBuilder.class.getName());
 
@@ -231,6 +234,36 @@ final class PollingRouteBuilder extends RouteBuilder {
         return value;
     }
 
+    /**
+     * The credential's authentication method, of which there must be exactly one.
+     *
+     * <p>Only a password was ever emitted, so an operator who declared {@code privateKeyFile:}
+     * got a URI with a password setting missing and an error naming the wrong thing. Declaring
+     * both is refused rather than silently preferring one: which one wins is exactly the sort of
+     * question a deployment should never have to answer by experiment.
+     */
+    private String authentication(String scheme, PollConnectors.Credential credential) {
+        java.util.Optional<String> password = credential.setting("password");
+        java.util.Optional<String> privateKey = credential.setting("privateKeyFile");
+        if (password.isPresent() == privateKey.isPresent()) {
+            throw new TqlException(CREDENTIAL_METHOD, "Poll credential '" + credential.name()
+                    + "' needs exactly one of password: or privateKeyFile:, not "
+                    + (password.isPresent() ? "both" : "neither"));
+        }
+        if (password.isPresent()) {
+            return "&password=RAW(" + password.get() + ")";
+        }
+        if (!"sftp".equals(scheme)) {
+            throw new TqlException(CREDENTIAL_METHOD, "Poll credential '" + credential.name()
+                    + "' declares privateKeyFile:, which only an sftp source can use");
+        }
+        StringBuilder key = new StringBuilder("&privateKeyFile=RAW(")
+                .append(privateKey.get()).append(')');
+        credential.setting("privateKeyPassphrase").ifPresent(passphrase -> key
+                .append("&privateKeyPassphrase=RAW(").append(passphrase).append(')'));
+        return key.toString();
+    }
+
     private String remoteUri(String scheme, PollSpec poll, int defaultPort, String options) {
         // A remote source with no credential: was accepted, and produced a URI with no username
         // and no password. SFTP then fails at connect with a message about the server, and FTPS
@@ -247,10 +280,10 @@ final class PollingRouteBuilder extends RouteBuilder {
         StringBuilder uri = new StringBuilder(scheme).append("://")
                 .append(poll.host()).append(':').append(port).append('/').append(path)
                 .append('?').append(options);
+        // RAW(...) keeps Camel from URL-decoding a value with reserved characters, and keeps an
+        // '&' inside one from splitting the query.
         uri.append("&username=RAW(").append(credential.require("username")).append(')')
-                // RAW(...) keeps Camel from URL-decoding a value with reserved characters, and
-                // keeps an '&' inside one from splitting the query.
-                .append("&password=RAW(").append(credential.require("password")).append(')');
+                .append(authentication(scheme, credential));
         return uri.toString();
     }
 }

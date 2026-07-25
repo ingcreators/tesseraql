@@ -220,8 +220,14 @@ home-relative — the CHANGELOG entry names it, per rule 10.
    metadata before writing them is what caught it.
    `TQL-SEC-4084` stayed a warning: SSH host keys have a legitimate trust-on-first-use posture
    that a CA bundle does not, so only the new FTPS check is an error.
-4. **Credential methods.** Key-based SFTP, FTPS client certificates, and exactly-one-method
-   validation remain.
+4. **Credential methods.** FTPS client certificates remain; they need keystore plumbing beside
+   the trust store rather than a new URI option.
+   **Key-based SFTP and exactly-one-method validation are shipped** (`TQL-SEC-4089`). Only a
+   password was ever emitted, so an operator who wrote `privateKeyFile:` got a URI with no key
+   and an error about a missing password — the failure named the wrong thing, which is the worst
+   kind of message to debug against. Declaring both is refused rather than silently preferring
+   one: which wins is exactly the question a deployment should never answer by experiment. A
+   private key on an `ftps` source is refused too.
    **The load error for a remote source with no credential is shipped** (`TQL-SEC-4088`). It was
    accepted, and produced a URI with no username and no password: SFTP fails at connect with a
    message about the server, and FTPS may succeed as anonymous — a poll job quietly reading
