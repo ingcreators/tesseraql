@@ -412,8 +412,13 @@ else re-derives.
    which was the security half; declaring every existing posture is the documentation half.
 6. **The lifecycle registry and `guarded()`**, closing the template, client, executor, and
    start-failure rows.
-7. **The long tail:** login/reset rate limiting, the OIDC/SAML error envelope, the scheduling
-   claim-compensation, and the `FrameworkMigrations` component map.
+7. **The long tail:** login/reset rate limiting, the scheduling claim-compensation, and the
+   `FrameworkMigrations` component map remain. Rate limiting needs the keyed limiter described
+   with the deviation above — the shipped ones hold one bucket per route, and attaching one to
+   login trades an online-guessing weakness for a trivial lockout of every user.
+   **The OIDC/SAML error envelope is shipped:** both answer the framework envelope through a
+   shared `FederationErrors`, and the catch-all distinguishes a `TqlException` from an unexpected
+   failure instead of reporting every one as the caller's fault.
    **SSE session re-validation is shipped**, with the envelope leak beside it: every frame
    re-checks the session, and the refusal answer returns its code with a generic phrase rather
    than concatenating the internal exception message into JSON. Closing the stream turned out to
@@ -430,9 +435,6 @@ else re-derives.
    a `RouteBuilder` that throws on start is the obvious lever — and only then decide the
    condition. The leak is real; its rarity is why nothing has hit it, and why it is worth doing
    properly rather than plausibly.
-7. **The long tail:** login/reset rate limiting, the OIDC/SAML error envelope, SSE session
-   re-validation, the scheduling claim-compensation, and the `FrameworkMigrations` component map.
-
 ## Out of scope
 
 - **Rewriting framework routes as compiled YAML routes.** They exist in Java because they are
