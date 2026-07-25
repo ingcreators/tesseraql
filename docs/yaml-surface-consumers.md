@@ -126,9 +126,31 @@ calls the accessor, or a derived accessor on the same record plus the external c
 itself worth a look. `DISPLAY_ONLY` is unaffected — it is about which consumers exist, not how they
 reach the field.
 
-This also re-scopes slice 2: the registry is ~294 entries with about forty needing the two-part
-form, and the honest first step is generating the draft from the same bytecode scan rather than
-hand-authoring it, since the scan is what the drift test will run anyway.
+**Second correction: "the" consumer is usually several.** The same scan says that of the 251
+components with an external reader, **96** have exactly one behavioral consumer and **155** have
+more than one — `AttachmentDefinition.id` is read by three classes, `AssignSpec.file` by three. A
+registry shaped `"PollSpec.moveFailed" → PollingRouteBuilder.class` therefore asks for a judgment
+call ("which one is *the* consumer?") 155 times, and every one of those calls is a thing to get
+wrong, to argue about in review, and to leave stale when a fourth reader appears.
+
+So the registry stops trying to hold what a machine can derive exactly. The scan computes the
+consumer set; the registry records only what the scan cannot decide:
+
+- `DISPLAY_ONLY` — this field is *meant* to be read only by the portal or Studio. This is the
+  entry that would have caught `security.provider`, and it is a genuine human judgment.
+- `UNWIRED` — a known-dead field with a reason and, ideally, an issue. Anything unwired and
+  unlisted fails.
+
+That inverts the maintenance burden: adding a field with a real consumer needs no registry edit at
+all, and the only edits are the two that carry a decision. `ScaffoldedConfigKeys` stayed
+hand-written because config keys are strings a scan cannot follow; accessors are call edges, which
+is the opposite situation.
+
+**Where the test lives.** Computing call edges needs compiled classes from every module, so this
+test cannot sit in `tesseraql-yaml` — the reactor builds it long before its consumers exist. It
+belongs in a module that runs last, reading `tesseraql-*/target/classes` from the reactor. If those
+directories are missing the test must fail rather than skip: a guard that goes quiet when run the
+wrong way is the failure mode this whole document is about.
 
 ## Slices
 
