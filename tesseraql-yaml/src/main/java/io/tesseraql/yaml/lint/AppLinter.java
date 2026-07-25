@@ -3044,8 +3044,11 @@ public final class AppLinter {
      * a known kind with a path, a remote source has an allow-listed host
      * ({@code TQL-SEC-4080}, deny by default) and a configured credential ({@code TQL-SEC-4081}, a
      * warning), an SFTP source should verify the server's host key against
-     * {@code tesseraql.connectors.poll.knownHostsFile} ({@code TQL-SEC-4084}, a warning), and the
-     * job carries an {@code import:} block whose per-row SQL file exists.
+     * {@code tesseraql.connectors.poll.knownHostsFile} ({@code TQL-SEC-4084}, a warning), an FTPS
+     * source must verify the server certificate against
+     * {@code tesseraql.connectors.poll.trustStore} ({@code TQL-SEC-4085}, an error — unlike SSH
+     * host keys there is no first-use posture to preserve), and the job carries an
+     * {@code import:} block whose per-row SQL file exists.
      */
     private void lintPollJob(AppConfig config, io.tesseraql.yaml.manifest.JobFile job,
             String source,
@@ -3094,6 +3097,17 @@ public final class AppLinter {
                 findings.add(new LintFinding("TQL-SEC-4084", "warning", source,
                         "SFTP poll source does not verify the server's SSH host key; set"
                                 + " tesseraql.connectors.poll.knownHostsFile to pin it"));
+            }
+            // The FTPS counterpart, and an error rather than a warning: without a trust store
+            // the client accepts any in-date certificate from any host, so the handshake proves
+            // nothing about the peer. The runtime refuses to wire the job either way — lint is
+            // the place the author finds out.
+            if ("ftps".equals(kind)
+                    && config.navigate("tesseraql.connectors.poll.trustStore") == null) {
+                findings.add(new LintFinding("TQL-SEC-4085", "error", source,
+                        "FTPS poll source does not verify the server certificate; set"
+                                + " tesseraql.connectors.poll.trustStore (file:, password:) to"
+                                + " pin the CA that signs it"));
             }
         }
         io.tesseraql.yaml.model.ImportSpec importSpec = job.definition().fileImport();

@@ -99,7 +99,7 @@ final class PollingRouteBuilder extends RouteBuilder {
         return switch (poll.effectiveSource()) {
             case "local" -> "file://" + poll.path() + "?" + options;
             case "sftp" -> remoteUri("sftp", poll, 22, options + sftpHostKeyOptions());
-            case "ftps" -> remoteUri("ftps", poll, 21, options + ftpsTransportOptions());
+            case "ftps" -> remoteUri("ftps", poll, 21, options + ftpsTransportOptions(poll));
             default -> throw new IllegalArgumentException(
                     "Unsupported poll source '" + poll.source() + "'");
         };
@@ -134,8 +134,43 @@ final class PollingRouteBuilder extends RouteBuilder {
      * corrupt; active mode asks the server to open a connection back to this process, which no
      * containerized or NAT'd deployment can accept.
      */
-    private static String ftpsTransportOptions() {
-        return "&execPbsz=0&execProt=P&binary=true&passiveMode=true";
+    private String ftpsTransportOptions(PollSpec poll) {
+        return "&execPbsz=0&execProt=P&binary=true&passiveMode=true" + ftpsTrustOptions(poll);
+    }
+
+    /**
+     * Server-identity verification for an FTPS source, the counterpart of SFTP's known-hosts
+     * check. With {@code tesseraql.connectors.poll.trustStore} declared, the server's certificate
+     * chain is validated against that keystore and the hostname is checked.
+     *
+     * <p>Without it there is nothing to validate against: commons-net's default trust manager
+     * only checks that the certificate is in date — no chain, no anchor, no hostname — so any
+     * self-signed certificate from any host is accepted and TLS proves nothing about who
+     * answered. The job is therefore refused rather than run unverified, and lint says so first
+     * ({@code TQL-SEC-4085}).
+     *
+     * <p>The option names are the component's own: {@code ftpClient.trustStore.} is the
+     * multi-value prefix feeding {@code FtpsEndpoint.ftpClientTrustStoreParameters}, whose
+     * {@code file}/{@code password}/{@code type} keys build the trust manager, and
+     * {@code ftpClient.} maps to {@code FTPSClient} bean properties —
+     * {@code endpointCheckingEnabled} is what turns hostname verification on.
+     */
+    private String ftpsTrustOptions(PollSpec poll) {
+        PollConnectors.TrustStore trust = connectors.trustStore().orElseThrow(
+                () -> new IllegalArgumentException("Poll source 'ftps' for host '" + poll.host()
+                        + "' needs tesseraql.connectors.poll.trustStore: without it the server"
+                        + " certificate is not verified and TLS proves nothing about the peer"));
+        StringBuilder options = new StringBuilder()
+                .append("&ftpClient.trustStore.file=")
+                .append(appHome.resolve(trust.file()).normalize().toAbsolutePath())
+                .append("&ftpClient.endpointCheckingEnabled=true");
+        if (trust.password() != null && !trust.password().isBlank()) {
+            // RAW(...) keeps Camel from URL-decoding a password with reserved characters, the
+            // same treatment the credential password gets.
+            options.append("&ftpClient.trustStore.password=RAW(")
+                    .append(trust.password()).append(')');
+        }
+        return options.toString();
     }
 
     private String remoteUri(String scheme, PollSpec poll, int defaultPort, String options) {

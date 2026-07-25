@@ -293,11 +293,24 @@ existing apps keep working).
 
 FTPS rides the same recipe and runtime path with `source: ftps`. The endpoint negotiates
 `PBSZ 0`/`PROT P`, so the file's bytes are encrypted and not only the login, and it transfers in
-binary and connects in passive mode. Its server identity, however, is **not** verified: there is
-no FTPS equivalent of `knownHostsFile` yet, and the underlying client accepts any in-date
-certificate without building a chain or checking the hostname. Until that lands, treat an FTPS
-partner as authenticated by the network path rather than by TLS — prefer `source: sftp` with a
-`knownHostsFile` where the partner offers both.
+binary and connects in passive mode. Its server identity is pinned by a trust store — the FTPS
+counterpart of `knownHostsFile`:
+
+```yaml
+tesseraql:
+  connectors:
+    poll:
+      allowedHosts: [ftps.partner.example]
+      trustStore:
+        file: security/partner-ca.p12      # relative to the app home, or absolute
+        password: ${secret.ftps.truststore}
+```
+
+The server's certificate must chain to that keystore and its hostname must match. This one is
+**required**: without it the underlying client accepts any in-date certificate from any host, so
+an `ftps` source with no `trustStore` is refused at startup and lint reports `TQL-SEC-4085`
+first. (`knownHostsFile` stays a warning by contrast — SSH host keys have a legitimate
+trust-on-first-use posture that a CA bundle does not.)
 
 ### Governance and testing
 

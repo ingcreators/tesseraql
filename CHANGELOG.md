@@ -132,6 +132,16 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Fixed
 
+- **FTPS poll sources verify the server certificate** (docs/connectors.md): the client accepted
+  any in-date certificate from any host — commons-net's default trust manager checks validity
+  dates only, with no chain building and no hostname verification — and there was no
+  configuration surface to change that, so a TLS handshake proved nothing about the peer. A new
+  `tesseraql.connectors.poll.trustStore` (`file:`, `password:`) pins the CA the certificate must
+  chain to and turns hostname checking on; an `ftps` source without one is refused at wiring
+  time, and lint reports it first as `TQL-SEC-4085` (an error — unlike SSH host keys, a CA
+  bundle has no trust-on-first-use posture worth preserving). The integration test covers the
+  negative case: a server presenting an untrusted certificate ingests nothing.
+
 - **Row scoping applies to writes** (docs/data-scoping.md): a `/*%scope … */` directive in a
   command's SQL, a command step, a validation rule, or a workflow `assign:` block threw
   `TQL-SQL-2106` at request time — the scope resolver was wired into the SQL component only, so
