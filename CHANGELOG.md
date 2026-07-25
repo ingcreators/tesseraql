@@ -158,6 +158,14 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Fixed
 
+- **An invalidated session ends an already-open SSE stream** (docs/security-hardening.md): the
+  stream authenticated once at connect and never looked again, so "sign out others" and a password
+  change left an open stream delivering data for up to its fifteen-minute lifetime — against the
+  claim that a credential change evicts a parallel session. Every frame now re-checks the session
+  and closes the stream when it is gone. The refusal envelope also stops concatenating the internal
+  exception message into JSON, which is the leak the Studio reload stub had; the code is returned,
+  the detail goes to the log.
+
 - **Static assets and SSE streams carry the app's `security.responseHeaders`**
   (docs/response-shaping.md): the block was applied by the HTML render, so the two surfaces that
   write their own responses — a hand-written asset route and the Vert.x SSE streams — left without
