@@ -141,6 +141,14 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Fixed
 
+- **An MCP tool's `emit:` reaches live views** (docs/realtime.md): `buildMcpTool` never added the
+  topic-emit step, so `emit:` on a tool was accepted by the model, described in the reference, and
+  did nothing — a model-driven write left every view watching the same data stale, while the
+  identical declaration on an HTTP command worked. The step now runs in the same position it does
+  for a command, after the write, so a rollback bypasses it. `lintTool` also never called
+  `lintEmit`, so neither half of the omission was visible: the topic-name and query-recipe checks
+  now apply to tools as they do to routes and queue consumers.
+
 - **A polled file that fails to import lands in `moveFailed`** (docs/connectors.md): the import
   ran asynchronously — the transfer service spooled the bytes, recorded the transfer and handed
   the work to an executor — so the Camel exchange completed before a single row of SQL had run

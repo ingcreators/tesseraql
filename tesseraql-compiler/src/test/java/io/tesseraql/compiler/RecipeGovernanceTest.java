@@ -79,6 +79,15 @@ class RecipeGovernanceTest {
         assertThat(page).contains("IdempotencyComplete");
     }
 
+    @Test
+    void aToolThatWritesCanEmitToLiveViews(@TempDir Path dir) throws Exception {
+        List<String> tool = compileAndCollect(dir).get("mcp.items.write");
+
+        // emit: was accepted on a tool and did nothing: buildMcpTool never added the step, so a
+        // model-driven write left every live view watching the same data stale.
+        assertThat(tool).contains("TopicEmitProcessor");
+    }
+
     /** Compiles the fixture app and maps each route id to its processors' simple class names. */
     private static Map<String, List<String>> compileAndCollect(Path dir) throws Exception {
         writeApp(dir);
@@ -270,6 +279,24 @@ class RecipeGovernanceTest {
                     body:
                       data: sql.rows
                 """.formatted(policy), "list.sql");
+
+        route(dir, "mcp", "write.yml", """
+                version: tesseraql/v1
+                id: items.write
+                kind: tool
+                recipe: command-json
+                description: add an item
+                security:
+                  policy: app.write
+                %s
+                input:
+                  name: { type: string }
+                sql:
+                  file: insert.sql
+                  mode: update
+                emit:
+                  - items.changed
+                """.formatted(policy), "insert.sql");
 
         Files.createDirectories(dir.resolve("attachments"));
         Files.writeString(dir.resolve("attachments/notes.yml"), """

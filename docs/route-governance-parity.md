@@ -274,10 +274,15 @@ Ordered so that each lands independently and the guard arrives before the long t
    the marker row only appears if the URI carries `dialect=`.
 6. **The SQL contract registry and its honesty probes** (guard step 4), covering the dialect and
    binding gaps in the file-transfer and batch executors.
-7. **The long tail:** `export.sql params:`, assign-SQL ambient binds, temporal/label normalization
-   in command query-steps, and the `lintEmit`/`lintValidation` calls missing from `lintConsumer`
-   and `lintTool` (the latter shared with
-   [shared-definitions-reach.md](shared-definitions-reach.md)).
+7. **The long tail:** `export.sql params:`, assign-SQL ambient binds, and temporal/label
+   normalization in command query-steps remain.
+   **Shipped:** the `lintEmit`/`lintValidation` calls missing from `lintConsumer` and `lintTool`.
+   Chasing the last of those turned up more than a missing lint call — the compiler never added
+   the topic-emit step to an MCP tool at all, so `emit:` on a tool was accepted, documented, and
+   inert. Both halves are fixed together, because either alone leaves the surface lying: wiring
+   without the lint accepts a malformed topic, and linting without the wiring reports on
+   something that does nothing. `lintEmit` also lost its unused `RouteFile` parameter, which is
+   what had made it look like a route-only lint.
 
 ## Lint and tooling
 
