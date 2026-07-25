@@ -158,6 +158,12 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Fixed
 
+- **A remote poll source without a credential is refused** (docs/connectors.md, `TQL-SEC-4088`):
+  it was accepted and produced an endpoint URI with no username and no password, so SFTP failed at
+  connect with a message about the server while FTPS could succeed as an anonymous session — a poll
+  job quietly reading whatever anonymous access allows. Neither outcome named the declaration as
+  the incomplete part.
+
 - **OIDC and SAML answer the framework error envelope** (docs/framework-surface-parity.md): both
   returned `{"error": "<string>"}` — a shape no other endpoint uses, carrying no code an operator
   could search for — and both wrapped every failure in `onException(Exception.class)` that answered
