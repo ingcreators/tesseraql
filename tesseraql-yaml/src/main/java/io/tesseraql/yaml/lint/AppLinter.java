@@ -3069,6 +3069,43 @@ public final class AppLinter {
             findings.add(new LintFinding("TQL-YAML-1005", "error", source,
                     "Poll trigger needs a path: (the directory to poll)"));
         }
+        // Values that reach the endpoint URI. delay throws inside wire() where the failure is
+        // logged and the job dropped, so the app boots healthy with a route that never runs;
+        // port fails at connect. Both are better answered here.
+        if (poll.delay() != null && !poll.delay().isBlank()) {
+            try {
+                io.tesseraql.core.util.Durations.toMillis(poll.delay());
+            } catch (RuntimeException ex) {
+                findings.add(new LintFinding("TQL-YAML-1005", "error", source,
+                        "Poll trigger delay '" + poll.delay() + "' is not a duration — the job"
+                                + " would be dropped at startup, leaving the app healthy with"
+                                + " nothing arriving"));
+            }
+        }
+        if (poll.port() != null && (poll.port() < 1 || poll.port() > 65535)) {
+            findings.add(new LintFinding("TQL-YAML-1005", "error", source,
+                    "Poll trigger port " + poll.port() + " is outside 1-65535"));
+        }
+        if (!poll.isRemote()) {
+            // Keys that belong to a remote source parse cleanly and are then discarded, so an
+            // author converting a job between kinds gets no signal that they now mean nothing.
+            if (poll.host() != null && !poll.host().isBlank()) {
+                findings.add(new LintFinding("TQL-YAML-1005", "warning", source,
+                        "Poll trigger source '" + kind + "' ignores host: — remove it or use a"
+                                + " remote source"));
+            }
+            if (poll.credential() != null && !poll.credential().isBlank()) {
+                findings.add(new LintFinding("TQL-YAML-1005", "warning", source,
+                        "Poll trigger source '" + kind + "' ignores credential: — remove it or"
+                                + " use a remote source"));
+            }
+            if (config.navigate("tesseraql.connectors.poll.allowedPaths") == null) {
+                findings.add(new LintFinding("TQL-SEC-4086", "error", source,
+                        "Local poll source has no tesseraql.connectors.poll.allowedPaths root:"
+                                + " without one the job can read — and move — files anywhere the"
+                                + " process can reach"));
+            }
+        }
         if (poll.isRemote()) {
             if (poll.host() == null || poll.host().isBlank()) {
                 findings.add(new LintFinding("TQL-YAML-1005", "error", source,

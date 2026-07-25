@@ -241,6 +241,27 @@ trigger:
     move: .done                  # processed files move here (default .done)
     moveFailed: .error           # files that could not be ingested move here (default .error)
 
+A **local** source needs a declared root, the same deny-by-default rule remote sources get from
+`allowedHosts`:
+
+```yaml
+tesseraql:
+  connectors:
+    poll:
+      allowedPaths:               # deny-by-default roots for source: local
+        - inbound
+        - /srv/partner-drop
+```
+
+The `path:` resolves under one of those roots, is normalized, and is re-checked — so `..` cannot
+climb out. Without a root the job is refused, and lint says so first (`TQL-SEC-4086`). This is
+not only about reading: the poll consumer **moves** what it ingests, so an unanchored path can
+relocate a live directory's contents into `.done`.
+
+`move:` and `moveFailed:` must be plain relative directory names. Camel evaluates them as Simple
+expressions, so a value like `${file:parent}/../archive` would write the polled file outside the
+poll tree; such values are rejected rather than escaped.
+
 import:                          # the same import: block a file-import route uses
   format: csv
   columns:

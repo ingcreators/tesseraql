@@ -661,6 +661,83 @@ class AppLinterTest {
     }
 
     @Test
+    void aLocalPollSourceWithoutADeclaredRootIsAnError(@TempDir Path dir) throws Exception {
+        writeLocalPollJob(dir, "path: /data/inbound", "");
+
+        assertThat(new AppLinter().lint(dir))
+                .anyMatch(f -> f.code().equals("TQL-SEC-4086") && f.isError());
+    }
+
+    @Test
+    void aLocalPollSourceUnderADeclaredRootIsClean(@TempDir Path dir) throws Exception {
+        writeLocalPollJob(dir, "path: inbound", """
+                  connectors:
+                    poll:
+                      allowedPaths:
+                        - inbound
+                """);
+
+        assertThat(new AppLinter().lint(dir))
+                .noneMatch(f -> f.code().equals("TQL-SEC-4086"));
+    }
+
+    @Test
+    void anUnparseableDelayIsReportedRatherThanDroppingTheJobAtStartup(@TempDir Path dir)
+            throws Exception {
+        writeLocalPollJob(dir, "path: inbound\n    delay: every-hour", """
+                  connectors:
+                    poll:
+                      allowedPaths:
+                        - inbound
+                """);
+
+        // Without this the job throws inside wire(), is logged, and dropped — so the app boots
+        // healthy and the only symptom is that nothing ever arrives.
+        assertThat(new AppLinter().lint(dir))
+                .anyMatch(f -> f.code().equals("TQL-YAML-1005") && f.isError()
+                        && f.message().contains("every-hour"));
+    }
+
+    @Test
+    void remoteOnlyKeysOnALocalSourceAreFlagged(@TempDir Path dir) throws Exception {
+        writeLocalPollJob(dir,
+                "path: inbound\n    host: sftp.partner.example\n    credential: partner",
+                """
+                          connectors:
+                            poll:
+                              allowedPaths:
+                                - inbound
+                        """);
+
+        assertThat(new AppLinter().lint(dir))
+                .anyMatch(f -> f.code().equals("TQL-YAML-1005") && !f.isError()
+                        && f.message().contains("ignores host:"));
+    }
+
+    private static void writeLocalPollJob(Path dir, String pollKeys, String connectors)
+            throws Exception {
+        Files.createDirectories(dir.resolve("config"));
+        Files.writeString(dir.resolve("config/tesseraql.yml"),
+                "tesseraql:\n  app:\n    name: t\n" + connectors);
+        Files.createDirectories(dir.resolve("batch/intake"));
+        Files.writeString(dir.resolve("batch/intake/upsert.sql"), "insert into t values (1)\n");
+        Files.writeString(dir.resolve("batch/intake/job.yml"), """
+                version: tesseraql/v1
+                id: orders.intake
+                kind: job
+                recipe: file-import
+                trigger:
+                  poll:
+                    source: local
+                    %s
+                import:
+                  format: csv
+                  sql:
+                    file: upsert.sql
+                """.formatted(pollKeys));
+    }
+
+    @Test
     void lintsPollTriggeredFileImportJobs(@TempDir Path dir) throws Exception {
         Files.createDirectories(dir.resolve("config"));
         Files.writeString(dir.resolve("config/tesseraql.yml"), """

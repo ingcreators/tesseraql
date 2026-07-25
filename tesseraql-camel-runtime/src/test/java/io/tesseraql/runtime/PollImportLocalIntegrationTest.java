@@ -114,8 +114,17 @@ class PollImportLocalIntegrationTest {
                     url: %s
                     username: %s
                     password: %s
+
+                tesseraql:
+                  connectors:
+                    poll:
+                      # A local source polls under a declared root, the same deny-by-default rule
+                      # a remote source gets from allowedHosts: the consumer moves what it reads,
+                      # so an unanchored path relocates a live directory's contents.
+                      allowedPaths:
+                        - %s
                 """.formatted(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(),
-                POSTGRES.getPassword()));
+                POSTGRES.getPassword(), inbound.toAbsolutePath()));
 
         Path jobDir = target.resolve("batch/intake");
         Files.createDirectories(jobDir);

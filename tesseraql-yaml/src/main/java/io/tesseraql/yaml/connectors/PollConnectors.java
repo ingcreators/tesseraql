@@ -37,6 +37,7 @@ public final class PollConnectors {
     private final AppConfig config;
     private final boolean present;
     private final List<String> allowedHosts;
+    private final List<String> allowedPaths;
     private final String knownHostsFile;
     private final TrustStore trustStore;
     private final Map<String, Credential> credentials;
@@ -53,10 +54,12 @@ public final class PollConnectors {
     }
 
     private PollConnectors(AppConfig config, boolean present, List<String> allowedHosts,
-            String knownHostsFile, TrustStore trustStore, Map<String, Credential> credentials) {
+            List<String> allowedPaths, String knownHostsFile, TrustStore trustStore,
+            Map<String, Credential> credentials) {
         this.config = config;
         this.present = present;
         this.allowedHosts = List.copyOf(allowedHosts);
+        this.allowedPaths = List.copyOf(allowedPaths);
         this.knownHostsFile = knownHostsFile;
         this.trustStore = trustStore;
         // Populated by load() after this instance exists (Credential is an inner class), so the
@@ -74,10 +77,14 @@ public final class PollConnectors {
         String knownHostsFile = config.getString("tesseraql.connectors.poll.knownHostsFile")
                 .filter(value -> !value.isBlank())
                 .orElse(null);
+        List<String> allowedPaths = new ArrayList<>();
+        if (config.navigate("tesseraql.connectors.poll.allowedPaths") instanceof List<?> paths) {
+            paths.forEach(path -> allowedPaths.add(String.valueOf(path)));
+        }
         TrustStore trustStore = loadTrustStore(config);
         Map<String, Credential> credentials = new LinkedHashMap<>();
-        PollConnectors loaded = new PollConnectors(config, present, allowedHosts, knownHostsFile,
-                trustStore, credentials);
+        PollConnectors loaded = new PollConnectors(config, present, allowedHosts, allowedPaths,
+                knownHostsFile, trustStore, credentials);
         if (config
                 .navigate("tesseraql.connectors.poll.credentials") instanceof Map<?, ?> declared) {
             declared.forEach((name, settings) -> {
@@ -118,6 +125,48 @@ public final class PollConnectors {
      */
     public Optional<TrustStore> trustStore() {
         return Optional.ofNullable(trustStore);
+    }
+
+    /**
+     * Resolves a {@code source: local} path against the declared roots
+     * ({@code tesseraql.connectors.poll.allowedPaths}), the same rule
+     * {@code FileScopes} applies to every other filesystem surface: resolve under a root,
+     * normalize, then re-check the prefix so {@code ..} cannot climb out.
+     *
+     * <p>Deny by default, like the host allow-list. Without roots a local poll job is a
+     * read-and-move primitive anywhere the process user can reach — and it *moves* what it
+     * reads, so a mis-pointed path silently relocates a live directory's contents into
+     * {@code .done}.
+     *
+     * @param appHome the app home a relative path resolves against
+     * @param path    the declared {@code path:}
+     * @return the anchored absolute path
+     * @throws TqlException when no root is declared, or the path escapes every root
+     */
+    public java.nio.file.Path requireAllowedPath(java.nio.file.Path appHome, String path) {
+        if (path == null || path.isBlank()) {
+            throw new TqlException(INVALID_CONFIG, "A local poll source needs a path:");
+        }
+        if (allowedPaths.isEmpty()) {
+            throw new TqlException(INVALID_CONFIG,
+                    "A local poll source needs tesseraql.connectors.poll.allowedPaths: without a"
+                            + " declared root the job can read and move files anywhere the"
+                            + " process can reach");
+        }
+        java.nio.file.Path candidate = appHome.resolve(path).normalize().toAbsolutePath();
+        for (String declared : allowedPaths) {
+            java.nio.file.Path root = appHome.resolve(declared).normalize().toAbsolutePath();
+            if (candidate.startsWith(root)) {
+                return candidate;
+            }
+        }
+        throw new TqlException(INVALID_CONFIG, "Local poll path '" + path + "' resolves outside"
+                + " every tesseraql.connectors.poll.allowedPaths root");
+    }
+
+    /** The declared local poll roots, empty when the app declares none. */
+    public List<String> allowedPaths() {
+        return allowedPaths;
     }
 
     /**
