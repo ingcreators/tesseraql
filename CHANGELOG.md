@@ -142,6 +142,13 @@ All notable changes to TesseraQL are documented here. The format follows
   ingested. The poll consumer now waits for the transfer to resolve and raises `TQL-LD-2849`
   when it did not complete, uniformly for local, SFTP and FTPS sources.
 
+- **Remote poll sources no longer load the whole file into heap** (docs/connectors.md): the SFTP
+  and FTPS components default to materializing a polled file in memory before the route sees it
+  (`streamDownload` false, no `localWorkDirectory`), so `PollImportProcessor`'s "a large file
+  never materializes in memory" was true for `source: local` only — and the transfer service
+  then spooled a second copy. Remote sources now stream through a local work directory under the
+  app's work home, making the spool a disk-to-disk copy.
+
 - **Error pages carry the app's security headers** (docs/response-shaping.md): the
   `security.responseHeaders` block was merged by the successful HTML render, which the error path
   short-circuits — so a custom `templates/errors/<status>.html` page and an htmx error fragment,

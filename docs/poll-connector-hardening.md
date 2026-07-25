@@ -41,7 +41,7 @@ unauthenticated, cleartext transfer that no lint mentions.
 | Works behind NAT | n/a | yes | yes (was **active mode**) |
 | Credential kinds | n/a | password only | password only |
 | Anonymous connection possible | n/a | **yes, unflagged** | **yes, unflagged** |
-| Streams off-heap | yes | **no** | **no** |
+| Streams off-heap | yes | yes (was **no**) | yes (was **no**) |
 | Test coverage | one IT | unit + IT | unit + IT (was **none**) |
 
 ## The confirmed findings
@@ -143,9 +143,9 @@ model below has to answer them, not because they are established.
   silently skipped at wiring).
 - **No SFTP key auth, no FTPS client certificate.** `require("password")` makes a key-only
   credential fatal, so partners mandating key-based SFTP — common — cannot be integrated at all.
-- **Remote polls load whole files into heap.** `streamDownload` and `localWorkDirectory` are unset,
-  so the body is materialized before the route runs, contradicting `PollImportProcessor`'s "a large
-  file never materializes in memory" and costing a second copy when the service spools it.
+- ~~**Remote polls load whole files into heap.**~~ **CONFIRMED and FIXED** (slice 7). Both remote
+  components default to loading the whole file before the route sees it, so the processor's "a
+  large file never materializes in memory" held for `local` only.
 - **`ComponentGuard` auto-allows the raw, unvalidated source string.** `source: ftp` — a plausible
   typo for `ftps`, and the cleartext sibling — exempts the `ftp` component from an `allowed:`
   narrowing even though the job itself is dead. `denied:` and the baseline still win, so this
@@ -249,8 +249,12 @@ home-relative — the CHANGELOG entry names it, per rule 10.
    per-source difference is the class of divergence this document exists to remove.
    The integration test drops a file whose rows cannot bind and asserts it reaches `.error`;
    without the wait it lands in `.done` like any success.
-7. **Off-heap remote polls.** `localWorkDirectory` under the app work dir, or `streamDownload`, so
-   the processor's off-heap promise holds for every source.
+7. ~~**Off-heap remote polls.**~~ **Shipped**, with `localWorkDirectory` under the app work
+   directory rather than `streamDownload`: the component writes the remote content straight to a
+   file, so the spool that follows is a disk-to-disk copy and the consumer keeps its normal retry
+   and move behavior — `streamDownload` would hand the route a live network stream, which the
+   spool would then have to hold open. The processor's off-heap promise now holds for all three
+   sources.
 
 ## Lint and tooling
 

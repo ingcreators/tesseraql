@@ -34,14 +34,16 @@ final class PollingRouteBuilder extends RouteBuilder {
     private final String appName;
     private final Map<String, String> jobOwners;
     private final Path appHome;
+    private final Path workHome;
 
     PollingRouteBuilder(List<JobFile> jobs, PollConnectors connectors, String appName,
-            Map<String, String> jobOwners, Path appHome) {
+            Map<String, String> jobOwners, Path appHome, Path workHome) {
         this.jobs = List.copyOf(jobs);
         this.connectors = connectors;
         this.appName = appName;
         this.jobOwners = Map.copyOf(jobOwners);
         this.appHome = appHome;
+        this.workHome = workHome;
     }
 
     @Override
@@ -101,11 +103,32 @@ final class PollingRouteBuilder extends RouteBuilder {
         return switch (poll.effectiveSource()) {
             case "local" -> "file://"
                     + connectors.requireAllowedPath(appHome, poll.path()) + "?" + options;
-            case "sftp" -> remoteUri("sftp", poll, 22, options + sftpHostKeyOptions());
-            case "ftps" -> remoteUri("ftps", poll, 21, options + ftpsTransportOptions(poll));
+            case "sftp" -> remoteUri("sftp", poll, 22,
+                    options + remoteStreamingOptions() + sftpHostKeyOptions());
+            case "ftps" -> remoteUri("ftps", poll, 21,
+                    options + remoteStreamingOptions() + ftpsTransportOptions(poll));
             default -> throw new IllegalArgumentException(
                     "Unsupported poll source '" + poll.source() + "'");
         };
+    }
+
+    /**
+     * Keeps a remote file off the heap.
+     *
+     * <p>Both remote components default to loading the whole file into memory before the route
+     * sees it — {@code streamDownload} is false and {@code localWorkDirectory} unset — so
+     * {@code PollImportProcessor}'s promise that "a large file never materializes in memory" held
+     * for {@code local} only, where the body is a lazy handle on a file already on disk. A
+     * nightly extract of any size cost that many bytes of heap before the processor even ran, and
+     * then a second copy when the transfer service spooled it.
+     *
+     * <p>A local work directory rather than {@code streamDownload}: the component writes the
+     * remote content straight to a file, so the spool that follows is a disk-to-disk copy and the
+     * consumer can still retry and move the remote file normally. It lives under the app's work
+     * directory, beside every other build and runtime artifact.
+     */
+    private String remoteStreamingOptions() {
+        return "&localWorkDirectory=" + workHome.resolve("poll").toAbsolutePath();
     }
 
     /**
