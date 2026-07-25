@@ -163,6 +163,12 @@ All notable changes to TesseraQL are documented here. The format follows
   instead of closing — which is what a crashed or restarted one does — grew it for the life of the
   process. Sessions now carry an idle TTL (two hours) with a 10,000 ceiling behind it, and use
   refreshes the window rather than total age counting against it.
+- **The queue consumer's send template is stopped with the context** (docs/messaging.md): it was
+  created lazily and never stopped, and a `ProducerTemplate` holds a producer cache, so an app
+  close or a reload left its endpoints and their connections behind. Neither owner — a
+  `PgNotifyListener` and a route builder — had a close path to add one to, so the template is now
+  registered with the context, which stops it. The lazy creation was also unsynchronized: two
+  threads reaching the unset field both built one, and the loser was leaked silently.
 
 - **An invalidated session ends an already-open SSE stream** (docs/security-hardening.md): the
   stream authenticated once at connect and never looked again, so "sign out others" and a password

@@ -97,9 +97,29 @@ final class QueueConsumer {
         }
     }
 
-    private ProducerTemplate template() {
+    /**
+     * The send template, created once and owned by the context.
+     *
+     * <p>It was created lazily and never stopped: a template holds a producer cache, so an app
+     * close or a reload left its endpoints and their connections behind. Handing it to the
+     * context as a service is the fix that needs no close path in either owner — a
+     * {@code PgNotifyListener} and a route builder — because stopping the context stops it.
+     *
+     * <p>Synchronized because the check-then-create was not: two threads reaching an unset field
+     * both built a template, and whichever lost the race was leaked silently — the same object
+     * that was already never being closed.
+     */
+    private synchronized ProducerTemplate template() {
         if (template == null) {
-            template = context.createProducerTemplate();
+            ProducerTemplate created = context.createProducerTemplate();
+            try {
+                context.addService(created);
+            } catch (Exception cannotRegister) {
+                throw new IllegalStateException(
+                        "Could not register the queue consumer's producer template",
+                        cannotRegister);
+            }
+            template = created;
         }
         return template;
     }

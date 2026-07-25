@@ -58,7 +58,8 @@ a documented, verified-intentional exemption.
 | `RouteWatcher` | yes | n/a | **— (thread dies, unrecoverable)** | yes |
 | `InMemorySessionStore` | n/a | yes (was **no TTL, no cap**) | n/a | n/a |
 | `McpHttpHandler` sessions | n/a | yes (idle TTL + cap) | n/a | n/a |
-| `QueueConsumer` `ProducerTemplate` | **—** | yes | yes | **—** |
+| `McpHttpHandler` sessions | n/a | **— (no TTL, no cap)** | n/a | n/a |
+| `QueueConsumer` `ProducerTemplate` | yes (context-owned) | yes | yes | yes |
 | `MultiAppGateway` | **— (client, executor)** | **— (unbounded body buffering)** | yes | partial |
 | `TesseraqlRuntime.start()` failure path | **— (context never stopped, and hard to reach)** | n/a | n/a | n/a |
 | `JdbcFileTransferService` | yes | yes | yes (`guarded()`) | yes |
