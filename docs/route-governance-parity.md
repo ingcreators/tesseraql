@@ -1,6 +1,6 @@
 # Route governance parity
 
-> **Status: slices 1, 2 and 4 shipped, the rest designed.** A contract-deviation sweep (2026-07-25, method
+> **Status: slices 1, 2, 4 and 5 shipped, the rest designed.** A contract-deviation sweep (2026-07-25, method
 > borrowed from the Apache Camel 4.22 AI audit: learn the contract from the well-trodden
 > implementation, then check every sibling for where it deviates) found that the route
 > compiler's cross-cutting governance is **restated by hand in each `build*` method** and its
@@ -68,6 +68,10 @@ Every other executor re-implements a subset.
 | `TransactionalCommandProcessor` (command, steps) | yes | yes | yes | yes | yes | yes | yes | **—** |
 | `ValidationRules` | yes | yes | n/a | yes | yes | **—** | rides the command | **—** |
 | `query-export` URI (hand-built) | **—** | **—** | n/a | yes | yes | n/a | yes | **—** |
+
+| `TransactionalCommandProcessor` (command, steps) | yes | **—** | **—** | yes | yes | yes | yes | **—** |
+| `ValidationRules` | yes | **—** | **—** | yes | yes | **—** | rides the command | **—** |
+| `query-export` URI (hand-built) | yes | yes | n/a | yes | yes | n/a | yes | **—** |
 | `JdbcFileTransferService` (row / query / after SQL) | **—** | **—** | n/a | **—** | partial | **—** | **—** | n/a |
 | `JobExecutor` (batch steps) | **—** | **—** | n/a | **—** | yes | **—** | **—** | n/a |
 | workflow `assign:` | yes | **—** | **—** | yes | yes | yes | rides the command | n/a |
@@ -125,7 +129,7 @@ its own JDBC transaction. So `tesseraql.sql.timeoutSeconds` and a per-binding `t
 silently do not apply inside a command, and unbounded row materialization happens inside an open
 write transaction.
 
-### `query-export` bypasses `executionUri`
+### `query-export` bypasses `executionUri` — FIXED
 
 `RouteCompiler:664-667` hand-builds the `tesseraql-sql:` URI with `datasource`, `mode`, and
 `filename` only, skipping the shared `executionUri` builder that supplies `dialect`, `maxRows`,
@@ -249,8 +253,14 @@ Ordered so that each lands independently and the guard arrives before the long t
    run outside a request; whether they should carry a scope at all is the same question
    `TQL-SCOPE-3014` answers for jobs, and they deserve the same treatment or a resolver of their
    own — decide before extending 3014 to them.
-5. **`query-export` through `executionUri`,** which is a deletion plus a call, and carries the
-   streaming-profile fix with it.
+5. ~~**`query-export` through `executionUri`.**~~ **Shipped**, though not literally: the export
+   URI's `mode` and `filename` are not a binding's, so the shared part was extracted as
+   `executionParams` (dialect, maxRows, onOverflow, timeout) and both callers use it, with
+   `bindingDatasource` shared too. That carries the streaming-profile fix: with a dialect the
+   producer picks the right profile instead of the default that leaves autocommit on, which is
+   what made PostgreSQL ignore the fetch size and buffer the whole result set.
+   The regression test is a `.postgres.sql` variant beside a query-export route's base file —
+   the marker row only appears if the URI carries `dialect=`.
 6. **The SQL contract registry and its honesty probes** (guard step 4), covering the dialect and
    binding gaps in the file-transfer and batch executors.
 7. **The long tail:** `export.sql params:`, assign-SQL ambient binds, temporal/label normalization

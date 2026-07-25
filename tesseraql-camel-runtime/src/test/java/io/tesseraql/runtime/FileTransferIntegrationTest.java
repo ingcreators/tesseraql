@@ -212,7 +212,11 @@ class FileTransferIntegrationTest {
                 .contains("events-sync.csv");
         // Header labels, date pattern, and German number format come from the export block.
         assertThat(file.body()).startsWith("Event,held_on,fee");
-        assertThat(file.body()).contains("sync-fest,2026/07/01,\"1.234,50\"");
+        // The .postgres.sql variant beside the base file is what ran: the export endpoint
+        // carries dialect=, so it resolves variants like every other statement. Before that, a
+        // query-export route silently ran the base file on every database.
+        assertThat(file.body()).contains("postgres-variant");
+        assertThat(file.body()).doesNotContain("sync-fest");
     }
 
     @Test
@@ -421,6 +425,12 @@ class FileTransferIntegrationTest {
                 """);
         Files.writeString(downloadRoute.resolve("select-events.sql"),
                 "select name, held_on, fee from events order by name\n;\n");
+        // A dialect variant beside the base file. The endpoint only prefers it when the compiled
+        // URI carries dialect=, which the hand-built query-export URI used to omit — so this
+        // marker row is the evidence the export runs on the same execution contract every other
+        // statement does.
+        Files.writeString(downloadRoute.resolve("select-events.postgres.sql"),
+                "select 'postgres-variant' as name, held_on, fee from events order by held_on\n;\n");
     }
 
     private static void writeImportRoute(Path home, String dir, String id, String onError)

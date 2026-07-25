@@ -154,6 +154,15 @@ All notable changes to TesseraQL are documented here. The format follows
   `TQL-LD-0001`. Validation SQL gets the timeout (a rule that hangs pins the transaction); its
   rows stay uncapped on purpose, since truncating violations would hide why a write was refused.
 
+- **`query-export` runs on the same execution contract as every other statement**
+  (docs/file-transfers.md): its `tesseraql-sql:` URI was hand-built with only `datasource`,
+  `mode` and `filename`, so a dialect variant (`select-events.postgres.sql`) was never picked
+  up, the statement ran with no timeout whatever `tesseraql.sql.timeoutSeconds` said, a
+  binding-level `sql.datasource:` was ignored, and — because the dialect also selects the
+  streaming profile — PostgreSQL exports left autocommit on, so the driver ignored the fetch
+  size and buffered the entire result set, which is precisely what streaming an export exists
+  to avoid.
+
 - **FTPS poll sources verify the server certificate** (docs/connectors.md): the client accepted
   any in-date certificate from any host — commons-net's default trust manager checks validity
   dates only, with no chain building and no hostname verification — and there was no
