@@ -8,6 +8,15 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **Shared definitions on the published surface** (docs/reference-yaml-surface.md): `domains/`
+  and `rules/` documents now ship their own JSON Schemas, are associated in a scaffolded app's
+  `.vscode/settings.json`, and appear in the generated YAML-surface reference alongside routes.
+  `domain:` on an input field and `use:`/`params:`/`field:`/`when:` inside `validate:` are
+  documented rather than merely accepted — the route schema had described `validate:` as "one of
+  rule: or file:" since before shared rules existed. `SchemaSyncTest` now asserts property
+  coverage against the model records, not just enum coverage, so the next key added to an input
+  field or a rule fails the build instead of shipping undocumented.
+
 - **Path-matched route security defaults** (docs/authentication.md "Route security defaults"):
   `tesseraql.security.defaults.routes` declares firewall-style rules (`match` glob over the
   served URL path, first match wins) that fill a route's `auth`, `csrf`, and `policy` when the

@@ -71,6 +71,12 @@ public final class AppScaffolder {
                 // language server validates and completes route/job/view documents offline.
                 new ScaffoldedFile(".vscode/tesseraql-v1.schema.json",
                         absoluteResource("/schema/tesseraql-v1.schema.json")),
+                // Shared definitions are their own document kind — a domains or rules file has
+                // no id: or kind: and would fail the route schema — so each ships its own.
+                new ScaffoldedFile(".vscode/tesseraql-domains-v1.schema.json",
+                        absoluteResource("/schema/tesseraql-domains-v1.schema.json")),
+                new ScaffoldedFile(".vscode/tesseraql-rules-v1.schema.json",
+                        absoluteResource("/schema/tesseraql-rules-v1.schema.json")),
                 new ScaffoldedFile(".vscode/settings.json", VSCODE_SETTINGS_JSON),
                 new ScaffoldedFile(".vscode/extensions.json", VSCODE_EXTENSIONS_JSON));
     }
@@ -83,6 +89,12 @@ public final class AppScaffolder {
                   "consume/**/*.yml",
                   "batch/**/*.yml",
                   "mcp/**/*.yml"
+                ],
+                ".vscode/tesseraql-domains-v1.schema.json": [
+                  "domains/**/*.yml"
+                ],
+                ".vscode/tesseraql-rules-v1.schema.json": [
+                  "rules/**/*.yml"
                 ]
               }
             }

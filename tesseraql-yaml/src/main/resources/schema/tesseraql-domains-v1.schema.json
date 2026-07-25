@@ -1,0 +1,134 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tesseraql.io/schema/tesseraql-domains-v1.schema.json",
+  "title": "TesseraQL field domains v1",
+  "description": "Schema for TesseraQL field domain documents (domains/*.yml): named field knowledge referenced from input fields with 'domain:', plus the app-level constraint catalog. Documented in field-domains.md.",
+  "$comment": "The domains map's value type is an input field, so $defs/inputField below is copied verbatim from tesseraql-v1.schema.json rather than restated by hand, and SchemaSyncTest fails if the two ever differ. A cross-file $ref would avoid the copy but would depend on how each editor's language server resolves a relative reference offline; a guarded copy depends on nothing.",
+  "type": "object",
+  "properties": {
+    "version": {
+      "type": "string",
+      "const": "tesseraql/v1",
+      "description": "The DSL version. Always tesseraql/v1."
+    },
+    "domains": {
+      "type": "object",
+      "description": "Named field domains. A route's input field references one with 'domain: <name>' and may override any individual key locally.",
+      "additionalProperties": {
+        "$ref": "#/$defs/inputField"
+      }
+    },
+    "constraints": {
+      "type": "object",
+      "description": "Database constraint names mapped once for the whole app, so a violation of a shared unique index reports the same field, code and message on every route that can raise it.",
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "field": {
+            "type": "string",
+            "description": "The input field the violation is reported against."
+          },
+          "code": {
+            "type": "string",
+            "description": "Stable machine-readable code for the violation."
+          },
+          "message": {
+            "type": "string",
+            "description": "Message key resolved through the app's i18n bundles."
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "inputField": {
+      "type": "object",
+      "properties": {
+        "domain": {
+          "type": "string",
+          "description": "Name of a field domain declared under domains/; its type, bounds, pattern, format, enum, classification and mask merge in, and the keys declared here win. Operational keys (required, requiredWhen, default, writable) stay route-local."
+        },
+        "type": {
+          "enum": [
+            "string",
+            "integer",
+            "number",
+            "boolean",
+            "date",
+            "array"
+          ]
+        },
+        "required": {
+          "type": "boolean"
+        },
+        "default": {},
+        "min": {
+          "type": "number"
+        },
+        "max": {
+          "type": "number"
+        },
+        "maxLength": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "minLength": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "pattern": {
+          "type": "string",
+          "description": "Anchored regular expression (TQL-YAML-1012 when it does not compile)."
+        },
+        "format": {
+          "type": "string",
+          "description": "string: email|uuid|url; date/number: a parse pattern.",
+          "examples": [
+            "email",
+            "uuid",
+            "url",
+            "yyyy/MM/dd",
+            "#,##0.##"
+          ]
+        },
+        "requiredWhen": {
+          "type": "string",
+          "description": "A core expression over params./path./body. (TQL-YAML-1014)."
+        },
+        "enum": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "writable": {
+          "type": "boolean"
+        },
+        "classification": {
+          "type": "string"
+        },
+        "mask": {
+          "type": "string"
+        },
+        "items": {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string"
+            },
+            "enum": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "additionalProperties": true
+        }
+      },
+      "additionalProperties": true
+    }
+  }
+}

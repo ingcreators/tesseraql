@@ -27,7 +27,7 @@ Schema for TesseraQL Simple YAML documents: routes (web/**/<method>.yml), jobs (
 | `sql` | [sqlBinding](#sqlbinding) |  |
 | `steps` | map of [sqlBinding](#sqlbinding) |  |
 | `queries` | map of [sqlBinding](#sqlbinding) | Additional named queries executed after sql, each bound into the execution context under its name. |
-| `validate` | map of object | Declarative validation rules keyed by rule id; each declares one of rule: (expression) or file: (validation SQL). Documented in declarative-validation.md. |
+| `validate` | map of [object](#validate) | Declarative validation rules keyed by rule id. A rule declares exactly one of rule: (a cross-field expression), file: (validation SQL), or use: (a shared rule declared under rules/). Honored on command-json, query-json and webhook routes, on queue consumers, and on MCP tools. |
 | `notify` | map of object | Notifications enqueued with the command on the transactional outbox, keyed by channel. Documented in notifications.md. |
 | `errors` | object | Per-route error mapping: constraint codes and statuses onto response fields and messages. Documented in declarative-validation.md. |
 | `import` | object | file-import parsing and column-to-bind mapping (headerRow, startRow, columns, onError: rollback\|skip). Documented in file-transfers.md. |
@@ -82,6 +82,19 @@ Declarative HTTP caching for query responses (docs/response-shaping.md): Cache-C
 | `visibility` | enum: `private` \| `public` |  |
 | `etag` | boolean | Hash the rendered body and answer If-None-Match with 304 (default true). |
 | `staleWhileRevalidate` | string |  |
+
+### validate
+
+| Property | Type | Description |
+| --- | --- | --- |
+| `rule` | string | A cross-field expression that must hold. |
+| `file` | string | Validation SQL returning one row per violation; must be a SELECT, and runs inside the command's transaction. |
+| `use` | string | Name of a shared rule declared under rules/. The reference supplies params: matching the rule's binds: contract, plus its own field:/when:/code:/message:. |
+| `params` | map of string | Binds for a SQL rule, as dotted source expressions. |
+| `field` | string | The input the violation is reported against. |
+| `when` | string | Guard expression; the rule is skipped when it is falsy. |
+| `code` | string | Machine-readable violation code. |
+| `message` | string | Message catalog key. |
 
 ### webhook
 
@@ -191,12 +204,54 @@ Declarative pagination: the framework appends the dialect clause; authored SQL c
 | `retarget` | string |  |
 | `reswap` | string |  |
 
+## Other document kinds
+
+Shared definitions live in their own documents, referenced from routes rather than repeated in them. Each has its own schema and its own file association.
+
+### domains
+
+Schema for TesseraQL field domain documents (domains/*.yml): named field knowledge referenced from input fields with 'domain:', plus the app-level constraint catalog. Documented in field-domains.md.
+
+| Property | Type | Description |
+| --- | --- | --- |
+| `version` | const `tesseraql/v1` | The DSL version. Always tesseraql/v1. |
+| `domains` | map of [inputField](#inputfield) | Named field domains. A route's input field references one with 'domain: <name>' and may override any individual key locally. |
+| `constraints` | map of [object](#domainsconstraints) | Database constraint names mapped once for the whole app, so a violation of a shared unique index reports the same field, code and message on every route that can raise it. |
+
+#### domains.constraints
+
+| Property | Type | Description |
+| --- | --- | --- |
+| `field` | string | The input field the violation is reported against. |
+| `code` | string | Stable machine-readable code for the violation. |
+| `message` | string | Message key resolved through the app's i18n bundles. |
+
+### rules
+
+Schema for TesseraQL shared validation rule documents (rules/*.yml): named rules a route references from its 'validate:' block with 'use:'. Documented in validation-rule-sets.md.
+
+| Property | Type | Description |
+| --- | --- | --- |
+| `version` | const `tesseraql/v1` | The DSL version. Always tesseraql/v1. |
+| `rules` | map of [object](#rulesrules) | Named validation rules. Each declares what the rule is; how a route uses it (params:, field:, when:) stays at the reference. |
+
+#### rules.rules
+
+| Property | Type | Description |
+| --- | --- | --- |
+| `rule` | string | Cross-field expression. Exactly one of rule: or file:. |
+| `file` | string | Validation SQL, resolved relative to this document. Exactly one of rule: or file:. |
+| `binds` | array of string | The bind contract a reference's params: must satisfy exactly. Ambient binds (principal.*, audit.*) are supplied by the framework and never listed here. |
+| `code` | string | Default stable rule code, overridable at the reference. |
+| `message` | string | Default message key, overridable at the reference. |
+
 ## Shared definitions
 
 ### inputField
 
 | Property | Type | Description |
 | --- | --- | --- |
+| `domain` | string | Name of a field domain declared under domains/; its type, bounds, pattern, format, enum, classification and mask merge in, and the keys declared here win. Operational keys (required, requiredWhen, default, writable) stay route-local. |
 | `type` | enum: `string` \| `integer` \| `number` \| `boolean` \| `date` \| `array` |  |
 | `required` | boolean |  |
 | `default` | any |  |

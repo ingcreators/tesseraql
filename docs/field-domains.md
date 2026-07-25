@@ -122,6 +122,10 @@ a migration is one edit in one file.
 - **Scaffolder** — generates a `domains/` file from column metadata (VARCHAR size → `maxLength`,
   NOT NULL informing the route's `required`), and emits routes that reference the domains.
   Re-scaffolding after a DDL change updates the domain, not N routes.
+- **Editors** — `domains/*.yml` has its own JSON Schema, associated by a scaffolded app's
+  `.vscode/settings.json`, so completion and validation work offline in any editor with a YAML
+  language server. A domain's value is an input field, so its schema carries a copy of the route
+  schema's field definition that `SchemaSyncTest` keeps identical.
 - **OpenAPI** — a domain becomes a named component schema; routes `$ref` it instead of inlining
   identical inline schemas per operation.
 - **Studio** — the validation rule builder and schema overlay offer domains for selection; the

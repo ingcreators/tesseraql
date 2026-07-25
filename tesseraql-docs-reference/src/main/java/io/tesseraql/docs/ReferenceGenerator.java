@@ -37,8 +37,13 @@ public final class ReferenceGenerator {
 
     /** The full {@code reference-yaml-surface.md} content. */
     public static String yamlSurface(Path repoRoot) throws IOException {
-        return BANNER + SchemaReference.render(repoRoot
-                .resolve("tesseraql-yaml/src/main/resources/schema/tesseraql-v1.schema.json"));
+        Path schemas = repoRoot.resolve("tesseraql-yaml/src/main/resources/schema");
+        return BANNER + SchemaReference.render(schemas.resolve("tesseraql-v1.schema.json"),
+                java.util.List.of(
+                        new SchemaReference.DocumentKind("domains",
+                                schemas.resolve("tesseraql-domains-v1.schema.json")),
+                        new SchemaReference.DocumentKind("rules",
+                                schemas.resolve("tesseraql-rules-v1.schema.json"))));
     }
 
     /** The full {@code reference-error-codes.md} content. */

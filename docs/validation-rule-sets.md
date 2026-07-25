@@ -110,6 +110,9 @@ purchase-request), so the docs page has a hand-authored reference next to the ge
 - Lint family (registry-assigned at implementation): unknown `use:` reference and bind-contract
   mismatch fail the load; unreferenced rule (warning); a route-local rule textually identical
   to a shared one (warning — the copy-paste this replaces).
+- `rules/*.yml` has its own JSON Schema, associated by a scaffolded app's
+  `.vscode/settings.json`, and both it and `validate:`'s `use:`/`params:` reference form appear
+  in the generated YAML-surface reference.
 - The docs portal's Domains page pattern extends naturally: a Rules section listing each rule,
   its contract, and the routes referencing it.
 - Validation coverage counts resolved per-route rules exactly as today; a shared rule
