@@ -163,6 +163,16 @@ All notable changes to TesseraQL are documented here. The format follows
   whatever the comparison against null returns. A route-level `sql: {params:}` on the same route
   *did* reach the query because nothing rejected it, so the surface offered two spellings and
   honored the undocumented one.
+- **A command's query-steps shape rows like every other read** (docs/transactional-writes.md):
+  the SQL producer normalized column labels per dialect and converted JDBC temporals to ISO-8601,
+  while a command's query-steps force-lowercased every label and passed `java.sql.Timestamp`
+  through untouched. The same `select … as "orderTotal"` came back as `orderTotal` on a query
+  route and `ordertotal` inside a command on Oracle, and a date rendered as `2026-07-25` on one
+  path and as a driver-specific `toString()` on the other, so a response binding written against
+  one path broke on the other. Both paths now ask `ResultRows`. **This changes what a command's
+  query-step rows look like**: temporals are ISO-8601 strings, and a quoted mixed-case alias
+  keeps its case on Oracle. Generated-key lookup stays case-insensitive — it matches a declared
+  key, not a label a binding reads.
 
 - **A polled file that fails to import lands in `moveFailed`** (docs/connectors.md): the import
   ran asynchronously — the transfer service spooled the bytes, recorded the transfer and handed
