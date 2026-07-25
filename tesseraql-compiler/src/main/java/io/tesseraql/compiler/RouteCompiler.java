@@ -663,9 +663,18 @@ public final class RouteCompiler {
             restEndpoint(builder, routeFile.httpMethod(), routeFile.urlPath()).to(direct);
         }
         Path sqlPath = routeDir.resolve(definition.sql().file()).normalize();
+        // The export URI is hand-built because its mode and filename are not a binding's, but it
+        // carries the same execution parameters every other endpoint does. Omitting them meant a
+        // dialect variant was never picked up, the statement ran with no timeout, and on
+        // PostgreSQL the default streaming profile left autocommit on - so the driver ignored
+        // the fetch size and buffered the whole result set, which is exactly what streaming an
+        // export exists to avoid.
+        String exportDatasource = bindingDatasource(definition.sql(),
+                definition.effectiveDatasource());
         String sqlUri = "tesseraql-sql:file:" + sqlPath
-                + "?datasource=" + definition.effectiveDatasource()
-                + "&mode=query-export&filename=" + exportFilename(definition, codec);
+                + "?datasource=" + exportDatasource
+                + "&mode=query-export&filename=" + exportFilename(definition, codec)
+                + executionParams(exportDatasource, definition.sql());
 
         ProcessorDefinition<?> route = builder.from(direct).routeId(routeId);
         applyTelemetry(route, routeFile);
@@ -1046,18 +1055,34 @@ public final class RouteCompiler {
             return "tesseraql-iam:contract?name=" + binding.contract()
                     + "&mode=" + binding.effectiveMode() + "&resultKey=" + resultKey;
         }
-        String datasource = binding.datasource() == null || binding.datasource().isBlank()
-                ? routeDatasource
-                : binding.datasource();
+        String datasource = bindingDatasource(binding, routeDatasource);
         Path sqlPath = sourceDir.resolve(binding.file()).normalize();
         return "tesseraql-sql:file:" + sqlPath
                 + "?datasource=" + datasource
                 + "&mode=" + binding.effectiveMode()
                 + "&resultKey=" + resultKey
-                + "&dialect=" + datasourceDialect(datasource)
+                + executionParams(datasource, binding);
+    }
+
+    /**
+     * The execution parameters every {@code tesseraql-sql:} endpoint carries, whatever its mode.
+     * {@code dialect} is the load-bearing one: the producer resolves {@code foo.<dialect>.sql}
+     * variants from it, picks the dialect's streaming profile, and folds column labels with it —
+     * a hand-built URI that omits it silently runs the base file with default streaming.
+     */
+    private String executionParams(String datasource, io.tesseraql.yaml.model.SqlBinding binding) {
+        return "&dialect=" + datasourceDialect(datasource)
                 + "&maxRows=" + effectiveMaxRows(binding)
                 + "&onOverflow=" + effectiveOnOverflow(binding)
                 + "&queryTimeoutSeconds=" + effectiveTimeoutSeconds(binding);
+    }
+
+    /** The connector a binding runs on: its own {@code datasource:} when declared, else the route's. */
+    private static String bindingDatasource(io.tesseraql.yaml.model.SqlBinding binding,
+            String routeDatasource) {
+        return binding.datasource() == null || binding.datasource().isBlank()
+                ? routeDatasource
+                : binding.datasource();
     }
 
     /**
