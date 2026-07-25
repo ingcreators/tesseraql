@@ -163,6 +163,11 @@ All notable changes to TesseraQL are documented here. The format follows
   its connection pool and selector thread — along with the virtual-thread executor created inline
   and never referenced again. A host that restarts a gateway accumulated both. The unbounded
   request-body buffering on that surface is a separate row and still open.
+- **The multi-app gateway bounds the request body it buffers** (docs/multi-app.md): it read the
+  whole body with `readAllBytes()` before forwarding, so a stranger decided how much of the front
+  door's heap to take. Bodies over 10 MB are now refused with 413. A fixed ceiling rather than a
+  config key, deliberately: the gateway fronts several apps, so a per-app limit would be ambiguous
+  here — this is the door's own bound, and the app behind it keeps whatever limits it declares.
 
 - **MCP sessions expire and are capped** (docs/mcp.md): the handler kept session ids in a set that
   `initialize` added to and only an explicit `DELETE` removed from, so a client that reconnects
