@@ -152,6 +152,31 @@ belongs in a module that runs last, reading `tesseraql-*/target/classes` from th
 directories are missing the test must fail rather than skip: a guard that goes quiet when run the
 wrong way is the failure mode this whole document is about.
 
+**Third correction, and the one that blocks the slice: a per-class scan cannot answer this.** The
+guard above was built — scanner, registry, both tests — and it passed. Then removing
+`JobDefinition.params` from the known-dead list, which should have failed it immediately, changed
+nothing. The scan reports exactly one reader for that field: `io.tesseraql.yaml.model.JobDefinition`
+itself. Every record references its own components from its canonical accessor and constructor, so
+"has a reader" is true for all 294 and the guard can never fail.
+
+That is not a bug in the scan. It is the same distinction the second correction raised, one level
+finer. Three cases look identical in a constant pool:
+
+| read by | means |
+| --- | --- |
+| another class | wired |
+| its own record's *derived* accessor (`effectiveMove()`) | wired — the common case here |
+| its own record's *canonical* accessor | nothing at all; always present |
+
+A constant pool is per class, so it cannot separate the last two. Doing so needs method-level
+attribution — walking each method's `Code` attribute and recording which member each `getfield`
+belongs to — either by hand or with ASM as a test-scoped dependency. Until that exists, this slice
+cannot be built honestly: excluding the declaring class reinstates the forty false positives the
+second correction removed, and including it makes the guard vacuous.
+
+The lesson is worth as much as the guard would have been. A guard that passes proves nothing until
+you have made it fail; this one passed on the first run and was already incapable of failing.
+
 ## Slices
 
 1. ~~**The three retirements** plus the `ErrorIndex` padding fix.~~ **Shipped.**
