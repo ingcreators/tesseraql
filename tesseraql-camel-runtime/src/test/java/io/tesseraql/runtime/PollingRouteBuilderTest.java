@@ -158,12 +158,29 @@ class PollingRouteBuilderTest {
         AppConfig config = new AppConfig(
                 Map.of("tesseraql", Map.of("connectors", Map.of("poll", poll))), name -> null);
         return new PollingRouteBuilder(List.of(), PollConnectors.load(config), "app", Map.of(),
-                home);
+                home, home.resolve("work"));
     }
 
     private static PollSpec sftp() {
         return new PollSpec("sftp", "sftp.partner.example", null, "/outbound", null, null, null,
                 null, null);
+    }
+
+    @Test
+    void aRemoteSourceStreamsThroughALocalWorkDirectory() {
+        String sftp = builder(Map.of("allowedHosts", List.of("sftp.partner.example")))
+                .endpointUri(sftp());
+        String ftps = builder(Map.of(
+                "allowedHosts", List.of("ftps.partner.example"),
+                "trustStore", Map.of("file", "ca.p12", "password", "s3cr3t")))
+                .endpointUri(ftps());
+
+        // Both remote components otherwise load the whole file into memory before the route sees
+        // it, which is what PollImportProcessor's "never materializes in memory" comment claims
+        // does not happen — true for local, false for sftp and ftps.
+        String workDir = "localWorkDirectory=" + home.resolve("work/poll").toAbsolutePath();
+        assertThat(sftp).contains(workDir);
+        assertThat(ftps).contains(workDir);
     }
 
     private static PollSpec local(String path) {
