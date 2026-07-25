@@ -96,6 +96,55 @@ class OrgDataScopingIntegrationTest {
         assertThat(ids(get(token("nobody", List.of(), List.of(), List.of())))).isEmpty();
     }
 
+    @Test
+    void aScopedUpdateConfinesTheWriteToAuthorizedRows() throws Exception {
+        // u001 owns rows 1 and 3. Renaming row 1 is inside their scope and lands.
+        assertThat(rename(token("u001", List.of(), List.of("orders:read-own"), List.of()), 1,
+                "mine-renamed")).isEqualTo(1);
+        assertThat(nameOf(1)).isEqualTo("mine-renamed");
+
+        // Row 2 belongs to someone else. The same statement matches by id, so only the scope
+        // predicate stands between the caller and another owner's row: it must affect nothing.
+        assertThat(rename(token("u001", List.of(), List.of("orders:read-own"), List.of()), 2,
+                "not-mine")).isZero();
+        assertThat(nameOf(2)).isNotEqualTo("not-mine");
+    }
+
+    @Test
+    void anUnscopedCallerWritesNothing() throws Exception {
+        assertThat(rename(token("nobody", List.of(), List.of(), List.of()), 1, "hijacked"))
+                .isZero();
+        assertThat(nameOf(1)).isNotEqualTo("hijacked");
+    }
+
+    /** POSTs the scoped rename and returns the affected-row count. */
+    private static int rename(String bearer, int id, String name) throws Exception {
+        HttpResponse<String> response = HttpClient.newHttpClient().send(
+                HttpRequest.newBuilder(URI.create(
+                        "http://localhost:" + runtime.port() + "/api/orders/rename"))
+                        .header("Authorization", "Bearer " + bearer)
+                        .header("Content-Type", "application/json")
+                        .POST(HttpRequest.BodyPublishers.ofString(
+                                "{\"id\": " + id + ", \"name\": \"" + name + "\"}"))
+                        .build(),
+                HttpResponse.BodyHandlers.ofString());
+        assertThat(response.statusCode()).isEqualTo(200);
+        return MAPPER.readTree(response.body()).get("affected").asInt();
+    }
+
+    private static String nameOf(int id) throws Exception {
+        try (java.sql.Connection connection = java.sql.DriverManager.getConnection(
+                POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword());
+                java.sql.PreparedStatement statement = connection.prepareStatement(
+                        "select name from orders where id = ?")) {
+            statement.setInt(1, id);
+            try (java.sql.ResultSet rows = statement.executeQuery()) {
+                rows.next();
+                return rows.getString(1);
+            }
+        }
+    }
+
     private static List<Integer> ids(JsonNode body) {
         return StreamSupport.stream(body.get("data").spliterator(), false)
                 .map(row -> row.get("id").asInt()).sorted().toList();
@@ -204,6 +253,39 @@ class OrgDataScopingIntegrationTest {
                 from orders o
                 where /*%scope orders_scope on o */ (1=1)
                 order by id
+                """);
+
+        // The write leg: the same scope in an UPDATE's WHERE, which is how an approval
+        // transition is documented to carry its row authority (docs/data-scoping.md).
+        Path renameDir = home.resolve("web/api/orders/rename");
+        Files.createDirectories(renameDir);
+        Files.writeString(renameDir.resolve("post.yml"), """
+                version: tesseraql/v1
+                id: orders.rename
+                kind: route
+                recipe: command-json
+                security:
+                  auth: bearer
+                input:
+                  id: { type: integer, required: true }
+                  name: { type: string, required: true }
+                sql:
+                  file: rename.sql
+                  mode: update
+                  params:
+                    id: params.id
+                    name: params.name
+                response:
+                  json:
+                    status: 200
+                    body:
+                      affected: sql.affectedRows
+                """);
+        Files.writeString(renameDir.resolve("rename.sql"), """
+                update orders o
+                set name = /* name */ 'x'
+                where o.id = /* id */ 0
+                  and /*%scope orders_scope on o */ (1=1)
                 """);
         return home;
     }

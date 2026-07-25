@@ -132,6 +132,23 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Fixed
 
+- **Row scoping applies to writes** (docs/data-scoping.md): a `/*%scope … */` directive in a
+  command's SQL, a command step, a validation rule, or a workflow `assign:` block threw
+  `TQL-SQL-2106` at request time — the scope resolver was wired into the SQL component only, so
+  scoping worked on reads and failed on the writes the documentation describes ("this is how an
+  approval workflow state transition carries its row authority"). Worse, `TQL-SEC-4100` warns
+  when a write route touches a scope-governed table *without* a scope predicate, so following
+  the lint produced a route that 500s. The resolver now reaches every request-path executor;
+  the failure was fail-closed throughout, so no unscoped write was ever committed. A scope
+  directive in **batch-job** SQL is now a lint error (`TQL-SCOPE-3014`) instead of a runtime
+  failure: a job runs on a schedule with no principal to scope against.
+
+- **Workflow `assign:` SQL binds the ambient namespaces**: it rendered with only its declared
+  `params:`, so `/* principal.loginId */` or `/* audit.now */` bound **null** rather than
+  failing — a missing segment evaluates to null. It now seeds the same ambient principal and
+  audit binds every other statement in the transaction gets, reusing the command's own audit map
+  so one clock reading still covers the whole transaction.
+
 - **FTPS poll sources encrypt the file, not just the login** (docs/connectors.md): the `ftps:`
   endpoint carried `disableSecureDataChannelDefaults=true`, which reads like hardening and does
   the opposite — it suppressed the `PBSZ`/`PROT P` negotiation, so TLS protected the control
