@@ -67,8 +67,6 @@ final class PgNotifyListener extends ServiceSupport {
             try {
                 listenAndDrain();
             } catch (SQLException ex) {
-                closeQuietly(connection);
-                connection = null;
                 if (!running) {
                     return;
                 }
@@ -87,23 +85,33 @@ final class PgNotifyListener extends ServiceSupport {
     private void listenAndDrain() throws SQLException {
         Connection conn = dataSource.getConnection();
         connection = conn;
-        conn.setAutoCommit(true);
-        try (Statement statement = conn.createStatement()) {
-            for (String channel : channels) {
-                statement.execute("LISTEN " + JdbcEventChannelStore.notifyChannel(channel));
+        try {
+            conn.setAutoCommit(true);
+            try (Statement statement = conn.createStatement()) {
+                for (String channel : channels) {
+                    statement.execute("LISTEN " + JdbcEventChannelStore.notifyChannel(channel));
+                }
             }
-        }
-        // Catch up on anything published while we were not listening (startup or a reconnect).
-        consumer.drainAll();
-        PGConnection pg = conn.unwrap(PGConnection.class);
-        while (running) {
-            // Blocks up to the backstop interval, returning early when a NOTIFY arrives. Either way
-            // we drain: a notification means new work, a timeout is the periodic safety sweep.
-            pg.getNotifications((int) backstopMillis);
-            if (!running) {
-                return;
-            }
+            // Catch up on anything published while we were not listening (startup or a reconnect).
             consumer.drainAll();
+            PGConnection pg = conn.unwrap(PGConnection.class);
+            while (running) {
+                // Blocks up to the backstop interval, returning early when a NOTIFY arrives. Either
+                // way we drain: a notification means new work, a timeout is the periodic sweep.
+                pg.getNotifications((int) backstopMillis);
+                if (!running) {
+                    return;
+                }
+                consumer.drainAll();
+            }
+        } finally {
+            // Every exit releases the dedicated LISTEN connection, because the next attempt opens
+            // a fresh one. A drain that threw a RuntimeException — which is what the event store
+            // raises, wrapping SQLException in TqlException — used to skip the close and orphan
+            // one pooled connection per reconnect cycle. The pool is the app's main pool, so a
+            // persistent drain failure took every other component down with it.
+            closeQuietly(conn);
+            connection = null;
         }
     }
 

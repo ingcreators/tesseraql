@@ -142,6 +142,26 @@ All notable changes to TesseraQL are documented here. The format follows
   rows land in the tenant's database. Deployments in a per-tenant isolation mode should check
   the shared pool for rows written before this fix.
 
+- **The pg-notify listener no longer leaks its LISTEN connection**: a drain failure surfaces as a
+  `TqlException` (unchecked), and the reconnect path released the connection only on the checked
+  branch — so a persistent failure orphaned one connection per five-second cycle from the app's
+  *main* pool until every component sharing it was starved. Both listeners now release from a
+  `finally`, and the cross-node topic bridge gained the unchecked-exception catch its sibling
+  already had (without it, one unchecked exception ended live-view signalling for the life of the
+  process).
+
+- **Live streams no longer strand the subscription they evict for**: at the global cap, a subject
+  holding a single stream could have its own list evicted and dropped from the registry while a
+  new subscription was being added to it. That subscription then never unregistered — it kept
+  receiving signals after close and never returned its slot, so the cap ratcheted down and every
+  later stream evicted a live one despite spare capacity. Eviction now runs before the list
+  reference is taken, and the cap loop stops when there is nothing left to evict.
+
+- **The route watcher survives an unreadable filesystem event**: `Files.walk` reports a directory
+  that vanishes mid-traversal as `UncheckedIOException`, which escaped the watcher's
+  `IOException` handling and killed its thread for the life of the process — `serve --watch`
+  stopped reloading with no way to restart it short of restarting the server.
+
 ### Changed
 
 - **The gallery apps rely on the default response headers**: all five example apps declare

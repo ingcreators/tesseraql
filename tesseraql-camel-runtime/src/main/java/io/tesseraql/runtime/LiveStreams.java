@@ -93,14 +93,22 @@ final class LiveStreams implements TopicBus {
     /** Subscribes a stream of {@code subject} to the given signal keys. */
     synchronized Subscription subscribe(String subject, List<String> keys) {
         Subscription subscription = new Subscription(subject, List.copyOf(keys));
+        // Evict first, and only then take the list reference. An eviction can empty this
+        // subject's list, and unregister() drops an emptied list from the map — so a reference
+        // captured beforehand would be detached from the registry, and the new subscription
+        // added to it would be invisible to unregister() forever: byKey would keep signalling a
+        // closed stream and `total` would never come back down.
+        List<Subscription> existing = bySubject.get(subject);
+        while (existing != null && existing.size() >= MAX_PER_SUBJECT) {
+            evict(existing.get(0));
+            existing = bySubject.get(subject);
+        }
+        while (total >= MAX_TOTAL && evictOldest()) {
+            // Each pass frees one slot; evictOldest() reporting false means there is nothing
+            // left to evict, and continuing would spin forever holding this monitor.
+        }
         List<Subscription> subjectSubs = bySubject.computeIfAbsent(subject,
                 s -> new ArrayList<>());
-        while (subjectSubs.size() >= MAX_PER_SUBJECT) {
-            evict(subjectSubs.get(0));
-        }
-        while (total >= MAX_TOTAL) {
-            evictOldest();
-        }
         subjectSubs.add(subscription);
         for (String key : subscription.keys) {
             byKey.computeIfAbsent(key, k -> new ArrayList<>()).add(subscription);
@@ -148,12 +156,16 @@ final class LiveStreams implements TopicBus {
         subscription.end();
     }
 
-    private void evictOldest() {
+    /** Evicts the oldest live subscription; false when there was none left to evict. */
+    private boolean evictOldest() {
         for (List<Subscription> subs : bySubject.values()) {
             if (!subs.isEmpty()) {
+                // evict() can remove this entry from the map, so return without touching the
+                // iterator again.
                 evict(subs.get(0));
-                return;
+                return true;
             }
         }
+        return false;
     }
 }

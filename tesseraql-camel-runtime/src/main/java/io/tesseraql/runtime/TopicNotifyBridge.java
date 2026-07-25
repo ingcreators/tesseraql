@@ -61,12 +61,18 @@ final class TopicNotifyBridge extends ServiceSupport {
             try {
                 listen();
             } catch (SQLException ex) {
-                closeQuietly(connection);
-                connection = null;
                 if (!running) {
                     return;
                 }
                 LOG.warn("Live-topic listen connection lost; reconnecting: {}", ex.getMessage());
+                sleep(RECONNECT_DELAY_MS);
+            } catch (RuntimeException ex) {
+                // The sibling listener learned this the hard way: without it, one unchecked
+                // exception ends cross-node live-view signalling for the life of the process.
+                if (!running) {
+                    return;
+                }
+                LOG.warn("Live-topic forward failed; continuing: {}", ex.getMessage());
                 sleep(RECONNECT_DELAY_MS);
             }
         }
@@ -75,19 +81,24 @@ final class TopicNotifyBridge extends ServiceSupport {
     private void listen() throws SQLException {
         Connection conn = dataSource.getConnection();
         connection = conn;
-        conn.setAutoCommit(true);
-        try (Statement statement = conn.createStatement()) {
-            statement.execute("LISTEN " + CrossNodeTopicBus.CHANNEL);
-        }
-        PGConnection pg = conn.unwrap(PGConnection.class);
-        while (running) {
-            PGNotification[] notifications = pg.getNotifications(POLL_TIMEOUT_MS);
-            if (notifications == null) {
-                continue;
+        try {
+            conn.setAutoCommit(true);
+            try (Statement statement = conn.createStatement()) {
+                statement.execute("LISTEN " + CrossNodeTopicBus.CHANNEL);
             }
-            for (PGNotification notification : notifications) {
-                forward(notification.getParameter());
+            PGConnection pg = conn.unwrap(PGConnection.class);
+            while (running) {
+                PGNotification[] notifications = pg.getNotifications(POLL_TIMEOUT_MS);
+                if (notifications == null) {
+                    continue;
+                }
+                for (PGNotification notification : notifications) {
+                    forward(notification.getParameter());
+                }
             }
+        } finally {
+            closeQuietly(conn);
+            connection = null;
         }
     }
 
