@@ -99,6 +99,59 @@ Point 3 is the one that matters most here. A naive "is this accessor called anyw
 for three of the five dead fields, because docs and Studio read them. The distinction the guard has
 to encode is between a consumer that *changes behavior* and one that *renders text*.
 
+**Correction, from measuring it.** A bytecode scan of all 26 built modules — every constant-pool
+method and field reference into `io.tesseraql.yaml.model` — puts the model at **294** record
+components, and finds **43** with no reference from outside the model package at all. Those 43 are
+not 43 dead fields. Nearly all of them are read by a *derived accessor on their own record*, which
+is what the rest of the framework calls:
+
+| Component | Read by | Called from |
+| --- | --- | --- |
+| `PollSpec.move`, `PollSpec.moveFailed` | `effectiveMove()`, `effectiveMoveFailed()` | `PollingRouteBuilder` |
+| `ImportSpec.columns`, `.sheet`, `.headerRow`, `.startRow` | `toReadSpec()`, `effectiveHeaderRow()`, `effectiveStartRow()` | `PollingRouteBuilder`, `RouteCompiler` |
+| `CacheSpec.etag`, `.visibility` | `etagEnabled()`, `effectiveVisibility()` | the response pipeline |
+| `ResponseSpec.*.status` (four records) | `effectiveStatus()` | the response pipeline |
+| `InputPolicy.unknownFields`, `.readOnlyFieldBehavior` | `rejectsUnknownFields()`, `readOnlyBehaviorOrDefault()` | input binding |
+| `InputField.writable` | `isWritable()` | input binding |
+| `HttpSourceSpec.*` | `toCall()`, `degradesToEmpty()` | the HTTP source |
+| `ColumnSpec.*` | `toMapping()` | file read/write specs |
+
+Defaulting through a derived accessor is the model's normal idiom, not an exception, so step 3 as
+written above would report roughly forty correctly-wired fields as unwired — and a guard that cries
+wolf forty times is one whose failures get waved through, which is worse than no guard.
+
+So a registration names the consumption *path*, not only a class: either an external consumer that
+calls the accessor, or a derived accessor on the same record plus the external consumer that calls
+*it*. The probe follows that one hop and no further; a chain longer than one hop inside the model is
+itself worth a look. `DISPLAY_ONLY` is unaffected — it is about which consumers exist, not how they
+reach the field.
+
+**Second correction: "the" consumer is usually several.** The same scan says that of the 251
+components with an external reader, **96** have exactly one behavioral consumer and **155** have
+more than one — `AttachmentDefinition.id` is read by three classes, `AssignSpec.file` by three. A
+registry shaped `"PollSpec.moveFailed" → PollingRouteBuilder.class` therefore asks for a judgment
+call ("which one is *the* consumer?") 155 times, and every one of those calls is a thing to get
+wrong, to argue about in review, and to leave stale when a fourth reader appears.
+
+So the registry stops trying to hold what a machine can derive exactly. The scan computes the
+consumer set; the registry records only what the scan cannot decide:
+
+- `DISPLAY_ONLY` — this field is *meant* to be read only by the portal or Studio. This is the
+  entry that would have caught `security.provider`, and it is a genuine human judgment.
+- `UNWIRED` — a known-dead field with a reason and, ideally, an issue. Anything unwired and
+  unlisted fails.
+
+That inverts the maintenance burden: adding a field with a real consumer needs no registry edit at
+all, and the only edits are the two that carry a decision. `ScaffoldedConfigKeys` stayed
+hand-written because config keys are strings a scan cannot follow; accessors are call edges, which
+is the opposite situation.
+
+**Where the test lives.** Computing call edges needs compiled classes from every module, so this
+test cannot sit in `tesseraql-yaml` — the reactor builds it long before its consumers exist. It
+belongs in a module that runs last, reading `tesseraql-*/target/classes` from the reactor. If those
+directories are missing the test must fail rather than skip: a guard that goes quiet when run the
+wrong way is the failure mode this whole document is about.
+
 ## Slices
 
 1. ~~**The three retirements** plus the `ErrorIndex` padding fix.~~ **Shipped.**
