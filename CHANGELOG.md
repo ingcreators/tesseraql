@@ -132,6 +132,19 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Fixed
 
+- **Every recipe carries the same governance head** (docs/route-governance-parity.md): the
+  sequence — telemetry, audit, rate limit, lane, security, tenancy, locale — was restated by
+  hand in each `build*` method, and each copy had dropped something. `file-import`/`file-export`
+  ran with no tenancy and ignored `policy.rateLimit` and `lane:` entirely; `queue-consume` routes
+  and MCP tools never reached the audit trail, so with `tesseraql.audit.routes.enabled` an HTTP
+  write was recorded and the identical write from a queue message or an AI agent was not;
+  workflow delegation carried only security and tenancy, so its errors skipped locale
+  negotiation; all three attachment routes skipped tenancy and only upload resolved a locale;
+  and a `page` route opened an idempotency record it never closed, so a retry with the same key
+  answered 409 for the whole TTL. One shared applier now supplies the head, and a test compiles
+  each recipe and reads the processors back off the Camel model, so a recipe that skips a step
+  fails the build rather than a review.
+
 - **`POST /_tesseraql/studio/reload` requires the Studio edit role** like every other mutating
   Studio endpoint. It authenticated and stopped there, so in the **default** posture — where
   `tesseraql.studio.readOnly` is true and draft/apply/scaffold all 403 — any authenticated

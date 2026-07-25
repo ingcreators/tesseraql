@@ -190,10 +190,7 @@ public final class RouteCompiler {
                 restEndpoint(builder, "POST", basePath).to(direct);
             }
             ProcessorDefinition<?> route = builder.from(direct).routeId(uploadId);
-            route.process(new io.tesseraql.compiler.binding.RouteTelemetry(uploadId, "POST",
-                    basePath, appName));
-            applySecurity(route, security);
-            applyI18n(route);
+            applyAttachmentGovernance(route, uploadId, "POST", basePath, security);
             route.process(new io.tesseraql.compiler.binding.AttachmentUploadProcessor(
                     entity, recordKey, def.bucket(), maxBytes, contentTypes));
         }
@@ -205,9 +202,7 @@ public final class RouteCompiler {
                 restEndpoint(builder, "GET", basePath).to(direct);
             }
             ProcessorDefinition<?> route = builder.from(direct).routeId(listId);
-            route.process(new io.tesseraql.compiler.binding.RouteTelemetry(listId, "GET", basePath,
-                    appName));
-            applySecurity(route, security);
+            applyAttachmentGovernance(route, listId, "GET", basePath, security);
             route.process(new io.tesseraql.compiler.binding.AttachmentListProcessor(entity,
                     recordKey));
         }
@@ -220,9 +215,7 @@ public final class RouteCompiler {
                 restEndpoint(builder, "GET", urlPath).to(direct);
             }
             ProcessorDefinition<?> route = builder.from(direct).routeId(downloadId);
-            route.process(new io.tesseraql.compiler.binding.RouteTelemetry(downloadId, "GET",
-                    urlPath, appName));
-            applySecurity(route, security);
+            applyAttachmentGovernance(route, downloadId, "GET", urlPath, security);
             route.process(new io.tesseraql.compiler.binding.AttachmentDownloadProcessor(entity,
                     recordKey, idParam));
         }
@@ -344,13 +337,7 @@ public final class RouteCompiler {
                 .resolve(routeDir.resolve(file).normalize(), dialect);
 
         ProcessorDefinition<?> route = builder.from(direct).routeId(routeId);
-        applyTelemetry(route, routeFile);
-        applyAudit(route, routeFile);
-        applyConcurrency(route, definition);
-        applyLane(route, definition);
-        applySecurity(route, definition.security());
-        applyTenancy(route);
-        applyI18n(route);
+        applyCommonGovernance(route, routeFile);
         applyIdempotencyBegin(route, definition);
         if (preCommand != null) {
             route.process(preCommand);
@@ -475,8 +462,7 @@ public final class RouteCompiler {
                 null, null, null, null, null, workflowResponse(), null, null, null, null,
                 null);
         ProcessorDefinition<?> route = builder.from(direct).routeId(routeId);
-        applySecurity(route, def.security());
-        applyTenancy(route);
+        applyCommonGovernance(route, routeId, "POST", urlPath, definition);
         route.process(new RequestBinder(definition, pathParams(urlPath), compiledAppHome))
                 .process(new io.tesseraql.compiler.binding.WorkflowDelegateProcessor(def.id(),
                         def.document().type(), DEFAULT_DATASOURCE))
@@ -606,13 +592,8 @@ public final class RouteCompiler {
         String routeId = "queue." + definition.id();
         String direct = "direct:" + routeId;
         ProcessorDefinition<?> route = builder.from(direct).routeId(routeId);
-        route.process(new io.tesseraql.compiler.binding.RouteTelemetry(
-                definition.id(), "QUEUE", "/" + definition.id(), appName));
-        applyConcurrency(route, definition);
-        applyLane(route, definition);
-        applySecurity(route, definition.security());
-        applyTenancy(route);
-        applyI18n(route);
+        applyCommonGovernance(route, definition.id(), "QUEUE", "/" + definition.id(),
+                definition);
         route.process(new RequestBinder(definition, java.util.List.of(), compiledAppHome));
         route.process(new io.tesseraql.compiler.binding.QueueDedupProcessor(
                 consume.channel(), consume.topic(), consume.idempotencyKey()));
@@ -677,13 +658,7 @@ public final class RouteCompiler {
                 + executionParams(exportDatasource, definition.sql());
 
         ProcessorDefinition<?> route = builder.from(direct).routeId(routeId);
-        applyTelemetry(route, routeFile);
-        applyAudit(route, routeFile);
-        applyConcurrency(route, definition);
-        applyLane(route, definition);
-        applySecurity(route, definition.security());
-        applyTenancy(route);
-        applyI18n(route);
+        applyCommonGovernance(route, routeFile);
         route.process(
                 new RequestBinder(definition, pathParams(routeFile.urlPath()), compiledAppHome))
                 .process(new io.tesseraql.compiler.binding.QueryExportBinder(codec, writeSpec,
@@ -709,10 +684,7 @@ public final class RouteCompiler {
             restEndpoint(builder, routeFile.httpMethod(), routeFile.urlPath()).to(direct);
         }
         ProcessorDefinition<?> route = builder.from(direct).routeId(routeId);
-        applyTelemetry(route, routeFile);
-        applyAudit(route, routeFile);
-        applySecurity(route, definition.security());
-        applyI18n(route);
+        applyCommonGovernance(route, routeFile);
         route.process(new io.tesseraql.compiler.binding.FileImportProcessor(
                 routeId, routeFile.urlPath(), appName, spec.format(),
                 spec.toReadSpec(), formatDeclaration(spec.locale(), "tesseraql.files.locale"),
@@ -744,10 +716,7 @@ public final class RouteCompiler {
             restEndpoint(builder, routeFile.httpMethod(), routeFile.urlPath()).to(direct);
         }
         ProcessorDefinition<?> route = builder.from(direct).routeId(routeId);
-        applyTelemetry(route, routeFile);
-        applyAudit(route, routeFile);
-        applySecurity(route, definition.security());
-        applyI18n(route);
+        applyCommonGovernance(route, routeFile);
         route.process(
                 new RequestBinder(definition, pathParams(routeFile.urlPath()), compiledAppHome))
                 .process(new io.tesseraql.compiler.binding.FileExportStartProcessor(
@@ -825,6 +794,9 @@ public final class RouteCompiler {
                     routeDir, i18n.defaultTag(), viewBinding));
         }
         applyHttpCache(route, routeFile.definition());
+        // pipelineThroughSql opened the idempotency record; closing it here is what stops a
+        // retry with the same key answering 409 for the whole TTL instead of serving the page.
+        applyIdempotencyComplete(route, routeFile.definition());
     }
 
     /** The POST route serving a path — a form view's {@code action:} target. */
@@ -849,13 +821,7 @@ public final class RouteCompiler {
         }
 
         ProcessorDefinition<?> route = builder.from(direct).routeId(routeId);
-        applyTelemetry(route, routeFile);
-        applyAudit(route, routeFile);
-        applyConcurrency(route, definition);
-        applyLane(route, definition);
-        applySecurity(route, definition.security());
-        applyTenancy(route);
-        applyI18n(route);
+        applyCommonGovernance(route, routeFile);
         applyIdempotencyBegin(route, definition);
         ProcessorDefinition<?> step = route
                 .process(new RequestBinder(definition, pathParams(routeFile.urlPath()),
@@ -901,13 +867,7 @@ public final class RouteCompiler {
         String direct = "direct:" + routeId;
 
         ProcessorDefinition<?> route = builder.from(direct).routeId(routeId);
-        route.process(new io.tesseraql.compiler.binding.RouteTelemetry(
-                definition.id(), "MCP", "/" + definition.id(), appName));
-        applyConcurrency(route, definition);
-        applyLane(route, definition);
-        applySecurity(route, definition.security());
-        applyTenancy(route);
-        applyI18n(route);
+        applyCommonGovernance(route, definition.id(), "MCP", "/" + definition.id(), definition);
         applyIdempotencyBegin(route, definition);
         ProcessorDefinition<?> step = route
                 .process(new RequestBinder(definition, java.util.List.of(), compiledAppHome));
@@ -1144,11 +1104,74 @@ public final class RouteCompiler {
                         .orElse(""));
     }
 
+    /**
+     * The governance steps every served pipeline carries, in the order the rest of the pipeline
+     * needs them: telemetry first so a rejection is still measured, audit next, then the
+     * admission guards, then authentication, then the tenant and locale the binder reads.
+     *
+     * <p>This exists because it used to be six hand-written lists. Each {@code build*} method
+     * re-stated the sequence, and each dropped a different step — file routes lost tenancy and
+     * rate limiting, queue consumers and MCP tools lost the audit trail, workflow delegation
+     * lost almost all of it. The recipe governance matrix
+     * ({@code RecipeGovernanceTest}) asserts the compiled output against
+     * {@link #GOVERNED_STEPS}, so a recipe that skips a step fails the build rather than a
+     * review.
+     *
+     * <p>A recipe that genuinely must skip a step does not call this — it declares the skip at
+     * its own call site, where a reviewer sees the reason.
+     */
+    private void applyCommonGovernance(ProcessorDefinition<?> route, String id, String method,
+            String path, RouteDefinition definition) {
+        applyTelemetry(route, id, method, path);
+        applyAudit(route, id, method, path, definition);
+        applyConcurrency(route, definition);
+        applyLane(route, definition);
+        applySecurity(route, definition.security());
+        applyTenancy(route);
+        applyI18n(route);
+    }
+
+    /**
+     * The governance an attachment route can carry. It has no {@code policy:} or {@code input:}
+     * of its own, so concurrency, lane and the audit trail have nothing to read — the rest
+     * applies, and tenancy in particular, which every business route resolves and all three
+     * attachment routes used to skip. i18n was applied to upload only, so a list or download
+     * error rendered in the default locale while an upload error localized.
+     */
+    private void applyAttachmentGovernance(ProcessorDefinition<?> route, String id, String method,
+            String path, SecuritySpec security) {
+        applyTelemetry(route, id, method, path);
+        applySecurity(route, security);
+        applyTenancy(route);
+        applyI18n(route);
+    }
+
+    private void applyCommonGovernance(ProcessorDefinition<?> route, RouteFile routeFile) {
+        applyCommonGovernance(route, routeFile.definition().id(), routeFile.httpMethod(),
+                routeFile.urlPath(), routeFile.definition());
+    }
+
+    /**
+     * The processors {@link #applyCommonGovernance} contributes, in order — the executable form
+     * of Matrix 1 in docs/route-governance-parity.md. {@code Gate} is the admission guard the
+     * rate limiters install. Every one of these is conditional on configuration (a route with no
+     * {@code policy:} has no gate, an app with tenancy off has no resolution), so the matrix
+     * test enables them all before asserting.
+     */
+    static final java.util.List<String> GOVERNED_STEPS = java.util.List.of(
+            "RouteTelemetry", "RouteAudit", "Gate", "LaneGate", "TenantResolution",
+            "LocaleResolution");
+
     /** Inserts the route telemetry step (span + invocation counter) at the route head (ch. 25). */
     private void applyTelemetry(ProcessorDefinition<?> route, RouteFile routeFile) {
+        applyTelemetry(route, routeFile.definition().id(), routeFile.httpMethod(),
+                routeFile.urlPath());
+    }
+
+    private void applyTelemetry(ProcessorDefinition<?> route, String id, String method,
+            String path) {
         route.process(new io.tesseraql.compiler.binding.RouteTelemetry(
-                routeFile.definition().id(), routeFile.httpMethod(), routeFile.urlPath(), appName,
-                accessLogEnabled()));
+                id, method, path, appName, accessLogEnabled()));
     }
 
     /** The opt-in HTTP access log (roadmap Phase 45): one correlated line per request. */
@@ -1162,13 +1185,18 @@ public final class RouteCompiler {
      * {@code tesseraql.audit.routes.enabled} is set, so un-audited apps pay nothing.
      */
     private void applyAudit(ProcessorDefinition<?> route, RouteFile routeFile) {
+        applyAudit(route, routeFile.definition().id(), routeFile.httpMethod(),
+                routeFile.urlPath(), routeFile.definition());
+    }
+
+    private void applyAudit(ProcessorDefinition<?> route, String id, String method, String path,
+            RouteDefinition definition) {
         if (!config.getString("tesseraql.audit.routes.enabled")
                 .map(Boolean::parseBoolean).orElse(false)) {
             return;
         }
         route.process(new io.tesseraql.compiler.binding.RouteAudit(
-                routeFile.definition().id(), routeFile.httpMethod(), routeFile.urlPath(),
-                appName, routeFile.definition().input()));
+                id, method, path, appName, definition.input()));
     }
 
     /**

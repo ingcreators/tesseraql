@@ -1,6 +1,6 @@
 # Route governance parity
 
-> **Status: slices 1, 2, 4 and 5 shipped, the rest designed.** A contract-deviation sweep (2026-07-25, method
+> **Status: slices 1–5 shipped; 6–7 designed.** A contract-deviation sweep (2026-07-25, method
 > borrowed from the Apache Camel 4.22 AI audit: learn the contract from the well-trodden
 > implementation, then check every sibling for where it deviates) found that the route
 > compiler's cross-cutting governance is **restated by hand in each `build*` method** and its
@@ -44,15 +44,15 @@ What each recipe applies today. **`—`** marks a confirmed gap against the reci
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | `command-json` | yes | yes | yes | yes | yes | yes | yes | yes | begin + complete |
 | `query-json` | yes | yes | yes | yes | yes | n/a | n/a | yes | begin + complete |
-| `query-html` / `page` | yes | yes | yes | yes | yes | n/a | n/a | yes | begin, **— complete** |
+| `query-html` / `page` | yes | yes | yes | yes | yes | n/a | n/a | yes | begin + complete |
 | `query-export` | yes | yes | yes | yes | yes | n/a | n/a | yes | n/a |
-| `file-import` | yes | yes | yes | **—** | **—** | yes | n/a | n/a | n/a |
-| `file-export` | yes | yes | yes | **—** | **—** | yes | n/a | n/a | n/a |
-| `queue-consume` | yes | yes | yes | yes | yes | **—** | **—** | **—** | n/a |
-| MCP tool | yes | yes | yes | yes | yes | **—** | **—** | yes | begin + complete |
-| workflow delegate | **—** | yes | **—** | yes | **—** | **—** | n/a | n/a | n/a |
-| attachment upload | yes | yes | yes | **—** | **—** | **—** | n/a | n/a | n/a |
-| attachment list / download | yes | yes | **—** | **—** | **—** | **—** | n/a | n/a | n/a |
+| `file-import` | yes | yes | yes | yes | yes | yes | n/a | n/a | n/a |
+| `file-export` | yes | yes | yes | yes | yes | yes | n/a | n/a | n/a |
+| `queue-consume` | yes | yes | yes | yes | yes | yes | **—** | **—** | n/a |
+| MCP tool | yes | yes | yes | yes | yes | yes | **—** | yes | begin + complete |
+| workflow delegate | yes | yes | yes | yes | yes | yes | n/a | n/a | n/a |
+| attachment upload | yes | yes | yes | yes | n/a | n/a | n/a | n/a | n/a |
+| attachment list / download | yes | yes | yes | yes | n/a | n/a | n/a | n/a | n/a |
 
 `n/a` marks a step the recipe cannot carry (a read route has nothing to audit or emit); every
 `—` is a step its siblings apply and it does not.
@@ -239,9 +239,20 @@ Ordered so that each lands independently and the guard arrives before the long t
    cap would silently drop the reasons a write was refused; if that ever needs bounding it should
    be a distinct error, not a truncation. The integration test proves both: before the fix the
    runaway step returned 200 after the full ten seconds, and the 50,000-row step returned 200.
-3. **The head applier and its matrix test** (guard steps 1–3), which closes file-route tenancy,
-   the queue-consume/MCP audit gap, the workflow-delegate and attachment head gaps, and the
-   `page` idempotency pairing in one move.
+3. ~~**The head applier and its matrix test.**~~ **Shipped.** `applyCommonGovernance` replaced
+   eight hand-written head sequences, and `RecipeGovernanceTest` compiles one route per served
+   recipe and reads the processors back off the Camel model — so a future recipe that forgets to
+   call the applier fails the build even if its source looks right. Confirmed by dropping
+   `applyTenancy` from the applier: the test names `TenantResolution` as missing.
+   That single move closed file-route tenancy and rate limiting, the queue-consume and MCP audit
+   gap, the workflow-delegate head (it had only security and tenancy), the attachment tenancy
+   gap and its i18n asymmetry, and the `page` idempotency pairing.
+   One production change the guard required: the admission guards and the idempotency pair
+   returned **lambdas**, which have no readable name, so they are named classes now. An
+   unnameable step is a step a matrix cannot assert — worth knowing before writing the next one.
+   Attachments get their own narrower applier: with no `policy:` or `input:` of their own,
+   concurrency, lane and audit have nothing to read, and saying so at the call site is the
+   "declare the skip where a reviewer sees it" rule this design asked for.
 4. ~~**Scope directives on the write path.**~~ **Shipped for the request path.** The resolver is
    threaded into the command processor (its own SQL and every step), `ValidationRules`, and
    workflow `assign:` SQL. `TQL-SEC-4100` needed no narrowing after all — once scoping works on
