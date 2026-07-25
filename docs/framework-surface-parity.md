@@ -60,7 +60,7 @@ a documented, verified-intentional exemption.
 | `McpHttpHandler` sessions | n/a | **— (no TTL, no cap)** | n/a | n/a |
 | `QueueConsumer` `ProducerTemplate` | **—** | yes | yes | **—** |
 | `MultiAppGateway` | **— (client, executor)** | **— (unbounded body buffering)** | yes | partial |
-| `TesseraqlRuntime.start()` failure path | **— (context never stopped)** | n/a | n/a | n/a |
+| `TesseraqlRuntime.start()` failure path | **— (context never stopped, and hard to reach)** | n/a | n/a | n/a |
 | `JdbcFileTransferService` | yes | yes | yes (`guarded()`) | yes |
 | `DatasetSpool`, caches, `JwksKeySource` | yes | yes (LRU/TTL) | yes | yes |
 
@@ -414,6 +414,18 @@ else re-derives.
    be the part that was missing — the existing `IOException` branch logged the end and left the
    response open, so a client held a stream that would never produce again. The test caught that
    by hanging, which is the honest way to find it.
+   *A note from attempting the start-failure row first, since it looked like the smallest.* The
+   one-line shape is obvious — stop the context before closing the pools underneath it — and it
+   was written and then dropped, because two inducements failed to reach the window: an
+   unparseable cron survives Quartz's trigger build, and an already-bound port does not fail the
+   start. Without a failing case there is no evidence the guard condition
+   (`isStarted() || isStarting()`) is even true on the real path, and a fix nobody can make fire
+   is not a fix, it is a comment. Whoever takes this row should induce the failure from inside —
+   a `RouteBuilder` that throws on start is the obvious lever — and only then decide the
+   condition. The leak is real; its rarity is why nothing has hit it, and why it is worth doing
+   properly rather than plausibly.
+7. **The long tail:** login/reset rate limiting, the OIDC/SAML error envelope, SSE session
+   re-validation, the scheduling claim-compensation, and the `FrameworkMigrations` component map.
 
 ## Out of scope
 
