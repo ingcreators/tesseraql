@@ -82,5 +82,11 @@ public record InputField(
     /** Element type for array inputs. */
     @JsonIgnoreProperties(ignoreUnknown = true)
     public record InputItems(String type, @JsonProperty("enum") List<String> enumValues) {
+
+        public InputItems {
+            // Absent means "no element enum", not null: every reader would otherwise repeat the
+            // same null check, and the first one to forget it gets an NPE at request time.
+            enumValues = enumValues == null ? List.of() : List.copyOf(enumValues);
+        }
     }
 }

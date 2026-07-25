@@ -89,6 +89,7 @@ public final class RequestBinder implements Processor {
         String localeTag = exchange.getProperty(TesseraqlProperties.LOCALE, "en", String.class);
         Map<String, Object> effective = InputBinder.bind(route.input(),
                 name -> rawValue(name, body, exchange),
+                name -> body.get(name),
                 java.util.Locale.forLanguageTag(localeTag));
 
         // A path parameter declared under input: publishes its coerced, validated value in the
