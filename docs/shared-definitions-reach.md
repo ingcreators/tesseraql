@@ -174,7 +174,9 @@ catch up. `domains/` and `rules/` get their own small schemas and their own file
    `SchemaSyncTest` property-coverage guard that keeps all of it honest.
 4. **The bind contract check.** Parse the shared rule's SQL at load and compare its bind set with
    `binds:`; reject a `rule:`-kind set declaring non-empty `binds:` (which today dies per-reference
-   at compile). Allocate `TQL-FIELD-4609` to the identical-copy warning the design promised.
+   at compile). *Shipped:* `TQL-FIELD-4609` took the declaration-side load error, because
+   4604..4608 are load errors and 4610..4612 are lint warnings — a warning at 4609 would have
+   broken the only ordering the family has. The identical-copy warning took `TQL-FIELD-4613`.
 5. **Portal and Studio.** A Rules page mirroring the Domains page (each rule, its contract, the
    routes and tools referencing it); `use()`/`code()` carried into `RouteSpec`; the missing
    constraint chips; Studio's rule builder offering `use:` and emitting `params:`.
@@ -182,7 +184,8 @@ catch up. `domains/` and `rules/` get their own small schemas and their own file
 ## Lint and tooling
 
 - No new lint *codes* for the reach fix itself — the existing 4604..4612 family simply starts
-  seeing tools and consumers. `TQL-FIELD-4609` gets allocated to the identical-copy warning.
+  seeing tools and consumers. The bind-contract check takes `TQL-FIELD-4609` and the
+  identical-copy warning `TQL-FIELD-4613` (see slice 4).
 - One behavioral change worth calling out in the CHANGELOG: apps that today pass lint with an
   unreferenced-looking domain (because their only reference is from a tool) will stop emitting
   `TQL-FIELD-4611` — a false positive disappearing, not a rule loosening.

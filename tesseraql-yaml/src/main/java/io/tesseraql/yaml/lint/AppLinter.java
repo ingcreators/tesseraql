@@ -576,8 +576,9 @@ public final class AppLinter {
 
     /**
      * Lints shared validation rules (docs/validation-rule-sets.md): a rule nothing references
-     * is either dead or a missed reference. Unknown references, bind-contract mismatches, and
-     * duplicates already failed the manifest load (TQL-FIELD-4604..4608).
+     * is either dead or a missed reference, and a route-local rule that says the same thing as
+     * a shared one is the copy-paste rule sets exist to replace. Unknown references, bind
+     * contracts on both sides, and duplicates already failed the load (TQL-FIELD-4604..4609).
      */
     private void lintRuleSets(Path appHome, AppManifest manifest, List<LintFinding> findings) {
         io.tesseraql.yaml.rules.ValidationRuleSets sets = io.tesseraql.yaml.rules.ValidationRuleSets
@@ -587,16 +588,45 @@ public final class AppLinter {
         }
         Set<String> referenced = new HashSet<>();
         for (Map.Entry<Path, RouteDefinition> document : authoringDocuments(manifest)) {
-            document.getValue().validate().values().forEach(rule -> {
+            String source = appHome.relativize(document.getKey()).toString();
+            document.getValue().validate().forEach((id, rule) -> {
                 if (rule.use() != null) {
                     referenced.add(rule.use());
+                    return;
                 }
+                duplicateOf(rule, sets).ifPresent(shared -> findings.add(new LintFinding(
+                        "TQL-FIELD-4613", "warning", source,
+                        "Validation rule '" + id + "' repeats shared rule '" + shared
+                                + "' — reference it with use: so the two cannot drift apart")));
             });
         }
         sets.rules().keySet().stream()
                 .filter(name -> !referenced.contains(name))
                 .forEach(name -> findings.add(new LintFinding("TQL-FIELD-4612", "warning",
                         "rules", "Rule '" + name + "' is declared but never referenced")));
+    }
+
+    /**
+     * The shared rule a route-local one restates, if any. Only the rule's own substance counts —
+     * expression text, or SQL file contents — because {@code field:}, {@code when:} and the
+     * message are the reference's local wiring and differ legitimately between two uses of the
+     * same rule.
+     */
+    private static java.util.Optional<String> duplicateOf(
+            io.tesseraql.yaml.model.ValidationRule local,
+            io.tesseraql.yaml.rules.ValidationRuleSets sets) {
+        if (local.rule() == null || local.rule().isBlank()) {
+            // Two SQL rules are the same rule when they name the same file, which the shared
+            // declaration already expresses; comparing file *contents* would flag a route that
+            // legitimately keeps its own copy of similar SQL.
+            return java.util.Optional.empty();
+        }
+        String expression = local.rule().trim();
+        return sets.rules().entrySet().stream()
+                .filter(entry -> entry.getValue().rule() != null
+                        && entry.getValue().rule().trim().equals(expression))
+                .map(Map.Entry::getKey)
+                .findFirst();
     }
 
     /**
@@ -615,10 +645,6 @@ public final class AppLinter {
             }
         }
     }
-
-    /** The ambient {@code principal.*} bind fields (docs/two-way-sql.md "Ambient binds"). */
-    private static final Pattern AMBIENT_PRINCIPAL = Pattern
-            .compile("principal\\.(subject|loginId|tenantId|roles|permissions|groups)");
 
     /**
      * Lints the ambient {@code principal.*} binds (docs/ambient-params.md): a bind on a route
@@ -662,7 +688,8 @@ public final class AppLinter {
             }
         }
         sqlParamMaps(def).forEach((where, params) -> params.forEach((bindName, expr) -> {
-            if (expr != null && AMBIENT_PRINCIPAL.matcher(expr).matches()) {
+            if (expr != null && io.tesseraql.core.sql.AmbientBinds.isAmbient(expr)
+                    && expr.startsWith("principal.")) {
                 findings.add(new LintFinding("TQL-SEC-4137", "warning", source,
                         "Route '" + def.id() + "' " + where + " wires '" + bindName + ": "
                                 + expr + "' — the ambient bind /* " + expr + " */ makes the"
@@ -738,19 +765,21 @@ public final class AppLinter {
         return found;
     }
 
+    /** The principal half of the ambient set; the framework owns the list, not this linter. */
+    private static void addIfAmbientPrincipal(String expressionSource, Set<String> found) {
+        String expression = expressionSource == null ? "" : expressionSource.trim();
+        if (expression.startsWith("principal.")
+                && io.tesseraql.core.sql.AmbientBinds.isAmbient(expression)) {
+            found.add(expression);
+        }
+    }
+
     private static void collectPrincipalBinds(List<SqlNode> nodes, Set<String> found) {
         for (SqlNode node : nodes) {
             switch (node) {
-                case SqlNode.Bind bind -> {
-                    if (AMBIENT_PRINCIPAL.matcher(bind.expressionSource().trim()).matches()) {
-                        found.add(bind.expressionSource().trim());
-                    }
-                }
-                case SqlNode.ListBind bind -> {
-                    if (AMBIENT_PRINCIPAL.matcher(bind.expressionSource().trim()).matches()) {
-                        found.add(bind.expressionSource().trim());
-                    }
-                }
+                case SqlNode.Bind bind -> addIfAmbientPrincipal(bind.expressionSource(), found);
+                case SqlNode.ListBind bind ->
+                    addIfAmbientPrincipal(bind.expressionSource(), found);
                 case SqlNode.If cond -> cond.branches()
                         .forEach(branch -> collectPrincipalBinds(branch.body(), found));
                 case SqlNode.For loop -> collectPrincipalBinds(loop.body(), found);

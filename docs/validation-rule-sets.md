@@ -107,12 +107,14 @@ purchase-request), so the docs page has a hand-authored reference next to the ge
 
 ## Lint and tooling
 
-- Lint family (registry-assigned at implementation): unknown `use:` reference and bind-contract
-  mismatch fail the load; unreferenced rule (warning); a route-local rule textually identical
-  to a shared one (warning — the copy-paste this replaces).
 - `rules/*.yml` has its own JSON Schema, associated by a scaffolded app's
   `.vscode/settings.json`, and both it and `validate:`'s `use:`/`params:` reference form appear
   in the generated YAML-surface reference.
+- Unknown `use:` references and bind-contract mismatches fail the load
+  (`TQL-FIELD-4606`/`4607`), and so does a `binds:` contract that disagrees with the rule's own
+  SQL (`TQL-FIELD-4609`) — the contract is checked on both sides, not only against each
+  reference. An unreferenced rule (`TQL-FIELD-4612`) and a route-local rule whose expression
+  repeats a shared one (`TQL-FIELD-4613` — the copy-paste this replaces) are warnings.
 - The docs portal's Domains page pattern extends naturally: a Rules section listing each rule,
   its contract, and the routes referencing it.
 - Validation coverage counts resolved per-route rules exactly as today; a shared rule

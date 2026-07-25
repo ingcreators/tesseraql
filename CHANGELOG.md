@@ -16,6 +16,15 @@ All notable changes to TesseraQL are documented here. The format follows
   rule: or file:" since before shared rules existed. `SchemaSyncTest` now asserts property
   coverage against the model records, not just enum coverage, so the next key added to an input
   field or a rule fails the build instead of shipping undocumented.
+- **The shared rule bind contract is checked against its SQL** (docs/validation-rule-sets.md):
+  a rule set's `binds:` is now compared with what `rules/*.sql` actually binds at load time, and
+  an expression rule may not declare a contract at all (`TQL-FIELD-4609`). Every *reference* was
+  already checked against `binds:`; `binds:` itself was checked against nothing, so adding a bind
+  to a shared rule's SQL and forgetting the contract passed load and lint on every referencing
+  route and failed on the first request that triggered the rule. Ambient binds (`principal.*`,
+  `audit.*`) are excluded, from the framework's own list rather than a second copy of it. A
+  route-local rule whose expression repeats a shared one is now the warning the design promised
+  (`TQL-FIELD-4613`).
 
 - **Path-matched route security defaults** (docs/authentication.md "Route security defaults"):
   `tesseraql.security.defaults.routes` declares firewall-style rules (`match` glob over the
