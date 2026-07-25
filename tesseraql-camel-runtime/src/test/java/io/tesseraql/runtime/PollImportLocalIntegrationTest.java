@@ -65,7 +65,11 @@ class PollImportLocalIntegrationTest {
     void theDroppedCsvIsImportedAndArchived() throws Exception {
         long deadline = System.currentTimeMillis() + Duration.ofSeconds(30).toMillis();
         Map<String, Integer> rows = new LinkedHashMap<>();
-        while (System.currentTimeMillis() < deadline && rows.size() < 2) {
+        // Both conditions, not just the rows: the import now completes inside the consumer's
+        // exchange, so the rows become visible a moment *before* Camel archives the polled file.
+        // Waiting on the rows alone used to imply the move had happened; it no longer does.
+        while (System.currentTimeMillis() < deadline
+                && (rows.size() < 2 || !Files.exists(inbound.resolve(".done/orders.csv")))) {
             rows.clear();
             try (Connection connection = connect();
                     Statement statement = connection.createStatement();
@@ -75,7 +79,7 @@ class PollImportLocalIntegrationTest {
                     rows.put(rs.getString("order_no"), rs.getInt("qty"));
                 }
             }
-            if (rows.size() < 2) {
+            if (rows.size() < 2 || !Files.exists(inbound.resolve(".done/orders.csv"))) {
                 Thread.sleep(300);
             }
         }
