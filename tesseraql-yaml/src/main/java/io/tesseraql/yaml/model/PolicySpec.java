@@ -17,10 +17,9 @@ public record PolicySpec(Concurrency concurrency, RateLimit rateLimit, String la
      * In-flight concurrency limit (design ch. 36.1).
      *
      * @param maxInFlight   maximum concurrent in-flight requests for the route
-     * @param rejectStatus  HTTP status to reject with when exceeded (default 429)
      */
     @JsonIgnoreProperties(ignoreUnknown = true)
-    public record Concurrency(Integer maxInFlight, Integer rejectStatus) {
+    public record Concurrency(Integer maxInFlight) {
     }
 
     /**

@@ -62,8 +62,11 @@ final class ErrorIndex {
                     .append("\n| Code | Meaning | Documented in | Raised in |\n"
                             + "| --- | --- | --- | --- |\n");
             for (Map.Entry<Integer, Code> code : domain.getValue().entrySet()) {
+                // Zero-padded, exactly as TqlErrorCode.toString() renders it. An unpadded row
+                // spells a code the runtime never emits, so a user searching for the one in
+                // their error payload finds nothing.
                 md.append("| `TQL-").append(domain.getKey()).append('-')
-                        .append(code.getKey()).append("` | ")
+                        .append(String.format("%04d", code.getKey())).append("` | ")
                         .append(meaningCell(code.getValue().messages())).append(" | ")
                         .append(docLinks(code.getValue().docs())).append(" | ")
                         .append(sourceLinks(code.getValue().sources())).append(" |\n");

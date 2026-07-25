@@ -45,7 +45,7 @@ class SecurityDefaultsTest {
         SecurityDefaults defaults = SecurityDefaults.from(config(List.of(
                 Map.of("match", "/**", "auth", "browser", "csrf", "auto", "policy", "app.read"))));
 
-        SecuritySpec declared = new SecuritySpec("bearer", "items.write", null, Boolean.FALSE);
+        SecuritySpec declared = new SecuritySpec("bearer", "items.write", Boolean.FALSE);
         SecuritySpec effective = defaults.resolve("POST", "/items", declared);
 
         assertThat(effective.auth()).isEqualTo("bearer");
@@ -60,7 +60,7 @@ class SecurityDefaultsTest {
 
         // The route declares only a policy; auth comes from the rule.
         SecuritySpec effective = defaults.resolve("GET", "/admin/audit",
-                new SecuritySpec(null, "admin.audit", null, null));
+                new SecuritySpec(null, "admin.audit", null));
 
         assertThat(effective.auth()).isEqualTo("browser");
         assertThat(effective.policy()).isEqualTo("admin.audit");
@@ -72,7 +72,7 @@ class SecurityDefaultsTest {
                 Map.of("match", "/**", "auth", "browser", "csrf", "auto", "policy", "app.read"))));
 
         SecuritySpec effective = defaults.resolve("POST", "/health",
-                new SecuritySpec("public", null, null, null));
+                new SecuritySpec("public", null, null));
 
         assertThat(effective.auth()).isEqualTo("public");
         assertThat(effective.policy()).isNull();
@@ -85,7 +85,7 @@ class SecurityDefaultsTest {
         SecurityDefaults defaults = SecurityDefaults.from(config(List.of(
                 Map.of("match", "/api/**", "auth", "bearer"))));
 
-        SecuritySpec declared = new SecuritySpec("browser", null, null, null);
+        SecuritySpec declared = new SecuritySpec("browser", null, null);
         assertThat(defaults.resolve("GET", "/users", declared)).isSameAs(declared);
         assertThat(defaults.resolve("GET", "/users", null)).isNull();
     }
@@ -105,7 +105,7 @@ class SecurityDefaultsTest {
                 .from(new AppConfig(Map.of(), name -> null));
 
         assertThat(defaults.isEmpty()).isTrue();
-        SecuritySpec declared = new SecuritySpec("bearer", null, null, null);
+        SecuritySpec declared = new SecuritySpec("bearer", null, null);
         assertThat(defaults.resolve("GET", "/api/users", declared)).isSameAs(declared);
     }
 

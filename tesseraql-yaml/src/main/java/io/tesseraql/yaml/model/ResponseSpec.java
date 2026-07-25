@@ -76,11 +76,10 @@ public record ResponseSpec(JsonResponse json, HtmlResponse html, StreamResponse 
     /**
      * A streaming response for large-data export (design ch. 28.10).
      *
-     * @param contentType the response content type (e.g. {@code text/csv})
      * @param filename    the suggested download filename
      */
     @JsonIgnoreProperties(ignoreUnknown = true)
-    public record StreamResponse(String contentType, String filename) {
+    public record StreamResponse(String filename) {
     }
 
     /**

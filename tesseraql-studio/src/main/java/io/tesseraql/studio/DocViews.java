@@ -723,7 +723,6 @@ public final class DocViews {
         Map<String, Object> model = new LinkedHashMap<>();
         model.put("auth", security.auth());
         model.put("policy", security.policy());
-        model.put("provider", security.provider());
         model.put("csrf", security.csrf());
         return model;
     }

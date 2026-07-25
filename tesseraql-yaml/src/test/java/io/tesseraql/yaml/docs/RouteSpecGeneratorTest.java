@@ -56,7 +56,7 @@ class RouteSpecGeneratorTest {
                         tuple("offset", "integer", false, new java.math.BigDecimal(0), null, null),
                         tuple("q", "string", false, null, null, 200));
         assertThat(search.security())
-                .isEqualTo(new RouteSpec.Security("bearer", "app.read", null, false));
+                .isEqualTo(new RouteSpec.Security("bearer", "app.read", false));
         assertThat(search.response())
                 .isEqualTo(new RouteSpec.Response("json", 200, null, null, null));
     }
@@ -84,7 +84,7 @@ class RouteSpecGeneratorTest {
 
         assertThat(create.recipe()).isEqualTo("command-json");
         assertThat(create.security())
-                .isEqualTo(new RouteSpec.Security("browser", "app.write", null, true));
+                .isEqualTo(new RouteSpec.Security("browser", "app.write", true));
         assertThat(create.response())
                 .isEqualTo(new RouteSpec.Response("redirect", 303, null, null,
                         "/items/{steps.record.keys.id}"));

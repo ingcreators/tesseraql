@@ -73,7 +73,7 @@ public record RouteSpec(
      * @param provider the named provider, or {@code null}
      * @param csrf     whether CSRF protection is required
      */
-    public record Security(String auth, String policy, String provider, boolean csrf) {
+    public record Security(String auth, String policy, boolean csrf) {
     }
 
     /**

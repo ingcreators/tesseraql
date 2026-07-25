@@ -1,6 +1,6 @@
 # YAML surface consumer audit
 
-> **Status: designed, not yet implemented.** [config-consumers.md](config-consumers.md) closed
+> **Status: slice 1 shipped, 2–5 designed.** [config-consumers.md](config-consumers.md) closed
 > "the scaffolder emits a config key nothing reads". The 2026-07-25 contract-deviation sweep found
 > the same failure class one layer up, in the **YAML model itself**: five record components across
 > the spec records are parsed, accepted without error, and never consumed. Two of them are
@@ -101,8 +101,14 @@ to encode is between a consumer that *changes behavior* and one that *renders te
 
 ## Slices
 
-1. **The three retirements** plus the `ErrorIndex` padding fix. Pure deletion, no behavior to
-   design, and it shrinks the surface the guard has to cover.
+1. ~~**The three retirements** plus the `ErrorIndex` padding fix.~~ **Shipped.**
+   `policy.concurrency.rejectStatus`, `security.provider`, and `response.stream.contentType` are
+   gone from the model, and with them the display-only readers that made two of them look real:
+   the portal route page's `provider:` badge and the route spec's stream content type. The
+   error-code index now zero-pads, so the row a user searches for after hitting the maxRows
+   overflow reads `TQL-LD-0001` — the code the runtime actually emits — instead of `TQL-LD-1`.
+   **Not** in this slice, deliberately: `items` and `jobs: params:`, because those two are
+   documented with shipped examples and need implementing rather than deleting (slices 3–4).
 2. **The registry and its drift test** (guard steps 1–3), seeded with the surviving ~245 fields.
    Landing this before the wiring work means the two wired fields arrive with their registrations
    already required.

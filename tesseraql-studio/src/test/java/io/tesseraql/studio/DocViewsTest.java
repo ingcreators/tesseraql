@@ -25,7 +25,7 @@ class DocViewsTest {
                 "query", "select 1", List.of("q", "limit"),
                 List.of(new RouteSpec.Control("if", "q != null", 0)));
         RouteSpec route = new RouteSpec("users.search", "GET", "/api/users", "query-json", "route",
-                List.of(limit), new RouteSpec.Security("bearer", "users.read", null, false),
+                List.of(limit), new RouteSpec.Security("bearer", "users.read", false),
                 List.of(), List.of(), new RouteSpec.Response("json", 200, null, null, null),
                 List.of(sql));
         return new RouteEntry(route, List.of(new TestRef("finds sato", "sql", "search.sql")));
@@ -33,7 +33,7 @@ class DocViewsTest {
 
     private static RouteEntry route(String id, String method) {
         RouteSpec route = new RouteSpec(id, method, "/x", "query-json", "route", List.of(),
-                new RouteSpec.Security("bearer", null, null, false), List.of(), List.of(),
+                new RouteSpec.Security("bearer", null, false), List.of(), List.of(),
                 new RouteSpec.Response("json", 200, null, null, null), List.of());
         return new RouteEntry(route, List.of());
     }
