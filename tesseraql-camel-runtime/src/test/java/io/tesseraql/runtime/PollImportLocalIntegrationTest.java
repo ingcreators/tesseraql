@@ -86,6 +86,26 @@ class PollImportLocalIntegrationTest {
         assertThat(Files.exists(inbound.resolve(".done/orders.csv"))).isTrue();
     }
 
+    @Test
+    void aFileThatCannotBeIngestedLandsInTheFailureDirectory() throws Exception {
+        // The import rolls back on a bad row (onError: rollback), so nothing is written - and
+        // the file must reflect that. It used to land in .done regardless: startImport spools,
+        // records the transfer and hands the work to an executor, so the exchange completed
+        // before a single row of SQL had run and the consumer archived the file as ingested.
+        Files.writeString(inbound.resolve("broken.csv"), "orderNo,qty\nB-1,not-a-number\n");
+
+        long deadline = System.currentTimeMillis() + Duration.ofSeconds(30).toMillis();
+        while (System.currentTimeMillis() < deadline
+                && !Files.exists(inbound.resolve(".error/broken.csv"))) {
+            Thread.sleep(300);
+        }
+
+        assertThat(Files.exists(inbound.resolve(".error/broken.csv")))
+                .as("a file whose import failed belongs in moveFailed, not .done")
+                .isTrue();
+        assertThat(Files.exists(inbound.resolve(".done/broken.csv"))).isFalse();
+    }
+
     private static Connection connect() throws Exception {
         return DriverManager.getConnection(
                 POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword());
@@ -141,6 +161,7 @@ class PollImportLocalIntegrationTest {
                     delay: 500ms
                 import:
                   format: csv
+                  onError: rollback
                   columns:
                     - orderNo
                     - { name: qty, type: number }

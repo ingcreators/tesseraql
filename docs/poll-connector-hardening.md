@@ -1,6 +1,6 @@
 # Poll connector hardening
 
-> **Status: slices 1–3 and 5 shipped; 4, 6 and 7 designed.** The 2026-07-25 contract-deviation sweep compared
+> **Status: slices 1–3, 5 and 6 shipped; 4 and 7 designed.** The 2026-07-25 contract-deviation sweep compared
 > the three poll sources (`local`, `sftp`, `ftps`) against each other and found that `ftps` is
 > not, as [connectors.md](connectors.md) states, "the identical recipe and runtime path … only
 > the endpoint scheme differs" — it transfers file content **unencrypted**, validates **no
@@ -127,11 +127,11 @@ model below has to answer them, not because they are established.
   scalar, with no lint anywhere. Escaping `&` would not fix it; only rejecting path-ish and
   expression values will. `ComponentGuard` does not cover this either: `bean`/`language`/
   `script` are baseline-denied as *components*, while Simple's `${bean:…}` is a language.
-- **`moveFailed` is effectively dead for all three sources.** The import is asynchronous — the
-  transfer service spools, inserts a row, submits, and returns — so the exchange completes and the
-  file moves to `.done` before a single row of SQL runs. Only three synchronous failures can route
-  to `.error`. [connectors.md](connectors.md) documents the opposite, and an operator reconciling
-  by directory concludes a failed file was ingested.
+- ~~**`moveFailed` is effectively dead for all three sources.**~~ **CONFIRMED and FIXED** (slice
+  6). The import was asynchronous — spool, insert a row, submit, return — so the exchange
+  completed and the file moved to `.done` before a single row of SQL ran, and `.error` could only
+  ever collect the three synchronous failures. Confirmed by removing the fix: a file whose rows
+  cannot bind lands in `.done` like any success.
 - **A remote `path:` documented as absolute is home-relative.** `PollingRouteBuilder:128` strips a
   leading `/` that Camel's `GenericFileConfiguration.configure` already strips, so
   `path: /outbound/orders` — the form the docs show — resolves against the login home. Verified;
@@ -239,9 +239,16 @@ home-relative — the CHANGELOG entry names it, per rule 10.
    `credential:` on a local source.
    **Not** in this slice: the `ComponentGuard` source-string validation, which belongs with the
    component-intent inference rather than with URI handling.
-6. **`moveFailed` honesty.** Either the file moves after the import resolves (the transfer service
-   signals the consumer), or the documentation stops promising it and the operations console
-   becomes the reconciliation surface. See the open question.
+6. ~~**`moveFailed` honesty.**~~ **Shipped**, by the first of the two options and uniformly for
+   all three sources: the poll processor waits for the transfer to reach a terminal status and
+   raises `TQL-LD-2849` when it did not complete, so Camel's own `move`/`moveFailed` finally
+   mean what [connectors.md](connectors.md) says. The wait runs on the poll consumer's own
+   thread, which is where it belongs — a poll job handles one file at a time by construction,
+   the file's fate is the point of the cycle, and it gives the loop natural backpressure.
+   Open question 1 answered: **not** by making local synchronous and leaving remote async. A
+   per-source difference is the class of divergence this document exists to remove.
+   The integration test drops a file whose rows cannot bind and asserts it reaches `.error`;
+   without the wait it lands in `.done` like any success.
 7. **Off-heap remote polls.** `localWorkDirectory` under the app work dir, or `streamDownload`, so
    the processor's off-heap promise holds for every source.
 

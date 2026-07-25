@@ -22,6 +22,8 @@ final class PollImportProcessor implements Processor {
 
     private static final TqlErrorCode EMPTY_FILE = new TqlErrorCode(TqlDomain.LD, 2824);
     private static final TqlErrorCode NO_SERVICE = new TqlErrorCode(TqlDomain.LD, 2825);
+    /** TQL-LD-2849: a polled file's import did not complete, so the file moves to moveFailed. */
+    private static final TqlErrorCode IMPORT_FAILED = new TqlErrorCode(TqlDomain.LD, 2849);
 
     private static final System.Logger LOG = System
             .getLogger(PollImportProcessor.class.getName());
@@ -32,6 +34,9 @@ final class PollImportProcessor implements Processor {
     private final FileReadSpec readSpec;
     private final Path rowSqlFile;
     private final String onError;
+
+    /** How often the poll thread re-reads the transfer's status while it runs. */
+    private static final long POLL_INTERVAL_MILLIS = 100;
 
     PollImportProcessor(String jobId, String appName, String format, FileReadSpec readSpec,
             Path rowSqlFile, String onError) {
@@ -61,9 +66,52 @@ final class PollImportProcessor implements Processor {
             // materializes in memory and the consumer can safely move it afterwards.
             String transferId = transfers.startImport(new FileTransferService.ImportRequest(
                     jobId, appName, format, readSpec, rowSqlFile, onError), content);
+            awaitImport(transfers, transferId, fileName);
             LOG.log(System.Logger.Level.INFO,
                     "Polled file {0} ingested for job {1} as transfer {2}",
                     fileName, jobId, transferId);
+        }
+    }
+
+    /**
+     * Waits for the import to resolve, and fails the exchange when it did not.
+     *
+     * <p>This is what makes {@code move:}/{@code moveFailed:} mean what
+     * docs/connectors.md says they mean. {@code startImport} spools, records the transfer and
+     * hands the work to an executor, so without this the exchange completed the instant the
+     * bytes were on disk — and the consumer archived the file into {@code .done} before a single
+     * row of SQL had run. A file that failed every row still landed in {@code .done}, and
+     * {@code .error} could only ever collect the three synchronous failures (no service, empty
+     * body, an IO error while spooling). An operator reconciling by directory, which is the
+     * model the documentation describes, concluded a rejected file had been ingested.
+     *
+     * <p>The wait is the poll consumer's own thread, which is the right place for it: a poll job
+     * processes one file at a time by construction, and the file's fate is the whole point of
+     * the cycle. It also gives the loop natural backpressure.
+     */
+    private void awaitImport(FileTransferService transfers, String transferId, String fileName) {
+        while (true) {
+            String status = transfers.status(transferId)
+                    .map(FileTransferService.TransferStatus::status)
+                    .orElse("UNKNOWN");
+            switch (status) {
+                case "COMPLETED" -> {
+                    return;
+                }
+                case "FAILED", "STOPPED" -> throw new TqlException(IMPORT_FAILED,
+                        "Polled file '" + fileName + "' failed to import (transfer " + transferId
+                                + "); it moves to the failure directory");
+                default -> sleepBriefly();
+            }
+        }
+    }
+
+    private static void sleepBriefly() {
+        try {
+            Thread.sleep(POLL_INTERVAL_MILLIS);
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+            throw new TqlException(IMPORT_FAILED, "Interrupted while awaiting the import");
         }
     }
 }

@@ -132,6 +132,16 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Fixed
 
+- **A polled file that fails to import lands in `moveFailed`** (docs/connectors.md): the import
+  ran asynchronously — the transfer service spooled the bytes, recorded the transfer and handed
+  the work to an executor — so the Camel exchange completed before a single row of SQL had run
+  and the consumer archived the file into `move` (`.done`) regardless of the outcome. `.error`
+  could only ever collect three synchronous failures (no transfer service, an empty body, an IO
+  error while spooling), while the documentation described it as where a file that could not be
+  ingested goes. An operator reconciling by directory therefore read a rejected file as
+  ingested. The poll consumer now waits for the transfer to resolve and raises `TQL-LD-2849`
+  when it did not complete, uniformly for local, SFTP and FTPS sources.
+
 - **Error pages carry the app's security headers** (docs/response-shaping.md): the
   `security.responseHeaders` block was merged by the successful HTML render, which the error path
   short-circuits — so a custom `templates/errors/<status>.html` page and an htmx error fragment,
