@@ -65,16 +65,12 @@ Every other executor re-implements a subset.
 | Executor | dialect variant | query timeout | maxRows | `/*%scope%*/` | ambient `principal.*` | `audit.*` binds | per-tenant datasource | ISO temporals / label folding |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | `TesseraqlSqlProducer` (route `sql:`, named queries) | yes | yes (30s) | yes (10k) | yes | yes | n/a | yes | yes |
-| `TransactionalCommandProcessor` (command, steps) | yes | yes | yes | yes | yes | yes | yes | **—** |
+| `TransactionalCommandProcessor` (command, steps) | yes | yes | yes | yes | yes | yes | yes | yes |
 | `ValidationRules` | yes | yes | n/a | yes | yes | **—** | rides the command | **—** |
-| `query-export` URI (hand-built) | **—** | **—** | n/a | yes | yes | n/a | yes | **—** |
-
-| `TransactionalCommandProcessor` (command, steps) | yes | **—** | **—** | yes | yes | yes | yes | **—** |
-| `ValidationRules` | yes | **—** | **—** | yes | yes | **—** | rides the command | **—** |
 | `query-export` URI (hand-built) | yes | yes | n/a | yes | yes | n/a | yes | **—** |
 | `JdbcFileTransferService` (row / query / after SQL) | **—** | **—** | n/a | **—** | partial | **—** | **—** | n/a |
 | `JobExecutor` (batch steps) | **—** | **—** | n/a | **—** | yes | **—** | **—** | n/a |
-| workflow `assign:` | yes | **—** | **—** | yes | yes | yes | rides the command | n/a |
+| workflow `assign:` | yes | yes | yes | yes | yes | yes | rides the command | n/a |
 
 ## The deviations
 
@@ -275,7 +271,10 @@ Ordered so that each lands independently and the guard arrives before the long t
    The regression test is a `.postgres.sql` variant beside a query-export route's base file —
    the marker row only appears if the URI carries `dialect=`.
 6. **The SQL contract registry and its honesty probes** (guard step 4), covering the dialect and
-   binding gaps in the file-transfer and batch executors.
+   binding gaps in the file-transfer and batch executors — the two rows still carrying `—` after
+   everything else in Matrix 2 closed. Both re-implement execution rather than going through the
+   producer, which is why they missed the dialect variant, the bounds and the scope resolver at
+   once; the registry's value is making that visible per executor rather than per fix.
 7. ~~**The long tail.**~~ **Shipped, all of it.**
    The `lintEmit`/`lintValidation` calls missing from `lintConsumer` and `lintTool` were the
    entry point, and chasing the last one turned up more than a missing lint call: the compiler
