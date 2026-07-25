@@ -362,7 +362,7 @@ public final class RouteCompiler {
                         routeId, definition.sql(), definition.steps(), definition.validate(),
                         definition.notifications(), stepFile, datasource, dialect,
                         definition.outbox(), definition.publish(), definition.errors(), appName,
-                        workflow));
+                        workflow, commandBounds()));
         // Live-view topics broadcast only after a successful commit: an exception in the
         // command processor (rollback) bypasses this step (docs/realtime.md).
         if (!definition.emit().isEmpty()) {
@@ -626,7 +626,8 @@ public final class RouteCompiler {
         route.process(new io.tesseraql.compiler.binding.TransactionalCommandProcessor(
                 routeId, definition.sql(), definition.steps(), definition.validate(),
                 definition.notifications(), stepFile, datasource, dialect,
-                definition.outbox(), definition.publish(), definition.errors(), appName));
+                definition.outbox(), definition.publish(), definition.errors(), appName,
+                commandBounds()));
     }
 
     /**
@@ -911,7 +912,8 @@ public final class RouteCompiler {
             step = step.process(new io.tesseraql.compiler.binding.TransactionalCommandProcessor(
                     routeId, definition.sql(), definition.steps(), definition.validate(),
                     definition.notifications(), stepFile, datasource, dialect,
-                    definition.outbox(), definition.publish(), definition.errors(), appName));
+                    definition.outbox(), definition.publish(), definition.errors(), appName,
+                    commandBounds()));
         } else if (definition.sql() != null) {
             step = step.to(executionUri(toolDir, definition.sql(), "sql",
                     definition.effectiveDatasource()));
@@ -1221,6 +1223,25 @@ public final class RouteCompiler {
             String scope = idempotency.scope() != null ? idempotency.scope() : definition.id();
             route.process(IdempotencyProcessors.complete(scope));
         }
+    }
+
+    /**
+     * The app-wide execution bounds a command's statements inherit. A command opens its own JDBC
+     * transaction with no transaction manager to bound it, so it reads the same config keys the
+     * route-level SQL path does rather than running unbounded (docs/route-governance-parity.md).
+     */
+    private io.tesseraql.compiler.binding.TransactionalCommandProcessor.Bounds commandBounds() {
+        int timeout = config.getString("tesseraql.sql.timeoutSeconds")
+                .map(Integer::parseInt)
+                .map(value -> Math.max(0, value))
+                .orElse(30);
+        int maxRows = config.getString("tesseraql.resultMaterialization.maxRows")
+                .map(Integer::parseInt)
+                .orElse(DEFAULT_MAX_ROWS);
+        String onOverflow = config.getString("tesseraql.resultMaterialization.onOverflow")
+                .orElse("fail");
+        return new io.tesseraql.compiler.binding.TransactionalCommandProcessor.Bounds(
+                timeout, maxRows, onOverflow);
     }
 
     /** Resolves the effective row cap: route override, then global config, then default (ch. 28.7). */

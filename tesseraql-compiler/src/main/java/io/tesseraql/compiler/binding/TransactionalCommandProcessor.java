@@ -83,6 +83,9 @@ public final class TransactionalCommandProcessor implements Processor {
     private static final TqlErrorCode EXPECT_FAILED = new TqlErrorCode(TqlDomain.SQL, 2602);
     /** TQL-SQL-2611: a sequence step needs the runtime's DocumentSequences bean. */
     private static final TqlErrorCode NO_SEQUENCES = new TqlErrorCode(TqlDomain.SQL, 2611);
+    // The same code the route-level SQL path raises, because it is the same failure.
+    /** TQL-LD-0001: result materialization exceeded the configured maxRows. */
+    private static final TqlErrorCode MATERIALIZATION_OVERFLOW = new TqlErrorCode(TqlDomain.LD, 1);
     /** TQL-CAMEL-3102: the route's steps declaration is invalid (fail fast at startup). */
     private static final TqlErrorCode INVALID_STEPS = new TqlErrorCode(TqlDomain.CAMEL, 3102);
     /** TQL-SQL-4092: a row-count expectation failed, reported as an optimistic-lock conflict. */
@@ -116,12 +119,29 @@ public final class TransactionalCommandProcessor implements Processor {
     private final List<io.tesseraql.yaml.notify.NotifyEvents.CompiledNotify> notifications;
     private final io.tesseraql.yaml.messaging.PublishEvents.CompiledPublish publish;
     private final boolean singleSql;
+    private final Bounds defaultBounds;
+    private static final System.Logger LOG = System
+            .getLogger(TransactionalCommandProcessor.class.getName());
     private final String datasourceName;
     private final OutboxEvents outboxEvents;
     private final ErrorsSpec errors;
     private final String appName;
     private final boolean generatedKeyColumns;
     private final WorkflowBinding workflow;
+
+    /**
+     * The execution bounds a command's statements inherit, resolved by the compiler from the
+     * same config keys the route-level SQL path uses. A command opens its own JDBC transaction
+     * and has no transaction manager to bound it, so without these a step can hold a pool
+     * connection open indefinitely and materialize an unbounded result set inside an open write
+     * transaction.
+     *
+     * @param timeoutSeconds statement timeout; {@code 0} disables it, as at route level
+     * @param maxRows        row cap for {@code mode: query} steps; negative disables it
+     * @param onOverflow     {@code fail} (default) or {@code warn} to truncate with a log line
+     */
+    public record Bounds(int timeoutSeconds, int maxRows, String onOverflow) {
+    }
 
     /**
      * A compiled step: a parsed 2-way SQL statement or a managed sequence allocation.
@@ -131,7 +151,7 @@ public final class TransactionalCommandProcessor implements Processor {
      */
     private record Step(String name, String contextKey, List<SqlNode> nodes, String sourcePath,
             String mode, Map<String, String> params, List<String> keys, SqlBinding.Expect expect,
-            String sequence) {
+            String sequence, Bounds bounds) {
 
         boolean isSequence() {
             return sequence != null;
@@ -155,9 +175,9 @@ public final class TransactionalCommandProcessor implements Processor {
             java.util.function.Function<String, Path> stepFile,
             String datasourceName, String dialect, OutboxSpec outbox,
             io.tesseraql.yaml.model.PublishSpec publish, ErrorsSpec errors,
-            String appName) {
+            String appName, Bounds defaultBounds) {
         this(routeId, sql, declaredSteps, validate, notify, stepFile, datasourceName, dialect,
-                outbox, publish, errors, appName, null);
+                outbox, publish, errors, appName, null, defaultBounds);
     }
 
     /**
@@ -171,7 +191,8 @@ public final class TransactionalCommandProcessor implements Processor {
             java.util.function.Function<String, Path> stepFile,
             String datasourceName, String dialect, OutboxSpec outbox,
             io.tesseraql.yaml.model.PublishSpec publish, ErrorsSpec errors,
-            String appName, WorkflowBinding workflow) {
+            String appName, WorkflowBinding workflow, Bounds defaultBounds) {
+        this.defaultBounds = defaultBounds;
         this.workflow = workflow;
         this.routeId = routeId;
         this.datasourceName = datasourceName;
@@ -239,7 +260,8 @@ public final class TransactionalCommandProcessor implements Processor {
             String contextKey = singleSql ? "sql" : name;
             if (binding.isSequence()) {
                 compiled.add(new Step(name, contextKey, null, null, "sequence",
-                        binding.params(), List.of(), null, binding.sequence()));
+                        binding.params(), List.of(), null, binding.sequence(),
+                        boundsFor(binding)));
             } else {
                 Path file = stepFile.apply(binding.file());
                 // Steps default to update (commands write); the single-statement form keeps its
@@ -258,11 +280,34 @@ public final class TransactionalCommandProcessor implements Processor {
                 }
                 compiled.add(new Step(name, contextKey, Sql2WayParser.parse(read(file)),
                         file.toString(), mode,
-                        binding.params(), binding.keys(), binding.expect(), null));
+                        binding.params(), binding.keys(), binding.expect(), null,
+                        boundsFor(binding)));
             }
             seen.add(name);
         }
         return List.copyOf(compiled);
+    }
+
+    /**
+     * The bounds for one step: its own {@code timeoutSeconds:}/{@code materialize:} when
+     * declared, otherwise the app-wide defaults the compiler resolved — the same precedence the
+     * route-level SQL path applies.
+     */
+    private Bounds boundsFor(SqlBinding binding) {
+        if (defaultBounds == null) {
+            return new Bounds(0, -1, "fail");
+        }
+        int timeout = binding.timeoutSeconds() != null
+                ? Math.max(0, binding.timeoutSeconds())
+                : defaultBounds.timeoutSeconds();
+        int maxRows = binding.materialize() != null && binding.materialize().maxRows() != null
+                ? binding.materialize().maxRows()
+                : defaultBounds.maxRows();
+        String onOverflow = binding.materialize() != null
+                && binding.materialize().onOverflow() != null
+                        ? binding.materialize().onOverflow()
+                        : defaultBounds.onOverflow();
+        return new Bounds(timeout, maxRows, onOverflow);
     }
 
     /** Fail-fast validation of one step declaration (runs at route build time). */
@@ -358,7 +403,8 @@ public final class TransactionalCommandProcessor implements Processor {
                 // rules against the bound context, SQL rules on the command's connection. A
                 // violation rejects the request before a single step writes.
                 List<Map<String, Object>> violations = validation.evaluate(context, connection,
-                        scopeResolver(exchange), null);
+                        scopeResolver(exchange),
+                        defaultBounds == null ? 0 : defaultBounds.timeoutSeconds(), null);
                 if (!violations.isEmpty()) {
                     throw TqlException.builder(VALIDATION_FAILED)
                             .message("Route '" + routeId + "': validation rejected the input with "
@@ -585,7 +631,8 @@ public final class TransactionalCommandProcessor implements Processor {
         params.put(AUDIT, context.get(AUDIT));
         BoundSql bound = SqlRenderer.render(workflow.assignNodes(), params,
                 scopeResolver(exchange), context);
-        Map<String, Object> result = executeQuery(connection, bound);
+        Map<String, Object> result = executeQuery(connection, bound, "Workflow assign",
+                null, defaultBounds);
         // The opened task's deadline (roadmap Phase 28 slice 3): the to state's `within`, if any.
         Instant dueAt = workflow.dueWithinMillis() == null
                 ? null
@@ -683,7 +730,8 @@ public final class TransactionalCommandProcessor implements Processor {
         long startNanos = System.nanoTime();
         long startedAt = System.currentTimeMillis();
         Map<String, Object> result = "query".equals(step.mode())
-                ? executeQuery(connection, bound)
+                ? executeQuery(connection, bound, "Step '" + step.name() + "'",
+                        step.sourcePath(), step.bounds())
                 : executeUpdate(connection, bound, step);
         recordExecution(exchange, step, result, startNanos, startedAt);
 
@@ -696,6 +744,7 @@ public final class TransactionalCommandProcessor implements Processor {
     private Map<String, Object> executeUpdate(Connection connection, BoundSql bound, Step step)
             throws SQLException {
         try (PreparedStatement statement = prepare(connection, bound.sql(), step.keys())) {
+            applyTimeout(statement, step.bounds());
             bind(statement, bound);
             int affected = statement.executeUpdate();
             Map<String, Object> result = new LinkedHashMap<>();
@@ -746,14 +795,31 @@ public final class TransactionalCommandProcessor implements Processor {
         return values;
     }
 
-    private static Map<String, Object> executeQuery(Connection connection, BoundSql bound)
-            throws SQLException {
+    private static Map<String, Object> executeQuery(Connection connection, BoundSql bound,
+            String label, String sourcePath, Bounds bounds) throws SQLException {
         try (PreparedStatement statement = connection.prepareStatement(bound.sql())) {
+            applyTimeout(statement, bounds);
             bind(statement, bound);
             try (ResultSet resultSet = statement.executeQuery()) {
                 java.sql.ResultSetMetaData metaData = resultSet.getMetaData();
                 List<Map<String, Object>> rows = new ArrayList<>();
+                int maxRows = bounds == null ? -1 : bounds.maxRows();
+                boolean warn = bounds != null && "warn".equals(bounds.onOverflow());
                 while (resultSet.next()) {
+                    if (maxRows >= 0 && rows.size() >= maxRows) {
+                        if (warn) {
+                            LOG.log(System.Logger.Level.WARNING,
+                                    "{0} result truncated at maxRows={1}",
+                                    label, maxRows);
+                            break;
+                        }
+                        throw TqlException.builder(MATERIALIZATION_OVERFLOW)
+                                .message(label + " result exceeds maxRows=" + maxRows
+                                        + " (narrow the statement, or raise"
+                                        + " materialize.maxRows)")
+                                .source(sourcePath)
+                                .build();
+                    }
                     Map<String, Object> row = new LinkedHashMap<>();
                     for (int col = 1; col <= metaData.getColumnCount(); col++) {
                         row.put(metaData.getColumnLabel(col).toLowerCase(Locale.ROOT),
@@ -766,6 +832,15 @@ public final class TransactionalCommandProcessor implements Processor {
                 result.put("rowCount", rows.size());
                 return result;
             }
+        }
+    }
+
+    /** Bounds one statement, so a runaway query cannot pin this transaction's connection. */
+    private static void applyTimeout(PreparedStatement statement, Bounds bounds)
+            throws SQLException {
+        int seconds = bounds == null ? 0 : bounds.timeoutSeconds();
+        if (seconds > 0) {
+            statement.setQueryTimeout(seconds);
         }
     }
 

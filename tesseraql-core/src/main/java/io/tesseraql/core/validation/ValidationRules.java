@@ -123,6 +123,17 @@ public final class ValidationRules {
     public List<Map<String, Object>> evaluate(Map<String, Object> context, Connection connection,
             ScopeResolver scopeResolver, BiConsumer<Rule, BoundSql> observer)
             throws SQLException {
+        return evaluate(context, connection, scopeResolver, 0, observer);
+    }
+
+    /**
+     * As above, bounding each rule's statement at {@code timeoutSeconds} ({@code 0} disables it).
+     * A validation rule runs inside the command's open write transaction, so a rule that hangs
+     * pins that transaction and its pool connection for as long as the database allows.
+     */
+    public List<Map<String, Object>> evaluate(Map<String, Object> context, Connection connection,
+            ScopeResolver scopeResolver, int timeoutSeconds, BiConsumer<Rule, BoundSql> observer)
+            throws SQLException {
         EvaluationContext evaluation = new EvaluationContext(context);
         List<Map<String, Object>> violations = new ArrayList<>();
         for (Rule rule : rules) {
@@ -135,7 +146,7 @@ public final class ValidationRules {
                 }
             } else {
                 violations.addAll(executeSql(rule, evaluation, context, connection, scopeResolver,
-                        observer));
+                        timeoutSeconds, observer));
             }
         }
         return violations;
@@ -143,7 +154,7 @@ public final class ValidationRules {
 
     private static List<Map<String, Object>> executeSql(Rule rule, EvaluationContext evaluation,
             Map<String, Object> scopeContext, Connection connection, ScopeResolver scopeResolver,
-            BiConsumer<Rule, BoundSql> observer) throws SQLException {
+            int timeoutSeconds, BiConsumer<Rule, BoundSql> observer) throws SQLException {
         Map<String, Object> params = new LinkedHashMap<>();
         rule.params().forEach((bindName, sourceExpr) -> params.put(bindName,
                 evaluation.resolve(Arrays.asList(sourceExpr.split("\\.")))));
@@ -156,6 +167,9 @@ public final class ValidationRules {
         }
         List<Map<String, Object>> violations = new ArrayList<>();
         try (PreparedStatement statement = connection.prepareStatement(bound.sql())) {
+            if (timeoutSeconds > 0) {
+                statement.setQueryTimeout(timeoutSeconds);
+            }
             for (int i = 0; i < bound.parameters().size(); i++) {
                 statement.setObject(i + 1, bound.parameters().get(i).value());
             }

@@ -132,6 +132,16 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Fixed
 
+- **Command steps and validation SQL are bounded** (docs/transactional-writes.md): a command
+  opens its own JDBC transaction with no transaction manager behind it, and its statements ran
+  with no query timeout and no row cap — so `tesseraql.sql.timeoutSeconds` and
+  `tesseraql.resultMaterialization.maxRows` silently did not apply inside a command, and a
+  `mode: query` step could materialize an unbounded result set *inside an open write
+  transaction*. Both now resolve from the same config keys the route-level SQL path uses, with a
+  step's own `timeoutSeconds:`/`materialize:` taking precedence and overflow raising the same
+  `TQL-LD-0001`. Validation SQL gets the timeout (a rule that hangs pins the transaction); its
+  rows stay uncapped on purpose, since truncating violations would hide why a write was refused.
+
 - **FTPS poll sources verify the server certificate** (docs/connectors.md): the client accepted
   any in-date certificate from any host — commons-net's default trust manager checks validity
   dates only, with no chain building and no hostname verification — and there was no

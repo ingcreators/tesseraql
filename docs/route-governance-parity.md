@@ -1,6 +1,6 @@
 # Route governance parity
 
-> **Status: slices 1 and 4 shipped, the rest designed.** A contract-deviation sweep (2026-07-25, method
+> **Status: slices 1, 2 and 4 shipped, the rest designed.** A contract-deviation sweep (2026-07-25, method
 > borrowed from the Apache Camel 4.22 AI audit: learn the contract from the well-trodden
 > implementation, then check every sibling for where it deviates) found that the route
 > compiler's cross-cutting governance is **restated by hand in each `build*` method** and its
@@ -65,8 +65,8 @@ Every other executor re-implements a subset.
 | Executor | dialect variant | query timeout | maxRows | `/*%scope%*/` | ambient `principal.*` | `audit.*` binds | per-tenant datasource | ISO temporals / label folding |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | `TesseraqlSqlProducer` (route `sql:`, named queries) | yes | yes (30s) | yes (10k) | yes | yes | n/a | yes | yes |
-| `TransactionalCommandProcessor` (command, steps) | yes | **—** | **—** | yes | yes | yes | yes | **—** |
-| `ValidationRules` | yes | **—** | **—** | yes | yes | **—** | rides the command | **—** |
+| `TransactionalCommandProcessor` (command, steps) | yes | yes | yes | yes | yes | yes | yes | **—** |
+| `ValidationRules` | yes | yes | n/a | yes | yes | **—** | rides the command | **—** |
 | `query-export` URI (hand-built) | **—** | **—** | n/a | yes | yes | n/a | yes | **—** |
 | `JdbcFileTransferService` (row / query / after SQL) | **—** | **—** | n/a | **—** | partial | **—** | **—** | n/a |
 | `JobExecutor` (batch steps) | **—** | **—** | n/a | **—** | yes | **—** | **—** | n/a |
@@ -116,7 +116,7 @@ The one mitigating fact, which shapes the fix's priority: this is **fail-closed*
 throws before the statement executes. It is an undelivered feature and a docs-vs-code
 contradiction, not a silent authorization bypass.
 
-### Command steps and validation SQL are unbounded
+### Command steps and validation SQL are unbounded — FIXED
 
 No `setQueryTimeout`, and the query-step row loop has no cap, where the route-level path applies
 a 30s default and `DEFAULT_MAX_ROWS = 10_000`. Hikari's `connectionTimeout` is pool-acquire wait,
@@ -226,8 +226,15 @@ Ordered so that each lands independently and the guard arrives before the long t
    path, and `TenantDataSourceRoutingIntegrationTest` grows a write leg on its own table (seeded
    in every tenant schema *and* the main pool's default schema, so a misrouted write lands
    somewhere observable rather than failing on a missing table).
-2. **Bound the command path.** Timeout and `maxRows` on command steps and validation SQL, honoring
-   the same config keys as the route path.
+2. ~~**Bound the command path.**~~ **Shipped.** A `Bounds` record (timeout, maxRows, onOverflow)
+   resolved by the compiler from the same config keys the route path reads, applied per step with
+   the binding's own `timeoutSeconds:`/`materialize:` winning — the same precedence and the same
+   `TQL-LD-0001` overflow error. Workflow `assign:` SQL inherits the app defaults too. Validation
+   SQL gets the timeout, which is the half that matters there: a rule that hangs pins the open
+   write transaction. Its **rows are deliberately uncapped** — a rule returns violations, so a
+   cap would silently drop the reasons a write was refused; if that ever needs bounding it should
+   be a distinct error, not a truncation. The integration test proves both: before the fix the
+   runaway step returned 200 after the full ten seconds, and the 50,000-row step returned 200.
 3. **The head applier and its matrix test** (guard steps 1–3), which closes file-route tenancy,
    the queue-consume/MCP audit gap, the workflow-delegate and attachment head gaps, and the
    `page` idempotency pairing in one move.
