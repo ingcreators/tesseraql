@@ -1,6 +1,6 @@
 # Shared definitions: reach beyond `web/`
 
-> **Status: designed, not yet implemented.** [field-domains.md](field-domains.md) and
+> **Status: slices 1–2 shipped, 3–5 designed.** [field-domains.md](field-domains.md) and
 > [validation-rule-sets.md](validation-rule-sets.md) both shipped, and both stop at the `web/`
 > boundary. The 2026-07-25 contract-deviation sweep confirmed — by running the real loader and
 > compiler against a purpose-built app home — that `use:` in an MCP tool or queue consumer fails
@@ -9,6 +9,14 @@
 > both directions: it reports the referenced-only-from-a-tool rule as unreferenced, and it
 > rejects `validate:` on recipes the compiler happily validates. This document closes the reach
 > gap and makes the authoring surfaces agree.
+>
+> **Slices 1–2 are shipped:** resolution moved above the tree split, so routes, queue consumers,
+> and MCP tools all resolve `use:` and `domain:`; every "is this referenced?" scan
+> (`TQL-FIELD-4611`/`4612`, `TQL-SEC-4136`) now walks all three, so closing the reach gap did not
+> just relocate it; and `TQL-YAML-1003` gates on the recipes that actually reach the transactional
+> command pipeline instead of on the name `command-json`. `lintValidation` is called from the
+> consumer and tool linters too. Slices 3–5 (schema/reference, the bind-contract check, portal
+> and Studio) remain.
 
 The failure class: a definition declared once and referenced by name, where the resolution step
 runs for one document tree and not its siblings. What makes it worse than an ordinary gap is the
@@ -31,9 +39,9 @@ docs/Studio consumers.
 
 | Tree | `security.defaults` | `domain:` | `use:` | validate lint | domain/rule reference scan |
 | --- | --- | --- | --- | --- | --- |
-| `web/` | yes | yes | yes | yes (over-strict, below) | yes |
-| `consume/` | n/a | **—** | **—** | **none at all** | **—** |
-| `mcp/` | n/a | **—** | **—** | **none at all** | **—** |
+| `web/` | yes | yes | yes | yes (was over-strict) | yes |
+| `consume/` | n/a | yes (was **—**) | yes (was **—**) | yes (was **none**) | yes (was **—**) |
+| `mcp/` | n/a | yes (was **—**) | yes (was **—**) | yes (was **none**) | yes (was **—**) |
 
 Both trees fully support `validate:` and `input:` — the compiler passes `definition.validate()`
 into the transactional command processor for queue-consume and MCP tools alike, and constructs
@@ -146,12 +154,21 @@ catch up. `domains/` and `rules/` get their own small schemas and their own file
 
 ## Slices
 
-1. **Resolution reach.** Hoist `applyFieldDomains`/`applyRuleSets` over tools and consumers; widen
-   the reference scans; extend `RuleSetResolutionTest` and `FieldDomainsTest` with consume/mcp
-   cases (they have none today).
-2. **Lint vocabulary.** Gate `TQL-YAML-1003` on the compiler's predicate; call `lintValidation`
-   from `lintTool` and `lintConsumer`; add the `lintEmit` calls those two also lack (shared with
-   route-governance-parity slice 7).
+1. ~~**Resolution reach.**~~ **Shipped.** The two appliers became per-definition transforms
+   (`resolveSharedDefinitions`) applied to routes, consumers, and tools alike; the domain and
+   rule-set loads hoisted to one call each. `TQL-FIELD-4611`/`4612` and `TQL-SEC-4136` walk all
+   three trees, so a rule referenced only by a tool is no longer reported unreferenced — and
+   `TQL-SEC-4136` gained the case the sweep found: a queue consumer can *never* carry a
+   principal, so a `principal.*` bind in its SQL is an error regardless of its security block.
+   `RuleSetResolutionTest` and `FieldDomainsTest` grew consume/mcp cases, both confirmed to fail
+   without the loader change.
+2. ~~**Lint vocabulary.**~~ **Shipped.** `TQL-YAML-1003` moved to `lintRoute` and gates on
+   `VALIDATING_RECIPES` (command-json, query-json, webhook — every recipe that reaches the
+   transactional command pipeline), so the webhook and query-json false positives are gone;
+   `lintValidation` is a shape check callable from any surface and runs for consumers and tools;
+   `lintEmit` runs for consumers, and tools get their own message since a tool may legally carry
+   `recipe: command-json` while its compiled pipeline still broadcasts nothing. The existing test
+   that pinned the false positive was rewritten — it asserted the bug.
 3. **Schema and reference.** `domain` on `inputField`, a typed `validate` node including `use:`,
    refreshed descriptions, `domains/`+`rules/` schemas and file associations, and the
    `SchemaSyncTest` property-coverage guard that keeps all of it honest.
