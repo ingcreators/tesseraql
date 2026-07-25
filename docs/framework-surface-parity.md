@@ -1,6 +1,6 @@
 # Framework surface parity
 
-> **Status: designed, not yet implemented.** The compiled app request path has a contract —
+> **Status: slice 1 shipped, the rest designed.** The compiled app request path has a contract —
 > authenticate, authorize, CSRF, localize, one error envelope, security response headers — and the
 > framework's own ~25 hand-written `RouteBuilder`s each re-implement a subset of it. Its long-lived
 > services have a second contract — close what you open, bound what you accumulate, survive an
@@ -9,6 +9,13 @@
 > connection leak that pins the main pool at zero, and a live-stream accounting bug that
 > permanently degrades every SSE consumer on the node. This document defines the two contracts as
 > code and records the deviations.
+>
+> **Slice 1 is shipped:** the `PgNotifyListener` and `TopicNotifyBridge` connection lifecycles
+> moved into a `finally` so every exit releases the LISTEN connection, `TopicNotifyBridge` gained
+> the `RuntimeException` catch its sibling has, `RouteWatcher` guards each event so one unreadable
+> event cannot unwind its thread, and the `LiveStreams` eviction no longer strands the
+> subscription it is making room for. Two regression tests pin the leaks; see "What slice 1 could
+> not pin" for the one guard that has no direct test and the separate defect that hunt turned up.
 
 The failure class is the same one [route-governance-parity.md](route-governance-parity.md)
 addresses for compiled routes, one level out: the framework's own surfaces are written by hand, so
@@ -232,6 +239,33 @@ remains the actual control.
   (`WorkflowSweepRoutes` shares the shape). Camel's error handler keeps the timer firing, so this is
   a lost firing, not a dead route.
 
+## What slice 1 could not pin
+
+The `RouteWatcher` guard ships **without a direct regression test**, and the attempt to write one
+is worth recording because it found something else.
+
+The confirmed trigger — a directory deleted while `Files.walk` is iterating it — is a filesystem
+race, so the obvious deterministic substitute was an unreadable directory moved into the watched
+tree fully formed. That turns out to exercise a *different* path: `registerTree` reports the
+failure as a checked `AccessDeniedException`, which `accept()`'s existing `catch (IOException)`
+already handles. The staged failure never reaches the guard.
+
+It did, however, surface a real and separate defect: **one unreadable directory anywhere under
+`web/` stops every subsequent hot reload.** The watcher survives and keeps reporting, but each
+debounced reload walks `web/` to load the manifest, hits the unreadable directory, and fails:
+
+```
+Watch: reload failed after web/api/alive/get.yml (+1 more) changed:
+  java.nio.file.AccessDeniedException: .../web/api/blocked/inner
+```
+
+A new route created after that point never mounts, and the only signal is the watch line — which
+`serve --watch` prints but a test asserting over HTTP never sees. Dev-loop only, and it does fail
+loudly rather than silently, so it is a lead rather than a defect to fix blind: the question is
+whether an unreadable subtree should be skipped with a warning (the manifest load is already
+tolerant of broken *route documents*) or remain fatal. Deciding that belongs with the reload
+tolerance model, not with a thread-safety fix.
+
 ## Unverified leads
 
 Raised by the sweep, not examined by a verifier. Listed so the slices below can decide them, not
@@ -283,10 +317,13 @@ else re-derives.
 
 ## Slices
 
-1. **The two leaks and the accounting bug.** `PgNotifyListener`'s `RuntimeException` close,
-   `TopicNotifyBridge`'s missing catch, `RouteWatcher`'s `Throwable` guard, and the `LiveStreams`
-   eviction fix — each with the regression test the sweep's harnesses already sketch. Independent,
-   small, and highest-value.
+1. ~~**The two leaks and the accounting bug.**~~ **Shipped.** Both listeners release their
+   connection from a `finally` (so the unchecked path the event store actually raises cannot skip
+   it), `TopicNotifyBridge` gained the `RuntimeException` catch its javadoc already claimed,
+   `RouteWatcher` guards per event, and `LiveStreams` evicts before taking the list reference —
+   plus a progress guarantee on the global-cap loop, since a corrupted `total` could otherwise
+   spin it forever holding the monitor. `PgNotifyListenerTest` and a new `LiveStreamsTest` case
+   pin the two; both were confirmed to fail without the fix.
 2. **The Studio reload gate**, plus the stub's security chain and message redaction.
 3. **Security headers on every response**, which subsumes the error-response, SSE, and assets rows.
 4. **The session-store default.** Either TTL and a cap in the in-memory store, or make `jdbc` the

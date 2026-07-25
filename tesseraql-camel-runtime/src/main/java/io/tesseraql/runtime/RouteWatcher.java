@@ -118,7 +118,16 @@ public final class RouteWatcher implements AutoCloseable {
                 if (key != null) {
                     Path dir = (Path) key.watchable();
                     for (WatchEvent<?> event : key.pollEvents()) {
-                        accept(dir, event);
+                        try {
+                            accept(dir, event);
+                        } catch (RuntimeException ex) {
+                            // One unreadable event must not end the watch. Files.walk reports a
+                            // directory that vanished mid-traversal as UncheckedIOException,
+                            // which is not an IOException and so escaped accept()'s own catch,
+                            // unwound this thread, and left --watch silently dead for the rest
+                            // of the process (start() will not replace a thread that died).
+                            LOG.warn("Ignoring watch event under {}: {}", dir, ex.toString());
+                        }
                     }
                     key.reset();
                 }
