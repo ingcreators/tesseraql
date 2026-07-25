@@ -83,7 +83,7 @@ public final class RouteSpecGenerator {
         if (security == null) {
             return null;
         }
-        return new RouteSpec.Security(security.auth(), security.policy(), security.provider(),
+        return new RouteSpec.Security(security.auth(), security.policy(),
                 Boolean.TRUE.equals(security.csrf()));
     }
 
@@ -126,7 +126,8 @@ public final class RouteSpecGenerator {
                     response.html().template(), null, null);
         }
         if (response.stream() != null) {
-            return new RouteSpec.Response("stream", null, null, response.stream().contentType(),
+            // The codec decides a stream's content type, so the spec reports none.
+            return new RouteSpec.Response("stream", null, null, null,
                     null);
         }
         if (response.redirect() != null) {

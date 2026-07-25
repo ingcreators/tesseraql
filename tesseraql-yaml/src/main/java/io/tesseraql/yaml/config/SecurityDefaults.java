@@ -121,11 +121,10 @@ public final class SecurityDefaults {
         Boolean csrf = declared != null && declared.csrf() != null
                 ? declared.csrf()
                 : defaultCsrf(rule.csrf(), auth, httpMethod);
-        String provider = declared == null ? null : declared.provider();
-        if (auth == null && policy == null && csrf == null && provider == null) {
+        if (auth == null && policy == null && csrf == null) {
             return declared;
         }
-        return new SecuritySpec(auth, policy, provider, csrf);
+        return new SecuritySpec(auth, policy, csrf);
     }
 
     private static Boolean defaultCsrf(String csrf, String effectiveAuth, String httpMethod) {

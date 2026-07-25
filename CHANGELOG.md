@@ -250,6 +250,23 @@ All notable changes to TesseraQL are documented here. The format follows
   `IOException` handling and killed its thread for the life of the process — `serve --watch`
   stopped reloading with no way to restart it short of restarting the server.
 
+### Removed
+
+- **Three YAML keys that were parsed, documented, and never consumed** (docs/yaml-surface-consumers.md):
+  `policy.concurrency.rejectStatus` (rejections are always 429 — `ConcurrencyLimiter` has no
+  status field), `security.provider` (route-level provider selection does not exist;
+  `applySecurity` branches on `auth`/`csrf`/`policy` only), and `response.stream.contentType`
+  (the codec decides a download's content type). The last two were **read only by the docs
+  portal and Studio**, which displayed them faithfully and so confirmed the illusion — those
+  readers are gone too. An app still setting one of these now fails to parse, which is the
+  point: it never did anything.
+
+### Fixed
+
+- **The error-code reference no longer lists an unsearchable code**: `ErrorIndex` rendered the
+  number unpadded while `TqlErrorCode.toString()` pads to four digits, so the maxRows overflow
+  appeared as `TQL-LD-1` for a code the runtime emits as `TQL-LD-0001`.
+
 ### Changed
 
 - **The gallery apps rely on the default response headers**: all five example apps declare

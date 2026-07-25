@@ -70,7 +70,6 @@
       <div class="hc-cluster">
         <span class="hc-badge" th:if="${doc.security.auth}" th:text="|auth: ${doc.security.auth}|"></span>
         <span class="hc-badge" th:if="${doc.security.policy}" th:text="|policy: ${doc.security.policy}|"></span>
-        <span class="hc-badge" th:if="${doc.security.provider}" th:text="|provider: ${doc.security.provider}|"></span>
         <span class="hc-badge" data-variant="warning" th:if="${doc.security.csrf}">CSRF</span>
       </div>
     </section>
