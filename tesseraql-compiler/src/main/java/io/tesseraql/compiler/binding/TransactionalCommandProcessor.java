@@ -301,6 +301,18 @@ public final class TransactionalCommandProcessor implements Processor {
         }
     }
 
+    /**
+     * The data-scope resolver bound by the runtime, or the reject-any default so a
+     * {@code /*%scope … *&#47;} in an app without scopes fails loudly instead of silently
+     * writing unscoped rows.
+     */
+    private static io.tesseraql.core.sql.ScopeResolver scopeResolver(Exchange exchange) {
+        io.tesseraql.core.sql.ScopeResolver resolver = exchange.getContext().getRegistry()
+                .lookupByNameAndType(TesseraqlProperties.SCOPE_RESOLVER_BEAN,
+                        io.tesseraql.core.sql.ScopeResolver.class);
+        return resolver != null ? resolver : io.tesseraql.core.sql.ScopeResolver.UNSUPPORTED;
+    }
+
     private TqlException invalid(String message) {
         return new TqlException(INVALID_STEPS, "Route '" + routeId + "': " + message);
     }
@@ -345,7 +357,8 @@ public final class TransactionalCommandProcessor implements Processor {
                 // Validation runs first, inside the transaction (roadmap Phase 19): expression
                 // rules against the bound context, SQL rules on the command's connection. A
                 // violation rejects the request before a single step writes.
-                List<Map<String, Object>> violations = validation.evaluate(context, connection);
+                List<Map<String, Object>> violations = validation.evaluate(context, connection,
+                        scopeResolver(exchange), null);
                 if (!violations.isEmpty()) {
                     throw TqlException.builder(VALIDATION_FAILED)
                             .message("Route '" + routeId + "': validation rejected the input with "
@@ -563,7 +576,15 @@ public final class TransactionalCommandProcessor implements Processor {
         Map<String, Object> params = new LinkedHashMap<>();
         workflow.assignParams().forEach((bindName, sourceExpr) -> params.put(bindName,
                 evaluation.resolve(Arrays.asList(sourceExpr.split("\\.")))));
-        BoundSql bound = SqlRenderer.render(workflow.assignNodes(), params);
+        // Assign SQL binds what every other statement in this transaction binds. Without the
+        // ambient seed a /* principal.loginId *&#47; here resolved to null rather than failing,
+        // because a missing segment evaluates to null - a silent wrong answer.
+        io.tesseraql.core.sql.AmbientBinds.seed(params, evaluation);
+        // The command's own audit map, not a fresh one: re-reading the clock here would break
+        // the guarantee that every audit.now in the transaction agrees.
+        params.put(AUDIT, context.get(AUDIT));
+        BoundSql bound = SqlRenderer.render(workflow.assignNodes(), params,
+                scopeResolver(exchange), context);
         Map<String, Object> result = executeQuery(connection, bound);
         // The opened task's deadline (roadmap Phase 28 slice 3): the to state's `within`, if any.
         Instant dueAt = workflow.dueWithinMillis() == null
@@ -654,7 +675,10 @@ public final class TransactionalCommandProcessor implements Processor {
         // and the audit namespace stays reserved.
         io.tesseraql.core.sql.AmbientBinds.seed(params, evaluation);
         params.put(AUDIT, audit);
-        BoundSql bound = SqlRenderer.render(step.nodes(), params);
+        // Row scoping applies to writes, not only reads: a /*%scope … *&#47; in an UPDATE's
+        // WHERE is how an approval transition carries its row authority (docs/data-scoping.md).
+        BoundSql bound = SqlRenderer.render(step.nodes(), params, scopeResolver(exchange),
+                context);
 
         long startNanos = System.nanoTime();
         long startedAt = System.currentTimeMillis();

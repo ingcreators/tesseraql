@@ -7,6 +7,7 @@ import io.tesseraql.core.expr.EvaluationContext;
 import io.tesseraql.core.expr.Expr;
 import io.tesseraql.core.expr.ExpressionParser;
 import io.tesseraql.core.sql.BoundSql;
+import io.tesseraql.core.sql.ScopeResolver;
 import io.tesseraql.core.sql.Sql2WayParser;
 import io.tesseraql.core.sql.SqlNode;
 import io.tesseraql.core.sql.SqlRenderer;
@@ -100,18 +101,28 @@ public final class ValidationRules {
         return head.startsWith("select") || head.startsWith("with");
     }
 
-    /** Evaluates every rule against the context, collecting all violations. */
+    /**
+     * Evaluates every rule against the context, collecting all violations. Scope directives are
+     * rejected: a caller that can resolve them passes its resolver to the four-argument form.
+     */
     public List<Map<String, Object>> evaluate(Map<String, Object> context, Connection connection)
             throws SQLException {
-        return evaluate(context, connection, null);
+        return evaluate(context, connection, ScopeResolver.UNSUPPORTED, null);
     }
 
     /**
      * Evaluates every rule, notifying {@code observer} of each rendered SQL rule so callers can
      * record coverage traces (design ch. 14).
+     *
+     * <p>{@code scopeResolver} expands a {@code /*%scope … *&#47;} directive in a rule's SQL
+     * (docs/data-scoping.md). A validation rule reads rows to decide whether a write is legal, so
+     * it has to read them through the caller's own scope — otherwise the rule answers from rows
+     * the caller cannot see. Callers with no request principal pass
+     * {@link ScopeResolver#UNSUPPORTED}, which rejects the directive loudly.
      */
     public List<Map<String, Object>> evaluate(Map<String, Object> context, Connection connection,
-            BiConsumer<Rule, BoundSql> observer) throws SQLException {
+            ScopeResolver scopeResolver, BiConsumer<Rule, BoundSql> observer)
+            throws SQLException {
         EvaluationContext evaluation = new EvaluationContext(context);
         List<Map<String, Object>> violations = new ArrayList<>();
         for (Rule rule : rules) {
@@ -123,20 +134,23 @@ public final class ValidationRules {
                     violations.add(violation(rule));
                 }
             } else {
-                violations.addAll(executeSql(rule, evaluation, connection, observer));
+                violations.addAll(executeSql(rule, evaluation, context, connection, scopeResolver,
+                        observer));
             }
         }
         return violations;
     }
 
     private static List<Map<String, Object>> executeSql(Rule rule, EvaluationContext evaluation,
-            Connection connection, BiConsumer<Rule, BoundSql> observer) throws SQLException {
+            Map<String, Object> scopeContext, Connection connection, ScopeResolver scopeResolver,
+            BiConsumer<Rule, BoundSql> observer) throws SQLException {
         Map<String, Object> params = new LinkedHashMap<>();
         rule.params().forEach((bindName, sourceExpr) -> params.put(bindName,
                 evaluation.resolve(Arrays.asList(sourceExpr.split("\\.")))));
         // Ambient principal.* binds (docs/ambient-params.md); declared params win by name.
         io.tesseraql.core.sql.AmbientBinds.seed(params, evaluation);
-        BoundSql bound = SqlRenderer.render(rule.sql(), params);
+        BoundSql bound = SqlRenderer.render(rule.sql(), params, scopeResolver,
+                scopeContext);
         if (observer != null) {
             observer.accept(rule, bound);
         }

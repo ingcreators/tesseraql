@@ -1,6 +1,6 @@
 # Route governance parity
 
-> **Status: slice 1 shipped, the rest designed.** A contract-deviation sweep (2026-07-25, method
+> **Status: slices 1 and 4 shipped, the rest designed.** A contract-deviation sweep (2026-07-25, method
 > borrowed from the Apache Camel 4.22 AI audit: learn the contract from the well-trodden
 > implementation, then check every sibling for where it deviates) found that the route
 > compiler's cross-cutting governance is **restated by hand in each `build*` method** and its
@@ -9,6 +9,14 @@
 > row-authority feature that throws at request time. This document defines the two matrices
 > that make "a recipe silently missing a governance step" unrepresentable, and records the
 > deviations that motivated them.
+>
+> **Slice 4 (scope on the write path) is also shipped:** the compiled resolver reaches command
+> SQL, command steps, validation rules, and workflow `assign:` SQL, so a `/*%scope … */` in an
+> `UPDATE` confines the write as [data-scoping.md](data-scoping.md) has always said it does — the
+> integration test's write leg returned **500 on both cases** before the fix. `TQL-SEC-4100` is
+> now honest advice rather than a nudge into a broken path, and a new `TQL-SCOPE-3014` rejects a
+> directive in batch-job SQL at lint time, since a job has no principal to scope against (the
+> answer to open question 1). Assign SQL also gained the ambient and audit binds it was missing.
 >
 > **Slice 1 (tenant-correct writes) is shipped:** the routing rule lives in one shared
 > `TenantRouting` the SQL producer, the transactional command processor, and workflow delegation
@@ -57,12 +65,12 @@ Every other executor re-implements a subset.
 | Executor | dialect variant | query timeout | maxRows | `/*%scope%*/` | ambient `principal.*` | `audit.*` binds | per-tenant datasource | ISO temporals / label folding |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | `TesseraqlSqlProducer` (route `sql:`, named queries) | yes | yes (30s) | yes (10k) | yes | yes | n/a | yes | yes |
-| `TransactionalCommandProcessor` (command, steps) | yes | **—** | **—** | **—** | yes | yes | yes | **—** |
-| `ValidationRules` | yes | **—** | **—** | **—** | yes | **—** | rides the command | **—** |
+| `TransactionalCommandProcessor` (command, steps) | yes | **—** | **—** | yes | yes | yes | yes | **—** |
+| `ValidationRules` | yes | **—** | **—** | yes | yes | **—** | rides the command | **—** |
 | `query-export` URI (hand-built) | **—** | **—** | n/a | yes | yes | n/a | yes | **—** |
 | `JdbcFileTransferService` (row / query / after SQL) | **—** | **—** | n/a | **—** | partial | **—** | **—** | n/a |
 | `JobExecutor` (batch steps) | **—** | **—** | n/a | **—** | yes | **—** | **—** | n/a |
-| workflow `assign:` | yes | **—** | **—** | **—** | **—** | **—** | rides the command | n/a |
+| workflow `assign:` | yes | **—** | **—** | yes | yes | yes | rides the command | n/a |
 
 ## The deviations
 
@@ -85,7 +93,7 @@ resolved tenant's pool replaces `main`, "rather than silently falling back to a 
 `AppLinter.lintTenantPredicate` returns early unless the mode is `shared-schema`, so per-tenant
 apps get no lint here at all, and `TenantDataSourceRoutingIntegrationTest` covers reads only.
 
-### `/*%scope … */` is inert on every write path
+### `/*%scope … */` is inert on every write path — FIXED on the request path
 
 The two-argument `SqlRenderer.render` passes `ScopeResolver.UNSUPPORTED`, which throws
 `TQL-SQL-2106`. The only scope-aware call site in `src/main` is `TesseraqlSqlProducer:90`. So
@@ -223,12 +231,17 @@ Ordered so that each lands independently and the guard arrives before the long t
 3. **The head applier and its matrix test** (guard steps 1–3), which closes file-route tenancy,
    the queue-consume/MCP audit gap, the workflow-delegate and attachment head gaps, and the
    `page` idempotency pairing in one move.
-4. **Scope directives on the write path.** Thread the compiled scope resolver into the command
-   processor, validation rules, the file-transfer service, `JobExecutor`, and the workflow
-   sweeper — then delete the `SqlRenderer` javadoc claim that the two-argument overload is for
-   paths that never carry a directive. Until this lands, lint must stop steering: `TQL-SEC-4100`
-   is narrowed to routes whose SQL the scope resolver actually reaches, and a new error fires when
-   a directive appears in SQL that cannot resolve it (the fail-fast that lint owes today).
+4. ~~**Scope directives on the write path.**~~ **Shipped for the request path.** The resolver is
+   threaded into the command processor (its own SQL and every step), `ValidationRules`, and
+   workflow `assign:` SQL. `TQL-SEC-4100` needed no narrowing after all — once scoping works on
+   writes, following its advice produces a working route, which was the whole complaint.
+   `TQL-SCOPE-3014` (new, error) rejects a directive in batch-job SQL, resolving open question 1
+   in favour of failing at build time rather than wiring a resolver with no principal to resolve
+   against. The scope directive lint also reaches MCP tools now.
+   **Still open:** `JdbcFileTransferService` (file import/export SQL) and `WorkflowSweeper`. Both
+   run outside a request; whether they should carry a scope at all is the same question
+   `TQL-SCOPE-3014` answers for jobs, and they deserve the same treatment or a resolver of their
+   own — decide before extending 3014 to them.
 5. **`query-export` through `executionUri`,** which is a deletion plus a call, and carries the
    streaming-profile fix with it.
 6. **The SQL contract registry and its honesty probes** (guard step 4), covering the dialect and

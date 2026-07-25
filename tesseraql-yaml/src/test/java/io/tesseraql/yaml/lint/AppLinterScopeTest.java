@@ -59,6 +59,32 @@ class AppLinterScopeTest {
                 """);
     }
 
+    @Test
+    void aScopeDirectiveInBatchJobSqlIsRejected(@TempDir Path dir) throws Exception {
+        writeScope(dir);
+        Files.createDirectories(dir.resolve("batch/nightly"));
+        Files.writeString(dir.resolve("batch/nightly/sweep.sql"),
+                "update orders o set status = 'X' where /*%scope orders_scope on o */ (1=1)\n");
+        Files.writeString(dir.resolve("batch/nightly/job.yml"), """
+                version: tesseraql/v1
+                id: nightly.sweep
+                kind: job
+                recipe: sql-pipeline
+                trigger:
+                  schedule:
+                    cron: "0 0 3 * * ?"
+                pipeline:
+                  - id: sweep
+                    sql:
+                      file: sweep.sql
+                      mode: update
+                """);
+
+        // Scoping resolves against a request principal. A job has none, so the directive can
+        // only fail at execution time — lint owes the author that answer at build time.
+        assertThat(scopeCodes(new AppLinter().lint(dir))).contains("TQL-SCOPE-3014");
+    }
+
     private static List<String> scopeCodes(List<LintFinding> findings) {
         return findings.stream().map(LintFinding::code).filter(c -> c.startsWith("TQL-SCOPE"))
                 .toList();

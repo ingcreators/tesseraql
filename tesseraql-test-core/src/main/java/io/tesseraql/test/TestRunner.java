@@ -241,7 +241,10 @@ public final class TestRunner {
                     + (test.validate().rule() == null ? "" : " '" + test.validate().rule() + "'"));
         }
         try (Connection connection = dataSource.getConnection()) {
+            // A declarative case supplies its own params and carries no request principal, so a
+            // scope directive has nothing to resolve against: reject it rather than pretend.
             return new ValidationRules(rules).evaluate(test.params(), connection,
+                    io.tesseraql.core.sql.ScopeResolver.UNSUPPORTED,
                     (rule, bound) -> recordRuleCoverage(rule, bound));
         } catch (java.sql.SQLException ex) {
             throw new IllegalStateException("Validation SQL failed: " + ex.getMessage(), ex);

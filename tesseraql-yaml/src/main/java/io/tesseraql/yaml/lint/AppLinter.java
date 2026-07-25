@@ -6,13 +6,16 @@ import io.tesseraql.core.sql.Sql2WayParser;
 import io.tesseraql.core.sql.SqlNode;
 import io.tesseraql.yaml.config.AppConfig;
 import io.tesseraql.yaml.manifest.AppManifest;
+import io.tesseraql.yaml.manifest.JobFile;
 import io.tesseraql.yaml.manifest.ManifestLoader;
 import io.tesseraql.yaml.manifest.RouteFile;
 import io.tesseraql.yaml.manifest.ScopeFile;
 import io.tesseraql.yaml.manifest.ToolFile;
 import io.tesseraql.yaml.manifest.WorkflowFile;
 import io.tesseraql.yaml.model.DeadlineSpec;
+import io.tesseraql.yaml.model.ImportSpec;
 import io.tesseraql.yaml.model.InputField;
+import io.tesseraql.yaml.model.JobDefinition;
 import io.tesseraql.yaml.model.MatchArm;
 import io.tesseraql.yaml.model.RouteDefinition;
 import io.tesseraql.yaml.model.ScopeDefinition;
@@ -1616,7 +1619,59 @@ public final class AppLinter {
         for (RouteFile consumer : manifest.consumers()) {
             lintScopeDirectives(appHome, consumer, declared, findings);
         }
+        for (io.tesseraql.yaml.manifest.ToolFile tool : manifest.tools()) {
+            lintScopeDirectives(appHome, tool.source(), tool.definition(), declared, findings);
+        }
+        lintUnreachableScopeDirectives(appHome, manifest, findings);
         lintWriteScope(appHome, manifest, findings);
+    }
+
+    /**
+     * Reports a {@code /*%scope … *&#47;} directive sitting in SQL no scope resolver reaches
+     * ({@code TQL-SCOPE-3014}). Scoping is wired into the request path — route SQL, named
+     * queries, command steps, and validation rules — because that is where a principal exists to
+     * scope against. Batch jobs run on a schedule and file transfers stream rows outside a
+     * request, so a directive there can only fail at execution time with {@code TQL-SQL-2106}.
+     * Saying so at lint time is the difference between a build error and a 3am job failure.
+     */
+    private void lintUnreachableScopeDirectives(Path appHome, AppManifest manifest,
+            List<LintFinding> findings) {
+        for (JobFile job : manifest.jobs()) {
+            Path dir = job.source().getParent();
+            String source = relative(appHome, job.source());
+            for (String file : jobSqlFiles(job)) {
+                Path sqlFile = dir.resolve(file);
+                if (Files.isRegularFile(sqlFile)
+                        && SCOPE_DIRECTIVE.matcher(readQuietly(sqlFile)).find()) {
+                    findings.add(new LintFinding("TQL-SCOPE-3014", "error", source,
+                            "batch job '" + job.definition().id() + "' uses a /*%scope … */"
+                                    + " directive in " + file + ", but a job runs with no"
+                                    + " principal to scope against — it would fail at execution"
+                                    + " time (TQL-SQL-2106); filter with a job parameter instead"));
+                }
+            }
+        }
+    }
+
+    /** Every SQL file a job references: its own binding, pipeline steps, and import row SQL. */
+    private static List<String> jobSqlFiles(JobFile job) {
+        List<String> files = new ArrayList<>();
+        JobDefinition definition = job.definition();
+        if (definition.sql() != null && definition.sql().file() != null) {
+            files.add(definition.sql().file());
+        }
+        if (definition.pipeline() != null) {
+            definition.pipeline().forEach(step -> {
+                if (step.sql() != null && step.sql().file() != null) {
+                    files.add(step.sql().file());
+                }
+            });
+        }
+        ImportSpec fileImport = definition.fileImport();
+        if (fileImport != null && fileImport.sql() != null && fileImport.sql().file() != null) {
+            files.add(fileImport.sql().file());
+        }
+        return files;
     }
 
     private static final Pattern SCOPED_TABLE_ALIASED = Pattern.compile(
@@ -1863,12 +1918,17 @@ public final class AppLinter {
         }
     }
 
-    /** Checks each {@code /*%scope%/} directive in a route's SQL names a declared scope. */
     private void lintScopeDirectives(Path appHome, RouteFile route, Set<String> declared,
             List<LintFinding> findings) {
-        String source = relative(appHome, route.source());
-        String id = route.definition().id();
-        for (Path sqlFile : routeSqlFiles(route)) {
+        lintScopeDirectives(appHome, route.source(), route.definition(), declared, findings);
+    }
+
+    /** Checks each {@code /*%scope%/} directive in a document's SQL names a declared scope. */
+    private void lintScopeDirectives(Path appHome, Path file, RouteDefinition definition,
+            Set<String> declared, List<LintFinding> findings) {
+        String source = relative(appHome, file);
+        String id = definition.id();
+        for (Path sqlFile : routeSqlFiles(file, definition)) {
             if (!Files.isRegularFile(sqlFile)) {
                 continue;
             }
@@ -2120,10 +2180,13 @@ public final class AppLinter {
         return value == null || value.isBlank();
     }
 
-    /** The non-contract SQL files a route references (its {@code sql}, {@code steps}, {@code queries}). */
     private static List<Path> routeSqlFiles(RouteFile route) {
-        RouteDefinition definition = route.definition();
-        Path dir = route.source().getParent();
+        return routeSqlFiles(route.source(), route.definition());
+    }
+
+    /** The non-contract SQL files a document references ({@code sql}, {@code steps}, {@code queries}). */
+    private static List<Path> routeSqlFiles(Path source, RouteDefinition definition) {
+        Path dir = source.getParent();
         Map<String, SqlBinding> bindings = new LinkedHashMap<>();
         if (definition.sql() != null) {
             bindings.put("sql", definition.sql());
