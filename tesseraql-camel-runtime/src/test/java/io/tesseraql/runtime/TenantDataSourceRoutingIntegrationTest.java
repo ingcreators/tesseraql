@@ -16,6 +16,8 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.sql.Connection;
 import java.sql.DriverManager;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
 import java.sql.Statement;
 import java.util.Comparator;
 import java.util.stream.Stream;
@@ -86,6 +88,30 @@ class TenantDataSourceRoutingIntegrationTest {
     }
 
     @Test
+    void aWriteLandsInTheTenantsOwnDatasource() throws Exception {
+        assertThat(post("acme", "acme-written").statusCode()).isEqualTo(201);
+
+        // The tenant that wrote owns the row; its neighbour does not have it, and neither does
+        // the shared pool the command resolved to before tenant routing reached the write path.
+        assertThat(noteCount("acme", "acme-written")).isEqualTo(1);
+        assertThat(noteCount("globex", "acme-written")).isZero();
+        assertThat(noteCount("public", "acme-written")).isZero();
+    }
+
+    @Test
+    void anUnknownTenantsWriteIsRejectedAndCommitsNothing() throws Exception {
+        HttpResponse<String> response = post("nope", "never-written");
+
+        assertThat(response.statusCode()).isEqualTo(403);
+        assertThat(response.body()).contains("TQL-TENANT-4031");
+        // The read path already refuses this tenant; the write must not slip into the shared
+        // pool behind that refusal.
+        assertThat(noteCount("public", "never-written")).isZero();
+        assertThat(noteCount("acme", "never-written")).isZero();
+        assertThat(noteCount("globex", "never-written")).isZero();
+    }
+
+    @Test
     void unknownTenantIsRejected() throws Exception {
         HttpResponse<String> response = HttpClient.newHttpClient().send(
                 HttpRequest.newBuilder(URI.create(
@@ -95,6 +121,32 @@ class TenantDataSourceRoutingIntegrationTest {
                 HttpResponse.BodyHandlers.ofString());
         assertThat(response.statusCode()).isEqualTo(403);
         assertThat(response.body()).contains("TQL-TENANT-4031");
+    }
+
+    private static HttpResponse<String> post(String tenant, String name) throws Exception {
+        return HttpClient.newHttpClient().send(
+                HttpRequest.newBuilder(URI.create(
+                        "http://localhost:" + runtime.port() + "/api/notes"))
+                        .header("X-Tenant-Id", tenant)
+                        .header("Content-Type", "application/json")
+                        .POST(HttpRequest.BodyPublishers.ofString(
+                                "{\"name\": \"" + name + "\"}"))
+                        .build(),
+                HttpResponse.BodyHandlers.ofString());
+    }
+
+    /** Reads straight past the framework, so the assertion is about rows on disk. */
+    private static int noteCount(String schema, String name) throws Exception {
+        try (Connection connection = DriverManager.getConnection(
+                POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword());
+                PreparedStatement statement = connection.prepareStatement(
+                        "select count(*) from " + schema + ".notes where name = ?")) {
+            statement.setString(1, name);
+            try (ResultSet rows = statement.executeQuery()) {
+                rows.next();
+                return rows.getInt(1);
+            }
+        }
     }
 
     private static JsonNode get(String tenant, int expectedStatus) throws Exception {
@@ -118,6 +170,13 @@ class TenantDataSourceRoutingIntegrationTest {
                         + ".items (id serial primary key, name varchar(200) not null)");
                 statement.execute("insert into " + tenant
                         + ".items (name) values ('" + tenant + "-only')");
+            }
+            // notes lives in every tenant schema AND in the main pool's default schema, so a
+            // write that resolves the wrong datasource lands somewhere observable instead of
+            // failing on a missing table — that is the shape of the bug this guards.
+            for (String schema : new String[]{"acme", "globex", "public"}) {
+                statement.execute("create table " + schema
+                        + ".notes (id serial primary key, name varchar(200) not null)");
             }
             // A deployment-shared reporting area, reached by an explicit datasource: only.
             statement.execute("create schema reporting_s");
@@ -216,6 +275,37 @@ class TenantDataSourceRoutingIntegrationTest {
                 """);
         Files.writeString(reportDir.resolve("report.sql"),
                 "select id, name from items order by id\n");
+
+        // The write leg: a command must land in the same database its reads come from. It uses
+        // its own table so the row it adds cannot perturb the read assertions above.
+        Path notesDir = target.resolve("web/api/notes");
+        Files.createDirectories(notesDir);
+        Files.writeString(notesDir.resolve("post.yml"), """
+                version: tesseraql/v1
+                id: notes.create
+                kind: route
+                recipe: command-json
+
+                security:
+                  auth: public
+
+                input:
+                  name: { type: string, required: true, maxLength: 200 }
+
+                sql:
+                  file: insert.sql
+                  mode: update
+                  params:
+                    name: params.name
+
+                response:
+                  json:
+                    status: 201
+                    body:
+                      created: sql.affectedRows
+                """);
+        Files.writeString(notesDir.resolve("insert.sql"),
+                "insert into notes (name) values (/* name */ 'sample')\n");
         return target;
     }
 

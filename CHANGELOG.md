@@ -130,6 +130,18 @@ All notable changes to TesseraQL are documented here. The format follows
   `/* principal.loginId */` bind, so the contract is a single `title` bind, exercised by two
   declarative suite cases.
 
+### Fixed
+
+- **Writes honor per-tenant datasource routing** (docs/multi-tenancy.md): under
+  `database-per-tenant` or `schema-per-tenant`, a `command-json` write — and a `queue-consume`
+  write, an MCP write tool, validation SQL, and workflow delegation — resolved the route's named
+  connector directly and committed to the shared `main` pool, while every read on the same
+  request went to the tenant's pool. A tenant with no configured pool was refused on the read
+  path with `TQL-TENANT-4031` (403) but still had its write committed. Every executor now
+  resolves the datasource through one shared rule, so the 403 covers writes too and a tenant's
+  rows land in the tenant's database. Deployments in a per-tenant isolation mode should check
+  the shared pool for rows written before this fix.
+
 ### Changed
 
 - **The gallery apps rely on the default response headers**: all five example apps declare
