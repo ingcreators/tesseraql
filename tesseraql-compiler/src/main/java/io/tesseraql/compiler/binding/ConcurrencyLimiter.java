@@ -25,7 +25,13 @@ public final class ConcurrencyLimiter {
 
     /** Returns a processor that acquires a permit and releases it when the exchange completes. */
     public Processor acquire() {
-        return exchange -> {
+        return new Gate();
+    }
+
+    /** Named so the recipe-governance matrix test can read it back off the compiled route. */
+    final class Gate implements Processor {
+        @Override
+        public void process(Exchange exchange) {
             if (!semaphore.tryAcquire()) {
                 throw new TqlException(RATE_LIMIT, "Too many concurrent requests");
             }
@@ -40,6 +46,6 @@ public final class ConcurrencyLimiter {
                     semaphore.release();
                 }
             });
-        };
+        }
     }
 }

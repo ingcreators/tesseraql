@@ -31,7 +31,18 @@ public final class IdempotencyProcessors {
 
     /** Begins idempotent processing before request binding. */
     public static Processor begin(String scope, long ttlMillis, boolean required) {
-        return exchange -> {
+        // Named rather than a lambda: begin and complete have to be paired, and the
+        // recipe-governance matrix test can only check that by reading the compiled route back.
+        return new IdempotencyBegin(scope, ttlMillis, required);
+    }
+
+    /** @see #begin(String, long, boolean) */
+    public record IdempotencyBegin(String scope, long ttlMillis, boolean required)
+            implements
+                Processor {
+
+        @Override
+        public void process(org.apache.camel.Exchange exchange) {
             String key = exchange.getMessage().getHeader(KEY_HEADER, String.class);
             if (key == null || key.isBlank()) {
                 if (required) {
@@ -59,12 +70,19 @@ public final class IdempotencyProcessors {
                 case IdempotencyStore.Conflict conflict ->
                     throw new TqlException(CONFLICT, conflict.reason());
             }
-        };
+        }
     }
 
     /** Persists the rendered response so future requests with the same key replay it. */
     public static Processor complete(String scope) {
-        return exchange -> {
+        return new IdempotencyComplete(scope);
+    }
+
+    /** @see #complete(String) */
+    public record IdempotencyComplete(String scope) implements Processor {
+
+        @Override
+        public void process(org.apache.camel.Exchange exchange) {
             if (Boolean.TRUE.equals(exchange.getProperty(REPLAY_PROPERTY))) {
                 return;
             }
@@ -78,7 +96,7 @@ public final class IdempotencyProcessors {
             String contentType = exchange.getMessage().getHeader(Exchange.CONTENT_TYPE,
                     String.class);
             store(exchange).complete(scope, key, status, body, contentType);
-        };
+        }
     }
 
     private static IdempotencyStore store(Exchange exchange) {

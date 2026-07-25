@@ -53,6 +53,15 @@
       <artifactId>jackson-databind</artifactId>
     </dependency>
 
+    <!-- Test-only: the CSV FileCodec is discovered through the SPI at compile time, so the
+         recipe-governance matrix test needs a codec on the classpath to compile an export or
+         import route at all. Operations does not depend on the compiler, so this is a leaf. -->
+    <dependency>
+      <groupId>io.tesseraql</groupId>
+      <artifactId>tesseraql-operations</artifactId>
+      <version>${project.version}</version>
+      <scope>test</scope>
+    </dependency>
     <dependency>
       <groupId>org.junit.jupiter</groupId>
       <artifactId>junit-jupiter</artifactId>

@@ -3,6 +3,7 @@ package io.tesseraql.compiler.binding;
 import io.tesseraql.core.error.TqlDomain;
 import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
+import org.apache.camel.Exchange;
 import org.apache.camel.Processor;
 
 /**
@@ -28,11 +29,21 @@ public final class RateLimiter {
 
     /** Returns a processor that rejects when no token is available. */
     public Processor acquire() {
-        return exchange -> {
+        return new Gate();
+    }
+
+    /**
+     * Named rather than a lambda so the compiled route can be read back: the recipe-governance
+     * matrix test asserts admission guards by processor name, and an anonymous one is invisible
+     * to it.
+     */
+    final class Gate implements Processor {
+        @Override
+        public void process(Exchange exchange) {
             if (!tryAcquire()) {
                 throw new TqlException(RATE_LIMIT, "Rate limit exceeded");
             }
-        };
+        }
     }
 
     private synchronized boolean tryAcquire() {

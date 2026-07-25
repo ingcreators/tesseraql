@@ -48,11 +48,17 @@ public final class ClusterRateLimiter {
 
     /** Returns a processor that rejects with 429 when the leased budget is exhausted. */
     public Processor acquire() {
-        return exchange -> {
+        return new Gate();
+    }
+
+    /** Named so the recipe-governance matrix test can read it back off the compiled route. */
+    final class Gate implements Processor {
+        @Override
+        public void process(Exchange exchange) {
             if (!tryAcquire(exchange)) {
                 throw new TqlException(RATE_LIMIT, "Rate limit exceeded");
             }
-        };
+        }
     }
 
     private synchronized boolean tryAcquire(Exchange exchange) {
