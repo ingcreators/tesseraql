@@ -122,7 +122,11 @@ class PollImportFtpsIntegrationTest {
     void theRemoteCsvIsPolledOverAProtectedDataChannelAndImportedVerbatim() throws Exception {
         long deadline = System.currentTimeMillis() + Duration.ofSeconds(60).toMillis();
         Map<String, Integer> rows = new LinkedHashMap<>();
-        while (System.currentTimeMillis() < deadline && rows.isEmpty()) {
+        // Both conditions, not just the rows: the import now completes inside the consumer's
+        // exchange, so the row becomes visible a moment *before* Camel moves the polled file.
+        // Waiting on the row alone used to imply the move had happened; it no longer does.
+        while (System.currentTimeMillis() < deadline
+                && (rows.isEmpty() || Files.exists(ftpRoot.resolve("inbound/orders.csv")))) {
             rows.clear();
             try (Connection connection = connect();
                     Statement statement = connection.createStatement();
@@ -132,7 +136,7 @@ class PollImportFtpsIntegrationTest {
                     rows.put(rs.getString("order_no"), rs.getInt("qty"));
                 }
             }
-            if (rows.isEmpty()) {
+            if (rows.isEmpty() || Files.exists(ftpRoot.resolve("inbound/orders.csv"))) {
                 Thread.sleep(400);
             }
         }

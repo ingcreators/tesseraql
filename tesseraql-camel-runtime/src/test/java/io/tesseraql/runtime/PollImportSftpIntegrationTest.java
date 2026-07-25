@@ -79,7 +79,11 @@ class PollImportSftpIntegrationTest {
     void theRemoteCsvIsPolledAndImported() throws Exception {
         long deadline = System.currentTimeMillis() + Duration.ofSeconds(45).toMillis();
         Map<String, Integer> rows = new LinkedHashMap<>();
-        while (System.currentTimeMillis() < deadline && rows.size() < 2) {
+        // Both conditions, not just the rows: the import now completes inside the consumer's
+        // exchange, so the rows become visible a moment *before* Camel moves the polled file.
+        // Waiting on the rows alone used to imply the move had happened; it no longer does.
+        while (System.currentTimeMillis() < deadline
+                && (rows.size() < 2 || Files.exists(sftpRoot.resolve("inbound/orders.csv")))) {
             rows.clear();
             try (Connection connection = connect();
                     Statement statement = connection.createStatement();
@@ -89,7 +93,7 @@ class PollImportSftpIntegrationTest {
                     rows.put(rs.getString("order_no"), rs.getInt("qty"));
                 }
             }
-            if (rows.size() < 2) {
+            if (rows.size() < 2 || Files.exists(sftpRoot.resolve("inbound/orders.csv"))) {
                 Thread.sleep(400);
             }
         }

@@ -65,7 +65,11 @@ class PollImportLocalIntegrationTest {
     void theDroppedCsvIsImportedAndArchived() throws Exception {
         long deadline = System.currentTimeMillis() + Duration.ofSeconds(30).toMillis();
         Map<String, Integer> rows = new LinkedHashMap<>();
-        while (System.currentTimeMillis() < deadline && rows.size() < 2) {
+        // Both conditions, not just the rows: the import now completes inside the consumer's
+        // exchange, so the rows become visible a moment *before* Camel archives the polled file.
+        // Waiting on the rows alone used to imply the move had happened; it no longer does.
+        while (System.currentTimeMillis() < deadline
+                && (rows.size() < 2 || !Files.exists(inbound.resolve(".done/orders.csv")))) {
             rows.clear();
             try (Connection connection = connect();
                     Statement statement = connection.createStatement();
@@ -75,7 +79,7 @@ class PollImportLocalIntegrationTest {
                     rows.put(rs.getString("order_no"), rs.getInt("qty"));
                 }
             }
-            if (rows.size() < 2) {
+            if (rows.size() < 2 || !Files.exists(inbound.resolve(".done/orders.csv"))) {
                 Thread.sleep(300);
             }
         }
@@ -84,6 +88,26 @@ class PollImportLocalIntegrationTest {
         // The consumer moved the processed file out of the inbound root into the done directory.
         assertThat(Files.exists(inbound.resolve("orders.csv"))).isFalse();
         assertThat(Files.exists(inbound.resolve(".done/orders.csv"))).isTrue();
+    }
+
+    @Test
+    void aFileThatCannotBeIngestedLandsInTheFailureDirectory() throws Exception {
+        // The import rolls back on a bad row (onError: rollback), so nothing is written - and
+        // the file must reflect that. It used to land in .done regardless: startImport spools,
+        // records the transfer and hands the work to an executor, so the exchange completed
+        // before a single row of SQL had run and the consumer archived the file as ingested.
+        Files.writeString(inbound.resolve("broken.csv"), "orderNo,qty\nB-1,not-a-number\n");
+
+        long deadline = System.currentTimeMillis() + Duration.ofSeconds(30).toMillis();
+        while (System.currentTimeMillis() < deadline
+                && !Files.exists(inbound.resolve(".error/broken.csv"))) {
+            Thread.sleep(300);
+        }
+
+        assertThat(Files.exists(inbound.resolve(".error/broken.csv")))
+                .as("a file whose import failed belongs in moveFailed, not .done")
+                .isTrue();
+        assertThat(Files.exists(inbound.resolve(".done/broken.csv"))).isFalse();
     }
 
     private static Connection connect() throws Exception {
@@ -141,6 +165,7 @@ class PollImportLocalIntegrationTest {
                     delay: 500ms
                 import:
                   format: csv
+                  onError: rollback
                   columns:
                     - orderNo
                     - { name: qty, type: number }
