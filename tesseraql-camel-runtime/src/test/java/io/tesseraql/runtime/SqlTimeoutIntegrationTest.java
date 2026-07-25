@@ -70,6 +70,37 @@ class SqlTimeoutIntegrationTest {
         assertThat(response.body()).contains("done");
     }
 
+    @Test
+    void aRunawayCommandStepIsCancelledByTheSameDefault() throws Exception {
+        long start = System.currentTimeMillis();
+        HttpResponse<String> response = post("/api/slow-command");
+        long elapsedMs = System.currentTimeMillis() - start;
+
+        // Without the bound this step would hold the command's transaction — and its pool
+        // connection — for the full ten seconds.
+        assertThat(response.statusCode()).isEqualTo(500);
+        assertThat(elapsedMs).isLessThan(8_000);
+    }
+
+    @Test
+    void aCommandStepThatOverMaterializesIsRefused() throws Exception {
+        HttpResponse<String> response = post("/api/big-command");
+
+        // 50,000 rows against a 100-row cap: the same TQL-LD-0001 the read path raises, rather
+        // than materializing the lot inside an open write transaction.
+        assertThat(response.statusCode()).isEqualTo(500);
+        assertThat(response.body()).contains("TQL-LD-0001");
+    }
+
+    private static HttpResponse<String> post(String path) throws Exception {
+        HttpRequest request = HttpRequest.newBuilder(
+                URI.create("http://localhost:" + runtime.port() + path))
+                .header("Content-Type", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString("{}"))
+                .build();
+        return HttpClient.newHttpClient().send(request, HttpResponse.BodyHandlers.ofString());
+    }
+
     private static HttpResponse<String> get(String path) throws Exception {
         HttpRequest request = HttpRequest.newBuilder(
                 URI.create("http://localhost:" + runtime.port() + path)).build();
@@ -99,6 +130,8 @@ class SqlTimeoutIntegrationTest {
                       password: %s
                   sql:
                     timeoutSeconds: 1
+                  resultMaterialization:
+                    maxRows: 100
                 """.formatted(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(),
                 POSTGRES.getPassword()));
 
@@ -120,6 +153,51 @@ class SqlTimeoutIntegrationTest {
                       data: sql.rows
                 """);
         Files.writeString(slow.resolve("slow.sql"), "select pg_sleep(10) as nap\n");
+
+        // The command path: a step opens its own transaction with no transaction manager to
+        // bound it, so it has to read the same timeout the route path does.
+        Path slowCommand = target.resolve("web/api/slow-command");
+        Files.createDirectories(slowCommand);
+        Files.writeString(slowCommand.resolve("post.yml"), """
+                version: tesseraql/v1
+                id: slow.command
+                kind: route
+                recipe: command-json
+                security:
+                  auth: public
+                steps:
+                  nap:
+                    file: nap.sql
+                    mode: query
+                response:
+                  json:
+                    status: 200
+                    body:
+                      ok: "true"
+                """);
+        Files.writeString(slowCommand.resolve("nap.sql"), "select pg_sleep(10) as nap\n");
+
+        Path bigCommand = target.resolve("web/api/big-command");
+        Files.createDirectories(bigCommand);
+        Files.writeString(bigCommand.resolve("post.yml"), """
+                version: tesseraql/v1
+                id: big.command
+                kind: route
+                recipe: command-json
+                security:
+                  auth: public
+                steps:
+                  rows:
+                    file: many.sql
+                    mode: query
+                response:
+                  json:
+                    status: 200
+                    body:
+                      ok: "true"
+                """);
+        Files.writeString(bigCommand.resolve("many.sql"),
+                "select g from generate_series(1, 50000) as g\n");
 
         Path patient = target.resolve("web/api/patient");
         Files.createDirectories(patient);
