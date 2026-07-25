@@ -122,6 +122,40 @@ public final class SimpleYamlParser {
         return new io.tesseraql.yaml.model.DomainsDocument(domains, constraints);
     }
 
+    private static final TqlErrorCode RULESET_MALFORMED = new TqlErrorCode(
+            io.tesseraql.core.error.TqlDomain.FIELD, 4604);
+
+    /**
+     * Parses one {@code rules/*.yml} document (docs/validation-rule-sets.md), rejecting an
+     * entry that declares both or neither of {@code rule:}/{@code file:} — a shared rule is
+     * exactly one of an expression or a SQL file.
+     */
+    public io.tesseraql.yaml.model.RuleSetsDocument parseRuleSets(Path file) {
+        io.tesseraql.yaml.model.RuleSetsDocument document;
+        try {
+            document = mapper.readValue(readFile(file),
+                    io.tesseraql.yaml.model.RuleSetsDocument.class);
+        } catch (IOException | RuntimeException ex) {
+            throw schemaError("rules", file.toString(), ex);
+        }
+        if (document == null) {
+            throw new TqlException(RULESET_MALFORMED, "Empty rules document: " + file);
+        }
+        if (!EXPECTED_VERSION.equals(document.version())) {
+            throw new TqlException(RULESET_MALFORMED, "Rules document " + file
+                    + " must declare version: " + EXPECTED_VERSION);
+        }
+        document.rules().forEach((name, rule) -> {
+            boolean expression = rule.rule() != null && !rule.rule().isBlank();
+            boolean sql = rule.file() != null && !rule.file().isBlank();
+            if (expression == sql) {
+                throw new TqlException(RULESET_MALFORMED, "Rule '" + name + "' (" + file
+                        + ") must declare exactly one of rule: or file:");
+            }
+        });
+        return document;
+    }
+
     /** Parses a job YAML file. */
     public JobDefinition parseJob(Path file) {
         String content = readFile(file);

@@ -84,6 +84,14 @@ public final class CrudScaffolder {
         List<ScaffoldedFile> files = new ArrayList<>();
         files.add(new ScaffoldedFile("domains/" + names.table() + ".yml",
                 domainsFile(table, names)));
+        if (!table.uniqueIndexes().isEmpty()) {
+            files.add(new ScaffoldedFile("rules/" + names.table() + ".yml",
+                    rulesFile(table, names)));
+            table.uniqueIndexes().forEach((index, column) -> files.add(new ScaffoldedFile(
+                    "rules/" + names.table() + "-" + column.toLowerCase(Locale.ROOT)
+                            .replace('_', '-') + "-free.sql",
+                    uniqueRuleSql(table, names, column))));
+        }
         files.add(new ScaffoldedFile(names.dir() + "/get.yml", listRoute(table, names)));
         files.add(new ScaffoldedFile(names.dir() + "/list.view.yml", listView(table, names)));
         files.add(new ScaffoldedFile(names.dir() + "/search.sql", searchSql(table, names)));
@@ -438,6 +446,7 @@ public final class CrudScaffolder {
                   policy: app.write
                   csrf: true
                 """);
+        route.append(validateBlock(table, names, false));
         if (generatedKey) {
             route.append("""
 
@@ -612,6 +621,7 @@ public final class CrudScaffolder {
                   policy: app.write
                   csrf: true
                 """);
+        route.append(validateBlock(table, names, true));
         route.append("""
 
                 sql:
@@ -802,6 +812,83 @@ public final class CrudScaffolder {
         }
         columns.addAll(table.dataColumns());
         return columns;
+    }
+
+    /**
+     * The table's shared validation rules (docs/validation-rule-sets.md): a pre-write
+     * uniqueness check per single-column unique index, shared by create and update — update
+     * excludes the row being updated. The constraint catalog stays alongside
+     * (docs/field-domains.md): the rule gives the friendly 422 before the write, the catalog
+     * keeps the post-write race honest.
+     */
+    private static String rulesFile(TableSchema table, Names names) {
+        StringBuilder yml = new StringBuilder();
+        yml.append(
+                """
+                        # Scaffolded validation rules for the %s table (tesseraql scaffold crud --table %s):
+                        # declared once, referenced from validate: blocks with use: (docs/validation-rule-sets.md).
+                        version: tesseraql/v1
+
+                        rules:
+                        """
+                        .formatted(names.table(), names.table()));
+        table.uniqueIndexes().forEach((index, column) -> {
+            String field = Names.camel(column.toLowerCase(Locale.ROOT));
+            String sql = names.table() + "-" + column.toLowerCase(Locale.ROOT).replace('_', '-')
+                    + "-free.sql";
+            yml.append("  ").append(names.entity()).append(capitalize(field))
+                    .append("IsFree:\n");
+            yml.append("    file: ").append(sql).append('\n');
+            yml.append("    binds: [").append(field).append(", excludeId]\n");
+            yml.append("    code: duplicate\n");
+        });
+        return yml.toString();
+    }
+
+    /**
+     * The uniqueness rule's 2-way SQL: a returned row is the violation. The {@code excludeId}
+     * bind excludes the row being updated via a conditional directive, so create — where the
+     * generated key is absent and the bind is null — checks against every row, portably across
+     * dialects (no null-typed bind ever reaches the database).
+     */
+    private static String uniqueRuleSql(TableSchema table, Names names, String column) {
+        return """
+                -- A returned row is a violation (docs/validation-rule-sets.md): the value is
+                -- already taken by another row. Shared by create (excludeId null) and update.
+                select '%s' as field
+                from %s
+                where %s = /* %s */'sample'
+                /*%%if excludeId != null */
+                  and %s <> /* excludeId */0
+                /*%%end*/
+                """.formatted(Names.camel(column.toLowerCase(Locale.ROOT)), names.table(),
+                column.toLowerCase(Locale.ROOT), Names.camel(column.toLowerCase(Locale.ROOT)),
+                names.pkColumn());
+    }
+
+    /** The validate: block referencing the shared uniqueness rules. */
+    private static String validateBlock(TableSchema table, Names names, boolean forUpdate) {
+        if (table.uniqueIndexes().isEmpty()) {
+            return "";
+        }
+        StringBuilder yml = new StringBuilder("\nvalidate:\n");
+        table.uniqueIndexes().forEach((index, column) -> {
+            String field = Names.camel(column.toLowerCase(Locale.ROOT));
+            yml.append("  ").append(field).append("IsFree:\n");
+            yml.append("    use: ").append(names.entity()).append(capitalize(field))
+                    .append("IsFree\n");
+            yml.append("    params:\n");
+            yml.append("      ").append(field).append(": params.").append(field).append('\n');
+            yml.append("      excludeId: ").append(forUpdate
+                    ? "params." + names.pkField()
+                    : "params." + names.pkField()).append('\n');
+            yml.append("    field: ").append(field).append('\n');
+        });
+        return yml.toString();
+    }
+
+    private static String capitalize(String value) {
+        return Character.toUpperCase(value.charAt(0)) + value.substring(1);
     }
 
     /**

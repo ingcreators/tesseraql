@@ -127,6 +127,20 @@ public record RouteDefinition(
                 response, page, datasource, http, cache, emit);
     }
 
+    /**
+     * A copy carrying resolved {@code validate:} rules — how the manifest loader stamps shared
+     * rule-set references (docs/validation-rule-sets.md) into the route.
+     */
+    public RouteDefinition withValidate(Map<String, ValidationRule> effective) {
+        if (effective == validate) {
+            return this;
+        }
+        return new RouteDefinition(version, id, kind, recipe, input, inputPolicy, security,
+                idempotency, policy, outbox, sql, steps, queries, effective, notifications,
+                errors, fileImport, fileExport, webhook, publish, consume, response, page,
+                datasource, http, cache, emit);
+    }
+
     /** The input policy, or framework defaults (reject unknown / reject read-only). */
     public InputPolicy effectiveInputPolicy() {
         return inputPolicy == null ? InputPolicy.defaults() : inputPolicy;

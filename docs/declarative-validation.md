@@ -163,6 +163,44 @@ violation, so a form repaints once. Each rule declares exactly one of:
   may lock rows with `FOR UPDATE` for balance checks). A non-SELECT fails at route build
   time: validation must not write.
 
+## Shared rule sets
+
+A rule needed by more than one route — the create/update uniqueness pair, a posting-period
+check, a balance rule — is declared once under `rules/` and referenced by name:
+
+```yaml
+# rules/catalog.yml
+version: tesseraql/v1
+
+rules:
+  skuIsFree:
+    file: sku-free.sql          # relative to this document; rows are violations
+    binds: [sku, excludeId]     # the bind contract every reference must wire exactly
+    code: duplicate
+```
+
+```yaml
+# a route's validate: block
+validate:
+  skuIsFree:
+    use: skuIsFree
+    params: { sku: params.sku, excludeId: params.id }
+    field: sku                  # the reporting target is this operation's input
+```
+
+The set carries what the rule *is* (the expression or SQL, the contract, default
+`code`/`message`); every reference carries its own wiring — `params:` (checked against
+`binds:` exactly), `field:`, `when:`, and `code`/`message` overrides. Ambient
+[`principal.*` binds](two-way-sql.md#ambient-binds) seed shared SQL exactly as route SQL, so
+they never appear in a contract. Resolution happens at manifest load; execution, this page's
+error model, and coverage consume plain rules unchanged. Unknown references, contract
+mismatches, and `use:` combined with an inline `rule:`/`file:` fail the load
+(`TQL-FIELD-4606..4608`); an unreferenced rule is linted (`TQL-FIELD-4612`).
+
+`scaffold crud` generates a `…IsFree` rule per single-column unique index, shared by the
+create and update routes (update excludes its own row through a conditional directive), so the
+pre-write friendly 422 and the constraint catalog's post-write honesty compose.
+
 ## The expression language
 
 `validate:` rules, `requiredWhen`, `response.html.headersWhen` guards, and workflow guards

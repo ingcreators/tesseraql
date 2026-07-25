@@ -119,7 +119,7 @@ class TransactionalCommandProcessorTest {
     @Test
     void rejectsValidationRuleWithBothExpressionAndFile() throws Exception {
         Map<String, ValidationRule> validate = Map.of("uniqueEmail", new ValidationRule(
-                null, "body.email != null", "check-email.sql", null, "email", null, null));
+                null, "body.email != null", "check-email.sql", null, "email", null, null, null));
 
         assertThatThrownBy(() -> processor(step(sql("single.sql"), Map.of()), Map.of(), validate))
                 .isInstanceOf(TqlException.class)
@@ -131,7 +131,7 @@ class TransactionalCommandProcessorTest {
     void rejectsParamsOnAnExpressionRule() throws Exception {
         Map<String, ValidationRule> validate = Map.of("dateOrder", new ValidationRule(
                 null, "body.endDate >= body.startDate", null, Map.of("email", "body.email"),
-                "endDate", null, null));
+                "endDate", null, null, null));
 
         assertThatThrownBy(() -> processor(step(sql("single.sql"), Map.of()), Map.of(), validate))
                 .isInstanceOf(TqlException.class)
@@ -141,7 +141,7 @@ class TransactionalCommandProcessorTest {
     @Test
     void rejectsValidationSqlThatWrites() throws Exception {
         Map<String, ValidationRule> validate = Map.of("uniqueEmail", new ValidationRule(
-                null, null, sql("check-email.sql"), Map.of(), "email", null, null));
+                null, null, sql("check-email.sql"), Map.of(), "email", null, null, null));
 
         assertThatThrownBy(() -> processor(step(sql("single.sql"), Map.of()), Map.of(), validate))
                 .isInstanceOf(TqlException.class)
@@ -155,9 +155,10 @@ class TransactionalCommandProcessorTest {
                 "select 'email' as field from t where email = /* email */'x'\n");
         Map<String, ValidationRule> validate = new LinkedHashMap<>();
         validate.put("dateOrder", new ValidationRule("body.endDate != null",
-                "body.endDate >= body.startDate", null, null, "endDate", null, null));
+                "body.endDate >= body.startDate", null, null, "endDate", null, null, null));
         validate.put("uniqueEmail", new ValidationRule(null, null, "check-email.sql",
-                Map.of("email", "body.email"), "email", "duplicate", "members.email.duplicate"));
+                Map.of("email", "body.email"), "email", "duplicate", "members.email.duplicate",
+                null));
 
         assertThat(processor(step(sql("single.sql"), Map.of()), Map.of(), validate)).isNotNull();
     }

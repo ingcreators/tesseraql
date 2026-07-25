@@ -68,6 +68,8 @@ class CrudScaffolderTest {
 
         assertThat(files).extracting(ScaffoldedFile::path).containsExactly(
                 "domains/items.yml",
+                "rules/items.yml",
+                "rules/items-name-free.sql",
                 "web/items/get.yml",
                 "web/items/list.view.yml",
                 "web/items/search.sql",
@@ -87,6 +89,7 @@ class CrudScaffolderTest {
         files.stream().filter(file -> file.path().endsWith(".yml"))
                 .filter(file -> !file.path().startsWith("tests/"))
                 .filter(file -> !file.path().startsWith("domains/"))
+                .filter(file -> !file.path().startsWith("rules/"))
                 .filter(file -> !file.path().endsWith(".view.yml"))
                 .forEach(file -> parser.parseRoute(file.content(), file.path()));
     }
@@ -274,6 +277,30 @@ class CrudScaffolderTest {
                 .doesNotContain("Content-Security-Policy")
                 .doesNotContain("headers:");
         assertThat(content(slim, "web/items/new/get.yml")).doesNotContain("headers:");
+    }
+
+    @Test
+    void theSharedUniquenessRuleIsReferencedByCreateAndUpdate() {
+        List<ScaffoldedFile> files = scaffolder.scaffold(items());
+
+        assertThat(content(files, "rules/items.yml"))
+                .contains("itemsNameIsFree:")
+                .contains("binds: [name, excludeId]")
+                .contains("code: duplicate");
+        assertThat(content(files, "rules/items-name-free.sql"))
+                .contains("/*%if excludeId != null */")
+                .contains("id <> /* excludeId */0");
+
+        RouteDefinition create = parser.parseRoute(content(files, "web/items/create/post.yml"),
+                "post.yml");
+        assertThat(create.validate().get("nameIsFree").use()).isEqualTo("itemsNameIsFree");
+        assertThat(create.validate().get("nameIsFree").params())
+                .containsEntry("name", "params.name")
+                .containsEntry("excludeId", "params.id");
+        RouteDefinition update = parser.parseRoute(
+                content(files, "web/items/{id}/update/post.yml"), "post.yml");
+        assertThat(update.validate().get("nameIsFree").params())
+                .containsEntry("excludeId", "params.id");
     }
 
     @Test

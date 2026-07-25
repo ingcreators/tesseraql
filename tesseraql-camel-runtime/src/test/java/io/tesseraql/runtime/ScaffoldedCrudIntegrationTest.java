@@ -176,11 +176,12 @@ class ScaffoldedCrudIntegrationTest {
         assertThat(stale.statusCode()).as(stale::body).isEqualTo(409);
         assertThat(stale.body()).contains("TQL-SQL-4092");
 
-        // A duplicate name surfaces as the scaffolded field-level constraint mapping; an htmx
-        // caller gets the kit's field-errors fragment (the X-CSRF carrier marks the request htmx).
+        // A duplicate name is now caught pre-write by the scaffolded shared rule
+        // (docs/validation-rule-sets.md): a friendly 422 field error instead of the
+        // post-write constraint 409 — the constraint catalog still backs the race window.
         HttpResponse<String> duplicate = post("/items/create", cookie, csrf, null, Map.of(
                 "name", "First item", "quantity", "1", "active", "true"));
-        assertThat(duplicate.statusCode()).as(duplicate::body).isEqualTo(409);
+        assertThat(duplicate.statusCode()).as(duplicate::body).isEqualTo(422);
         assertThat(duplicate.body()).contains("data-hc-field-errors")
                 .contains("data-field=\"name\"");
 

@@ -1,9 +1,13 @@
 # Validation rule sets
 
-> **Status: design.** This document precedes implementation. It picks up the item
-> [field-domains.md](field-domains.md) deliberately deferred ("named cross-field rule sets —
-> revisit once field domains are in use"): domains shipped and the revisit trigger has fired,
-> with the scaffolder chosen as the first consumer.
+> **Status: shipped.** `rules/*.yml` + `use:` references with the bind contract are resolved
+> at manifest load (`ValidationRuleSets`; load errors `TQL-FIELD-4604..4608`, unreferenced-rule
+> lint `TQL-FIELD-4612`), and the scaffolder is the first consumer: `scaffold crud` generates
+> the per-unique-index `…IsFree` rule — shared by create and update, self-exclusion via a
+> conditional directive so no null-typed bind ever reaches the database — referenced from both
+> generated routes, with the dogfood suite exercising it end-to-end. FK-existence generation
+> and a hand-authored gallery archetype remain listed below as follow-ups. User-facing docs:
+> declarative-validation.md "Shared rule sets".
 
 A **validation rule set** declares a `validate:` rule — a cross-field expression or a
 validation SQL file — once, app-wide, for routes to reference by name. It is the `validate:`
