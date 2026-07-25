@@ -132,6 +132,18 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Fixed
 
+- **`POST /_tesseraql/studio/reload` requires the Studio edit role** like every other mutating
+  Studio endpoint. It authenticated and stopped there, so in the **default** posture — where
+  `tesseraql.studio.readOnly` is true and draft/apply/scaffold all 403 — any authenticated
+  bearer principal could still force a rebuild of every route in the running context, as often
+  as it liked.
+
+- **The hot-reload compile-failure stub no longer echoes the compile error.** The stub replaces
+  the broken route's own security chain, so it answers without credentials, and its body carried
+  `cause.getMessage()` — absolute file paths, SQL text, table and column names. It now returns
+  `TQL-CAMEL-3103` with a generic message and logs the cause. **Behavior change:** clients (or
+  tests) reading the compile detail out of the response body will no longer find it.
+
 - **Command steps and validation SQL are bounded** (docs/transactional-writes.md): a command
   opens its own JDBC transaction with no transaction manager behind it, and its statements ran
   with no query timeout and no row cap — so `tesseraql.sql.timeoutSeconds` and

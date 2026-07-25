@@ -94,10 +94,14 @@ class RouteWatchIntegrationTest {
         HttpResponse<String> stub = await("/api/ping",
                 response -> response.statusCode() == 500);
         assertThat(stub.statusCode()).isEqualTo(500);
-        assertThat(stub.body()).contains("TQL-CAMEL-3103").contains("no-such-recipe");
+        // The code identifies the failure; the cause goes to the log, not the response —
+        // the stub replaces the route's own security chain, so it can be reached without
+        // credentials and must not hand out file paths, SQL, or column names.
+        assertThat(stub.body()).contains("TQL-CAMEL-3103").doesNotContain("no-such-recipe");
         assertThat(get("/api/pong").statusCode()).isEqualTo(200);
         awaitWatchLine(line -> line.contains("failed to compile")
                 && line.contains("no-such-recipe"));
+        // The operator-facing watch line still names the cause; only the HTTP body is redacted.
 
         // Fixing the file in place recovers on the next save — the watcher is still alive.
         Files.writeString(appHome.resolve("web/api/ping/ping.sql"),

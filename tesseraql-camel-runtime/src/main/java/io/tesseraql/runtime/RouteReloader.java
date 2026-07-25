@@ -294,8 +294,12 @@ final class RouteReloader {
      */
     private void installStub(RouteFile route, Exception cause) {
         String id = route.definition().id();
-        String message = String.valueOf(cause.getMessage()).replace("\\", "\\\\")
-                .replace("\"", "'").replace("\n", " ");
+        // The compile message names absolute paths, SQL text, and table and column names. The
+        // stub is mounted in place of the route's own security chain, so it can be reached
+        // without credentials - the diagnostics belong in the log, not in the response, the same
+        // rule ErrorResponseRenderer follows for every other failure.
+        LOG.warn("Route {} failed to compile; serving a {} stub: {}", id, COMPILE_FAILED,
+                cause.getMessage());
         try {
             context.addRoutes(new RouteBuilder() {
                 @Override
@@ -315,8 +319,8 @@ final class RouteReloader {
                         exchange.getMessage().setHeader(org.apache.camel.Exchange.CONTENT_TYPE,
                                 "application/json; charset=utf-8");
                         exchange.getMessage().setBody("{\"error\":{\"code\":\"" + COMPILE_FAILED
-                                + "\",\"message\":\"Route failed to compile: " + message
-                                + "\"}}");
+                                + "\",\"message\":\"Route failed to compile; see the server"
+                                + " log for the cause\"}}");
                     });
                 }
             });
