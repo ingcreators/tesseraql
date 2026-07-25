@@ -61,6 +61,85 @@ class RuleSetResolutionTest {
         return dir;
     }
 
+    /**
+     * The contract is checked against the SQL, not only against each reference.
+     *
+     * <p>Every reference was validated against {@code binds:}, and {@code binds:} against
+     * nothing. Adding a bind to a shared rule's SQL and forgetting the contract therefore passed
+     * load and lint on every referencing route and failed on the first request that triggered
+     * the rule — in the one construct whose purpose is that N routes cannot disagree.
+     */
+    @Test
+    void aBindTheSqlNeedsButTheContractOmitsFailsTheLoad(@TempDir Path dir) throws Exception {
+        Path app = app(dir, "  skuKnown:\n"
+                + "    use: skuIsFree\n"
+                + "    params: { sku: params.sku }\n"
+                + "    field: sku\n");
+        Files.writeString(app.resolve("rules/sku-free.sql"),
+                "select 'sku' as field from products"
+                        + " where sku = /* sku */'AA-1' and org = /* orgId */1\n");
+
+        assertThatThrownBy(() -> new ManifestLoader().load(app))
+                .isInstanceOf(TqlException.class)
+                .hasMessageContaining("TQL-FIELD-4609")
+                .hasMessageContaining("orgId");
+    }
+
+    @Test
+    void aBindTheContractDeclaresButTheSqlNeverUsesFailsTheLoad(@TempDir Path dir)
+            throws Exception {
+        Path app = app(dir, "  skuKnown:\n"
+                + "    use: skuIsFree\n"
+                + "    params: { sku: params.sku }\n"
+                + "    field: sku\n");
+        Files.writeString(app.resolve("rules/catalog.yml"), """
+                version: tesseraql/v1
+
+                rules:
+                  skuIsFree:
+                    file: sku-free.sql
+                    binds: [sku, orgId]
+                """);
+
+        assertThatThrownBy(() -> new ManifestLoader().load(app))
+                .isInstanceOf(TqlException.class)
+                .hasMessageContaining("TQL-FIELD-4609");
+    }
+
+    @Test
+    void ambientBindsStayOutOfTheContract(@TempDir Path dir) throws Exception {
+        Path app = app(dir, "  skuKnown:\n"
+                + "    use: skuIsFree\n"
+                + "    params: { sku: params.sku }\n"
+                + "    field: sku\n");
+        // principal.* and audit.* are seeded by the framework, so a rule that binds them
+        // declares nothing extra — the same reading every reference already gets.
+        Files.writeString(app.resolve("rules/sku-free.sql"),
+                "select 'sku' as field from products where sku = /* sku */'AA-1'"
+                        + " and tenant_id = /* principal.tenantId */'t'"
+                        + " and updated_at < /* audit.now */current_timestamp\n");
+
+        assertThat(new ManifestLoader().load(app)).isNotNull();
+    }
+
+    @Test
+    void anExpressionRuleCannotDeclareABindContract(@TempDir Path dir) throws Exception {
+        Path app = app(dir, "  sane:\n    use: quantityStaysSane\n    field: delta\n");
+        Files.writeString(app.resolve("rules/catalog.yml"), """
+                version: tesseraql/v1
+
+                rules:
+                  quantityStaysSane:
+                    rule: "params.delta >= -10000"
+                    binds: [delta]
+                """);
+
+        assertThatThrownBy(() -> new ManifestLoader().load(app))
+                .isInstanceOf(TqlException.class)
+                .hasMessageContaining("TQL-FIELD-4609")
+                .hasMessageContaining("expression rule");
+    }
+
     @Test
     void aReferenceMergesTheSharedRuleUnderTheLocalWiring(@TempDir Path dir) throws Exception {
         AppManifest manifest = new ManifestLoader().load(app(dir,

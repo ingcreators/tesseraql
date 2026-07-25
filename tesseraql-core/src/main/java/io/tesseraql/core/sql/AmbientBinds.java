@@ -33,7 +33,25 @@ public final class AmbientBinds {
     private static final List<String> PRINCIPAL_FIELDS = List.of("subject", "loginId", "tenantId",
             "roles", "permissions", "groups");
 
+    /** The audit binds every command seeds; they are ambient exactly as {@code principal.*} is. */
+    private static final List<String> AUDIT_BINDS = List.of("audit.user", "audit.now");
+
     private AmbientBinds() {
+    }
+
+    /**
+     * Whether a bind expression names something the framework supplies rather than something a
+     * route or a rule must wire. Callers that check a declared bind contract need the same
+     * answer as the seeding above, so they ask here instead of restating the field list — a
+     * second copy would quietly disagree the first time a field is added.
+     */
+    public static boolean isAmbient(String bindExpression) {
+        String expression = bindExpression == null ? "" : bindExpression.trim();
+        if (AUDIT_BINDS.contains(expression)) {
+            return true;
+        }
+        return PRINCIPAL_FIELDS.stream()
+                .anyMatch(field -> expression.equals(PRINCIPAL + "." + field));
     }
 
     /**

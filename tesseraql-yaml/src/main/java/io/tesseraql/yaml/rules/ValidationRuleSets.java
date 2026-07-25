@@ -3,6 +3,9 @@ package io.tesseraql.yaml.rules;
 import io.tesseraql.core.error.TqlDomain;
 import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
+import io.tesseraql.core.sql.AmbientBinds;
+import io.tesseraql.core.sql.Sql2WayParser;
+import io.tesseraql.core.sql.SqlNode;
 import io.tesseraql.yaml.SimpleYamlParser;
 import io.tesseraql.yaml.model.RuleSetsDocument;
 import io.tesseraql.yaml.model.ValidationRule;
@@ -35,6 +38,7 @@ public final class ValidationRuleSets {
     private static final TqlErrorCode UNKNOWN = new TqlErrorCode(TqlDomain.FIELD, 4606);
     private static final TqlErrorCode CONTRACT = new TqlErrorCode(TqlDomain.FIELD, 4607);
     private static final TqlErrorCode CONFLICT = new TqlErrorCode(TqlDomain.FIELD, 4608);
+    private static final TqlErrorCode DECLARED_CONTRACT = new TqlErrorCode(TqlDomain.FIELD, 4609);
 
     private final Path rulesDir;
     private final Map<String, RuleSetsDocument.RuleSet> rules;
@@ -64,7 +68,67 @@ public final class ValidationRuleSets {
         } catch (IOException ex) {
             throw new UncheckedIOException(ex);
         }
+        rules.forEach((name, rule) -> checkDeclaredContract(dir, name, rule));
         return new ValidationRuleSets(dir, rules);
+    }
+
+    /**
+     * Checks a rule's {@code binds:} against what its SQL actually binds.
+     *
+     * <p>Every reference was checked against the contract; the contract itself was checked
+     * against nothing. Adding a bind to a shared rule's SQL without extending {@code binds:}
+     * therefore passed load and lint everywhere and failed on the first request that triggered
+     * the rule — the one failure mode a shared declaration is supposed to make impossible,
+     * because the whole point is that N routes agree with one definition.
+     */
+    private static void checkDeclaredContract(Path rulesDir, String name,
+            RuleSetsDocument.RuleSet rule) {
+        if (rule.file() == null) {
+            // An expression rule reads the route's own inputs; there is nothing to wire, so a
+            // contract on one is a mistake that today dies per-reference at compile time.
+            if (!rule.binds().isEmpty()) {
+                throw new TqlException(DECLARED_CONTRACT, "Rule '" + name
+                        + "' declares binds: " + rule.binds()
+                        + " but is an expression rule — only a file: rule has a bind contract");
+            }
+            return;
+        }
+        Path sqlFile = rulesDir.resolve(rule.file()).normalize();
+        if (!Files.isRegularFile(sqlFile)) {
+            // The missing file is its own error at resolution; do not report it as a contract.
+            return;
+        }
+        Set<String> actual = new LinkedHashSet<>();
+        try {
+            collectBinds(Sql2WayParser.parse(Files.readString(sqlFile)), actual);
+        } catch (IOException ex) {
+            throw new UncheckedIOException(ex);
+        } catch (TqlException unparseable) {
+            // Malformed SQL is reported where SQL is parsed for execution, with its own code.
+            return;
+        }
+        actual.removeIf(AmbientBinds::isAmbient);
+        Set<String> declared = new LinkedHashSet<>(rule.binds());
+        if (!declared.equals(actual)) {
+            throw new TqlException(DECLARED_CONTRACT, "Rule '" + name + "' declares binds "
+                    + declared + " but " + rule.file() + " binds " + actual
+                    + " — the contract every reference is checked against must match the SQL");
+        }
+    }
+
+    /** Every bind the template can reach, branches included: a contract covers all paths. */
+    private static void collectBinds(java.util.List<SqlNode> nodes, Set<String> binds) {
+        for (SqlNode node : nodes) {
+            switch (node) {
+                case SqlNode.Bind bind -> binds.add(bind.expressionSource().trim());
+                case SqlNode.ListBind bind -> binds.add(bind.expressionSource().trim());
+                case SqlNode.If conditional -> conditional.branches()
+                        .forEach(branch -> collectBinds(branch.body(), binds));
+                case SqlNode.For loop -> collectBinds(loop.body(), binds);
+                default -> {
+                }
+            }
+        }
     }
 
     public boolean isEmpty() {

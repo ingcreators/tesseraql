@@ -195,7 +195,9 @@ The set carries what the rule *is* (the expression or SQL, the contract, default
 they never appear in a contract. Resolution happens at manifest load; execution, this page's
 error model, and coverage consume plain rules unchanged. Unknown references, contract
 mismatches, and `use:` combined with an inline `rule:`/`file:` fail the load
-(`TQL-FIELD-4606..4608`); an unreferenced rule is linted (`TQL-FIELD-4612`).
+(`TQL-FIELD-4606..4608`), as does a `binds:` contract that disagrees with the rule's own SQL
+(`TQL-FIELD-4609`); an unreferenced rule, and a route-local rule that repeats a shared one, are
+linted (`TQL-FIELD-4612`/`4613`).
 
 `scaffold crud` generates a `…IsFree` rule per single-column unique index, shared by the
 create and update routes (update excludes its own row through a conditional directive), so the
