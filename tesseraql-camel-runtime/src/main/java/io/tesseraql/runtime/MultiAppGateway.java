@@ -52,6 +52,7 @@ public final class MultiAppGateway implements AutoCloseable {
     private final MultiAppHost host;
     private final HttpServer server;
     private final HttpClient client;
+    private final java.util.concurrent.ExecutorService executor;
     private final int port;
     private final Map<String, String> hostToApp;
     private final Map<String, InstalledApp> appsById;
@@ -72,7 +73,10 @@ public final class MultiAppGateway implements AutoCloseable {
         this.client = HttpClient.newHttpClient();
         this.port = server.getAddress().getPort();
         server.createContext("/", this::handle);
-        server.setExecutor(Executors.newVirtualThreadPerTaskExecutor());
+        // Held so close() can shut it down: it was created inline and dropped, so stopping the
+        // gateway left the executor behind along with the client's connection pool and selector.
+        this.executor = Executors.newVirtualThreadPerTaskExecutor();
+        server.setExecutor(executor);
         server.start();
     }
 
@@ -223,6 +227,11 @@ public final class MultiAppGateway implements AutoCloseable {
         try {
             server.stop(0);
         } finally {
+            // Everything this instance opened, in the order it was opened: the executor the
+            // server ran on, then the client's pool and selector thread, then the hosted app.
+            // Two of the three were never closed at all, so a gateway restart accumulated both.
+            executor.shutdownNow();
+            client.close();
             host.close();
         }
     }

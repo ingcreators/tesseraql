@@ -71,6 +71,35 @@ class MultiAppGatewayIntegrationTest {
         assertThat(itemName("shop-b")).isEqualTo("from-b");
     }
 
+    /**
+     * Closing the gateway closes what it opened.
+     *
+     * <p>It closed the hosted app and stopped the HTTP server, and left the client and the
+     * executor: the client's connection pool and selector thread, and the virtual-thread executor
+     * created inline and dropped. A host that restarts a gateway accumulated both.
+     */
+    @Test
+    void closingTheGatewayReleasesItsClientAndExecutor() throws Exception {
+        MultiAppGateway second = MultiAppGateway.start(installRoot, 0);
+        java.net.http.HttpClient client = field(second, "client",
+                java.net.http.HttpClient.class);
+        java.util.concurrent.ExecutorService executor = field(second, "executor",
+                java.util.concurrent.ExecutorService.class);
+        assertThat(executor.isShutdown()).isFalse();
+
+        second.close();
+
+        assertThat(executor.isShutdown()).as("the server's executor").isTrue();
+        assertThat(client.isTerminated()).as("the outbound HTTP client").isTrue();
+    }
+
+    private static <T> T field(MultiAppGateway gateway, String name, Class<T> type)
+            throws Exception {
+        java.lang.reflect.Field field = MultiAppGateway.class.getDeclaredField(name);
+        field.setAccessible(true);
+        return type.cast(field.get(gateway));
+    }
+
     @Test
     void unknownAppReturns404() throws Exception {
         HttpResponse<String> response = get("/apps/nope/api/items");
