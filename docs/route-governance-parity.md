@@ -274,19 +274,24 @@ Ordered so that each lands independently and the guard arrives before the long t
    the marker row only appears if the URI carries `dialect=`.
 6. **The SQL contract registry and its honesty probes** (guard step 4), covering the dialect and
    binding gaps in the file-transfer and batch executors.
-7. **The long tail:** temporal/label normalization in command query-steps remains.
-   **Shipped:** the `lintEmit`/`lintValidation` calls missing from `lintConsumer` and `lintTool`.
-   Chasing the last of those turned up more than a missing lint call — the compiler never added
-   the topic-emit step to an MCP tool at all, so `emit:` on a tool was accepted, documented, and
-   inert. Both halves are fixed together, because either alone leaves the surface lying: wiring
-   without the lint accepts a malformed topic, and linting without the wiring reports on
-   something that does nothing. `lintEmit` also lost its unused `RouteFile` parameter, which is
-   what had made it look like a route-only lint.
-   **`export.sql params:` is shipped too:** the binder now reads every binding the recipe can
-   carry, with a route-level `sql:` last so an explicit route key still wins. The integration
-   test filters an export by a declared bind and was confirmed to return both rows without the
-   fix. Assign-SQL's ambient binds turned out to have landed already, with the write-scoping
-   slice.
+7. ~~**The long tail.**~~ **Shipped, all of it.**
+   The `lintEmit`/`lintValidation` calls missing from `lintConsumer` and `lintTool` were the
+   entry point, and chasing the last one turned up more than a missing lint call: the compiler
+   never added the topic-emit step to an MCP tool at all, so `emit:` on a tool was accepted,
+   documented, and inert. Both halves were fixed together, because either alone leaves the
+   surface lying — wiring without the lint accepts a malformed topic, and linting without the
+   wiring reports on something that does nothing. `lintEmit` also lost its unused `RouteFile`
+   parameter, which is what had made it look like a route-only lint.
+   **`export.sql params:`**: the binder now reads every binding the recipe can carry, with a
+   route-level `sql:` last so an explicit route key still wins. The integration test filters an
+   export by a declared bind and was confirmed to return both rows without the fix.
+   **Temporal/label normalization**: both paths ask `ResultRows`, so there is one answer to
+   change rather than two that drift. It is a visible contract change on the command path —
+   temporals become ISO-8601 strings and a quoted mixed-case alias keeps its case — and the
+   CHANGELOG says so.
+   **Assign-SQL's ambient binds** turned out to have landed already, with the write-scoping
+   slice; the finding's second half — that `AmbientBinds`' "fails loudly" claim was wrong
+   generally — became `TQL-SQL-2112`.
 
 ## Lint and tooling
 

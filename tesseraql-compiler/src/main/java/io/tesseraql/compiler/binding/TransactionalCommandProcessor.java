@@ -126,6 +126,7 @@ public final class TransactionalCommandProcessor implements Processor {
     private final OutboxEvents outboxEvents;
     private final ErrorsSpec errors;
     private final String appName;
+    private final String dialect;
     private final boolean generatedKeyColumns;
     private final WorkflowBinding workflow;
 
@@ -203,6 +204,7 @@ public final class TransactionalCommandProcessor implements Processor {
                 : io.tesseraql.yaml.messaging.PublishEvents.compile(routeId, publish);
         this.appName = appName;
         this.errors = errors == null ? new ErrorsSpec(null) : errors;
+        this.dialect = dialect;
         this.generatedKeyColumns = Dialect.fromId(dialect)
                 .map(d -> d.capabilities().generatedKeyColumns())
                 .orElse(true);
@@ -566,7 +568,10 @@ public final class TransactionalCommandProcessor implements Processor {
         return new WorkflowExec(store, taskStore, docId, from, tenantId);
     }
 
-    /** Loads the document row by key, lower-casing column labels so the guard reads `document.col`. */
+    /**
+     * Loads the document row by key, shaping labels and values the way every other read does, so
+     * a guard reads {@code document.col} with the same spelling a response binding would.
+     */
     private Map<String, Object> loadDocument(Connection connection, String docId)
             throws SQLException {
         try (PreparedStatement ps = connection.prepareStatement("select * from " + workflow.table()
@@ -579,8 +584,9 @@ public final class TransactionalCommandProcessor implements Processor {
                 java.sql.ResultSetMetaData metaData = rs.getMetaData();
                 Map<String, Object> row = new LinkedHashMap<>();
                 for (int col = 1; col <= metaData.getColumnCount(); col++) {
-                    row.put(metaData.getColumnLabel(col).toLowerCase(Locale.ROOT),
-                            rs.getObject(col));
+                    row.put(io.tesseraql.core.dialect.ResultRows.label(dialect,
+                            metaData.getColumnLabel(col)),
+                            io.tesseraql.core.dialect.ResultRows.value(rs.getObject(col)));
                 }
                 return row;
             }
@@ -632,7 +638,7 @@ public final class TransactionalCommandProcessor implements Processor {
         BoundSql bound = SqlRenderer.render(workflow.assignNodes(), params,
                 scopeResolver(exchange), context);
         Map<String, Object> result = executeQuery(connection, bound, "Workflow assign",
-                null, defaultBounds);
+                null, defaultBounds, dialect);
         // The opened task's deadline (roadmap Phase 28 slice 3): the to state's `within`, if any.
         Instant dueAt = workflow.dueWithinMillis() == null
                 ? null
@@ -731,7 +737,7 @@ public final class TransactionalCommandProcessor implements Processor {
         long startedAt = System.currentTimeMillis();
         Map<String, Object> result = "query".equals(step.mode())
                 ? executeQuery(connection, bound, "Step '" + step.name() + "'",
-                        step.sourcePath(), step.bounds())
+                        step.sourcePath(), step.bounds(), dialect)
                 : executeUpdate(connection, bound, step);
         recordExecution(exchange, step, result, startNanos, startedAt);
 
@@ -788,7 +794,11 @@ public final class TransactionalCommandProcessor implements Processor {
                     column = i + 1;
                 }
                 if (column != null) {
-                    values.put(key, resultSet.getObject(column));
+                    // The lookup stays case-insensitive: it matches a *declared* key, not a
+                    // label a binding will read, so dialect normalization does not apply here.
+                    values.put(key,
+                            io.tesseraql.core.dialect.ResultRows.value(
+                                    resultSet.getObject(column)));
                 }
             }
         }
@@ -796,7 +806,7 @@ public final class TransactionalCommandProcessor implements Processor {
     }
 
     private static Map<String, Object> executeQuery(Connection connection, BoundSql bound,
-            String label, String sourcePath, Bounds bounds) throws SQLException {
+            String label, String sourcePath, Bounds bounds, String dialect) throws SQLException {
         try (PreparedStatement statement = connection.prepareStatement(bound.sql())) {
             applyTimeout(statement, bounds);
             bind(statement, bound);
@@ -822,8 +832,10 @@ public final class TransactionalCommandProcessor implements Processor {
                     }
                     Map<String, Object> row = new LinkedHashMap<>();
                     for (int col = 1; col <= metaData.getColumnCount(); col++) {
-                        row.put(metaData.getColumnLabel(col).toLowerCase(Locale.ROOT),
-                                resultSet.getObject(col));
+                        row.put(io.tesseraql.core.dialect.ResultRows.label(dialect,
+                                metaData.getColumnLabel(col)),
+                                io.tesseraql.core.dialect.ResultRows.value(
+                                        resultSet.getObject(col)));
                     }
                     rows.add(row);
                 }

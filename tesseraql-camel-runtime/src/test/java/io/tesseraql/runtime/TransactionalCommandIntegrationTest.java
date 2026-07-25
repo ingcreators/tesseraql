@@ -88,6 +88,12 @@ class TransactionalCommandIntegrationTest {
         assertThat(body.path("orderNo").asLong()).isEqualTo(1); // first sequence value
         assertThat(body.path("lines").asInt()).isEqualTo(2);
         assertThat(body.path("eventId").asText()).isNotBlank();
+        // A command's query-step shapes its rows the way a query route does: an ISO-8601
+        // instant, not whatever java.sql.Timestamp.toString() a driver happens to produce
+        // ("2026-01-01 00:00:00.0"). A response binding written against one path used to
+        // break on the other.
+        assertThat(body.path("placed").get(0).path("created_at").asText())
+                .matches("\\d{4}-\\d{2}-\\d{2}T.*");
 
         Map<String, Object> header = queryOne(
                 "select order_no, status, version, created_by, created_at from orders where id = "
@@ -342,6 +348,11 @@ class TransactionalCommandIntegrationTest {
                     params:
                       orderId: steps.header.keys.id
                       lines: body.lines
+                  placed:
+                    file: select-placed.sql
+                    mode: query
+                    params:
+                      orderId: steps.header.keys.id
                 errors:
                   constraints:
                     order_lines_product_fk:
@@ -357,6 +368,7 @@ class TransactionalCommandIntegrationTest {
                       orderId: steps.header.keys.id
                       orderNo: steps.orderNo.value
                       lines: steps.lines.affectedRows
+                      placed: steps.placed.rows
                       eventId: outbox.eventId
                 """);
         Files.writeString(create.resolve("insert-order.sql"), """
@@ -372,6 +384,9 @@ class TransactionalCommandIntegrationTest {
                 (/* orderId */1, /* line_index */0 + 1, /* line.productId */10,
                  /* line.quantity */1)
                 /*%end*/
+                """);
+        Files.writeString(create.resolve("select-placed.sql"), """
+                select created_at from orders where id = /* orderId */1
                 """);
 
         Path update = appHome.resolve("web/api/orders/update-status");
