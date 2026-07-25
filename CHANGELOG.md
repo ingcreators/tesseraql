@@ -8,6 +8,12 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **Key-based SFTP for poll sources** (docs/connectors.md): a poll credential may declare
+  `privateKeyFile:` (with an optional `privateKeyPassphrase:`) instead of `password:`. Exactly one
+  method is required — declaring both is refused with `TQL-SEC-4089` rather than silently
+  preferring one, and declaring neither now says so instead of failing later about a missing
+  password. A private key on an `ftps` source is refused, since only SFTP can use one.
+
 - **A guard on the framework's own HTTP surface** (docs/framework-surface-parity.md):
   `FrameworkSurfaces` records the framework routes that answer without an authentication step —
   `PUBLIC_BY_DESIGN` with a reason, `PROCESSOR_ENFORCED` naming the method that enforces the gate —
