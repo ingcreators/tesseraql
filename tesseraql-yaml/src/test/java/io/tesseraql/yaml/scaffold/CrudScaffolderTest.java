@@ -304,6 +304,41 @@ class CrudScaffolderTest {
     }
 
     @Test
+    void foreignKeysGenerateSharedExistenceRules() {
+        TableSchema table = new TableSchema("order_lines", List.of(
+                new TableSchema.Column("id", Types.BIGINT, "bigint", 0, 0, false, true, false),
+                column("product_id", Types.BIGINT, false, false),
+                column("warehouse_id", Types.BIGINT, true, false),
+                new TableSchema.Column("qty", Types.INTEGER, "int", 0, 0, false, false, false)),
+                List.of("id"), Map.of(), List.of(
+                        new TableSchema.ForeignKey("product_id", "products", "id"),
+                        new TableSchema.ForeignKey("warehouse_id", "warehouses", "id")));
+        List<ScaffoldedFile> files = scaffolder.scaffold(table);
+
+        assertThat(content(files, "rules/order_lines.yml"))
+                .contains("orderLinesProductIdExists:")
+                .contains("binds: [productId]")
+                .contains("orderLinesWarehouseIdExists:")
+                .contains("code: unknown");
+        assertThat(content(files, "rules/order_lines-product-id-exists.sql"))
+                .contains("not exists (select 1 from products where id = /* productId */0)");
+
+        RouteDefinition create = parser.parseRoute(
+                content(files, "web/order_lines/create/post.yml"), "post.yml");
+        // Both write routes share the rule; the nullable FK is guarded so an absent optional
+        // value never reaches the query.
+        assertThat(create.validate().get("productIdExists").use())
+                .isEqualTo("orderLinesProductIdExists");
+        assertThat(create.validate().get("productIdExists").when()).isNull();
+        assertThat(create.validate().get("warehouseIdExists").when())
+                .isEqualTo("params.warehouseId != null");
+        RouteDefinition update = parser.parseRoute(
+                content(files, "web/order_lines/{id}/update/post.yml"), "post.yml");
+        assertThat(update.validate().get("productIdExists").use())
+                .isEqualTo("orderLinesProductIdExists");
+    }
+
+    @Test
     void theDomainsFileCarriesTheDdlDerivedKnowledgeOnce() {
         List<ScaffoldedFile> files = scaffolder.scaffold(items());
 

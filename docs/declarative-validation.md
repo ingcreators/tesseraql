@@ -199,7 +199,12 @@ mismatches, and `use:` combined with an inline `rule:`/`file:` fail the load
 
 `scaffold crud` generates a `…IsFree` rule per single-column unique index, shared by the
 create and update routes (update excludes its own row through a conditional directive), so the
-pre-write friendly 422 and the constraint catalog's post-write honesty compose.
+pre-write friendly 422 and the constraint catalog's post-write honesty compose. It also
+generates a `…Exists` rule per single-column foreign key — `when:`-guarded for nullable
+columns — the one file where "exists" grows into "exists and is active". For a hand-authored
+example, the purchase-request gallery app's `duplicateRequest` rule guards duplicate
+applications with the caller identified by the ambient `/* principal.loginId */` bind, so its
+contract is a single `title` bind.
 
 ## The expression language
 

@@ -39,11 +39,44 @@ public final class TableIntrospector {
             }
             List<String> primaryKey = readPrimaryKey(metaData, table);
             Map<String, String> uniqueIndexes = readUniqueIndexes(metaData, table, primaryKey);
-            return new TableSchema(table.name(), columns, primaryKey, uniqueIndexes);
+            List<TableSchema.ForeignKey> foreignKeys = readForeignKeys(metaData, table);
+            return new TableSchema(table.name(), columns, primaryKey, uniqueIndexes,
+                    foreignKeys);
         } catch (SQLException ex) {
             throw new TqlException(INTROSPECT_ERROR,
                     "Failed to introspect table '" + tableName + "': " + ex.getMessage());
         }
+    }
+
+    /**
+     * Single-column foreign keys, in key-sequence order; a composite key (any KEY_SEQ &gt; 1)
+     * is skipped whole, mirroring the single-column unique-index stance.
+     */
+    private static List<TableSchema.ForeignKey> readForeignKeys(DatabaseMetaData metaData,
+            TableRef table) throws SQLException {
+        Map<String, List<TableSchema.ForeignKey>> byName = new LinkedHashMap<>();
+        java.util.Set<String> composite = new java.util.LinkedHashSet<>();
+        try (ResultSet keys = metaData.getImportedKeys(table.catalog(), table.schema(),
+                table.name())) {
+            while (keys.next()) {
+                String name = keys.getString("FK_NAME");
+                if (keys.getShort("KEY_SEQ") > 1) {
+                    composite.add(name);
+                    continue;
+                }
+                byName.computeIfAbsent(name, key -> new ArrayList<>())
+                        .add(new TableSchema.ForeignKey(keys.getString("FKCOLUMN_NAME"),
+                                keys.getString("PKTABLE_NAME"),
+                                keys.getString("PKCOLUMN_NAME")));
+            }
+        }
+        List<TableSchema.ForeignKey> foreignKeys = new ArrayList<>();
+        byName.forEach((name, refs) -> {
+            if (!composite.contains(name)) {
+                foreignKeys.addAll(refs);
+            }
+        });
+        return foreignKeys;
     }
 
     private record TableRef(String catalog, String schema, String name) {

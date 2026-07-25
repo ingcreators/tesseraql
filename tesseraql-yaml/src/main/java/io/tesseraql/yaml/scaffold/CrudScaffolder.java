@@ -84,13 +84,17 @@ public final class CrudScaffolder {
         List<ScaffoldedFile> files = new ArrayList<>();
         files.add(new ScaffoldedFile("domains/" + names.table() + ".yml",
                 domainsFile(table, names)));
-        if (!table.uniqueIndexes().isEmpty()) {
+        if (!table.uniqueIndexes().isEmpty() || !table.foreignKeys().isEmpty()) {
             files.add(new ScaffoldedFile("rules/" + names.table() + ".yml",
                     rulesFile(table, names)));
             table.uniqueIndexes().forEach((index, column) -> files.add(new ScaffoldedFile(
                     "rules/" + names.table() + "-" + column.toLowerCase(Locale.ROOT)
                             .replace('_', '-') + "-free.sql",
                     uniqueRuleSql(table, names, column))));
+            table.foreignKeys().forEach(fk -> files.add(new ScaffoldedFile(
+                    "rules/" + names.table() + "-" + fk.column().toLowerCase(Locale.ROOT)
+                            .replace('_', '-') + "-exists.sql",
+                    fkRuleSql(names, fk))));
         }
         files.add(new ScaffoldedFile(names.dir() + "/get.yml", listRoute(table, names)));
         files.add(new ScaffoldedFile(names.dir() + "/list.view.yml", listView(table, names)));
@@ -842,7 +846,35 @@ public final class CrudScaffolder {
             yml.append("    binds: [").append(field).append(", excludeId]\n");
             yml.append("    code: duplicate\n");
         });
+        table.foreignKeys().forEach(fk -> {
+            String field = Names.camel(fk.column().toLowerCase(Locale.ROOT));
+            String sql = names.table() + "-" + fk.column().toLowerCase(Locale.ROOT)
+                    .replace('_', '-') + "-exists.sql";
+            yml.append("  ").append(names.entity()).append(capitalize(field))
+                    .append("Exists:\n");
+            yml.append("    file: ").append(sql).append('\n');
+            yml.append("    binds: [").append(field).append("]\n");
+            yml.append("    code: unknown\n");
+        });
         return yml.toString();
+    }
+
+    /**
+     * The FK-existence rule's 2-way SQL: a returned row is the violation — the referenced row
+     * is missing. The reference guards nullable columns with {@code when:}, so an absent
+     * optional value never reaches this query. This is the hook where "exists" grows into
+     * "exists and is active": one edit here instead of one per route.
+     */
+    private static String fkRuleSql(Names names, TableSchema.ForeignKey fk) {
+        String field = Names.camel(fk.column().toLowerCase(Locale.ROOT));
+        return """
+                -- A returned row is a violation (docs/validation-rule-sets.md): the referenced
+                -- %s row does not exist.
+                select '%s' as field
+                where not exists (select 1 from %s where %s = /* %s */0)
+                """.formatted(fk.refTable().toLowerCase(Locale.ROOT), field,
+                fk.refTable().toLowerCase(Locale.ROOT), fk.refColumn().toLowerCase(Locale.ROOT),
+                field);
     }
 
     /**
@@ -866,12 +898,27 @@ public final class CrudScaffolder {
                 names.pkColumn());
     }
 
-    /** The validate: block referencing the shared uniqueness rules. */
+    /** The validate: block referencing the shared uniqueness and FK-existence rules. */
     private static String validateBlock(TableSchema table, Names names, boolean forUpdate) {
-        if (table.uniqueIndexes().isEmpty()) {
+        if (table.uniqueIndexes().isEmpty() && table.foreignKeys().isEmpty()) {
             return "";
         }
         StringBuilder yml = new StringBuilder("\nvalidate:\n");
+        table.foreignKeys().forEach(fk -> {
+            String field = Names.camel(fk.column().toLowerCase(Locale.ROOT));
+            boolean nullable = table.columns().stream()
+                    .filter(column -> column.name().equalsIgnoreCase(fk.column()))
+                    .anyMatch(TableSchema.Column::nullable);
+            yml.append("  ").append(field).append("Exists:\n");
+            yml.append("    use: ").append(names.entity()).append(capitalize(field))
+                    .append("Exists\n");
+            if (nullable) {
+                yml.append("    when: params.").append(field).append(" != null\n");
+            }
+            yml.append("    params:\n");
+            yml.append("      ").append(field).append(": params.").append(field).append('\n');
+            yml.append("    field: ").append(field).append('\n');
+        });
         table.uniqueIndexes().forEach((index, column) -> {
             String field = Names.camel(column.toLowerCase(Locale.ROOT));
             yml.append("  ").append(field).append("IsFree:\n");

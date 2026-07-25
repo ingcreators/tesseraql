@@ -16,6 +16,15 @@ input:
 security:
   policy: pr.write
 
+# The shared duplicate-application guard (rules/requests.yml): the rule's SQL identifies the
+# caller through the ambient principal bind, so only the title is wired here.
+validate:
+  duplicateRequest:
+    use: duplicateRequest
+    params:
+      title: params.title
+    field: title
+
 sql:
   file: create.sql
   mode: update

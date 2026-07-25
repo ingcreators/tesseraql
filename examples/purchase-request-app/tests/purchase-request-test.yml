@@ -25,3 +25,29 @@ tests:
       rows:
         - title: Conference tickets (2x)
 
+
+  - name: refiling an identical request violates the shared duplicateRequest rule
+    validate:
+      route: requests.create
+    params:
+      params:
+        title: Standing desks for the design team
+      principal:
+        loginId: aoki
+    expect:
+      rowCount: 1
+      rows:
+        - rule: duplicateRequest
+          field: title
+          code: duplicate
+
+  - name: a fresh title passes the duplicateRequest rule
+    validate:
+      route: requests.create
+    params:
+      params:
+        title: Monitor arms for the desks
+      principal:
+        loginId: aoki
+    expect:
+      rowCount: 0

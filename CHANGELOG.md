@@ -122,6 +122,14 @@ All notable changes to TesseraQL are documented here. The format follows
   dialects), exercised end-to-end by the dogfood suites. Load errors `TQL-FIELD-4604..4608`;
   unreferenced rules lint `TQL-FIELD-4612`.
 
+- **Rule-set generation completed** (docs/validation-rule-sets.md, closing the design):
+  `scaffold crud` also generates a `…Exists` rule per single-column foreign key (referenced by
+  create and update, `when:`-guarded for nullable columns; composite keys skipped like
+  composite unique indexes), and the purchase-request gallery app carries the hand-authored
+  duplicate-application archetype — its SQL identifies the caller via the ambient
+  `/* principal.loginId */` bind, so the contract is a single `title` bind, exercised by two
+  declarative suite cases.
+
 ### Changed
 
 - **The gallery apps rely on the default response headers**: all five example apps declare
