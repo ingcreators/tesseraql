@@ -161,8 +161,14 @@ final class StudioRouteBuilder extends RouteBuilder {
 
         // The manual reload is the recovery hammer: force rebuilds every kept route even
         // when its sources look unchanged (the automatic apply-path reloads content-diff).
+        // It mutates the served route table, so it takes the same edit gate its siblings do —
+        // without it, a read-only Studio (the default posture) still let any authenticated
+        // caller rebuild every route, repeatedly.
         from("direct:studio.reload").routeId("studio.reload")
-                .to(AUTH).process(json(exchange -> reloader.reload(true)));
+                .to(AUTH).process(json(exchange -> {
+                    studioAccess.requireEdit(roles(exchange));
+                    return reloader.reload(true);
+                }));
     }
 
     private static String requirePath(Exchange exchange) {

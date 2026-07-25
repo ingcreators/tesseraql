@@ -1,6 +1,6 @@
 # Framework surface parity
 
-> **Status: slice 1 shipped, the rest designed.** The compiled app request path has a contract —
+> **Status: slices 1–2 shipped, the rest designed.** The compiled app request path has a contract —
 > authenticate, authorize, CSRF, localize, one error envelope, security response headers — and the
 > framework's own ~25 hand-written `RouteBuilder`s each re-implement a subset of it. Its long-lived
 > services have a second contract — close what you open, bound what you accumulate, survive an
@@ -36,8 +36,8 @@ a documented, verified-intentional exemption.
 | `IamAdminRouteBuilder` | yes | yes | yes | — | yes |
 | `ScimRouteBuilder` | yes | yes | n/a (bearer) | — | yes (SCIM shape by design) |
 | `StudioRouteBuilder` mutations | yes | yes | n/a (bearer) | — | yes |
-| `StudioRouteBuilder` **reload** | yes | **—** | n/a | — | yes |
-| `RouteReloader` compile-failure stub | **—** | **—** | **—** | — | leaks diagnostics |
+| `StudioRouteBuilder` **reload** | yes | yes (was **—**) | n/a | — | yes |
+| `RouteReloader` compile-failure stub | **—** | **—** | **—** | — | redacted (was **leaked**) |
 | `AssetsRouteBuilder` | public *by design* | n/a | n/a | **nosniff only; 404 none** | n/a |
 | `SseRoutes` | at connect only | yes | n/a | **—** | **hand-built** |
 | `McpRouteBuilder` transport | open *by design* | n/a | n/a | — | — |
@@ -138,7 +138,7 @@ explicitly logs out, and the map grows one `Principal` per login forever.
 [deployment.md](deployment.md) steering deployments to `jdbc` is the mitigation and is why this is
 medium rather than high.
 
-### `POST /_tesseraql/studio/reload` skips the edit-role gate
+### `POST /_tesseraql/studio/reload` skips the edit-role gate — FIXED
 
 Every sibling Studio mutation — draft, apply, scaffold apply — runs
 `studioAccess.requireEdit(roles(exchange))` after authenticating, as do all three MCP twins.
@@ -149,7 +149,7 @@ mutating Studio endpoint 403s while reload succeeds for any bearer principal. `r
 and re-adds every web route and SHA-256-digests the whole app tree — a repeatable authenticated DoS
 with an in-flight-request race the code itself calls "the risky, expensive part of a reload".
 
-### The compile-failure stub is unauthenticated and echoes diagnostics
+### The compile-failure stub is unauthenticated and echoes diagnostics — half FIXED
 
 `stopAndRemove` runs before `addRoutes`, so on a compile failure the stub **is** the endpoint — the
 secured route is gone, and because route security is compiled into the route body, no outer filter
@@ -324,7 +324,16 @@ else re-derives.
    plus a progress guarantee on the global-cap loop, since a corrupted `total` could otherwise
    spin it forever holding the monitor. `PgNotifyListenerTest` and a new `LiveStreamsTest` case
    pin the two; both were confirmed to fail without the fix.
-2. **The Studio reload gate**, plus the stub's security chain and message redaction.
+2. ~~**The Studio reload gate**~~ **and the stub's message redaction: shipped.** Reload takes the
+   same `requireEdit` its siblings do — it matters most in the default posture, where `readOnly`
+   is true and every other mutating Studio endpoint already 403s. The stub now returns its code
+   with no cause; the compile message, which names absolute paths, SQL text, and column names,
+   goes to the log. Two integration tests pinned the leak and were rewritten to assert the
+   redaction — a deliberate contract change.
+   **Still open:** giving the stub a security chain. It is mounted by a bare `RouteBuilder` in
+   the runtime while `applySecurity` lives in the compiler, so wiring it needs the compiler's
+   chain to be reachable from a reload — worth doing with the surface registry (slice 5) rather
+   than by duplicating the chain.
 3. **Security headers on every response**, which subsumes the error-response, SSE, and assets rows.
 4. **The session-store default.** Either TTL and a cap in the in-memory store, or make `jdbc` the
    default; and honor `tesseraql.sessions.ttl` on both paths so the key stops lying. See the open
