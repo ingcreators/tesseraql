@@ -68,14 +68,6 @@ final class SseRoutes {
     }
 
     /** Registers {@code GET path} as an SSE endpoint on the started platform router. */
-    /** The app's configured response headers, empty when the app declares none. */
-    @SuppressWarnings("unchecked")
-    private static java.util.Map<String, String> securityHeaders(CamelContext camelContext) {
-        java.util.Map<String, String> headers = camelContext.getRegistry().lookupByNameAndType(
-                TesseraqlProperties.RESPONSE_HEADERS_BEAN, java.util.Map.class);
-        return headers == null ? java.util.Map.of() : headers;
-    }
-
     static void register(CamelContext camelContext, int port, String path, Handler handler) {
         VertxPlatformHttpRouter router = VertxPlatformHttpRouter.lookup(camelContext,
                 VertxPlatformHttpRouter.getRouterNameFromPort(port));

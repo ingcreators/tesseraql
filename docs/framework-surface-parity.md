@@ -395,8 +395,14 @@ else re-derives.
    which was the security half; declaring every existing posture is the documentation half.
 6. **The lifecycle registry and `guarded()`**, closing the template, client, executor, and
    start-failure rows.
-7. **The long tail:** login/reset rate limiting, the OIDC/SAML error envelope, SSE session
-   re-validation, the scheduling claim-compensation, and the `FrameworkMigrations` component map.
+7. **The long tail:** login/reset rate limiting, the OIDC/SAML error envelope, the scheduling
+   claim-compensation, and the `FrameworkMigrations` component map.
+   **SSE session re-validation is shipped**, with the envelope leak beside it: every frame
+   re-checks the session, and the refusal answer returns its code with a generic phrase rather
+   than concatenating the internal exception message into JSON. Closing the stream turned out to
+   be the part that was missing — the existing `IOException` branch logged the end and left the
+   response open, so a client held a stream that would never produce again. The test caught that
+   by hanging, which is the honest way to find it.
 
 ## Out of scope
 
