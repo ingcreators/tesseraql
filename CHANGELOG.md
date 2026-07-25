@@ -8,6 +8,14 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **A guard on the framework's own HTTP surface** (docs/framework-surface-parity.md):
+  `FrameworkSurfaces` records the framework routes that answer without an authentication step —
+  `PUBLIC_BY_DESIGN` with a reason, `PROCESSOR_ENFORCED` naming the method that enforces the gate —
+  and a test starts a context with Studio, metrics, MCP and SCIM all mounted, reads each route off
+  the model, and fails on one that neither authenticates nor appears there. The audit this closes
+  found two framework routes shipped without the gate their siblings had, and neither was caught in
+  review because an absence looks like nothing.
+
 - **Shared definitions on the published surface** (docs/reference-yaml-surface.md): `domains/`
   and `rules/` documents now ship their own JSON Schemas, are associated in a scaffolded app's
   `.vscode/settings.json`, and appear in the generated YAML-surface reference alongside routes.

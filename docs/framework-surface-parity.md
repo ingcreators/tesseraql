@@ -308,14 +308,22 @@ registry, and fails on an unregistered route or a declared-but-absent step. That
 caught both the reload gate and the reload stub, which are precisely the routes nobody thought to
 list.
 
-*Measured before building it:* the framework declares **71** route ids, in six families —
-`ops` (20), `system` (18), `studio` (13), `scim` (12), `tql` (5), `mcp` (3). The prose above and
-the deviations below name `health`, MCP discovery, recovery, and the Studio routes; they never
-name `system.*` or `scim.*`, which together are **30 of the 71** and include `system.login`,
-`system.logout`, `system.logout.others`, and `system.invite.accept` — the authentication surfaces
-slice 7 discusses without ever naming their routes. A registry seeded from the prose would cover
-well under half the surface and read as complete, which is the failure this whole document is
-about. Seed it from the mounted route ids, then let the per-route posture be the judgment.
+*Measured before building it, then measured again properly.* Counting `routeId("...")` literals in
+the source gives **71**, and that number is wrong — it was the first thing the guard's own fixture
+disproved. A started context with every surface enabled mounts **173** framework HTTP routes,
+because most of `tql.*` (123 of them: the account pages, the inbox, the ops console, the Studio UI)
+is generated rather than written as a literal. Counting the source was measuring the thing that was
+easy to count.
+
+Two consequences. First, a full per-route posture table is a 173-entry artifact, not a 50-entry
+one. Second — and this is what made the slice tractable — only **18** of those 173 answer without
+an `authenticate` step, so the reviewable set is the exemptions, not the postures.
+
+*And there are three states, not two.* A step-based check alone calls `system.logout.others`
+unprotected. It is not: it resolves the session and validates the CSRF token inside its processor.
+Recording that as "public by design" would have put a falsehood in the registry built to prevent
+falsehoods. So `FrameworkSurfaces` distinguishes `PUBLIC_BY_DESIGN` from `PROCESSOR_ENFORCED`, and
+the latter names the method that enforces it, so the claim can be checked rather than believed.
 
 Unlike the model-field registry in [yaml-surface-consumers.md](yaml-surface-consumers.md), a
 hand-written entry is right here: "what posture should this surface have" is not derivable from
@@ -370,8 +378,17 @@ else re-derives.
    silent-no-expiry defect did not require deciding it, so this slice did not decide it.
    The no-TTL constructor is kept for embedders, and a test pins that too, so the change is
    about the framework's default rather than the class's only possible posture.
-5. **The surface registry and its test** (the guard), which also settles the unverified HTTP leads
-   by forcing each surface to declare its posture.
+5. **The surface registry and its test** (the guard). **Shipped, as the exemption half.**
+   `FrameworkSurfaces` records the 18 framework HTTP routes that answer without an `authenticate`
+   step — `PUBLIC_BY_DESIGN` with a reason, `PROCESSOR_ENFORCED` naming what enforces it — and
+   `FrameworkSurfaceGuardTest` starts a context with every surface mounted and fails on a route
+   that neither authenticates nor appears there. Both directions were probed: removing an
+   exemption reports the route, and adding one for a route nobody mounts reports the entry. The
+   fixture's own honesty check requires all six families and a floor on the route count, because a
+   guard that quietly stopped mounting Studio would pass loudest when it checked least.
+   **Still open:** the full per-route posture table (auth mode, policy, CSRF for all 173), and with
+   it the unverified HTTP leads — the exemption guard is what makes a *new* open surface fail,
+   which was the security half; declaring every existing posture is the documentation half.
 6. **The lifecycle registry and `guarded()`**, closing the template, client, executor, and
    start-failure rows.
 7. **The long tail:** login/reset rate limiting, the OIDC/SAML error envelope, SSE session
