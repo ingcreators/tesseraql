@@ -1,6 +1,6 @@
 # Poll connector hardening
 
-> **Status: slices 1–3 shipped, the rest designed.** The 2026-07-25 contract-deviation sweep compared
+> **Status: slices 1–3 and 5 shipped; 4, 6 and 7 designed.** The 2026-07-25 contract-deviation sweep compared
 > the three poll sources (`local`, `sftp`, `ftps`) against each other and found that `ftps` is
 > not, as [connectors.md](connectors.md) states, "the identical recipe and runtime path … only
 > the endpoint scheme differs" — it transfers file content **unencrypted**, validates **no
@@ -35,8 +35,8 @@ unauthenticated, cleartext transfer that no lint mentions.
 | --- | --- | --- | --- |
 | Content encrypted in transit | n/a | yes | yes (was **no**) |
 | Server identity verified | n/a | only with `knownHostsFile` | yes, required (was **never**) |
-| Host allow-list enforced | **no** | yes | yes |
-| Path governance (root anchoring, traversal) | **none** | n/a (remote) | n/a (remote) |
+| Path / host allow-list enforced | yes, required (was **no**) | yes | yes |
+| Path governance (root anchoring, traversal) | yes (was **none**) | n/a (remote) | n/a (remote) |
 | Binary-safe | yes | yes | yes (was **ASCII mode**) |
 | Works behind NAT | n/a | yes | yes (was **active mode**) |
 | Credential kinds | n/a | password only | password only |
@@ -99,17 +99,34 @@ default. The risk is real; the framing "TesseraQL asserts an unsafe posture" is 
 The sweep raised these; no adversarial verifier examined them. They are listed here because the
 model below has to answer them, not because they are established.
 
-- **`source: local` has no path governance.** The host allow-list gate applies to remote sources
-  only; a local `path:` is concatenated verbatim with no root anchoring and no traversal check,
-  unlike `FileScopes`, which anchors to a declared root and re-checks the normalized prefix. With
-  camel-file's `autoCreate=true` default, a local poll job is a read-and-move filesystem primitive
-  anywhere the process user can reach. No `allowedPaths` key exists.
-- **Endpoint option injection.** `path`, `include`→`antInclude`, `move`, `moveFailed`, and
-  `username` are concatenated unescaped while the adjacent `password` is wrapped in `RAW(...)` —
-  as is a user-supplied cron in `SchedulingRouteBuilder`. An `include:` carrying
-  `&recursive=true&noop=true` would make the consumer descend into `.done` and stop moving files:
-  unbounded re-import. The actor is the manifest author, not an HTTP caller, which caps severity
-  but not the surprise. Camel also evaluates `move`/`moveFailed` as Simple expressions.
+- **`source: local` has no path governance** — VERIFIED in full. The allow-list gate sits behind
+  `poll.isRemote()`, so `local` never reaches one, and the local arm concatenates `path:`
+  verbatim with no anchoring and no `normalize()`. A probe with `path: <tmp>/app/data/../../secret`
+  polled a file out of the sibling directory *and moved it* into `<tmp>/secret/.done/` — read and
+  write outside any nominal root. `autoCreate` does default true (confirmed in `file.json` and
+  empirically), `ComponentPolicy.FRAMEWORK_FLOOR` always admits `file`, and no `allowedPaths`
+  key exists anywhere. The asymmetry with `FileScopes` is exact: it resolves under a declared
+  root, normalizes, and re-checks the prefix.
+- **Endpoint option injection** — VERIFIED, with two corrections. `include`→`antInclude`,
+  `move`, `moveFailed` and `username` are concatenated unescaped while `password` is wrapped in
+  `RAW(...)`; Camel splits the query on `&` before binding, so the author gets arbitrary
+  consumer-option control (a probe bound `noop=true` and `recursive()=true` onto the resolved
+  `FileEndpoint`). **`path` is not injectable** — it precedes the `?`, and a `?` inside it
+  produces a URI Camel refuses outright; its problem belongs to the path-governance lead above.
+  And the payload originally proposed here does **not** re-import: `.done`/`.error` are
+  dot-prefixed and `includeHiddenDirs`/`includeHiddenFiles` default false, so `recursive=true`
+  cannot reach them, while `noop=true` makes Camel force `idempotent=true` with an in-memory
+  repository. Unbounded re-import needs
+  `**/*.csv&recursive=true&noop=true&idempotent=false&includeHiddenDirs=true&includeHiddenFiles=true`
+  (probe: 4 deliveries in 6 cycles, nothing moved). The low-effort harm from the simple payload
+  is real but different — `noop=true` alone stops the move, so the inbound directory never
+  drains and every process restart re-imports everything still sitting in it.
+- **`move`/`moveFailed` are Simple expressions, and that is the sharper edge.** It needs no `&`:
+  `move: "${file:parent}/../../escaped/${file:onlyname}"` relocated the polled file outside the
+  poll tree in a probe — an arbitrary-destination write of the file's contents from a plain YAML
+  scalar, with no lint anywhere. Escaping `&` would not fix it; only rejecting path-ish and
+  expression values will. `ComponentGuard` does not cover this either: `bean`/`language`/
+  `script` are baseline-denied as *components*, while Simple's `${bean:…}` is a language.
 - **`moveFailed` is effectively dead for all three sources.** The import is asynchronous — the
   transfer service spools, inserts a row, submits, and returns — so the exchange completes and the
   file moves to `.done` before a single row of SQL runs. Only three synchronous failures can route
@@ -133,9 +150,14 @@ model below has to answer them, not because they are established.
   typo for `ftps`, and the cleartext sibling — exempts the `ftp` component from an `allowed:`
   narrowing even though the job itself is dead. `denied:` and the baseline still win, so this
   widens only the narrowing.
-- **Lint parity gaps inside the poll block:** `port` range unvalidated, `delay` unvalidated (a bad
-  value silently disables the job), `host`/`credential` on a `local` source silently ignored, blank
-  `path` on local creating a directory literally named `null`.
+- **Lint parity gaps inside the poll block** — VERIFIED, one correction: `port` range
+  unvalidated (negligible — it fails at connect with a clear error); `delay` unvalidated, and a
+  bad value throws inside `wire()` where a `catch (RuntimeException)` **logs at ERROR** and drops
+  the job — not silent, but the app boots healthy with a missing route, so an operator sees only
+  "nothing is arriving"; `host`/`credential` on a `local` source parse and are discarded with no
+  feedback; a blank or missing `path` does create a directory literally named `null` in the
+  process working directory — though lint *does* error on it (`TQL-YAML-1005`), so the real gap
+  there is that lint is not a boot gate.
 
 ## The model
 
@@ -200,8 +222,23 @@ home-relative — the CHANGELOG entry names it, per rule 10.
    that a CA bundle does not, so only the new FTPS check is an error.
 4. **Credential methods.** Key-based SFTP, FTPS client certificates, exactly-one-method validation,
    and a load error for a remote source with no credential.
-5. **URI value handling and poll lint parity**, including the local path root anchoring and the
-   `ComponentGuard` source-string validation.
+5. ~~**URI value handling and poll lint parity.**~~ **Shipped**, after a verification pass that
+   corrected the leads it was based on (see the marked-up leads above — `path` turned out not to
+   be injectable, the proposed re-import payload does not re-import, and `move:` is the sharper
+   edge). A local source now resolves under a declared
+   `tesseraql.connectors.poll.allowedPaths` root, normalizes, and re-checks the prefix — the
+   `FileScopes` rule, deny-by-default, with `TQL-SEC-4086` saying so at lint time
+   (open question 3 answered: require a root, because defaulting quietly re-creates the
+   "the user believes they configured a boundary" failure).
+   `include` and `username` are `RAW(...)`-wrapped so an `&` cannot bind extra consumer options.
+   `move`/`moveFailed` are **rejected** rather than escaped when they contain `${`, `..`, a
+   leading `/`, `&` or `?`: Camel evaluates them as Simple expressions, so escaping would not
+   have stopped `${file:parent}/../../escaped` from writing the polled file outside the tree.
+   Lint gained the parity checks — unparseable `delay` (which otherwise drops the job at startup
+   and leaves the app healthy with nothing arriving), out-of-range `port`, and `host:`/
+   `credential:` on a local source.
+   **Not** in this slice: the `ComponentGuard` source-string validation, which belongs with the
+   component-intent inference rather than with URI handling.
 6. **`moveFailed` honesty.** Either the file moves after the import resolves (the transfer service
    signals the consumer), or the documentation stops promising it and the operations console
    becomes the reconciliation surface. See the open question.

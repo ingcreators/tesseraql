@@ -90,14 +90,17 @@ final class PollingRouteBuilder extends RouteBuilder {
     /** Builds the Camel consumer URI for the source, keeping the component name out of the YAML. */
     String endpointUri(PollSpec poll) {
         String options = "delay=" + Durations.toMillis(poll.effectiveDelay())
-                + "&move=" + poll.effectiveMove()
-                + "&moveFailed=" + poll.effectiveMoveFailed()
+                + "&move=" + archiveDirectory("move", poll.effectiveMove())
+                + "&moveFailed=" + archiveDirectory("moveFailed", poll.effectiveMoveFailed())
                 + "&readLock=changed"
                 + (poll.include() == null || poll.include().isBlank()
                         ? ""
-                        : "&antInclude=" + poll.include());
+                        // RAW keeps an '&' in a glob from splitting the query and binding
+                        // whatever follows as extra consumer options.
+                        : "&antInclude=RAW(" + poll.include() + ")");
         return switch (poll.effectiveSource()) {
-            case "local" -> "file://" + poll.path() + "?" + options;
+            case "local" -> "file://"
+                    + connectors.requireAllowedPath(appHome, poll.path()) + "?" + options;
             case "sftp" -> remoteUri("sftp", poll, 22, options + sftpHostKeyOptions());
             case "ftps" -> remoteUri("ftps", poll, 21, options + ftpsTransportOptions(poll));
             default -> throw new IllegalArgumentException(
@@ -173,6 +176,31 @@ final class PollingRouteBuilder extends RouteBuilder {
         return options.toString();
     }
 
+    /**
+     * Validates an archive directory ({@code move:} / {@code moveFailed:}).
+     *
+     * <p>Camel evaluates these as <em>Simple expressions</em>, not as plain names, so escaping is
+     * not enough: {@code ${file:parent}/../../escaped/${file:onlyname}} relocates the polled file
+     * outside the poll tree entirely — an arbitrary-destination write of its contents from a
+     * plain YAML scalar. The component guard does not help, because Simple's {@code ${bean:…}}
+     * is a language rather than a component. So the value is constrained to a relative directory
+     * name instead.
+     */
+    private static String archiveDirectory(String key, String value) {
+        if (value == null || value.isBlank()) {
+            throw new IllegalArgumentException("Poll " + key + " must name a directory");
+        }
+        boolean unsafe = value.contains("${") || value.contains("..")
+                || value.startsWith("/") || value.contains("&") || value.contains("?")
+                || value.contains("\\");
+        if (unsafe) {
+            throw new IllegalArgumentException("Poll " + key + " '" + value + "' must be a plain"
+                    + " relative directory name: Camel evaluates it as a Simple expression, so a"
+                    + " path or placeholder can write the polled file anywhere");
+        }
+        return value;
+    }
+
     private String remoteUri(String scheme, PollSpec poll, int defaultPort, String options) {
         PollConnectors.Credential credential = poll.credential() == null
                 ? null
@@ -183,8 +211,9 @@ final class PollingRouteBuilder extends RouteBuilder {
                 .append(poll.host()).append(':').append(port).append('/').append(path)
                 .append('?').append(options);
         if (credential != null) {
-            uri.append("&username=").append(credential.require("username"))
-                    // RAW(...) keeps Camel from URL-decoding a password with reserved characters.
+            uri.append("&username=RAW(").append(credential.require("username")).append(')')
+                    // RAW(...) keeps Camel from URL-decoding a value with reserved characters,
+                    // and keeps an '&' inside one from splitting the query.
                     .append("&password=RAW(").append(credential.require("password")).append(')');
         }
         return uri.toString();

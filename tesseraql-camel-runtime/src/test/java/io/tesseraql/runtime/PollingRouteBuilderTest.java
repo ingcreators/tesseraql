@@ -3,6 +3,7 @@ package io.tesseraql.runtime;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import io.tesseraql.core.error.TqlException;
 import io.tesseraql.yaml.config.AppConfig;
 import io.tesseraql.yaml.connectors.PollConnectors;
 import io.tesseraql.yaml.model.PollSpec;
@@ -98,6 +99,61 @@ class PollingRouteBuilderTest {
                 .hasMessageContaining("trustStore");
     }
 
+    @Test
+    void aLocalPathIsAnchoredUnderADeclaredRoot() {
+        String uri = builder(Map.of("allowedPaths", List.of("inbox")))
+                .endpointUri(local("inbox/orders"));
+
+        assertThat(uri).startsWith("file://" + home.resolve("inbox/orders").toAbsolutePath() + "?");
+    }
+
+    @Test
+    void aLocalPathThatClimbsOutOfEveryRootIsRefused() {
+        PollingRouteBuilder builder = builder(Map.of("allowedPaths", List.of("inbox")));
+
+        // The poll consumer does not only read: it moves what it reads, so a path that escapes
+        // the root relocates a live directory's contents into .done.
+        assertThatThrownBy(() -> builder.endpointUri(local("inbox/../../secret")))
+                .isInstanceOf(TqlException.class)
+                .hasMessageContaining("outside every");
+    }
+
+    @Test
+    void aLocalSourceWithNoDeclaredRootIsRefused() {
+        PollingRouteBuilder builder = builder(Map.of());
+
+        assertThatThrownBy(() -> builder.endpointUri(local("anywhere")))
+                .isInstanceOf(TqlException.class)
+                .hasMessageContaining("allowedPaths");
+    }
+
+    @Test
+    void anIncludeGlobCannotSmuggleExtraEndpointOptions() {
+        String uri = builder(Map.of("allowedPaths", List.of("inbox")))
+                .endpointUri(new PollSpec("local", null, null, "inbox", null,
+                        "*.csv&noop=true", null, null, null));
+
+        // Camel splits the query on '&' before binding, so an unwrapped glob would bind noop
+        // (and anything else after it) as real consumer options.
+        assertThat(uri).contains("antInclude=RAW(*.csv&noop=true)");
+    }
+
+    @Test
+    void anArchiveDirectoryThatIsAnExpressionOrAPathIsRefused() {
+        PollingRouteBuilder builder = builder(Map.of("allowedPaths", List.of("inbox")));
+
+        // Camel evaluates move: as a Simple expression, so this writes the polled file outside
+        // the poll tree entirely — escaping would not help, only refusing the value does.
+        assertThatThrownBy(() -> builder.endpointUri(new PollSpec("local", null, null, "inbox",
+                null, null, null, "${file:parent}/../../escaped", null)))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Simple expression");
+        assertThatThrownBy(() -> builder.endpointUri(new PollSpec("local", null, null, "inbox",
+                null, null, null, null, "../outside")))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("relative directory name");
+    }
+
     private PollingRouteBuilder builder(Map<String, Object> poll) {
         AppConfig config = new AppConfig(
                 Map.of("tesseraql", Map.of("connectors", Map.of("poll", poll))), name -> null);
@@ -108,6 +164,10 @@ class PollingRouteBuilderTest {
     private static PollSpec sftp() {
         return new PollSpec("sftp", "sftp.partner.example", null, "/outbound", null, null, null,
                 null, null);
+    }
+
+    private static PollSpec local(String path) {
+        return new PollSpec("local", null, null, path, null, null, null, null, null);
     }
 
     private static PollSpec ftps() {

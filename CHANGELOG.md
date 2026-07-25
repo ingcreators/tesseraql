@@ -154,6 +154,27 @@ All notable changes to TesseraQL are documented here. The format follows
   selected, and the in-memory store prunes on write behind a 50,000-session ceiling.
   Constructing it without a TTL still yields a non-expiring store, for embedders that want one.
 
+- **`source: local` poll jobs are confined to declared roots** (docs/connectors.md): the
+  deny-by-default allow-list gate applied to remote sources only, and a local `path:` went into
+  the endpoint URI verbatim — no anchoring, no normalization, no traversal check — while
+  camel-file's `autoCreate` default is true. A path like `data/../../secret` therefore polled a
+  directory outside the app *and moved its files into `.done`*, since the consumer relocates
+  what it ingests. `tesseraql.connectors.poll.allowedPaths` now declares the roots, resolution
+  re-checks the normalized prefix (the rule `FileScopes` already applied everywhere else), and a
+  local source without a root is refused with `TQL-SEC-4086` at lint time.
+
+- **Poll option values cannot smuggle endpoint options**: `include` and `username` were
+  concatenated into the consumer URI unescaped while `password` was `RAW(...)`-wrapped, so an
+  `&` in either bound whatever followed as extra Camel consumer options. Both are wrapped now.
+  `move:`/`moveFailed:` are **rejected** rather than escaped when they contain `${`, `..`, a
+  leading `/`, `&` or `?` — Camel evaluates them as Simple expressions, so escaping would not
+  stop `${file:parent}/../../elsewhere` from writing the polled file outside the poll tree.
+
+- **Poll lint parity**: an unparseable `delay` is reported at lint instead of throwing at
+  startup, where it was logged and the job dropped — leaving the app healthy with nothing ever
+  arriving; `port` is range-checked; and `host:`/`credential:` on a `local` source are flagged
+  rather than silently discarded.
+
 - **`POST /_tesseraql/studio/reload` requires the Studio edit role** like every other mutating
   Studio endpoint. It authenticated and stopped there, so in the **default** posture — where
   `tesseraql.studio.readOnly` is true and draft/apply/scaffold all 403 — any authenticated
