@@ -119,6 +119,24 @@ class RouteAuditAndErrorPagesIntegrationTest {
         assertThat(api.body()).contains("\"error\"");
     }
 
+    /**
+     * Static assets carry the app's header block too.
+     *
+     * <p>They did not. The block was applied by the HTML render, so a response the compiler never
+     * produces — an asset served by a hand-written route — left without a CSP. An asset is a
+     * response leaving the runtime like any other, and a permissive one is a place to host
+     * something the CSP was written to prevent.
+     */
+    @Test
+    void aStaticAssetCarriesTheAppsSecurityHeaders() throws Exception {
+        HttpResponse<String> asset = get("/assets/app.css", null, "text/css");
+
+        assertThat(asset.statusCode()).isEqualTo(200);
+        assertThat(asset.headers().firstValue("Content-Security-Policy").orElse(""))
+                .contains("frame-ancestors 'none'");
+        assertThat(asset.headers().firstValue("X-Frame-Options").orElse("")).isEqualTo("DENY");
+    }
+
     private static HttpResponse<String> get(String path, String bearer, String accept)
             throws Exception {
         HttpRequest.Builder request = HttpRequest.newBuilder(
@@ -162,6 +180,8 @@ class RouteAuditAndErrorPagesIntegrationTest {
     private static Path prepareAppHome() throws IOException {
         Path target = Files.createTempDirectory("tesseraql-audit-it");
         Files.createDirectories(target.resolve("config"));
+        Files.createDirectories(target.resolve("assets"));
+        Files.writeString(target.resolve("assets/app.css"), "body { margin: 0 }\n");
         Files.writeString(target.resolve("config/application.yml"), """
                 server:
                   port: 0

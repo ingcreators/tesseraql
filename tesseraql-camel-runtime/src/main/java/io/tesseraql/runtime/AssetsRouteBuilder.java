@@ -81,6 +81,13 @@ final class AssetsRouteBuilder extends RouteBuilder {
                 .process(this::serve);
     }
 
+    /** The app's configured response headers, empty when the app declares none. */
+    @SuppressWarnings("unchecked")
+    private java.util.Map<String, String> securityHeaders() {
+        java.util.Map<String, String> headers = getContext().getRegistry().lookupByNameAndType(
+                io.tesseraql.camel.TesseraqlProperties.RESPONSE_HEADERS_BEAN, java.util.Map.class);
+        return headers == null ? java.util.Map.of() : headers;
+    }
     private void serve(Exchange exchange) throws IOException {
         String path = requestPath(exchange);
         String ifNoneMatch = exchange.getMessage().getHeader("If-None-Match", String.class);
@@ -107,6 +114,9 @@ final class AssetsRouteBuilder extends RouteBuilder {
         exchange.getMessage().setHeader("ETag", etag);
         exchange.getMessage().setHeader("Cache-Control", "public, max-age=300");
         exchange.getMessage().setHeader("X-Content-Type-Options", "nosniff");
+        // The app's security.responseHeaders: an asset is a response leaving the runtime like
+        // any other, and it is served by a hand-written route the compiler never sees.
+        securityHeaders().forEach((name, value) -> exchange.getMessage().setHeader(name, value));
         if (etag.equals(ifNoneMatch)) {
             exchange.getMessage().setHeader(Exchange.HTTP_RESPONSE_CODE, 304);
             exchange.getMessage().setBody("");

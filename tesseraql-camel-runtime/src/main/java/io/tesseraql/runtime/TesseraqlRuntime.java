@@ -852,6 +852,11 @@ public final class TesseraqlRuntime implements AutoCloseable {
                     appAssets.put(mounted.name(), assets);
                 }
             }
+            // The surfaces that write their own responses — static assets and the SSE streams —
+            // are the ones no compiled route covers, so they read the block from the registry.
+            context.getRegistry().bind(TesseraqlProperties.RESPONSE_HEADERS_BEAN,
+                    io.tesseraql.yaml.config.ResponseHeaderDefaults.from(manifest.config())
+                            .headers());
             context.addRoutes(new AssetsRouteBuilder(appHome.resolve("assets"), appAssets,
                     new ClientMessages(appHome,
                             manifest.config().getString("tesseraql.i18n.defaultLocale")

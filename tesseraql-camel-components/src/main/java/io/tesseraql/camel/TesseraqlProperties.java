@@ -49,6 +49,15 @@ public final class TesseraqlProperties {
     public static final String API_KEY_AUTHENTICATOR_BEAN = "tesseraqlApiKeyAuthenticator";
     public static final String MTLS_AUTHENTICATOR_BEAN = "tesseraqlMtlsAuthenticator";
     public static final String SESSION_STORE_BEAN = "tesseraqlSessionStore";
+
+    /**
+     * The app's resolved {@code tesseraql.security.responseHeaders} block, as a plain map.
+     *
+     * <p>Bound in the registry rather than threaded through constructors because the surfaces
+     * that need it are the ones the compiler never sees — static assets and the SSE streams,
+     * which write their own responses outside a compiled route.
+     */
+    public static final String RESPONSE_HEADERS_BEAN = "tesseraqlResponseHeaders";
     public static final String TEMP_STORE_BEAN = "tesseraqlTempStore";
     public static final String IDEMPOTENCY_STORE_BEAN = "tesseraqlIdempotencyStore";
     public static final String OUTBOX_STORE_BEAN = "tesseraqlOutboxStore";

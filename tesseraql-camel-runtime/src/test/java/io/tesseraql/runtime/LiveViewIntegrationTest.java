@@ -132,6 +132,43 @@ class LiveViewIntegrationTest {
         }
     }
 
+    /**
+     * An invalidated session ends an already-open stream.
+     *
+     * <p>It did not. The stream authenticated once at connect and never looked again, so "sign out
+     * others" and a password change left an open stream delivering data for up to its fifteen
+     * minute lifetime — against security-hardening.md's claim that a credential change evicts a
+     * parallel session. The claim was the right behaviour; the code was the part that was wrong.
+     */
+    @Test
+    void invalidatingTheSessionEndsAnOpenStream() throws Exception {
+        SessionStore sessions = runtime.camelContext().getRegistry().lookupByNameAndType(
+                TesseraqlProperties.SESSION_STORE_BEAN, SessionStore.class);
+        String sid = sessions.create(new Principal("evicted", "evicted", "Evicted", null,
+                List.of(), List.of("ADMIN"), List.of(), Map.of()));
+        String cookie = sessions.cookieName() + "=" + sid;
+
+        HttpResponse<java.io.InputStream> stream = HttpClient.newHttpClient().send(
+                HttpRequest.newBuilder(URI.create("http://localhost:" + runtime.port()
+                        + "/_tesseraql/events?topics=orders.changed"))
+                        .header("Cookie", cookie).build(),
+                HttpResponse.BodyHandlers.ofInputStream());
+        assertThat(stream.statusCode()).isEqualTo(200);
+
+        try (var frames = new java.io.BufferedReader(new java.io.InputStreamReader(
+                stream.body(), java.nio.charset.StandardCharsets.UTF_8))) {
+            assertThat(frames.readLine()).startsWith("retry:");
+            assertThat(frames.readLine()).isEmpty();
+
+            sessions.invalidate(sid);
+
+            // The next frame is what notices: the write re-checks the session, finds it gone and
+            // closes the stream, so the reader sees end-of-stream rather than the event.
+            assertThat(postCommand("status=APPROVED").statusCode()).isEqualTo(200);
+            assertThat(frames.readLine()).isNull();
+        }
+    }
+
     /** A rolled-back command (validation failure) emits nothing. */
     @Test
     void aFailedCommandEmitsNothing() throws Exception {
