@@ -196,7 +196,9 @@ Everything stays explicit in the SQL — nothing is injected behind the template
 name `audit` is reserved (declaring it under `params:` fails at route build time); a declared
 parameter named `principal` shadows the ambient namespace entirely, so explicit wiring always
 wins. A route without an authenticated principal seeds nothing: a `principal.*` bind on a public
-route fails loudly as an unbound parameter instead of binding null.
+route fails with `TQL-SQL-2112` instead of binding null. Only the whole namespace being absent
+is an error: a seeded `principal.tenantId` that is genuinely null stays null, because that is a
+fact about the principal rather than the absence of one.
 
 ## The scope directive
 

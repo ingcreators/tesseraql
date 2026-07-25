@@ -62,7 +62,8 @@ every existing example and the scaffolder's output.
    authenticated principal — `auth: public`, no effective security, or a signature-authenticated
    webhook — is an error-severity lint (`TQL-SEC-4136`; shipped in the SEC registry rather than
    a new `TQL-PRINCIPAL-*` family), and the binder seeds nothing without a principal, so the
-   bind fails loudly as an unbound parameter at runtime rather than binding null.
+   bind fails at runtime (`TQL-SQL-2112`) rather than binding null — the lint covers the routes
+   whose posture is decidable statically, and the runtime check covers the rest.
 4. **Explicit wiring still wins.** A route-local `params:` entry with the same SQL parameter name
    shadows the ambient resolution for that statement. `params:` remains the mechanism for
    renames, non-principal values, and anything computed.
