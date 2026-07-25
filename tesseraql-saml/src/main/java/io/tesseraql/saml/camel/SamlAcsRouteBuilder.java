@@ -11,6 +11,7 @@ import io.tesseraql.saml.SamlRedirect;
 import io.tesseraql.saml.SamlResponseValidator;
 import io.tesseraql.saml.SpMetadata;
 import io.tesseraql.security.Principal;
+import io.tesseraql.security.federation.FederationErrors;
 import io.tesseraql.security.session.LoginRedirects;
 import io.tesseraql.security.session.SessionStore;
 import java.net.URLDecoder;
@@ -32,6 +33,9 @@ import org.apache.camel.builder.RouteBuilder;
  * leaking assertion contents.
  */
 final class SamlAcsRouteBuilder extends RouteBuilder {
+
+    private static final org.slf4j.Logger LOG = org.slf4j.LoggerFactory
+            .getLogger(SamlAcsRouteBuilder.class);
 
     private final ObjectMapper mapper = new ObjectMapper();
     private final SamlResponseValidator validator;
@@ -362,17 +366,33 @@ final class SamlAcsRouteBuilder extends RouteBuilder {
         return null;
     }
 
-    private void unauthorized(Exchange exchange) throws Exception {
-        respondError(exchange, 401, "SAML authentication failed");
+    private void unauthorized(Exchange exchange) {
+        respondError(exchange, FederationErrors.UNAUTHENTICATED, "SAML authentication failed");
     }
 
-    private void badRequest(Exchange exchange) throws Exception {
-        respondError(exchange, 400, "Invalid SAML request");
+    /**
+     * The catch-all, which used to answer 400 for everything.
+     *
+     * <p>{@code onException(Exception.class)} covers a malformed assertion and an IdP whose
+     * metadata cannot be fetched alike, and collapsing both into 400 told an operator their
+     * request was wrong when the truth was that the server failed.
+     */
+    private void badRequest(Exchange exchange) {
+        Throwable cause = exchange.getProperty(Exchange.EXCEPTION_CAUGHT, Throwable.class);
+        if (cause instanceof io.tesseraql.core.error.TqlException tql) {
+            respondError(exchange, tql.code(), "SAML request refused");
+            return;
+        }
+        LOG.warn("SAML request failed", cause);
+        respondError(exchange, FederationErrors.FAILED, "SAML request failed");
     }
 
-    private void respondError(Exchange exchange, int status, String message) throws Exception {
-        exchange.getMessage().setHeader(Exchange.HTTP_RESPONSE_CODE, status);
+    /** The framework envelope, so a federation error reads like every other error. */
+    private void respondError(Exchange exchange, io.tesseraql.core.error.TqlErrorCode code,
+            String message) {
+        exchange.getMessage().setHeader(Exchange.HTTP_RESPONSE_CODE,
+                io.tesseraql.compiler.binding.ErrorResponseRenderer.httpStatus(code));
         exchange.getMessage().setHeader(Exchange.CONTENT_TYPE, "application/json; charset=utf-8");
-        exchange.getMessage().setBody(mapper.writeValueAsString(Map.of("error", message)));
+        exchange.getMessage().setBody(FederationErrors.body(code, message));
     }
 }

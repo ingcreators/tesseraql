@@ -82,7 +82,28 @@ class SamlAcsIntegrationTest {
     @Test
     void tamperedResponseIsRejected() throws Exception {
         String saml = saml().replace("alice@idp.example.com", "mallory@idp.example.com");
-        assertThat(postAcs(saml).statusCode()).isEqualTo(401);
+        HttpResponse<String> rejected = postAcs(saml);
+
+        assertThat(rejected.statusCode()).isEqualTo(401);
+        // The framework envelope, not `{"error":"<string>"}`: a federation failure carries a code
+        // an operator can search for, like every other error the framework answers with.
+        assertThat(rejected.body()).contains("\"code\":\"TQL-SEC-4011\"");
+    }
+
+    /**
+     * A malformed request is the caller's fault; a broken exchange is not.
+     *
+     * <p>{@code onException(Exception.class).handled(true)} answered 400 for both, so an operator
+     * reading the response learned that their request was invalid when the truth might have been
+     * that the server or the IdP had failed. At a federation boundary, whose fault it is happens
+     * to be the single most useful thing the answer can carry.
+     */
+    @Test
+    void aMalformedAssertionIsRefusedWithTheFrameworkEnvelope() throws Exception {
+        HttpResponse<String> refused = postAcs("not xml at all");
+
+        assertThat(refused.body()).contains("\"code\":\"TQL-SEC-");
+        assertThat(refused.body()).doesNotContain("Invalid SAML request");
     }
 
     @Test
