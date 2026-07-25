@@ -103,7 +103,24 @@
       "description": "Additional named queries executed after sql, each bound into the execution context under its name.",
       "additionalProperties": { "$ref": "#/$defs/sqlBinding" }
     },
-    "validate": { "type": "object", "additionalProperties": { "type": "object", "additionalProperties": true }, "description": "Declarative validation rules keyed by rule id; each declares one of rule: (expression) or file: (validation SQL). Documented in declarative-validation.md." },
+    "validate": {
+      "type": "object",
+      "description": "Declarative validation rules keyed by rule id. A rule declares exactly one of rule: (a cross-field expression), file: (validation SQL), or use: (a shared rule declared under rules/). Honored on command-json, query-json and webhook routes, on queue consumers, and on MCP tools.",
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "rule": { "type": "string", "description": "A cross-field expression that must hold." },
+          "file": { "type": "string", "description": "Validation SQL returning one row per violation; must be a SELECT, and runs inside the command's transaction." },
+          "use": { "type": "string", "description": "Name of a shared rule declared under rules/. The reference supplies params: matching the rule's binds: contract, plus its own field:/when:/code:/message:." },
+          "params": { "type": "object", "additionalProperties": { "type": "string" }, "description": "Binds for a SQL rule, as dotted source expressions." },
+          "field": { "type": "string", "description": "The input the violation is reported against." },
+          "when": { "type": "string", "description": "Guard expression; the rule is skipped when it is falsy." },
+          "code": { "type": "string", "description": "Machine-readable violation code." },
+          "message": { "type": "string", "description": "Message catalog key." }
+        },
+        "additionalProperties": false
+      }
+    },
     "notify": { "type": "object", "additionalProperties": { "type": "object", "additionalProperties": true }, "description": "Notifications enqueued with the command on the transactional outbox, keyed by channel. Documented in notifications.md." },
     "errors": { "type": "object", "additionalProperties": true, "description": "Per-route error mapping: constraint codes and statuses onto response fields and messages. Documented in declarative-validation.md." },
     "import": { "type": "object", "additionalProperties": true, "description": "file-import parsing and column-to-bind mapping (headerRow, startRow, columns, onError: rollback|skip). Documented in file-transfers.md." },
@@ -245,6 +262,7 @@
     "inputField": {
       "type": "object",
       "properties": {
+        "domain": { "type": "string", "description": "Name of a field domain declared under domains/; its type, bounds, pattern, format, enum, classification and mask merge in, and the keys declared here win. Operational keys (required, requiredWhen, default, writable) stay route-local." },
         "type": { "enum": ["string", "integer", "number", "boolean", "date", "array"] },
         "required": { "type": "boolean" },
         "default": {},

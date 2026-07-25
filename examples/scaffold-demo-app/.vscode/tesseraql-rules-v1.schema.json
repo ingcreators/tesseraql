@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tesseraql.io/schema/tesseraql-rules-v1.schema.json",
+  "title": "TesseraQL validation rule sets v1",
+  "description": "Schema for TesseraQL shared validation rule documents (rules/*.yml): named rules a route references from its 'validate:' block with 'use:'. Documented in validation-rule-sets.md.",
+  "type": "object",
+  "properties": {
+    "version": {
+      "type": "string",
+      "const": "tesseraql/v1",
+      "description": "The DSL version. Always tesseraql/v1."
+    },
+    "rules": {
+      "type": "object",
+      "description": "Named validation rules. Each declares what the rule is; how a route uses it (params:, field:, when:) stays at the reference.",
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "rule": {
+            "type": "string",
+            "description": "Cross-field expression. Exactly one of rule: or file:."
+          },
+          "file": {
+            "type": "string",
+            "description": "Validation SQL, resolved relative to this document. Exactly one of rule: or file:."
+          },
+          "binds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "The bind contract a reference's params: must satisfy exactly. Ambient binds (principal.*, audit.*) are supplied by the framework and never listed here."
+          },
+          "code": {
+            "type": "string",
+            "description": "Default stable rule code, overridable at the reference."
+          },
+          "message": {
+            "type": "string",
+            "description": "Default message key, overridable at the reference."
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}

@@ -15,6 +15,104 @@ import org.junit.jupiter.api.Test;
  */
 class SchemaSyncTest {
 
+    /**
+     * Property coverage, not just enum coverage.
+     *
+     * <p>The enum checks caught a missing recipe, but nothing checked that a *key* the model
+     * accepts appears in the schema at all — so `domain:` and `use:` shipped, and the published
+     * YAML surface (generated straight from this file) documented neither. A reader concluded
+     * they did not exist. Reflecting over the model record is what makes the next added field
+     * fail here rather than go quietly missing.
+     */
+    @Test
+    void schemaInputFieldCoversEveryModelComponent() throws Exception {
+        JsonNode schema = new ObjectMapper().readTree(
+                getClass().getResourceAsStream("/schema/tesseraql-v1.schema.json"));
+        JsonNode properties = schema.path("$defs").path("inputField").path("properties");
+
+        List<String> declared = new ArrayList<>();
+        for (var component : io.tesseraql.yaml.model.InputField.class.getRecordComponents()) {
+            // The YAML name, not the Java one: default/enum are reserved words, so those two
+            // components carry a @JsonProperty rename. A record component's annotations land on
+            // the backing field, not on the component mirror.
+            String name = component.getName();
+            try {
+                var field = io.tesseraql.yaml.model.InputField.class.getDeclaredField(name);
+                var renamed = field.getAnnotation(
+                        com.fasterxml.jackson.annotation.JsonProperty.class);
+                if (renamed != null && !renamed.value().isBlank()) {
+                    name = renamed.value();
+                }
+            } catch (NoSuchFieldException impossibleForARecord) {
+                throw new IllegalStateException(impossibleForARecord);
+            }
+            declared.add(name);
+        }
+        List<String> documented = new ArrayList<>();
+        properties.fieldNames().forEachRemaining(documented::add);
+
+        assertThat(documented)
+                .as("every input: key the model accepts is documented in the shipped schema")
+                .containsAll(declared);
+    }
+
+    @Test
+    void theRuleSetSchemaCoversEveryRuleSetComponent() throws Exception {
+        JsonNode schema = new ObjectMapper().readTree(
+                getClass().getResourceAsStream("/schema/tesseraql-rules-v1.schema.json"));
+        JsonNode rule = schema.path("properties").path("rules")
+                .path("additionalProperties").path("properties");
+
+        List<String> documented = new ArrayList<>();
+        rule.fieldNames().forEachRemaining(documented::add);
+        List<String> declared = new ArrayList<>();
+        for (var component : io.tesseraql.yaml.model.RuleSetsDocument.RuleSet.class
+                .getRecordComponents()) {
+            declared.add(component.getName());
+        }
+
+        assertThat(documented).containsAll(declared);
+    }
+
+    /**
+     * A field domain's value type <em>is</em> an input field, so the domains schema carries a
+     * verbatim copy of the route schema's definition and this test is what keeps the copy
+     * honest. A hand-maintained second declaration would drift the moment a field key is added,
+     * which is the exact gap that let {@code domain:} ship undocumented.
+     */
+    @Test
+    void theDomainSchemaCarriesAVerbatimCopyOfTheInputFieldDefinition() throws Exception {
+        ObjectMapper mapper = new ObjectMapper();
+        JsonNode route = mapper.readTree(
+                getClass().getResourceAsStream("/schema/tesseraql-v1.schema.json"));
+        JsonNode domains = mapper.readTree(
+                getClass().getResourceAsStream("/schema/tesseraql-domains-v1.schema.json"));
+
+        assertThat(domains.path("properties").path("domains").path("additionalProperties")
+                .path("$ref").asText())
+                .as("the domains map's value is an input field")
+                .isEqualTo("#/$defs/inputField");
+        assertThat(domains.path("$defs").path("inputField"))
+                .as("copied from tesseraql-v1.schema.json; re-copy it rather than editing here")
+                .isEqualTo(route.path("$defs").path("inputField"));
+    }
+
+    @Test
+    void schemaValidateRuleDocumentsSharedRuleReferences() throws Exception {
+        JsonNode schema = new ObjectMapper().readTree(
+                getClass().getResourceAsStream("/schema/tesseraql-v1.schema.json"));
+        JsonNode rule = schema.path("properties").path("validate")
+                .path("additionalProperties").path("properties");
+
+        // use: is how a route references a shared rule set; the node was an untyped map whose
+        // description predated the feature.
+        assertThat(rule.has("use")).isTrue();
+        assertThat(rule.has("rule")).isTrue();
+        assertThat(rule.has("file")).isTrue();
+        assertThat(schema.path("properties").path("validate").path("description").asText())
+                .contains("use:");
+    }
+
     @Test
     void schemaRecipeEnumCoversEveryLinterRecipe() throws Exception {
         JsonNode schema = new ObjectMapper().readTree(

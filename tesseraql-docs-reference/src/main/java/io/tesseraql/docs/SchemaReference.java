@@ -23,8 +23,12 @@ final class SchemaReference {
     private SchemaReference() {
     }
 
-    /** Renders the whole page from the schema file. */
-    static String render(Path schemaFile) throws IOException {
+    /** One non-route document kind: the schema file and the heading its section carries. */
+    record DocumentKind(String title, Path schemaFile) {
+    }
+
+    /** Renders the whole page from the route schema plus the sibling document schemas. */
+    static String render(Path schemaFile, List<DocumentKind> documentSchemas) throws IOException {
         JsonNode schema = MAPPER.readTree(schemaFile.toFile());
         StringBuilder md = new StringBuilder();
         md.append("# YAML surface reference\n\n")
@@ -38,6 +42,24 @@ final class SchemaReference {
             md.append('\n').append(schema.get("description").asText()).append('\n');
         }
         renderObject(md, schema, schema, "The document", 2);
+
+        // The shared-definition documents are their own kind — no id:, no kind: — so they have
+        // their own schemas, and a page generated from the route schema alone documented
+        // neither. A reader had no way to learn the surface existed.
+        if (!documentSchemas.isEmpty()) {
+            md.append("\n## Other document kinds\n\n")
+                    .append("Shared definitions live in their own documents, referenced from "
+                            + "routes rather than repeated in them. Each has its own schema and "
+                            + "its own file association.\n");
+            for (DocumentKind kind : documentSchemas) {
+                JsonNode document = MAPPER.readTree(kind.schemaFile().toFile());
+                // Rendered against the route schema's root: these documents' shared
+                // definitions are copies of it (SchemaSyncTest enforces that), so a "$ref"
+                // resolves to the same node and links to the same section of this page.
+                renderObject(md, document, schema, kind.title(), 3);
+            }
+        }
+
         JsonNode defs = schema.get("$defs");
         if (defs != null) {
             md.append("\n## Shared definitions\n");

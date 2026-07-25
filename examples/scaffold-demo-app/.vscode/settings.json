@@ -5,6 +5,12 @@
       "consume/**/*.yml",
       "batch/**/*.yml",
       "mcp/**/*.yml"
+    ],
+    ".vscode/tesseraql-domains-v1.schema.json": [
+      "domains/**/*.yml"
+    ],
+    ".vscode/tesseraql-rules-v1.schema.json": [
+      "rules/**/*.yml"
     ]
   }
 }

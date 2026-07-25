@@ -42,6 +42,8 @@ class AppScaffolderTest {
                 "compose.yaml",
                 "README.md",
                 ".vscode/tesseraql-v1.schema.json",
+                ".vscode/tesseraql-domains-v1.schema.json",
+                ".vscode/tesseraql-rules-v1.schema.json",
                 ".vscode/settings.json",
                 ".vscode/extensions.json");
     }
