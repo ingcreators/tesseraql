@@ -334,19 +334,6 @@ else re-derives.
    the runtime while `applySecurity` lives in the compiler, so wiring it needs the compiler's
    chain to be reachable from a reload — worth doing with the surface registry (slice 5) rather
    than by duplicating the chain.
-<<<<<<< HEAD
-3. **Security headers on every response**, which subsumes the error-response, SSE, and assets rows.
-4. ~~**The session-store default.**~~ **Shipped, the first half.** The in-memory store expires on
-   read and prunes on write, with a 50,000-session ceiling behind that, and
-   `tesseraql.sessions.ttl` is read once and handed to whichever store is selected — the key had
-   been read inside the jdbc branch only, so on the default it was inert.
-   **Open question 1 is deliberately still open.** Making `jdbc` the default is a deployment
-   posture, not a defect: it would also make sessions survive a restart, which is a visible
-   behavior change for every existing app and belongs to whoever owns that call. Fixing the
-   silent-no-expiry defect did not require deciding it, so this slice did not decide it.
-   The no-TTL constructor is kept for embedders, and a test pins that too, so the change is
-   about the framework's default rather than the class's only possible posture.
-=======
 3. **Security headers on every response** — **the error-response row is shipped**; SSE and assets
    are not, and the reason is worth recording rather than leaving as an omission.
    `ErrorResponseRenderer` now carries the app's `security.responseHeaders` and applies them to
@@ -360,10 +347,16 @@ else re-derives.
    started, too late to set headers) or reaching into Vert.x directly. SSE additionally needs its
    headers before the first frame, so it cannot use a completion hook at all. Decide the
    mechanism with the surface registry in slice 5, where each surface declares its posture.
-4. **The session-store default.** Either TTL and a cap in the in-memory store, or make `jdbc` the
-   default; and honor `tesseraql.sessions.ttl` on both paths so the key stops lying. See the open
-   question.
->>>>>>> 79ca2074 (fix(errors): error pages carry the app's security headers)
+4. ~~**The session-store default.**~~ **Shipped, the first half.** The in-memory store expires on
+   read and prunes on write, with a 50,000-session ceiling behind that, and
+   `tesseraql.sessions.ttl` is read once and handed to whichever store is selected — the key had
+   been read inside the jdbc branch only, so on the default it was inert.
+   **Open question 1 is deliberately still open.** Making `jdbc` the default is a deployment
+   posture, not a defect: it would also make sessions survive a restart, which is a visible
+   behavior change for every existing app and belongs to whoever owns that call. Fixing the
+   silent-no-expiry defect did not require deciding it, so this slice did not decide it.
+   The no-TTL constructor is kept for embedders, and a test pins that too, so the change is
+   about the framework's default rather than the class's only possible posture.
 5. **The surface registry and its test** (the guard), which also settles the unverified HTTP leads
    by forcing each surface to declare its posture.
 6. **The lifecycle registry and `guarded()`**, closing the template, client, executor, and
