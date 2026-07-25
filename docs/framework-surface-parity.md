@@ -285,6 +285,17 @@ because they are established.
 - `POST /_tesseraql/login` and `POST /_tesseraql/reset` have no rate limit, attempt counter, or
   lockout — the compiled-route `policy.rateLimit` feature these Java routes do not use. Reset also
   queues an outbox mail per call.
+  **The obvious fix is a wrong one, so it is written down here before someone ships it.** Both
+  shipped limiters — `RateLimiter` and `ClusterRateLimiter` — hold a *single* bucket per route;
+  `ClusterRateLimiter`'s `scopeKey` names the route for cluster coordination, not the caller.
+  Attaching either to the login route makes every attempt in the system draw on one budget, so one
+  attacker locks every user out with a script. That trades an online-guessing weakness for a
+  trivial denial of service, which is not an improvement — it is a different, cheaper attack.
+  What login needs is a limiter keyed per caller (remote address, and separately per `loginId` so a
+  distributed attempt on one account is still bounded), with eviction, which neither existing class
+  provides. Reset needs the same keying plus a per-address cap on queued mail, since each call
+  costs an outbox row and a message. That is a slice, not a line — and its absence is safer than a
+  global bucket would be.
 - Session cookies are issued without `Secure` at every site and there is no knob to add it. Uniform
   and explicitly reasoned in [threat-model.md](threat-model.md) ("HTTPS-secured at the edge"), which
   does not cover the first request before HSTS is known.
