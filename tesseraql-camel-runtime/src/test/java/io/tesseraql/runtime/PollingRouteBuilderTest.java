@@ -99,6 +99,27 @@ class PollingRouteBuilderTest {
                 .hasMessageContaining("trustStore");
     }
 
+    /**
+     * A remote source with no credential is refused rather than polled anonymously.
+     *
+     * <p>It was accepted, and produced a URI with no username and no password. SFTP then fails at
+     * connect with a message about the server, and FTPS may well succeed as anonymous — a poll job
+     * quietly reading whatever an anonymous session can see. Neither outcome tells the operator
+     * that the declaration was the incomplete part.
+     */
+    @Test
+    void aRemoteSourceWithoutACredentialIsRefused() {
+        PollingRouteBuilder builder = builder(
+                Map.of("allowedHosts", List.of("sftp.partner.example")));
+        PollSpec anonymous = new PollSpec("sftp", "sftp.partner.example", null, "/outbound",
+                null, null, null, null, null);
+
+        assertThatThrownBy(() -> builder.endpointUri(anonymous))
+                .isInstanceOf(io.tesseraql.core.error.TqlException.class)
+                .hasMessageContaining("TQL-SEC-4088")
+                .hasMessageContaining("needs a credential");
+    }
+
     @Test
     void aLocalPathIsAnchoredUnderADeclaredRoot() {
         String uri = builder(Map.of("allowedPaths", List.of("inbox")))
@@ -155,15 +176,21 @@ class PollingRouteBuilderTest {
     }
 
     private PollingRouteBuilder builder(Map<String, Object> poll) {
+        // Every remote source needs one now, so the fixture declares it rather than each case
+        // repeating it: a remote poll with no credential is refused (TQL-SEC-4088).
+        Map<String, Object> withCredential = new java.util.LinkedHashMap<>(poll);
+        withCredential.putIfAbsent("credentials",
+                Map.of("partner", Map.of("username", "svc", "password", "s3cr3t")));
         AppConfig config = new AppConfig(
-                Map.of("tesseraql", Map.of("connectors", Map.of("poll", poll))), name -> null);
+                Map.of("tesseraql", Map.of("connectors", Map.of("poll", withCredential))),
+                name -> null);
         return new PollingRouteBuilder(List.of(), PollConnectors.load(config), "app", Map.of(),
                 home, home.resolve("work"));
     }
 
     private static PollSpec sftp() {
-        return new PollSpec("sftp", "sftp.partner.example", null, "/outbound", null, null, null,
-                null, null);
+        return new PollSpec("sftp", "sftp.partner.example", null, "/outbound", "partner", null,
+                null, null, null);
     }
 
     @Test
@@ -188,7 +215,7 @@ class PollingRouteBuilderTest {
     }
 
     private static PollSpec ftps() {
-        return new PollSpec("ftps", "ftps.partner.example", null, "/outbound", null, null, null,
-                null, null);
+        return new PollSpec("ftps", "ftps.partner.example", null, "/outbound", "partner", null,
+                null, null, null);
     }
 }

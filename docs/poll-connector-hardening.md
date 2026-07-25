@@ -220,8 +220,14 @@ home-relative — the CHANGELOG entry names it, per rule 10.
    metadata before writing them is what caught it.
    `TQL-SEC-4084` stayed a warning: SSH host keys have a legitimate trust-on-first-use posture
    that a CA bundle does not, so only the new FTPS check is an error.
-4. **Credential methods.** Key-based SFTP, FTPS client certificates, exactly-one-method validation,
-   and a load error for a remote source with no credential.
+4. **Credential methods.** Key-based SFTP, FTPS client certificates, and exactly-one-method
+   validation remain.
+   **The load error for a remote source with no credential is shipped** (`TQL-SEC-4088`). It was
+   accepted, and produced a URI with no username and no password: SFTP fails at connect with a
+   message about the server, and FTPS may succeed as anonymous — a poll job quietly reading
+   whatever an anonymous session can see. Neither outcome names the declaration as the incomplete
+   part. Five existing tests were constructing remote sources without a credential, which is its
+   own evidence for how easily the omission passes unnoticed.
 5. ~~**URI value handling and poll lint parity.**~~ **Shipped**, after a verification pass that
    corrected the leads it was based on (see the marked-up leads above — `path` turned out not to
    be injectable, the proposed re-import payload does not re-import, and `move:` is the sharper

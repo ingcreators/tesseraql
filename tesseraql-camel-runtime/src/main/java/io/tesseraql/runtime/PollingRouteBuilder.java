@@ -1,5 +1,8 @@
 package io.tesseraql.runtime;
 
+import io.tesseraql.core.error.TqlDomain;
+import io.tesseraql.core.error.TqlErrorCode;
+import io.tesseraql.core.error.TqlException;
 import io.tesseraql.core.util.Durations;
 import io.tesseraql.yaml.connectors.PollConnectors;
 import io.tesseraql.yaml.manifest.JobFile;
@@ -25,6 +28,10 @@ import org.apache.camel.builder.RouteBuilder;
  * down.
  */
 final class PollingRouteBuilder extends RouteBuilder {
+
+    /** A remote poll source declared without a credential (docs/connectors.md). */
+    private static final TqlErrorCode REMOTE_NEEDS_CREDENTIAL = new TqlErrorCode(TqlDomain.SEC,
+            4088);
 
     private static final System.Logger LOG = System
             .getLogger(PollingRouteBuilder.class.getName());
@@ -225,20 +232,25 @@ final class PollingRouteBuilder extends RouteBuilder {
     }
 
     private String remoteUri(String scheme, PollSpec poll, int defaultPort, String options) {
-        PollConnectors.Credential credential = poll.credential() == null
-                ? null
-                : connectors.requireCredential(poll.credential());
+        // A remote source with no credential: was accepted, and produced a URI with no username
+        // and no password. SFTP then fails at connect with a message about the server, and FTPS
+        // may succeed as anonymous — a poll job quietly reading whatever an anonymous session can
+        // see. Neither outcome tells the operator that the declaration was incomplete.
+        if (poll.credential() == null || poll.credential().isBlank()) {
+            throw new TqlException(REMOTE_NEEDS_CREDENTIAL, "Poll source '" + scheme
+                    + "' needs a credential: declare one under"
+                    + " tesseraql.connectors.poll.credentials and reference it with credential:");
+        }
+        PollConnectors.Credential credential = connectors.requireCredential(poll.credential());
         int port = poll.port() == null ? defaultPort : poll.port();
         String path = poll.path().startsWith("/") ? poll.path().substring(1) : poll.path();
         StringBuilder uri = new StringBuilder(scheme).append("://")
                 .append(poll.host()).append(':').append(port).append('/').append(path)
                 .append('?').append(options);
-        if (credential != null) {
-            uri.append("&username=RAW(").append(credential.require("username")).append(')')
-                    // RAW(...) keeps Camel from URL-decoding a value with reserved characters,
-                    // and keeps an '&' inside one from splitting the query.
-                    .append("&password=RAW(").append(credential.require("password")).append(')');
-        }
+        uri.append("&username=RAW(").append(credential.require("username")).append(')')
+                // RAW(...) keeps Camel from URL-decoding a value with reserved characters, and
+                // keeps an '&' inside one from splitting the query.
+                .append("&password=RAW(").append(credential.require("password")).append(')');
         return uri.toString();
     }
 }
