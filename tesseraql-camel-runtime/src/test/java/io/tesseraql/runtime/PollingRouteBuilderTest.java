@@ -15,7 +15,9 @@ import org.junit.jupiter.api.io.TempDir;
  * The consumer-URI construction for {@code poll:} triggers: with
  * {@code tesseraql.connectors.poll.knownHostsFile} set, the SFTP endpoint verifies the server's
  * SSH host key against that file (strict checking); without it, the historical unchecked
- * behavior stays, so existing apps keep polling.
+ * behavior stays, so existing apps keep polling. The FTPS endpoint carries the transport
+ * settings that make it the sibling the docs describe rather than only the scheme they share —
+ * each of those is one option long, which is exactly why they need pinning.
  */
 class PollingRouteBuilderTest {
 
@@ -55,6 +57,26 @@ class PollingRouteBuilderTest {
                 .doesNotContain("knownHostsFile=");
     }
 
+    @Test
+    void ftpsEncryptsTheDataChannelAndTransfersBytesVerbatim() {
+        String uri = builder(Map.of("allowedHosts", List.of("ftps.partner.example")))
+                .endpointUri(ftps());
+
+        assertThat(uri)
+                .startsWith("ftps://ftps.partner.example:21/outbound?")
+                // PBSZ/PROT protect the data connection. Without them TLS covers the control
+                // channel only and every polled file crosses the network in cleartext.
+                .contains("execPbsz=0")
+                .contains("execProt=P")
+                // The option that used to be here reads like hardening and does the opposite:
+                // it suppresses the defaults that would have negotiated that protection.
+                .doesNotContain("disableSecureDataChannelDefaults")
+                // ASCII mode would line-ending-translate an Excel or archive payload in transit.
+                .contains("binary=true")
+                // Active mode asks the server to dial back into this process.
+                .contains("passiveMode=true");
+    }
+
     private PollingRouteBuilder builder(Map<String, Object> poll) {
         AppConfig config = new AppConfig(
                 Map.of("tesseraql", Map.of("connectors", Map.of("poll", poll))), name -> null);
@@ -64,6 +86,11 @@ class PollingRouteBuilderTest {
 
     private static PollSpec sftp() {
         return new PollSpec("sftp", "sftp.partner.example", null, "/outbound", null, null, null,
+                null, null);
+    }
+
+    private static PollSpec ftps() {
+        return new PollSpec("ftps", "ftps.partner.example", null, "/outbound", null, null, null,
                 null, null);
     }
 }

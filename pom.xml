@@ -105,6 +105,10 @@
     <slf4j.version>2.0.18</slf4j.version>
     <!-- Test-only: an in-process SFTP server for the Phase 26 poll-trigger integration test. -->
     <sshd.version>2.19.0</sshd.version>
+    <!-- Test-only: an in-process FTPS server, so the ftps poll source is exercised for real
+         (its transport settings are each one option long and nothing else would notice them
+         regressing). -->
+    <ftpserver.version>1.2.1</ftpserver.version>
     <maven.api.version>3.9.16</maven.api.version>
     <maven.plugin.tools.version>3.15.2</maven.plugin.tools.version>
     <junit.version>6.1.1</junit.version>

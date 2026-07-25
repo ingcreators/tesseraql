@@ -289,8 +289,15 @@ tesseraql:
 ```
 
 Without it, host keys are not checked and lint nudges with `TQL-SEC-4084` (a warning, so
-existing apps keep working). FTPS rides the identical recipe and runtime path with
-`source: ftps`; only the endpoint scheme differs.
+existing apps keep working).
+
+FTPS rides the same recipe and runtime path with `source: ftps`. The endpoint negotiates
+`PBSZ 0`/`PROT P`, so the file's bytes are encrypted and not only the login, and it transfers in
+binary and connects in passive mode. Its server identity, however, is **not** verified: there is
+no FTPS equivalent of `knownHostsFile` yet, and the underlying client accepts any in-date
+certificate without building a chain or checking the hostname. Until that lands, treat an FTPS
+partner as authenticated by the network path rather than by TLS — prefer `source: sftp` with a
+`knownHostsFile` where the partner offers both.
 
 ### Governance and testing
 

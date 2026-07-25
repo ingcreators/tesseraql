@@ -1,6 +1,6 @@
 # Poll connector hardening
 
-> **Status: designed, not yet implemented.** The 2026-07-25 contract-deviation sweep compared
+> **Status: slices 1–2 shipped, the rest designed.** The 2026-07-25 contract-deviation sweep compared
 > the three poll sources (`local`, `sftp`, `ftps`) against each other and found that `ftps` is
 > not, as [connectors.md](connectors.md) states, "the identical recipe and runtime path … only
 > the endpoint scheme differs" — it transfers file content **unencrypted**, validates **no
@@ -9,6 +9,14 @@
 > coverage at all**, which is why they survived ~13 months. This document defines the credential
 > and transport model the three sources should share, and the lint that makes an unverified
 > remote source unrepresentable.
+>
+> **Slices 1–2 are shipped:** the ftps endpoint now negotiates `PBSZ 0` + `PROT P`, transfers in
+> binary, and connects in passive mode, and `PollImportFtpsIntegrationTest` exercises the branch
+> against an in-process Apache FtpServer — asserting the server's own command trace, which is
+> what actually distinguishes the settings (a lenient server round-trips text intact even in
+> ASCII mode, so a payload-only assertion passes against the broken setting). Against the old
+> code the trace reads `TYPE A` with no `PBSZ`/`PROT` at all. **Server identity is still
+> unverified — slice 3 remains the security-critical one.**
 
 The failure class: a recipe family whose members are documented as interchangeable, where the
 security posture silently differs per member. An author hardens their SFTP job after the
@@ -19,20 +27,20 @@ unauthenticated, cleartext transfer that no lint mentions.
 
 | | `local` | `sftp` | `ftps` |
 | --- | --- | --- | --- |
-| Content encrypted in transit | n/a | yes | **no** |
+| Content encrypted in transit | n/a | yes | yes (was **no**) |
 | Server identity verified | n/a | only with `knownHostsFile` | **never, unconfigurable** |
 | Host allow-list enforced | **no** | yes | yes |
 | Path governance (root anchoring, traversal) | **none** | n/a (remote) | n/a (remote) |
-| Binary-safe | yes | yes | **no (ASCII mode)** |
-| Works behind NAT | n/a | yes | **no (active mode)** |
+| Binary-safe | yes | yes | yes (was **ASCII mode**) |
+| Works behind NAT | n/a | yes | yes (was **active mode**) |
 | Credential kinds | n/a | password only | password only |
 | Anonymous connection possible | n/a | **yes, unflagged** | **yes, unflagged** |
 | Streams off-heap | yes | **no** | **no** |
-| Test coverage | one IT | unit + IT | **none** |
+| Test coverage | one IT | unit + IT | unit + IT (was **none**) |
 
 ## The confirmed findings
 
-### FTPS transfers file content in the clear
+### FTPS transfers file content in the clear — FIXED
 
 `PollingRouteBuilder:102-103` appends `disableSecureDataChannelDefaults=true`, which is the
 inverse of a hardening flag. In `camel-ftp-4.18.0`, `FtpsOperations.connect` reads
@@ -60,7 +68,7 @@ only `username` and `password`. **There is no YAML path to fix this.** Combined 
 finding: an on-path attacker presents any in-date self-signed certificate, harvests the
 credentials, and reads every file in the clear.
 
-### FTPS runs in ASCII mode and active mode
+### FTPS runs in ASCII mode and active mode — FIXED
 
 `binary` and `passiveMode` are never set and both default false. `FtpOperations.connect` actively
 calls `setFileType(ASCII_FILE_TYPE)` and skips `enterLocalPassiveMode()`. ASCII mode
@@ -165,12 +173,16 @@ home-relative — the CHANGELOG entry names it, per rule 10.
 
 ## Slices
 
-1. **FTPS transport.** Drop `disableSecureDataChannelDefaults`, add `execProt`/`execPbsz`,
-   `binary=true`, `passiveMode=true`. Small, and it makes the branch correct before it is
-   configurable.
-2. **The ftps test bed.** An FTPS integration test on the pattern of the SFTP one, asserting the
-   negotiated data channel is encrypted and a binary payload round-trips byte-identically. This
-   comes second deliberately: slice 1's fixes are one-liners that nothing would notice regressing.
+1. ~~**FTPS transport.**~~ **Shipped.** `disableSecureDataChannelDefaults` is gone; the endpoint
+   sets `execPbsz=0`, `execProt=P`, `binary=true`, `passiveMode=true` explicitly, so the settings
+   survive a change in the component's own defaults and state their intent at the call site.
+2. ~~**The ftps test bed.**~~ **Shipped.** `PollImportFtpsIntegrationTest` runs an in-process
+   Apache FtpServer with a keystore generated per run by the JDK's `keytool` (no key in the
+   repository), and asserts the server's command trace: `PBSZ 0`, `PROT P`, `TYPE I`, `PASV`,
+   plus the row landing in the database. A `PollingRouteBuilderTest` case pins the URI itself.
+   One correction to the original plan worth recording: "a binary payload round-trips
+   byte-identically" is **not** a usable assertion — this server returns multi-byte text intact
+   in ASCII mode too, so that check passes against the broken setting. The trace is the evidence.
 3. **Server identity.** `trustStore` config, `SSLContextParameters` wiring, `tlsEndpointChecking`;
    `TQL-SEC-4084` to error plus its FTPS sibling.
 4. **Credential methods.** Key-based SFTP, FTPS client certificates, exactly-one-method validation,

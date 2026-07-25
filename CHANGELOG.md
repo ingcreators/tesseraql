@@ -132,6 +132,18 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Fixed
 
+- **FTPS poll sources encrypt the file, not just the login** (docs/connectors.md): the `ftps:`
+  endpoint carried `disableSecureDataChannelDefaults=true`, which reads like hardening and does
+  the opposite — it suppressed the `PBSZ`/`PROT P` negotiation, so TLS protected the control
+  channel while every polled file's bytes crossed the network in cleartext. The endpoint now
+  sets `execPbsz=0` and `execProt=P` explicitly, and also `binary=true` (ASCII mode
+  line-ending-translated payloads in flight, corrupting Excel and archive imports) and
+  `passiveMode=true` (active mode asks the server to open a connection back into the runtime,
+  which no containerized or NAT'd deployment can accept). An in-process FTPS integration test
+  now covers the branch, which had none. **Server-certificate validation is still absent and
+  still unconfigurable** — treat an FTPS partner as authenticated by the network, not by TLS,
+  until that ships.
+
 - **Writes honor per-tenant datasource routing** (docs/multi-tenancy.md): under
   `database-per-tenant` or `schema-per-tenant`, a `command-json` write — and a `queue-consume`
   write, an MCP write tool, validation SQL, and workflow delegation — resolved the route's named
