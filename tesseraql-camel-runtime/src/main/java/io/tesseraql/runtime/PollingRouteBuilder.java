@@ -99,8 +99,7 @@ final class PollingRouteBuilder extends RouteBuilder {
         return switch (poll.effectiveSource()) {
             case "local" -> "file://" + poll.path() + "?" + options;
             case "sftp" -> remoteUri("sftp", poll, 22, options + sftpHostKeyOptions());
-            case "ftps" -> remoteUri("ftps", poll, 21,
-                    options + "&disableSecureDataChannelDefaults=true");
+            case "ftps" -> remoteUri("ftps", poll, 21, options + ftpsTransportOptions());
             default -> throw new IllegalArgumentException(
                     "Unsupported poll source '" + poll.source() + "'");
         };
@@ -118,6 +117,25 @@ final class PollingRouteBuilder extends RouteBuilder {
                         + appHome.resolve(file).normalize().toAbsolutePath()
                         + "&strictHostKeyChecking=yes")
                 .orElse("&strictHostKeyChecking=no");
+    }
+
+    /**
+     * Transport settings for an FTPS source, so it carries the same guarantees its SFTP sibling
+     * does rather than only looking like it.
+     *
+     * <p>{@code PBSZ 0} + {@code PROT P} encrypt the <em>data</em> connection. Without them TLS
+     * protects the control channel — the credentials — while every polled file's bytes cross the
+     * network in cleartext, which is what the previous {@code disableSecureDataChannelDefaults}
+     * produced: that option reads like hardening and does the opposite, suppressing the very
+     * defaults that would have negotiated protection.
+     *
+     * <p>{@code binary} and {@code passiveMode} both default to false in the component. ASCII
+     * mode line-ending-translates payloads in transit, so an Excel or archive import arrives
+     * corrupt; active mode asks the server to open a connection back to this process, which no
+     * containerized or NAT'd deployment can accept.
+     */
+    private static String ftpsTransportOptions() {
+        return "&execPbsz=0&execProt=P&binary=true&passiveMode=true";
     }
 
     private String remoteUri(String scheme, PollSpec poll, int defaultPort, String options) {

@@ -33,8 +33,9 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
 /**
  * Phase 26 end-to-end over SFTP: a {@code poll:}-triggered file-import job polls a remote
  * (allow-listed) SFTP directory — served here by an in-process Apache MINA sshd server, no Docker
- * — and ingests a CSV it finds through the file-import pipeline. FTPS uses the same recipe with
- * {@code source: ftps}; only the Camel endpoint scheme differs.
+ * — and ingests a CSV it finds through the file-import pipeline. FTPS shares the recipe but not
+ * the transport settings, so it has its own {@link PollImportFtpsIntegrationTest} — assuming the
+ * scheme was the only difference is what let its data channel stay unencrypted for a year.
  */
 @Testcontainers
 class PollImportSftpIntegrationTest {
