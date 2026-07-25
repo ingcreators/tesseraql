@@ -1,6 +1,6 @@
 # Route governance parity
 
-> **Status: designed, not yet implemented.** A contract-deviation sweep (2026-07-25, method
+> **Status: slice 1 shipped, the rest designed.** A contract-deviation sweep (2026-07-25, method
 > borrowed from the Apache Camel 4.22 AI audit: learn the contract from the well-trodden
 > implementation, then check every sibling for where it deviates) found that the route
 > compiler's cross-cutting governance is **restated by hand in each `build*` method** and its
@@ -9,6 +9,12 @@
 > row-authority feature that throws at request time. This document defines the two matrices
 > that make "a recipe silently missing a governance step" unrepresentable, and records the
 > deviations that motivated them.
+>
+> **Slice 1 (tenant-correct writes) is shipped:** the routing rule lives in one shared
+> `TenantRouting` the SQL producer, the transactional command processor, and workflow delegation
+> all call, so `TQL-TENANT-4031` now covers writes and a tenant's rows land in the tenant's
+> database. The integration test's write leg pins it — and confirmed the old behavior returned
+> **201** for an unknown tenant whose reads were already refused.
 
 The failure class is the one [config-consumers.md](config-consumers.md) closed for scaffolded
 configuration, moved one layer in: there, a key was emitted and never read; here, a governance
@@ -51,7 +57,7 @@ Every other executor re-implements a subset.
 | Executor | dialect variant | query timeout | maxRows | `/*%scope%*/` | ambient `principal.*` | `audit.*` binds | per-tenant datasource | ISO temporals / label folding |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | `TesseraqlSqlProducer` (route `sql:`, named queries) | yes | yes (30s) | yes (10k) | yes | yes | n/a | yes | yes |
-| `TransactionalCommandProcessor` (command, steps) | yes | **—** | **—** | **—** | yes | yes | **—** | **—** |
+| `TransactionalCommandProcessor` (command, steps) | yes | **—** | **—** | **—** | yes | yes | yes | **—** |
 | `ValidationRules` | yes | **—** | **—** | **—** | yes | **—** | rides the command | **—** |
 | `query-export` URI (hand-built) | **—** | **—** | n/a | yes | yes | n/a | yes | **—** |
 | `JdbcFileTransferService` (row / query / after SQL) | **—** | **—** | n/a | **—** | partial | **—** | **—** | n/a |
@@ -60,7 +66,7 @@ Every other executor re-implements a subset.
 
 ## The deviations
 
-### Per-tenant writes land in the shared pool
+### Per-tenant writes land in the shared pool — FIXED
 
 `TransactionalCommandProcessor:321-322` resolves its `DataSource` by a compile-time constant
 name; the read path (`TesseraqlSqlProducer:440-463`) consults the `TENANT` exchange property and
@@ -207,9 +213,11 @@ and the tests assert the code against the compiler's real output.
 
 Ordered so that each lands independently and the guard arrives before the long tail.
 
-1. **Tenant-correct writes.** Route the command processor's datasource through the tenant
-   resolver, extend the `TQL-TENANT-4031` 403 to the write path, and add the write leg to
-   `TenantDataSourceRoutingIntegrationTest`. Standalone and highest-value.
+1. ~~**Tenant-correct writes.**~~ **Shipped.** The routing rule moved into a shared
+   `TenantRouting` that all three executors call, the `TQL-TENANT-4031` 403 now covers the write
+   path, and `TenantDataSourceRoutingIntegrationTest` grows a write leg on its own table (seeded
+   in every tenant schema *and* the main pool's default schema, so a misrouted write lands
+   somewhere observable rather than failing on a missing table).
 2. **Bound the command path.** Timeout and `maxRows` on command steps and validation SQL, honoring
    the same config keys as the route path.
 3. **The head applier and its matrix test** (guard steps 1–3), which closes file-route tenancy,

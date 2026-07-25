@@ -58,8 +58,8 @@ public final class WorkflowDelegateProcessor implements Processor {
             throw new TqlException(NO_TASK_STORE,
                     "Workflow '" + workflowId + "' delegation needs a task store");
         }
-        DataSource dataSource = exchange.getContext().getRegistry()
-                .lookupByNameAndType(datasourceName, DataSource.class);
+        DataSource dataSource = io.tesseraql.camel.tenant.TenantRouting
+                .dataSource(exchange, datasourceName);
         try (Connection connection = dataSource.getConnection()) {
             boolean previousAutoCommit = connection.getAutoCommit();
             connection.setAutoCommit(false);

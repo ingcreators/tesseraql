@@ -1,6 +1,7 @@
 package io.tesseraql.camel.sql;
 
 import io.tesseraql.camel.TesseraqlProperties;
+import io.tesseraql.camel.tenant.TenantRouting;
 import io.tesseraql.core.error.TqlDomain;
 import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
@@ -42,7 +43,6 @@ public class TesseraqlSqlProducer extends DefaultProducer {
     /** TQL-SQL-2500: the SQL failed to execute for a reason beyond the portable constraint kinds. */
     private static final TqlErrorCode EXECUTION_ERROR = new TqlErrorCode(TqlDomain.SQL, 2500);
     private static final TqlErrorCode UNSUPPORTED_MODE = new TqlErrorCode(TqlDomain.SQL, 2501);
-    private static final TqlErrorCode NO_DATASOURCE = new TqlErrorCode(TqlDomain.SQL, 2502);
     // Portable constraint-violation codes, mapped to HTTP statuses by ErrorResponseRenderer.
     private static final TqlErrorCode UNIQUE_VIOLATION_CODE = new TqlErrorCode(TqlDomain.SQL, 4090);
     private static final TqlErrorCode FOREIGN_KEY_VIOLATION_CODE = new TqlErrorCode(TqlDomain.SQL,
@@ -428,38 +428,9 @@ public class TesseraqlSqlProducer extends DefaultProducer {
         }
     }
 
-    /**
-     * Resolves the datasource for the exchange. When the request carries a resolved tenant and a
-     * {@link io.tesseraql.camel.tenant.TenantDataSourceResolver} is bound, the per-tenant datasource
-     * is used (database/schema-per-tenant, design ch. 30.2); otherwise the named datasource is used.
-     *
-     * <p>Tenant routing replaces only the {@code main} connector: an explicit non-main
-     * {@code datasource:} (roadmap Phase 53) is authoritative — named connectors are
-     * deployment-shared infrastructure, not tenant homes.
-     */
+    /** Resolves the datasource for the exchange; see {@link TenantRouting} for the routing rule. */
     private DataSource dataSource(Exchange exchange) {
-        Object tenant = "main".equals(endpoint.getDatasource())
-                ? exchange.getProperty(TesseraqlProperties.TENANT)
-                : null;
-        if (tenant instanceof io.tesseraql.core.tenant.TenantContext tenantContext) {
-            io.tesseraql.camel.tenant.TenantDataSourceResolver resolver = endpoint.getCamelContext()
-                    .getRegistry().lookupByNameAndType(
-                            TesseraqlProperties.TENANT_DATASOURCE_RESOLVER_BEAN,
-                            io.tesseraql.camel.tenant.TenantDataSourceResolver.class);
-            if (resolver != null) {
-                DataSource resolved = resolver.resolve(tenantContext.id());
-                if (resolved != null) {
-                    return resolved;
-                }
-            }
-        }
-        DataSource dataSource = endpoint.getCamelContext().getRegistry()
-                .lookupByNameAndType(endpoint.getDatasource(), DataSource.class);
-        if (dataSource == null) {
-            throw new TqlException(NO_DATASOURCE,
-                    "No DataSource named '" + endpoint.getDatasource() + "' in the registry");
-        }
-        return dataSource;
+        return TenantRouting.dataSource(exchange, endpoint.getDatasource());
     }
 
     private TqlException executionError(Exception ex) {

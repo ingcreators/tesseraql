@@ -1,6 +1,7 @@
 package io.tesseraql.compiler.binding;
 
 import io.tesseraql.camel.TesseraqlProperties;
+import io.tesseraql.camel.tenant.TenantRouting;
 import io.tesseraql.core.dialect.Dialect;
 import io.tesseraql.core.dialect.SqlErrorKind;
 import io.tesseraql.core.dialect.SqlErrors;
@@ -318,8 +319,9 @@ public final class TransactionalCommandProcessor implements Processor {
         Map<String, Object> stepResults = new LinkedHashMap<>();
         context.put("steps", stepResults);
 
-        DataSource dataSource = exchange.getContext().getRegistry()
-                .lookupByNameAndType(datasourceName, DataSource.class);
+        // Tenant routing is resolved the same way the read path resolves it: a per-tenant
+        // deployment must not commit a write to the shared pool its reads never touch.
+        DataSource dataSource = TenantRouting.dataSource(exchange, datasourceName);
         boolean needsStore = outboxEvents != null || !notifications.isEmpty() || publish != null;
         OutboxStore store = !needsStore
                 ? null
