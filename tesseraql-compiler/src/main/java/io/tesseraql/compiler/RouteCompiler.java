@@ -892,6 +892,13 @@ public final class RouteCompiler {
             step = step.to(executionUri(toolDir, definition.sql(), "sql",
                     definition.effectiveDatasource()));
         }
+        // Same placement as an HTTP command's: after the write, so a rollback bypasses it. A
+        // tool that changes data has the same reason to refresh a live view that a route does,
+        // and emit: was accepted here while doing nothing at all.
+        if (!definition.emit().isEmpty()) {
+            step = step.process(new io.tesseraql.compiler.binding.TopicEmitProcessor(
+                    definition.emit()));
+        }
         for (var entry : definition.queries().entrySet()) {
             step = step
                     .process(new io.tesseraql.compiler.binding.NamedQueryBinder(entry.getValue()))

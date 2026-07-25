@@ -98,6 +98,40 @@ class AppLinterLiveViewTest {
                 && "TQL-VIEW-3311".equals(finding.code()));
     }
 
+    /**
+     * The same lint reaches MCP tools.
+     *
+     * <p>{@code lintTool} never called it, so a tool could declare a malformed topic, or declare
+     * {@code emit:} on a query, and the linter said nothing — while the compiler silently
+     * dropped the emit entirely. Two halves of the same omission.
+     */
+    @Test
+    void emitOnAQueryToolIsAnError(@TempDir Path dir) throws Exception {
+        writeApp(dir, "", "list", "");
+        Files.createDirectories(dir.resolve("mcp"));
+        Files.writeString(dir.resolve("mcp/search.yml"), """
+                version: tesseraql/v1
+                id: orders.search
+                kind: tool
+                recipe: query-json
+                description: search orders
+                security:
+                  policy: app.read
+                emit: orders.changed
+                sql:
+                  file: orders.sql
+                response:
+                  json:
+                    body:
+                      rows: sql.rows
+                """);
+        Files.writeString(dir.resolve("mcp/orders.sql"), "select 1\n");
+
+        assertThat(new AppLinter().lint(dir)).anyMatch(finding -> finding.isError()
+                && "TQL-YAML-1038".equals(finding.code())
+                && finding.source().contains("search.yml"));
+    }
+
     @Test
     void emitOnAQueryRouteIsAnError(@TempDir Path dir) throws Exception {
         writeApp(dir, "", "list", "");

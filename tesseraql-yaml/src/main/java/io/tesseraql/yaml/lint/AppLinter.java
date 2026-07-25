@@ -288,8 +288,12 @@ public final class AppLinter {
      * Live-view emit lints (docs/realtime.md): emit: is a command-json key (TQL-YAML-1038, the
      * topics broadcast after that command's commit), and a topic name must match the slug shape
      * (TQL-YAML-1039) so it survives URL, SSE event-name, and selector contexts unquoted.
+     *
+     * <p>Reached from routes, queue consumers, and MCP tools alike. The file the definition came
+     * from was never read here, and taking it as a parameter is what made this look like a
+     * route-only lint for as long as tools went unchecked.
      */
-    private void lintEmit(RouteFile route, RouteDefinition definition, String source,
+    private void lintEmit(RouteDefinition definition, String source,
             List<LintFinding> findings) {
         if (definition.emit().isEmpty()) {
             return;
@@ -1350,6 +1354,7 @@ public final class AppLinter {
         }
         // A tool's validate: runs through the same transactional pipeline a route's does.
         lintValidation(tool.source(), definition, source, findings);
+        lintEmit(definition, source, findings);
         // emit: is a command-json route key. A tool may legally carry that recipe, so the route
         // check would pass it while the compiled tool pipeline broadcasts nothing — say so.
         if (!definition.emit().isEmpty()) {
@@ -1484,7 +1489,7 @@ public final class AppLinter {
                             + ", queue consumers, and MCP tools"));
         }
         lintValidation(route.source(), definition, source, findings);
-        lintEmit(route, definition, source, findings);
+        lintEmit(definition, source, findings);
         lintHttpSources(config, definition, source, findings);
         lintRateLimitScope(definition, source, findings);
         lintHttpCache(definition, source, findings);
@@ -2431,7 +2436,7 @@ public final class AppLinter {
         // A consumer's validate: is compiled and run exactly like a command's, so its rules get
         // the same static checks — a typo'd validation SQL filename used to reach startup.
         lintValidation(consumer.source(), definition, source, findings);
-        lintEmit(consumer, definition, source, findings);
+        lintEmit(definition, source, findings);
         lintPublish(config, definition, source, findings);
         lintNotify(config, definition, source, findings);
         lintDatasource(config, consumer.source(), definition, source, findings);
