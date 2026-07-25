@@ -308,6 +308,19 @@ registry, and fails on an unregistered route or a declared-but-absent step. That
 caught both the reload gate and the reload stub, which are precisely the routes nobody thought to
 list.
 
+*Measured before building it:* the framework declares **71** route ids, in six families —
+`ops` (20), `system` (18), `studio` (13), `scim` (12), `tql` (5), `mcp` (3). The prose above and
+the deviations below name `health`, MCP discovery, recovery, and the Studio routes; they never
+name `system.*` or `scim.*`, which together are **30 of the 71** and include `system.login`,
+`system.logout`, `system.logout.others`, and `system.invite.accept` — the authentication surfaces
+slice 7 discusses without ever naming their routes. A registry seeded from the prose would cover
+well under half the surface and read as complete, which is the failure this whole document is
+about. Seed it from the mounted route ids, then let the per-route posture be the judgment.
+
+Unlike the model-field registry in [yaml-surface-consumers.md](yaml-surface-consumers.md), a
+hand-written entry is right here: "what posture should this surface have" is not derivable from
+the code — it is the decision the code is supposed to implement.
+
 **Lifecycle is declared, not remembered.** Long-lived services implement a small
 `ManagedService` contract (`start`/`close`, plus a `bounded()` self-description for anything holding
 per-subject or per-session state), the runtime owns a registry of them, and `close()` walks it — so a
