@@ -150,6 +150,15 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Fixed
 
+- **An ambient `principal.*` bind with no principal now fails** (docs/ambient-params.md,
+  `TQL-SQL-2112`): the documentation promised it "fails loudly as an unbound parameter instead of
+  binding null", and it bound null. A missing path segment evaluates to null like any other, so
+  `where owner = /* principal.loginId */` on a request carrying no principal became
+  `where owner = NULL` — a predicate matching nothing, or matching the rows whose owner is unset.
+  A quiet wrong answer where the documentation promised a loud failure, and `TQL-SEC-4136` only
+  covers routes whose posture is decidable statically. Only the whole namespace being absent is
+  an error: a seeded `principal.tenantId` that is genuinely null still binds null.
+
 - **An MCP tool's `emit:` reaches live views** (docs/realtime.md): `buildMcpTool` never added the
   topic-emit step, so `emit:` on a tool was accepted by the model, described in the reference, and
   did nothing — a model-driven write left every view watching the same data stale, while the

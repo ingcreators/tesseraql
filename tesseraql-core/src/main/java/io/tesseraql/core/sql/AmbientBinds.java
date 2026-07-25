@@ -22,7 +22,8 @@ import java.util.Map;
  * needs goes through explicit {@code params:} wiring where it is visible and reviewable. A
  * route-declared parameter named {@code principal} shadows the ambient map entirely (explicit
  * always wins). Without an authenticated principal nothing is seeded, so a {@code principal.*}
- * bind on a public route fails loudly as an unbound parameter instead of binding null.
+ * bind on a public route fails ({@code TQL-SQL-2112}) instead of binding null. Only the absence
+ * of the whole namespace is an error; a seeded field that is genuinely null stays null.
  */
 public final class AmbientBinds {
 

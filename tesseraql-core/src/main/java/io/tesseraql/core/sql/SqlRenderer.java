@@ -25,6 +25,7 @@ public final class SqlRenderer {
     private static final TqlErrorCode MISSING_LIST = new TqlErrorCode(TqlDomain.SQL, 2001);
     /** TQL-SQL-2108: an embedded variable resolved to a value carrying SQL meta-characters. */
     private static final TqlErrorCode UNSAFE_EMBEDDED = new TqlErrorCode(TqlDomain.SQL, 2108);
+    private static final TqlErrorCode UNSEEDED_AMBIENT = new TqlErrorCode(TqlDomain.SQL, 2112);
     /** A {@code {placeholder}} reference inside an embedded-variable template. */
     private static final Pattern PLACEHOLDER = Pattern.compile("\\{([^}]+)}");
 
@@ -233,6 +234,36 @@ public final class SqlRenderer {
         coverage.coverLine(embedded.sourceLine());
     }
 
+    /**
+     * Keeps the promise {@link AmbientBinds} makes: a {@code principal.*} bind on a request that
+     * carries no principal fails, rather than binding null.
+     *
+     * <p>It bound null. A missing path segment evaluates to null like any other, so
+     * {@code where owner = /*}{@code  principal.loginId *}{@code /} on a public route became
+     * {@code where owner = NULL} — a predicate that matches nothing, or matches the rows whose
+     * owner is unset, depending on the statement. Either way it is a quiet wrong answer where
+     * the documentation promised a loud one, and the linter's static check cannot see a route
+     * whose effective auth is decided at runtime.
+     *
+     * <p>Only the whole namespace being absent is an error. A seeded {@code principal.tenantId}
+     * that is genuinely null stays null, because that is a fact about the principal rather than
+     * the absence of one.
+     */
+    private void requireSeededAmbient(String expressionSource, int sourceLine) {
+        String expression = expressionSource == null ? "" : expressionSource.trim();
+        if (!expression.startsWith(AmbientBinds.PRINCIPAL + ".")
+                || !AmbientBinds.isAmbient(expression)) {
+            return;
+        }
+        if (context.resolve(List.of(AmbientBinds.PRINCIPAL)) == null) {
+            throw TqlException.builder(UNSEEDED_AMBIENT)
+                    .message("Bind '" + expression + "' has no authenticated principal to read"
+                            + " — an ambient principal bind needs a route that authenticates")
+                    .line(sourceLine)
+                    .build();
+        }
+    }
+
     /** Rejects an interpolated value that could break out of its SQL position (Doma-style guard). */
     private void guardEmbedded(String value, String path, int sourceLine) {
         boolean unsafe = value.indexOf('\'') >= 0 || value.indexOf(';') >= 0
@@ -252,6 +283,7 @@ public final class SqlRenderer {
 
     private void appendBind(SqlNode.Bind bind) {
         Object value = bind.expression().eval(context);
+        requireSeededAmbient(bind.expressionSource(), bind.sourceLine());
         mapToSource("?", bind.sourceLine());
         parameters.add(new BoundParameter(bind.expressionSource(), value, bind.sourceLine()));
         coverage.coverLine(bind.sourceLine());
@@ -259,6 +291,7 @@ public final class SqlRenderer {
 
     private void appendListBind(SqlNode.ListBind listBind) {
         Object value = listBind.expression().eval(context);
+        requireSeededAmbient(listBind.expressionSource(), listBind.sourceLine());
         List<Object> elements = toList(value, listBind.expressionSource(), listBind.sourceLine());
         coverage.coverLine(listBind.sourceLine());
         if (elements.isEmpty()) {

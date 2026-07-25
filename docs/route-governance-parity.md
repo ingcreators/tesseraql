@@ -185,7 +185,9 @@ fit: a heavy export is exactly what an operator would rate-limit.
   three sites and assign is not one. The failure is *silent*: a missing segment resolves to null,
   so `/* principal.loginId */` binds NULL. That also contradicts the `AmbientBinds` javadoc
   ("fails loudly as an unbound parameter instead of binding null") — a claim that appears wrong
-  generally, not only here. [ambient-params.md](ambient-params.md) scopes shipped coverage to
+  generally, not only here. **Both are shipped:** assign got the seed with the write-scoping
+  slice, and the renderer now raises `TQL-SQL-2112` when an ambient `principal.*` bind has no
+  namespace to read, so the javadoc's claim is true rather than deleted. [ambient-params.md](ambient-params.md) scopes shipped coverage to
   query, command-step, named-query, and validation SQL, so this is an unclosed edge rather than a
   broken promise.
 - **`export.sql params:` are dropped.** `RequestBinder.resolveSqlParams` fills `SQL_PARAMS` from
