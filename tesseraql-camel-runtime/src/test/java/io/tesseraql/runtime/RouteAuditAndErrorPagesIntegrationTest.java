@@ -106,6 +106,12 @@ class RouteAuditAndErrorPagesIntegrationTest {
         assertThat(browser.headers().firstValue("Content-Type").orElse(""))
                 .contains("text/html");
         assertThat(browser.body()).contains("Custom error page").contains("500");
+        // An error page is HTML the browser renders like any other, so it carries the app's
+        // header block too. It did not: the merge lived in the success render this path
+        // short-circuits, so the page arrived with no CSP and no X-Frame-Options.
+        assertThat(browser.headers().firstValue("Content-Security-Policy").orElse(""))
+                .contains("frame-ancestors 'none'");
+        assertThat(browser.headers().firstValue("X-Frame-Options").orElse("")).isEqualTo("DENY");
 
         // An API client (no HTML Accept) keeps the machine-readable envelope.
         HttpResponse<String> api = get("/broken", null, null);
@@ -169,6 +175,9 @@ class RouteAuditAndErrorPagesIntegrationTest {
                       username: %s
                       password: %s
                   security:
+                    responseHeaders:
+                      Content-Security-Policy: "default-src 'self'; frame-ancestors 'none'"
+                      X-Frame-Options: DENY
                     jwt:
                       secret: dev-only-secret-change-me-in-production
                       rolesClaim: roles

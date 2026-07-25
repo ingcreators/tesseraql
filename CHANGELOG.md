@@ -132,6 +132,14 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Fixed
 
+- **Error pages carry the app's security headers** (docs/response-shaping.md): the
+  `security.responseHeaders` block was merged by the successful HTML render, which the error path
+  short-circuits — so a custom `templates/errors/<status>.html` page and an htmx error fragment,
+  both HTML a browser renders like any other, arrived with no `Content-Security-Policy` and no
+  `X-Frame-Options`. Both now carry the block. SSE and static assets still do not, and need a
+  different mechanism: SSE has to set its headers before the first frame, so no completion hook
+  can serve it.
+
 - **Every recipe carries the same governance head** (docs/route-governance-parity.md): the
   sequence — telemetry, audit, rate limit, lane, security, tenancy, locale — was restated by
   hand in each `build*` method, and each copy had dropped something. `file-import`/`file-export`

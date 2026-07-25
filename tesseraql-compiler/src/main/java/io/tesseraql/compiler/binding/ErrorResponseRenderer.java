@@ -44,6 +44,7 @@ public final class ErrorResponseRenderer implements Processor {
     private final I18nSettings i18n;
     private final Map<String, OnError> onErrorByRoute;
     private final java.nio.file.Path appHome;
+    private final Map<String, String> securityHeaders;
 
     public ErrorResponseRenderer() {
         this(I18nSettings.defaults());
@@ -70,9 +71,27 @@ public final class ErrorResponseRenderer implements Processor {
      */
     public ErrorResponseRenderer(I18nSettings i18n, Map<String, OnError> onErrorByRoute,
             java.nio.file.Path appHome) {
+        this(i18n, onErrorByRoute, appHome, Map.of());
+    }
+
+    /**
+     * @param securityHeaders the app's {@code security.responseHeaders} block. An HTML error
+     *                        page and an htmx error fragment are HTML documents the browser
+     *                        renders like any other, but they were the one HTML surface the
+     *                        defaults never reached: they are produced here, and the merge lived
+     *                        in the success render the error path short-circuits.
+     */
+    public ErrorResponseRenderer(I18nSettings i18n, Map<String, OnError> onErrorByRoute,
+            java.nio.file.Path appHome, Map<String, String> securityHeaders) {
         this.i18n = i18n;
         this.onErrorByRoute = onErrorByRoute == null ? Map.of() : Map.copyOf(onErrorByRoute);
         this.appHome = appHome;
+        this.securityHeaders = securityHeaders == null ? Map.of() : Map.copyOf(securityHeaders);
+    }
+
+    /** Applies the app's default security headers to an HTML error response. */
+    private void applySecurityHeaders(Exchange exchange) {
+        securityHeaders.forEach((name, value) -> exchange.getMessage().setHeader(name, value));
     }
 
     @Override
@@ -117,12 +136,14 @@ public final class ErrorResponseRenderer implements Processor {
             if (page != null) {
                 exchange.getMessage().setHeader(Exchange.CONTENT_TYPE,
                         "text/html; charset=utf-8");
+                applySecurityHeaders(exchange);
                 exchange.getMessage().setBody(page);
                 return;
             }
         }
         if ("true".equals(exchange.getMessage().getHeader("HX-Request", String.class))) {
             exchange.getMessage().setHeader(Exchange.CONTENT_TYPE, "text/html; charset=utf-8");
+            applySecurityHeaders(exchange);
             applyOnError(exchange);
             exchange.getMessage().setBody(htmxFragment(error));
             return;
