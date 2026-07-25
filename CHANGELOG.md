@@ -164,6 +164,12 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Fixed
 
+- **A job's declared `params:` are bound before it runs** (docs/batch-jobs.md): they were accepted,
+  documented with a shipped example, and never read, so whatever the caller sent reached the job's
+  SQL uncoerced — a numeric parameter arrived as its text — and a missing required parameter
+  surfaced later as an unbound SQL parameter, an error naming the SQL rather than the input. All
+  three entry points (the operations API, `runJob`, and the per-tenant variant) share one binding.
+
 - **A declared array input keeps its elements, and they are validated** (docs/reference-yaml-surface.md):
   the binder read every request value as text, so a JSON body's list became `String.valueOf(list)`
   — `[{productId=10, quantity=1}]` — as the input's effective value, and any binding reading

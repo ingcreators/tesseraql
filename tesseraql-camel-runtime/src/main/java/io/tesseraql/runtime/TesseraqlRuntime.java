@@ -727,6 +727,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
             if (jobFile == null) {
                 throw new IllegalArgumentException("Unknown job: " + jobId);
             }
+            Map<String, Object> boundParams = bindJobParams(jobFile, params);
             String owner = jobOwners.getOrDefault(jobId, appName);
             // A job's declared datasource: (docs/duckdb.md ETL) wins over main; per-tenant pool
             // routing applies only to main-datasource jobs (a duckdb engine is one per node,
@@ -753,12 +754,12 @@ public final class TesseraqlRuntime implements AutoCloseable {
                                         ? tenantPools.dataSourceFor(tenantId, dataSource)
                                         : jobPool,
                                 io.tesseraql.core.tenant.TenantContext.of(tenantId),
-                                owner, params, "manual");
+                                owner, boundParams, "manual");
                     }
                     return last;
                 }
             }
-            return jobExecutor.run(jobFile, jobPool, owner, params, "manual");
+            return jobExecutor.run(jobFile, jobPool, owner, boundParams, "manual");
         };
 
         io.tesseraql.core.outbox.OutboxEventSink outboxSink;
@@ -3365,6 +3366,28 @@ public final class TesseraqlRuntime implements AutoCloseable {
                         .orElse(null));
     }
 
+    /**
+     * Declared job parameters, bound the way a route binds its {@code input:}.
+     *
+     * <p>{@code params:} was accepted, documented with a shipped example, and never read, so
+     * whatever the caller sent reached the job's SQL uncoerced — a {@code count} arrived as the
+     * string {@code "10"}, and a required parameter nobody sent was simply absent until the SQL
+     * failed on an unbound one.
+     *
+     * <p>Shared because there are three ways to start a job — the ops API, this method, and the
+     * per-tenant variant — and binding in one of them is the "two spellings, one working" shape
+     * this codebase has spent the day removing.
+     */
+    static Map<String, Object> bindJobParams(JobFile jobFile, Map<String, Object> params) {
+        Map<String, io.tesseraql.yaml.model.InputField> declared = jobFile.definition().params();
+        if (declared.isEmpty()) {
+            return params;
+        }
+        return io.tesseraql.compiler.binding.InputBinder.bind(declared,
+                name -> params.get(name) == null ? null : String.valueOf(params.get(name)),
+                params::get, java.util.Locale.ENGLISH);
+    }
+
     /** Runs a batch job by id and returns its final execution record (design ch. 26). */
     public JobExecution runJob(String jobId, Map<String, Object> params) {
         JobFile jobFile = jobs.get(jobId);
@@ -3372,7 +3395,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
             throw new IllegalArgumentException("Unknown job: " + jobId);
         }
         return jobExecutor.run(jobFile, jobDataSource(jobFile),
-                jobOwners.getOrDefault(jobId, appName), params, "manual");
+                jobOwners.getOrDefault(jobId, appName), bindJobParams(jobFile, params), "manual");
     }
 
     /**
@@ -3393,7 +3416,8 @@ public final class TesseraqlRuntime implements AutoCloseable {
                             ? tenantDataSources.dataSourceFor(tenantId, mainDataSource)
                             : jobPool,
                     io.tesseraql.core.tenant.TenantContext.of(tenantId),
-                    jobOwners.getOrDefault(jobId, appName), params, "manual"));
+                    jobOwners.getOrDefault(jobId, appName), bindJobParams(jobFile, params),
+                    "manual"));
         }
         return executions;
     }
