@@ -338,17 +338,21 @@ public final class TesseraqlRuntime implements AutoCloseable {
         // V2 subject column, and the store's direct ensureSchema stays the tolerated,
         // idempotent fallback for embedders without it.
         SessionStore sessionStore;
+        // One reading of the TTL for both stores. It used to be read inside the jdbc branch
+        // only, so on the default (memory) store the key was silently inert and sessions never
+        // expired at all.
+        java.time.Duration sessionTtl = java.time.Duration.ofMillis(
+                io.tesseraql.core.util.Durations.toMillis(
+                        manifest.config().getString("tesseraql.sessions.ttl").orElse("12h")));
         if ("jdbc".equalsIgnoreCase(
                 manifest.config().getString("tesseraql.sessions.store").orElse("memory"))) {
             io.tesseraql.security.session.JdbcSessionStore jdbcSessions = new io.tesseraql.security.session.JdbcSessionStore(
-                    dataSource,
-                    java.time.Duration.ofMillis(io.tesseraql.core.util.Durations.toMillis(
-                            manifest.config().getString("tesseraql.sessions.ttl")
-                                    .orElse("12h"))));
+                    dataSource, sessionTtl);
             jdbcSessions.ensureSchema();
             sessionStore = jdbcSessions;
         } else {
-            sessionStore = new io.tesseraql.security.session.InMemorySessionStore();
+            sessionStore = new io.tesseraql.security.session.InMemorySessionStore(
+                    io.tesseraql.security.session.SessionStore.DEFAULT_COOKIE_NAME, sessionTtl);
         }
         context.getRegistry().bind(TesseraqlProperties.SESSION_STORE_BEAN, sessionStore);
         JobRepository jobRepository = new JobRepository(dataSource);

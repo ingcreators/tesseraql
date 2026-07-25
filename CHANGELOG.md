@@ -145,6 +145,15 @@ All notable changes to TesseraQL are documented here. The format follows
   each recipe and reads the processors back off the Camel model, so a recipe that skips a step
   fails the build rather than a review.
 
+- **Sessions expire on the default store** (docs/deployment.md): `tesseraql.sessions.ttl` was
+  read only when `tesseraql.sessions.store` was `jdbc`, and the default in-memory store resolved
+  a session id with a bare map lookup — no expiry check, no pruning, no cap. So on the default
+  configuration a session id stayed valid until the process restarted, the map grew one
+  principal per login for the life of the process, and a stolen cookie outlived every control
+  except an explicit logout. The TTL is now read once and applied by whichever store is
+  selected, and the in-memory store prunes on write behind a 50,000-session ceiling.
+  Constructing it without a TTL still yields a non-expiring store, for embedders that want one.
+
 - **`POST /_tesseraql/studio/reload` requires the Studio edit role** like every other mutating
   Studio endpoint. It authenticated and stopped there, so in the **default** posture — where
   `tesseraql.studio.readOnly` is true and draft/apply/scaffold all 403 — any authenticated
