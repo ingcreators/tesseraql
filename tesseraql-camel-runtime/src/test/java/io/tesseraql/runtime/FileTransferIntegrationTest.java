@@ -196,6 +196,33 @@ class FileTransferIntegrationTest {
                 .contains("\"1.234,56\"");
     }
 
+    /**
+     * A file-export's {@code params:} reach its query.
+     *
+     * <p>They did not. {@code resolveSqlParams} read {@code route.sql()}, which is null for a
+     * file-export — its binding lives at {@code export.sql} — so every declared param resolved
+     * to a silent null bind and the export returned whatever "column >= null" returns. The
+     * confusing part was that a *route-level* {@code sql: {params:}} on the same route did
+     * reach the query, because nothing rejected it: two spellings, one of them working.
+     */
+    @Test
+    void aFileExportsDeclaredParamsReachItsQuery() throws Exception {
+        try (Connection connection = connect();
+                Statement statement = connection.createStatement()) {
+            statement.executeUpdate("insert into events (name, held_on, fee)"
+                    + " values ('cheap', date '2026-01-01', 10)");
+            statement.executeUpdate("insert into events (name, held_on, fee)"
+                    + " values ('pricey', date '2026-01-02', 5000)");
+        }
+
+        String id = startTransfer("/api/events/export-filtered?min=1000", "");
+        assertThat(awaitTerminal("/api/events/export-filtered/" + id).get("status").asText())
+                .isEqualTo("COMPLETED");
+
+        HttpResponse<String> file = get("/api/events/export-filtered/" + id + "/file");
+        assertThat(file.body()).contains("pricey").doesNotContain("cheap");
+    }
+
     @Test
     void synchronousQueryExportSharesColumnMappingAndFormats() throws Exception {
         try (Connection connection = connect();
@@ -403,6 +430,28 @@ class FileTransferIntegrationTest {
                 """);
         Files.writeString(exportRoute.resolve("select-events.sql"),
                 "select name, held_on, fee from events order by name\n;\n");
+
+        // A file-export whose query takes a bind. The binding lives at export.sql, which is the
+        // only place a file-export can declare it.
+        Path filtered = home.resolve("web/api/events/export-filtered");
+        Files.createDirectories(filtered);
+        Files.writeString(filtered.resolve("post.yml"), """
+                version: tesseraql/v1
+                id: events.exportFiltered
+                kind: route
+                recipe: file-export
+                input:
+                  min: { type: number }
+                export:
+                  format: csv
+                  filename: expensive.csv
+                  sql:
+                    file: select-expensive.sql
+                    params:
+                      minFee: params.min
+                """);
+        Files.writeString(filtered.resolve("select-expensive.sql"),
+                "select name, fee from events where fee >= /* minFee */0 order by name\n;\n");
 
         // Synchronous download (query-export) through the same codec/column/format machinery.
         Path downloadRoute = home.resolve("web/api/events/download");

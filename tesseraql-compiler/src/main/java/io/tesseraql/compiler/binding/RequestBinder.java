@@ -9,6 +9,7 @@ import io.tesseraql.core.expr.EvaluationContext;
 import io.tesseraql.yaml.model.InputField;
 import io.tesseraql.yaml.model.InputPolicy;
 import io.tesseraql.yaml.model.RouteDefinition;
+import io.tesseraql.yaml.model.SqlBinding;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -248,11 +249,28 @@ public final class RequestBinder implements Processor {
         return exchange.getMessage().getHeader(name, String.class);
     }
 
+    /** Every binding whose {@code params:} this route's SQL execution can read, in precedence
+     * order: a route-level {@code sql:} last, so an explicit route key still wins. */
+    private java.util.List<SqlBinding> bindings() {
+        java.util.List<SqlBinding> bindings = new java.util.ArrayList<>();
+        if (route.fileExport() != null && route.fileExport().sql() != null) {
+            bindings.add(route.fileExport().sql());
+        }
+        if (route.sql() != null) {
+            bindings.add(route.sql());
+        }
+        return bindings;
+    }
+
     private Map<String, Object> resolveSqlParams(Map<String, Object> context) {
         EvaluationContext evaluation = new EvaluationContext(context);
         Map<String, Object> sqlParams = new LinkedHashMap<>();
-        if (route.sql() != null) {
-            route.sql().params().forEach((bindName, sourceExpr) -> sqlParams.put(bindName,
+        // The route's own binding, wherever the recipe keeps it. A file-export declares its
+        // query at export.sql, and reading route.sql() alone meant every params: entry there
+        // resolved to a silent null bind — while the *same* keys under a route-level sql: did
+        // reach the export query, because nothing rejected them. Two spellings, one working.
+        for (SqlBinding binding : bindings()) {
+            binding.params().forEach((bindName, sourceExpr) -> sqlParams.put(bindName,
                     evaluation.resolve(Arrays.asList(sourceExpr.split("\\.")))));
         }
         // Ambient principal.* binds (docs/ambient-params.md); declared params win by name.
