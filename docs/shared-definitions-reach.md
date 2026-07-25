@@ -169,10 +169,13 @@ catch up. `domains/` and `rules/` get their own small schemas and their own file
    `lintEmit` runs for consumers, and tools get their own message since a tool may legally carry
    `recipe: command-json` while its compiled pipeline still broadcasts nothing. The existing test
    that pinned the false positive was rewritten — it asserted the bug.
-3. **Schema and reference.** `domain` on `inputField`, a typed `validate` node including `use:`,
-   refreshed descriptions, `domains/`+`rules/` schemas and file associations, and the
-   `SchemaSyncTest` property-coverage guard that keeps all of it honest.
-4. **The bind contract check.** Parse the shared rule's SQL at load and compare its bind set with
+3. ~~**Schema and reference.**~~ **Shipped.** `domain` on `inputField`, a typed `validate` node
+   including `use:`, refreshed descriptions, `domains/`+`rules/` schemas and file associations,
+   and the `SchemaSyncTest` property-coverage guard that keeps all of it honest. The domains
+   schema carries a copy of the route schema's `inputField` rather than a cross-file `$ref`,
+   because whether an editor's language server resolves a relative reference offline could not
+   be verified here, while a copy the test compares can be.
+4. ~~**The bind contract check.**~~ **Shipped.** Parse the shared rule's SQL at load and compare its bind set with
    `binds:`; reject a `rule:`-kind set declaring non-empty `binds:` (which today dies per-reference
    at compile). *Shipped:* `TQL-FIELD-4609` took the declaration-side load error, because
    4604..4608 are load errors and 4610..4612 are lint warnings — a warning at 4609 would have
