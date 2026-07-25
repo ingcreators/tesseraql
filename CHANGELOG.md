@@ -158,6 +158,12 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Fixed
 
+- **The multi-app gateway releases its client and executor on close** (docs/multi-app.md): it
+  stopped the HTTP server and closed the hosted app, and left behind the outbound `HttpClient` —
+  its connection pool and selector thread — along with the virtual-thread executor created inline
+  and never referenced again. A host that restarts a gateway accumulated both. The unbounded
+  request-body buffering on that surface is a separate row and still open.
+
 - **MCP sessions expire and are capped** (docs/mcp.md): the handler kept session ids in a set that
   `initialize` added to and only an explicit `DELETE` removed from, so a client that reconnects
   instead of closing — which is what a crashed or restarted one does — grew it for the life of the
