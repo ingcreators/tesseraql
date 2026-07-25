@@ -99,6 +99,37 @@ Point 3 is the one that matters most here. A naive "is this accessor called anyw
 for three of the five dead fields, because docs and Studio read them. The distinction the guard has
 to encode is between a consumer that *changes behavior* and one that *renders text*.
 
+**Correction, from measuring it.** A bytecode scan of all 26 built modules — every constant-pool
+method and field reference into `io.tesseraql.yaml.model` — puts the model at **294** record
+components, and finds **43** with no reference from outside the model package at all. Those 43 are
+not 43 dead fields. Nearly all of them are read by a *derived accessor on their own record*, which
+is what the rest of the framework calls:
+
+| Component | Read by | Called from |
+| --- | --- | --- |
+| `PollSpec.move`, `PollSpec.moveFailed` | `effectiveMove()`, `effectiveMoveFailed()` | `PollingRouteBuilder` |
+| `ImportSpec.columns`, `.sheet`, `.headerRow`, `.startRow` | `toReadSpec()`, `effectiveHeaderRow()`, `effectiveStartRow()` | `PollingRouteBuilder`, `RouteCompiler` |
+| `CacheSpec.etag`, `.visibility` | `etagEnabled()`, `effectiveVisibility()` | the response pipeline |
+| `ResponseSpec.*.status` (four records) | `effectiveStatus()` | the response pipeline |
+| `InputPolicy.unknownFields`, `.readOnlyFieldBehavior` | `rejectsUnknownFields()`, `readOnlyBehaviorOrDefault()` | input binding |
+| `InputField.writable` | `isWritable()` | input binding |
+| `HttpSourceSpec.*` | `toCall()`, `degradesToEmpty()` | the HTTP source |
+| `ColumnSpec.*` | `toMapping()` | file read/write specs |
+
+Defaulting through a derived accessor is the model's normal idiom, not an exception, so step 3 as
+written above would report roughly forty correctly-wired fields as unwired — and a guard that cries
+wolf forty times is one whose failures get waved through, which is worse than no guard.
+
+So a registration names the consumption *path*, not only a class: either an external consumer that
+calls the accessor, or a derived accessor on the same record plus the external consumer that calls
+*it*. The probe follows that one hop and no further; a chain longer than one hop inside the model is
+itself worth a look. `DISPLAY_ONLY` is unaffected — it is about which consumers exist, not how they
+reach the field.
+
+This also re-scopes slice 2: the registry is ~294 entries with about forty needing the two-part
+form, and the honest first step is generating the draft from the same bytecode scan rather than
+hand-authoring it, since the scan is what the drift test will run anyway.
+
 ## Slices
 
 1. ~~**The three retirements** plus the `ErrorIndex` padding fix.~~ **Shipped.**
