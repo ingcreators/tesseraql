@@ -117,4 +117,27 @@ class TableIntrospectorTest {
                 .hasMessageContaining("TQL-APP-5201")
                 .hasMessageContaining("nope");
     }
+
+    @org.junit.jupiter.api.Test
+    void readsSingleColumnForeignKeysAndSkipsComposite() throws Exception {
+        try (var stmt = connection.createStatement()) {
+            stmt.execute("create table fk_products (id bigint primary key)");
+            stmt.execute("create table fk_pairs (a int, b int, primary key (a, b))");
+            stmt.execute("""
+                    create table fk_lines (
+                      id bigint primary key,
+                      product_id bigint not null references fk_products(id),
+                      pa int, pb int,
+                      foreign key (pa, pb) references fk_pairs(a, b))
+                    """);
+        }
+        TableSchema schema = new TableIntrospector().introspect(connection, "fk_lines");
+
+        // The single-column key reads; the composite key is skipped whole.
+        org.assertj.core.api.Assertions.assertThat(schema.foreignKeys())
+                .extracting(TableSchema.ForeignKey::column, TableSchema.ForeignKey::refTable,
+                        TableSchema.ForeignKey::refColumn)
+                .containsExactly(org.assertj.core.api.Assertions.tuple("PRODUCT_ID",
+                        "FK_PRODUCTS", "ID"));
+    }
 }

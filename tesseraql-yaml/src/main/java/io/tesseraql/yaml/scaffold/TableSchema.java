@@ -19,7 +19,25 @@ import java.util.Optional;
  *                      constraint-violation errors (Phase 18)
  */
 public record TableSchema(String name, List<Column> columns, List<String> primaryKey,
-        Map<String, String> uniqueIndexes) {
+        Map<String, String> uniqueIndexes, List<ForeignKey> foreignKeys) {
+
+    /** The pre-FK shape; keeps hand-built schemas and older callers unchanged. */
+    public TableSchema(String name, List<Column> columns, List<String> primaryKey,
+            Map<String, String> uniqueIndexes) {
+        this(name, columns, primaryKey, uniqueIndexes, List.of());
+    }
+
+    /**
+     * A single-column foreign key (docs/validation-rule-sets.md): the scaffolder turns each
+     * into a shared existence rule. Composite keys are skipped, mirroring the single-column
+     * unique-index stance.
+     *
+     * @param column    the referencing column on this table
+     * @param refTable  the referenced table
+     * @param refColumn the referenced column
+     */
+    public record ForeignKey(String column, String refTable, String refColumn) {
+    }
 
     /** The column names conventionally stamped from the canonical audit binds (Phase 18). */
     public static final List<String> AUDIT_COLUMNS = List.of(

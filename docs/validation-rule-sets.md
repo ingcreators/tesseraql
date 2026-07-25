@@ -5,8 +5,14 @@
 > lint `TQL-FIELD-4612`), and the scaffolder is the first consumer: `scaffold crud` generates
 > the per-unique-index `…IsFree` rule — shared by create and update, self-exclusion via a
 > conditional directive so no null-typed bind ever reaches the database — referenced from both
-> generated routes, with the dogfood suite exercising it end-to-end. FK-existence generation
-> and a hand-authored gallery archetype remain listed below as follow-ups. User-facing docs:
+> generated routes, with the dogfood suite exercising it end-to-end. Both remaining slices are
+> now shipped: `scaffold crud` generates a `…Exists` rule per single-column foreign key
+> (referenced by create and update, `when:`-guarded for nullable columns — the hook where
+> "exists" grows into "exists and is active" in one file), and the purchase-request gallery
+> app carries the hand-authored archetype: the `duplicateRequest` duplicate-application guard,
+> whose SQL identifies the caller through the ambient `/* principal.loginId */` bind so the
+> bind contract is just `[title]` — exercised by two declarative suite cases (violation and
+> clean pass). This design is COMPLETE. User-facing docs:
 > declarative-validation.md "Shared rule sets".
 
 A **validation rule set** declares a `validate:` rule — a cross-field expression or a

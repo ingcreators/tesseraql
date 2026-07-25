@@ -1,0 +1,11 @@
+# The hand-authored shared-rule archetype (docs/validation-rule-sets.md): the LOB
+# "duplicate application" guard, declared once. The requester never appears in the bind
+# contract — the ambient /* principal.loginId */ bind identifies the caller inside the SQL
+# (docs/two-way-sql.md "Ambient binds"), so every referencing route wires only the title.
+version: tesseraql/v1
+
+rules:
+  duplicateRequest:
+    file: duplicate-request.sql
+    binds: [title]
+    code: duplicate
