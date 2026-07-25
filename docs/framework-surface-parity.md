@@ -44,7 +44,7 @@ a documented, verified-intentional exemption.
 | `LoginRouteBuilder` logout | cookie | n/a | **— (GET)** | — | yes |
 | `OidcRouteBuilder` / `SamlAcsRouteBuilder` | protocol | n/a | **— (GET logout)** | — | **`{"error": "<string>"}`** |
 | `RecoveryRouteBuilder` | pre-auth *by design* | n/a | n/a *by design* | — | yes |
-| error responses (all surfaces) | n/a | n/a | n/a | **—** | yes |
+| error responses (all surfaces) | n/a | n/a | n/a | yes (was **—**) | yes |
 
 ## Matrix 2 — the service lifecycle contract
 
@@ -162,7 +162,7 @@ session — and reaching it requires a route to be broken, which already implies
 writable-Studio access. The real cost is diagnostics leaking to anonymous callers during a broken
 window, on a URL that has silently lost its 401.
 
-### Error responses carry none of the security headers
+### Error responses carry none of the security headers — FIXED
 
 `ResponseHeaderDefaults.mergeUnder` is reachable only through the compiler's `withDefaultHeaders`
 and materializes only in `HtmlResponseRenderer.applyHeaders` — the last step of a *successful*
@@ -334,6 +334,7 @@ else re-derives.
    the runtime while `applySecurity` lives in the compiler, so wiring it needs the compiler's
    chain to be reachable from a reload — worth doing with the surface registry (slice 5) rather
    than by duplicating the chain.
+<<<<<<< HEAD
 3. **Security headers on every response**, which subsumes the error-response, SSE, and assets rows.
 4. ~~**The session-store default.**~~ **Shipped, the first half.** The in-memory store expires on
    read and prunes on write, with a 50,000-session ceiling behind that, and
@@ -345,6 +346,24 @@ else re-derives.
    silent-no-expiry defect did not require deciding it, so this slice did not decide it.
    The no-TTL constructor is kept for embedders, and a test pins that too, so the change is
    about the framework's default rather than the class's only possible posture.
+=======
+3. **Security headers on every response** — **the error-response row is shipped**; SSE and assets
+   are not, and the reason is worth recording rather than leaving as an omission.
+   `ErrorResponseRenderer` now carries the app's `security.responseHeaders` and applies them to
+   both HTML surfaces it produces (the custom error page and the htmx error fragment). An
+   integration test pins it, confirmed to fail without the change.
+   **What is left needs a different mechanism, not more of this one.** The design leaned toward
+   applying the block at the platform-http layer so even a 404 from an unmounted path carries it,
+   but `VertxPlatformHttpServerConfiguration` exposes no handler hook beyond a body handler —
+   reaching every response means either a Camel `RoutePolicyFactory` on the context (which covers
+   mounted routes only, and whose `onExchangeDone` fires *after* an SSE stream has already
+   started, too late to set headers) or reaching into Vert.x directly. SSE additionally needs its
+   headers before the first frame, so it cannot use a completion hook at all. Decide the
+   mechanism with the surface registry in slice 5, where each surface declares its posture.
+4. **The session-store default.** Either TTL and a cap in the in-memory store, or make `jdbc` the
+   default; and honor `tesseraql.sessions.ttl` on both paths so the key stops lying. See the open
+   question.
+>>>>>>> 79ca2074 (fix(errors): error pages carry the app's security headers)
 5. **The surface registry and its test** (the guard), which also settles the unverified HTTP leads
    by forcing each surface to declare its posture.
 6. **The lifecycle registry and `guarded()`**, closing the template, client, executor, and

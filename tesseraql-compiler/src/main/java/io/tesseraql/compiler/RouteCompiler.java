@@ -99,12 +99,17 @@ public final class RouteCompiler {
                 // time from the failing route id; the error renderer is one shared exception handler.
                 java.util.Map<String, io.tesseraql.yaml.model.ResponseSpec.OnError> onErrorByRoute = onErrorByRoute(
                         manifest);
+                // The same header block every successful HTML response carries. The error path
+                // short-circuits the render that merged it, so an error page and an htmx error
+                // fragment - both HTML the browser renders like any other - used to arrive with
+                // no CSP and no X-Frame-Options at all.
+                java.util.Map<String, String> errorHeaders = responseHeaders.headers();
                 onException(TqlException.class).handled(true)
                         .process(new ErrorResponseRenderer(i18n, onErrorByRoute,
-                                manifest.appHome()));
+                                manifest.appHome(), errorHeaders));
                 onException(Exception.class).handled(true)
                         .process(new ErrorResponseRenderer(i18n, onErrorByRoute,
-                                manifest.appHome()));
+                                manifest.appHome(), errorHeaders));
                 for (RouteFile routeFile : manifest.routes()) {
                     if (onlyRouteIds == null
                             || onlyRouteIds.contains(routeFile.definition().id())) {
