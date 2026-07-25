@@ -100,6 +100,27 @@ class MultiAppGatewayIntegrationTest {
         return type.cast(field.get(gateway));
     }
 
+    /**
+     * An oversized request body is refused rather than buffered.
+     *
+     * <p>The gateway read the whole body with {@code readAllBytes()} before forwarding it, so a
+     * stranger decided how much of its heap to take. This is the front door: the app behind it
+     * keeps whatever limits it declares, and the door has its own.
+     */
+    @Test
+    void anOversizedBodyIsRefused() throws Exception {
+        byte[] tooBig = new byte[MultiAppGateway.MAX_REQUEST_BODY_BYTES + 1024];
+
+        java.net.http.HttpResponse<String> response = java.net.http.HttpClient.newHttpClient()
+                .send(java.net.http.HttpRequest.newBuilder(
+                        java.net.URI.create("http://localhost:" + gateway.port()
+                                + "/apps/shop-a/api/items"))
+                        .POST(java.net.http.HttpRequest.BodyPublishers.ofByteArray(tooBig))
+                        .build(), java.net.http.HttpResponse.BodyHandlers.ofString());
+
+        assertThat(response.statusCode()).isEqualTo(413);
+    }
+
     @Test
     void unknownAppReturns404() throws Exception {
         HttpResponse<String> response = get("/apps/nope/api/items");

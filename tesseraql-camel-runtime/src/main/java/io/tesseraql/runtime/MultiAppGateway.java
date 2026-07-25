@@ -51,6 +51,16 @@ public final class MultiAppGateway implements AutoCloseable {
 
     private final MultiAppHost host;
     private final HttpServer server;
+    /**
+     * The largest request body the gateway will buffer before forwarding it.
+     *
+     * <p>A fixed ceiling rather than a config key, deliberately: the gateway fronts several apps
+     * and a per-app limit would be ambiguous here, so this is the front door's own bound and the
+     * app behind it keeps whatever limits it declares. Ten megabytes leaves ordinary form and
+     * upload traffic alone while making "how much heap can a stranger take" a bounded question.
+     */
+    static final int MAX_REQUEST_BODY_BYTES = 10 * 1024 * 1024;
+
     private final HttpClient client;
     private final java.util.concurrent.ExecutorService executor;
     private final int port;
@@ -159,7 +169,14 @@ public final class MultiAppGateway implements AutoCloseable {
         URI target = URI.create("http://localhost:" + appPort + downstreamPath
                 + (query == null ? "" : "?" + query));
 
-        byte[] body = exchange.getRequestBody().readAllBytes();
+        // Bounded, because this is the front door: readAllBytes() let any caller decide how much
+        // of the gateway's heap to take, and a proxy holds the whole body before it can forward.
+        // One byte past the cap is enough to know it was exceeded without buffering the rest.
+        byte[] body = exchange.getRequestBody().readNBytes(MAX_REQUEST_BODY_BYTES + 1);
+        if (body.length > MAX_REQUEST_BODY_BYTES) {
+            respond(exchange, 413, "{\"error\":\"Request body too large\"}");
+            return;
+        }
         HttpRequest.Builder request = HttpRequest.newBuilder(target)
                 .method(exchange.getRequestMethod(), body.length == 0
                         ? HttpRequest.BodyPublishers.noBody()
