@@ -1,6 +1,6 @@
 # Framework surface parity
 
-> **Status: slices 1–2 shipped, the rest designed.** The compiled app request path has a contract —
+> **Status: slices 1, 2 and 4 shipped; the rest designed.** The compiled app request path has a contract —
 > authenticate, authorize, CSRF, localize, one error envelope, security response headers — and the
 > framework's own ~25 hand-written `RouteBuilder`s each re-implement a subset of it. Its long-lived
 > services have a second contract — close what you open, bound what you accumulate, survive an
@@ -56,7 +56,7 @@ a documented, verified-intentional exemption.
 | `PgNotifyListener` | **— (RuntimeException path)** | n/a | yes | yes |
 | `TopicNotifyBridge` | yes | n/a | **— (RuntimeException kills it)** | yes |
 | `RouteWatcher` | yes | n/a | **— (thread dies, unrecoverable)** | yes |
-| `InMemorySessionStore` | n/a | **— (no TTL, no cap)** | n/a | n/a |
+| `InMemorySessionStore` | n/a | yes (was **no TTL, no cap**) | n/a | n/a |
 | `McpHttpHandler` sessions | n/a | **— (no TTL, no cap)** | n/a | n/a |
 | `QueueConsumer` `ProducerTemplate` | **—** | yes | yes | **—** |
 | `MultiAppGateway` | **— (client, executor)** | **— (unbounded body buffering)** | yes | partial |
@@ -121,7 +121,7 @@ Either fix suffices: skip the registering subject in `evictOldest`, or re-read `
 after the eviction loops rather than reusing the captured reference. `LiveStreamsTest` exercises
 `MAX_PER_SUBJECT` only; nothing touches `MAX_TOTAL`.
 
-### The default session store never expires anything
+### The default session store never expires anything — FIXED
 
 `InMemorySessionStore.session()` is a bare map lookup with no expiry comparison, and there is no
 cap, no eviction, and no prune. `JdbcSessionStore` filters on `expires_at` and prunes on every
@@ -335,9 +335,16 @@ else re-derives.
    chain to be reachable from a reload — worth doing with the surface registry (slice 5) rather
    than by duplicating the chain.
 3. **Security headers on every response**, which subsumes the error-response, SSE, and assets rows.
-4. **The session-store default.** Either TTL and a cap in the in-memory store, or make `jdbc` the
-   default; and honor `tesseraql.sessions.ttl` on both paths so the key stops lying. See the open
-   question.
+4. ~~**The session-store default.**~~ **Shipped, the first half.** The in-memory store expires on
+   read and prunes on write, with a 50,000-session ceiling behind that, and
+   `tesseraql.sessions.ttl` is read once and handed to whichever store is selected — the key had
+   been read inside the jdbc branch only, so on the default it was inert.
+   **Open question 1 is deliberately still open.** Making `jdbc` the default is a deployment
+   posture, not a defect: it would also make sessions survive a restart, which is a visible
+   behavior change for every existing app and belongs to whoever owns that call. Fixing the
+   silent-no-expiry defect did not require deciding it, so this slice did not decide it.
+   The no-TTL constructor is kept for embedders, and a test pins that too, so the change is
+   about the framework's default rather than the class's only possible posture.
 5. **The surface registry and its test** (the guard), which also settles the unverified HTTP leads
    by forcing each surface to declare its posture.
 6. **The lifecycle registry and `guarded()`**, closing the template, client, executor, and
