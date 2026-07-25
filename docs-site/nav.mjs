@@ -109,4 +109,10 @@ export const EXCLUDED = [
   'component-guard.md',
   'config-consumers.md',
   'validation-rule-sets.md',
+  // Contract-deviation sweep, 2026-07-25.
+  'route-governance-parity.md',
+  'poll-connector-hardening.md',
+  'shared-definitions-reach.md',
+  'framework-surface-parity.md',
+  'yaml-surface-consumers.md',
 ];
