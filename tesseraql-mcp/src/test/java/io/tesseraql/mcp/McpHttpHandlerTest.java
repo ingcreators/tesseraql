@@ -37,6 +37,40 @@ class McpHttpHandlerTest {
         assertThat(call.body()).contains("\"text\":\"hi\"");
     }
 
+    /**
+     * A session that goes idle stops working, and the map stops growing.
+     *
+     * <p>It was a set with no expiry and no ceiling: {@code initialize} added an entry and only an
+     * explicit {@code DELETE} removed one. A client that reconnects rather than closing — which is
+     * what a crashed or restarted one does — grew it for the life of the process.
+     */
+    @Test
+    void anIdleSessionExpires() throws Exception {
+        McpHttpHandler handler = new McpHttpHandler(server(), null,
+                java.time.Duration.ofMillis(40));
+        String session = handler.handle(post(INIT, null)).headers()
+                .get(McpHttpHandler.SESSION_HEADER);
+        assertThat(handler.handle(post(CALL, session)).status()).isEqualTo(200);
+
+        Thread.sleep(80);
+
+        assertThat(handler.handle(post(CALL, session)).status()).isEqualTo(404);
+    }
+
+    @Test
+    void useKeepsASessionAlive() throws Exception {
+        McpHttpHandler handler = new McpHttpHandler(server(), null,
+                java.time.Duration.ofMillis(120));
+        String session = handler.handle(post(INIT, null)).headers()
+                .get(McpHttpHandler.SESSION_HEADER);
+
+        // Three calls spanning more than one TTL: the window is idleness, not total age.
+        for (int i = 0; i < 3; i++) {
+            Thread.sleep(50);
+            assertThat(handler.handle(post(CALL, session)).status()).isEqualTo(200);
+        }
+    }
+
     @Test
     void anUnknownSessionIsRejected() {
         McpHttpHandler handler = new McpHttpHandler(server(), null);

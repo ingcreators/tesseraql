@@ -6,7 +6,6 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -32,11 +31,58 @@ public final class McpHttpHandler {
     private final ObjectMapper mapper = new ObjectMapper();
     private final McpServer server;
     private final McpAuthenticator authenticator;
-    private final Set<String> sessions = ConcurrentHashMap.newKeySet();
+    /** How long an idle MCP session stays valid. */
+    static final java.time.Duration DEFAULT_TTL = java.time.Duration.ofHours(2);
+
+    /** The ceiling behind the TTL, so a client that never issues DELETE cannot grow the map. */
+    static final int MAX_SESSIONS = 10_000;
+
+    /**
+     * Session id to last-seen epoch millis.
+     *
+     * <p>It was a set with no expiry and no ceiling: {@code initialize} added an entry and only an
+     * explicit {@code DELETE} ever removed one, so a client that reconnects instead of closing —
+     * which is what a crashed or restarted client does — grew this without bound for the life of
+     * the process.
+     */
+    private final Map<String, Long> sessions = new ConcurrentHashMap<>();
+    private final java.time.Duration ttl;
 
     public McpHttpHandler(McpServer server, McpAuthenticator authenticator) {
+        this(server, authenticator, DEFAULT_TTL);
+    }
+
+    /** Visible for tests, and for an embedder that wants a different idle window. */
+    McpHttpHandler(McpServer server, McpAuthenticator authenticator, java.time.Duration ttl) {
         this.server = server;
         this.authenticator = authenticator;
+        this.ttl = ttl;
+    }
+
+    /** Whether the session is known and still inside its idle window; touches it if so. */
+    private boolean touch(String sessionId) {
+        Long lastSeen = sessions.get(sessionId);
+        if (lastSeen == null) {
+            return false;
+        }
+        long now = System.currentTimeMillis();
+        if (now - lastSeen > ttl.toMillis()) {
+            sessions.remove(sessionId);
+            return false;
+        }
+        sessions.put(sessionId, now);
+        return true;
+    }
+
+    /** Drops expired entries, then the oldest if the ceiling is still reached. */
+    private void prune() {
+        long now = System.currentTimeMillis();
+        sessions.entrySet().removeIf(entry -> now - entry.getValue() > ttl.toMillis());
+        while (sessions.size() >= MAX_SESSIONS) {
+            sessions.entrySet().stream().min(Map.Entry.comparingByValue())
+                    .map(Map.Entry::getKey)
+                    .ifPresent(sessions::remove);
+        }
     }
 
     /** Whether a credential is required on every request. */
@@ -72,7 +118,7 @@ public final class McpHttpHandler {
             return json(400, errorBody("Empty request body"), Map.of());
         }
         boolean initialize = message.path("method").asText("").equals("initialize");
-        if (!initialize && request.sessionId() != null && !sessions.contains(request.sessionId())) {
+        if (!initialize && request.sessionId() != null && !touch(request.sessionId())) {
             return json(404, errorBody("Unknown or expired session"), Map.of());
         }
         Optional<JsonNode> response = server.handle(message,
@@ -80,7 +126,8 @@ public final class McpHttpHandler {
         Map<String, String> headers = new LinkedHashMap<>();
         if (initialize) {
             String session = UUID.randomUUID().toString();
-            sessions.add(session);
+            prune();
+            sessions.put(session, System.currentTimeMillis());
             headers.put(SESSION_HEADER, session);
         }
         if (response.isEmpty()) {
