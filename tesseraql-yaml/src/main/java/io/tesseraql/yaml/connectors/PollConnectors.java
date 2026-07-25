@@ -38,14 +38,27 @@ public final class PollConnectors {
     private final boolean present;
     private final List<String> allowedHosts;
     private final String knownHostsFile;
+    private final TrustStore trustStore;
     private final Map<String, Credential> credentials;
 
+    /**
+     * The CA bundle an FTPS server's certificate is validated against — the FTPS counterpart of
+     * {@code knownHostsFile}. Without it the client accepts any in-date certificate from any
+     * host, so the TLS handshake proves nothing about who is on the other end.
+     *
+     * @param file     keystore path, relative to the app home or absolute
+     * @param password keystore password, resolved through the secret resolver like any other
+     */
+    public record TrustStore(String file, String password) {
+    }
+
     private PollConnectors(AppConfig config, boolean present, List<String> allowedHosts,
-            String knownHostsFile, Map<String, Credential> credentials) {
+            String knownHostsFile, TrustStore trustStore, Map<String, Credential> credentials) {
         this.config = config;
         this.present = present;
         this.allowedHosts = List.copyOf(allowedHosts);
         this.knownHostsFile = knownHostsFile;
+        this.trustStore = trustStore;
         // Populated by load() after this instance exists (Credential is an inner class), so the
         // live reference is shared, not copied.
         this.credentials = credentials;
@@ -61,9 +74,10 @@ public final class PollConnectors {
         String knownHostsFile = config.getString("tesseraql.connectors.poll.knownHostsFile")
                 .filter(value -> !value.isBlank())
                 .orElse(null);
+        TrustStore trustStore = loadTrustStore(config);
         Map<String, Credential> credentials = new LinkedHashMap<>();
         PollConnectors loaded = new PollConnectors(config, present, allowedHosts, knownHostsFile,
-                credentials);
+                trustStore, credentials);
         if (config
                 .navigate("tesseraql.connectors.poll.credentials") instanceof Map<?, ?> declared) {
             declared.forEach((name, settings) -> {
@@ -98,11 +112,40 @@ public final class PollConnectors {
     }
 
     /**
+     * The trust store an FTPS server's certificate chain is validated against, or empty when the
+     * app declares none — in which case the endpoint refuses to connect rather than trusting
+     * whatever certificate it is offered.
+     */
+    public Optional<TrustStore> trustStore() {
+        return Optional.ofNullable(trustStore);
+    }
+
+    /**
      * Whether the remote host is permitted by the allow-list (exact or {@code *.wildcard}, the same
      * deny-by-default rule outbound HTTP uses). With no allow-list, nothing is reachable.
      */
     public boolean isHostAllowed(String host) {
         return HttpOutbound.hostAllowed(allowedHosts, host);
+    }
+
+    /** Reads and validates {@code tesseraql.connectors.poll.trustStore}. */
+    private static TrustStore loadTrustStore(AppConfig config) {
+        Object node = config.navigate("tesseraql.connectors.poll.trustStore");
+        if (node == null) {
+            return null;
+        }
+        if (!(node instanceof Map<?, ?> raw)) {
+            throw new TqlException(INVALID_CONFIG,
+                    "tesseraql.connectors.poll.trustStore must be a mapping with file: and"
+                            + " password:");
+        }
+        String file = config.getString("tesseraql.connectors.poll.trustStore.file")
+                .filter(value -> !value.isBlank())
+                .orElseThrow(() -> new TqlException(INVALID_CONFIG,
+                        "tesseraql.connectors.poll.trustStore needs a file:"));
+        String password = config.getString("tesseraql.connectors.poll.trustStore.password")
+                .orElse(null);
+        return new TrustStore(file, password);
     }
 
     /** The named credential, or empty when not declared. */

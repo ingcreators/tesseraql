@@ -1,6 +1,6 @@
 # Poll connector hardening
 
-> **Status: slices 1–2 shipped, the rest designed.** The 2026-07-25 contract-deviation sweep compared
+> **Status: slices 1–3 shipped, the rest designed.** The 2026-07-25 contract-deviation sweep compared
 > the three poll sources (`local`, `sftp`, `ftps`) against each other and found that `ftps` is
 > not, as [connectors.md](connectors.md) states, "the identical recipe and runtime path … only
 > the endpoint scheme differs" — it transfers file content **unencrypted**, validates **no
@@ -15,8 +15,14 @@
 > against an in-process Apache FtpServer — asserting the server's own command trace, which is
 > what actually distinguishes the settings (a lenient server round-trips text intact even in
 > ASCII mode, so a payload-only assertion passes against the broken setting). Against the old
-> code the trace reads `TYPE A` with no `PBSZ`/`PROT` at all. **Server identity is still
-> unverified — slice 3 remains the security-critical one.**
+> code the trace reads `TYPE A` with no `PBSZ`/`PROT` at all.
+>
+> **Slice 3 (server identity) is shipped:** `tesseraql.connectors.poll.trustStore` pins the CA an
+> FTPS server's certificate must chain to, hostname checking is on, and an ftps source without a
+> trust store is refused at wiring time with `TQL-SEC-4085` (an **error**, not the warning its
+> SFTP sibling raises — an unverified CA has no first-use posture to preserve). The integration
+> test carries a negative case: a server presenting a certificate the client does not trust
+> ingests nothing, which is what makes the control self-verifying. Slices 4–7 remain.
 
 The failure class: a recipe family whose members are documented as interchangeable, where the
 security posture silently differs per member. An author hardens their SFTP job after the
@@ -28,7 +34,7 @@ unauthenticated, cleartext transfer that no lint mentions.
 | | `local` | `sftp` | `ftps` |
 | --- | --- | --- | --- |
 | Content encrypted in transit | n/a | yes | yes (was **no**) |
-| Server identity verified | n/a | only with `knownHostsFile` | **never, unconfigurable** |
+| Server identity verified | n/a | only with `knownHostsFile` | yes, required (was **never**) |
 | Host allow-list enforced | **no** | yes | yes |
 | Path governance (root anchoring, traversal) | **none** | n/a (remote) | n/a (remote) |
 | Binary-safe | yes | yes | yes (was **ASCII mode**) |
@@ -53,7 +59,7 @@ returns exactly one hit: line 103 itself.
 The control channel — including USER/PASS — is TLS-protected via AUTH TLS. File content and LIST
 output are not. The introducing commit carries no rationale for the flag.
 
-### FTPS validates no server certificate, and nothing can configure one
+### FTPS validates no server certificate, and nothing can configure one — FIXED
 
 With `sslContextParameters` and both `ftpClient*StoreParameters` null, `FtpsEndpoint.createFtpClient`
 never calls `setTrustManager`, leaving commons-net's default
@@ -183,8 +189,15 @@ home-relative — the CHANGELOG entry names it, per rule 10.
    One correction to the original plan worth recording: "a binary payload round-trips
    byte-identically" is **not** a usable assertion — this server returns multi-byte text intact
    in ASCII mode too, so that check passes against the broken setting. The trace is the evidence.
-3. **Server identity.** `trustStore` config, `SSLContextParameters` wiring, `tlsEndpointChecking`;
-   `TQL-SEC-4084` to error plus its FTPS sibling.
+3. ~~**Server identity.**~~ **Shipped**, by a simpler route than designed. `SSLContextParameters`
+   turned out to be unnecessary: the component exposes `ftpClient.trustStore.` as a multi-value
+   URI prefix feeding `FtpsEndpoint.ftpClientTrustStoreParameters` (whose `file`/`password`/`type`
+   keys build the trust manager — confirmed in the bytecode), and the generic `ftpClient.` prefix
+   reaches `FTPSClient` bean properties, so `endpointCheckingEnabled=true` turns on hostname
+   verification. Two option names in the original plan do not exist; checking the component
+   metadata before writing them is what caught it.
+   `TQL-SEC-4084` stayed a warning: SSH host keys have a legitimate trust-on-first-use posture
+   that a CA bundle does not, so only the new FTPS check is an error.
 4. **Credential methods.** Key-based SFTP, FTPS client certificates, exactly-one-method validation,
    and a load error for a remote source with no credential.
 5. **URI value handling and poll lint parity**, including the local path root anchoring and the

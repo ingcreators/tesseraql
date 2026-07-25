@@ -50,6 +50,9 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
  *   <li><b>The transfer is binary.</b> {@code TYPE I} has to appear. The trace is what proves
  *       this, not the payload: a lenient server round-trips even multi-byte text intact in ASCII
  *       mode, so a value-only assertion would pass against the broken setting.</li>
+ *   <li><b>The server is verified.</b> The certificate chain is validated against the declared
+ *       trust store — the very keystore this server presents from — with hostname checking on.
+ *       The transfer completing at all is the evidence.</li>
  *   <li><b>The connection direction works.</b> Passive mode is what a NAT'd or containerized
  *       deployment can actually use, so {@code PASV} has to appear.</li>
  * </ul>
@@ -65,11 +68,15 @@ class PollImportFtpsIntegrationTest {
 
     /** Multi-byte UTF-8, so the pipeline is exercised on more than 7-bit text. */
     private static final String ORDER_NO = "注文-B1";
+    /** Only ever reachable by a client that skipped certificate validation. */
+    private static final String UNTRUSTED_ORDER_NO = "注文-X9";
 
     static TesseraqlRuntime runtime;
     static Path appHome;
     static Path ftpRoot;
     static Path keystore;
+    /** A second self-signed keystore the server never presents from. */
+    static Path untrusted;
     static FtpServer ftpServer;
     static int ftpPort;
 
@@ -78,10 +85,15 @@ class PollImportFtpsIntegrationTest {
         seedDatabase();
         ftpRoot = Files.createTempDirectory("tesseraql-ftps-root");
         Files.createDirectories(ftpRoot.resolve("inbound"));
+        Files.createDirectories(ftpRoot.resolve("inbound-untrusted"));
+        Files.write(ftpRoot.resolve("inbound-untrusted/orders.csv"),
+                ("orderNo,qty\n" + UNTRUSTED_ORDER_NO + ",9\n")
+                        .getBytes(java.nio.charset.StandardCharsets.UTF_8));
         Files.write(ftpRoot.resolve("inbound/orders.csv"),
                 ("orderNo,qty\n" + ORDER_NO + ",7\n")
                         .getBytes(java.nio.charset.StandardCharsets.UTF_8));
         keystore = generateKeystore();
+        untrusted = generateKeystore();
         startFtpsServer();
         appHome = prepareAppHome();
         runtime = TesseraqlRuntime.start(appHome, freePort());
@@ -143,10 +155,42 @@ class PollImportFtpsIntegrationTest {
         assertThat(Files.exists(ftpRoot.resolve("inbound/orders.csv"))).isFalse();
     }
 
+    @Test
+    void aServerPresentingAnUntrustedCertificateIsRefused() throws Exception {
+        // Same server, same credentials, same directory layout - only the trust store differs.
+        // If the client were not validating, this would ingest exactly like the trusted case,
+        // which is what makes it the honest test of the control: a positive-only test passes
+        // whether or not verification happens.
+        Path home = prepareAppHome("inbound-untrusted", untrusted);
+        TesseraqlRuntime rogue = TesseraqlRuntime.start(home, freePort());
+        try {
+            // Long enough for several poll cycles at the job's 500ms delay.
+            Thread.sleep(java.time.Duration.ofSeconds(6).toMillis());
+
+            try (Connection connection = connect();
+                    java.sql.PreparedStatement statement = connection.prepareStatement(
+                            "select count(*) from imported_orders where order_no = ?")) {
+                statement.setString(1, UNTRUSTED_ORDER_NO);
+                try (ResultSet rows = statement.executeQuery()) {
+                    rows.next();
+                    assertThat(rows.getInt(1))
+                            .as("a file behind an unverified certificate must not be ingested")
+                            .isZero();
+                }
+            }
+            // The file is still sitting there: the poll never got far enough to move it.
+            assertThat(Files.exists(ftpRoot.resolve("inbound-untrusted/orders.csv"))).isTrue();
+        } finally {
+            rogue.close();
+            deleteRecursively(home);
+        }
+    }
+
     /**
      * A throwaway self-signed certificate, generated per run by the JDK's own keytool — the
-     * repository never carries a key, and the client does not validate the certificate anyway
-     * (that gap is its own slice).
+     * repository never carries a key. The client validates against this same file, so the
+     * handshake exercises real chain and hostname checking (the certificate carries
+     * {@code SAN=dns:localhost}).
      */
     private static Path generateKeystore() throws Exception {
         Path dir = Files.createTempDirectory("tesseraql-ftps-keystore");
@@ -223,6 +267,11 @@ class PollImportFtpsIntegrationTest {
     }
 
     private static Path prepareAppHome() throws IOException {
+        return prepareAppHome("inbound", keystore);
+    }
+
+    private static Path prepareAppHome(String remoteDir, Path trustStore)
+            throws IOException {
         Path source = Paths.get("..", "examples", "user-admin-app").toAbsolutePath().normalize();
         Path target = Files.createTempDirectory("tesseraql-ftps-it");
         try (Stream<Path> files = Files.walk(source)) {
@@ -243,12 +292,15 @@ class PollImportFtpsIntegrationTest {
                     poll:
                       allowedHosts:
                         - localhost
+                      trustStore:
+                        file: %s
+                        password: changeit
                       credentials:
                         partner-ftps:
                           username: svc
                           password: s3cr3t
                 """.formatted(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(),
-                POSTGRES.getPassword()));
+                POSTGRES.getPassword(), trustStore.toAbsolutePath()));
 
         Path jobDir = target.resolve("batch/partner");
         Files.createDirectories(jobDir);
@@ -262,7 +314,7 @@ class PollImportFtpsIntegrationTest {
                     source: ftps
                     host: localhost
                     port: %d
-                    path: /inbound
+                    path: /%s
                     credential: partner-ftps
                     include: "*.csv"
                     delay: 500ms
@@ -273,7 +325,7 @@ class PollImportFtpsIntegrationTest {
                     - { name: qty, type: number }
                   sql:
                     file: upsert-order.sql
-                """.formatted(ftpPort));
+                """.formatted(ftpPort, remoteDir));
         Files.writeString(jobDir.resolve("upsert-order.sql"),
                 "insert into imported_orders (order_no, qty)"
                         + " values (/* orderNo */ 'x', /* qty */ 0)\n");

@@ -1,6 +1,7 @@
 package io.tesseraql.runtime;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import io.tesseraql.yaml.config.AppConfig;
 import io.tesseraql.yaml.connectors.PollConnectors;
@@ -59,7 +60,9 @@ class PollingRouteBuilderTest {
 
     @Test
     void ftpsEncryptsTheDataChannelAndTransfersBytesVerbatim() {
-        String uri = builder(Map.of("allowedHosts", List.of("ftps.partner.example")))
+        String uri = builder(Map.of(
+                "allowedHosts", List.of("ftps.partner.example"),
+                "trustStore", Map.of("file", "security/partner-ca.p12", "password", "s3cr3t")))
                 .endpointUri(ftps());
 
         assertThat(uri)
@@ -74,7 +77,25 @@ class PollingRouteBuilderTest {
                 // ASCII mode would line-ending-translate an Excel or archive payload in transit.
                 .contains("binary=true")
                 // Active mode asks the server to dial back into this process.
-                .contains("passiveMode=true");
+                .contains("passiveMode=true")
+                // The server's certificate chain is checked against the declared trust store,
+                // and the hostname against the certificate.
+                .contains("ftpClient.trustStore.file="
+                        + home.resolve("security/partner-ca.p12").toAbsolutePath())
+                .contains("ftpClient.trustStore.password=RAW(s3cr3t)")
+                .contains("ftpClient.endpointCheckingEnabled=true");
+    }
+
+    @Test
+    void ftpsWithoutATrustStoreIsRefusedRatherThanRunUnverified() {
+        PollingRouteBuilder builder = builder(
+                Map.of("allowedHosts", List.of("ftps.partner.example")));
+
+        // Nothing to validate against means any in-date certificate from any host is accepted,
+        // so the handshake proves nothing about the peer. Refuse the job instead of polling it.
+        assertThatThrownBy(() -> builder.endpointUri(ftps()))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("trustStore");
     }
 
     private PollingRouteBuilder builder(Map<String, Object> poll) {
