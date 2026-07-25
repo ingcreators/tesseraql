@@ -144,6 +144,24 @@ All notable changes to TesseraQL are documented here. The format follows
   still unconfigurable** — treat an FTPS partner as authenticated by the network, not by TLS,
   until that ships.
 
+- **Shared definitions reach queue consumers and MCP tools** (docs/field-domains.md,
+  docs/validation-rule-sets.md): `use:` and `domain:` were resolved only for `web/` routes. A
+  `use:` reference in a `consume/` or `mcp/` document failed at startup with "validation rule
+  must declare exactly one of rule: or file:" — an error naming keys the author never wrote —
+  and a `domain:` reference silently lost every constraint it carried, which on an MCP tool
+  meant an agent-facing surface advertised without its declared limits. Resolution now happens
+  above the tree split, and every check that answers "is this referenced?"
+  (`TQL-FIELD-4611`/`4612`, `TQL-SEC-4136`) walks all three trees so the fix does not just move
+  the problem. `TQL-SEC-4136` additionally covers queue consumers, which can never carry a
+  principal at all.
+
+- **`TQL-YAML-1003` no longer rejects working routes**: it fired for every recipe but
+  `command-json`, while the compiler runs `validate:` on any route reaching the transactional
+  command pipeline — so a `webhook` route, or a `query-json` route with a validate block, failed
+  the lint gate at error severity for validation the runtime performs. The check now gates on
+  that same set. Conversely, consumers and MCP tools had no validate lint at all (a typo'd
+  validation SQL filename reached startup) and now get the same shape checks routes do.
+
 - **Writes honor per-tenant datasource routing** (docs/multi-tenancy.md): under
   `database-per-tenant` or `schema-per-tenant`, a `command-json` write — and a `queue-consume`
   write, an MCP write tool, validation SQL, and workflow delegation — resolved the route's named

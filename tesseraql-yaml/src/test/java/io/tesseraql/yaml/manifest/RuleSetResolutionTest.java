@@ -98,6 +98,73 @@ class RuleSetResolutionTest {
     }
 
     @Test
+    void referencesResolveInConsumersAndToolsToo(@TempDir Path dir) throws Exception {
+        Path home = app(dir, "  skuKnown:\n"
+                + "    use: skuIsFree\n"
+                + "    params: { sku: params.sku }\n"
+                + "    field: sku");
+        String validate = """
+                validate:
+                  skuKnown:
+                    use: skuIsFree
+                    params: { sku: params.sku }
+                    field: sku
+                """;
+        Files.createDirectories(home.resolve("consume/products"));
+        Files.writeString(home.resolve("consume/products/adjusted.yml"), """
+                version: tesseraql/v1
+                id: products.adjusted
+                kind: route
+                recipe: queue-consume
+                consume:
+                  channel: events
+                  topic: products.adjusted
+                input:
+                  sku: { type: string, required: true }
+                %s
+                sql:
+                  file: apply.sql
+                """.formatted(validate));
+        Files.writeString(home.resolve("consume/products/apply.sql"), "select 1\n");
+        Files.createDirectories(home.resolve("mcp"));
+        Files.writeString(home.resolve("mcp/adjust.yml"), """
+                version: tesseraql/v1
+                id: products.adjustTool
+                kind: tool
+                recipe: command-json
+                description: adjust stock
+                security:
+                  policy: inv.write
+                input:
+                  sku: { type: string, required: true }
+                %s
+                sql:
+                  file: apply.sql
+                response:
+                  json:
+                    body:
+                      ok: "true"
+                """.formatted(validate));
+        Files.writeString(home.resolve("mcp/apply.sql"), "select 1\n");
+
+        AppManifest manifest = new ManifestLoader().load(home);
+
+        // Before shared definitions reached these trees, the compiler rejected both with
+        // "must declare exactly one of rule: or file:" — an error naming keys the author
+        // never wrote, because `use:` was still unresolved.
+        ValidationRule consumerRule = manifest.consumers().get(0).definition()
+                .validate().get("skuKnown");
+        assertThat(consumerRule.isSql()).isTrue();
+        assertThat(consumerRule.file()).isEqualTo("../../rules/sku-free.sql");
+        assertThat(consumerRule.code()).isEqualTo("duplicate");
+
+        ValidationRule toolRule = manifest.tools().get(0).definition().validate().get("skuKnown");
+        assertThat(toolRule.isSql()).isTrue();
+        assertThat(toolRule.file()).isEqualTo("../rules/sku-free.sql");
+        assertThat(toolRule.code()).isEqualTo("duplicate");
+    }
+
+    @Test
     void unknownReferencesAndInlineConflictsFail(@TempDir Path dir) throws Exception {
         Path home = app(dir, "  skuKnown:\n    use: nope\n    field: sku");
         assertThatThrownBy(() -> new ManifestLoader().load(home))

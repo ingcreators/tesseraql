@@ -9,6 +9,7 @@ import io.tesseraql.yaml.manifest.AppManifest;
 import io.tesseraql.yaml.manifest.ManifestLoader;
 import io.tesseraql.yaml.manifest.RouteFile;
 import io.tesseraql.yaml.manifest.ScopeFile;
+import io.tesseraql.yaml.manifest.ToolFile;
 import io.tesseraql.yaml.manifest.WorkflowFile;
 import io.tesseraql.yaml.model.DeadlineSpec;
 import io.tesseraql.yaml.model.InputField;
@@ -50,6 +51,16 @@ public final class AppLinter {
     public static Set<String> knownRouteRecipes() {
         return KNOWN_ROUTE_RECIPES;
     }
+
+    /**
+     * The route recipes whose compiled pipeline runs {@code validate:} — every recipe that can
+     * reach the transactional command processor. {@code command-json} and {@code query-json}
+     * both route into it once a validate block is present, and {@code webhook} delegates to it
+     * unconditionally. Queue consumers and MCP tools run it too; they are linted separately
+     * because they carry no route recipe.
+     */
+    private static final List<String> VALIDATING_RECIPES = List.of("command-json", "query-json",
+            "webhook");
 
     private static final Set<String> KNOWN_AUTH_MODES = Set.of("bearer", "browser", "apiKey",
             "mtls", "public");
@@ -572,8 +583,8 @@ public final class AppLinter {
             return;
         }
         Set<String> referenced = new HashSet<>();
-        for (RouteFile route : manifest.routes()) {
-            route.definition().validate().values().forEach(rule -> {
+        for (Map.Entry<Path, RouteDefinition> document : authoringDocuments(manifest)) {
+            document.getValue().validate().values().forEach(rule -> {
                 if (rule.use() != null) {
                     referenced.add(rule.use());
                 }
@@ -617,28 +628,44 @@ public final class AppLinter {
     private void lintAmbientPrincipal(Path appHome, AppManifest manifest,
             List<LintFinding> findings) {
         for (RouteFile route : manifest.routes()) {
-            RouteDefinition def = route.definition();
-            String source = appHome.relativize(route.source()).toString().replace('\\', '/');
-            boolean noPrincipal = "webhook".equals(def.recipe())
-                    || def.security() == null
-                    || "public".equals(def.security().auth());
-            if (noPrincipal) {
-                for (String bind : principalBinds(route)) {
-                    findings.add(new LintFinding("TQL-SEC-4136", "error", source,
-                            "Route '" + def.id() + "' binds '" + bind + "' but never carries an"
-                                    + " authenticated principal — the bind can only fail as an"
-                                    + " unbound parameter at runtime"));
-                }
-            }
-            sqlParamMaps(def).forEach((where, params) -> params.forEach((bindName, expr) -> {
-                if (expr != null && AMBIENT_PRINCIPAL.matcher(expr).matches()) {
-                    findings.add(new LintFinding("TQL-SEC-4137", "warning", source,
-                            "Route '" + def.id() + "' " + where + " wires '" + bindName + ": "
-                                    + expr + "' — the ambient bind /* " + expr + " */ makes the"
-                                    + " wiring unnecessary"));
-                }
-            }));
+            lintAmbientPrincipal(appHome, route.source(), route.definition(), false, findings);
         }
+        // A queue consumer runs off a message, not a request: there is no caller to authenticate,
+        // so a principal.* bind in its SQL can only ever fail at runtime.
+        for (RouteFile consumer : manifest.consumers()) {
+            lintAmbientPrincipal(appHome, consumer.source(), consumer.definition(), true,
+                    findings);
+        }
+        // An MCP tool threads the caller's bearer token, so it carries a principal exactly when
+        // its own security block says it does.
+        for (ToolFile tool : manifest.tools()) {
+            lintAmbientPrincipal(appHome, tool.source(), tool.definition(), false, findings);
+        }
+    }
+
+    private void lintAmbientPrincipal(Path appHome, Path file, RouteDefinition def,
+            boolean neverAuthenticated, List<LintFinding> findings) {
+        String source = appHome.relativize(file).toString().replace('\\', '/');
+        boolean noPrincipal = neverAuthenticated
+                || "webhook".equals(def.recipe())
+                || def.security() == null
+                || "public".equals(def.security().auth());
+        if (noPrincipal) {
+            for (String bind : principalBinds(file, def)) {
+                findings.add(new LintFinding("TQL-SEC-4136", "error", source,
+                        "Route '" + def.id() + "' binds '" + bind + "' but never carries an"
+                                + " authenticated principal — the bind can only fail as an"
+                                + " unbound parameter at runtime"));
+            }
+        }
+        sqlParamMaps(def).forEach((where, params) -> params.forEach((bindName, expr) -> {
+            if (expr != null && AMBIENT_PRINCIPAL.matcher(expr).matches()) {
+                findings.add(new LintFinding("TQL-SEC-4137", "warning", source,
+                        "Route '" + def.id() + "' " + where + " wires '" + bindName + ": "
+                                + expr + "' — the ambient bind /* " + expr + " */ makes the"
+                                + " wiring unnecessary"));
+            }
+        }));
     }
 
     /**
@@ -671,12 +698,11 @@ public final class AppLinter {
         return maps;
     }
 
-    /** The distinct {@code principal.*} bind expressions across a route's parseable SQL files. */
-    private Set<String> principalBinds(RouteFile route) {
+    /** The distinct {@code principal.*} bind expressions across a document's parseable SQL files. */
+    private Set<String> principalBinds(Path source, RouteDefinition def) {
         Set<String> found = new LinkedHashSet<>();
-        Path dir = route.source().getParent();
+        Path dir = source.getParent();
         List<String> files = new ArrayList<>();
-        RouteDefinition def = route.definition();
         if (def.sql() != null && def.sql().file() != null) {
             files.add(def.sql().file());
         }
@@ -745,9 +771,9 @@ public final class AppLinter {
             return;
         }
         Set<String> referenced = new HashSet<>();
-        for (RouteFile route : manifest.routes()) {
-            String source = appHome.relativize(route.source()).toString();
-            route.definition().input().forEach((name, field) -> {
+        for (Map.Entry<Path, RouteDefinition> document : authoringDocuments(manifest)) {
+            String source = appHome.relativize(document.getKey()).toString();
+            document.getValue().input().forEach((name, field) -> {
                 if (field.domain() == null) {
                     return;
                 }
@@ -767,6 +793,21 @@ public final class AppLinter {
                 .forEach(name -> findings.add(new LintFinding("TQL-FIELD-4611", "warning",
                         "domains",
                         "Domain '" + name + "' is declared but never referenced")));
+    }
+
+    /**
+     * Every document that can declare {@code input:} or {@code validate:} — web routes, queue
+     * consumers, and MCP tools. Any check that answers "is this shared definition referenced?"
+     * has to see all three, or resolving them everywhere just moves the bug: a domain used only
+     * by a tool would be reported as unreferenced.
+     */
+    private static List<Map.Entry<Path, RouteDefinition>> authoringDocuments(
+            AppManifest manifest) {
+        List<Map.Entry<Path, RouteDefinition>> documents = new ArrayList<>();
+        manifest.routes().forEach(r -> documents.add(Map.entry(r.source(), r.definition())));
+        manifest.consumers().forEach(c -> documents.add(Map.entry(c.source(), c.definition())));
+        manifest.tools().forEach(t -> documents.add(Map.entry(t.source(), t.definition())));
+        return documents;
     }
 
     /** The ways the merged field is looser than its domain, as human-readable clauses. */
@@ -1275,6 +1316,15 @@ public final class AppLinter {
             findings.add(new LintFinding("TQL-SEC-4030", "warning", source,
                     "MCP tool references undefined policy '" + policy + "' (deny by default)"));
         }
+        // A tool's validate: runs through the same transactional pipeline a route's does.
+        lintValidation(tool.source(), definition, source, findings);
+        // emit: is a command-json route key. A tool may legally carry that recipe, so the route
+        // check would pass it while the compiled tool pipeline broadcasts nothing — say so.
+        if (!definition.emit().isEmpty()) {
+            findings.add(new LintFinding("TQL-YAML-1038", "error", source,
+                    "emit: has no effect on an MCP tool — the compiled tool pipeline does not"
+                            + " broadcast live-view topics"));
+        }
         lintDatasource(config, tool.source(), definition, source, findings);
     }
 
@@ -1392,7 +1442,16 @@ public final class AppLinter {
             }
         });
         lintOptimisticLocking(route, definition, source, findings);
-        lintValidation(route, definition, source, findings);
+        // Whether the recipe honors validate: at all is a route-level question; the rules'
+        // shape is checked the same way wherever they are declared.
+        if (!definition.validate().isEmpty() && definition.recipe() != null
+                && !VALIDATING_RECIPES.contains(definition.recipe())) {
+            findings.add(new LintFinding("TQL-YAML-1003", "error", source,
+                    "validate: has no effect on '" + definition.recipe() + "' routes — it is"
+                            + " honored on " + String.join(", ", VALIDATING_RECIPES)
+                            + ", queue consumers, and MCP tools"));
+        }
+        lintValidation(route.source(), definition, source, findings);
         lintEmit(route, definition, source, findings);
         lintHttpSources(config, definition, source, findings);
         lintRateLimitScope(definition, source, findings);
@@ -2139,15 +2198,10 @@ public final class AppLinter {
      * expressions parse, its SQL file exists, and that SQL is a SELECT (it runs inside the
      * command's transaction and must not write).
      */
-    private void lintValidation(RouteFile route, RouteDefinition definition, String source,
+    private void lintValidation(Path file, RouteDefinition definition, String source,
             List<LintFinding> findings) {
         if (definition.validate().isEmpty()) {
             return;
-        }
-        if (!"command-json".equals(definition.recipe())) {
-            findings.add(new LintFinding("TQL-YAML-1003", "error", source,
-                    "validate: is only supported on command-json routes, not '"
-                            + definition.recipe() + "'"));
         }
         definition.validate().forEach((id, rule) -> {
             if (rule.isExpression() == rule.isSql()) {
@@ -2166,13 +2220,13 @@ public final class AppLinter {
                 lintRuleExpression(id, rule.rule(), source, findings);
                 return;
             }
-            Path file = route.source().getParent().resolve(rule.file());
-            if (!Files.isRegularFile(file)) {
+            Path sqlFile = file.getParent().resolve(rule.file());
+            if (!Files.isRegularFile(sqlFile)) {
                 findings.add(new LintFinding("TQL-SQL-2103", "error", source,
                         "Validation rule '" + id + "' references a missing SQL file: "
                                 + rule.file()));
             } else if (!io.tesseraql.core.validation.ValidationRules
-                    .isSelect(readQuietly(file))) {
+                    .isSelect(readQuietly(sqlFile))) {
                 findings.add(new LintFinding("TQL-FIELD-2003", "error", source,
                         "Validation rule '" + id + "': validation SQL must be a SELECT"
                                 + " returning violations - it must not write"));
@@ -2282,6 +2336,10 @@ public final class AppLinter {
                         "Step '" + name + "' references a missing SQL file: " + step.file()));
             }
         });
+        // A consumer's validate: is compiled and run exactly like a command's, so its rules get
+        // the same static checks — a typo'd validation SQL filename used to reach startup.
+        lintValidation(consumer.source(), definition, source, findings);
+        lintEmit(consumer, definition, source, findings);
         lintPublish(config, definition, source, findings);
         lintNotify(config, definition, source, findings);
         lintDatasource(config, consumer.source(), definition, source, findings);

@@ -915,9 +915,40 @@ class AppLinterTest {
         Files.writeString(dir.resolve("web/api/items/search.sql"),
                 "select * from t where a = /* limit */1\n");
 
+        // query-json is routed into the transactional command pipeline as soon as it declares a
+        // validate: block, so the rules do run — rejecting them here blocked a working route at
+        // error severity.
+        assertThat(new AppLinter().lint(dir))
+                .noneMatch(f -> f.code().equals("TQL-YAML-1003"));
+    }
+
+    @Test
+    void reportsValidateOnARecipeThatCannotRunIt(@TempDir Path dir) throws Exception {
+        Files.createDirectories(dir.resolve("config"));
+        Files.writeString(dir.resolve("config/tesseraql.yml"), "tesseraql:\n  app:\n    name: t\n");
+        Files.createDirectories(dir.resolve("web/items"));
+        Files.writeString(dir.resolve("web/items/get.yml"), """
+                version: tesseraql/v1
+                id: items.page
+                kind: route
+                recipe: page
+                validate:
+                  positive:
+                    rule: query.limit > 0
+                    field: limit
+                sql:
+                  file: search.sql
+                response:
+                  html:
+                    template: items.html
+                """);
+        Files.writeString(dir.resolve("web/items/search.sql"),
+                "select * from t where a = /* limit */1\n");
+
+        // A page never reaches the transactional command pipeline, so its rules are dropped.
         assertThat(new AppLinter().lint(dir))
                 .anyMatch(f -> f.code().equals("TQL-YAML-1003") && f.isError()
-                        && f.message().contains("command-json"));
+                        && f.message().contains("page"));
     }
 
     @Test

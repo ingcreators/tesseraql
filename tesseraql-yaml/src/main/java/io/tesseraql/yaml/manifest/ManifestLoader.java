@@ -91,15 +91,27 @@ public final class ManifestLoader {
             throw new TqlException(LOAD_ERROR, "App home is not a directory: " + home);
         }
         AppConfig config = loadConfig(home);
-        List<RouteFile> routes = applyRuleSets(home, applyFieldDomains(home,
-                applySecurityDefaults(config, loadRoutes(home, brokenSink))));
+        // Shared definitions are a property of the declaration, not of the directory it sits in:
+        // every document that can carry input: or validate: resolves them, or an MCP tool loses
+        // its declared constraints in silence and a consumer fails at compile naming keys its
+        // author never wrote (docs/shared-definitions-reach.md).
+        io.tesseraql.yaml.domain.FieldDomains domains = io.tesseraql.yaml.domain.FieldDomains
+                .load(home);
+        io.tesseraql.yaml.rules.ValidationRuleSets ruleSets = io.tesseraql.yaml.rules.ValidationRuleSets
+                .load(home, parser);
+        List<RouteFile> routes = applySharedDefinitions(domains, ruleSets,
+                applySecurityDefaults(config, loadRoutes(home, brokenSink)));
         List<JobFile> jobs = loadJobs(home);
         List<ToolFile> tools = new ArrayList<>();
         List<ResourceFile> resources = new ArrayList<>();
         List<UiResourceFile> uiResources = new ArrayList<>();
         List<PromptFile> prompts = new ArrayList<>();
         loadMcp(home, tools, resources, uiResources, prompts);
-        List<RouteFile> consumers = loadConsumers(home);
+        tools.replaceAll(tool -> new ToolFile(tool.source(),
+                resolveSharedDefinitions(domains, ruleSets, tool.source(), tool.definition()),
+                tool.description(), tool.uiResource()));
+        List<RouteFile> consumers = applySharedDefinitions(domains, ruleSets,
+                loadConsumers(home));
         List<ScopeFile> scopes = loadScopes(home);
         List<WorkflowFile> workflows = loadWorkflows(home);
         List<AttachmentFile> attachments = loadAttachments(home);
@@ -363,70 +375,71 @@ public final class ManifestLoader {
         return resolved;
     }
 
-    /**
-     * Resolves field-domain references and merges the app constraint catalog
-     * (docs/field-domains.md) into each route, so the binder, linter, OpenAPI, and coverage see
-     * fully-populated inputs. An unknown domain reference fails the load: a typo must not
-     * silently drop the constraints it names.
-     */
-    private static List<RouteFile> applyFieldDomains(Path home, List<RouteFile> routes) {
-        io.tesseraql.yaml.domain.FieldDomains domains = io.tesseraql.yaml.domain.FieldDomains
-                .load(home);
-        if (domains.isEmpty()) {
-            return routes;
+    /** Resolves both shared-definition layers over a list of routes or consumers. */
+    private static List<RouteFile> applySharedDefinitions(
+            io.tesseraql.yaml.domain.FieldDomains domains,
+            io.tesseraql.yaml.rules.ValidationRuleSets ruleSets, List<RouteFile> files) {
+        if (domains.isEmpty() && ruleSets.isEmpty()) {
+            return files;
         }
-        List<RouteFile> resolved = new ArrayList<>(routes.size());
-        for (RouteFile route : routes) {
-            RouteDefinition def = route.definition();
-            Map<String, io.tesseraql.yaml.model.InputField> input = def.input();
-            if (input.values().stream().anyMatch(field -> field.domain() != null)) {
-                Map<String, io.tesseraql.yaml.model.InputField> merged = new java.util.LinkedHashMap<>();
-                input.forEach((name, field) -> merged.put(name, field.domain() == null
-                        ? field
-                        : field.mergedWith(
-                                domains.require(field.domain(), route.source().toString()))));
-                input = merged;
-            }
-            io.tesseraql.yaml.model.ErrorsSpec errors = def.errors();
-            if (!domains.constraints().isEmpty()) {
-                Map<String, io.tesseraql.yaml.model.ErrorsSpec.ConstraintMapping> catalog = new java.util.LinkedHashMap<>(
-                        domains.constraints());
-                if (errors != null) {
-                    catalog.putAll(errors.constraints());
-                }
-                errors = new io.tesseraql.yaml.model.ErrorsSpec(catalog);
-            }
-            resolved.add(new RouteFile(route.httpMethod(), route.urlPath(), route.source(),
-                    def.withInputAndErrors(input, errors)));
+        List<RouteFile> resolved = new ArrayList<>(files.size());
+        for (RouteFile file : files) {
+            resolved.add(new RouteFile(file.httpMethod(), file.urlPath(), file.source(),
+                    resolveSharedDefinitions(domains, ruleSets, file.source(),
+                            file.definition())));
         }
         return resolved;
     }
 
     /**
-     * Resolves shared validation-rule references (docs/validation-rule-sets.md) so execution,
-     * coverage, and tooling see plain rules; an unknown reference or a bind-contract mismatch
-     * fails the load.
+     * Field-domain references plus shared validation rules for one document
+     * (docs/field-domains.md, docs/validation-rule-sets.md), so the binder, linter, OpenAPI,
+     * coverage, and the MCP schema all see fully-populated inputs and plain rules. An unknown
+     * reference on either layer fails the load: a typo must not silently drop the constraints
+     * it names.
      */
-    private List<RouteFile> applyRuleSets(Path home, List<RouteFile> routes) {
-        io.tesseraql.yaml.rules.ValidationRuleSets sets = io.tesseraql.yaml.rules.ValidationRuleSets
-                .load(home, parser);
-        if (sets.isEmpty()) {
-            return routes;
+    private static RouteDefinition resolveSharedDefinitions(
+            io.tesseraql.yaml.domain.FieldDomains domains,
+            io.tesseraql.yaml.rules.ValidationRuleSets ruleSets, Path source,
+            RouteDefinition def) {
+        return withRuleSets(ruleSets, source, withFieldDomains(domains, source, def));
+    }
+
+    private static RouteDefinition withFieldDomains(io.tesseraql.yaml.domain.FieldDomains domains,
+            Path source, RouteDefinition def) {
+        if (domains.isEmpty()) {
+            return def;
         }
-        List<RouteFile> resolved = new ArrayList<>(routes.size());
-        for (RouteFile route : routes) {
-            RouteDefinition def = route.definition();
-            if (def.validate().values().stream().noneMatch(rule -> rule.use() != null)) {
-                resolved.add(route);
-                continue;
+        Map<String, io.tesseraql.yaml.model.InputField> input = def.input();
+        if (input.values().stream().anyMatch(field -> field.domain() != null)) {
+            Map<String, io.tesseraql.yaml.model.InputField> merged = new java.util.LinkedHashMap<>();
+            input.forEach((name, field) -> merged.put(name, field.domain() == null
+                    ? field
+                    : field.mergedWith(domains.require(field.domain(), source.toString()))));
+            input = merged;
+        }
+        io.tesseraql.yaml.model.ErrorsSpec errors = def.errors();
+        if (!domains.constraints().isEmpty()) {
+            Map<String, io.tesseraql.yaml.model.ErrorsSpec.ConstraintMapping> catalog = new java.util.LinkedHashMap<>(
+                    domains.constraints());
+            if (errors != null) {
+                catalog.putAll(errors.constraints());
             }
-            Map<String, io.tesseraql.yaml.model.ValidationRule> merged = new java.util.LinkedHashMap<>();
-            def.validate().forEach((id, rule) -> merged.put(id, sets.resolve(id, rule,
-                    route.source().getParent(), route.source().toString())));
-            resolved.add(new RouteFile(route.httpMethod(), route.urlPath(), route.source(),
-                    def.withValidate(merged)));
+            errors = new io.tesseraql.yaml.model.ErrorsSpec(catalog);
         }
-        return resolved;
+        return def.withInputAndErrors(input, errors);
+    }
+
+    private static RouteDefinition withRuleSets(
+            io.tesseraql.yaml.rules.ValidationRuleSets sets, Path source, RouteDefinition def) {
+        if (sets.isEmpty()
+                || def.validate().values().stream().noneMatch(rule -> rule.use() != null)) {
+            return def;
+        }
+        Map<String, io.tesseraql.yaml.model.ValidationRule> merged = new java.util.LinkedHashMap<>();
+        def.validate().forEach((id, rule) -> merged.put(id,
+                sets.resolve(id, rule, source.getParent(), source.toString())));
+        return def.withValidate(merged);
     }
 
     private List<RouteFile> loadRoutes(Path home, List<BrokenRoute> brokenSink) {
