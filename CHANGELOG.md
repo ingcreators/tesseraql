@@ -157,6 +157,12 @@ All notable changes to TesseraQL are documented here. The format follows
   for a command, after the write, so a rollback bypasses it. `lintTool` also never called
   `lintEmit`, so neither half of the omission was visible: the topic-name and query-recipe checks
   now apply to tools as they do to routes and queue consumers.
+- **A file-export's `params:` reach its query** (docs/file-transfers.md): `RequestBinder` filled
+  the SQL parameter map from `route.sql()`, which is null for a `file-export` — its binding lives
+  at `export.sql` — so every declared param resolved to a silent null bind and the export returned
+  whatever the comparison against null returns. A route-level `sql: {params:}` on the same route
+  *did* reach the query because nothing rejected it, so the surface offered two spellings and
+  honored the undocumented one.
 
 - **A polled file that fails to import lands in `moveFailed`** (docs/connectors.md): the import
   ran asynchronously — the transfer service spooled the bytes, recorded the transfer and handed
