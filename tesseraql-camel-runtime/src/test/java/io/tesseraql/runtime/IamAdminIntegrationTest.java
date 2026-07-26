@@ -109,7 +109,8 @@ class IamAdminIntegrationTest {
         HttpResponse<String> before = get("/_tesseraql/admin/users/u2", true);
         assertThat(before.body()).contains("Disable user")
                 .contains("/_tesseraql/admin/users/u2/disable")
-                .contains("data-hc-confirm=\"Disable user bob?\"");
+                .contains(
+                        "data-hc-confirm=\"Disable user bob? Their active sessions end immediately.\"");
 
         // post/redirect/get: the command answers 303 back to the detail page.
         HttpResponse<String> disabled = post("/_tesseraql/admin/users/u2/disable");
@@ -121,6 +122,50 @@ class IamAdminIntegrationTest {
         HttpResponse<String> enabled = post("/_tesseraql/admin/users/u2/enable");
         assertThat(enabled.statusCode()).isEqualTo(303);
         assertThat(get("/_tesseraql/admin/users/u2", true).body()).contains("ACTIVE");
+    }
+
+    /**
+     * Session administration (docs/session-administration.md): the detail page lists the
+     * subject's sessions (timestamps only), "Sign out everywhere" ends them, and disabling —
+     * per-user and bulk alike — invalidates instead of waiting for cookie expiry.
+     */
+    @Test
+    void sessionsPanelRevokesAndDisableEndsSessions() throws Exception {
+        io.tesseraql.security.session.SessionStore sessions = runtime.camelContext()
+                .getRegistry().lookupByNameAndType(
+                        io.tesseraql.camel.TesseraqlProperties.SESSION_STORE_BEAN,
+                        io.tesseraql.security.session.SessionStore.class);
+        try {
+            sessions.create(bob());
+            String detail = get("/_tesseraql/admin/users/u2", true).body();
+            assertThat(detail).contains("Active sessions").contains("1 active session")
+                    .contains("/_tesseraql/admin/users/u2/sessions/revoke");
+
+            HttpResponse<String> revoke = post("/_tesseraql/admin/users/u2/sessions/revoke");
+            assertThat(revoke.statusCode()).isEqualTo(303);
+            assertThat(sessions.sessionsFor("u2")).isEmpty();
+            assertThat(get("/_tesseraql/admin/users/u2", true).body())
+                    .contains("No active sessions");
+
+            // Disabled means disabled: the session dies with the status flip.
+            sessions.create(bob());
+            assertThat(post("/_tesseraql/admin/users/u2/disable").statusCode()).isEqualTo(303);
+            assertThat(sessions.sessionsFor("u2")).isEmpty();
+
+            // Bulk disable invalidates the same way.
+            post("/_tesseraql/admin/users/u2/enable");
+            sessions.create(bob());
+            assertThat(postForm("/_tesseraql/admin/users/bulk", "action=disable&ids=u2")
+                    .statusCode()).isEqualTo(303);
+            assertThat(sessions.sessionsFor("u2")).isEmpty();
+        } finally {
+            post("/_tesseraql/admin/users/u2/enable");
+        }
+    }
+
+    private static io.tesseraql.security.Principal bob() {
+        return new io.tesseraql.security.Principal("u2", "bob", "Bob", null,
+                List.of(), List.of(), List.of(), Map.of());
     }
 
     @Test

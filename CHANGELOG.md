@@ -16,6 +16,13 @@ All notable changes to TesseraQL are documented here. The format follows
   skipped or repeatedly failing source raises the new `TQL-OPS-9007` operational alert,
   riding the existing alert surface and outbox notifier.
 
+- **Session administration in IAM Admin, and disabled means disabled**
+  (docs/session-administration.md): the user detail page gains an *Active sessions* panel
+  (sign-in and expiry times only — session ids never reach a template) with a confirm-gated
+  *Sign out everywhere* action (`iam.admin.write`), and disabling a user — the per-user
+  action and the bulk toolbar alike — now ends every session of that subject immediately. A
+  revoked account previously kept browsing until its cookies expired.
+
 - **The schema sidecar lifecycle closes inside Studio** (docs/studio-schema-lifecycle.md): a
   *Refresh schema* button on the docs schema page introspects the runtime's own datasources
   live and rewrites `.tesseraql/docs/schema.json` — the SQL builder, migration DDL builder,

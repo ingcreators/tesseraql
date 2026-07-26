@@ -10,3 +10,4 @@ web/_tesseraql/admin/users/{id}/detail.html
 web/_tesseraql/admin/users/{id}/disable/post.yml
 web/_tesseraql/admin/users/{id}/enable/post.yml
 web/_tesseraql/admin/users/{id}/get.yml
+web/_tesseraql/admin/users/{id}/sessions/revoke/post.yml
