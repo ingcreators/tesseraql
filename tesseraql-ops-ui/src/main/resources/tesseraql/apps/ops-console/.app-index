@@ -4,6 +4,9 @@ config/tesseraql.yml
 web/_tesseraql/ops/console/executions/{id}/execution.html
 web/_tesseraql/ops/console/executions/{id}/get.yml
 web/_tesseraql/ops/console/get.yml
+web/_tesseraql/ops/console/jobs/get.yml
+web/_tesseraql/ops/console/jobs/jobs.html
+web/_tesseraql/ops/console/jobs/run/post.yml
 web/_tesseraql/ops/console/outbox/get.yml
 web/_tesseraql/ops/console/outbox/outbox.html
 web/_tesseraql/ops/console/outbox/redeliver/post.yml

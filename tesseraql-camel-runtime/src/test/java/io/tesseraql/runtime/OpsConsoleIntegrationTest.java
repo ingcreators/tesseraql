@@ -114,7 +114,7 @@ class OpsConsoleIntegrationTest {
                 "/_tesseraql/ops/console/traces"}) {
             String body = get(path, true).body();
             assertThat(body).contains("hc-shell__sidebar").contains("data-hc-nav-current")
-                    .contains(">Overview<").contains(">Traces<")
+                    .contains(">Overview<").contains(">Jobs<").contains(">Traces<")
                     .contains(">Transfers<").contains(">Outbox<")
                     // the other system apps stay reachable
                     .contains(">Studio<").contains(">IAM Admin<")
@@ -248,6 +248,43 @@ class OpsConsoleIntegrationTest {
 
         assertThat(response.statusCode()).isEqualTo(403);
         assertThat(outboxStore().find(deadId).orElseThrow().status()).isEqualTo("DEAD");
+    }
+
+    @Test
+    void jobsPageListsTheScopedCatalogWithRunButtons() throws Exception {
+        String body = getWith("/_tesseraql/ops/console/jobs", scopedCookie).body();
+
+        assertThat(body).contains("Batch jobs").contains("user.dailyMaintenance")
+                .contains("cron 0 0 2 * * ?")
+                .contains("action=\"/_tesseraql/ops/console/jobs/run\"");
+        // Deny-by-default: a caller without ops.app.* grants sees an empty catalog.
+        assertThat(getWith("/_tesseraql/ops/console/jobs", adminCookie).body())
+                .contains("No jobs declared.");
+    }
+
+    @Test
+    void runStartsAJobRecordsTheActorAndRedirectsToItsExecution() throws Exception {
+        HttpResponse<String> response = postForm("/_tesseraql/ops/console/jobs/run",
+                "id=user.dailyMaintenance", scopedCookie, scopedCsrf);
+
+        assertThat(response.statusCode()).isEqualTo(303);
+        String location = response.headers().firstValue("location").orElseThrow();
+        assertThat(location).contains("/_tesseraql/ops/console/executions/")
+                .contains("started=1");
+
+        String detail = getWith(location, scopedCookie).body();
+        assertThat(detail).contains("Job started.").contains("Triggered by")
+                .contains("ops-admin").contains(">manual<");
+    }
+
+    @Test
+    void runRequiresTheRunPolicyAndScope() throws Exception {
+        // BATCH_VIEWER satisfies ops.batch.view but not ops.batch.run.
+        assertThat(postForm("/_tesseraql/ops/console/jobs/run", "id=user.dailyMaintenance",
+                viewerCookie, viewerCsrf).statusCode()).isEqualTo(403);
+        // No ops.app.* grant: the job reads exactly like an unknown one.
+        assertThat(postForm("/_tesseraql/ops/console/jobs/run", "id=user.dailyMaintenance",
+                adminCookie, adminCsrf).statusCode()).isEqualTo(404);
     }
 
     private static io.tesseraql.operations.outbox.JdbcOutboxStore outboxStore() {
