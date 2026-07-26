@@ -251,14 +251,44 @@ final class PollingRouteBuilder extends RouteBuilder {
                     + (password.isPresent() ? "both" : "neither"));
         }
         if (password.isPresent()) {
-            return "&password=RAW(" + password.get() + ")";
+            // A password authenticates us; an FTPS client certificate can accompany it, since
+            // mutual TLS and a login are different questions the server may ask together.
+            return "&password=RAW(" + password.get() + ")"
+                    + ("ftps".equals(scheme) ? ftpsClientCertificate(credential) : "");
         }
         if (!"sftp".equals(scheme)) {
             throw new TqlException(CREDENTIAL_METHOD, "Poll credential '" + credential.name()
                     + "' declares privateKeyFile:, which only an sftp source can use");
         }
+        return sftpKeyOptions(privateKey.get(), credential);
+    }
+
+    /**
+     * An FTPS client certificate, when the credential declares a keystore.
+     *
+     * <p>Mutual TLS is how a partner identifies <em>us</em>, and it was unreachable: the trust
+     * store proved who answered, and nothing carried a certificate the other way, so an FTPS
+     * server requiring one could not be polled at all. The password rides {@code RAW(...)} like
+     * every other secret, and {@code type} defaults rather than being demanded, since a keystore
+     * that is not PKCS#12 is the exception.
+     */
+    private String ftpsClientCertificate(PollConnectors.Credential credential) {
+        java.util.Optional<String> keyStore = credential.setting("keyStoreFile");
+        if (keyStore.isEmpty()) {
+            return "";
+        }
+        StringBuilder options = new StringBuilder("&ftpClient.keyStore.file=")
+                .append(keyStore.get());
+        credential.setting("keyStorePassword").ifPresent(password -> options
+                .append("&ftpClient.keyStore.password=RAW(").append(password).append(')'));
+        credential.setting("keyStoreType")
+                .ifPresent(type -> options.append("&ftpClient.keyStore.type=").append(type));
+        return options.toString();
+    }
+
+    private String sftpKeyOptions(String privateKeyFile, PollConnectors.Credential credential) {
         StringBuilder key = new StringBuilder("&privateKeyFile=RAW(")
-                .append(privateKey.get()).append(')');
+                .append(privateKeyFile).append(')');
         credential.setting("privateKeyPassphrase").ifPresent(passphrase -> key
                 .append("&privateKeyPassphrase=RAW(").append(passphrase).append(')'));
         return key.toString();

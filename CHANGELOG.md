@@ -8,6 +8,13 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **FTPS client certificates for poll sources** (docs/connectors.md): a poll credential may
+  declare `keyStoreFile:` (with `keyStorePassword:` and an optional `keyStoreType:`) and the
+  source presents it. Mutual TLS was unreachable: the trust store proved who answered and nothing
+  carried a certificate the other way, so an FTPS server requiring one could not be polled at all.
+  A password may accompany the certificate — mutual TLS and a login are separate questions a
+  server may ask together.
+
 - **Studio's validation builder can reference a shared rule** (docs/validation-rule-sets.md): a
   `use:` operation offers the rules declared under `rules/` by name and generates the reference
   with its whole bind contract laid out. The builder previously emitted only inline rules, so an
