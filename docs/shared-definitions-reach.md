@@ -180,9 +180,13 @@ catch up. `domains/` and `rules/` get their own small schemas and their own file
    at compile). *Shipped:* `TQL-FIELD-4609` took the declaration-side load error, because
    4604..4608 are load errors and 4610..4612 are lint warnings — a warning at 4609 would have
    broken the only ordering the family has. The identical-copy warning took `TQL-FIELD-4613`.
-5. **Portal and Studio.** A Rules page mirroring the Domains page (each rule, its contract, the
-   routes and tools referencing it); `use()`/`code()` carried into `RouteSpec`; the missing
-   constraint chips; Studio's rule builder offering `use:` and emitting `params:`.
+5. **Portal and Studio.** A Rules page mirroring the Domains page, and Studio's rule builder
+   offering `use:` and emitting `params:`, remain.
+   **The route page's own gaps are shipped:** `use()` and `code()` are carried into `RouteSpec`,
+   so a rule referencing a shared one says which one and under what code, and the missing
+   constraint chips (`pattern`, `minLength`, `requiredWhen`) render. Those three were already on
+   the Domains page and in OpenAPI; dropping them on the route page meant an input carrying a
+   real constraint read as unconstrained exactly where a reviewer decides whether it is safe.
 
 ## Lint and tooling
 

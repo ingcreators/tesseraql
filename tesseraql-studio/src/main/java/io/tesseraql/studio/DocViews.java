@@ -713,6 +713,18 @@ public final class DocViews {
         if (input.format() != null) {
             chips.add("format " + input.format());
         }
+        // OpenAPI and the Domains page rendered these three all along; the route page did not,
+        // so a pattern-constrained input read as unconstrained exactly where a reviewer looks to
+        // decide whether it is safe.
+        if (input.pattern() != null) {
+            chips.add("pattern " + input.pattern());
+        }
+        if (input.minLength() != null) {
+            chips.add("minLength " + input.minLength());
+        }
+        if (input.requiredWhen() != null) {
+            chips.add("required when " + input.requiredWhen());
+        }
         return chips;
     }
 
