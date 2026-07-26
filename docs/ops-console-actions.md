@@ -91,11 +91,11 @@ policy. Honest, simple, and consistent with deny-by-default doing the real work.
 
 ## Follow-up candidates (not in these slices)
 
-- A read-only **audit page** over `JdbcRouteAuditStore.recent` (the API exists,
-  flag-gated; the page renders only when the store is enabled).
-- Health detail (per-datasource probe map, the DOWN state), a version/build panel,
-  and session administration — each rides the same action machinery once it
-  exists, and each is its own design conversation.
+- ~~A read-only **audit page**~~, ~~health detail and a version/build panel~~ — designed
+  in [ops-console-coverage.md](ops-console-coverage.md), together with the params form
+  the jobs slice deferred.
+- ~~Session administration~~ — shipped on the IAM Admin user page
+  ([session-administration.md](session-administration.md)).
 
 ## Testing
 

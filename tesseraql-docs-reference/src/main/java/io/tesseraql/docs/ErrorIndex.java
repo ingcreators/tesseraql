@@ -424,7 +424,8 @@ final class ErrorIndex {
             "shared-definitions-reach.md", "framework-surface-parity.md",
             "yaml-surface-consumers.md", "ops-console-actions.md",
             "studio-schema-lifecycle.md", "session-administration.md",
-            "poll-source-status.md", "poll-source-metrics.md");
+            "poll-source-status.md", "poll-source-metrics.md",
+            "ops-console-coverage.md");
 
     /**
      * Marks each code with the cookbook pages whose markdown mentions it — every
