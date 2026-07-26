@@ -197,8 +197,15 @@ you have made it fail; this one passed on the first run and was already incapabl
    *Three entry points, not one.* The ops API, `runJob`, and the per-tenant variant all start
    jobs, and binding in whichever one is being fixed is the "two spellings, one working" shape
    this document keeps finding; all three share `bindJobParams`.
-   **Still open:** Studio's job page, which should offer the declared parameters rather than a
-   free-form JSON box.
+   **Correction, from going to build it:** there is no job page to fix. The ops console has
+   overview, executions, outbox, traces and transfers — no jobs page, and no run form anywhere in
+   the bundled apps. Nothing offers a free-form JSON box because nothing offers a box at all; the
+   ops API's `POST /_tesseraql/ops/batch/jobs/{id}/run` is the only way to start a job by hand,
+   and it now binds the declared parameters like every other entry point.
+   So this is not a slice of *this* document. Building a jobs page is a feature with its own
+   design — which jobs a caller may see and run is the ops scope question, and a parameter form
+   is only worth building once that is answered. Recorded here so the next reader does not go
+   looking for the box either.
 4. ~~**`items` wiring**~~ **— the binding half is shipped.** Element coercion and validation now
    run, and a declared array keeps its elements.
    *Worse than the audit recorded, as it turned out.* The finding said `items` was unread; the
