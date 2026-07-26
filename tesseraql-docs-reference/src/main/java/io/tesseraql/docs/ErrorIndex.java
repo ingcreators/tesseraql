@@ -423,7 +423,8 @@ final class ErrorIndex {
             "route-governance-parity.md", "poll-connector-hardening.md",
             "shared-definitions-reach.md", "framework-surface-parity.md",
             "yaml-surface-consumers.md", "ops-console-actions.md",
-            "studio-schema-lifecycle.md");
+            "studio-schema-lifecycle.md", "session-administration.md",
+            "poll-source-status.md");
 
     /**
      * Marks each code with the cookbook pages whose markdown mentions it — every
