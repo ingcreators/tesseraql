@@ -21,6 +21,11 @@ sql:
     tenantId: principal.tenantId
 
 response:
+  # Confirming enrollment elevates the session (a stronger factor), so the session id
+  # rotates in place - the pre-elevation id stops working the moment this succeeds
+  # (docs/session-rotation.md).
+  session:
+    rotate: true
   redirect:
     status: 303
     location: /_tesseraql/account

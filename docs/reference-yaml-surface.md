@@ -177,6 +177,7 @@ Declarative pagination: the framework appends the dialect clause; authored SQL c
 | `redirect` | [object](#responseredirect) |  |
 | `file` | [object](#responsefile) |  |
 | `onError` | [object](#responseonerror) |  |
+| `session` | [object](#responsesession) | Browser-session handling for the response (docs/session-rotation.md). |
 
 #### response.json
 
@@ -238,6 +239,14 @@ Declarative pagination: the framework appends the dialect clause; authored SQL c
 | --- | --- | --- |
 | `retarget` | string |  |
 | `reswap` | string |  |
+
+#### response.session
+
+Browser-session handling for the response (docs/session-rotation.md).
+
+| Property | Type | Description |
+| --- | --- | --- |
+| `rotate` | boolean | Re-issue the caller's session cookie in place on success: a fresh id and CSRF token, the old id invalidated before the response leaves. Declare on routes that elevate the session (confirming an MFA enrollment); bearer or public callers are untouched. |
 
 ### trigger
 

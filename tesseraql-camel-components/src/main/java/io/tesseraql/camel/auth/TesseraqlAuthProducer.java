@@ -49,6 +49,7 @@ public class TesseraqlAuthProducer extends DefaultProducer {
                 case "authenticate" -> authenticate(exchange);
                 case "authorize" -> authorize(exchange);
                 case "csrf" -> csrf(exchange);
+                case "rotate" -> rotate(exchange);
                 default -> throw new TqlException(UNSUPPORTED,
                         "Unsupported tesseraql-auth operation: " + operation);
             }
@@ -57,6 +58,28 @@ public class TesseraqlAuthProducer extends DefaultProducer {
             throw ex;
         } finally {
             span.end();
+        }
+    }
+
+    /**
+     * Re-issues the caller's session cookie in place (docs/session-rotation.md): a fresh
+     * id and CSRF token, the old id invalidated first. No session cookie (a bearer or
+     * public caller on the same route) and no session store are both no-ops - the
+     * directive describes browser sessions, and a shared route must not fail for the
+     * caller without one.
+     */
+    private void rotate(Exchange exchange) {
+        SessionStore sessions = endpoint.getCamelContext().getRegistry().lookupByNameAndType(
+                TesseraqlProperties.SESSION_STORE_BEAN, SessionStore.class);
+        if (sessions == null) {
+            return;
+        }
+        String cookieHeader = exchange.getMessage().getHeader("Cookie", String.class);
+        String fresh = sessions.rotate(sessions.sessionIdFromCookie(cookieHeader));
+        if (fresh != null) {
+            // Login's exact attributes (LoginRouteBuilder): Secure stays the edge's concern.
+            exchange.getMessage().setHeader("Set-Cookie", sessions.cookieName() + "=" + fresh
+                    + "; Path=/; HttpOnly; SameSite=Lax");
         }
     }
 

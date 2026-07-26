@@ -24,6 +24,33 @@ class InMemorySessionStoreTest {
     }
 
     @Test
+    void rotateMintsAFreshIdAndCsrfAndKillsTheOldOne() {
+        InMemorySessionStore store = new InMemorySessionStore(
+                SessionStore.DEFAULT_COOKIE_NAME, Duration.ofMinutes(5));
+        String old = store.create(principal("alice"));
+        String oldCsrf = store.session(old).csrfToken();
+
+        String fresh = store.rotate(old);
+
+        assertThat(fresh).isNotNull().isNotEqualTo(old);
+        // The old id is invalidated before the response leaves - no rotate-later window.
+        assertThat(store.session(old)).isNull();
+        SessionStore.Session rotated = store.session(fresh);
+        assertThat(rotated.principal().subject()).isEqualTo("alice");
+        // The CSRF token is session-bound state and rotates with it.
+        assertThat(rotated.csrfToken()).isNotEqualTo(oldCsrf);
+    }
+
+    @Test
+    void rotatingAnUnknownOrNullIdIsANoOpNotACrash() {
+        InMemorySessionStore store = new InMemorySessionStore(
+                SessionStore.DEFAULT_COOKIE_NAME, Duration.ofMinutes(5));
+
+        assertThat(store.rotate("unknown")).isNull();
+        assertThat(store.rotate(null)).isNull();
+    }
+
+    @Test
     void aSessionPastItsTimeToLiveNoLongerResolves() throws Exception {
         InMemorySessionStore store = new InMemorySessionStore(
                 SessionStore.DEFAULT_COOKIE_NAME, Duration.ofMillis(40));

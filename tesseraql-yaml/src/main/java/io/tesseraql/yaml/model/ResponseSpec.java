@@ -9,7 +9,25 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public record ResponseSpec(JsonResponse json, HtmlResponse html, StreamResponse stream,
-        RedirectResponse redirect, FileResponse file, OnError onError) {
+        RedirectResponse redirect, FileResponse file, OnError onError,
+        SessionResponse session) {
+
+    /**
+     * Browser-session handling for the response (docs/session-rotation.md): {@code rotate}
+     * re-issues the caller's session cookie — a fresh id and CSRF token, the old id
+     * invalidated before the response leaves — on a successful execution. Declared on
+     * routes that elevate the session (confirming an MFA enrollment); a caller without a
+     * session cookie (bearer, public) is untouched.
+     *
+     * @param rotate re-issue the session id in place on success
+     */
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public record SessionResponse(Boolean rotate) {
+
+        public boolean rotates() {
+            return Boolean.TRUE.equals(rotate);
+        }
+    }
 
     /**
      * How an htmx caller's <em>error</em> response is steered (design ch. 6.4): the error renderer
