@@ -383,6 +383,7 @@ public final class ErrorResponseRenderer implements Processor {
                 case 4030, 4031 -> 403; // read-only / caller lacks a Studio edit role (backlog D6)
                 case 4040 -> 404;
                 case 4090 -> 409; // a draft applied over a concurrently changed source (backlog D5)
+                case 4236 -> 409; // baseline capture without a schema sidecar to copy
                 // 4221: invalid draft; 4223: apply not confirmed; 4232: egress change not confirmed
                 case 4221, 4223, 4232 -> 422;
                 default -> 500;

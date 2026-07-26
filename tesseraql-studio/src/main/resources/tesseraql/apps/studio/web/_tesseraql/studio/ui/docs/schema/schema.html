@@ -4,15 +4,26 @@
 <th:block id="page-header">
   <span class="hc-spacer"></span>
   <div class="hc-cluster">
+    <form th:if="${sch.editable}" method="post" action="/_tesseraql/studio/ui/docs/schema/refresh">
+      <input type="hidden" name="_csrf" th:value="${_csrf}">
+      <button class="hc-button" data-size="sm" type="submit">Refresh schema</button>
+    </form>
     <a class="hc-button" data-variant="ghost" data-size="sm" href="/_tesseraql/studio/ui/docs">&larr; docs</a>
   </div>
 </th:block>
 <div id="page-content" class="hc-stack">
+  <p class="hc-alert" data-variant="success" role="status" th:if="${!#strings.isEmpty(refreshed)}">Schema refreshed from the live database.</p>
   <section class="hc-card" th:unless="${sch.hasSchema}">
     <h2>Schema</h2>
-    <div class="hc-empty">
+    <div class="hc-empty" th:if="${sch.schemaCorrupt}">
+      <p class="hc-empty__title">The schema sidecar cannot be parsed.</p>
+      <p><code>.tesseraql/docs/schema.json</code> exists but is not a valid schema document
+        &mdash; refresh to regenerate it.</p>
+    </div>
+    <div class="hc-empty" th:unless="${sch.schemaCorrupt}">
       <p class="hc-empty__title">No schema introspected yet.</p>
-      <p>Run the <code>tesseraql:schema</code> goal against the migrated database to populate table definitions.</p>
+      <p>Refresh the schema above, or run the <code>tesseraql:schema</code> goal in CI, to
+        populate table definitions from the migrated database.</p>
     </div>
   </section>
   <section class="hc-card" th:if="${sch.hasSchema}" th:each="ds : ${sch.datasources}">

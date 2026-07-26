@@ -66,6 +66,8 @@ public final class StudioService {
     private static final TqlErrorCode ROUTE_FORM = new TqlErrorCode(TqlDomain.STUDIO, 4230);
     private static final TqlErrorCode CONNECTORS = new TqlErrorCode(TqlDomain.STUDIO, 4231);
     private static final TqlErrorCode RECORDER = new TqlErrorCode(TqlDomain.STUDIO, 4233);
+    /** Capturing a baseline without a schema sidecar to copy (409). */
+    private static final TqlErrorCode NO_SCHEMA = new TqlErrorCode(TqlDomain.STUDIO, 4236);
     private static final java.util.regex.Pattern SECRET_REF = java.util.regex.Pattern
             .compile("\\$\\{secret\\.[A-Za-z0-9_.-]+\\}");
     private static final java.util.regex.Pattern EGRESS_HOST = java.util.regex.Pattern
@@ -1829,6 +1831,57 @@ public final class StudioService {
      */
     public void recordCopilotDraft(String actor, String target) {
         recordAudit(actor, "copilot", target);
+    }
+
+    /**
+     * Writes the introspected schema sidecar (docs/studio-schema-lifecycle.md): the caller
+     * introspected the runtime's own datasources, this persists the same {@code SchemaOverlay}
+     * envelope the build-time {@code schema} goal emits, confined and audited like every
+     * Studio write.
+     */
+    public void refreshSchema(
+            java.util.Map<String, io.tesseraql.yaml.scaffold.CatalogSchema> datasources,
+            String actor) {
+        if (readOnly) {
+            throw new TqlException(READ_ONLY,
+                    "Studio is read-only; refreshing the schema is disabled");
+        }
+        Path target = resolve(DocService.SCHEMA_PATH);
+        try {
+            Files.createDirectories(target.getParent());
+            Files.writeString(target, jsonMapper.writerWithDefaultPrettyPrinter()
+                    .writeValueAsString(new SchemaOverlay(1,
+                            java.time.Instant.now().toString(), datasources)));
+        } catch (IOException ex) {
+            throw new UncheckedIOException(ex);
+        }
+        recordAudit(actor, "schema-refresh", DocService.SCHEMA_PATH);
+    }
+
+    /**
+     * Captures both diff baselines in one action (docs/studio-schema-lifecycle.md):
+     * {@code schema.baseline.json} as a copy of the current schema sidecar, and
+     * {@code openapi.baseline.json} from the live OpenAPI document the caller rendered —
+     * no intermediate {@code openapi.json} file exists at runtime.
+     */
+    public void captureBaselines(String openApiJson, String actor) {
+        if (readOnly) {
+            throw new TqlException(READ_ONLY,
+                    "Studio is read-only; capturing baselines is disabled");
+        }
+        Path schema = resolve(DocService.SCHEMA_PATH);
+        if (!Files.isRegularFile(schema)) {
+            throw new TqlException(NO_SCHEMA,
+                    "No schema sidecar to baseline; refresh the schema first.");
+        }
+        try {
+            Files.copy(schema, resolve(DocService.SCHEMA_BASELINE_PATH),
+                    java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+            Files.writeString(resolve(DocService.OPENAPI_BASELINE_PATH), openApiJson);
+        } catch (IOException ex) {
+            throw new UncheckedIOException(ex);
+        }
+        recordAudit(actor, "baseline-capture", ".tesseraql/docs");
     }
 
     /**

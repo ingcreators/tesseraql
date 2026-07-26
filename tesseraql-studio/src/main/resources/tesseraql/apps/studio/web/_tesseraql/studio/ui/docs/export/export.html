@@ -59,8 +59,9 @@
       </li>
     </ul>
   </th:block>
-  <p class="hc-field__label" th:unless="${docs.hasBaseline}">No baseline captured. Copy this app's
-    <code>openapi.json</code> to <code th:text="${docs.baselinePath}"></code> (for example at release
+  <p class="hc-field__label" th:unless="${docs.hasBaseline}">No baseline captured. Use
+    <em>Capture baselines now</em> on the
+    <a href="/_tesseraql/studio/ui/docs/release-diff">release diff page</a> (for example at release
     time) to track what changed since then.</p>
 </section>
 <section class="hc-card">

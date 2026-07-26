@@ -2404,6 +2404,46 @@ public final class TesseraqlRuntime implements AutoCloseable {
                                             java.nio.charset.StandardCharsets.UTF_8));
                             return model;
                         })
+                        // Refresh schema (docs/studio-schema-lifecycle.md): live introspection
+                        // over the runtime's own pools - the same CatalogIntrospector Scaffold
+                        // uses - persisted as the SchemaOverlay envelope the build-time schema
+                        // goal emits, so the SQL/DDL builders and docs pages stop depending on
+                        // an out-of-band goal run. Edit-gated, audited.
+                        .register("studio.schemaRefresh", params -> {
+                            studioAccess.requireEdit(params.get("roles"));
+                            java.util.Map<String, io.tesseraql.yaml.scaffold.CatalogSchema> introspected = new java.util.LinkedHashMap<>();
+                            io.tesseraql.yaml.scaffold.CatalogIntrospector introspector = new io.tesseraql.yaml.scaffold.CatalogIntrospector();
+                            for (Map.Entry<String, com.zaxxer.hikari.HikariDataSource> entry : dataSources
+                                    .entrySet()) {
+                                try (java.sql.Connection connection = entry.getValue()
+                                        .getConnection()) {
+                                    introspected.put(entry.getKey(),
+                                            introspector.introspect(connection));
+                                } catch (java.sql.SQLException ex) {
+                                    throw new io.tesseraql.core.error.TqlException(
+                                            new io.tesseraql.core.error.TqlErrorCode(
+                                                    io.tesseraql.core.error.TqlDomain.APP, 5204),
+                                            "Schema introspection failed for datasource '"
+                                                    + entry.getKey() + "': " + ex.getMessage());
+                                }
+                            }
+                            studio.refreshSchema(introspected, actorOf(params));
+                            return java.util.Map.of("refreshed", true,
+                                    "datasources", introspected.size());
+                        })
+                        // Capture baselines (docs/studio-schema-lifecycle.md): both diff anchors
+                        // in one action - schema.baseline.json copies the sidecar, and the
+                        // OpenAPI baseline persists the live document (no openapi.json file
+                        // exists at runtime). Edit-gated, audited.
+                        .register("studio.baselineCapture", params -> {
+                            studioAccess.requireEdit(params.get("roles"));
+                            // A fresh DocService reads the manifest live, like the migration
+                            // providers above - the OpenAPI document is generated, not cached.
+                            studio.captureBaselines(
+                                    new io.tesseraql.studio.DocService(manifest).openApiJson(),
+                                    actorOf(params));
+                            return java.util.Map.of("captured", true);
+                        })
                         // Migrate now (roadmap Phase 42): applies the app's pending migrations to
                         // the dev datasource on demand, closing the schema -> scaffold -> serve
                         // loop without a process bounce. Same Flyway path as startup (main set +
@@ -2618,14 +2658,21 @@ public final class TesseraqlRuntime implements AutoCloseable {
                             }
                             return model;
                         })
-                        .register("docs.schema", params -> io.tesseraql.studio.DocViews.schema(
-                                doc.appName(), doc.schema(),
-                                params.get("sort") == null
-                                        ? null
-                                        : String.valueOf(params.get("sort")),
-                                params.get("dir") == null
-                                        ? null
-                                        : String.valueOf(params.get("dir"))))
+                        .register("docs.schema", params -> {
+                            Map<String, Object> model = io.tesseraql.studio.DocViews.schema(
+                                    doc.appName(), doc.schema(),
+                                    params.get("sort") == null
+                                            ? null
+                                            : String.valueOf(params.get("sort")),
+                                    params.get("dir") == null
+                                            ? null
+                                            : String.valueOf(params.get("dir")));
+                            // The refresh action's gate and the honest empty state
+                            // (docs/studio-schema-lifecycle.md).
+                            model.put("editable", studioAccess.canEdit(params.get("roles")));
+                            model.put("schemaCorrupt", doc.schemaCorrupt());
+                            return model;
+                        })
                         .register("docs.table", params -> {
                             String ds = String.valueOf(params.get("ds"));
                             String name = String.valueOf(params.get("name"));
@@ -2665,6 +2712,8 @@ public final class TesseraqlRuntime implements AutoCloseable {
                         .register("docs.releaseDiff", params -> {
                             Map<String, Object> model = new java.util.LinkedHashMap<>();
                             model.put("appName", doc.appName());
+                            // The capture action's gate (docs/studio-schema-lifecycle.md).
+                            model.put("editable", studioAccess.canEdit(params.get("roles")));
                             model.put("hasApiBaseline", doc.hasApiBaseline());
                             io.tesseraql.studio.DocViews.applyApiChangelog(model,
                                     doc.apiChangelog());
