@@ -207,8 +207,12 @@ you have made it fail; this one passed on the first run and was already incapabl
    `params.<name>` put that text into SQL. Not unvalidated but corrupted, and quietly, because
    `body.<name>` kept the real list and most routes happened to read that instead. A non-list
    value for a declared array is now refused rather than stringified.
-   **Still open:** OpenAPI `items` and the MCP array type, which describe the surface rather than
-   enforce it.
+   **The descriptive half is shipped too.** OpenAPI emits the element type and enum, and an MCP
+   tool's declared array is an `array` rather than falling through to `string` — it did, so a
+   model was told to send text where the framework rejects anything but a list, a rejection the
+   model cannot diagnose because the schema it was given is what it followed. Both descriptions
+   were looser than the contract a caller must satisfy, which is the direction of error that
+   costs someone a request they had no way to anticipate.
 5. **`DISPLAY_ONLY` in the generated reference** (guard step 4).
 
 ## Lint and tooling

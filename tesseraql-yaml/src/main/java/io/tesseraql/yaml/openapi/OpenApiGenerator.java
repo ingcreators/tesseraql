@@ -356,8 +356,12 @@ public final class OpenApiGenerator {
      * ride into the contract — enum, length and value bounds, the regex pattern, and the
      * semantic string formats ({@code url} maps to OpenAPI's {@code uri}). Deterministic key
      * order.
+     *
+     * <p>Package-private rather than private for its test: the gallery declares no array input,
+     * and reaching this through a whole manifest to assert one node would test the fixture more
+     * than the mapping.
      */
-    private static Map<String, Object> fieldSchema(InputField field) {
+    static Map<String, Object> fieldSchema(InputField field) {
         Map<String, Object> schema = new LinkedHashMap<>();
         schema.put("type", schemaType(field));
         if (field.enumValues() != null && !field.enumValues().isEmpty()) {
@@ -381,7 +385,29 @@ public final class OpenApiGenerator {
         if (field.max() != null) {
             schema.put("maximum", field.max());
         }
+        // An array's element shape. The framework validates elements against items: now, so a
+        // document that said `type: array` and stopped there described a looser contract than
+        // the one a caller actually has to satisfy — the direction of error that costs a caller
+        // a rejected request they had no way to anticipate.
+        if ("array".equals(schema.get("type")) && field.items() != null) {
+            Map<String, Object> items = new LinkedHashMap<>();
+            items.put("type", jsonType(field.items().type()));
+            if (!field.items().enumValues().isEmpty()) {
+                items.put("enum", field.items().enumValues());
+            }
+            schema.put("items", items);
+        }
         return schema;
+    }
+
+    /** A declared element type as JSON Schema names it; unknown or absent means any. */
+    private static String jsonType(String declared) {
+        return switch (declared == null ? "string" : declared) {
+            case "integer" -> "integer";
+            case "number" -> "number";
+            case "boolean" -> "boolean";
+            default -> "string";
+        };
     }
 
     private static String schemaType(InputField field) {

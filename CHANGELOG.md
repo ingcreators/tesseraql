@@ -177,6 +177,12 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Fixed
 
+- **OpenAPI and MCP describe an array input's elements** (docs/reference-yaml-surface.md): the
+  OpenAPI document emitted `type: array` and stopped, and an MCP tool's declared array fell
+  through to `"string"` — so a model was told to send text where the framework rejects anything
+  but a list, a rejection it cannot diagnose because the schema it was given is what it followed.
+  Both now carry the element type and enum that `items:` declares and the binder enforces.
+
 - **The route page shows every constraint an input declares** (docs/documentation-portal.md):
   `pattern`, `minLength` and `requiredWhen` were rendered by OpenAPI and the Domains page but not
   by the route page, so an input carrying a real constraint read as unconstrained exactly where a
