@@ -124,4 +124,6 @@ export const EXCLUDED = [
   'poll-source-status.md',
   // Poll source metrics exposition, 2026-07-26.
   'poll-source-metrics.md',
+  // Ops console coverage (audit page, health panel, params form), 2026-07-26.
+  'ops-console-coverage.md',
 ];
