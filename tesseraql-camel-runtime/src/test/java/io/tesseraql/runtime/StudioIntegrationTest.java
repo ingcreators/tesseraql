@@ -2448,6 +2448,10 @@ class StudioIntegrationTest {
 
         assertThat(response.statusCode()).isEqualTo(200);
         assertThat(response.body()).contains("Validation builder").contains("name=\"operation\"");
+        // The use: option and its shared-rule list. Asserted here rather than in a unit test
+        // because only this path evaluates the template — the model name is the kind of mistake
+        // that compiles, passes every unit test, and answers 500.
+        assertThat(response.body()).contains("use a shared rule").contains("id=\"vb-rules\"");
     }
 
     @Test

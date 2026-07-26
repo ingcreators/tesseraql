@@ -8,6 +8,12 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **Studio's validation builder can reference a shared rule** (docs/validation-rule-sets.md): a
+  `use:` operation offers the rules declared under `rules/` by name and generates the reference
+  with its whole bind contract laid out. The builder previously emitted only inline rules, so an
+  author generating a SQL rule got an inline copy with unbound binds — nudged into exactly the
+  duplication shared rules exist to eliminate, by the tool meant to help.
+
 - **A shared validation rules page in the documentation portal**
   (docs/validation-rule-sets.md): every rule declared under `rules/` with its kind, bind contract
   and default code, and the routes referencing it with `use:`. validation-rule-sets.md promised

@@ -59,12 +59,16 @@
             <option value="one-of">one of (comma list)</option>
             <option value="expression">custom expression</option>
             <option value="sql">SQL rule (file)</option>
+            <option value="use">use a shared rule (rules/)</option>
           </select>
         </div>
         <div class="hc-field hc-field--grow">
           <label class="hc-field__label" for="vb-value">Value / expression / SQL file</label>
-          <input class="hc-input" id="vb-value" name="value" autocomplete="off"
-                 placeholder="18 · 'ACTIVE' · a,b,c · body.a == body.b · validate-x.sql">
+          <input class="hc-input" id="vb-value" name="value" autocomplete="off" list="vb-rules"
+                 placeholder="18 · 'ACTIVE' · a,b,c · body.a == body.b · validate-x.sql · ruleName">
+          <datalist id="vb-rules">
+            <option th:each="r : ${vb.sharedRules}" th:value="${r.name}"></option>
+          </datalist>
         </div>
         <div class="hc-field">
           <label class="hc-field__label" for="vb-value2">Value 2 (range)</label>
