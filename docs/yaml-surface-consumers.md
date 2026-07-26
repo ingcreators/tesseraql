@@ -190,8 +190,15 @@ you have made it fail; this one passed on the first run and was already incapabl
 2. **The registry and its drift test** (guard steps 1–3), seeded with the surviving ~245 fields.
    Landing this before the wiring work means the two wired fields arrive with their registrations
    already required.
-3. **`jobs: params:` wiring** — the larger of the two, since it introduces job input validation and
-   touches the operations API, the scheduler, and Studio's job page.
+3. ~~**`jobs: params:` wiring**~~ **— the binding is shipped.** A job's declared parameters are
+   bound the way a route binds its `input:`, so a numeric parameter arrives coerced and a missing
+   required one is refused before the job starts rather than surfacing later as an unbound SQL
+   parameter — an error that names the SQL instead of the input.
+   *Three entry points, not one.* The ops API, `runJob`, and the per-tenant variant all start
+   jobs, and binding in whichever one is being fixed is the "two spellings, one working" shape
+   this document keeps finding; all three share `bindJobParams`.
+   **Still open:** Studio's job page, which should offer the declared parameters rather than a
+   free-form JSON box.
 4. ~~**`items` wiring**~~ **— the binding half is shipped.** Element coercion and validation now
    run, and a declared array keeps its elements.
    *Worse than the audit recorded, as it turned out.* The finding said `items` was unread; the
