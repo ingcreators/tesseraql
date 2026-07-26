@@ -8,6 +8,14 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **The editor knows the shared definitions** (docs/vscode-extension.md): `tesseraql symbols`
+  now prints the field domains declared under `domains/` and the validation rules declared under
+  `rules/` (name, file, line), and the VS Code extension (0.3.2) completes and go-to-defines
+  `domain:` and `use:` values over them, exactly as it already did `policy:` and `message:`. The
+  explorer gains *Domains* and *Rules* sections — shared definitions were referenceable
+  everywhere but visible nowhere in the editor. A pre-0.8 CLI omits the two arrays and the
+  extension degrades those features to empty instead of rejecting the document.
+
 - **FTPS client certificates for poll sources** (docs/connectors.md): a poll credential may
   declare `keyStoreFile:` (with `keyStorePassword:` and an optional `keyStoreType:`) and the
   source presents it. Mutual TLS was unreachable: the trust store proved who answered and nothing

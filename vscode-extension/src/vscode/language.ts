@@ -11,9 +11,19 @@ import {
 
 /**
  * The language layer (docs/vscode-extension.md, Phase 56 slice 5): completion and
- * go-to-definition for `policy:` and `message:` values over the `tesseraql symbols`
- * contract — the editor knows exactly what the framework declares, nothing more.
+ * go-to-definition for `policy:`, `message:`, `domain:`, and `use:` values over the
+ * `tesseraql symbols` contract — the editor knows exactly what the framework
+ * declares, nothing more.
  */
+function poolFor(symbols: AppSymbols,
+    kind: 'policy' | 'message' | 'maybe-message' | 'domain' | 'rule') {
+  switch (kind) {
+    case 'policy': return symbols.policies;
+    case 'domain': return symbols.domains;
+    case 'rule': return symbols.rules;
+    default: return symbols.messages;
+  }
+}
 export class SymbolIndex {
   private readonly byHome = new Map<string, AppSymbols>();
   private readonly pending = new Map<string, NodeJS.Timeout>();
@@ -88,7 +98,7 @@ export class SymbolDefinitionProvider implements vscode.DefinitionProvider {
     if (reference === undefined) {
       return undefined;
     }
-    const pool = reference.kind === 'policy' ? found.symbols.policies : found.symbols.messages;
+    const pool = poolFor(found.symbols, reference.kind);
     const target = pool.find((symbol) => symbol.name === reference.value);
     if (target === undefined) {
       // A maybe-message (title:/label:) that names no key is a literal, not an error.
@@ -113,12 +123,12 @@ export class SymbolCompletionProvider implements vscode.CompletionItemProvider {
     if (kind === undefined) {
       return undefined;
     }
-    const pool = kind === 'policy' ? found.symbols.policies : found.symbols.messages;
+    const pool = poolFor(found.symbols, kind);
     return pool.map((symbol) => {
       const item = new vscode.CompletionItem(symbol.name,
-          kind === 'policy'
-              ? vscode.CompletionItemKind.Value
-              : vscode.CompletionItemKind.Text);
+          kind === 'message'
+              ? vscode.CompletionItemKind.Text
+              : vscode.CompletionItemKind.Value);
       item.detail = symbol.source;
       return item;
     });

@@ -1,7 +1,8 @@
 // The symbols contract (docs/vscode-extension.md, Phase 56 slice 5): what the
-// framework declares — policies, default-locale message keys, routes — with source
-// lines, as `tesseraql symbols --format json` prints it. The providers navigate and
-// complete over it; unknown references stay lint findings.
+// framework declares — policies, default-locale message keys, shared field domains
+// and validation rules, routes — with source lines, as `tesseraql symbols --format
+// json` prints it. The providers navigate and complete over it; unknown references
+// stay lint findings.
 
 export interface DeclaredSymbol {
   name: string;
@@ -12,6 +13,8 @@ export interface DeclaredSymbol {
 export interface AppSymbols {
   policies: DeclaredSymbol[];
   messages: DeclaredSymbol[];
+  domains: DeclaredSymbol[];
+  rules: DeclaredSymbol[];
 }
 
 export class SymbolsContractError extends Error {}
@@ -27,11 +30,21 @@ export function parseAppSymbols(stdout: string): AppSymbols {
       || !Array.isArray((parsed as any).policies) || !Array.isArray((parsed as any).messages)) {
     throw new SymbolsContractError('stdout is JSON but not the symbols document');
   }
-  const document = parsed as { policies: unknown[]; messages: unknown[] };
+  const document = parsed as {
+    policies: unknown[]; messages: unknown[]; domains?: unknown; rules?: unknown;
+  };
   return {
     policies: document.policies.map((value) => toSymbol(value, 'name')),
     messages: document.messages.map((value) => toSymbol(value, 'key')),
+    // Absent on a pre-0.8 CLI — the shared-definition arrays degrade to empty, not to
+    // a contract error, so lint and policy/message intelligence keep working.
+    domains: optionalSymbols(document.domains),
+    rules: optionalSymbols(document.rules),
   };
+}
+
+function optionalSymbols(value: unknown): DeclaredSymbol[] {
+  return Array.isArray(value) ? value.map((entry) => toSymbol(entry, 'name')) : [];
 }
 
 function toSymbol(value: unknown, nameField: string): DeclaredSymbol {
@@ -52,16 +65,26 @@ function toSymbol(value: unknown, nameField: string): DeclaredSymbol {
   };
 }
 
-/** A `policy:`/`message:` value span, or a `title:`/`label:` value that may be a key. */
+/**
+ * A `policy:`/`message:`/`domain:`/`use:` value span, or a `title:`/`label:` value
+ * that may be a key.
+ */
 export interface SymbolReference {
-  kind: 'policy' | 'message' | 'maybe-message';
+  kind: 'policy' | 'message' | 'maybe-message' | 'domain' | 'rule';
   value: string;
   /** 0-based columns of the value span. */
   start: number;
   end: number;
 }
 
-const REFERENCE = /^(\s*(?:-\s+)?(policy|message|title|label):\s*)(["']?)([^\s#"']+)\3/;
+const REFERENCE = /^(\s*(?:-\s+)?(policy|message|title|label|domain|use):\s*)(["']?)([^\s#"']+)\3/;
+
+const KIND_BY_KEY: Record<string, SymbolReference['kind']> = {
+  policy: 'policy',
+  message: 'message',
+  domain: 'domain',
+  use: 'rule',
+};
 
 export function symbolReferenceAt(lineText: string, character: number): SymbolReference | undefined {
   const match = REFERENCE.exec(lineText);
@@ -73,14 +96,14 @@ export function symbolReferenceAt(lineText: string, character: number): SymbolRe
   if (character < start || character > end) {
     return undefined;
   }
-  const key = match[2];
-  const kind = key === 'policy' ? 'policy' : key === 'message' ? 'message' : 'maybe-message';
+  const kind = KIND_BY_KEY[match[2]] ?? 'maybe-message';
   return { kind, value: match[4], start, end };
 }
 
-/** The completion context of a cursor sitting after `policy:` or `message:`. */
-export function completionKindAt(lineText: string, character: number): 'policy' | 'message' | undefined {
+/** The completion context of a cursor sitting after `policy:`, `message:`, `domain:`, or `use:`. */
+export function completionKindAt(lineText: string, character: number):
+    'policy' | 'message' | 'domain' | 'rule' | undefined {
   const head = lineText.slice(0, character);
-  const match = /^\s*(?:-\s+)?(policy|message):\s*(["']?)[^\s#"']*$/.exec(head);
-  return match === null ? undefined : match[1] as 'policy' | 'message';
+  const match = /^\s*(?:-\s+)?(policy|message|domain|use):\s*(["']?)[^\s#"']*$/.exec(head);
+  return match === null ? undefined : KIND_BY_KEY[match[1]] as 'policy' | 'message' | 'domain' | 'rule';
 }

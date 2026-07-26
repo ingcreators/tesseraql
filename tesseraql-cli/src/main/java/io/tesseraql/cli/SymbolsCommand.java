@@ -3,6 +3,7 @@ package io.tesseraql.cli;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import io.tesseraql.yaml.SimpleYamlParser;
 import io.tesseraql.yaml.i18n.MessageCatalog;
 import io.tesseraql.yaml.manifest.AppManifest;
 import io.tesseraql.yaml.manifest.ManifestLoader;
@@ -12,23 +13,26 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Comparator;
 import java.util.Deque;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
 import java.util.concurrent.Callable;
+import java.util.function.Function;
+import java.util.stream.Stream;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
 
 /**
  * {@code tesseraql symbols --app <dir>}: prints what the framework declares — security policies,
- * default-locale message keys, and routes, each with its source and line — as one JSON object on
- * stdout. The editor language layer (docs/vscode-extension.md, Phase 56) consumes it for
- * completion and go-to-definition; like every editor contract, the document is sorted and
- * deterministic.
+ * default-locale message keys, shared field domains and validation rules, and routes, each with
+ * its source and line — as one JSON object on stdout. The editor language layer
+ * (docs/vscode-extension.md, Phase 56) consumes it for completion and go-to-definition; like
+ * every editor contract, the document is sorted and deterministic.
  */
-@Command(name = "symbols", description = "Print the app's declared symbols (policies, message keys, routes) as JSON.")
+@Command(name = "symbols", description = "Print the app's declared symbols (policies, message keys, domains, rules, routes) as JSON.")
 final class SymbolsCommand implements Callable<Integer> {
 
     @Option(names = {"--app"}, required = true, description = "Path to the external app home.")
@@ -40,8 +44,13 @@ final class SymbolsCommand implements Callable<Integer> {
         AppManifest manifest = new ManifestLoader().load(home);
         ObjectMapper mapper = new ObjectMapper();
         ObjectNode document = mapper.createObjectNode();
+        SimpleYamlParser parser = new SimpleYamlParser();
         policies(document.putArray("policies"), manifest, home);
         messages(document.putArray("messages"), manifest, home);
+        sharedDefinitions(document.putArray("domains"), home, "domains",
+                file -> parser.parseDomains(file).domains().keySet());
+        sharedDefinitions(document.putArray("rules"), home, "rules",
+                file -> parser.parseRuleSets(file).rules().keySet());
         routes(document.putArray("routes"), manifest, home);
         System.out.println(mapper.writerWithDefaultPrettyPrinter().writeValueAsString(document));
         return 0;
@@ -81,6 +90,45 @@ final class SymbolsCommand implements Callable<Integer> {
             message.put("key", key);
             message.put("source", source);
             message.put("line", lines.getOrDefault(key, 0) == 0 ? null : lines.get(key));
+        }
+    }
+
+    /**
+     * The shared-definition namespaces — field domains and validation rules — declare names under
+     * a top-level key matching their directory ({@code domains/*.yml} → {@code domains:},
+     * {@code rules/*.yml} → {@code rules:}, docs/field-domains.md and
+     * docs/validation-rule-sets.md), so one walk covers both: every declared name with the file
+     * that declares it and its 1-based line.
+     */
+    private static void sharedDefinitions(ArrayNode into, Path home, String kind,
+            Function<Path, Collection<String>> namesOf) throws IOException {
+        Path dir = home.resolve(kind);
+        if (!Files.isDirectory(dir)) {
+            return;
+        }
+        record Declared(String name, String source, Integer line) {
+        }
+        List<Declared> declared = new ArrayList<>();
+        List<Path> files;
+        try (Stream<Path> listed = Files.list(dir)) {
+            files = listed.filter(file -> file.getFileName().toString().endsWith(".yml"))
+                    .sorted()
+                    .toList();
+        }
+        for (Path file : files) {
+            String source = kind + "/" + file.getFileName();
+            Map<String, Integer> lines = dottedKeyLines(readLines(file));
+            for (String name : namesOf.apply(file)) {
+                Integer line = lines.get(kind + "." + name);
+                declared.add(new Declared(name, source, line));
+            }
+        }
+        declared.sort(Comparator.comparing(Declared::name));
+        for (Declared definition : declared) {
+            ObjectNode entry = into.addObject();
+            entry.put("name", definition.name());
+            entry.put("source", definition.source());
+            entry.put("line", definition.line());
         }
     }
 

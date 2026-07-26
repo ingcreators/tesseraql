@@ -66,9 +66,12 @@ itself); *Lint* runs headless into the Problems panel.
 ## The explorer
 
 A *TesseraQL* tree view over the app layout — routes grouped by kind (`web/`,
-`consume/`, `batch/`, `mcp/`), views, `db/**/migration` trees, and `tests/` suites —
-built from the documented directory contract ([app layout](app-layout.md)), refreshed
-on file events, one click to the source. No CLI call needed to navigate.
+`consume/`, `batch/`, `mcp/`), views, shared field domains (`domains/`,
+[field domains](field-domains.md)), shared validation rules with their SQL (`rules/`,
+[validation rule sets](validation-rule-sets.md)), `db/**/migration` trees, and
+`tests/` suites — built from the documented directory contract
+([app layout](app-layout.md)), refreshed on file events, one click to the source. No
+CLI call needed to navigate.
 
 ## Reference navigation
 
@@ -79,18 +82,23 @@ target exists — a broken reference stays a lint finding, not a dead link. No Y
 semantics enter the extension: the provider matches the documented key shapes
 line-by-line.
 
-## Policy and message intelligence
+## Declared-symbol intelligence
 
 The extension reads what the framework declares through the `tesseraql symbols`
 contract (see below), per app home and refreshed on save, and adds:
 
-- **Completion** for `policy:` values (the app's declared policies) and `message:`
-  values (catalog keys).
+- **Completion** for `policy:` values (the app's declared policies), `message:`
+  values (catalog keys), `domain:` values (the shared field domains under
+  `domains/`), and `use:` values (the shared validation rules under `rules/`).
 - **Go-to-definition** from a `policy:` value to its declaration in
-  `config/tesseraql.yml`, and from a `message:` value (or a view `title:`/`label:`
-  that names an existing key) to its line in the default-locale catalog.
+  `config/tesseraql.yml`, from a `message:` value (or a view `title:`/`label:`
+  that names an existing key) to its line in the default-locale catalog, and from a
+  `domain:` or `use:` value to the shared definition's line in its `domains/*.yml`
+  or `rules/*.yml` document.
 
 Unknown references stay lint findings — the providers navigate, they do not judge.
+A pre-shared-definitions CLI simply omits the `domains`/`rules` arrays, and the
+extension degrades those two features to empty rather than rejecting the document.
 
 ## Test Explorer and SQL coverage
 
@@ -202,12 +210,13 @@ the opt-in regression gate) are identical in both formats.
 Prints what the framework declares:
 
 ```json
-{"policies": [{"name": "...", "source": "...", "line": 1}], "messages": [{"key": "...", "source": "...", "line": 1}], "routes": [{"id": "...", "source": "...", "path": "...", "recipe": "..."}]}
+{"policies": [{"name": "...", "source": "...", "line": 1}], "messages": [{"key": "...", "source": "...", "line": 1}], "domains": [{"name": "...", "source": "...", "line": 1}], "rules": [{"name": "...", "source": "...", "line": 1}], "routes": [{"id": "...", "source": "...", "path": "...", "recipe": "..."}]}
 ```
 
 Policies come from the app config, message keys from the default-locale catalog
-(flattened dotted keys with their source lines), routes from the manifest; sorted,
-deterministic.
+(flattened dotted keys with their source lines), domains and rules from the
+shared-definition documents under `domains/` and `rules/` (each name with the file
+declaring it), routes from the manifest; sorted, deterministic.
 
 ## Not currently supported
 

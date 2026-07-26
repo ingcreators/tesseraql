@@ -85,6 +85,22 @@ class AppLifecycleCommandsTest {
                   list:
                     title: Users
                 """);
+        Files.createDirectories(app.resolve("domains"));
+        Files.writeString(app.resolve("domains/catalog.yml"), """
+                version: tesseraql/v1
+                domains:
+                  sku:
+                    type: string
+                    maxLength: 40
+                """);
+        Files.createDirectories(app.resolve("rules"));
+        Files.writeString(app.resolve("rules/inventory.yml"), """
+                version: tesseraql/v1
+                rules:
+                  editableStatus:
+                    rule: "params.status == 'draft'"
+                    code: not-editable
+                """);
         Captured captured = executeCapturing("symbols", "--app", app.toString());
         assertThat(captured.exitCode()).isZero();
         JsonNode document = new ObjectMapper().readTree(captured.stdout());
@@ -103,6 +119,26 @@ class AppLifecycleCommandsTest {
         JsonNode message = document.get("messages").get(0);
         assertThat(message.get("key").asText()).isEqualTo("users.list.title");
         assertThat(message.get("line").asInt()).isEqualTo(3);
+
+        JsonNode sku = null;
+        for (JsonNode domain : document.get("domains")) {
+            if (domain.get("name").asText().equals("sku")) {
+                sku = domain;
+            }
+        }
+        assertThat(sku).as("the declared sku domain").isNotNull();
+        assertThat(sku.get("source").asText()).isEqualTo("domains/catalog.yml");
+        assertThat(sku.get("line").asInt()).isEqualTo(3);
+
+        JsonNode rule = null;
+        for (JsonNode candidate : document.get("rules")) {
+            if (candidate.get("name").asText().equals("editableStatus")) {
+                rule = candidate;
+            }
+        }
+        assertThat(rule).as("the declared editableStatus rule").isNotNull();
+        assertThat(rule.get("source").asText()).isEqualTo("rules/inventory.yml");
+        assertThat(rule.get("line").asInt()).isEqualTo(3);
 
         assertThat(document.get("routes").size()).isPositive();
         JsonNode route = document.get("routes").get(0);

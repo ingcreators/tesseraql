@@ -11,10 +11,20 @@ test('parses the symbols document', () => {
   const symbols = parseAppSymbols(JSON.stringify({
     policies: [{ name: 'app.read', source: 'config/tesseraql.yml', line: 72 }],
     messages: [{ key: 'users.list.title', source: 'messages/en.yml', line: 3 }],
+    domains: [{ name: 'sku', source: 'domains/catalog.yml', line: 3 }],
+    rules: [{ name: 'editableStatus', source: 'rules/inventory.yml', line: 7 }],
     routes: [{ id: 'app.home', source: 'web/get.yml' }],
   }));
   assert.deepEqual(symbols.policies, [{ name: 'app.read', source: 'config/tesseraql.yml', line: 72 }]);
   assert.deepEqual(symbols.messages, [{ name: 'users.list.title', source: 'messages/en.yml', line: 3 }]);
+  assert.deepEqual(symbols.domains, [{ name: 'sku', source: 'domains/catalog.yml', line: 3 }]);
+  assert.deepEqual(symbols.rules, [{ name: 'editableStatus', source: 'rules/inventory.yml', line: 7 }]);
+});
+
+test('a pre-shared-definitions document degrades to empty domains and rules', () => {
+  const symbols = parseAppSymbols(JSON.stringify({ policies: [], messages: [] }));
+  assert.deepEqual(symbols.domains, []);
+  assert.deepEqual(symbols.rules, []);
 });
 
 test('rejects non-contract stdout', () => {
@@ -36,9 +46,19 @@ test('title/label values are maybe-message references', () => {
   assert.equal(symbolReferenceAt('    label: users.list.title', 15)?.kind, 'maybe-message');
 });
 
+test('domain and use values resolve under the cursor', () => {
+  const domain = symbolReferenceAt('    domain: sku', 13);
+  assert.deepEqual(domain, { kind: 'domain', value: 'sku', start: 12, end: 15 });
+  const rule = symbolReferenceAt('    use: stockStaysNonNegative', 12);
+  assert.equal(rule?.kind, 'rule');
+  assert.equal(rule?.value, 'stockStaysNonNegative');
+});
+
 test('completion kind is detected mid-typing', () => {
   assert.equal(completionKindAt('  policy: app.', 14), 'policy');
   assert.equal(completionKindAt('  message: ', 11), 'message');
+  assert.equal(completionKindAt('    domain: s', 13), 'domain');
+  assert.equal(completionKindAt('    use: ', 9), 'rule');
   assert.equal(completionKindAt('  title: x', 10), undefined);
   assert.equal(completionKindAt('  policy: app.read extra', 24), undefined);
 });

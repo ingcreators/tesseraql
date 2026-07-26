@@ -17,8 +17,12 @@ never disagree with the build.
   CLI verb in the integrated terminal; *TesseraQL: Lint* runs headless into the
   Problems panel.
 - **The explorer.** A *TesseraQL* view in the Explorer sidebar: routes grouped by
-  kind (`web/`, `consume/`, `batch/`, `mcp/`), views, migrations, and test suites —
+  kind (`web/`, `consume/`, `batch/`, `mcp/`), views, shared field domains
+  (`domains/`), shared validation rules (`rules/`), migrations, and test suites —
   one click to the source.
+- **Declared-symbol intelligence.** Completion and go-to-definition for `policy:`,
+  `message:`, `domain:`, and `use:` values over the `tesseraql symbols` contract —
+  the editor offers exactly what the framework declares, nothing more.
 - **Error-code hovers.** Hover any `TQL-<DOMAIN>-<n>` literal for a link into the
   error-code reference.
 - **Snippets** for the blessed route shapes (`tql-query-json`, `tql-query-html`,
