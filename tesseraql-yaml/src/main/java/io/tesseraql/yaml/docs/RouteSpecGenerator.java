@@ -75,7 +75,7 @@ public final class RouteSpecGenerator {
         return new RouteSpec.Input(name, field.type() == null ? "string" : field.type(),
                 field.required(), field.defaultValue(), field.min(), field.max(),
                 field.maxLength(), field.enumValues(), field.format(),
-                field.domain());
+                field.domain(), field.pattern(), field.minLength(), field.requiredWhen());
     }
 
     private RouteSpec.Security security(RouteDefinition definition) {
@@ -90,7 +90,8 @@ public final class RouteSpecGenerator {
     private List<RouteSpec.Validation> validations(RouteDefinition definition) {
         List<RouteSpec.Validation> out = new ArrayList<>();
         definition.validate().forEach((id, rule) -> out.add(new RouteSpec.Validation(id,
-                ruleKind(rule), rule.rule(), rule.file(), rule.field(), rule.when())));
+                ruleKind(rule), rule.rule(), rule.file(), rule.field(), rule.when(),
+                rule.use(), rule.code())));
         return out;
     }
 

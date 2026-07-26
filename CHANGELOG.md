@@ -164,6 +164,12 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Fixed
 
+- **The route page shows every constraint an input declares** (docs/documentation-portal.md):
+  `pattern`, `minLength` and `requiredWhen` were rendered by OpenAPI and the Domains page but not
+  by the route page, so an input carrying a real constraint read as unconstrained exactly where a
+  reviewer decides whether it is safe. A validation rule also now carries its `use:` and `code:`,
+  so a rule that references a shared one says which one and under what code.
+
 - **A row-scope directive in batch SQL is refused rather than ignored** (docs/data-scoping.md):
   pinned rather than changed. `JobExecutor` passes `ScopeResolver.UNSUPPORTED`, so a
   `/*%scope%*/` in a job's SQL fails with `TQL-SQL-2106` instead of rendering unscoped and

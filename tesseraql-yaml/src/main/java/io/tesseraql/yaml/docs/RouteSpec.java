@@ -58,7 +58,11 @@ public record RouteSpec(
             java.math.BigDecimal min, java.math.BigDecimal max, Integer maxLength,
             List<String> enumValues, String format,
             // The referenced field domain (docs/field-domains.md), or null.
-            String domain) {
+            String domain,
+            // Constraints OpenAPI and the Domains page already render. Without them a
+            // pattern-constrained input read as unconstrained on the route page, which is where
+            // a reviewer looks to decide whether an input is safe.
+            String pattern, Integer minLength, String requiredWhen) {
 
         public Input {
             enumValues = enumValues == null ? List.of() : List.copyOf(enumValues);
@@ -85,9 +89,13 @@ public record RouteSpec(
      * @param file       the validation SQL file, for a {@code sql} rule
      * @param field      the field path violations report against, or {@code null}
      * @param when       the optional guard expression, or {@code null}
+     * @param use        the shared rule this references (docs/validation-rule-sets.md), or
+     *                   {@code null}
+     * @param code       the stable violation code, declared here or inherited from the shared
+     *                   rule
      */
     public record Validation(String id, String kind, String expression, String file, String field,
-            String when) {
+            String when, String use, String code) {
     }
 
     /**

@@ -20,7 +20,7 @@ class DocViewsTest {
         RouteSpec.Input limit = new RouteSpec.Input("limit", "integer", false, 50,
                 new java.math.BigDecimal(1),
                 new java.math.BigDecimal(200), null,
-                List.of(), null, null);
+                List.of(), null, null, null, null, null);
         RouteSpec.SqlStatement sql = new RouteSpec.SqlStatement("sql", "search.sql", null, null,
                 "query", "select 1", List.of("q", "limit"),
                 List.of(new RouteSpec.Control("if", "q != null", 0)));
@@ -38,10 +38,28 @@ class DocViewsTest {
         return new RouteEntry(route, List.of());
     }
 
+    /**
+     * A pattern-constrained input shows its pattern on the route page.
+     *
+     * <p>It did not. OpenAPI and the Domains page rendered `pattern`, `minLength` and
+     * `requiredWhen` all along; the route page dropped them, so an input carrying a real
+     * constraint read as unconstrained exactly where a reviewer decides whether it is safe.
+     */
+    @Test
+    void patternMinLengthAndRequiredWhenAreShown() {
+        RouteSpec.Input code = new RouteSpec.Input("code", "string", false, null, null, null,
+                null, java.util.List.of(), null, null, "[A-Z]{2}-[0-9]+", 4, "params.kind == 'x'");
+
+        assertThat(DocViews.constraints(code))
+                .contains("pattern [A-Z]{2}-[0-9]+", "minLength 4",
+                        "required when params.kind == 'x'");
+    }
+
     @Test
     void aDomainReferenceLeadsTheConstraintChips() {
         RouteSpec.Input sku = new RouteSpec.Input("sku", "string", true, null,
-                null, null, 40, java.util.List.of(), null, "sku");
+                null, null, 40, java.util.List.of(), null, "sku", null, null, null);
+        assertThat(DocViews.constraints(sku)).doesNotContain("pattern [A-Z]{2}");
         assertThat(DocViews.constraints(sku))
                 .startsWith("domain sku")
                 .contains("maxLength 40");
