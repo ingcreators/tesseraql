@@ -47,6 +47,8 @@ public final class JobExecutor {
     private static final Logger LOG = LoggerFactory.getLogger(JobExecutor.class);
     private static final TqlErrorCode STEP_ERROR = new TqlErrorCode(TqlDomain.BATCH, 5002);
 
+    private int sqlTimeoutSeconds;
+
     /** Observes failed job executions (roadmap Phase 20 operations alerts). */
     @FunctionalInterface
     public interface FailureListener {
@@ -80,6 +82,20 @@ public final class JobExecutor {
         this.tempStore = tempStore;
         this.slowSqlLog = slowSqlLog;
         this.tracer = tracer;
+    }
+
+    /**
+     * The query timeout every batch statement runs under, in seconds; 0 leaves it unset.
+     *
+     * <p>There was none. A batch step's SQL ran with whatever the driver defaults to — usually
+     * forever — holding a pooled connection while it did, where the same statement on a route or
+     * inside a command has been bounded by {@code tesseraql.sql.timeoutSeconds} all along. A job
+     * is precisely the place a runaway statement goes unnoticed longest: nobody is waiting for
+     * the response.
+     */
+    public JobExecutor sqlTimeoutSeconds(int seconds) {
+        this.sqlTimeoutSeconds = Math.max(0, seconds);
+        return this;
     }
 
     /** Wires the outbox store {@code notify:} steps enqueue on (roadmap Phase 20). */
@@ -297,6 +313,9 @@ public final class JobExecutor {
         long startedAt = System.currentTimeMillis();
         try (Connection connection = dataSource.getConnection();
                 PreparedStatement statement = connection.prepareStatement(bound.sql())) {
+            if (sqlTimeoutSeconds > 0) {
+                statement.setQueryTimeout(sqlTimeoutSeconds);
+            }
             bind(statement, bound);
             Map<String, Object> result = switch (mode) {
                 case "query-spool" -> spool(statement);

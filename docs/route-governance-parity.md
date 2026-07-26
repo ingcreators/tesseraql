@@ -69,7 +69,7 @@ Every other executor re-implements a subset.
 | `ValidationRules` | yes | yes | n/a | yes | yes | **—** | rides the command | **—** |
 | `query-export` URI (hand-built) | yes | yes | n/a | yes | yes | n/a | yes | **—** |
 | `JdbcFileTransferService` (row / query / after SQL) | **—** | **—** | n/a | **—** | partial | **—** | **—** | n/a |
-| `JobExecutor` (batch steps) | **—** | **—** | n/a | **—** | yes | **—** | **—** | n/a |
+| `JobExecutor` (batch steps) | **—** | yes | n/a | **—** | yes | **—** | **—** | n/a |
 | workflow `assign:` | yes | yes | yes | yes | yes | yes | rides the command | n/a |
 
 ## The deviations

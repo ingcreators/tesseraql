@@ -164,6 +164,12 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Fixed
 
+- **Batch SQL runs under the app-wide query timeout** (docs/batch-jobs.md): `JobExecutor` prepared
+  its statements and never set one, so a job step's SQL ran for as long as the driver allowed while
+  holding a pooled connection — where the same statement on a route or inside a command has been
+  bounded by `tesseraql.sql.timeoutSeconds` all along. A job is where a runaway statement goes
+  unnoticed longest, because nobody is waiting for the response.
+
 - **A job's declared `params:` are bound before it runs** (docs/batch-jobs.md): they were accepted,
   documented with a shipped example, and never read, so whatever the caller sent reached the job's
   SQL uncoerced — a numeric parameter arrived as its text — and a missing required parameter

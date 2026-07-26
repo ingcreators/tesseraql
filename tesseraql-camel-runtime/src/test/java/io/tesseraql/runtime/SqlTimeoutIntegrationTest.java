@@ -62,6 +62,27 @@ class SqlTimeoutIntegrationTest {
         assertThat(elapsedMs).isLessThan(8_000);
     }
 
+    /**
+     * A batch step reads the same app-wide bound.
+     *
+     * <p>It read nothing: `JobExecutor` prepared its statement and never set a query timeout, so
+     * a step's SQL ran for as long as the driver allowed while holding a pooled connection. The
+     * route and command paths have been bounded by {@code tesseraql.sql.timeoutSeconds} since it
+     * was introduced.
+     */
+    @Test
+    void aRunawayBatchStepIsCancelledByTheSameDefault() {
+        long startedAt = System.currentTimeMillis();
+
+        // A job records its failure rather than throwing, so the status is the observable.
+        var execution = runtime.runJob("slow.job", java.util.Map.of());
+        long elapsed = System.currentTimeMillis() - startedAt;
+
+        assertThat(String.valueOf(execution.status())).isEqualTo("FAILED");
+        // The 1s app-wide default, not the statement's 10s sleep.
+        assertThat(elapsed).isLessThan(8_000);
+    }
+
     @Test
     void anExplicitZeroOptsALongRunningStatementOut() throws Exception {
         // timeoutSeconds: 0 disables the guard; a 2s sleep outlives the 1s app default.
@@ -153,6 +174,22 @@ class SqlTimeoutIntegrationTest {
                       data: sql.rows
                 """);
         Files.writeString(slow.resolve("slow.sql"), "select pg_sleep(10) as nap\n");
+
+        // The batch path: a job step ran with whatever the driver defaults to — usually forever —
+        // holding a pooled connection, where the same statement on a route has been bounded all
+        // along. A job is where a runaway statement goes unnoticed longest: nobody is waiting.
+        Path slowJob = target.resolve("batch/slow");
+        Files.createDirectories(slowJob);
+        Files.writeString(slowJob.resolve("job.yml"), """
+                version: tesseraql/v1
+                id: slow.job
+                kind: job
+                recipe: batch-tasklet
+                sql:
+                  file: nap.sql
+                  mode: query
+                """);
+        Files.writeString(slowJob.resolve("nap.sql"), "select pg_sleep(10) as nap\n");
 
         // The command path: a step opens its own transaction with no transaction manager to
         // bound it, so it has to read the same timeout the route path does.
