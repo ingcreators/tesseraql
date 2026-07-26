@@ -22,10 +22,11 @@ closes that loop by running the project's own CLI and rendering what it reports.
 The scaffolder's `.vscode/extensions.json` (and the committed
 `examples/scaffold-demo-app` copy) recommends the extension alongside
 `redhat.vscode-yaml`, so a fresh `tesseraql new` app opened in VS Code prompts for
-both. The extension is not yet published to the Visual Studio Marketplace / Open VSX,
-and no built `.vsix` is distributed anywhere yet: for now, build it from the
-repository (`pnpm run package` under `vscode-extension/`) and install the resulting
-`.vsix` from file (Extensions view → *Install from VSIX…*).
+both. The extension is published to the Visual Studio Marketplace as
+`ingcreators.tesseraql-vscode` by the `ext-v*` release workflow (see Publishing
+below); it can also be built from the repository (`pnpm run package` under
+`vscode-extension/`) and installed from the resulting `.vsix` (Extensions view →
+*Install from VSIX…*).
 
 The extension resolves the `tesseraql` binary from the `tesseraql.cliPath` setting
 (default: `tesseraql` on `PATH`), so findings always come from the CLI version the
@@ -71,7 +72,9 @@ A *TesseraQL* tree view over the app layout — routes grouped by kind (`web/`,
 [validation rule sets](validation-rule-sets.md)), `db/**/migration` trees, and
 `tests/` suites — built from the documented directory contract
 ([app layout](app-layout.md)), refreshed on file events, one click to the source. No
-CLI call needed to navigate.
+CLI call needed to navigate. When the symbols index has answered (see below), each
+route file additionally shows its served identity — `GET /api/users · query-json` —
+as the tree item's description; the tree itself never waits on the CLI.
 
 ## Reference navigation
 
@@ -205,7 +208,7 @@ numbers the documentation portal renders. The repeatable `--case <name>` filter
 them. `--format text` names the default output; exit semantics (1 on failure, 2 on
 the opt-in regression gate) are identical in both formats.
 
-### `tesseraql symbols --app <dir> --format json`
+### `tesseraql symbols --app <dir>`
 
 Prints what the framework declares:
 

@@ -3,6 +3,7 @@ import { test } from 'node:test';
 import {
   completionKindAt,
   parseAppSymbols,
+  routeDescription,
   symbolReferenceAt,
   SymbolsContractError,
 } from '../src/core/symbols';
@@ -13,18 +14,42 @@ test('parses the symbols document', () => {
     messages: [{ key: 'users.list.title', source: 'messages/en.yml', line: 3 }],
     domains: [{ name: 'sku', source: 'domains/catalog.yml', line: 3 }],
     rules: [{ name: 'editableStatus', source: 'rules/inventory.yml', line: 7 }],
-    routes: [{ id: 'app.home', source: 'web/get.yml' }],
+    routes: [{ id: 'app.home', source: 'web/get.yml', method: 'GET', path: '/', recipe: 'query-html' }],
   }));
   assert.deepEqual(symbols.policies, [{ name: 'app.read', source: 'config/tesseraql.yml', line: 72 }]);
   assert.deepEqual(symbols.messages, [{ name: 'users.list.title', source: 'messages/en.yml', line: 3 }]);
   assert.deepEqual(symbols.domains, [{ name: 'sku', source: 'domains/catalog.yml', line: 3 }]);
   assert.deepEqual(symbols.rules, [{ name: 'editableStatus', source: 'rules/inventory.yml', line: 7 }]);
+  assert.deepEqual(symbols.routes,
+      [{ id: 'app.home', source: 'web/get.yml', method: 'GET', path: '/', recipe: 'query-html' }]);
 });
 
 test('a pre-shared-definitions document degrades to empty domains and rules', () => {
   const symbols = parseAppSymbols(JSON.stringify({ policies: [], messages: [] }));
   assert.deepEqual(symbols.domains, []);
   assert.deepEqual(symbols.rules, []);
+  assert.deepEqual(symbols.routes, []);
+});
+
+test('a route without a source is a contract error, missing identity parts are not', () => {
+  assert.throws(() => parseAppSymbols(JSON.stringify(
+      { policies: [], messages: [], routes: [{ id: 'x' }] })), SymbolsContractError);
+  const symbols = parseAppSymbols(JSON.stringify(
+      { policies: [], messages: [], routes: [{ source: 'batch/nightly.yml', id: null }] }));
+  assert.deepEqual(symbols.routes,
+      [{ id: null, source: 'batch/nightly.yml', method: null, path: null, recipe: null }]);
+});
+
+test('a route describes itself from whichever identity parts it has', () => {
+  assert.equal(routeDescription(
+      { id: 'users.list', source: 'web/api/users/get.yml', method: 'GET', path: '/api/users', recipe: 'query-json' }),
+      'GET /api/users · query-json');
+  assert.equal(routeDescription(
+      { id: 'nightly', source: 'batch/nightly.yml', method: null, path: null, recipe: 'sql-batch' }),
+      'sql-batch');
+  assert.equal(routeDescription(
+      { id: null, source: 'web/get.yml', method: null, path: null, recipe: null }),
+      undefined);
 });
 
 test('rejects non-contract stdout', () => {

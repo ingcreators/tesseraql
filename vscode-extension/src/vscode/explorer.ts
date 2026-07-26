@@ -10,7 +10,13 @@ export class AppExplorer implements vscode.TreeDataProvider<AppNode> {
   private readonly changed = new vscode.EventEmitter<void>();
   readonly onDidChangeTreeData = this.changed.event;
 
-  constructor(private homes: readonly string[]) {}
+  /**
+   * `describe` annotates a file with its served identity ("GET /api/users ·
+   * query-json") from the symbols index — a decoration, so the tree itself keeps
+   * working when the CLI cannot run.
+   */
+  constructor(private homes: readonly string[],
+      private readonly describe?: (file: string) => string | undefined) {}
 
   setHomes(homes: readonly string[]): void {
     this.homes = homes;
@@ -32,6 +38,7 @@ export class AppExplorer implements vscode.TreeDataProvider<AppNode> {
       item.resourceUri = vscode.Uri.file(node.path);
       if (node.kind === 'file') {
         item.contextValue = 'file';
+        item.description = this.describe?.(node.path);
         item.command = {
           command: 'vscode.open',
           title: 'Open',
@@ -61,6 +68,8 @@ export class AppExplorer implements vscode.TreeDataProvider<AppNode> {
 const SECTION_ICONS: Record<string, string> = {
   Routes: 'symbol-interface',
   Views: 'preview',
+  Domains: 'symbol-field',
+  Rules: 'checklist',
   Migrations: 'database',
   Tests: 'beaker',
 };

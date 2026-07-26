@@ -10,6 +10,7 @@ import { ServeStatus } from './vscode/serveStatus';
 import { SymbolCompletionProvider, SymbolDefinitionProvider, SymbolIndex } from './vscode/language';
 import { registerMcpServer } from './vscode/mcpRegistration';
 import { studioSourceUrl } from './core/studio';
+import { routeDescription } from './core/symbols';
 import * as path from 'node:path';
 
 // The thin editor shell over the existing engines (docs/vscode-extension.md): lint
@@ -22,10 +23,19 @@ export function activate(context: vscode.ExtensionContext): void {
   const output = vscode.window.createOutputChannel('TesseraQL');
   const lint = new LintController(output);
   let homes = discoverHomes();
-  const explorer = new AppExplorer(homes);
+  const symbols = new SymbolIndex(homes, output);
+  const explorer = new AppExplorer(homes, (file) => {
+    const found = symbols.symbolsFor(file);
+    if (found === undefined) {
+      return undefined;
+    }
+    const relative = path.relative(found.home, file).split(path.sep).join('/');
+    const route = found.symbols.routes.find((candidate) => candidate.source === relative);
+    return route === undefined ? undefined : routeDescription(route);
+  });
+  symbols.onDidRefresh(() => explorer.refresh());
   const testing = new SuiteTestController(homes, output);
   const serveStatus = new ServeStatus();
-  const symbols = new SymbolIndex(homes, output);
 
   context.subscriptions.push(
       output,
