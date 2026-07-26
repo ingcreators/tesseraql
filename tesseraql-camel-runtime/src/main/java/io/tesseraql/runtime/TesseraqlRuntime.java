@@ -560,7 +560,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
         // and query routes' http: sources (docs/connectors.md) share the allow-list, the
         // named credentials, the timeouts, and the per-host circuit breaker.
         io.tesseraql.operations.http.HttpCallClient httpCallClient = new io.tesseraql.operations.http.HttpCallClient(
-                httpOutbound, manifest.config(), tracer);
+                httpOutbound, manifest.config(), tracer, effectiveMeter);
         JobExecutor jobExecutor = new JobExecutor(jobRepository, tempStore, slowSqlLog, tracer)
                 // The same bound routes and commands run under: a batch statement held a pooled
                 // connection for as long as the driver would let it, which on a job is the
@@ -888,7 +888,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
                             .map(Boolean::parseBoolean).orElse(false),
                     manifest.config().getString("tesseraql.metrics.unauthenticated")
                             .map(Boolean::parseBoolean).orElse(false),
-                    aggregatingMeter);
+                    aggregatingMeter, pollSourceStatus);
             context.addRoutes(new OperationsRouteBuilder(
                     jobRunner, jobRepository, ownedJobs, opsDashboard, outboxStore,
                     metricsSettings, routeAuditStore));

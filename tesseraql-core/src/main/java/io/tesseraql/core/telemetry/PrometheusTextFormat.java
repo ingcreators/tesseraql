@@ -51,6 +51,37 @@ public final class PrometheusTextFormat {
         return out.toString();
     }
 
+    /** One gauge observation: labels plus the value read at scrape time. */
+    public record GaugeSample(Map<String, String> attributes, double value) {
+    }
+
+    /**
+     * Renders one gauge family — a {@code # TYPE} line and one sample per entry — for
+     * state that is computed at scrape time rather than aggregated by the meter
+     * (docs/poll-source-metrics.md). An empty sample list renders nothing, so an
+     * appender never emits a headless family.
+     */
+    public static String gauge(String name, java.util.List<GaugeSample> samples) {
+        if (samples.isEmpty()) {
+            return "";
+        }
+        String metric = sanitize(name);
+        StringBuilder out = new StringBuilder();
+        out.append("# TYPE ").append(metric).append(" gauge\n");
+        for (GaugeSample sample : samples) {
+            out.append(metric).append(labels(sample.attributes(), null))
+                    .append(' ').append(number(sample.value())).append('\n');
+        }
+        return out.toString();
+    }
+
+    /** Integral values render without a decimal point, like the histogram bounds. */
+    private static String number(double value) {
+        return value == Math.floor(value) && !Double.isInfinite(value)
+                ? String.valueOf((long) value)
+                : String.valueOf(value);
+    }
+
     private static String seconds(long millis) {
         double value = millis / 1000.0;
         return value == Math.floor(value) ? String.valueOf((long) value) : String.valueOf(value);

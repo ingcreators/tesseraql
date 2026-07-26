@@ -252,6 +252,19 @@ recording — per-route invocation counters (`tesseraql_route_invocations_total`
 outcome-classed error counter (`tesseraql_route_errors_total`), and latency histograms in
 seconds (`tesseraql_route_duration_seconds_*`) labelled `routeId`/`method`/`outcome`.
 
+Beyond the route metrics, the scrape carries the node's poll-source health — the
+registry behind the console's jobs page, rendered as gauges at scrape time so a silent
+poll source is alertable without anyone watching a screen — and an egress-denial counter
+for `http-call` steps. `jobId` (or `host`) is the only label; source strings and skip
+reasons stay on the console page.
+
+| Family | Meaning | Sample alert |
+| --- | --- | --- |
+| `tesseraql_poll_source_wired` | `1` polling, `0` refused at wire time | `tesseraql_poll_source_wired == 0` |
+| `tesseraql_poll_source_consecutive_failures` | current import-failure streak | `tesseraql_poll_source_consecutive_failures >= 3` |
+| `tesseraql_poll_source_last_poll_age_seconds` | seconds since the last poll; absent until one completes | `tesseraql_poll_source_last_poll_age_seconds > 3600` |
+| `tesseraql_egress_denied_total` | `http-call` refusals per denied host | `rate(tesseraql_egress_denied_total[5m]) > 0` |
+
 The scrape is **bearer + `ops.metrics.view` policy** by default (labels reveal route ids);
 give the scraper a token via `bearer_token_file`, or set
 `tesseraql.metrics.unauthenticated: true` for a cluster-internal scrape the network already

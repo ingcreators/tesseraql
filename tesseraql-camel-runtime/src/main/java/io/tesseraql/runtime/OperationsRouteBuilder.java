@@ -55,9 +55,14 @@ final class OperationsRouteBuilder extends RouteBuilder {
                 String triggeredBy);
     }
 
-    /** The Prometheus exposition settings (roadmap Phase 45): opt-in, bearer-gated default. */
+    /**
+     * The Prometheus exposition settings (roadmap Phase 45): opt-in, bearer-gated default.
+     * {@code pollSources} joins the scrape as gauge families rendered from the registry at
+     * scrape time (docs/poll-source-metrics.md).
+     */
     record MetricsSettings(boolean enabled, boolean unauthenticated,
-            io.tesseraql.core.telemetry.AggregatingMeter meter) {
+            io.tesseraql.core.telemetry.AggregatingMeter meter,
+            io.tesseraql.opsui.PollSourceStatus pollSources) {
     }
 
     OperationsRouteBuilder(JobRunner runner, JobRepository repository,
@@ -138,7 +143,9 @@ final class OperationsRouteBuilder extends RouteBuilder {
                 exchange.getMessage().setHeader(Exchange.CONTENT_TYPE,
                         io.tesseraql.core.telemetry.PrometheusTextFormat.CONTENT_TYPE);
                 exchange.getMessage().setBody(io.tesseraql.core.telemetry.PrometheusTextFormat
-                        .render(metrics.meter()));
+                        .render(metrics.meter())
+                        + io.tesseraql.opsui.PollSourceMetrics.render(metrics.pollSources(),
+                                java.time.Instant.now()));
             });
         }
 

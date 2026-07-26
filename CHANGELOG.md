@@ -6,6 +6,18 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ## Unreleased
 
+### Added
+
+- **The poll-source registry reaches the scrape** (docs/poll-source-metrics.md):
+  `/_tesseraql/metrics` now carries per-node poll-source gauges rendered from the registry
+  at scrape time — `tesseraql_poll_source_wired` (0 = refused at wire time),
+  `tesseraql_poll_source_consecutive_failures`, and
+  `tesseraql_poll_source_last_poll_age_seconds` (absent until a poll completes), `jobId`
+  as the only label — so a silent poll source is alertable without anyone watching the
+  console. `http-call` egress refusals (`TQL-BATCH-5305`) additionally count into
+  `tesseraql_egress_denied_total{host=...}` on the existing meter, giving denial *rates*
+  an alertable shape after a config rollout.
+
 ## 0.8.0 - 2026-07-26
 
 ### Added
