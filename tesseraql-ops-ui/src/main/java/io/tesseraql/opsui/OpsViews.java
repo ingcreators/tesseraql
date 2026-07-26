@@ -174,7 +174,8 @@ public final class OpsViews {
      */
     public record JobCatalogEntry(String id, String app,
             io.tesseraql.yaml.model.TriggerSpec trigger, JobExecution lastExecution,
-            PollSourceStatus.SourceState pollSource) {
+            PollSourceStatus.SourceState pollSource,
+            Map<String, io.tesseraql.yaml.model.InputField> params) {
     }
 
     /** The jobs page model: the scope-filtered catalog with each job's last run summarized. */
@@ -192,6 +193,15 @@ public final class OpsViews {
             row.put("lastStart",
                     last == null || last.startTime() == null ? "-" : last.startTime().toString());
             row.put("lastExecutionId", last == null ? null : last.id());
+            // The declared-params form (docs/ops-console-coverage.md): name, required,
+            // and a numeric input for number params; bindJobParams stays the validator.
+            List<Map<String, Object>> params = new ArrayList<>();
+            entry.params().forEach((name, field) -> params.add(Map.of(
+                    "name", name,
+                    "required", field != null && field.required(),
+                    "numeric", field != null && "number".equals(field.type()))));
+            row.put("params", params);
+            row.put("hasParams", !params.isEmpty());
             PollSourceStatus.SourceState poll = entry.pollSource();
             row.put("hasPollSource", poll != null);
             if (poll != null) {

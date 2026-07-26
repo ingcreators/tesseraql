@@ -43,9 +43,17 @@
             </td>
             <td class="hc-datagrid__cell" th:text="${j.lastStart}"></td>
             <td class="hc-datagrid__cell">
-              <form method="post" action="/_tesseraql/ops/console/jobs/run">
+              <form method="post" action="/_tesseraql/ops/console/jobs/run" class="hc-stack" data-gap="xs">
                 <input type="hidden" name="_csrf" th:value="${_csrf}">
                 <input type="hidden" name="id" th:value="${j.id}">
+                <!-- Declared job parameters (docs/ops-console-coverage.md): required and
+                     numeric hints catch the common misses in the browser; the binding
+                     inside the runner is what validates. -->
+                <label class="hc-field" th:each="p : ${j.params}">
+                  <span class="hc-field__label" th:text="${p.name}"></span>
+                  <input class="hc-input" data-size="sm"
+                         th:attr="name=|param.${p.name}|,type=${p.numeric} ? 'number' : 'text',required=${p.required} ? 'required' : null,step=${p.numeric} ? 'any' : null">
+                </label>
                 <button class="hc-button" data-size="sm" type="submit">Run</button>
               </form>
             </td>
@@ -54,8 +62,9 @@
       </table>
     </div>
   </div>
-  <p class="hc-field__message">Run starts the job now with no parameters and records you as the
-    trigger; the execution page opens when it has been accepted.</p>
+  <p class="hc-field__message">Run starts the job now and records you as the trigger; declared
+    parameters are validated before the job starts, and the execution page opens when it has
+    been accepted.</p>
 </section>
 </div>
 </html>

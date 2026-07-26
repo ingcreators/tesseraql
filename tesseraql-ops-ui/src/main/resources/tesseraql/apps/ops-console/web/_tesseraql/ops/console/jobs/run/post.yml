@@ -5,7 +5,10 @@ recipe: command-json
 
 # Runs one declared job now (docs/ops-console-actions.md): the hypermedia face of
 # POST /_tesseraql/ops/batch/jobs/{jobId}/run - same policy, same scope stance. The
-# execution records who triggered it; params ride empty (a params form is its own design).
+# execution records who triggered it. Declared job parameters post as param.<name>
+# fields (docs/ops-console-coverage.md): their names are per-job and cannot be
+# declared statically here, so unknown fields pass through and the body rides to the
+# provider whole - bindJobParams inside the runner is the single validation point.
 security:
   policy: ops.batch.run
 
@@ -14,10 +17,16 @@ input:
     type: string
     required: true
 
+# Dynamic param.<name> fields cannot be declared statically; they pass through to the
+# provider and bindJobParams validates them against the job's declaration.
+inputPolicy:
+  unknownFields: ignore
+
 sql:
   service: ops.jobRun
   params:
     id: params.id
+    values: body
     actor: principal.loginId
     # Narrows to the caller's ops.app.<name> grants (deny by default).
     permissions: principal.permissions
