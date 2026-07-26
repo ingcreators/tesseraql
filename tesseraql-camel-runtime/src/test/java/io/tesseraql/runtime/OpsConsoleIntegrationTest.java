@@ -46,6 +46,13 @@ class OpsConsoleIntegrationTest {
 
     // The ops console is now browser-session auth; an authenticated GET carries this admin cookie.
     static String adminCookie;
+    static String adminCsrf;
+    // A scope-granted operator (ops.app.*): sees every app's rows and may act on them.
+    static String scopedCookie;
+    static String scopedCsrf;
+    // Sees rows (view policy + scope) but holds no run policy.
+    static String viewerCookie;
+    static String viewerCsrf;
 
     @BeforeAll
     static void start() throws Exception {
@@ -54,9 +61,21 @@ class OpsConsoleIntegrationTest {
         io.tesseraql.security.session.SessionStore sessions = runtime.camelContext().getRegistry()
                 .lookupByNameAndType(io.tesseraql.camel.TesseraqlProperties.SESSION_STORE_BEAN,
                         io.tesseraql.security.session.SessionStore.class);
-        adminCookie = sessions.cookieName() + "=" + sessions.create(
+        String adminSid = sessions.create(
                 new io.tesseraql.security.Principal("ops-user", "ops-user", "Ops User", null,
                         List.of(), List.of("ADMIN"), List.of(), Map.of()));
+        adminCookie = sessions.cookieName() + "=" + adminSid;
+        adminCsrf = sessions.session(adminSid).csrfToken();
+        String scopedSid = sessions.create(
+                new io.tesseraql.security.Principal("ops-admin", "ops-admin", "Ops Admin", null,
+                        List.of(), List.of("ADMIN"), List.of("ops.app.*"), Map.of()));
+        scopedCookie = sessions.cookieName() + "=" + scopedSid;
+        scopedCsrf = sessions.session(scopedSid).csrfToken();
+        String viewerSid = sessions.create(
+                new io.tesseraql.security.Principal("ops-viewer", "ops-viewer", "Ops Viewer",
+                        null, List.of(), List.of("BATCH_VIEWER"), List.of("ops.app.*"), Map.of()));
+        viewerCookie = sessions.cookieName() + "=" + viewerSid;
+        viewerCsrf = sessions.session(viewerSid).csrfToken();
     }
 
     @AfterAll
@@ -166,6 +185,111 @@ class OpsConsoleIntegrationTest {
     void requiresAuthentication() throws Exception {
         assertThat(get("/_tesseraql/ops/console", false).statusCode()).isEqualTo(401);
         assertThat(get("/_tesseraql/ops/console/traces", false).statusCode()).isEqualTo(401);
+    }
+
+    @Test
+    void redeliverButtonRendersOnlyOnDeadRows() throws Exception {
+        String deadId = seedDeadEvent();
+        String pendingId = outboxStore().insert(outboxEvent());
+
+        String body = getWith("/_tesseraql/ops/console/outbox", scopedCookie).body();
+
+        // The row-level form carries the event id; FAILED/PENDING rows stay button-free
+        // (docs/ops-console-actions.md: not-yet-dead events are the dispatcher's to retry).
+        assertThat(body).contains("action=\"/_tesseraql/ops/console/outbox/redeliver\"")
+                .contains("name=\"id\" value=\"" + deadId + "\"")
+                .doesNotContain("name=\"id\" value=\"" + pendingId + "\"");
+    }
+
+    @Test
+    void redeliverRequeuesADeadEvent() throws Exception {
+        String deadId = seedDeadEvent();
+
+        HttpResponse<String> response = postForm("/_tesseraql/ops/console/outbox/redeliver",
+                "id=" + deadId, scopedCookie, scopedCsrf);
+
+        assertThat(response.statusCode()).isEqualTo(303);
+        assertThat(response.headers().firstValue("location"))
+                .hasValueSatisfying(value -> assertThat(value).contains("redelivered=1"));
+        assertThat(outboxStore().find(deadId).orElseThrow().status()).isEqualTo("PENDING");
+    }
+
+    @Test
+    void redeliverOutOfScopeReadsAsUnknown() throws Exception {
+        String deadId = seedDeadEvent();
+
+        // The plain admin session holds no ops.app.* grant: deny-by-default hides the
+        // event, and out-of-scope answers exactly like unknown (the JSON API's stance).
+        HttpResponse<String> response = postForm("/_tesseraql/ops/console/outbox/redeliver",
+                "id=" + deadId, adminCookie, adminCsrf);
+
+        assertThat(response.statusCode()).isEqualTo(404);
+        assertThat(outboxStore().find(deadId).orElseThrow().status()).isEqualTo("DEAD");
+    }
+
+    @Test
+    void redeliverRequiresTheRunPolicy() throws Exception {
+        String deadId = seedDeadEvent();
+
+        // BATCH_VIEWER satisfies ops.batch.view but not ops.batch.run.
+        HttpResponse<String> response = postForm("/_tesseraql/ops/console/outbox/redeliver",
+                "id=" + deadId, viewerCookie, viewerCsrf);
+
+        assertThat(response.statusCode()).isEqualTo(403);
+        assertThat(outboxStore().find(deadId).orElseThrow().status()).isEqualTo("DEAD");
+    }
+
+    @Test
+    void redeliverRequiresACsrfToken() throws Exception {
+        String deadId = seedDeadEvent();
+
+        HttpResponse<String> response = postForm("/_tesseraql/ops/console/outbox/redeliver",
+                "id=" + deadId, scopedCookie, null);
+
+        assertThat(response.statusCode()).isEqualTo(403);
+        assertThat(outboxStore().find(deadId).orElseThrow().status()).isEqualTo("DEAD");
+    }
+
+    private static io.tesseraql.operations.outbox.JdbcOutboxStore outboxStore() {
+        return runtime.camelContext().getRegistry().lookupByNameAndType(
+                io.tesseraql.camel.TesseraqlProperties.OUTBOX_STORE_BEAN,
+                io.tesseraql.operations.outbox.JdbcOutboxStore.class);
+    }
+
+    private static io.tesseraql.core.outbox.OutboxEvent outboxEvent() {
+        return new io.tesseraql.core.outbox.OutboxEvent(null, "user", "sato",
+                "USER_PROVISIONED", "{}", "PENDING", 0, null, java.time.Instant.now(), null,
+                "user-admin");
+    }
+
+    private static String seedDeadEvent() {
+        io.tesseraql.operations.outbox.JdbcOutboxStore outbox = outboxStore();
+        String id = outbox.insert(outboxEvent());
+        outbox.markDead(id, "delivery kept failing");
+        return id;
+    }
+
+    private static HttpResponse<String> getWith(String path, String cookie) throws Exception {
+        HttpRequest.Builder request = HttpRequest.newBuilder(
+                URI.create("http://localhost:" + runtime.port() + path))
+                .header("Cookie", cookie);
+        return HttpClient.newHttpClient().send(request.build(),
+                HttpResponse.BodyHandlers.ofString());
+    }
+
+    /** A browser-session form POST; {@code csrf} null leaves the token header off. */
+    private static HttpResponse<String> postForm(String path, String form, String cookie,
+            String csrf) throws Exception {
+        HttpRequest.Builder request = HttpRequest.newBuilder(
+                URI.create("http://localhost:" + runtime.port() + path))
+                .header("Cookie", cookie)
+                .header("Content-Type", "application/x-www-form-urlencoded")
+                .POST(HttpRequest.BodyPublishers.ofString(form));
+        if (csrf != null) {
+            request.header("X-CSRF-Token", csrf);
+        }
+        return HttpClient.newHttpClient().send(request.build(),
+                HttpResponse.BodyHandlers.ofString());
     }
 
     private static HttpResponse<String> get(String path, boolean auth) throws Exception {

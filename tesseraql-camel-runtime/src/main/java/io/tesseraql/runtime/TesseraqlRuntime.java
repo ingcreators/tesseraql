@@ -916,6 +916,21 @@ public final class TesseraqlRuntime implements AutoCloseable {
                                         .filter(event -> scope.test(event.appName()))
                                         .toList());
                     })
+                    .register("ops.outboxRedeliver", params -> {
+                        java.util.function.Predicate<String> scope = io.tesseraql.opsui.OpsScope
+                                .allowedApps(params.get("permissions"));
+                        String id = String.valueOf(params.get("id"));
+                        // Out of scope reads exactly like unknown - the JSON API's stance
+                        // (docs/ops-console-actions.md); 4040 renders as a plain 404.
+                        io.tesseraql.core.outbox.OutboxEvent event = outboxStore.find(id)
+                                .filter(found -> scope.test(found.appName()))
+                                .orElseThrow(() -> new io.tesseraql.core.error.TqlException(
+                                        new io.tesseraql.core.error.TqlErrorCode(
+                                                io.tesseraql.core.error.TqlDomain.BATCH, 4040),
+                                        "Not Found"));
+                        return java.util.Map.of("id", event.id(),
+                                "redelivered", outboxStore.redeliver(id));
+                    })
                     .register("ops.execution", params -> {
                         String id = params.get("id") == null
                                 ? ""
