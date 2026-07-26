@@ -895,13 +895,27 @@ public final class TesseraqlRuntime implements AutoCloseable {
             // Service providers expose non-SQL runtime state to mounted yaml/template apps
             // (the bundled ops-console and studio apps render these, design ch. 26.11, 16, 47).
             io.tesseraql.opsui.OpsDashboard dashboardRef = opsDashboard;
+            io.tesseraql.operations.audit.JdbcRouteAuditStore auditStoreRef = routeAuditStore;
             io.tesseraql.core.service.ServiceProviders serviceProviders = new io.tesseraql.core.service.ServiceProviders()
                     // Batch visibility narrows to the caller's ops.app.<name> grants,
                     // bound by the console routes as principal.permissions (ch. 26.11).
                     .register("ops.overview",
                             params -> io.tesseraql.opsui.OpsViews.overview(dashboardRef.overview(20,
                                     io.tesseraql.opsui.OpsScope.allowedApps(
-                                            params.get("permissions")))))
+                                            params.get("permissions"))),
+                                    dashboardRef.health(),
+                                    io.tesseraql.core.TesseraqlVersion.current()))
+                    // The audit page is always mounted; the provider owns the honest
+                    // empty state when the flag-gated store is off
+                    // (docs/ops-console-coverage.md).
+                    .register("ops.audit",
+                            params -> io.tesseraql.opsui.OpsViews.audit(
+                                    auditStoreRef == null
+                                            ? null
+                                            : auditStoreRef.recent(200,
+                                                    io.tesseraql.opsui.OpsScope.allowedApps(
+                                                            params.get("permissions"))),
+                                    auditStoreRef != null))
                     .register("ops.traces",
                             params -> io.tesseraql.opsui.OpsViews.traces(dashboardRef.traceTree(
                                     io.tesseraql.opsui.OpsScope.allowedApps(

@@ -16,6 +16,7 @@
      Anchors the always-present sections; auto-refresh re-renders these links unchanged. -->
 <nav class="hc-cluster" aria-label="Jump to section">
   <span class="hc-field__label">Jump to</span>
+  <a class="hc-button" data-variant="ghost" data-size="sm" href="#health">Health</a>
   <a class="hc-button" data-variant="ghost" data-size="sm" href="#batch">Batch</a>
   <a class="hc-button" data-variant="ghost" data-size="sm" href="#lanes">Lanes</a>
   <a class="hc-button" data-variant="ghost" data-size="sm" href="#traces">Traces</a>
@@ -28,6 +29,20 @@
     <p th:each="a : ${ops.alerts}" class="hc-alert" role="status"
        th:attr="data-variant=${a.severity}"><code th:text="${a.code}"></code> [[${a.message}]]</p>
   </div>
+</section>
+<section class="hc-card" id="health">
+  <h2>Health</h2>
+  <!-- The health() roll-up with its per-datasource probe map, and the deployed version
+       (docs/ops-console-coverage.md): DOWN means a datasource this app cannot serve
+       without is unreachable. -->
+  <div class="hc-cluster">
+    <span class="hc-badge" th:attr="data-variant=${ops.health.statusVariant}" th:text="${ops.health.status}"></span>
+    <span class="hc-field__message">TesseraQL <span th:text="${ops.version}"></span></span>
+  </div>
+  <ul class="hc-chips" th:if="${ops.health.hasDatasources}">
+    <li th:each="d : ${ops.health.datasources}" class="hc-badge"
+        th:attr="data-variant=${d.stateVariant}">[[${d.name}]]: [[${d.state}]]</li>
+  </ul>
 </section>
 <section class="hc-card" id="batch">
   <h2>Batch executions</h2>

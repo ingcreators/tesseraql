@@ -25,11 +25,18 @@ public final class OpsViews {
     private OpsViews() {
     }
 
-    /** The overview page model: batch summary, lanes, trace metrics, slow SQL, pinning, alerts. */
-    public static Map<String, Object> overview(Overview overview) {
+    /**
+     * The overview page model: batch summary, lanes, trace metrics, slow SQL, pinning,
+     * alerts — and the health roll-up with its per-datasource probe map plus the deployed
+     * version (docs/ops-console-coverage.md).
+     */
+    public static Map<String, Object> overview(Overview overview,
+            io.tesseraql.opsui.OpsDashboard.HealthReport health, String version) {
         Map<String, Object> model = new LinkedHashMap<>();
         model.put("warning", overview.warning());
         model.put("ok", !overview.warning());
+        model.put("health", health(health));
+        model.put("version", version == null || version.isBlank() ? "dev" : version);
         model.put("alerts", alerts(overview.alerts()));
         model.put("hasAlerts", !overview.alerts().isEmpty());
         model.put("batchTotal", overview.batch().total());
@@ -44,6 +51,63 @@ public final class OpsViews {
         model.put("pinningCount", overview.pinning().count());
         model.put("hasPinning", overview.pinning().count() > 0);
         return model;
+    }
+
+    /** The health panel: the roll-up badge plus each datasource probe as its own badge. */
+    private static Map<String, Object> health(io.tesseraql.opsui.OpsDashboard.HealthReport health) {
+        Map<String, Object> model = new LinkedHashMap<>();
+        model.put("status", health.status());
+        model.put("statusVariant", switch (health.status()) {
+            case "UP" -> "success";
+            case "WARN" -> "warning";
+            default -> "error";
+        });
+        List<Map<String, Object>> datasources = new ArrayList<>();
+        if (health.details().get("datasources") instanceof Map<?, ?> probes) {
+            probes.forEach((name, up) -> datasources.add(Map.of(
+                    "name", String.valueOf(name),
+                    "state", Boolean.TRUE.equals(up) ? "reachable" : "unreachable",
+                    "stateVariant", Boolean.TRUE.equals(up) ? "success" : "error")));
+        }
+        model.put("datasources", datasources);
+        model.put("hasDatasources", !datasources.isEmpty());
+        return model;
+    }
+
+    /**
+     * The audit page model (docs/ops-console-coverage.md): {@code enabled} reports whether
+     * the flag-gated store is on, so the empty state can name the flag instead of
+     * pretending nothing happened. Rows come pre-scoped from the store.
+     */
+    public static Map<String, Object> audit(List<Map<String, Object>> rows, boolean enabled) {
+        List<Map<String, Object>> out = new ArrayList<>();
+        if (rows != null) {
+            for (Map<String, Object> row : rows) {
+                Map<String, Object> view = new LinkedHashMap<>(row);
+                Object status = row.get("status");
+                view.put("status", status == null ? "-" : status);
+                view.put("statusVariant", httpVariant(status));
+                view.put("actor", dash((String) row.get("actor")));
+                view.put("tenantId", dash((String) row.get("tenantId")));
+                view.put("traceId", dash((String) row.get("traceId")));
+                view.put("params", dash((String) row.get("params")));
+                out.add(view);
+            }
+        }
+        Map<String, Object> model = new LinkedHashMap<>();
+        model.put("enabled", enabled);
+        model.put("rows", out);
+        model.put("hasRows", !out.isEmpty());
+        return model;
+    }
+
+    /** Maps an HTTP status onto the kit's semantic variants (5xx error, 4xx warning). */
+    private static String httpVariant(Object status) {
+        if (!(status instanceof Number number)) {
+            return "neutral";
+        }
+        int value = number.intValue();
+        return value >= 500 ? "error" : value >= 400 ? "warning" : "success";
     }
 
     /** The file transfer page model: recent imports/exports, already scope-filtered. */
