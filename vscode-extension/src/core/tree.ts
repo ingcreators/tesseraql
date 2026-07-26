@@ -31,6 +31,26 @@ export function buildAppTree(home: string): AppNode[] {
     sections.push({ label: 'Views', kind: 'section', children: views.map((file) => fileNode(home, file)) });
   }
 
+  const domains = collectFiles(path.join(home, 'domains'), (name) => name.endsWith('.yml'));
+  if (domains.length > 0) {
+    sections.push({
+      label: 'Domains',
+      kind: 'section',
+      children: domains.map((file) => fileNode(path.join(home, 'domains'), file)),
+    });
+  }
+
+  // Shared validation rules and the SQL files their file: rules resolve against.
+  const rules = collectFiles(path.join(home, 'rules'),
+      (name) => name.endsWith('.yml') || name.endsWith('.sql'));
+  if (rules.length > 0) {
+    sections.push({
+      label: 'Rules',
+      kind: 'section',
+      children: rules.map((file) => fileNode(path.join(home, 'rules'), file)),
+    });
+  }
+
   const migrations = collectFiles(path.join(home, 'db'), (name) => name.endsWith('.sql'));
   if (migrations.length > 0) {
     sections.push({
