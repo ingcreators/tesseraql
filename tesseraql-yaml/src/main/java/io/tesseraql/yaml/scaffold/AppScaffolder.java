@@ -77,6 +77,15 @@ public final class AppScaffolder {
                         absoluteResource("/schema/tesseraql-domains-v1.schema.json")),
                 new ScaffoldedFile(".vscode/tesseraql-rules-v1.schema.json",
                         absoluteResource("/schema/tesseraql-rules-v1.schema.json")),
+                // The remaining authored surfaces (docs/vscode-extension.md "schema
+                // completion"): the app config, test suites, and message catalogs each get
+                // their own schema, so no authored YAML is editor-blind.
+                new ScaffoldedFile(".vscode/tesseraql-config-v1.schema.json",
+                        absoluteResource("/schema/tesseraql-config-v1.schema.json")),
+                new ScaffoldedFile(".vscode/tesseraql-tests-v1.schema.json",
+                        absoluteResource("/schema/tesseraql-tests-v1.schema.json")),
+                new ScaffoldedFile(".vscode/tesseraql-messages-v1.schema.json",
+                        absoluteResource("/schema/tesseraql-messages-v1.schema.json")),
                 new ScaffoldedFile(".vscode/settings.json", VSCODE_SETTINGS_JSON),
                 new ScaffoldedFile(".vscode/extensions.json", VSCODE_EXTENSIONS_JSON));
     }
@@ -95,6 +104,15 @@ public final class AppScaffolder {
                 ],
                 ".vscode/tesseraql-rules-v1.schema.json": [
                   "rules/**/*.yml"
+                ],
+                ".vscode/tesseraql-config-v1.schema.json": [
+                  "config/tesseraql.yml"
+                ],
+                ".vscode/tesseraql-tests-v1.schema.json": [
+                  "tests/**/*.yml"
+                ],
+                ".vscode/tesseraql-messages-v1.schema.json": [
+                  "messages/*.yml"
                 ]
               }
             }

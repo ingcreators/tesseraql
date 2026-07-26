@@ -1,0 +1,91 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tesseraql.io/schema/tesseraql-tests-v1.schema.json",
+  "title": "TesseraQL test suite (tests/*.yml)",
+  "$comment": "Deliberately open (additionalProperties: true): newer keys never break older editors. Each case sets exactly one target - sql, contract, validate, notify, messages, or http-call - stated as prose rather than a oneOf so editors report missing keys, not opaque union failures.",
+  "type": "object",
+  "required": ["tests"],
+  "properties": {
+    "tests": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name"],
+        "properties": {
+          "name": { "type": "string" },
+          "sql": {
+            "type": "object",
+            "properties": {
+              "file": { "type": "string", "description": "The 2-way SQL file under the app home this case executes." }
+            },
+            "additionalProperties": true
+          },
+          "contract": { "type": "string", "description": "A named identity contract to execute instead of a SQL file." },
+          "validate": {
+            "type": "object",
+            "properties": {
+              "route": { "type": "string" },
+              "rule": { "type": "string" }
+            },
+            "additionalProperties": true,
+            "description": "Exercises one declarative validation rule of a route."
+          },
+          "notify": {
+            "type": "object",
+            "properties": {
+              "route": { "type": "string" },
+              "job": { "type": "string" },
+              "id": { "type": "string" },
+              "send": { "type": "boolean" }
+            },
+            "additionalProperties": true
+          },
+          "http-call": {
+            "type": "object",
+            "properties": {
+              "route": { "type": "string" },
+              "job": { "type": "string" },
+              "id": { "type": "string" },
+              "send": { "type": "boolean" }
+            },
+            "additionalProperties": true
+          },
+          "messages": {
+            "type": "object",
+            "properties": {
+              "locale": { "type": "string" },
+              "keys": { "type": "array", "items": { "type": "string" } }
+            },
+            "additionalProperties": true
+          },
+          "params": { "type": "object", "additionalProperties": true },
+          "expect": {
+            "type": "object",
+            "properties": {
+              "rowCount": { "type": "integer" },
+              "updateCount": { "type": "integer" },
+              "rows": { "type": "array", "items": { "type": "object", "additionalProperties": true } }
+            },
+            "additionalProperties": true,
+            "description": "Data-independent expectations over the case's result."
+          },
+          "verify": {
+            "type": "array",
+            "description": "Follow-up SQL checks after a sql-target case, each with its own params and expect.",
+            "items": {
+              "type": "object",
+              "properties": {
+                "sql": { "type": "object", "additionalProperties": true },
+                "params": { "type": "object", "additionalProperties": true },
+                "expect": { "type": "object", "additionalProperties": true }
+              },
+              "additionalProperties": true
+            }
+          }
+        },
+        "additionalProperties": true
+      }
+    }
+  },
+  "additionalProperties": true
+}

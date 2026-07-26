@@ -16,8 +16,8 @@ Schema for TesseraQL Simple YAML documents: routes (web/**/<method>.yml), jobs (
 | `input` | map of [inputField](#inputfield) |  |
 | `inputPolicy` | object | Route-level input handling policy (e.g. unknown-field behavior) layered over the deny-by-default input: contract. |
 | `security` | [object](#security) |  |
-| `idempotency` | object | Idempotent replay for commands: required, scope (default: the route id), ttl (default 24h). A replayed key returns the stored response; a reused key with a different body is TQL-IDEM-4090. Documented in transactional-writes.md. |
-| `policy` | object | Row-authority policy binds for /*%scope*/ directives in the route's SQL. Documented in data-scoping.md. |
+| `idempotency` | [object](#idempotency) | Idempotent replay for commands. A replayed key returns the stored response; a reused key with a different body is TQL-IDEM-4090. Documented in transactional-writes.md. |
+| `policy` | [object](#policy) | Admission policy for this route: concurrency, rate limiting, and the execution lane. Documented in productivity.md (admission) and jobs.md (lanes). |
 | `outbox` | object | Transactional outbox event recorded with the command and delivered at-least-once after commit. Documented in notifications.md and messaging.md. |
 | `http` | map of [object](#http) | Named HTTP sources on a query route (docs/connectors.md, "HTTP sources"): each is a body-less GET against an external JSON API, executed through the outbound gateway (deny-by-default allowedHosts, named credentials, timeouts, circuit breaker) and composed with the SQL results in the response or view as <name>.rows / <name>.body. Query recipes only (TQL-YAML-1022). |
 | `cache` | [object](#cache) | Declarative HTTP caching for query responses (docs/response-shaping.md): Cache-Control from maxAge/visibility (private default; public lints onto auth: public only) and a content ETag answering If-None-Match with 304. Query recipes only (TQL-YAML-1025). |
@@ -47,7 +47,10 @@ Schema for TesseraQL Simple YAML documents: routes (web/**/<method>.yml), jobs (
 | `panels` | array of any |  |
 | `children` | object |  |
 | `slots` | map of string |  |
-| `trigger` | object |  |
+| `trigger` | [object](#trigger) | How a job starts (kind: job): a schedule, or a directory/SFTP/FTPS poll source feeding the import: pipeline. Documented in jobs.md and connectors.md. |
+| `perTenant` | boolean | Run this job once per configured tenant, each on its own datasource and tenant context (kind: job). Documented in multi-tenancy.md. |
+| `params` | map of [inputField](#inputfield) | A job's declared parameters (kind: job) - the same field contract routes declare with input:. Documented in jobs.md. |
+| `pipeline` | array of object | A batch-pipeline job's ordered steps (sql, http-call, or notify per step), each publishing its result to the step context. Documented in jobs.md. |
 
 ### security
 
@@ -55,8 +58,41 @@ Schema for TesseraQL Simple YAML documents: routes (web/**/<method>.yml), jobs (
 | --- | --- | --- |
 | `auth` | enum: `bearer` \| `browser` \| `apiKey` \| `mtls` \| `public` | bearer \| browser \| apiKey \| mtls \| public (deny-by-default: no auth means no access to protected data). |
 | `policy` | string | A policy id under tesseraql.security.policies. |
-| `provider` | string |  |
 | `csrf` | boolean |  |
+
+### idempotency
+
+Idempotent replay for commands. A replayed key returns the stored response; a reused key with a different body is TQL-IDEM-4090. Documented in transactional-writes.md.
+
+| Property | Type | Description |
+| --- | --- | --- |
+| `required` | boolean | Whether the Idempotency-Key header is required on this command. |
+| `scope` | string | The replay scope key (default: the route id). |
+| `ttl` | string | How long a stored response replays (duration string, default 24h). |
+
+### policy
+
+Admission policy for this route: concurrency, rate limiting, and the execution lane. Documented in productivity.md (admission) and jobs.md (lanes).
+
+| Property | Type | Description |
+| --- | --- | --- |
+| `concurrency` | [object](#policyconcurrency) |  |
+| `rateLimit` | [object](#policyratelimit) |  |
+| `lane` | string | The execution lane this route runs on (tesseraql.lanes). |
+
+#### policy.concurrency
+
+| Property | Type | Description |
+| --- | --- | --- |
+| `maxInFlight` | integer | Maximum requests of this route in flight at once; excess is rejected. |
+
+#### policy.rateLimit
+
+| Property | Type | Description |
+| --- | --- | --- |
+| `requestsPerSecond` | integer |  |
+| `burst` | integer | Burst capacity (default: requestsPerSecond). |
+| `scope` | enum: `node` \| `cluster` | node (default) limits per runtime node; cluster coordinates through the shared lease store (TQL-YAML-1023). |
 
 ### http
 
@@ -177,7 +213,6 @@ Declarative pagination: the framework appends the dialect clause; authored SQL c
 
 | Property | Type | Description |
 | --- | --- | --- |
-| `contentType` | string |  |
 | `filename` | string |  |
 
 #### response.redirect
@@ -203,6 +238,36 @@ Declarative pagination: the framework appends the dialect clause; authored SQL c
 | --- | --- | --- |
 | `retarget` | string |  |
 | `reswap` | string |  |
+
+### trigger
+
+How a job starts (kind: job): a schedule, or a directory/SFTP/FTPS poll source feeding the import: pipeline. Documented in jobs.md and connectors.md.
+
+| Property | Type | Description |
+| --- | --- | --- |
+| `schedule` | [object](#triggerschedule) |  |
+| `poll` | [object](#triggerpoll) |  |
+
+#### trigger.schedule
+
+| Property | Type | Description |
+| --- | --- | --- |
+| `cron` | string | A Quartz cron expression; firings are claimed cluster-wide so one node runs each. |
+| `fixedDelay` | string | A period (duration string, e.g. 5m); mutually exclusive with cron. |
+
+#### trigger.poll
+
+| Property | Type | Description |
+| --- | --- | --- |
+| `source` | enum: `local` \| `sftp` \| `ftps` | local (default) polls a directory under connectors.poll.allowedPaths; sftp/ftps poll a remote host in connectors.poll.allowedHosts. |
+| `host` | string |  |
+| `port` | integer |  |
+| `path` | string | The polled directory. A local path must sit under a declared allowedPaths root. |
+| `credential` | string | A named credential under tesseraql.connectors.poll.credentials (required for remote sources). |
+| `include` | string | An ant-style filename filter, e.g. *.csv. |
+| `delay` | string | Poll interval (duration string). |
+| `move` | string | Relative directory for processed files (default .done). Plain names only - no paths or placeholders. |
+| `moveFailed` | string | Relative directory for failed files (default .error). Plain names only. |
 
 ## Other document kinds
 
