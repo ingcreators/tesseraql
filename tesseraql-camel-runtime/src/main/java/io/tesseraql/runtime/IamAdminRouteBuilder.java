@@ -63,11 +63,18 @@ final class IamAdminRouteBuilder extends RouteBuilder {
                     RealmConfig realm = exchange.getContext().getRegistry()
                             .lookupByNameAndType(TesseraqlProperties.IDENTITY_REALM_BEAN,
                                     RealmConfig.class);
+                    io.tesseraql.security.session.SessionStore sessions = exchange.getContext()
+                            .getRegistry().lookupByNameAndType(
+                                    TesseraqlProperties.SESSION_STORE_BEAN,
+                                    io.tesseraql.security.session.SessionStore.class);
                     // The same contract the per-user route runs, once per selected id; an
-                    // id that matches no user simply updates zero rows.
+                    // id that matches no user simply updates zero rows. Disabled means
+                    // disabled (docs/session-administration.md): every session of each
+                    // subject ends now, not at cookie expiry.
                     for (String id : ids) {
                         identity.executeUpdate(realm, IdentityContracts.DISABLE_USER,
                                 Map.of("userId", id));
+                        sessions.invalidateOthersFor(id, "");
                     }
                     exchange.getMessage().setHeader(Exchange.HTTP_RESPONSE_CODE, 303);
                     exchange.getMessage().setHeader("Location", USERS);
