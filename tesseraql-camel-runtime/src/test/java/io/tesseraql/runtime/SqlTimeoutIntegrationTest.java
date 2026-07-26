@@ -83,6 +83,19 @@ class SqlTimeoutIntegrationTest {
         assertThat(elapsed).isLessThan(8_000);
     }
 
+    /**
+     * A batch step runs the dialect variant beside its file.
+     *
+     * <p>It ran the generic one. This executor resolved the SQL path itself and never asked the
+     * datasource its vendor, so an {@code x.postgresql.sql} sitting next to {@code x.sql} was
+     * never opened — silently, which is the failure a dialect variant exists to prevent.
+     */
+    @Test
+    void aBatchStepRunsTheDialectVariant() {
+        assertThat(String.valueOf(runtime.runJob("variant.job", java.util.Map.of()).status()))
+                .isEqualTo("COMPLETED");
+    }
+
     @Test
     void anExplicitZeroOptsALongRunningStatementOut() throws Exception {
         // timeoutSeconds: 0 disables the guard; a 2s sleep outlives the 1s app default.
@@ -190,6 +203,26 @@ class SqlTimeoutIntegrationTest {
                   mode: query
                 """);
         Files.writeString(slowJob.resolve("nap.sql"), "select pg_sleep(10) as nap\n");
+
+        // A job whose SQL has a PostgreSQL variant beside it: the batch executor resolved the
+        // path itself and never asked the datasource, so the generic file ran and the variant sat
+        // there unread.
+        Path variantJob = target.resolve("batch/variant");
+        Files.createDirectories(variantJob);
+        Files.writeString(variantJob.resolve("job.yml"), """
+                version: tesseraql/v1
+                id: variant.job
+                kind: job
+                recipe: batch-tasklet
+                sql:
+                  file: pick.sql
+                  mode: query
+                """);
+        // The generic file references a table that does not exist; the variant is valid. Which
+        // one ran is therefore the job's outcome, not something the test has to introspect.
+        Files.writeString(variantJob.resolve("pick.sql"),
+                "select this_column_does_not_exist from nowhere\n");
+        Files.writeString(variantJob.resolve("pick.postgresql.sql"), "select 1 as ok\n");
 
         // The command path: a step opens its own transaction with no transaction manager to
         // bound it, so it has to read the same timeout the route path does.

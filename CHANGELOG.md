@@ -169,6 +169,11 @@ All notable changes to TesseraQL are documented here. The format follows
   holding a pooled connection — where the same statement on a route or inside a command has been
   bounded by `tesseraql.sql.timeoutSeconds` all along. A job is where a runaway statement goes
   unnoticed longest, because nobody is waiting for the response.
+- **Batch steps run the dialect variant beside their SQL** (docs/batch-jobs.md): `JobExecutor`
+  resolved the SQL path itself and never asked the datasource its vendor, so an
+  `x.postgresql.sql` sitting next to `x.sql` was never opened and the generic file ran instead —
+  silently, which is the failure a dialect variant exists to prevent. The vendor is read once per
+  pool and cached, since reading it costs a pooled connection.
 
 - **A job's declared `params:` are bound before it runs** (docs/batch-jobs.md): they were accepted,
   documented with a shipped example, and never read, so whatever the caller sent reached the job's
