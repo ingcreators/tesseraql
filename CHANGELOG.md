@@ -8,6 +8,14 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **Poll sources report their health** (docs/poll-source-status.md): a per-node registry
+  tracks every poll-triggered job — a source refused at wire time (egress-denied host,
+  missing credential or trust store, no `import:` block) now reports *not polling* with the
+  reason, instead of only a startup log line, and each polled file stamps the last import's
+  outcome and failure streak. The ops console jobs page gains a *Source* column, and a
+  skipped or repeatedly failing source raises the new `TQL-OPS-9007` operational alert,
+  riding the existing alert surface and outbox notifier.
+
 - **Session administration in IAM Admin, and disabled means disabled**
   (docs/session-administration.md): the user detail page gains an *Active sessions* panel
   (sign-in and expiry times only — session ids never reach a template) with a confirm-gated

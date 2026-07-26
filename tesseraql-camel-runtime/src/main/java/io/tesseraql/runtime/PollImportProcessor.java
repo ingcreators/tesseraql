@@ -34,18 +34,20 @@ final class PollImportProcessor implements Processor {
     private final FileReadSpec readSpec;
     private final Path rowSqlFile;
     private final String onError;
+    private final io.tesseraql.opsui.PollSourceStatus status;
 
     /** How often the poll thread re-reads the transfer's status while it runs. */
     private static final long POLL_INTERVAL_MILLIS = 100;
 
     PollImportProcessor(String jobId, String appName, String format, FileReadSpec readSpec,
-            Path rowSqlFile, String onError) {
+            Path rowSqlFile, String onError, io.tesseraql.opsui.PollSourceStatus status) {
         this.jobId = jobId;
         this.appName = appName;
         this.format = format;
         this.readSpec = readSpec;
         this.rowSqlFile = rowSqlFile;
         this.onError = onError;
+        this.status = status;
     }
 
     @Override
@@ -70,6 +72,12 @@ final class PollImportProcessor implements Processor {
             LOG.log(System.Logger.Level.INFO,
                     "Polled file {0} ingested for job {1} as transfer {2}",
                     fileName, jobId, transferId);
+            status.imported(jobId, "'" + fileName + "' imported");
+        } catch (Exception ex) {
+            // The failure still moves the file per moveFailed:; the registry is what makes
+            // it visible on the console (docs/poll-source-status.md).
+            status.failed(jobId, ex.getMessage());
+            throw ex;
         }
     }
 

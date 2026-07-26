@@ -30,6 +30,7 @@ public final class OpsDashboard {
     private final io.tesseraql.core.diag.PinningMonitor pinning;
     private java.util.function.Supplier<Map<String, Integer>> outboxCounts;
     private java.util.function.Supplier<Map<String, Boolean>> datasourceProbe;
+    private PollSourceStatus pollSources;
 
     public OpsDashboard(JobRepository jobs, ExecutionLanes lanes, SqlExecutionLog slowSql,
             TraceLog traces, long slowSpanThresholdMs) {
@@ -78,6 +79,15 @@ public final class OpsDashboard {
      */
     public OpsDashboard datasourceProbe(java.util.function.Supplier<Map<String, Boolean>> probe) {
         this.datasourceProbe = probe;
+        return this;
+    }
+
+    /**
+     * Wires the poll-source registry (docs/poll-source-status.md), so a source skipped at
+     * wire time or failing repeatedly raises an operational alert instead of only a log line.
+     */
+    public OpsDashboard pollSources(PollSourceStatus pollSources) {
+        this.pollSources = pollSources;
         return this;
     }
 
@@ -197,6 +207,21 @@ public final class OpsDashboard {
                 alerts.add(new Alert("TQL-OPS-9006", "warning",
                         dead + " outbox event(s) dead-lettered; inspect the outbox delivery"
                                 + " log and redeliver or discard them"));
+            }
+        }
+        if (pollSources != null) {
+            for (PollSourceStatus.SourceState source : pollSources.all()) {
+                if (source.skipped()) {
+                    alerts.add(new Alert("TQL-OPS-9007", "warning",
+                            "Poll source for job '" + source.jobId() + "' is not polling: "
+                                    + source.reason()));
+                } else if (source
+                        .consecutiveFailures() >= PollSourceStatus.FAILURE_ALERT_THRESHOLD) {
+                    alerts.add(new Alert("TQL-OPS-9007", "warning",
+                            "Poll source for job '" + source.jobId() + "' failed "
+                                    + source.consecutiveFailures()
+                                    + " consecutive import(s); last: " + source.lastResult()));
+                }
             }
         }
         if (jobs != null) {
