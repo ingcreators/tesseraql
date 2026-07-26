@@ -14,11 +14,13 @@
 <th:block th:if="${execution.found}">
 <section class="hc-card">
   <h2>Summary</h2>
+  <p class="hc-alert" data-variant="success" role="status" th:if="${!#strings.isEmpty(started)}">Job started.</p>
   <table class="hc-table" data-variant="kv"><tbody>
     <tr><th scope="row">Job</th><td th:text="${execution.jobId}"></td></tr>
     <tr><th scope="row">App</th><td th:text="${execution.app}"></td></tr>
     <tr><th scope="row">Status</th><td class="hc-status" th:attr="data-variant=${execution.statusVariant}" th:text="${execution.status}"></td></tr>
     <tr><th scope="row">Trigger</th><td th:text="${execution.trigger}"></td></tr>
+    <tr><th scope="row">Triggered by</th><td th:text="${execution.triggeredBy}"></td></tr>
     <tr><th scope="row">Started</th><td th:text="${execution.startTime}"></td></tr>
     <tr><th scope="row">Ended</th><td th:text="${execution.endTime}"></td></tr>
     <tr><th scope="row">Duration (ms)</th><td th:text="${execution.durationMs}"></td></tr>

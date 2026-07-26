@@ -136,7 +136,8 @@ public final class JdbcFileTransferService implements FileTransferService {
             throw new TqlException(EMPTY_UPLOAD,
                     "file-import expects the uploaded file as the request body");
         }
-        String transferId = jobs.startExecution(request.routeId(), request.appName(), "import");
+        String transferId = jobs.startExecution(request.routeId(), request.appName(), "import",
+                null);
         insertTransfer(transferId, request.routeId(), request.appName(), "IMPORT",
                 request.format(), null, null, null, Map.of());
         executor.submit(guarded(transferId, () -> {
@@ -174,7 +175,8 @@ public final class JdbcFileTransferService implements FileTransferService {
         String filename = request.filename() != null && !request.filename().isBlank()
                 ? request.filename()
                 : request.routeId() + codec.extension();
-        String transferId = jobs.startExecution(request.routeId(), request.appName(), "export");
+        String transferId = jobs.startExecution(request.routeId(), request.appName(), "export",
+                null);
         insertTransfer(transferId, request.routeId(), request.appName(), "EXPORT",
                 request.format(), filename, request.afterTiming(),
                 request.afterSqlFile() == null ? null : request.afterSqlFile().toString(),

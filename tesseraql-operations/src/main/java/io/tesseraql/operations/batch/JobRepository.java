@@ -38,6 +38,8 @@ public final class JobRepository {
         try {
             io.tesseraql.core.util.SqlScripts.applyForVendor(dataSource, JobRepository.class,
                     "/tesseraql/db/migration/operations/V1__framework_operations.sql");
+            io.tesseraql.core.util.SqlScripts.applyForVendor(dataSource, JobRepository.class,
+                    "/tesseraql/db/migration/operations/V3__job_execution_actor.sql");
         } catch (SQLException ex) {
             throw error("Failed to create batch repository schema", ex);
         }
@@ -73,21 +75,24 @@ public final class JobRepository {
         }
     }
 
-    public String startExecution(String jobId, String appName, String triggerType) {
+    public String startExecution(String jobId, String appName, String triggerType,
+            String triggeredBy) {
         String id = UUID.randomUUID().toString();
         Instant now = Instant.now();
         execute("""
                 insert into tql_job_execution
-                  (job_execution_id, job_id, app_name, status, trigger_type, start_time, created_at)
-                values (?, ?, ?, ?, ?, ?, ?)""",
+                  (job_execution_id, job_id, app_name, status, trigger_type, triggered_by,
+                   start_time, created_at)
+                values (?, ?, ?, ?, ?, ?, ?, ?)""",
                 ps -> {
                     ps.setString(1, id);
                     ps.setString(2, jobId);
                     ps.setString(3, appName);
                     ps.setString(4, JobStatus.RUNNING.name());
                     ps.setString(5, triggerType);
-                    ps.setTimestamp(6, Timestamp.from(now));
+                    ps.setString(6, triggeredBy);
                     ps.setTimestamp(7, Timestamp.from(now));
+                    ps.setTimestamp(8, Timestamp.from(now));
                 });
         return id;
     }
@@ -184,6 +189,22 @@ public final class JobRepository {
         return executions;
     }
 
+    /** The most recent execution of {@code jobId}, or empty when it has never run. */
+    public Optional<JobExecution> latestExecution(String jobId) {
+        try (Connection connection = dataSource.getConnection();
+                PreparedStatement ps = connection.prepareStatement(
+                        "select * from tql_job_execution where job_id = ? "
+                                + "order by start_time desc " + fetchClause())) {
+            ps.setString(1, jobId);
+            ps.setInt(2, 1);
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next() ? Optional.of(readExecution(rs)) : Optional.empty();
+            }
+        } catch (SQLException ex) {
+            throw error("Failed to find the latest execution", ex);
+        }
+    }
+
     public Optional<JobExecution> findExecution(String executionId) {
         try (Connection connection = dataSource.getConnection();
                 PreparedStatement ps = connection.prepareStatement(
@@ -223,6 +244,7 @@ public final class JobRepository {
                 rs.getString("app_name"),
                 JobStatus.valueOf(rs.getString("status")),
                 rs.getString("trigger_type"),
+                rs.getString("triggered_by"),
                 start,
                 end,
                 durationMs(start, end),

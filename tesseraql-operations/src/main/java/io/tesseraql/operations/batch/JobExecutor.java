@@ -142,8 +142,8 @@ public final class JobExecutor {
 
     /** Runs the job and returns the final execution record (COMPLETED or FAILED). */
     public JobExecution run(JobFile jobFile, DataSource dataSource, String appName,
-            Map<String, Object> jobParams, String triggerType) {
-        return run(jobFile, dataSource, null, appName, jobParams, triggerType);
+            Map<String, Object> jobParams, String triggerType, String triggeredBy) {
+        return run(jobFile, dataSource, null, appName, jobParams, triggerType, triggeredBy);
     }
 
     /**
@@ -153,9 +153,10 @@ public final class JobExecutor {
      */
     public JobExecution run(JobFile jobFile, DataSource dataSource,
             io.tesseraql.core.tenant.TenantContext tenant, String appName,
-            Map<String, Object> jobParams, String triggerType) {
+            Map<String, Object> jobParams, String triggerType, String triggeredBy) {
         JobDefinition job = jobFile.definition();
-        String executionId = repository.startExecution(job.id(), appName, triggerType);
+        String executionId = repository.startExecution(job.id(), appName, triggerType,
+                triggeredBy);
         Map<String, Object> stepResults = new LinkedHashMap<>();
         Map<String, Object> context = new HashMap<>();
         context.put("job", jobParams == null ? Map.of() : jobParams);

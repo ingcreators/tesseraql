@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{tql/shell :: ops-page('Batch Jobs', ~{:: #page-header}, ~{:: #page-content})}">
+<th:block id="page-header">
+  <span class="hc-spacer"></span>
+  <div class="hc-cluster">
+    <a class="hc-button" data-variant="ghost" data-size="sm" href="/_tesseraql/ops/console">&larr; console</a>
+  </div>
+</th:block>
+<div id="page-content" class="hc-stack" hx-get="/_tesseraql/ops/console/jobs" hx-trigger="every 15s"
+     hx-select="#page-content" hx-target="this" hx-swap="outerHTML">
+<section class="hc-card">
+  <h2>Batch jobs</h2>
+  <div class="hc-empty" th:unless="${jobs.hasRows}"><p class="hc-empty__title">No jobs declared.</p></div>
+  <div class="hc-datagrid" th:if="${jobs.hasRows}">
+    <div class="hc-datagrid__scroll">
+      <table class="hc-datagrid__table">
+        <thead class="hc-datagrid__head"><tr>
+          <th class="hc-datagrid__headcell">Job</th>
+          <th class="hc-datagrid__headcell">App</th>
+          <th class="hc-datagrid__headcell">Trigger</th>
+          <th class="hc-datagrid__headcell">Last run</th>
+          <th class="hc-datagrid__headcell">Started</th>
+          <th class="hc-datagrid__headcell"></th>
+        </tr></thead>
+        <tbody class="hc-datagrid__body">
+          <tr class="hc-datagrid__row" th:each="j : ${jobs.rows}">
+            <td class="hc-datagrid__cell" th:text="${j.id}"></td>
+            <td class="hc-datagrid__cell" th:text="${j.app}"></td>
+            <td class="hc-datagrid__cell" th:text="${j.trigger}"></td>
+            <td class="hc-datagrid__cell">
+              <a th:if="${j.hasRun}" th:href="|/_tesseraql/ops/console/executions/${j.lastExecutionId}|"><span
+                  class="hc-badge" th:attr="data-variant=${j.lastStatusVariant}" th:text="${j.lastStatus}"></span></a>
+              <span th:unless="${j.hasRun}" th:text="${j.lastStatus}"></span>
+            </td>
+            <td class="hc-datagrid__cell" th:text="${j.lastStart}"></td>
+            <td class="hc-datagrid__cell">
+              <form method="post" action="/_tesseraql/ops/console/jobs/run">
+                <input type="hidden" name="_csrf" th:value="${_csrf}">
+                <input type="hidden" name="id" th:value="${j.id}">
+                <button class="hc-button" data-size="sm" type="submit">Run</button>
+              </form>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+  <p class="hc-field__message">Run starts the job now with no parameters and records you as the
+    trigger; the execution page opens when it has been accepted.</p>
+</section>
+</div>
+</html>
