@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{tql/shell :: studio-page(|TesseraQL Rules · ${dom.appName}|, ~{:: #page-header}, ~{:: #page-content})}">
+<th:block id="page-header">
+  <span class="hc-spacer"></span>
+  <div class="hc-cluster">
+    <a class="hc-button" data-variant="ghost" data-size="sm" href="/_tesseraql/studio/ui/docs">&larr; docs</a>
+  </div>
+</th:block>
+<div id="page-content" class="hc-stack">
+  <section class="hc-card" th:unless="${dom.hasRules}">
+    <h2>Shared validation rules</h2>
+    <div class="hc-empty">
+      <p class="hc-empty__title">No shared rules declared yet.</p>
+      <p>Declare a rule once under <code>rules/</code> and reference it from any route's
+        <code>validate:</code> with <code>use:</code> &mdash; the scaffolder generates a
+        uniqueness rule per single-column unique index.</p>
+    </div>
+  </section>
+  <section class="hc-card" th:if="${dom.hasRules}">
+    <h2>Shared validation rules</h2>
+    <p class="hc-field__message">Each rule states what it is; every reference states its own
+      <code>params:</code>, <code>field:</code> and <code>when:</code>. An unreferenced rule is
+      either dead or a missed reference (lint <code>TQL-FIELD-4612</code>).</p>
+    <table class="hc-table">
+      <thead><tr><th>Rule</th><th>Kind</th><th>Binds</th><th>Code</th><th>Used by</th></tr></thead>
+      <tbody>
+        <tr th:each="r : ${dom.rules}">
+          <td><code th:text="${r.name}"></code></td>
+          <td>
+            <span class="hc-badge" th:text="${r.kind}"></span>
+            <code th:if="${r.file}" th:text="${r.file}"></code>
+            <code th:if="${r.expression}" th:text="${r.expression}"></code>
+          </td>
+          <td>
+            <span class="hc-badge" th:each="b : ${r.binds}" th:text="${b}"></span>
+            <span th:unless="${r.hasBinds}">&mdash;</span>
+          </td>
+          <td><span th:if="${r.code}" th:text="${r.code}"></span><span th:unless="${r.code}">&mdash;</span></td>
+          <td>
+            <span class="hc-badge" data-variant="warning" th:if="${r.unreferenced}">unreferenced</span>
+            <span class="hc-cluster" th:unless="${r.unreferenced}">
+              <a th:each="u : ${r.usedBy}" th:href="${u.url}"
+                 th:text="|${u.method} ${u.id}|"></a>
+            </span>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+</div>
+</html>

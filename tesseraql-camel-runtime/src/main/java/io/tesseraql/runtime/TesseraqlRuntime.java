@@ -2621,6 +2621,11 @@ public final class TesseraqlRuntime implements AutoCloseable {
                         // domain, its constraint chips, and the routes referencing it.
                         .register("docs.domains", params -> io.tesseraql.studio.DocViews.domains(
                                 doc.appName(), doc.domains(), doc.constraintCatalog()))
+                        // Shared validation rules (docs/validation-rule-sets.md): the same page
+                        // shape applied to rules/, so "which routes share this rule" — the reason
+                        // to declare one once — is answerable from the portal.
+                        .register("docs.rules", params -> io.tesseraql.studio.DocViews.rules(
+                                doc.appName(), doc.rules()))
                         // Export/share (documentation portal F8): the OpenAPI document and the htmx
                         // contract, generated live from the manifest by the canonical generators and
                         // streamed as downloadable JSON (the download routes' response.file emits the

@@ -343,6 +343,46 @@ public final class DocService {
         return entries;
     }
 
+    /**
+     * One shared validation rule with the routes referencing it.
+     *
+     * @param name       the rule name declared under {@code rules/}
+     * @param definition what the rule is: expression or SQL file, its bind contract, defaults
+     * @param usedBy     the routes whose {@code validate:} references it with {@code use:}
+     */
+    public record RuleEntry(String name,
+            io.tesseraql.yaml.model.RuleSetsDocument.RuleSet definition, List<RouteRef> usedBy) {
+    }
+
+    /**
+     * The app's shared validation rules, each with the routes referencing it — the Domains page's
+     * shape applied to {@code rules/}, drawn from the same loader the manifest resolves with.
+     *
+     * <p>validation-rule-sets.md promised this page and nothing built it, so a reviewer asking
+     * "which routes share this rule" — the entire reason for declaring one once — could not
+     * answer from the portal.
+     */
+    public List<RuleEntry> rules() {
+        io.tesseraql.yaml.rules.ValidationRuleSets declared = io.tesseraql.yaml.rules.ValidationRuleSets
+                .load(appHome, new io.tesseraql.yaml.SimpleYamlParser());
+        List<RuleEntry> entries = new ArrayList<>();
+        declared.rules().forEach((name, definition) -> {
+            List<RouteRef> refs = new ArrayList<>();
+            for (RouteEntry entry : spec().routes()) {
+                RouteSpec route = entry.route();
+                if (route == null) {
+                    continue;
+                }
+                if (route.validations().stream().anyMatch(v -> name.equals(v.use()))) {
+                    refs.add(new RouteRef(route.id(), route.method(), routeUrl(route.id())));
+                }
+            }
+            entries.add(new RuleEntry(name, definition, refs));
+        });
+        entries.sort(java.util.Comparator.comparing(RuleEntry::name));
+        return entries;
+    }
+
     /** The app-level constraint catalog (docs/field-domains.md): DB constraint name to mapping. */
     public Map<String, io.tesseraql.yaml.model.ErrorsSpec.ConstraintMapping> constraintCatalog() {
         return io.tesseraql.yaml.domain.FieldDomains.load(appHome).constraints();

@@ -35,6 +35,8 @@ web/_tesseraql/studio/ui/docs/coverage/get.yml
 web/_tesseraql/studio/ui/docs/docs.html
 web/_tesseraql/studio/ui/docs/domains/domains.html
 web/_tesseraql/studio/ui/docs/domains/get.yml
+web/_tesseraql/studio/ui/docs/rules/get.yml
+web/_tesseraql/studio/ui/docs/rules/rules.html
 web/_tesseraql/studio/ui/docs/export/export.html
 web/_tesseraql/studio/ui/docs/export/get.yml
 web/_tesseraql/studio/ui/docs/export/htmx/get.yml
