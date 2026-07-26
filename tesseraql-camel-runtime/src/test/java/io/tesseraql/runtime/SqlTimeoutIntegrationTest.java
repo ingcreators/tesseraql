@@ -96,6 +96,29 @@ class SqlTimeoutIntegrationTest {
                 .isEqualTo("COMPLETED");
     }
 
+    /**
+     * A row-scope directive in batch SQL is refused, not quietly ignored.
+     *
+     * <p>Matrix 2 of docs/route-governance-parity.md records this cell as absent, which reads
+     * like a hole. It is not: the executor passes {@code ScopeResolver.UNSUPPORTED}, so the
+     * statement fails with {@code TQL-SQL-2106} rather than rendering unscoped and returning
+     * every tenant's rows. Pinned because "absent" and "fail-safe" look the same in a matrix and
+     * only one of them is safe to leave alone.
+     *
+     * <p>Making it work is a design question, not a wiring one: a batch job runs with no caller,
+     * so there is no principal for a scope to narrow by.
+     */
+    @Test
+    void aScopeDirectiveInBatchSqlIsRefused() {
+        var execution = runtime.runJob("scoped.job", java.util.Map.of());
+
+        assertThat(String.valueOf(execution.status())).isEqualTo("FAILED");
+        // The reason matters as much as the status: three earlier drafts of this test also
+        // reported FAILED, twice for a malformed directive of my own and once for the wrong SQL
+        // mode. A failure is evidence only once it is the failure you meant.
+        assertThat(String.valueOf(execution.exitMessage())).contains("TQL-SQL-2106");
+    }
+
     @Test
     void anExplicitZeroOptsALongRunningStatementOut() throws Exception {
         // timeoutSeconds: 0 disables the guard; a 2s sleep outlives the 1s app default.
@@ -223,6 +246,23 @@ class SqlTimeoutIntegrationTest {
         Files.writeString(variantJob.resolve("pick.sql"),
                 "select this_column_does_not_exist from nowhere\n");
         Files.writeString(variantJob.resolve("pick.postgresql.sql"), "select 1 as ok\n");
+
+        // A job whose SQL carries a row-scope directive. A batch job runs with no caller, so
+        // there is no principal for a scope to narrow by; what matters is that this is refused
+        // rather than quietly rendered unscoped.
+        Path scopedJob = target.resolve("batch/scoped");
+        Files.createDirectories(scopedJob);
+        Files.writeString(scopedJob.resolve("job.yml"), """
+                version: tesseraql/v1
+                id: scoped.job
+                kind: job
+                recipe: batch-tasklet
+                sql:
+                  file: scoped.sql
+                  mode: query
+                """);
+        Files.writeString(scopedJob.resolve("scoped.sql"),
+                "select 1 as ok from (select 1) t where /*%scope orders on t */ (1=1)\n");
 
         // The command path: a step opens its own transaction with no transaction manager to
         // bound it, so it has to read the same timeout the route path does.
