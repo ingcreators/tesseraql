@@ -187,9 +187,21 @@ you have made it fail; this one passed on the first run and was already incapabl
    overflow reads `TQL-LD-0001` — the code the runtime actually emits — instead of `TQL-LD-1`.
    **Not** in this slice, deliberately: `items` and `jobs: params:`, because those two are
    documented with shipped examples and need implementing rather than deleting (slices 3–4).
-2. **The registry and its drift test** (guard steps 1–3), seeded with the surviving ~245 fields.
-   Landing this before the wiring work means the two wired fields arrive with their registrations
-   already required.
+2. ~~**The registry and its drift test**~~ **— shipped**, in the shape the corrections demanded.
+   The blocker fell to method-level attribution: an ASM walk over every method's instructions
+   (test-scoped, in the reactor's terminal module `tesseraql-maven-plugin`, where every sibling's
+   `target/classes` exists — missing ones fail the guard, never skip). Three refinements beyond
+   the third correction, all found by running it: method references (`ColumnSpec::toMapping`)
+   ride as `invokedynamic` bootstrap handles, not method instructions, and must be read from the
+   BSM arguments; consumption paths include derived methods *with parameters*
+   (`toWriteSpec(Path, Path)`), so no arity filter; and internal chains run longer than one hop
+   (`toReadSpec() → effectiveHeaderRow() → headerRow`), so reachability is a transitive closure
+   *inside the declaring record* — canonical accessor, constructor and record boilerplate stay
+   excluded, which keeps the guard non-vacuous. The registry is the inversion the second
+   correction asked for: `YamlSurfaceConsumers` holds only `DISPLAY_ONLY` and `UNWIRED` maps with
+   justification strings, **both empty today** — the audit left no dead field and no field whose
+   every consumer merely renders. Proven able to fail before being trusted: a `deadCanary`
+   component added to `PollSpec` turns the build red naming exactly that component.
 3. ~~**`jobs: params:` wiring**~~ **— the binding is shipped.** A job's declared parameters are
    bound the way a route binds its `input:`, so a numeric parameter arrives coerced and a missing
    required one is refused before the job starts rather than surfacing later as an unbound SQL
@@ -220,7 +232,10 @@ you have made it fail; this one passed on the first run and was already incapabl
    model cannot diagnose because the schema it was given is what it followed. Both descriptions
    were looser than the contract a caller must satisfy, which is the direction of error that
    costs someone a request they had no way to anticipate.
-5. **`DISPLAY_ONLY` in the generated reference** (guard step 4).
+5. **`DISPLAY_ONLY` in the generated reference** (guard step 4) — deferred until the first
+   `DISPLAY_ONLY` entry exists. The registry is empty, so the reference has nothing to mark, and
+   rendering an annotation that can never fire is dead surface — the failure class this document
+   is about. The slice unblocks itself the day a genuinely display-only field is declared.
 
 ## Lint and tooling
 

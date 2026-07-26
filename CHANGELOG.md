@@ -18,6 +18,14 @@ All notable changes to TesseraQL are documented here. The format follows
   `tesseraql_egress_denied_total{host=...}` on the existing meter, giving denial *rates*
   an alertable shape after a config rollout.
 
+- **A dead model field turns the build red** (docs/yaml-surface-consumers.md): a
+  reactor-wide guard walks every module's compiled classes with method-level attribution
+  (ASM, test-scoped in `tesseraql-maven-plugin`) and fails when a YAML-model record
+  component has no behavioral consumer — separating the canonical accessor every record
+  carries from the derived-accessor chains the model actually defaults through, and from
+  display-only reads. Deliberate exceptions live in a probed registry
+  (`DISPLAY_ONLY`/`UNWIRED`, both empty today) whose entries must stay true to pass.
+
 ## 0.8.0 - 2026-07-26
 
 ### Added

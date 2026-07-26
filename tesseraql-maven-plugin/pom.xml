@@ -77,6 +77,15 @@
       <artifactId>junit-jupiter</artifactId>
       <scope>test</scope>
     </dependency>
+    <!-- The YAML-surface consumer guard (docs/yaml-surface-consumers.md) walks every
+         reactor sibling's compiled classes with method-level attribution; ASM is the
+         Code-attribute reader the third correction asked for. Test-only. -->
+    <dependency>
+      <groupId>org.ow2.asm</groupId>
+      <artifactId>asm</artifactId>
+      <version>9.10</version>
+      <scope>test</scope>
+    </dependency>
     <dependency>
       <groupId>org.assertj</groupId>
       <artifactId>assertj-core</artifactId>
