@@ -772,6 +772,10 @@ public final class TesseraqlRuntime implements AutoCloseable {
         };
 
         io.tesseraql.core.outbox.OutboxEventSink outboxSink;
+        // Per-node poll-source health (docs/poll-source-status.md): fed by the polling
+        // wiring below, read by the dashboard's alerts and the console's jobs page.
+        io.tesseraql.opsui.PollSourceStatus pollSourceStatus = new io.tesseraql.opsui.PollSourceStatus();
+        context.getRegistry().bind("tesseraqlPollSourceStatus", pollSourceStatus);
         io.tesseraql.opsui.OpsDashboard opsDashboard;
         try {
             opsDashboard = new io.tesseraql.opsui.OpsDashboard(jobRepository, lanes, slowSqlLog,
@@ -792,6 +796,9 @@ public final class TesseraqlRuntime implements AutoCloseable {
                     pinningMonitor)
                     // Dead-lettered deliveries surface as an operational alert (Phase 20).
                     .outboxCounts(outboxStore::countByStatus)
+                    // A skipped or repeatedly failing poll source surfaces as an alert
+                    // instead of only a startup log line (docs/poll-source-status.md).
+                    .pollSources(pollSourceStatus)
                     // Truthful readiness (roadmap Phase 45): every configured datasource is
                     // probed live; any failure rolls health up to DOWN so a load balancer
                     // actually sheds traffic.
@@ -940,7 +947,8 @@ public final class TesseraqlRuntime implements AutoCloseable {
                             if (scope.test(owner)) {
                                 entries.add(new io.tesseraql.opsui.OpsViews.JobCatalogEntry(
                                         id, owner, jobFile.definition().trigger(),
-                                        jobRepository.latestExecution(id).orElse(null)));
+                                        jobRepository.latestExecution(id).orElse(null),
+                                        pollSourceStatus.forJob(id).orElse(null)));
                             }
                         });
                         return io.tesseraql.opsui.OpsViews.jobs(entries);
@@ -1142,7 +1150,8 @@ public final class TesseraqlRuntime implements AutoCloseable {
             context.addRoutes(new PollingRouteBuilder(List.copyOf(jobs.values()),
                     io.tesseraql.yaml.connectors.PollConnectors.load(manifest.config()), appName,
                     jobOwners, appHome,
-                    io.tesseraql.yaml.config.WorkHome.resolve(appHome, manifest.config())));
+                    io.tesseraql.yaml.config.WorkHome.resolve(appHome, manifest.config()),
+                    pollSourceStatus));
             // Messaging consumers (roadmap Phase 27): each queue-consume route drains its channel
             // off the durable tql_event table — that table is what makes delivery at-least-once.
             // The wake mechanism depends on the channel's transport: pg-notify adds low-latency

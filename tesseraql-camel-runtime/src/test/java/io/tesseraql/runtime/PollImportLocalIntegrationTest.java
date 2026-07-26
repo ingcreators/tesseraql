@@ -110,6 +110,35 @@ class PollImportLocalIntegrationTest {
         assertThat(Files.exists(inbound.resolve(".done/broken.csv"))).isFalse();
     }
 
+    /**
+     * The poll-source registry (docs/poll-source-status.md): wired at boot as polling, and
+     * a successful import stamps the last-poll facts and resets the failure streak.
+     */
+    @Test
+    void thePollSourceRegistryTracksThisNode() throws Exception {
+        io.tesseraql.opsui.PollSourceStatus status = runtime.camelContext().getRegistry()
+                .lookupByNameAndType("tesseraqlPollSourceStatus",
+                        io.tesseraql.opsui.PollSourceStatus.class);
+        io.tesseraql.opsui.PollSourceStatus.SourceState wired = status.forJob("orders.intake")
+                .orElseThrow();
+        assertThat(wired.skipped()).isFalse();
+        assertThat(wired.source()).isEqualTo("local");
+
+        Files.writeString(inbound.resolve("registry.csv"), "orderNo,qty\nR-1,1\n");
+        long deadline = System.currentTimeMillis() + Duration.ofSeconds(30).toMillis();
+        while (System.currentTimeMillis() < deadline
+                && !String.valueOf(status.forJob("orders.intake").orElseThrow().lastResult())
+                        .contains("registry.csv")) {
+            Thread.sleep(300);
+        }
+
+        io.tesseraql.opsui.PollSourceStatus.SourceState state = status.forJob("orders.intake")
+                .orElseThrow();
+        assertThat(state.lastResult()).contains("registry.csv").contains("imported");
+        assertThat(state.lastPollAt()).isNotNull();
+        assertThat(state.consecutiveFailures()).isZero();
+    }
+
     private static Connection connect() throws Exception {
         return DriverManager.getConnection(
                 POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword());

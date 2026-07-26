@@ -199,6 +199,31 @@ class OpsDashboardTest {
     }
 
     @Test
+    void skippedAndRepeatedlyFailingPollSourcesRaiseAlerts() {
+        // docs/poll-source-status.md: a wire-time skip alerts immediately; import failures
+        // alert only at the streak threshold; a healthy source stays quiet.
+        PollSourceStatus status = new PollSourceStatus();
+        status.skipped("intake", "sftp", "host 'sftp.example' is not allowed");
+        status.polling("healthy", "local");
+        status.polling("flaky", "local");
+        for (int i = 0; i < PollSourceStatus.FAILURE_ALERT_THRESHOLD; i++) {
+            status.failed("flaky", "boom");
+        }
+        OpsDashboard dashboard = new OpsDashboard(null, null, null, new RingTracer(10), 200L)
+                .pollSources(status);
+
+        List<OpsDashboard.Alert> alerts = dashboard.alerts();
+
+        assertThat(alerts).hasSize(2)
+                .allSatisfy(alert -> assertThat(alert.code()).isEqualTo("TQL-OPS-9007"));
+        assertThat(alerts).anySatisfy(alert -> assertThat(alert.message())
+                .contains("intake").contains("not allowed"));
+        assertThat(alerts).anySatisfy(alert -> assertThat(alert.message())
+                .contains("flaky").contains("3 consecutive"));
+        assertThat(alerts).noneSatisfy(alert -> assertThat(alert.message()).contains("healthy"));
+    }
+
+    @Test
     void laneSaturationAndSlowRateRaiseAlerts() {
         ExecutionLanes lanes = ExecutionLanes.of(List.of(LanePolicy.virtual("io", 1)));
         lanes.lane("io").tryAdmit(); // take the only permit

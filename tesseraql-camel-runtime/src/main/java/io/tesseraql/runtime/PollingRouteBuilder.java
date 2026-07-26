@@ -45,15 +45,18 @@ final class PollingRouteBuilder extends RouteBuilder {
     private final Map<String, String> jobOwners;
     private final Path appHome;
     private final Path workHome;
+    private final io.tesseraql.opsui.PollSourceStatus status;
 
     PollingRouteBuilder(List<JobFile> jobs, PollConnectors connectors, String appName,
-            Map<String, String> jobOwners, Path appHome, Path workHome) {
+            Map<String, String> jobOwners, Path appHome, Path workHome,
+            io.tesseraql.opsui.PollSourceStatus status) {
         this.jobs = List.copyOf(jobs);
         this.connectors = connectors;
         this.appName = appName;
         this.jobOwners = Map.copyOf(jobOwners);
         this.appHome = appHome;
         this.workHome = workHome;
+        this.status = status;
     }
 
     @Override
@@ -68,6 +71,10 @@ final class PollingRouteBuilder extends RouteBuilder {
             } catch (RuntimeException ex) {
                 LOG.log(System.Logger.Level.ERROR, "Poll job {0} not wired: {1}",
                         job.definition().id(), ex.getMessage());
+                // The registry is what makes the skip visible beyond this log line
+                // (docs/poll-source-status.md).
+                status.skipped(job.definition().id(), trigger.poll().effectiveSource(),
+                        ex.getMessage());
             }
         }
     }
@@ -78,12 +85,16 @@ final class PollingRouteBuilder extends RouteBuilder {
         if (importSpec == null || importSpec.sql() == null || importSpec.sql().file() == null) {
             LOG.log(System.Logger.Level.ERROR,
                     "Poll job {0} has no import: block with a per-row sql; skipping", jobId);
+            status.skipped(jobId, poll.effectiveSource(),
+                    "no import: block with a per-row sql");
             return;
         }
         if (poll.isRemote() && !connectors.isHostAllowed(poll.host())) {
             LOG.log(System.Logger.Level.ERROR, "Poll job {0} targets host {1} which is not in"
                     + " tesseraql.connectors.poll.allowedHosts (deny by default); skipping",
                     jobId, poll.host());
+            status.skipped(jobId, poll.effectiveSource(), "host '" + poll.host()
+                    + "' is not in tesseraql.connectors.poll.allowedHosts (deny by default)");
             return;
         }
 
@@ -94,7 +105,8 @@ final class PollingRouteBuilder extends RouteBuilder {
                 .withLocale(importSpec.locale());
         from(uri).routeId("poll." + jobId).process(new PollImportProcessor(
                 jobId, owner, importSpec.format(), readSpec, rowSqlFile,
-                importSpec.effectiveOnError()));
+                importSpec.effectiveOnError(), status));
+        status.polling(jobId, poll.effectiveSource());
         LOG.log(System.Logger.Level.INFO, "Polling {0} source for job {1}",
                 poll.effectiveSource(), jobId);
     }
