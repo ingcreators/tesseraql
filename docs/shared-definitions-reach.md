@@ -180,7 +180,11 @@ catch up. `domains/` and `rules/` get their own small schemas and their own file
    at compile). *Shipped:* `TQL-FIELD-4609` took the declaration-side load error, because
    4604..4608 are load errors and 4610..4612 are lint warnings — a warning at 4609 would have
    broken the only ordering the family has. The identical-copy warning took `TQL-FIELD-4613`.
-5. **Portal and Studio.** Studio's rule builder offering `use:` and emitting `params:` remains.
+5. ~~**Portal and Studio.**~~ **Shipped.** The rule builder now offers a `use:` operation: the
+   shared rules are offered by name and the generated block lays out the whole bind contract,
+   because a reference must wire it exactly — an omission fails the load (`TQL-FIELD-4607`), and
+   a snippet that fails the load is worse than no snippet. `code:` and `message:` stay out unless
+   the author overrides them, since the shared rule already supplies both.
    **The Rules page is shipped**, mirroring the Domains page deliberately: the two are the same
    idea applied to different declarations, and a reader who has learned one should not have to
    learn the other. Each rule shows its kind, its bind contract, its default code, and the routes

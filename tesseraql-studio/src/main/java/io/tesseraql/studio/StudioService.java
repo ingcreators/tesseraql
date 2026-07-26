@@ -735,6 +735,24 @@ public final class StudioService {
                 .sorted().toList();
     }
 
+    /**
+     * Shared rule names with their bind contracts, for the validation builder's {@code use:}
+     * option — the contract has to travel with the name, because a reference must wire it
+     * exactly and the author cannot be expected to remember it.
+     */
+    public List<SharedRule> sharedRules() {
+        var declared = io.tesseraql.yaml.rules.ValidationRuleSets.load(appHome,
+                new io.tesseraql.yaml.SimpleYamlParser());
+        List<SharedRule> rules = new ArrayList<>();
+        declared.rules().forEach((name, rule) -> rules.add(new SharedRule(name, rule.binds())));
+        rules.sort(java.util.Comparator.comparing(SharedRule::name));
+        return rules;
+    }
+
+    /** One shared rule offered by the validation builder: its name and its bind contract. */
+    public record SharedRule(String name, List<String> binds) {
+    }
+
     /** Loads the structured form model for a route document (Track J1). */
     public RouteForm routeForm(String relativePath) {
         requireRouteDoc(relativePath);

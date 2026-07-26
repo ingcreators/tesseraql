@@ -2342,14 +2342,23 @@ public final class TesseraqlRuntime implements AutoCloseable {
                                         // Input-level constraints may already belong to a field
                                         // domain (docs/field-domains.md); the builder page
                                         // points at them before a cross-field rule is written.
-                                        "domains", studio.domainNames()))
+                                        "domains", studio.domainNames(),
+                                        // Shared rules with their contracts: the builder offered
+                                        // only inline rules, so an author generating a SQL rule
+                                        // got a copy of one that already existed.
+                                        "sharedRules", studio.sharedRules()))
                         .register("studio.validationBuilder.build", params -> Map.of("snippet",
                                 io.tesseraql.studio.ValidationRuleBuilder.generate(
                                         str(params, "operation"), str(params, "source"),
                                         str(params, "field"), str(params, "value"),
                                         str(params, "value2"), str(params, "id"),
                                         str(params, "code"), str(params, "message"),
-                                        str(params, "when"))))
+                                        str(params, "when"),
+                                        studio.sharedRules().stream()
+                                                .filter(r -> r.name().equals(str(params, "value")))
+                                                .findFirst()
+                                                .map(io.tesseraql.studio.StudioService.SharedRule::binds)
+                                                .orElse(java.util.List.of()))))
                         .register("studio.migration.create", params -> {
                             studioAccess.requireEdit(params.get("roles"));
                             String datasource = params.get("datasource") == null

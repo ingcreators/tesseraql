@@ -20,9 +20,18 @@ public final class ValidationRuleBuilder {
      * {@code value}/{@code value2} the operation's operands (or, for {@code expression}, the raw
      * expression, and for {@code sql}, the validation SQL file). Returns a {@code # ...} comment when
      * a required input is missing.
+     *
+     * <p>{@code operation: use} references a shared rule instead of writing one. The builder
+     * emitted only inline rules, so an author generating a SQL rule got an inline copy with
+     * unbound non-ambient binds — nudged into exactly the duplication {@code rules/} exists to
+     * eliminate, by the tool meant to help.
+     *
+     * @param binds the shared rule's bind contract, laid out as a {@code params:} block a
+     *              reference must satisfy exactly
      */
     public static String generate(String operation, String source, String field, String value,
-            String value2, String id, String code, String message, String when) {
+            String value2, String id, String code, String message, String when,
+            List<String> binds) {
         String ruleId = trim(id);
         String fieldName = trim(field);
         String op = operation == null ? "" : operation;
@@ -48,6 +57,13 @@ public final class ValidationRuleBuilder {
             case "one-of" -> rule = require(value, () -> oneOf(ref, value));
             case "expression" -> rule = require(value, value::trim);
             case "sql" -> file = trim(value);
+            case "use" -> {
+                String shared = trim(value);
+                if (shared == null) {
+                    return "# Choose the shared rule to reference.";
+                }
+                return useSnippet(ruleId, shared, fieldName, code, message, when, binds);
+            }
             default -> {
                 return "# Choose an operation.";
             }
@@ -69,6 +85,39 @@ public final class ValidationRuleBuilder {
         }
         yaml.append("    field: ").append(fieldName).append('\n');
         yaml.append("    code: ").append(blank(code) ? ruleId : code.trim()).append('\n');
+        if (!blank(message)) {
+            yaml.append("    message: ").append(message.trim()).append('\n');
+        }
+        return yaml.toString();
+    }
+
+    /**
+     * A reference to a shared rule: its own wiring only.
+     *
+     * <p>Every bind of the contract is laid out with a placeholder rather than left out, because
+     * a reference must wire the contract <em>exactly</em> — an omission fails the load
+     * ({@code TQL-FIELD-4607}), and a snippet that fails the load is worse than no snippet.
+     */
+    private static String useSnippet(String ruleId, String shared, String fieldName, String code,
+            String message, String when, List<String> binds) {
+        StringBuilder yaml = new StringBuilder("validate:\n  ").append(ruleId).append(":\n");
+        yaml.append("    use: ").append(shared).append('\n');
+        if (binds != null && !binds.isEmpty()) {
+            yaml.append("    params:\n");
+            for (String bind : binds) {
+                // The source is the author's to choose; the name is not.
+                yaml.append("      ").append(bind).append(": body.").append(bind).append('\n');
+            }
+        }
+        yaml.append("    field: ").append(fieldName).append('\n');
+        if (!blank(when)) {
+            yaml.append("    when: ").append(when.trim()).append('\n');
+        }
+        // code: and message: are the shared rule's defaults unless the reference overrides them,
+        // so they are emitted only when the author asked for an override.
+        if (!blank(code)) {
+            yaml.append("    code: ").append(code.trim()).append('\n');
+        }
         if (!blank(message)) {
             yaml.append("    message: ").append(message.trim()).append('\n');
         }
