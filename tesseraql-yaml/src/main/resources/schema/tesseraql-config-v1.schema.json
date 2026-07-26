@@ -1,0 +1,207 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tesseraql.io/schema/tesseraql-config-v1.schema.json",
+  "title": "TesseraQL app configuration (config/tesseraql.yml)",
+  "$comment": "Deliberately open (additionalProperties: true) at every level: newer keys never break older editors. Descriptions and the keys below mirror the scaffolded config and its consumers (ScaffoldedConfigKeys).",
+  "type": "object",
+  "properties": {
+    "tesseraql": {
+      "type": "object",
+      "properties": {
+        "app": {
+          "type": "object",
+          "properties": {
+            "name": { "type": "string", "description": "The application name: tags job executions, outbox events, and per-app operations scope (ops.app.<name>)." },
+            "home": { "type": "string" },
+            "work": { "type": "string", "description": "The work directory for runtime artifacts (default: <home>/work)." }
+          },
+          "additionalProperties": true
+        },
+        "datasources": {
+          "type": "object",
+          "description": "Named datasources; main is the default. Documented in multi-datasource.md.",
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "jdbcUrl": { "type": "string" },
+              "username": { "type": "string" },
+              "password": { "type": "string", "description": "Prefer a ${secret.*} reference over a literal." }
+            },
+            "additionalProperties": true
+          }
+        },
+        "security": {
+          "type": "object",
+          "properties": {
+            "defaults": {
+              "type": "object",
+              "properties": {
+                "routes": {
+                  "type": "array",
+                  "description": "Path-matched security defaults, first match wins (* = one segment, ** = many). Documented in route-defaults.md.",
+                  "items": {
+                    "type": "object",
+                    "required": ["match"],
+                    "properties": {
+                      "match": { "type": "string", "description": "The URL path pattern this rule covers." },
+                      "auth": { "type": "string", "enum": ["bearer", "browser", "apiKey", "mtls", "public"] },
+                      "csrf": { "type": "string", "enum": ["auto", "true", "false"], "description": "auto requires CSRF exactly when auth is browser and the method is not GET." },
+                      "policy": { "type": "string", "description": "A policy id under tesseraql.security.policies." }
+                    },
+                    "additionalProperties": true
+                  }
+                }
+              },
+              "additionalProperties": true
+            },
+            "responseHeaders": {
+              "type": "object",
+              "description": "Response headers stamped on every route response (CSP, X-Frame-Options, ...). A flat map of header name to value.",
+              "additionalProperties": { "type": "string" }
+            },
+            "policies": {
+              "type": "object",
+              "description": "Named authorization policies: each grants when any listed role or permission matches.",
+              "additionalProperties": {
+                "type": "object",
+                "properties": {
+                  "anyOf": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "role": { "type": "string" },
+                        "permission": { "type": "string" }
+                      },
+                      "additionalProperties": true
+                    }
+                  }
+                },
+                "additionalProperties": true
+              }
+            },
+            "jwt": {
+              "type": "object",
+              "properties": {
+                "secret": { "type": "string", "description": "Prefer a ${secret.*} reference over a literal." },
+                "rolesClaim": { "type": "string" },
+                "permissionsClaim": { "type": "string" },
+                "tenantClaim": { "type": "string" }
+              },
+              "additionalProperties": true
+            }
+          },
+          "additionalProperties": true
+        },
+        "i18n": {
+          "type": "object",
+          "properties": {
+            "defaultLocale": { "type": "string", "description": "BCP-47 tag the message catalogs fall back to (default en)." },
+            "locales": { "type": "array", "items": { "type": "string" } },
+            "preference": { "type": "string" }
+          },
+          "additionalProperties": true
+        },
+        "connectors": {
+          "type": "object",
+          "properties": {
+            "poll": {
+              "type": "object",
+              "description": "Poll-source connectivity, deny-by-default. Documented in connectors.md.",
+              "properties": {
+                "allowedHosts": { "type": "array", "items": { "type": "string" } },
+                "allowedPaths": { "type": "array", "items": { "type": "string" }, "description": "Roots a local poll source may watch; a local poll without one is refused." },
+                "knownHostsFile": { "type": "string", "description": "SSH known-hosts file for strict SFTP host-key checking." },
+                "trustStore": {
+                  "type": "object",
+                  "required": ["file"],
+                  "properties": {
+                    "file": { "type": "string" },
+                    "password": { "type": "string" },
+                    "type": { "type": "string" }
+                  },
+                  "additionalProperties": true,
+                  "description": "FTPS server-certificate trust; without it an ftps source is refused (TQL-SEC-4085)."
+                },
+                "credentials": {
+                  "type": "object",
+                  "description": "Named poll credentials (username plus exactly one of password/privateKeyFile; optional FTPS keyStore* for mutual TLS).",
+                  "additionalProperties": { "type": "object", "additionalProperties": true }
+                }
+              },
+              "additionalProperties": true
+            }
+          },
+          "additionalProperties": true
+        },
+        "sessions": {
+          "type": "object",
+          "properties": {
+            "ttl": { "type": "string", "description": "Browser-session lifetime (duration string, default 12h)." },
+            "store": { "type": "string", "enum": ["memory", "jdbc"], "description": "memory (default, per-node) or jdbc (shared, survives restarts)." }
+          },
+          "additionalProperties": true
+        },
+        "metrics": {
+          "type": "object",
+          "properties": {
+            "enabled": { "type": "boolean", "description": "Serve the Prometheus exposition endpoint (default false)." },
+            "unauthenticated": { "type": "boolean", "description": "Let a cluster-internal scraper skip the bearer gate (default false)." }
+          },
+          "additionalProperties": true
+        },
+        "audit": {
+          "type": "object",
+          "properties": {
+            "routes": {
+              "type": "object",
+              "properties": {
+                "enabled": { "type": "boolean", "description": "Record every route invocation to the route audit trail (default false)." }
+              },
+              "additionalProperties": true
+            }
+          },
+          "additionalProperties": true
+        },
+        "outbox": {
+          "type": "object",
+          "properties": {
+            "dispatch": {
+              "type": "object",
+              "properties": {
+                "fixedDelay": { "type": "string", "description": "How often the dispatcher claims pending events (duration string)." },
+                "maxAttempts": { "type": "integer", "description": "Delivery attempts before an event dead-letters." }
+              },
+              "additionalProperties": true
+            }
+          },
+          "additionalProperties": true
+        },
+        "retention": {
+          "type": "object",
+          "properties": {
+            "sweep": { "type": "string", "description": "How often the retention sweeper runs (duration string)." },
+            "outbox": { "type": "string", "description": "How long delivered outbox events are kept." },
+            "jobs": { "type": "string", "description": "How long finished job executions are kept." },
+            "attachments": { "type": "string" }
+          },
+          "additionalProperties": true
+        },
+        "studio": {
+          "type": "object",
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "readOnly": { "type": "boolean" }
+          },
+          "additionalProperties": true
+        },
+        "identity": {
+          "type": "object",
+          "additionalProperties": true
+        }
+      },
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": true
+}

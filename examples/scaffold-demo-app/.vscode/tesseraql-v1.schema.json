@@ -40,13 +40,44 @@
           "enum": ["bearer", "browser", "apiKey", "mtls", "public"]
         },
         "policy": { "type": "string", "description": "A policy id under tesseraql.security.policies." },
-        "provider": { "type": "string" },
         "csrf": { "type": "boolean" }
       },
       "additionalProperties": true
     },
-    "idempotency": { "type": "object", "additionalProperties": true, "description": "Idempotent replay for commands: required, scope (default: the route id), ttl (default 24h). A replayed key returns the stored response; a reused key with a different body is TQL-IDEM-4090. Documented in transactional-writes.md." },
-    "policy": { "type": "object", "additionalProperties": true, "description": "Row-authority policy binds for /*%scope*/ directives in the route's SQL. Documented in data-scoping.md." },
+    "idempotency": {
+      "type": "object",
+      "description": "Idempotent replay for commands. A replayed key returns the stored response; a reused key with a different body is TQL-IDEM-4090. Documented in transactional-writes.md.",
+      "properties": {
+        "required": { "type": "boolean", "description": "Whether the Idempotency-Key header is required on this command." },
+        "scope": { "type": "string", "description": "The replay scope key (default: the route id)." },
+        "ttl": { "type": "string", "description": "How long a stored response replays (duration string, default 24h)." }
+      },
+      "additionalProperties": true
+    },
+    "policy": {
+      "type": "object",
+      "description": "Admission policy for this route: concurrency, rate limiting, and the execution lane. Documented in productivity.md (admission) and jobs.md (lanes).",
+      "properties": {
+        "concurrency": {
+          "type": "object",
+          "properties": {
+            "maxInFlight": { "type": "integer", "description": "Maximum requests of this route in flight at once; excess is rejected." }
+          },
+          "additionalProperties": true
+        },
+        "rateLimit": {
+          "type": "object",
+          "properties": {
+            "requestsPerSecond": { "type": "integer" },
+            "burst": { "type": "integer", "description": "Burst capacity (default: requestsPerSecond)." },
+            "scope": { "type": "string", "enum": ["node", "cluster"], "description": "node (default) limits per runtime node; cluster coordinates through the shared lease store (TQL-YAML-1023)." }
+          },
+          "additionalProperties": true
+        },
+        "lane": { "type": "string", "description": "The execution lane this route runs on (tesseraql.lanes)." }
+      },
+      "additionalProperties": true
+    },
     "outbox": { "type": "object", "additionalProperties": true, "description": "Transactional outbox event recorded with the command and delivered at-least-once after commit. Documented in notifications.md and messaging.md." },
     "http": {
       "type": "object",
@@ -205,7 +236,6 @@
         "stream": {
           "type": "object",
           "properties": {
-            "contentType": { "type": "string" },
             "filename": { "type": "string" }
           },
           "additionalProperties": true
@@ -255,7 +285,47 @@
     "panels": { "type": "array" },
     "children": { "type": "object", "additionalProperties": true },
     "slots": { "type": "object", "additionalProperties": { "type": "string" } },
-    "trigger": { "type": "object", "additionalProperties": true }
+    "trigger": {
+      "type": "object",
+      "description": "How a job starts (kind: job): a schedule, or a directory/SFTP/FTPS poll source feeding the import: pipeline. Documented in jobs.md and connectors.md.",
+      "properties": {
+        "schedule": {
+          "type": "object",
+          "properties": {
+            "cron": { "type": "string", "description": "A Quartz cron expression; firings are claimed cluster-wide so one node runs each." },
+            "fixedDelay": { "type": "string", "description": "A period (duration string, e.g. 5m); mutually exclusive with cron." }
+          },
+          "additionalProperties": true
+        },
+        "poll": {
+          "type": "object",
+          "properties": {
+            "source": { "type": "string", "enum": ["local", "sftp", "ftps"], "description": "local (default) polls a directory under connectors.poll.allowedPaths; sftp/ftps poll a remote host in connectors.poll.allowedHosts." },
+            "host": { "type": "string" },
+            "port": { "type": "integer" },
+            "path": { "type": "string", "description": "The polled directory. A local path must sit under a declared allowedPaths root." },
+            "credential": { "type": "string", "description": "A named credential under tesseraql.connectors.poll.credentials (required for remote sources)." },
+            "include": { "type": "string", "description": "An ant-style filename filter, e.g. *.csv." },
+            "delay": { "type": "string", "description": "Poll interval (duration string)." },
+            "move": { "type": "string", "description": "Relative directory for processed files (default .done). Plain names only - no paths or placeholders." },
+            "moveFailed": { "type": "string", "description": "Relative directory for failed files (default .error). Plain names only." }
+          },
+          "additionalProperties": true
+        }
+      },
+      "additionalProperties": true
+    },
+    "perTenant": { "type": "boolean", "description": "Run this job once per configured tenant, each on its own datasource and tenant context (kind: job). Documented in multi-tenancy.md." },
+    "params": {
+      "type": "object",
+      "description": "A job's declared parameters (kind: job) - the same field contract routes declare with input:. Documented in jobs.md.",
+      "additionalProperties": { "$ref": "#/$defs/inputField" }
+    },
+    "pipeline": {
+      "type": "array",
+      "description": "A batch-pipeline job's ordered steps (sql, http-call, or notify per step), each publishing its result to the step context. Documented in jobs.md.",
+      "items": { "type": "object", "additionalProperties": true }
+    }
   },
   "additionalProperties": true,
   "$defs": {

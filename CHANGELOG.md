@@ -8,6 +8,19 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **No authored YAML is editor-blind** (docs/vscode-extension.md, schema completion): three
+  new shipped JSON Schemas cover `config/tesseraql.yml` (security path rules, response
+  headers, policies, poll connectors, sessions, metrics, audit, outbox, retention — with the
+  same descriptions the reference renders), `tests/**/*.yml` suites, and
+  `messages/<locale>.yml` catalogs; `tesseraql new` lands and associates all three. The
+  route/job schema stops stubbing what the model accepts: `trigger:` (schedule + poll),
+  `params:`, `perTenant:`, `idempotency:`, and `policy:` gain real properties — `policy`'s
+  description had drifted to describe row-authority scoping instead of admission — and the
+  `security.provider` / `response.stream.contentType` keys retired from the model earlier
+  leave the schema too. A new `SchemaSyncTest` guard reflects `RouteDefinition` and
+  `JobDefinition` against the schema root, closing the drift class that let those keys sit
+  undocumented (it caught `perTenant` on its first run).
+
 - **Session administration in IAM Admin, and disabled means disabled**
   (docs/session-administration.md): the user detail page gains an *Active sessions* panel
   (sign-in and expiry times only — session ids never reach a template) with a confirm-gated

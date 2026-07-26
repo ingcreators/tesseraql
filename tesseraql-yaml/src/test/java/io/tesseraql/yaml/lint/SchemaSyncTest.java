@@ -56,6 +56,50 @@ class SchemaSyncTest {
                 .containsAll(declared);
     }
 
+    /**
+     * The schema's root properties cover every key the route AND job models accept.
+     *
+     * <p>This is the guard whose absence let {@code trigger:}, {@code params:},
+     * {@code idempotency:}, and {@code policy:} sit as undocumented stubs for months: the
+     * inputField check above covered one $def while the root went unchecked. One schema file
+     * serves both document kinds, so both records reflect here.
+     */
+    @Test
+    void schemaRootCoversEveryRouteAndJobComponent() throws Exception {
+        JsonNode schema = new ObjectMapper().readTree(
+                getClass().getResourceAsStream("/schema/tesseraql-v1.schema.json"));
+        JsonNode properties = schema.path("properties");
+        List<String> documented = new ArrayList<>();
+        properties.fieldNames().forEachRemaining(documented::add);
+
+        assertThat(documented)
+                .as("every route: key the model accepts is documented in the shipped schema")
+                .containsAll(yamlNames(io.tesseraql.yaml.model.RouteDefinition.class));
+        assertThat(documented)
+                .as("every job: key the model accepts is documented in the shipped schema")
+                .containsAll(yamlNames(io.tesseraql.yaml.model.JobDefinition.class));
+    }
+
+    /** Each record component's YAML name (honoring @JsonProperty renames). */
+    private static List<String> yamlNames(Class<? extends Record> model) {
+        List<String> names = new ArrayList<>();
+        for (var component : model.getRecordComponents()) {
+            String name = component.getName();
+            try {
+                var field = model.getDeclaredField(name);
+                var renamed = field.getAnnotation(
+                        com.fasterxml.jackson.annotation.JsonProperty.class);
+                if (renamed != null && !renamed.value().isBlank()) {
+                    name = renamed.value();
+                }
+            } catch (NoSuchFieldException impossibleForARecord) {
+                throw new IllegalStateException(impossibleForARecord);
+            }
+            names.add(name);
+        }
+        return names;
+    }
+
     @Test
     void theRuleSetSchemaCoversEveryRuleSetComponent() throws Exception {
         JsonNode schema = new ObjectMapper().readTree(

@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tesseraql.io/schema/tesseraql-messages-v1.schema.json",
+  "title": "TesseraQL message catalog (messages/<locale>.yml)",
+  "$comment": "A catalog is an arbitrarily nested map flattened to dotted keys; every leaf must be a string. The recursion is what catches a number, boolean, or list where a message belongs.",
+  "type": "object",
+  "additionalProperties": {
+    "$ref": "#/$defs/messageNode"
+  },
+  "$defs": {
+    "messageNode": {
+      "oneOf": [
+        { "type": "string" },
+        { "type": "object", "additionalProperties": { "$ref": "#/$defs/messageNode" } }
+      ]
+    }
+  }
+}
