@@ -6,6 +6,8 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ## Unreleased
 
+## 0.8.0 - 2026-07-26
+
 ### Added
 
 - **No authored YAML is editor-blind** (docs/vscode-extension.md, schema completion): three
