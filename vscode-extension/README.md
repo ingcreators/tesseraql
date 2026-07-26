@@ -53,5 +53,7 @@ pnpm run test      # tsc + node:test over the editor-free core
 pnpm run package   # produces tesseraql-vscode-<version>.vsix
 ```
 
-Install the `.vsix` with *Extensions: Install from VSIX…* — marketplace publishing is
-tracked as an operator step in the design document.
+Install from the [Visual Studio Marketplace](https://marketplace.visualstudio.com/items?itemName=ingcreators.tesseraql-vscode)
+(published by the `ext-v*` release workflow, which also attaches the identical
+`.vsix` to a GitHub release), or install a locally built `.vsix` with
+*Extensions: Install from VSIX…*.
