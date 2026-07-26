@@ -119,4 +119,7 @@ export const EXCLUDED = [
   'ops-console-actions.md',
   // Studio schema lifecycle, 2026-07-26.
   'studio-schema-lifecycle.md',
+  // Session administration + poll source status, 2026-07-26.
+  'session-administration.md',
+  'poll-source-status.md',
 ];
