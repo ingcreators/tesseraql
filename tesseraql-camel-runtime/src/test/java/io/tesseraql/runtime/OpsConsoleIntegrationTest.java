@@ -115,12 +115,35 @@ class OpsConsoleIntegrationTest {
             String body = get(path, true).body();
             assertThat(body).contains("hc-shell__sidebar").contains("data-hc-nav-current")
                     .contains(">Overview<").contains(">Jobs<").contains(">Traces<")
-                    .contains(">Transfers<").contains(">Outbox<")
+                    .contains(">Transfers<").contains(">Outbox<").contains(">Audit<")
                     // the other system apps stay reachable
                     .contains(">Studio<").contains(">IAM Admin<")
                     // icons via the self-hosted sprite
                     .contains("/assets/_tesseraql/icons.svg#waypoints");
         }
+    }
+
+    @Test
+    void overviewShowsTheHealthPanelAndTheVersion() throws Exception {
+        // The health() roll-up, its per-datasource probe map, and the deployed version
+        // join the operator's first screen (docs/ops-console-coverage.md).
+        String body = get("/_tesseraql/ops/console", true).body();
+
+        assertThat(body).contains("id=\"health\"")
+                .contains("main: reachable")
+                .contains(io.tesseraql.core.TesseraqlVersion.current());
+    }
+
+    @Test
+    void auditPageNamesTheFlagWhenTheStoreIsOff() throws Exception {
+        // This runtime does not enable tesseraql.audit.routes.enabled: the page must say
+        // so instead of rendering an empty table that pretends nothing happened
+        // (docs/ops-console-coverage.md).
+        HttpResponse<String> response = get("/_tesseraql/ops/console/audit", true);
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(response.body()).contains("Route audit is not enabled")
+                .contains("tesseraql.audit.routes.enabled");
     }
 
     @Test

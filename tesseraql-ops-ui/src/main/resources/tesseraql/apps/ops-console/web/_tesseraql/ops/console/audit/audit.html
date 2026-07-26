@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{tql/shell :: ops-page('Route Audit', ~{:: #page-header}, ~{:: #page-content})}">
+<th:block id="page-header">
+  <span class="hc-spacer"></span>
+  <div class="hc-cluster">
+    <a class="hc-button" data-variant="ghost" data-size="sm" href="/_tesseraql/ops/console">&larr; console</a>
+  </div>
+</th:block>
+<div id="page-content" class="hc-stack" hx-get="/_tesseraql/ops/console/audit" hx-trigger="every 15s"
+     hx-select="#page-content" hx-target="this" hx-swap="outerHTML">
+<section class="hc-card">
+  <h2>Route audit trail</h2>
+  <!-- The store is flag-gated; a disabled store names its flag instead of rendering an
+       empty table that pretends nothing happened (docs/ops-console-coverage.md). -->
+  <div class="hc-empty" th:unless="${audit.enabled}">
+    <p class="hc-empty__title">Route audit is not enabled.</p>
+    <p>Set <code>tesseraql.audit.routes.enabled: true</code> to record business-route
+      writes; the newest entries appear here.</p>
+  </div>
+  <th:block th:if="${audit.enabled}">
+    <div class="hc-empty" th:unless="${audit.hasRows}"><p class="hc-empty__title">No audited requests recorded yet.</p></div>
+    <div class="hc-datagrid" th:if="${audit.hasRows}">
+      <div class="hc-datagrid__scroll">
+        <table class="hc-datagrid__table">
+          <thead class="hc-datagrid__head"><tr>
+            <th class="hc-datagrid__headcell">When</th>
+            <th class="hc-datagrid__headcell">App</th>
+            <th class="hc-datagrid__headcell">Route</th>
+            <th class="hc-datagrid__headcell">Request</th>
+            <th class="hc-datagrid__headcell">Actor</th>
+            <th class="hc-datagrid__headcell">Status</th>
+            <th class="hc-datagrid__headcell">Duration (ms)</th>
+            <th class="hc-datagrid__headcell">Params</th>
+            <th class="hc-datagrid__headcell">Trace</th>
+          </tr></thead>
+          <tbody class="hc-datagrid__body">
+            <tr class="hc-datagrid__row" th:each="a : ${audit.rows}">
+              <td class="hc-datagrid__cell" th:text="${a.occurredAt}"></td>
+              <td class="hc-datagrid__cell" th:text="${a.app}"></td>
+              <td class="hc-datagrid__cell" th:text="${a.routeId}"></td>
+              <td class="hc-datagrid__cell">[[${a.method}]] <code th:text="${a.path}"></code></td>
+              <td class="hc-datagrid__cell" th:text="${a.actor}"></td>
+              <td class="hc-datagrid__cell"><span class="hc-badge" th:attr="data-variant=${a.statusVariant}" th:text="${a.status}"></span></td>
+              <td class="hc-datagrid__cell" th:text="${a.durationMs}"></td>
+              <td class="hc-datagrid__cell"><code th:text="${a.params}"></code></td>
+              <td class="hc-datagrid__cell" th:text="${a.traceId}"></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <p class="hc-field__message">The newest 200 audited requests, narrowed to the apps
+      your <code>ops.app.*</code> grants cover.</p>
+  </th:block>
+</section>
+</div>
+</html>

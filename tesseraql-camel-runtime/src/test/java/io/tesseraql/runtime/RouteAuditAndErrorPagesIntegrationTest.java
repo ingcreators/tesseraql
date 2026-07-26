@@ -99,6 +99,34 @@ class RouteAuditAndErrorPagesIntegrationTest {
     }
 
     @Test
+    void theConsoleAuditPageRendersTheTrailForABrowserOperator() throws Exception {
+        // Self-sufficient: drive one audited call first, then render the page
+        // (docs/ops-console-coverage.md).
+        assertThat(get("/api/things?q=widgets", token(List.of("OPS")), null).statusCode())
+                .isEqualTo(200);
+        io.tesseraql.security.session.SessionStore sessions = runtime.camelContext()
+                .getRegistry().lookupByNameAndType(
+                        io.tesseraql.camel.TesseraqlProperties.SESSION_STORE_BEAN,
+                        io.tesseraql.security.session.SessionStore.class);
+        String sid = sessions.create(new io.tesseraql.security.Principal(
+                "console-op", "console-op", "Console Op", null,
+                List.of(), List.of("OPS"), List.of("ops.app.*"), java.util.Map.of()));
+
+        HttpRequest request = HttpRequest.newBuilder(
+                URI.create("http://localhost:" + runtime.port()
+                        + "/_tesseraql/ops/console/audit"))
+                .header("Cookie", sessions.cookieName() + "=" + sid)
+                .build();
+        HttpResponse<String> page = HttpClient.newHttpClient().send(request,
+                HttpResponse.BodyHandlers.ofString());
+
+        assertThat(page.statusCode()).isEqualTo(200);
+        assertThat(page.body()).contains("Route audit trail")
+                .contains("things")
+                .doesNotContain("Route audit is not enabled");
+    }
+
+    @Test
     void aBrowserErrorRendersTheCustomPageWhileApiClientsKeepJson() throws Exception {
         // The route's SQL is broken on purpose; a browser GET renders errors/500.html.
         HttpResponse<String> browser = get("/broken", null, "text/html");

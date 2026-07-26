@@ -1,0 +1,23 @@
+version: tesseraql/v1
+id: tql.opsConsole.audit
+kind: route
+recipe: query-html
+
+# The business-route audit trail (docs/ops-console-coverage.md): the same rows, scope
+# narrowing and policy as GET /_tesseraql/ops/audit. The page is always mounted; the
+# provider reports whether the flag-gated store is on.
+security:
+  policy: ops.batch.view
+
+sql:
+  service: ops.audit
+  params:
+    # Narrows visibility to the caller's ops.app.<name> grants (deny by default).
+    permissions: principal.permissions
+
+response:
+  html:
+    status: 200
+    template: audit.html
+    model:
+      audit: sql

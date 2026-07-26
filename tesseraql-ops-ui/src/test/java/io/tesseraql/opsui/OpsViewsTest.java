@@ -27,6 +27,33 @@ class OpsViewsTest {
     }
 
     @Test
+    void auditModelReportsTheDisabledStoreHonestly() {
+        Map<String, Object> disabled = OpsViews.audit(null, false);
+        assertThat(disabled.get("enabled")).isEqualTo(false);
+        assertThat(disabled.get("hasRows")).isEqualTo(false);
+
+        Map<String, Object> row = new LinkedHashMap<>();
+        row.put("auditId", "a-1");
+        row.put("app", "demo-app");
+        row.put("routeId", "orders.create");
+        row.put("method", "POST");
+        row.put("path", "/api/orders");
+        row.put("actor", null);
+        row.put("status", 422);
+        row.put("durationMs", 12L);
+        row.put("params", null);
+        row.put("traceId", "t-1");
+        row.put("occurredAt", "2026-07-26 12:00:00");
+        Map<String, Object> enabled = OpsViews.audit(List.of(row), true);
+        assertThat(enabled.get("enabled")).isEqualTo(true);
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> rows = (List<Map<String, Object>>) enabled.get("rows");
+        assertThat(rows.get(0).get("statusVariant")).isEqualTo("warning");
+        assertThat(rows.get(0).get("actor")).isEqualTo("-");
+        assertThat(rows.get(0).get("params")).isEqualTo("-");
+    }
+
+    @Test
     void overviewBuildsTemplateReadyModel() {
         Map<String, Integer> byStatus = new LinkedHashMap<>();
         byStatus.put("COMPLETED", 3);
@@ -38,9 +65,25 @@ class OpsViewsTest {
                 List.of(), List.of(), metrics(), new PinningSummary(0, List.of()),
                 true, List.of(new Alert("TQL-OPS-9001", "warning", "high error rate")));
 
-        Map<String, Object> model = OpsViews.overview(overview);
+        Map<String, Object> model = OpsViews.overview(overview,
+                new OpsDashboard.HealthReport("WARN",
+                        Map.of("datasources", Map.of("main", true, "reporting", false))),
+                "1.2.3");
 
         assertThat(model.get("warning")).isEqualTo(true);
+        assertThat(model.get("version")).isEqualTo("1.2.3");
+        @SuppressWarnings("unchecked")
+        Map<String, Object> health = (Map<String, Object>) model.get("health");
+        assertThat(health.get("status")).isEqualTo("WARN");
+        assertThat(health.get("statusVariant")).isEqualTo("warning");
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> datasources = (List<Map<String, Object>>) health
+                .get("datasources");
+        assertThat(datasources).anySatisfy(d -> {
+            assertThat(d.get("name")).isEqualTo("reporting");
+            assertThat(d.get("state")).isEqualTo("unreachable");
+            assertThat(d.get("stateVariant")).isEqualTo("error");
+        });
         assertThat(model.get("ok")).isEqualTo(false);
         assertThat(model.get("hasAlerts")).isEqualTo(true);
         assertThat(model.get("batchTotal")).isEqualTo(3);
