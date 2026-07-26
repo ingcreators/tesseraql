@@ -117,4 +117,6 @@ export const EXCLUDED = [
   'yaml-surface-consumers.md',
   // Ops console write actions, 2026-07-26.
   'ops-console-actions.md',
+  // Studio schema lifecycle, 2026-07-26.
+  'studio-schema-lifecycle.md',
 ];

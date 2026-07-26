@@ -6,6 +6,11 @@ recipe: query-html
 security:
   policy: ops.batch.view
 
+input:
+  started:
+    type: string
+    required: false
+
 sql:
   service: ops.execution
   params:
@@ -19,3 +24,4 @@ response:
     template: execution.html
     model:
       execution: sql
+      started: params.started

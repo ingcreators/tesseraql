@@ -1,0 +1,20 @@
+version: tesseraql/v1
+id: tql.opsConsole.jobs
+kind: route
+recipe: query-html
+
+security:
+  policy: ops.batch.view
+
+sql:
+  service: ops.jobs
+  params:
+    # Narrows visibility to the caller's ops.app.<name> grants (deny by default).
+    permissions: principal.permissions
+
+response:
+  html:
+    status: 200
+    template: jobs.html
+    model:
+      jobs: sql

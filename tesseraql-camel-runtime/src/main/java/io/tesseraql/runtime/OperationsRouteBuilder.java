@@ -44,10 +44,15 @@ final class OperationsRouteBuilder extends RouteBuilder {
     private final MetricsSettings metrics;
     private final io.tesseraql.operations.audit.JdbcRouteAuditStore routeAudit;
 
-    /** Runs a job by id; decouples the route builder from the runtime instance. */
+    /**
+     * Runs a job by id; decouples the route builder from the runtime instance. The trigger
+     * facts ride along so the execution row records how - and for a manual run, by whom -
+     * it started (docs/ops-console-actions.md).
+     */
     @FunctionalInterface
     interface JobRunner {
-        JobExecution run(String jobId, Map<String, Object> params);
+        JobExecution run(String jobId, Map<String, Object> params, String triggerType,
+                String triggeredBy);
     }
 
     /** The Prometheus exposition settings (roadmap Phase 45): opt-in, bearer-gated default. */
@@ -260,7 +265,9 @@ final class OperationsRouteBuilder extends RouteBuilder {
             return NOT_FOUND;
         }
         Map<String, Object> params = parseBody(exchange);
-        JobExecution execution = runner.run(jobId, params);
+        Principal principal = exchange.getProperty(TesseraqlProperties.PRINCIPAL, Principal.class);
+        JobExecution execution = runner.run(jobId, params, "manual",
+                principal == null ? null : principal.loginId());
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("executionId", execution.id());
         result.put("status", execution.status().name());

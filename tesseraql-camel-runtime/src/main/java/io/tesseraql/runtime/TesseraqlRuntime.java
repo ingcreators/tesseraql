@@ -731,7 +731,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
 
         TenantDataSources tenantPools = tenantDataSources;
         AppConfig runtimeConfig = manifest.config();
-        OperationsRouteBuilder.JobRunner jobRunner = (jobId, params) -> {
+        OperationsRouteBuilder.JobRunner jobRunner = (jobId, params, triggerType, triggeredBy) -> {
             JobFile jobFile = jobs.get(jobId);
             if (jobFile == null) {
                 throw new IllegalArgumentException("Unknown job: " + jobId);
@@ -763,12 +763,12 @@ public final class TesseraqlRuntime implements AutoCloseable {
                                         ? tenantPools.dataSourceFor(tenantId, dataSource)
                                         : jobPool,
                                 io.tesseraql.core.tenant.TenantContext.of(tenantId),
-                                owner, boundParams, "manual");
+                                owner, boundParams, triggerType, triggeredBy);
                     }
                     return last;
                 }
             }
-            return jobExecutor.run(jobFile, jobPool, owner, boundParams, "manual");
+            return jobExecutor.run(jobFile, jobPool, owner, boundParams, triggerType, triggeredBy);
         };
 
         io.tesseraql.core.outbox.OutboxEventSink outboxSink;
@@ -930,6 +930,39 @@ public final class TesseraqlRuntime implements AutoCloseable {
                                         "Not Found"));
                         return java.util.Map.of("id", event.id(),
                                 "redelivered", outboxStore.redeliver(id));
+                    })
+                    .register("ops.jobs", params -> {
+                        java.util.function.Predicate<String> scope = io.tesseraql.opsui.OpsScope
+                                .allowedApps(params.get("permissions"));
+                        List<io.tesseraql.opsui.OpsViews.JobCatalogEntry> entries = new java.util.ArrayList<>();
+                        jobs.forEach((id, jobFile) -> {
+                            String owner = jobOwners.getOrDefault(id, appName);
+                            if (scope.test(owner)) {
+                                entries.add(new io.tesseraql.opsui.OpsViews.JobCatalogEntry(
+                                        id, owner, jobFile.definition().trigger(),
+                                        jobRepository.latestExecution(id).orElse(null)));
+                            }
+                        });
+                        return io.tesseraql.opsui.OpsViews.jobs(entries);
+                    })
+                    .register("ops.jobRun", params -> {
+                        java.util.function.Predicate<String> scope = io.tesseraql.opsui.OpsScope
+                                .allowedApps(params.get("permissions"));
+                        String id = String.valueOf(params.get("id"));
+                        // Out of scope reads exactly like unknown - the JSON API's stance.
+                        if (!jobs.containsKey(id)
+                                || !scope.test(jobOwners.getOrDefault(id, appName))) {
+                            throw new io.tesseraql.core.error.TqlException(
+                                    new io.tesseraql.core.error.TqlErrorCode(
+                                            io.tesseraql.core.error.TqlDomain.BATCH, 4040),
+                                    "Not Found");
+                        }
+                        JobExecution execution = jobRunner.run(id, java.util.Map.of(), "manual",
+                                params.get("actor") == null
+                                        ? null
+                                        : String.valueOf(params.get("actor")));
+                        return java.util.Map.of("executionId", execution.id(),
+                                "status", execution.status().name());
                     })
                     .register("ops.execution", params -> {
                         String id = params.get("id") == null
@@ -3482,7 +3515,8 @@ public final class TesseraqlRuntime implements AutoCloseable {
             throw new IllegalArgumentException("Unknown job: " + jobId);
         }
         return jobExecutor.run(jobFile, jobDataSource(jobFile),
-                jobOwners.getOrDefault(jobId, appName), bindJobParams(jobFile, params), "manual");
+                jobOwners.getOrDefault(jobId, appName), bindJobParams(jobFile, params), "manual",
+                null);
     }
 
     /**
@@ -3504,7 +3538,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
                             : jobPool,
                     io.tesseraql.core.tenant.TenantContext.of(tenantId),
                     jobOwners.getOrDefault(jobId, appName), bindJobParams(jobFile, params),
-                    "manual"));
+                    "manual", null));
         }
         return executions;
     }

@@ -104,6 +104,54 @@ public final class OpsViews {
         return model;
     }
 
+    /**
+     * One jobs-catalog row (docs/ops-console-actions.md): the declared job, its owning app,
+     * its trigger, and its most recent execution (null when it has never run).
+     */
+    public record JobCatalogEntry(String id, String app,
+            io.tesseraql.yaml.model.TriggerSpec trigger, JobExecution lastExecution) {
+    }
+
+    /** The jobs page model: the scope-filtered catalog with each job's last run summarized. */
+    public static Map<String, Object> jobs(List<JobCatalogEntry> entries) {
+        List<Map<String, Object>> rows = new ArrayList<>();
+        for (JobCatalogEntry entry : entries) {
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("id", entry.id());
+            row.put("app", dash(entry.app()));
+            row.put("trigger", triggerSummary(entry.trigger()));
+            JobExecution last = entry.lastExecution();
+            row.put("hasRun", last != null);
+            row.put("lastStatus", last == null ? "-" : name(last.status()));
+            row.put("lastStatusVariant", last == null ? "neutral" : variant(name(last.status())));
+            row.put("lastStart",
+                    last == null || last.startTime() == null ? "-" : last.startTime().toString());
+            row.put("lastExecutionId", last == null ? null : last.id());
+            rows.add(row);
+        }
+        Map<String, Object> model = new LinkedHashMap<>();
+        model.put("rows", rows);
+        model.put("hasRows", !rows.isEmpty());
+        return model;
+    }
+
+    /** How a job starts, one glanceable phrase: its schedule, its poll source, or "manual". */
+    private static String triggerSummary(io.tesseraql.yaml.model.TriggerSpec trigger) {
+        if (trigger == null) {
+            return "manual";
+        }
+        if (trigger.schedule() != null) {
+            if (trigger.schedule().cron() != null && !trigger.schedule().cron().isBlank()) {
+                return "cron " + trigger.schedule().cron();
+            }
+            if (trigger.schedule().fixedDelay() != null
+                    && !trigger.schedule().fixedDelay().isBlank()) {
+                return "every " + trigger.schedule().fixedDelay();
+            }
+        }
+        return trigger.poll() != null ? "poll" : "manual";
+    }
+
     /** The trace page model: the trace tree flattened with per-node indents. */
     public static Map<String, Object> traces(List<TraceNode> tree) {
         List<Map<String, Object>> rows = new ArrayList<>();
@@ -131,6 +179,7 @@ public final class OpsViews {
         model.put("status", name(execution.status()));
         model.put("statusVariant", variant(name(execution.status())));
         model.put("trigger", dash(execution.triggerType()));
+        model.put("triggeredBy", dash(execution.triggeredBy()));
         model.put("startTime",
                 execution.startTime() == null ? "-" : execution.startTime().toString());
         model.put("endTime", execution.endTime() == null ? "-" : execution.endTime().toString());

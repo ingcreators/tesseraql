@@ -19,6 +19,24 @@ All notable changes to TesseraQL are documented here. The format follows
   with no schema sidecar refuses with the new `TQL-STUDIO-4236` (409). The schema page's
   empty state now distinguishes a corrupt sidecar from an absent one.
 
+- **A Jobs page in the ops console, and executions know who started them**
+  (docs/ops-console-actions.md): `/_tesseraql/ops/console/jobs` lists the scope-filtered job
+  catalog — trigger, owning app, last run — with a *Run* button per job (`ops.batch.run`) that
+  starts it now and lands on the new execution's detail page. `tql_job_execution` gains a
+  `triggered_by` column (V3 framework migration): manual runs — console and JSON API alike —
+  record the principal's login id, and the execution page shows it. Scheduled firings are now
+  recorded as `trigger_type = 'schedule'`; they previously rode the shared runner's hardcoded
+  `manual`, making every cron firing look operator-initiated.
+
+### Changed
+
+- **`JobExecutor.run`, `JobRepository.startExecution`, and the internal `JobRunner` contract
+  carry the trigger facts** (`triggerType`, `triggeredBy`) instead of a hardcoded string;
+  `JobExecution` gains the `triggeredBy` component. Embedders constructing these records or
+  calling these APIs must pass the new arguments (pre-1.0, no compatibility overloads).
+
+### Added
+
 - **The ops console redelivers dead outbox events** (docs/ops-console-actions.md): the outbox
   page's DEAD rows carry a *Redeliver* button — a plain CSRF-guarded form posting to the
   console's first write route (`ops.batch.run`, the same policy as the JSON API it fronts),

@@ -74,7 +74,7 @@ final class SchedulingRouteBuilder extends RouteBuilder {
                     "Skipping job {0} firing at {1}: claimed by another node", jobId, fireTime);
             return;
         }
-        runner.run(jobId, Map.of());
+        runner.run(jobId, Map.of(), "schedule", null);
     }
 
     /** Quartz's scheduled fire time is computed from the cron, so it matches across nodes. */

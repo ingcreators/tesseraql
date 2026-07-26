@@ -87,7 +87,7 @@ class OpsViewsTest {
     @Test
     void executionBuildsDetailModel() {
         JobExecution execution = new JobExecution("e-9", "nightly", "app", JobStatus.COMPLETED,
-                "cron", java.time.Instant.parse("2026-06-10T00:00:00Z"),
+                "cron", null, java.time.Instant.parse("2026-06-10T00:00:00Z"),
                 java.time.Instant.parse("2026-06-10T00:00:02Z"), 2000L, "ok");
         StepExecution step = new StepExecution("s-1", "e-9", "load", StepStatus.FAILED,
                 null, null, 1500L, 42, "boom");
