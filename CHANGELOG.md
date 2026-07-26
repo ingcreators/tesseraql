@@ -8,6 +8,15 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **The ops console redelivers dead outbox events** (docs/ops-console-actions.md): the outbox
+  page's DEAD rows carry a *Redeliver* button — a plain CSRF-guarded form posting to the
+  console's first write route (`ops.batch.run`, the same policy as the JSON API it fronts),
+  requeueing the event and flashing confirmation. The page previously printed the `curl`
+  command for the API instead of offering the action; not-yet-dead FAILED events stay
+  button-free — they are the dispatcher's to retry. An error page rendering `TQL-BATCH-4040`
+  now answers 404 (it fell through to 500), matching the JSON API's Not Found for the same
+  code.
+
 - **The VS Code extension publishes itself** (docs/vscode-extension.md): pushing an
   `ext-v<version>` tag runs the new *Extension release* workflow — tests, a
   manifest-version-matches-tag gate, one `vsce package`, then `vsce publish` of that exact vsix

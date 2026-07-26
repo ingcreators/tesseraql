@@ -401,6 +401,9 @@ public final class ErrorResponseRenderer implements Processor {
                 default -> 500;
             };
             case IAM -> code.number() == 4030 ? 403 : 500;
+            // 4040: unknown - or out-of-scope, which reads identically - event or execution,
+            // matching the JSON ops API's Not Found body for the same code.
+            case BATCH -> code.number() == 4040 ? 404 : 500;
             case ACCOUNT -> switch (code.number()) {
                 // 4801 undeclared preference key; 4802 invalid value; 4804 wrong password
                 case 4801, 4802, 4804 -> 400;
