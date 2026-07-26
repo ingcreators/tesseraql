@@ -55,6 +55,9 @@ public final class JobExecutor {
         void jobFailed(String jobId, String executionId, String appName, String message);
     }
 
+    /** Datasource to dialect id, resolved once: reading the vendor costs a pooled connection. */
+    private final Map<DataSource, String> dialects = new java.util.concurrent.ConcurrentHashMap<>();
+
     private final JobRepository repository;
     private final TempStore tempStore;
     private final io.tesseraql.core.diag.SqlExecutionLog slowSqlLog;
@@ -290,9 +293,25 @@ public final class JobExecutor {
         return httpCallClient.call(step.httpCall(), context, parentContext);
     }
 
+    /**
+     * The datasource's dialect id, resolved once per pool and cached.
+     *
+     * <p>Reading the vendor asks the pool for a connection, too expensive to repeat per step, and
+     * a datasource does not change vendor while the process runs.
+     */
+    private String dialectOf(DataSource dataSource) {
+        return dialects.computeIfAbsent(dataSource,
+                pool -> io.tesseraql.core.util.DatabaseVendors.vendor(pool).orElse(""));
+    }
+
     private Map<String, Object> runStep(JobFile jobFile, PipelineStep step, DataSource dataSource,
             Map<String, Object> context, io.tesseraql.core.telemetry.SpanContext parentContext) {
-        Path sqlPath = jobFile.source().getParent().resolve(step.sql().file()).normalize();
+        // The dialect variant beside the file, the way every other executor picks it: a step
+        // declaring `x.sql` with an `x.postgresql.sql` next to it ran the generic one, silently,
+        // because this executor resolved the path itself and never asked.
+        Path sqlPath = io.tesseraql.core.dialect.DialectSqlResolver.resolve(
+                jobFile.source().getParent().resolve(step.sql().file()).normalize(),
+                dialectOf(dataSource));
         String source = read(sqlPath);
         Map<String, Object> sqlParams = resolveParams(step, context);
         // File placeholders (docs/duckdb.md) resolve against the job's datasource; the job
