@@ -27,11 +27,17 @@ function poolFor(symbols: AppSymbols,
 export class SymbolIndex {
   private readonly byHome = new Map<string, AppSymbols>();
   private readonly pending = new Map<string, NodeJS.Timeout>();
+  private readonly refreshed: (() => void)[] = [];
 
   constructor(private homes: readonly string[], private readonly output: vscode.OutputChannel) {
     for (const home of homes) {
       this.scheduleRefresh(home);
     }
+  }
+
+  /** Runs after a home's symbols land, so index-decorated views can re-render. */
+  onDidRefresh(listener: () => void): void {
+    this.refreshed.push(listener);
   }
 
   dispose(): void {
@@ -74,6 +80,9 @@ export class SymbolIndex {
           (_error, stdout) => {
             try {
               this.byHome.set(home, parseAppSymbols(stdout));
+              for (const listener of this.refreshed) {
+                listener();
+              }
             } catch {
               // A pre-contract CLI or a broken app: keep the last good index; the
               // lint loop owns the actionable message.

@@ -1,8 +1,8 @@
 // The symbols contract (docs/vscode-extension.md, Phase 56 slice 5): what the
 // framework declares — policies, default-locale message keys, shared field domains
-// and validation rules, routes — with source lines, as `tesseraql symbols --format
-// json` prints it. The providers navigate and complete over it; unknown references
-// stay lint findings.
+// and validation rules, routes — with source lines, as `tesseraql symbols` prints
+// it. The providers navigate and complete over it; unknown references stay lint
+// findings.
 
 export interface DeclaredSymbol {
   name: string;
@@ -10,11 +10,21 @@ export interface DeclaredSymbol {
   line: number | null;
 }
 
+/** A mounted route as the manifest resolves it: the file plus its served identity. */
+export interface RouteSymbol {
+  id: string | null;
+  source: string;
+  method: string | null;
+  path: string | null;
+  recipe: string | null;
+}
+
 export interface AppSymbols {
   policies: DeclaredSymbol[];
   messages: DeclaredSymbol[];
   domains: DeclaredSymbol[];
   rules: DeclaredSymbol[];
+  routes: RouteSymbol[];
 }
 
 export class SymbolsContractError extends Error {}
@@ -32,6 +42,7 @@ export function parseAppSymbols(stdout: string): AppSymbols {
   }
   const document = parsed as {
     policies: unknown[]; messages: unknown[]; domains?: unknown; rules?: unknown;
+    routes?: unknown;
   };
   return {
     policies: document.policies.map((value) => toSymbol(value, 'name')),
@@ -40,11 +51,50 @@ export function parseAppSymbols(stdout: string): AppSymbols {
     // a contract error, so lint and policy/message intelligence keep working.
     domains: optionalSymbols(document.domains),
     rules: optionalSymbols(document.rules),
+    routes: optionalRoutes(document.routes),
   };
 }
 
 function optionalSymbols(value: unknown): DeclaredSymbol[] {
   return Array.isArray(value) ? value.map((entry) => toSymbol(entry, 'name')) : [];
+}
+
+function optionalRoutes(value: unknown): RouteSymbol[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value.map((entry) => {
+    if (typeof entry !== 'object' || entry === null) {
+      throw new SymbolsContractError('a route is not an object');
+    }
+    const route = entry as Record<string, unknown>;
+    if (typeof route.source !== 'string') {
+      throw new SymbolsContractError("a route lacks 'source'");
+    }
+    return {
+      id: stringOrNull(route.id),
+      source: route.source,
+      method: stringOrNull(route.method),
+      path: stringOrNull(route.path),
+      recipe: stringOrNull(route.recipe),
+    };
+  });
+}
+
+function stringOrNull(value: unknown): string | null {
+  return typeof value === 'string' ? value : null;
+}
+
+/**
+ * The explorer's route annotation — "GET /api/users · query-json" — from whichever
+ * parts the manifest declares (consume/batch/mcp routes carry no method or path).
+ */
+export function routeDescription(route: RouteSymbol): string | undefined {
+  const served = [route.method, route.path]
+      .filter((part): part is string => part !== null && part !== '').join(' ');
+  const parts = [served, route.recipe ?? '']
+      .filter((part) => part !== '');
+  return parts.length === 0 ? undefined : parts.join(' · ');
 }
 
 function toSymbol(value: unknown, nameField: string): DeclaredSymbol {
