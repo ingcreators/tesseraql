@@ -1,0 +1,18 @@
+version: tesseraql/v1
+id: tql.iamAdmin.users.sessionsRevoke
+kind: route
+recipe: command-json
+
+# Ends every session of this subject now (docs/session-administration.md). Deliberately
+# all-or-nothing: the operator-shaped decision is "end this account's access".
+security:
+  policy: iam.admin.write
+
+sql:
+  service: iam.revokeSessions
+  params:
+    userId: path.id
+
+response:
+  redirect:
+    location: /_tesseraql/admin/users/{path.id}

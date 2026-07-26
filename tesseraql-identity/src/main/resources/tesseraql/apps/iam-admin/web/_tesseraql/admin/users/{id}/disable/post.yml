@@ -6,9 +6,11 @@ recipe: command-json
 security:
   policy: iam.admin.write
 
+# A service, not a bare contract (docs/session-administration.md): disabling flips the
+# status AND ends every session of the subject - disabled means disabled now, not at
+# cookie expiry.
 sql:
-  contract: identity.disable-user
-  mode: update
+  service: iam.disableUser
   params:
     userId: path.id
 

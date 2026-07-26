@@ -1036,6 +1036,46 @@ public final class TesseraqlRuntime implements AutoCloseable {
                                             io.tesseraql.identity.RealmConfig.class),
                                     inviteChannel, inviteUrl, inviteTtl, appName,
                                     inviteEnabled))
+                    // Session administration (docs/session-administration.md): the admin's
+                    // view of a subject's sessions renders only timestamps - session ids
+                    // never reach a template - and revocation ends every session of the
+                    // subject (the "" keep-id is the changePassword precedent).
+                    .register("iam.userSessions", params -> {
+                        String userId = String.valueOf(params.get("userId"));
+                        java.util.List<Map<String, Object>> rows = new java.util.ArrayList<>();
+                        for (io.tesseraql.security.session.SessionStore.ActiveSession session : sessionStore
+                                .sessionsFor(userId)) {
+                            rows.add(Map.of(
+                                    "createdAt", session.createdAt() == null
+                                            ? ""
+                                            : session.createdAt().toString(),
+                                    "expiresAt", session.expiresAt() == null
+                                            ? ""
+                                            : session.expiresAt().toString()));
+                        }
+                        return Map.of("rows", rows, "count", rows.size());
+                    })
+                    .register("iam.revokeSessions", params -> {
+                        sessionStore.invalidateOthersFor(
+                                String.valueOf(params.get("userId")), "");
+                        return Map.of("revoked", true);
+                    })
+                    // Disabled means disabled: the status flips AND every session of the
+                    // subject ends now, not at cookie expiry. Identity and realm resolve
+                    // lazily like identity.invite (they bind later).
+                    .register("iam.disableUser", params -> {
+                        String userId = String.valueOf(params.get("userId"));
+                        context.getRegistry().lookupByNameAndType(
+                                TesseraqlProperties.IDENTITY_SERVICE_BEAN,
+                                io.tesseraql.identity.IdentityService.class)
+                                .executeUpdate(context.getRegistry().lookupByNameAndType(
+                                        TesseraqlProperties.IDENTITY_REALM_BEAN,
+                                        io.tesseraql.identity.RealmConfig.class),
+                                        io.tesseraql.identity.IdentityContracts.DISABLE_USER,
+                                        Map.of("userId", userId));
+                        sessionStore.invalidateOthersFor(userId, "");
+                        return Map.of("disabled", true);
+                    })
                     // TOTP self-service (roadmap Phase 50 slice 3): begin/confirm/disable.
                     // The store binds in the identity block, so resolve lazily like
                     // identity/realm; disable re-verifies the password.

@@ -24,6 +24,10 @@ queries:
     contract: identity.find-permissions-by-user-id
     params:
       userId: path.id
+  sessions:
+    service: iam.userSessions
+    params:
+      userId: path.id
 
 response:
   html:
@@ -34,3 +38,5 @@ response:
       roles: roles.rows
       groups: groups.rows
       permissions: permissions.rows
+      sessions: sessions.rows
+      sessionCount: sessions.count
