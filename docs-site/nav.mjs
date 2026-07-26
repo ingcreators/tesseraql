@@ -115,4 +115,6 @@ export const EXCLUDED = [
   'shared-definitions-reach.md',
   'framework-surface-parity.md',
   'yaml-surface-consumers.md',
+  // Ops console write actions, 2026-07-26.
+  'ops-console-actions.md',
 ];

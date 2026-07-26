@@ -422,7 +422,7 @@ final class ErrorIndex {
             "component-guard.md", "config-consumers.md", "validation-rule-sets.md",
             "route-governance-parity.md", "poll-connector-hardening.md",
             "shared-definitions-reach.md", "framework-surface-parity.md",
-            "yaml-surface-consumers.md");
+            "yaml-surface-consumers.md", "ops-console-actions.md");
 
     /**
      * Marks each code with the cookbook pages whose markdown mentions it — every
