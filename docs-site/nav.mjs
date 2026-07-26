@@ -126,4 +126,6 @@ export const EXCLUDED = [
   'poll-source-metrics.md',
   // Ops console coverage (audit page, health panel, params form), 2026-07-26.
   'ops-console-coverage.md',
+  // Session rotation in place, 2026-07-26.
+  'session-rotation.md',
 ];
