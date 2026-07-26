@@ -3,8 +3,15 @@ id: tql.docs.releaseDiff
 kind: route
 recipe: query-html
 
+input:
+  captured:
+    type: string
+    required: false
+
 sql:
   service: docs.releaseDiff
+  params:
+    roles: principal.roles
 
 response:
   html:
@@ -12,3 +19,4 @@ response:
     template: release-diff.html
     model:
       docs: sql
+      captured: params.captured

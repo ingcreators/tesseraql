@@ -8,6 +8,17 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **The schema sidecar lifecycle closes inside Studio** (docs/studio-schema-lifecycle.md): a
+  *Refresh schema* button on the docs schema page introspects the runtime's own datasources
+  live and rewrites `.tesseraql/docs/schema.json` — the SQL builder, migration DDL builder,
+  and docs pages stop depending on an out-of-band `tesseraql:schema` run; and a *Capture
+  baselines now* button on the release-diff page writes `schema.baseline.json` and
+  `openapi.baseline.json` in one action, replacing the hand-copy instructions (including one
+  that named `.tesseraql/docs/openapi.json`, a file nothing writes at runtime). Both are
+  edit-gated, path-confined, and audited (`schema-refresh` / `baseline-capture`); capturing
+  with no schema sidecar refuses with the new `TQL-STUDIO-4236` (409). The schema page's
+  empty state now distinguishes a corrupt sidecar from an absent one.
+
 - **A Jobs page in the ops console, and executions know who started them**
   (docs/ops-console-actions.md): `/_tesseraql/ops/console/jobs` lists the scope-filtered job
   catalog — trigger, owning app, last run — with a *Run* button per job (`ops.batch.run`) that
@@ -23,6 +34,8 @@ All notable changes to TesseraQL are documented here. The format follows
   carry the trigger facts** (`triggerType`, `triggeredBy`) instead of a hardcoded string;
   `JobExecution` gains the `triggeredBy` component. Embedders constructing these records or
   calling these APIs must pass the new arguments (pre-1.0, no compatibility overloads).
+
+### Added
 
 - **The ops console redelivers dead outbox events** (docs/ops-console-actions.md): the outbox
   page's DEAD rows carry a *Redeliver* button — a plain CSRF-guarded form posting to the

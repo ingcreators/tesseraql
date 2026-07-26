@@ -10,11 +10,16 @@
 <div id="page-content" class="hc-stack">
 <section class="hc-card">
   <h2>Release diff</h2>
+  <p class="hc-alert" data-variant="success" role="status" th:if="${!#strings.isEmpty(captured)}">Baselines captured &mdash; the diffs below now anchor to this release.</p>
   <p class="hc-field__message">What a promotion changes, from the captured baselines: the API
     changelog against <code>.tesseraql/docs/openapi.baseline.json</code>, the schema delta
     against <code>schema.baseline.json</code>, and the migration set the app carries. The
     full two-tree diff (routes, policies) is the <code>tesseraql release-diff</code> /
     <code>tesseraql:release-diff</code> report in CI.</p>
+  <form th:if="${docs.editable}" method="post" action="/_tesseraql/studio/ui/docs/release-diff/capture">
+    <input type="hidden" name="_csrf" th:value="${_csrf}">
+    <button class="hc-button" data-size="sm" type="submit">Capture baselines now</button>
+  </form>
 
   <h3>API contract</h3>
   <th:block th:if="${docs.hasBaseline}">
@@ -29,16 +34,14 @@
     </ul>
   </th:block>
   <p class="hc-field__message" th:unless="${docs.hasBaseline}">No API baseline captured yet
-    — copy <code>.tesseraql/docs/openapi.json</code> to <code>openapi.baseline.json</code> at
-    the last release.</p>
+    — use <em>Capture baselines now</em> above at a release point.</p>
 
   <h3>Schema</h3>
   <pre class="hc-code" th:if="${docs.schemaDiff != null}"><code th:text="${docs.schemaDiff}"></code></pre>
   <p class="hc-field__message" th:if="${docs.hasSchemaBaseline && docs.schemaDiff == null}">
     No schema changes since the baseline.</p>
   <p class="hc-field__message" th:unless="${docs.hasSchemaBaseline}">No schema baseline
-    captured yet — copy <code>.tesseraql/docs/schema.json</code> to
-    <code>schema.baseline.json</code> at the last release.</p>
+    captured yet — use <em>Capture baselines now</em> above at a release point.</p>
 
   <h3>Migrations the app carries</h3>
   <div style="overflow-x: auto">

@@ -873,6 +873,53 @@ class StudioIntegrationTest {
         assertThat(get("/_tesseraql/studio/ui/docs/schema", false).statusCode()).isEqualTo(401);
     }
 
+    /**
+     * The sidecar lifecycle closes inside Studio (docs/studio-schema-lifecycle.md): a corrupt
+     * sidecar names itself instead of reading as never-introspected, refresh rewrites it from
+     * the live database through the runtime's own pools, and capture arms both release-diff
+     * baselines in one action. The fixture's hand-authored sidecars are restored afterwards —
+     * sibling tests assert against their customers/orders shape.
+     */
+    @Test
+    void schemaRefreshAndBaselineCaptureCloseTheSidecarLifecycle() throws Exception {
+        Path docs = appHome.resolve(".tesseraql/docs");
+        byte[] schema = Files.readAllBytes(docs.resolve("schema.json"));
+        byte[] schemaBaseline = Files.readAllBytes(docs.resolve("schema.baseline.json"));
+        byte[] apiBaseline = Files.readAllBytes(docs.resolve("openapi.baseline.json"));
+        try {
+            Files.writeString(docs.resolve("schema.json"), "{not json");
+            assertThat(get("/_tesseraql/studio/ui/docs/schema", true).body())
+                    .contains("cannot be parsed");
+
+            HttpResponse<String> refresh = postForm(
+                    "/_tesseraql/studio/ui/docs/schema/refresh", "");
+            assertThat(refresh.statusCode()).isEqualTo(303);
+            String page = get("/_tesseraql/studio/ui/docs/schema?refreshed=1", true).body();
+            assertThat(page).contains("Schema refreshed").contains("Datasource: main")
+                    .contains("users");
+
+            HttpResponse<String> capture = postForm(
+                    "/_tesseraql/studio/ui/docs/release-diff/capture", "");
+            assertThat(capture.statusCode()).isEqualTo(303);
+            String diff = get("/_tesseraql/studio/ui/docs/release-diff?captured=1", true).body();
+            assertThat(diff).contains("Baselines captured")
+                    .doesNotContain("No API baseline captured yet")
+                    .doesNotContain("No schema baseline");
+
+            // Honest wayfinding: a read-only viewer gets no refresh button.
+            assertThat(getWithCookie("/_tesseraql/studio/ui/docs/schema", viewerCookie).body())
+                    .doesNotContain("Refresh schema");
+
+            // Both actions land in the audit trail.
+            String audit = get("/_tesseraql/studio/ui/audit", true).body();
+            assertThat(audit).contains("schema-refresh").contains("baseline-capture");
+        } finally {
+            Files.write(docs.resolve("schema.json"), schema);
+            Files.write(docs.resolve("schema.baseline.json"), schemaBaseline);
+            Files.write(docs.resolve("openapi.baseline.json"), apiBaseline);
+        }
+    }
+
     @Test
     void uiDocsRequiresAuthentication() throws Exception {
         assertThat(get("/_tesseraql/studio/ui/docs", false).statusCode()).isEqualTo(401);

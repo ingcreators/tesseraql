@@ -46,11 +46,13 @@ web/_tesseraql/studio/ui/docs/export/openapi/openapi.json.tpl
 web/_tesseraql/studio/ui/docs/export/pdf/get.yml
 web/_tesseraql/studio/ui/docs/export/pdf/pdf.html
 web/_tesseraql/studio/ui/docs/get.yml
+web/_tesseraql/studio/ui/docs/release-diff/capture/post.yml
 web/_tesseraql/studio/ui/docs/release-diff/get.yml
 web/_tesseraql/studio/ui/docs/release-diff/release-diff.html
 web/_tesseraql/studio/ui/docs/route/get.yml
 web/_tesseraql/studio/ui/docs/route/route.html
 web/_tesseraql/studio/ui/docs/schema/get.yml
+web/_tesseraql/studio/ui/docs/schema/refresh/post.yml
 web/_tesseraql/studio/ui/docs/schema/schema.html
 web/_tesseraql/studio/ui/docs/schema/table/get.yml
 web/_tesseraql/studio/ui/docs/schema/table/table.html

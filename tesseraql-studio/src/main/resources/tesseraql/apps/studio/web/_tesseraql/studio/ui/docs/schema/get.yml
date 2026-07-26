@@ -10,12 +10,16 @@ input:
   dir:
     type: string
     required: false
+  refreshed:
+    type: string
+    required: false
 
 sql:
   service: docs.schema
   params:
     sort: params.sort
     dir: params.dir
+    roles: principal.roles
 
 response:
   html:
@@ -23,3 +27,4 @@ response:
     template: schema.html
     model:
       sch: sql
+      refreshed: params.refreshed

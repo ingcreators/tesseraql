@@ -181,6 +181,15 @@ public final class DocService {
         }
     }
 
+    /**
+     * Whether {@code schema.json} exists but cannot be parsed (docs/studio-schema-lifecycle.md):
+     * absent and corrupt both read as a null overlay, so this is what lets the schema page name
+     * the actual problem instead of pretending nothing was ever introspected.
+     */
+    public boolean schemaCorrupt() {
+        return hasSchema() && schema() == null;
+    }
+
     /** Whether a schema baseline sidecar is present to diff the current schema against. */
     public boolean hasSchemaBaseline() {
         return Files.isRegularFile(appHome.resolve(SCHEMA_BASELINE_PATH));
