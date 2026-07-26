@@ -497,7 +497,10 @@ class StudioIntegrationTest {
                     .contains(">Explorer<").contains(">Overview<").contains(">Coverage<")
                     .contains(">Schema<").contains(">Scaffold<").contains(">Migration<")
                     .contains(">SQL builder<").contains(">Drafts<").contains(">Audit<")
-                    .contains(">Wizards<").contains(">Domains<")
+                    .contains(">Wizards<").contains(">Domains<").contains(">Rules<")
+                    // every page is reachable from the rail, not only from the explorer's
+                    // editable-mode "or create with" cluster (which a read-only user never sees)
+                    .contains(">Copilot<").contains(">Connectors<")
                     // the system apps stay reachable from Studio's sidebar
                     .contains(">Operations<").contains(">IAM Admin<")
                     // icons via the self-hosted sprite, and the collapse-rail + hamburger plumbing

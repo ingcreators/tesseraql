@@ -225,5 +225,6 @@ catch up. `domains/` and `rules/` get their own small schemas and their own file
    resolve? `McpSchema`'s javadoc frames type-and-required as deliberate scope. Leaning yes for
    enum/pattern/length: a model that sees the constraint produces a valid call, and the alternative
    is a rejected tool call the model cannot diagnose.
-3. Should the Rules page live in the portal, in Studio, or both? Domains chose the portal. Leaning
-   portal for parity, with Studio linking to it rather than reimplementing.
+3. Should the Rules page live in the portal, in Studio, or both? Domains chose the portal. Decided:
+   portal for parity, with Studio linking to it rather than reimplementing — the Rules page sits in
+   the studio sidebar's Documentation group next to Domains.

@@ -150,6 +150,8 @@ class OpsConsoleIntegrationTest {
         assertThat(response.body()).startsWith("<!DOCTYPE html>");
         // No ops.app.* grant on this caller: deny-by-default leaves the trace table empty.
         assertThat(response.body()).contains("Traces").contains("No traces retained");
+        // Refreshes like every other console page - traces used to be the one static view.
+        assertThat(response.body()).contains("hx-trigger=\"every 15s\"");
     }
 
     @Test
