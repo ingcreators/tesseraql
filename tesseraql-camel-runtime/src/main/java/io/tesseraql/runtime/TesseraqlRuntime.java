@@ -558,6 +558,11 @@ public final class TesseraqlRuntime implements AutoCloseable {
         io.tesseraql.operations.http.HttpCallClient httpCallClient = new io.tesseraql.operations.http.HttpCallClient(
                 httpOutbound, manifest.config(), tracer);
         JobExecutor jobExecutor = new JobExecutor(jobRepository, tempStore, slowSqlLog, tracer)
+                // The same bound routes and commands run under: a batch statement held a pooled
+                // connection for as long as the driver would let it, which on a job is the
+                // longest anything goes unnoticed — nobody is waiting for the response.
+                .sqlTimeoutSeconds(manifest.config().getString("tesseraql.sql.timeoutSeconds")
+                        .map(Integer::parseInt).orElse(30))
                 .notificationOutbox(outboxStore)
                 // Recipient-aware notify steps honor per-user opt-outs (roadmap Phase 48).
                 .preferenceStore(preferences)
