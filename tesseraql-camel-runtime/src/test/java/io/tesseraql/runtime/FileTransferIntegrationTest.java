@@ -279,6 +279,21 @@ class FileTransferIntegrationTest {
 
     // --- helpers ---
 
+    /**
+     * A file-export runs the dialect variant beside its query.
+     *
+     * <p>It ran the generic one: this executor read the declared file directly and never asked
+     * the datasource its vendor, so an {@code x.postgresql.sql} next to {@code x.sql} was never
+     * opened — silently, which is the failure a dialect variant exists to prevent.
+     */
+    @Test
+    void aFileExportRunsTheDialectVariant() throws Exception {
+        String id = startTransfer("/api/events/export-variant", "");
+
+        assertThat(awaitTerminal("/api/events/export-variant/" + id).get("status").asText())
+                .isEqualTo("COMPLETED");
+    }
+
     private static String startTransfer(String path, String body) throws Exception {
         HttpResponse<String> response = HTTP.send(HttpRequest.newBuilder(
                 URI.create("http://localhost:" + runtime.port() + path))
@@ -430,6 +445,30 @@ class FileTransferIntegrationTest {
                 """);
         Files.writeString(exportRoute.resolve("select-events.sql"),
                 "select name, held_on, fee from events order by name\n;\n");
+
+        // A file-export whose query has a PostgreSQL variant beside it. This executor read the
+        // declared file directly and never asked the datasource its vendor, so the variant sat
+        // unread — the same gap the batch executor had, for the same reason: it resolves its own
+        // paths instead of going through the producer.
+        Path variantExport = home.resolve("web/api/events/export-variant");
+        Files.createDirectories(variantExport);
+        Files.writeString(variantExport.resolve("post.yml"), """
+                version: tesseraql/v1
+                id: events.exportVariant
+                kind: route
+                recipe: file-export
+                export:
+                  format: csv
+                  filename: variant.csv
+                  sql:
+                    file: pick.sql
+                """);
+        // The generic file names a column that does not exist; the variant is valid. Which one
+        // ran is the transfer's outcome rather than something the test has to introspect.
+        Files.writeString(variantExport.resolve("pick.sql"),
+                "select no_such_column from events\n");
+        Files.writeString(variantExport.resolve("pick.postgresql.sql"),
+                "select name from events order by name\n");
 
         // A file-export whose query takes a bind. The binding lives at export.sql, which is the
         // only place a file-export can declare it.

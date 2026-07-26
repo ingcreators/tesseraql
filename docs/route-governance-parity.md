@@ -271,17 +271,22 @@ Ordered so that each lands independently and the guard arrives before the long t
    The regression test is a `.postgres.sql` variant beside a query-export route's base file —
    the marker row only appears if the URI carries `dialect=`.
 6. **The SQL contract registry and its honesty probes** (guard step 4).
-   **The batch row is closed as far as it can be:** the dialect variant and the query timeout are
-   wired, and the scope cell turned out not to be a hole at all — the executor passes
-   `ScopeResolver.UNSUPPORTED`, so a `/*%scope%*/` in batch SQL fails with `TQL-SQL-2106` instead
-   of rendering unscoped and returning every tenant's rows. "Absent" and "fail-safe" look
-   identical in a matrix and only one of them is safe to leave alone, so the row now says
-   *refused* and a test pins it. Making scope *work* there is a design question rather than a
-   wiring one: a batch job runs with no caller, so there is no principal for a scope to narrow by.
-   **What remains is `JdbcFileTransferService`,** which still re-implements execution rather than
-   going through the producer — the reason it lost several contract cells at once. Both re-implement execution rather than going through the
-   producer, which is why they missed the dialect variant, the bounds and the scope resolver at
-   once; the registry's value is making that visible per executor rather than per fix.
+   **Both non-producer executors are closed as far as wiring can close them.** `JobExecutor` and
+   `JdbcFileTransferService` each re-implement execution rather than going through the producer,
+   which is why each lost the dialect variant and the query timeout at once — independently, and
+   in the same two cells. Two executors losing the same cells on their own is the argument for a
+   registry rather than another round of per-fix patching. Both now resolve the dialect variant
+   beside their SQL and run under `tesseraql.sql.timeoutSeconds`.
+   **Their scope cells were never holes.** Each passes — or defaults to —
+   `ScopeResolver.UNSUPPORTED`, so a `/*%scope%*/` fails with `TQL-SQL-2106` instead of rendering
+   unscoped and returning every tenant's rows. "Absent" and "fail-safe" look identical in a
+   matrix and only one is safe to leave alone, so the rows read *refused* and tests pin them.
+   **What remains on both is the audit binds and the per-tenant datasource,** and those are
+   decisions rather than wires: a batch job and a file transfer run with no caller, so what
+   `audit.user` holds and which tenant's pool applies have to be answered before anything is
+   connected. Wiring them without answering would replace a loud refusal with a quiet guess —
+   the same trade the scope cells decline.
+
 7. ~~**The long tail.**~~ **Shipped, all of it.**
    The `lintEmit`/`lintValidation` calls missing from `lintConsumer` and `lintTool` were the
    entry point, and chasing the last one turned up more than a missing lint call: the compiler

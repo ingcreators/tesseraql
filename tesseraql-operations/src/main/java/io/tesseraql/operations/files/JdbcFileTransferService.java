@@ -72,12 +72,42 @@ public final class JdbcFileTransferService implements FileTransferService {
     private final ObjectMapper mapper = new ObjectMapper();
     private final ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor();
 
+    private volatile String dialect;
+    private int sqlTimeoutSeconds;
+
     public JdbcFileTransferService(JobRepository jobs, TempStore tempStore, DataSource dataSource,
             FileCodecs codecs) {
         this.jobs = jobs;
         this.tempStore = tempStore;
         this.dataSource = dataSource;
         this.codecs = codecs;
+    }
+
+    /**
+     * The query timeout every transfer statement runs under, in seconds; 0 leaves it unset.
+     *
+     * <p>There was none: an export query or an after-SQL statement ran for as long as the driver
+     * allowed, holding a pooled connection, where the same statement on a route has been bounded
+     * by {@code tesseraql.sql.timeoutSeconds} all along.
+     */
+    public JdbcFileTransferService sqlTimeoutSeconds(int seconds) {
+        this.sqlTimeoutSeconds = Math.max(0, seconds);
+        return this;
+    }
+
+    /** The datasource's dialect id, read once: asking costs a pooled connection. */
+    private String dialect() {
+        if (dialect == null) {
+            dialect = io.tesseraql.core.util.DatabaseVendors.vendor(dataSource).orElse("");
+        }
+        return dialect;
+    }
+
+    /** Applies the configured query timeout, if any. */
+    private void applyTimeout(PreparedStatement statement) throws SQLException {
+        if (sqlTimeoutSeconds > 0) {
+            statement.setQueryTimeout(sqlTimeoutSeconds);
+        }
     }
 
     /**
@@ -374,15 +404,16 @@ public final class JdbcFileTransferService implements FileTransferService {
         }
     }
 
-    private static int executeUpdate(Connection connection, BoundSql bound) throws SQLException {
+    private int executeUpdate(Connection connection, BoundSql bound) throws SQLException {
         try (PreparedStatement statement = prepare(connection, bound)) {
             return statement.executeUpdate();
         }
     }
 
-    private static PreparedStatement prepare(Connection connection, BoundSql bound)
+    private PreparedStatement prepare(Connection connection, BoundSql bound)
             throws SQLException {
         PreparedStatement statement = connection.prepareStatement(bound.sql());
+        applyTimeout(statement);
         List<BoundParameter> parameters = bound.parameters();
         for (int i = 0; i < parameters.size(); i++) {
             statement.setObject(i + 1, parameters.get(i).value());
@@ -390,9 +421,18 @@ public final class JdbcFileTransferService implements FileTransferService {
         return statement;
     }
 
-    private static List<SqlNode> parse(Path sqlFile) {
+    /**
+     * Parses a transfer's SQL, taking the dialect variant beside it.
+     *
+     * <p>This executor read the declared file directly, so an {@code x.postgresql.sql} sitting
+     * next to {@code x.sql} was never opened — the same gap the batch executor had, and for the
+     * same reason: it resolves its own paths instead of going through the producer.
+     */
+    private List<SqlNode> parse(Path sqlFile) {
         try {
-            return Sql2WayParser.parse(Files.readString(sqlFile, StandardCharsets.UTF_8));
+            Path resolved = io.tesseraql.core.dialect.DialectSqlResolver.resolve(sqlFile,
+                    dialect());
+            return Sql2WayParser.parse(Files.readString(resolved, StandardCharsets.UTF_8));
         } catch (IOException ex) {
             throw new UncheckedIOException(ex);
         }

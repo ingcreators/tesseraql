@@ -169,6 +169,12 @@ All notable changes to TesseraQL are documented here. The format follows
   `/*%scope%*/` in a job's SQL fails with `TQL-SQL-2106` instead of rendering unscoped and
   returning every tenant's rows — the safe posture, and one that a matrix cell reading "absent"
   made indistinguishable from a hole.
+- **File transfers take the dialect variant and the query timeout** (docs/file-transfers.md):
+  `JdbcFileTransferService` read its declared SQL file directly and never asked the datasource its
+  vendor, so an `x.postgresql.sql` beside `x.sql` was never opened; and it set no query timeout,
+  so an export query or an after-SQL statement held a pooled connection for as long as the driver
+  allowed. Both are the same gaps the batch executor had, for the same reason — it resolves its
+  own paths and prepares its own statements instead of going through the producer.
 
 - **Batch SQL runs under the app-wide query timeout** (docs/batch-jobs.md): `JobExecutor` prepared
   its statements and never set one, so a job step's SQL ran for as long as the driver allowed while

@@ -484,6 +484,10 @@ public final class TesseraqlRuntime implements AutoCloseable {
         io.tesseraql.operations.files.JdbcFileTransferService fileTransfers = new io.tesseraql.operations.files.JdbcFileTransferService(
                 jobRepository,
                 tempStore, dataSource, io.tesseraql.core.files.FileCodecs.discover());
+        // The same bound routes and commands run under: an export query or an after-SQL
+        // statement held a pooled connection for as long as the driver allowed.
+        fileTransfers.sqlTimeoutSeconds(manifest.config().getString("tesseraql.sql.timeoutSeconds")
+                .map(Integer::parseInt).orElse(30));
         fileTransfers.ensureSchema();
         context.getRegistry().bind(TesseraqlProperties.FILE_TRANSFER_BEAN, fileTransfers);
         // Managed attachments (roadmap Phase 30): provisioned and bound when the app declares
