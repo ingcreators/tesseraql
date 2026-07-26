@@ -220,8 +220,12 @@ home-relative — the CHANGELOG entry names it, per rule 10.
    metadata before writing them is what caught it.
    `TQL-SEC-4084` stayed a warning: SSH host keys have a legitimate trust-on-first-use posture
    that a CA bundle does not, so only the new FTPS check is an error.
-4. **Credential methods.** FTPS client certificates remain; they need keystore plumbing beside
-   the trust store rather than a new URI option.
+4. ~~**Credential methods.**~~ **Shipped.** FTPS client certificates ride the credential rather
+   than the connector config, because a certificate identifies *us* and the trust store proves
+   who answered — they are opposite directions of the same handshake, and the trust store's
+   shape would have suggested otherwise. A credential declaring `keyStoreFile:` presents it, and
+   a password may accompany it: mutual TLS and a login are separate questions a server may ask
+   together.
    **Key-based SFTP and exactly-one-method validation are shipped** (`TQL-SEC-4089`). Only a
    password was ever emitted, so an operator who wrote `privateKeyFile:` got a URI with no key
    and an error about a missing password — the failure named the wrong thing, which is the worst

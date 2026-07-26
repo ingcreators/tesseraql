@@ -137,6 +137,33 @@ class PollingRouteBuilderTest {
         assertThat(uri).doesNotContain("password=");
     }
 
+    /**
+     * FTPS can present a client certificate alongside its password.
+     *
+     * <p>Mutual TLS is how a partner identifies <em>us</em>, and it was unreachable: the trust
+     * store proved who answered and nothing carried a certificate the other way, so an FTPS
+     * server requiring one could not be polled at all.
+     */
+    @Test
+    void ftpsPresentsADeclaredClientCertificate() {
+        String uri = builderWith(Map.of("username", "svc", "password", "s3cr3t",
+                "keyStoreFile", "/etc/tql/client.p12", "keyStorePassword", "kp"))
+                .endpointUri(ftps());
+
+        assertThat(uri).contains("ftpClient.keyStore.file=/etc/tql/client.p12");
+        assertThat(uri).contains("ftpClient.keyStore.password=RAW(kp)");
+        // The login is a separate question the server may also ask.
+        assertThat(uri).contains("password=RAW(s3cr3t)");
+    }
+
+    @Test
+    void aCredentialWithoutAKeyStoreCarriesNoClientCertificate() {
+        String uri = builderWith(Map.of("username", "svc", "password", "s3cr3t"))
+                .endpointUri(ftps());
+
+        assertThat(uri).doesNotContain("keyStore");
+    }
+
     @Test
     void declaringBothAPasswordAndAKeyIsRefused() {
         PollingRouteBuilder builder = builderWith(Map.of("username", "svc", "password", "s3cr3t",
