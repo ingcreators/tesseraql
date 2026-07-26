@@ -42,7 +42,7 @@ poller keeps it live.
 The jobs page renders, for each job with declared `params:`, input fields from the
 declaration — a required marker from `required: true`, a numeric input for
 `type: number`. Fields post as `param.<name>` beside `id`; the run route sets
-`input.policy.unknownFields: ignore` (dynamic names cannot be statically declared) and
+`inputPolicy.unknownFields: ignore` (dynamic names cannot be statically declared) and
 passes the posted body to the provider whole (`body` is a bindable path like any other).
 The provider collects the `param.`-prefixed entries, strips the prefix, and hands the map
 to the runner — where `bindJobParams`, the single binding point all three run entry
