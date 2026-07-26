@@ -36,6 +36,17 @@ final class McpInputSchema {
                 ArrayNode values = property.putArray("enum");
                 field.enumValues().forEach(values::add);
             }
+            // The element shape, now that elements are validated against it: a model that sees
+            // the constraint produces a valid call, and the alternative is a rejection it has no
+            // way to diagnose.
+            if ("array".equals(field.type()) && field.items() != null) {
+                ObjectNode items = property.putObject("items");
+                items.put("type", jsonType(field.items().type()));
+                if (!field.items().enumValues().isEmpty()) {
+                    ArrayNode elementValues = items.putArray("enum");
+                    field.items().enumValues().forEach(elementValues::add);
+                }
+            }
             if (field.min() != null) {
                 property.put("minimum", field.min());
             }
@@ -60,6 +71,10 @@ final class McpInputSchema {
             case "integer" -> "integer";
             case "number" -> "number";
             case "boolean" -> "boolean";
+            // A declared array fell through to "string", so a model was told to send text where
+            // the framework rejects anything but a list — a tool call the model cannot diagnose,
+            // since the schema it was given is what it followed.
+            case "array" -> "array";
             default -> "string";
         };
     }
