@@ -8,6 +8,14 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **The VS Code extension publishes itself** (docs/vscode-extension.md): pushing an
+  `ext-v<version>` tag runs the new *Extension release* workflow — tests, a
+  manifest-version-matches-tag gate, one `vsce package`, then `vsce publish` of that exact vsix
+  to the Visual Studio Marketplace and a GitHub release with the same vsix attached. The
+  extension versions independently of the framework, so publication rode no `v*` release and
+  stayed a manual operator step; running the workflow manually is a dry run that proves the
+  `VSCE_PAT` secret is still valid without publishing anything.
+
 - **The editor knows the shared definitions** (docs/vscode-extension.md): `tesseraql symbols`
   now prints the field domains declared under `domains/` and the validation rules declared under
   `rules/` (name, file, line), and the VS Code extension (0.3.2) completes and go-to-defines

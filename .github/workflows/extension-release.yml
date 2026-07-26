@@ -1,0 +1,90 @@
+name: Extension release
+
+# Publishes the VS Code extension to the Visual Studio Marketplace on ext-v* tags
+# (docs/vscode-extension.md): test, check the manifest version matches the tag,
+# package once, verify the publisher token, publish that exact vsix, and attach it
+# to a GitHub release. The extension versions independently of the framework, so
+# its tags live in their own ext-v* namespace and never ride a framework release.
+#
+# workflow_dispatch runs everything except the publish and the release — a dry run
+# that proves VSCE_PAT is still valid (the Azure DevOps PAT expires) without
+# shipping anything.
+
+on:
+  push:
+    tags:
+      - 'ext-v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    name: Publish to the Visual Studio Marketplace
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6
+        with:
+          package_json_file: vscode-extension/package.json
+
+      - name: Set up Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v6
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: vscode-extension/pnpm-lock.yaml
+
+      - name: Install
+        working-directory: vscode-extension
+        run: pnpm install --frozen-lockfile
+
+      - name: Build and test
+        working-directory: vscode-extension
+        run: pnpm run test
+
+      - name: Check the manifest version matches the tag
+        if: github.event_name == 'push'
+        working-directory: vscode-extension
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          TAG="${GITHUB_REF_NAME#ext-v}"
+          if [ "$VERSION" != "$TAG" ]; then
+            echo "package.json version $VERSION does not match tag $TAG" >&2
+            exit 1
+          fi
+
+      - name: Package
+        working-directory: vscode-extension
+        run: pnpm run package
+
+      - name: Verify the Marketplace token
+        working-directory: vscode-extension
+        env:
+          VSCE_PAT: ${{ secrets.VSCE_PAT }}
+        run: pnpm exec vsce verify-pat ingcreators
+
+      # Publishes the vsix packaged above — the artifact attached to the release is
+      # byte-identical to what the Marketplace serves.
+      - name: Publish the packaged vsix
+        if: github.event_name == 'push'
+        working-directory: vscode-extension
+        env:
+          VSCE_PAT: ${{ secrets.VSCE_PAT }}
+        run: pnpm exec vsce publish --packagePath tesseraql-vscode-*.vsix
+
+      - name: Publish GitHub release
+        if: github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            --title "TesseraQL for VS Code ${GITHUB_REF_NAME#ext-v}" \
+            --generate-notes \
+            --verify-tag \
+            vscode-extension/tesseraql-vscode-*.vsix

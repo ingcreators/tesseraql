@@ -218,15 +218,30 @@ Policies come from the app config, message keys from the default-locale catalog
 shared-definition documents under `domains/` and `rules/` (each name with the file
 declaring it), routes from the manifest; sorted, deterministic.
 
+## Publishing
+
+The extension versions independently of the framework, so its releases live in
+their own tag namespace: pushing an `ext-v<version>` tag runs the *Extension
+release* workflow (`.github/workflows/extension-release.yml`) — tests, a
+manifest-version-matches-tag gate, one `vsce package`, `vsce verify-pat`, then
+`vsce publish` of that exact vsix to the Visual Studio Marketplace (publisher
+`ingcreators`) and a GitHub release with the same vsix attached, so the archived
+artifact is byte-identical to what the Marketplace serves. The workflow
+authenticates with the `VSCE_PAT` repository secret (an Azure DevOps PAT with the
+Marketplace *Manage* scope — it expires, so re-issuing it is a recurring operator
+task); running the workflow manually is a dry run that proves the token is still
+valid without publishing anything. `.vsix` files are gitignored — the release
+asset is the distribution channel, not the repository.
+
 ## Not currently supported
 
 - **An LSP wire protocol.** The definition/completion providers over the `symbols`
   contract are functionally identical to an LSP client inside VS Code and cost one
   process less; a separate language-server process becomes worthwhile only when a
   second editor is targeted. The editor-free core keeps that seam open.
-- **Marketplace publication.** Publishing to the Visual Studio Marketplace / Open VSX
-  (and automating it in the release workflow) is planned; until then the `.vsix` is
-  built from the repository and installed from file.
+- **Open VSX publication.** The `ext-v*` workflow publishes to the Visual Studio
+  Marketplace only; mirroring to Open VSX (for VS Code forks) needs its own token
+  and is not wired up.
 - **Embedded-SQL analysis** against the introspected catalog, and go-to-definition
   for named queries.
 
