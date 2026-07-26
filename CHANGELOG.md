@@ -164,6 +164,12 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Fixed
 
+- **A row-scope directive in batch SQL is refused rather than ignored** (docs/data-scoping.md):
+  pinned rather than changed. `JobExecutor` passes `ScopeResolver.UNSUPPORTED`, so a
+  `/*%scope%*/` in a job's SQL fails with `TQL-SQL-2106` instead of rendering unscoped and
+  returning every tenant's rows — the safe posture, and one that a matrix cell reading "absent"
+  made indistinguishable from a hole.
+
 - **Batch SQL runs under the app-wide query timeout** (docs/batch-jobs.md): `JobExecutor` prepared
   its statements and never set one, so a job step's SQL ran for as long as the driver allowed while
   holding a pooled connection — where the same statement on a route or inside a command has been

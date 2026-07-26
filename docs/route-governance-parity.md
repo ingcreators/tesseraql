@@ -69,7 +69,7 @@ Every other executor re-implements a subset.
 | `ValidationRules` | yes | yes | n/a | yes | yes | **—** | rides the command | **—** |
 | `query-export` URI (hand-built) | yes | yes | n/a | yes | yes | n/a | yes | **—** |
 | `JdbcFileTransferService` (row / query / after SQL) | **—** | **—** | n/a | **—** | partial | **—** | **—** | n/a |
-| `JobExecutor` (batch steps) | yes | yes | n/a | **—** | yes | **—** | **—** | n/a |
+| `JobExecutor` (batch steps) | yes | yes | n/a | refused | yes | **—** | **—** | n/a |
 | workflow `assign:` | yes | yes | yes | yes | yes | yes | rides the command | n/a |
 
 ## The deviations
@@ -270,9 +270,16 @@ Ordered so that each lands independently and the guard arrives before the long t
    what made PostgreSQL ignore the fetch size and buffer the whole result set.
    The regression test is a `.postgres.sql` variant beside a query-export route's base file —
    the marker row only appears if the URI carries `dialect=`.
-6. **The SQL contract registry and its honesty probes** (guard step 4), covering the dialect and
-   binding gaps in the file-transfer and batch executors — the two rows still carrying `—` after
-   everything else in Matrix 2 closed. Both re-implement execution rather than going through the
+6. **The SQL contract registry and its honesty probes** (guard step 4).
+   **The batch row is closed as far as it can be:** the dialect variant and the query timeout are
+   wired, and the scope cell turned out not to be a hole at all — the executor passes
+   `ScopeResolver.UNSUPPORTED`, so a `/*%scope%*/` in batch SQL fails with `TQL-SQL-2106` instead
+   of rendering unscoped and returning every tenant's rows. "Absent" and "fail-safe" look
+   identical in a matrix and only one of them is safe to leave alone, so the row now says
+   *refused* and a test pins it. Making scope *work* there is a design question rather than a
+   wiring one: a batch job runs with no caller, so there is no principal for a scope to narrow by.
+   **What remains is `JdbcFileTransferService`,** which still re-implements execution rather than
+   going through the producer — the reason it lost several contract cells at once. Both re-implement execution rather than going through the
    producer, which is why they missed the dialect variant, the bounds and the scope resolver at
    once; the registry's value is making that visible per executor rather than per fix.
 7. ~~**The long tail.**~~ **Shipped, all of it.**
