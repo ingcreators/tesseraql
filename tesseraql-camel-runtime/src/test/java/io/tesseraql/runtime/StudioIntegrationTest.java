@@ -520,6 +520,24 @@ class StudioIntegrationTest {
         }
     }
 
+    /**
+     * The shared-rules reference page renders.
+     *
+     * <p>validation-rule-sets.md promised it and nothing built it, so a reviewer asking "which
+     * routes share this rule" — the entire reason for declaring one once — could not answer from
+     * the portal. It mirrors the Domains page deliberately: the two are the same idea applied to
+     * different declarations.
+     */
+    @Test
+    void docsRulesPageRenders() throws Exception {
+        // Order-independent for the same reason the domains page test is: a sibling scaffold
+        // test may have written rules/ into the shared app home.
+        String body = get("/_tesseraql/studio/ui/docs/rules", true).body();
+
+        assertThat(body).contains("Shared validation rules");
+        assertThat(body).containsAnyOf("No shared rules declared yet", "unreferenced", "Used by");
+    }
+
     @Test
     void docsDomainsPageRendersAndTheFormOffersDomains() throws Exception {
         // Order-independent: a sibling scaffold test may have written domains/items.yml into

@@ -488,6 +488,47 @@ public final class DocViews {
         return model;
     }
 
+    /** The rules-page url, for cross-links from other portal pages. */
+    public static final String RULES_URL = "/_tesseraql/studio/ui/docs/rules";
+
+    /**
+     * The shared validation rules reference page (docs/validation-rule-sets.md): every declared
+     * rule with its bind contract and the routes referencing it.
+     *
+     * <p>Mirrors the Domains page deliberately: the two are the same idea applied to different
+     * declarations, and a reader who has learned one should not have to learn the other. An
+     * unreferenced rule is marked, the same signal as lint {@code TQL-FIELD-4612}.
+     */
+    public static Map<String, Object> rules(String appName, List<DocService.RuleEntry> entries) {
+        Map<String, Object> model = new LinkedHashMap<>();
+        model.put("appName", appName);
+        List<Map<String, Object>> rows = new ArrayList<>();
+        for (DocService.RuleEntry entry : entries) {
+            var rule = entry.definition();
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("name", entry.name());
+            row.put("kind", rule.file() == null ? "expression" : "sql");
+            row.put("expression", rule.rule());
+            row.put("file", rule.file());
+            // The contract a reference's params: must satisfy exactly; ambient binds never
+            // appear here, which is worth showing rather than leaving to the reader to recall.
+            row.put("binds", rule.binds());
+            row.put("hasBinds", !rule.binds().isEmpty());
+            row.put("code", rule.code());
+            row.put("message", rule.message());
+            List<Map<String, Object>> refs = new ArrayList<>();
+            for (DocService.RouteRef ref : entry.usedBy()) {
+                refs.add(Map.of("id", ref.id(), "method", ref.method(), "url", ref.url()));
+            }
+            row.put("usedBy", refs);
+            row.put("unreferenced", refs.isEmpty());
+            rows.add(row);
+        }
+        model.put("rules", rows);
+        model.put("hasRules", !rows.isEmpty());
+        return model;
+    }
+
     /** Human-readable chips for a domain's declared keys (only what it declares). */
     private static List<String> domainChips(io.tesseraql.yaml.model.InputField field) {
         List<String> chips = new ArrayList<>();

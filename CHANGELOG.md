@@ -8,6 +8,13 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **A shared validation rules page in the documentation portal**
+  (docs/validation-rule-sets.md): every rule declared under `rules/` with its kind, bind contract
+  and default code, and the routes referencing it with `use:`. validation-rule-sets.md promised
+  this page and nothing built it, so "which routes share this rule" — the entire reason to declare
+  one once — could not be answered from the portal. An unreferenced rule is marked, the same
+  signal as lint `TQL-FIELD-4612`.
+
 - **Key-based SFTP for poll sources** (docs/connectors.md): a poll credential may declare
   `privateKeyFile:` (with an optional `privateKeyPassphrase:`) instead of `password:`. Exactly one
   method is required — declaring both is refused with `TQL-SEC-4089` rather than silently

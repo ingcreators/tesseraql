@@ -45,6 +45,7 @@ class DocViewsTest {
      * `requiredWhen` all along; the route page dropped them, so an input carrying a real
      * constraint read as unconstrained exactly where a reviewer decides whether it is safe.
      */
+
     @Test
     void patternMinLengthAndRequiredWhenAreShown() {
         RouteSpec.Input code = new RouteSpec.Input("code", "string", false, null, null, null,
@@ -53,6 +54,35 @@ class DocViewsTest {
         assertThat(DocViews.constraints(code))
                 .contains("pattern [A-Z]{2}-[0-9]+", "minLength 4",
                         "required when params.kind == 'x'");
+    }
+
+    /**
+     * The rules page shows a rule's contract and who references it.
+     *
+     * <p>The integration test can only assert the page renders, which an empty state satisfies
+     * too. The rows are where the page earns its keep — "which routes share this rule" is the
+     * question that justifies declaring one once — so they are asserted here.
+     */
+    @Test
+    void theRulesPageShowsContractsAndReferences() {
+        var rule = new io.tesseraql.yaml.model.RuleSetsDocument.RuleSet(null,
+                "items-name-free.sql", java.util.List.of("name", "excludeId"), "duplicate", null);
+        var used = new DocService.RuleEntry("itemsNameIsFree", rule,
+                java.util.List.of(new DocService.RouteRef("items.create", "POST", "/api/items")));
+        var orphan = new DocService.RuleEntry("neverUsed",
+                new io.tesseraql.yaml.model.RuleSetsDocument.RuleSet("params.x > 0", null,
+                        java.util.List.of(), null, null),
+                java.util.List.of());
+
+        Map<String, Object> model = DocViews.rules("demo", java.util.List.of(used, orphan));
+
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> rows = (List<Map<String, Object>>) model.get("rules");
+        assertThat(rows).hasSize(2);
+        assertThat(rows.get(0)).containsEntry("kind", "sql").containsEntry("code", "duplicate")
+                .containsEntry("hasBinds", true).containsEntry("unreferenced", false);
+        assertThat(rows.get(1)).containsEntry("kind", "expression")
+                .containsEntry("unreferenced", true);
     }
 
     @Test
