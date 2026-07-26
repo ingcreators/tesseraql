@@ -19,6 +19,7 @@
           <th class="hc-datagrid__headcell">Job</th>
           <th class="hc-datagrid__headcell">App</th>
           <th class="hc-datagrid__headcell">Trigger</th>
+          <th class="hc-datagrid__headcell">Source</th>
           <th class="hc-datagrid__headcell">Last run</th>
           <th class="hc-datagrid__headcell">Started</th>
           <th class="hc-datagrid__headcell"></th>
@@ -28,6 +29,13 @@
             <td class="hc-datagrid__cell" th:text="${j.id}"></td>
             <td class="hc-datagrid__cell" th:text="${j.app}"></td>
             <td class="hc-datagrid__cell" th:text="${j.trigger}"></td>
+            <td class="hc-datagrid__cell">
+              <th:block th:if="${j.hasPollSource}">
+                <span class="hc-badge" th:attr="data-variant=${j.pollVariant}" th:text="${j.pollState}"></span>
+                <span class="hc-field__message" th:text="${j.pollDetail}"></span>
+              </th:block>
+              <span th:unless="${j.hasPollSource}">-</span>
+            </td>
             <td class="hc-datagrid__cell">
               <a th:if="${j.hasRun}" th:href="|/_tesseraql/ops/console/executions/${j.lastExecutionId}|"><span
                   class="hc-badge" th:attr="data-variant=${j.lastStatusVariant}" th:text="${j.lastStatus}"></span></a>

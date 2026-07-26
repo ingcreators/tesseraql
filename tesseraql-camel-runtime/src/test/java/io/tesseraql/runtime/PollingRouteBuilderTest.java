@@ -204,7 +204,7 @@ class PollingRouteBuilderTest {
         AppConfig config = new AppConfig(
                 Map.of("tesseraql", Map.of("connectors", Map.of("poll", poll))), name -> null);
         return new PollingRouteBuilder(List.of(), PollConnectors.load(config), "app", Map.of(),
-                home, home.resolve("work"));
+                home, home.resolve("work"), new io.tesseraql.opsui.PollSourceStatus());
     }
 
     @Test
@@ -272,7 +272,7 @@ class PollingRouteBuilderTest {
                 Map.of("tesseraql", Map.of("connectors", Map.of("poll", withCredential))),
                 name -> null);
         return new PollingRouteBuilder(List.of(), PollConnectors.load(config), "app", Map.of(),
-                home, home.resolve("work"));
+                home, home.resolve("work"), new io.tesseraql.opsui.PollSourceStatus());
     }
 
     private static PollSpec sftp() {

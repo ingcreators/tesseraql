@@ -109,7 +109,8 @@ public final class OpsViews {
      * its trigger, and its most recent execution (null when it has never run).
      */
     public record JobCatalogEntry(String id, String app,
-            io.tesseraql.yaml.model.TriggerSpec trigger, JobExecution lastExecution) {
+            io.tesseraql.yaml.model.TriggerSpec trigger, JobExecution lastExecution,
+            PollSourceStatus.SourceState pollSource) {
     }
 
     /** The jobs page model: the scope-filtered catalog with each job's last run summarized. */
@@ -127,6 +128,21 @@ public final class OpsViews {
             row.put("lastStart",
                     last == null || last.startTime() == null ? "-" : last.startTime().toString());
             row.put("lastExecutionId", last == null ? null : last.id());
+            PollSourceStatus.SourceState poll = entry.pollSource();
+            row.put("hasPollSource", poll != null);
+            if (poll != null) {
+                row.put("pollState", poll.skipped() ? "not polling" : "polling");
+                row.put("pollVariant", poll.skipped()
+                        ? "error"
+                        : poll.consecutiveFailures() >= PollSourceStatus.FAILURE_ALERT_THRESHOLD
+                                ? "warning"
+                                : "success");
+                row.put("pollDetail", poll.skipped()
+                        ? poll.reason()
+                        : poll.lastPollAt() == null
+                                ? "no files yet"
+                                : poll.lastResult() + " at " + poll.lastPollAt());
+            }
             rows.add(row);
         }
         Map<String, Object> model = new LinkedHashMap<>();
