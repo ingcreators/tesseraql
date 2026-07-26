@@ -122,4 +122,6 @@ export const EXCLUDED = [
   // Session administration + poll source status, 2026-07-26.
   'session-administration.md',
   'poll-source-status.md',
+  // Poll source metrics exposition, 2026-07-26.
+  'poll-source-metrics.md',
 ];
