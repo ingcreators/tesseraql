@@ -86,6 +86,25 @@ class MetricsEndpointIntegrationTest {
                 .contains("tesseraql_route_duration_seconds_count");
     }
 
+    @Test
+    void scrapeCarriesThePollSourceGaugesFromTheRegistry() throws Exception {
+        // The bundled job's sftp host is not allow-listed, so the source is refused at
+        // wire time — the scrape is where that refusal becomes alertable outside the
+        // console (docs/poll-source-metrics.md).
+        HttpResponse<String> scrape = get("/_tesseraql/metrics", token(List.of("OPS")));
+
+        assertThat(scrape.statusCode()).isEqualTo(200);
+        assertThat(scrape.body())
+                .contains("# TYPE tesseraql_poll_source_wired gauge")
+                .contains("tesseraql_poll_source_wired{jobId=\"partner.intake\"} 0")
+                .contains("tesseraql_poll_source_consecutive_failures"
+                        + "{jobId=\"partner.intake\"} 0")
+                // No poll has ever completed, so the age family stays absent — and the
+                // skip reason's host never leaks into the exposition.
+                .doesNotContain("tesseraql_poll_source_last_poll_age_seconds")
+                .doesNotContain("files.partner.example");
+    }
+
     private static HttpResponse<String> get(String path, String bearer) throws Exception {
         HttpRequest.Builder request = HttpRequest.newBuilder(
                 URI.create("http://localhost:" + runtime.port() + path));
@@ -162,6 +181,30 @@ class MetricsEndpointIntegrationTest {
                       data: sql.rows
                 """);
         Files.writeString(pingDir.resolve("ping.sql"), "select 'pong' as answer\n");
+        // A poll-triggered job whose sftp host is not in the (unset) allow-list: refused
+        // at wire time, deterministically, so the scrape has a poll source to expose.
+        Path jobDir = target.resolve("batch/partner-intake");
+        Files.createDirectories(jobDir);
+        Files.writeString(jobDir.resolve("job.yml"), """
+                version: tesseraql/v1
+                id: partner.intake
+                kind: job
+                recipe: file-import
+                trigger:
+                  poll:
+                    source: sftp
+                    host: files.partner.example
+                    path: /inbound
+                    credential: partner
+                    include: "*.csv"
+                import:
+                  format: csv
+                  columns:
+                    - orderNo
+                  sql:
+                    file: noop.sql
+                """);
+        Files.writeString(jobDir.resolve("noop.sql"), "select 1\n");
         return target;
     }
 }

@@ -69,9 +69,11 @@ class HttpCallClientTest {
                 Map.of("tesseraql", Map.of("http", Map.of("outbound", outbound))), name -> null);
     }
 
+    private final io.tesseraql.core.telemetry.AggregatingMeter meter = new io.tesseraql.core.telemetry.AggregatingMeter();
+
     private HttpCallClient client(Map<String, Object> outbound) {
         AppConfig config = config(outbound);
-        return new HttpCallClient(HttpOutbound.load(config), config, NoopTracer.INSTANCE);
+        return new HttpCallClient(HttpOutbound.load(config), config, NoopTracer.INSTANCE, meter);
     }
 
     private HttpCallSpec call(String method, String path) {
@@ -113,6 +115,21 @@ class HttpCallClientTest {
                 .isInstanceOf(TqlException.class)
                 .hasMessageContaining("TQL-BATCH-5305");
         assertThat(hits.get()).isZero();
+        // The denial rides the meter for the fleet view (docs/poll-source-metrics.md).
+        assertThat(meter.counterSnapshot().get("tesseraql.egress.denied"))
+                .anySatisfy(sample -> {
+                    assertThat(sample.attributes()).containsEntry("host", "localhost");
+                    assertThat(sample.value()).isEqualTo(1);
+                });
+    }
+
+    @Test
+    void anAllowedCallDoesNotCountAnEgressDenial() {
+        HttpCallClient client = client(Map.of("allowedHosts", List.of("localhost")));
+
+        client.call(call("GET", "/x"), Map.of(), null);
+
+        assertThat(meter.counterSnapshot()).doesNotContainKey("tesseraql.egress.denied");
     }
 
     @Test
@@ -169,7 +186,7 @@ class HttpCallClientTest {
                 "allowedHosts", List.of("localhost"),
                 "circuitBreaker", Map.of("failureThreshold", 1, "openDuration", "30s")));
         HttpCallClient client = new HttpCallClient(
-                HttpOutbound.load(config), config, NoopTracer.INSTANCE, now::get);
+                HttpOutbound.load(config), config, NoopTracer.INSTANCE, meter, now::get);
 
         responseStatus = 500;
         assertThatThrownBy(() -> client.call(call("GET", "/x"), Map.of(), null))

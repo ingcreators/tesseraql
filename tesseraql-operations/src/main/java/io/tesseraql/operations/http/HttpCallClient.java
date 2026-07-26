@@ -5,6 +5,8 @@ import io.tesseraql.core.error.TqlDomain;
 import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
 import io.tesseraql.core.expr.EvaluationContext;
+import io.tesseraql.core.telemetry.Meter;
+import io.tesseraql.core.telemetry.NoopMeter;
 import io.tesseraql.core.telemetry.Span;
 import io.tesseraql.core.telemetry.SpanContext;
 import io.tesseraql.core.telemetry.Tracer;
@@ -60,19 +62,22 @@ public final class HttpCallClient {
     private final HttpOutbound outbound;
     private final AppConfig config;
     private final Tracer tracer;
+    private final Meter meter;
     private final ObjectMapper mapper = new ObjectMapper();
     private final LongSupplier clock;
     private final Map<Long, HttpClient> clients = new ConcurrentHashMap<>();
     private final Map<String, Breaker> breakers = new ConcurrentHashMap<>();
 
-    public HttpCallClient(HttpOutbound outbound, AppConfig config, Tracer tracer) {
-        this(outbound, config, tracer, System::currentTimeMillis);
+    public HttpCallClient(HttpOutbound outbound, AppConfig config, Tracer tracer, Meter meter) {
+        this(outbound, config, tracer, meter, System::currentTimeMillis);
     }
 
-    HttpCallClient(HttpOutbound outbound, AppConfig config, Tracer tracer, LongSupplier clock) {
+    HttpCallClient(HttpOutbound outbound, AppConfig config, Tracer tracer, Meter meter,
+            LongSupplier clock) {
         this.outbound = outbound;
         this.config = config;
         this.tracer = tracer;
+        this.meter = meter == null ? NoopMeter.INSTANCE : meter;
         this.clock = clock;
     }
 
@@ -89,6 +94,10 @@ public final class HttpCallClient {
                     + "' must be an absolute http or https URL");
         }
         if (!outbound.isHostAllowed(host)) {
+            // The denial is loud per-execution; the counter adds the fleet view — a rate
+            // of denials after a config rollout is the alertable regression
+            // (docs/poll-source-metrics.md).
+            meter.counter("tesseraql.egress.denied").increment(Map.of("host", host));
             throw new TqlException(HOST_DENIED, "http-call host '" + host
                     + "' is not in tesseraql.http.outbound.allowedHosts (deny by default)");
         }
