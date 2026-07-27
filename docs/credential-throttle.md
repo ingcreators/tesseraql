@@ -111,9 +111,11 @@ The runtime constructs the throttle from config and binds it
   unaffected; a throttled `reset` still answers its neutral "sent" while issuing stops;
   garbage POSTs at the SAML ACS and forged callbacks at OIDC hit the address budget,
   while repeated *successful* SSO flow starts never throttle (the rush, reproduced).
-- Existing ITs that deliberately fail logins (TOTP, recovery, invite, OIDC/SAML) declare
-  `credentialThrottle.enabled: false` in their fixtures — the visible disable, rather
-  than tests that pass while quietly consuming budget.
+- Existing ITs that deliberately fail credentials (TOTP, recovery, invite, the SAML
+  suites) declare `credentialThrottle.enabled: false` in their fixtures — the visible
+  disable, rather than tests that pass while quietly consuming budget. The OIDC login IT
+  keeps the default budgets (its config appends to a copied base whose `security:` block
+  a second one would duplicate); its handful of deliberate failures sits far under them.
 - security-hardening.md's anti-automation row, threat-model.md, authentication.md, the
   error-code reference (4292), and framework-surface-parity.md slice 7 all update with
   the implementation.
