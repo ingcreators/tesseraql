@@ -301,6 +301,39 @@ class OpsConsoleIntegrationTest {
     }
 
     @Test
+    void jobsPageRendersTheDeclaredParamsForm() throws Exception {
+        String body = getWith("/_tesseraql/ops/console/jobs", scopedCookie).body();
+
+        assertThat(body).contains("ops.probe")
+                .contains("name=\"param.businessDate\"")
+                .contains("name=\"param.limit\"");
+        // Required and numeric declarations become browser hints; the binding validates.
+        assertThat(body.substring(body.indexOf("param.businessDate")))
+                .containsPattern("^[^>]*required");
+        assertThat(body.substring(body.indexOf("param.limit")))
+                .containsPattern("^[^>]*type=\"number\"");
+    }
+
+    @Test
+    void runBindsDeclaredParamsAndRefusesAMissingRequiredOne() throws Exception {
+        // The posted param.* fields reach the runner coerced and validated by
+        // bindJobParams - the same single binding point the ops API uses.
+        HttpResponse<String> started = postForm("/_tesseraql/ops/console/jobs/run",
+                "id=ops.probe&param.businessDate=2026-07-26&param.limit=5",
+                scopedCookie, scopedCsrf);
+        assertThat(started.statusCode()).isEqualTo(303);
+        assertThat(started.headers().firstValue("location").orElseThrow())
+                .contains("/_tesseraql/ops/console/executions/");
+
+        // A missing required parameter is refused before the job starts, with the
+        // field-error envelope the ops API speaks.
+        HttpResponse<String> refused = postForm("/_tesseraql/ops/console/jobs/run",
+                "id=ops.probe", scopedCookie, scopedCsrf);
+        assertThat(refused.statusCode()).isIn(400, 422);
+        assertThat(refused.body()).contains("businessDate");
+    }
+
+    @Test
     void runRequiresTheRunPolicyAndScope() throws Exception {
         // BATCH_VIEWER satisfies ops.batch.view but not ops.batch.run.
         assertThat(postForm("/_tesseraql/ops/console/jobs/run", "id=user.dailyMaintenance",
@@ -394,6 +427,36 @@ class OpsConsoleIntegrationTest {
                     password: %s
                 """.formatted(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(),
                 POSTGRES.getPassword()));
+        // An on-demand job with declared params - required string, optional number - so
+        // the console's params form has something real to render and refuse
+        // (docs/ops-console-coverage.md).
+        Path probeDir = target.resolve("batch/probe");
+        Files.createDirectories(probeDir);
+        Files.writeString(probeDir.resolve("job.yml"), """
+                version: tesseraql/v1
+                id: ops.probe
+                kind: job
+                recipe: batch-pipeline
+
+                params:
+                  businessDate:
+                    type: string
+                    required: true
+                  limit:
+                    type: number
+                    required: false
+
+                pipeline:
+                  - id: touch
+                    sql:
+                      file: touch.sql
+                      mode: update
+                      params:
+                        businessDate: job.businessDate
+                """);
+        Files.writeString(probeDir.resolve("touch.sql"), """
+                update users set status = status where status = /* businessDate */ 'x';
+                """);
         return target;
     }
 

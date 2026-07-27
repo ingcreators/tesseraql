@@ -962,7 +962,8 @@ public final class TesseraqlRuntime implements AutoCloseable {
                                 entries.add(new io.tesseraql.opsui.OpsViews.JobCatalogEntry(
                                         id, owner, jobFile.definition().trigger(),
                                         jobRepository.latestExecution(id).orElse(null),
-                                        pollSourceStatus.forJob(id).orElse(null)));
+                                        pollSourceStatus.forJob(id).orElse(null),
+                                        jobFile.definition().params()));
                             }
                         });
                         return io.tesseraql.opsui.OpsViews.jobs(entries);
@@ -979,7 +980,19 @@ public final class TesseraqlRuntime implements AutoCloseable {
                                             io.tesseraql.core.error.TqlDomain.BATCH, 4040),
                                     "Not Found");
                         }
-                        JobExecution execution = jobRunner.run(id, java.util.Map.of(), "manual",
+                        // The posted body rides whole; everything under the param. prefix
+                        // is a declared job parameter, and bindJobParams inside the runner
+                        // stays the single validation point (docs/ops-console-coverage.md).
+                        java.util.Map<String, Object> jobParams = new java.util.LinkedHashMap<>();
+                        if (params.get("values") instanceof java.util.Map<?, ?> posted) {
+                            posted.forEach((key, value) -> {
+                                String name = String.valueOf(key);
+                                if (name.startsWith("param.")) {
+                                    jobParams.put(name.substring("param.".length()), value);
+                                }
+                            });
+                        }
+                        JobExecution execution = jobRunner.run(id, jobParams, "manual",
                                 params.get("actor") == null
                                         ? null
                                         : String.valueOf(params.get("actor")));
