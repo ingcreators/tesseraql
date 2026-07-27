@@ -66,10 +66,12 @@ class StudioIntegrationTest {
         io.tesseraql.security.session.SessionStore sessions = runtime.camelContext().getRegistry()
                 .lookupByNameAndType(io.tesseraql.camel.TesseraqlProperties.SESSION_STORE_BEAN,
                         io.tesseraql.security.session.SessionStore.class);
-        String adminSid = sessions.create(principal(List.of("ADMIN")));
+        String adminSid = sessions.create(principal(List.of("ADMIN")),
+                io.tesseraql.security.session.SessionStore.ClientInfo.NONE);
         adminCookie = sessions.cookieName() + "=" + adminSid;
         adminCsrf = sessions.session(adminSid).csrfToken();
-        viewerCookie = sessions.cookieName() + "=" + sessions.create(principal(List.of("VIEWER")));
+        viewerCookie = sessions.cookieName() + "=" + sessions.create(principal(List.of("VIEWER")),
+                io.tesseraql.security.session.SessionStore.ClientInfo.NONE);
     }
 
     private static io.tesseraql.security.Principal principal(List<String> roles) {

@@ -62,7 +62,8 @@ class IamAdminIntegrationTest {
                 .lookupByNameAndType(io.tesseraql.camel.TesseraqlProperties.SESSION_STORE_BEAN,
                         io.tesseraql.security.session.SessionStore.class);
         String sid = sessions.create(new io.tesseraql.security.Principal("iam-admin", "iam-admin",
-                "IAM Admin", null, List.of(), List.of("ADMIN"), List.of(), Map.of()));
+                "IAM Admin", null, List.of(), List.of("ADMIN"), List.of(), Map.of()),
+                io.tesseraql.security.session.SessionStore.ClientInfo.NONE);
         adminCookie = sessions.cookieName() + "=" + sid;
         adminCsrf = sessions.session(sid).csrfToken();
     }
@@ -136,7 +137,7 @@ class IamAdminIntegrationTest {
                         io.tesseraql.camel.TesseraqlProperties.SESSION_STORE_BEAN,
                         io.tesseraql.security.session.SessionStore.class);
         try {
-            sessions.create(bob());
+            sessions.create(bob(), io.tesseraql.security.session.SessionStore.ClientInfo.NONE);
             String detail = get("/_tesseraql/admin/users/u2", true).body();
             assertThat(detail).contains("Active sessions").contains("1 active session")
                     .contains("/_tesseraql/admin/users/u2/sessions/revoke");
@@ -148,13 +149,13 @@ class IamAdminIntegrationTest {
                     .contains("No active sessions");
 
             // Disabled means disabled: the session dies with the status flip.
-            sessions.create(bob());
+            sessions.create(bob(), io.tesseraql.security.session.SessionStore.ClientInfo.NONE);
             assertThat(post("/_tesseraql/admin/users/u2/disable").statusCode()).isEqualTo(303);
             assertThat(sessions.sessionsFor("u2")).isEmpty();
 
             // Bulk disable invalidates the same way.
             post("/_tesseraql/admin/users/u2/enable");
-            sessions.create(bob());
+            sessions.create(bob(), io.tesseraql.security.session.SessionStore.ClientInfo.NONE);
             assertThat(postForm("/_tesseraql/admin/users/bulk", "action=disable&ids=u2")
                     .statusCode()).isEqualTo(303);
             assertThat(sessions.sessionsFor("u2")).isEmpty();

@@ -114,7 +114,13 @@ final class LoginRouteBuilder extends RouteBuilder {
             throw new TqlException(PolicyEngine.UNAUTHORIZED, "Invalid credentials");
         }
 
-        String sessionId = sessions.create(principal.get());
+        // Client facts ride into the session for the visibility surfaces
+        // (docs/session-visibility.md): informational, recorded as presented.
+        String sessionId = sessions.create(principal.get(), SessionStore.ClientInfo.of(
+                exchange.getMessage().getHeader("User-Agent", String.class),
+                exchange.getMessage().getHeader("X-Forwarded-For", String.class),
+                exchange.getMessage().getHeader("CamelVertxPlatformHttpRemoteAddress",
+                        String.class)));
         setSessionCookie(exchange, sessions.cookieName() + "=" + sessionId
                 + "; Path=/; HttpOnly; SameSite=Lax");
         if (browserForm) {

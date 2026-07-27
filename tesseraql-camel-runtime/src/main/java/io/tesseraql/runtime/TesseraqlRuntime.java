@@ -344,15 +344,24 @@ public final class TesseraqlRuntime implements AutoCloseable {
         java.time.Duration sessionTtl = java.time.Duration.ofMillis(
                 io.tesseraql.core.util.Durations.toMillis(
                         manifest.config().getString("tesseraql.sessions.ttl").orElse("12h")));
+        // Optional sliding idle window inside the absolute TTL (docs/session-visibility.md);
+        // unset keeps the pre-existing absolute-only behavior.
+        java.time.Duration sessionIdle = manifest.config()
+                .getString("tesseraql.sessions.idleTimeout")
+                .map(value -> java.time.Duration.ofMillis(
+                        io.tesseraql.core.util.Durations.toMillis(value)))
+                .orElse(null);
         if ("jdbc".equalsIgnoreCase(
                 manifest.config().getString("tesseraql.sessions.store").orElse("memory"))) {
             io.tesseraql.security.session.JdbcSessionStore jdbcSessions = new io.tesseraql.security.session.JdbcSessionStore(
-                    dataSource, sessionTtl);
+                    dataSource, sessionTtl, sessionIdle,
+                    io.tesseraql.security.session.SessionStore.DEFAULT_COOKIE_NAME);
             jdbcSessions.ensureSchema();
             sessionStore = jdbcSessions;
         } else {
             sessionStore = new io.tesseraql.security.session.InMemorySessionStore(
-                    io.tesseraql.security.session.SessionStore.DEFAULT_COOKIE_NAME, sessionTtl);
+                    io.tesseraql.security.session.SessionStore.DEFAULT_COOKIE_NAME, sessionTtl,
+                    sessionIdle);
         }
         context.getRegistry().bind(TesseraqlProperties.SESSION_STORE_BEAN, sessionStore);
         JobRepository jobRepository = new JobRepository(dataSource);

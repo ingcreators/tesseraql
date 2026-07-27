@@ -57,7 +57,8 @@ class CrossNodeLiveViewIntegrationTest {
         SessionStore sessions = nodeA.camelContext().getRegistry().lookupByNameAndType(
                 TesseraqlProperties.SESSION_STORE_BEAN, SessionStore.class);
         String sid = sessions.create(new Principal("cross-user", "cross-user", "Cross User",
-                null, List.of(), List.of("ADMIN"), List.of(), Map.of()));
+                null, List.of(), List.of("ADMIN"), List.of(), Map.of()),
+                SessionStore.ClientInfo.NONE);
         sessionCookie = sessions.cookieName() + "=" + sid;
     }
 

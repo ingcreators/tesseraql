@@ -64,7 +64,8 @@ class PurchaseRequestDelegationIntegrationTest {
         SessionStore sessions = runtime.camelContext().getRegistry().lookupByNameAndType(
                 TesseraqlProperties.SESSION_STORE_BEAN, SessionStore.class);
         String sid = sessions.create(new Principal("approver-1", "approver-1", "Approver",
-                null, List.of(), List.of("APPROVER"), List.of(), Map.of()));
+                null, List.of(), List.of("APPROVER"), List.of(), Map.of()),
+                SessionStore.ClientInfo.NONE);
         approverCookie = sessions.cookieName() + "=" + sid;
         approverCsrf = sessions.session(sid).csrfToken();
     }

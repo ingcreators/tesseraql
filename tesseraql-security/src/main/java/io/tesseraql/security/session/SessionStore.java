@@ -18,8 +18,32 @@ public interface SessionStore {
     record Session(Principal principal, String csrfToken) {
     }
 
+    /**
+     * Client facts captured at login (docs/session-visibility.md): informational — the
+     * address is whatever the edge presented, and an edge that does not strip inbound
+     * {@code X-Forwarded-For} lets a client spoof it. The user agent is truncated to 255.
+     */
+    record ClientInfo(String userAgent, String remoteAddr) {
+
+        public static final ClientInfo NONE = new ClientInfo(null, null);
+
+        public ClientInfo {
+            userAgent = userAgent != null && userAgent.length() > 255
+                    ? userAgent.substring(0, 255)
+                    : userAgent;
+        }
+
+        /** First {@code X-Forwarded-For} entry when the edge presents one, else the peer. */
+        public static ClientInfo of(String userAgent, String forwardedFor, String peerAddress) {
+            String address = forwardedFor != null && !forwardedFor.isBlank()
+                    ? forwardedFor.split(",")[0].trim()
+                    : peerAddress;
+            return new ClientInfo(userAgent, address);
+        }
+    }
+
     /** Creates a session for the principal and returns its id. */
-    String create(Principal principal);
+    String create(Principal principal, ClientInfo client);
 
     /** Returns the session for an id, or {@code null} if unknown or expired. */
     Session session(String sessionId);
@@ -48,6 +72,30 @@ public interface SessionStore {
     void invalidate(String sessionId);
 
     /**
+     * Marks the session as active now (docs/session-visibility.md), feeding the
+     * idle-timeout window and the "last active" column. Implementations throttle the
+     * write; the default is a no-op for stores that never learned metadata.
+     */
+    default void touch(String sessionId) {
+    }
+
+    /**
+     * Invalidates the subject's session named by its public handle
+     * (docs/session-visibility.md). Subject-scoped on purpose: a leaked handle cannot
+     * name another subject's session. Unknown handles are a no-op.
+     */
+    default void invalidateByHandle(String subject, String handle) {
+        if (subject == null || handle == null) {
+            return;
+        }
+        for (ActiveSession active : sessionsFor(subject)) {
+            if (handle.equals(active.handle())) {
+                invalidate(active.sessionId());
+            }
+        }
+    }
+
+    /**
      * Rotates a session in place (docs/session-rotation.md): a fresh id and CSRF token for
      * the same principal, the old id invalidated before the response leaves — no
      * rotate-later window. Returns the new id, or {@code null} when the id resolves to no
@@ -59,7 +107,16 @@ public interface SessionStore {
         if (session == null) {
             return null;
         }
-        String fresh = create(session.principal());
+        // Carry the client facts forward (docs/session-visibility.md): rotation is the
+        // same person on the same device. Bundled stores also carry created-at.
+        ClientInfo client = ClientInfo.NONE;
+        for (ActiveSession active : sessionsFor(session.principal().subject())) {
+            if (sessionId.equals(active.sessionId())) {
+                client = new ClientInfo(active.userAgent(), active.remoteAddr());
+                break;
+            }
+        }
+        String fresh = create(session.principal(), client);
         invalidate(sessionId);
         return fresh;
     }
@@ -78,12 +135,15 @@ public interface SessionStore {
     }
 
     /**
-     * An active session for the account surface's self-service list (roadmap Phase 48).
-     * Timestamps may be {@code null} where a store does not track them (in-memory); the id is
-     * for keep-checks only and must never be rendered.
+     * An active session for the self-service list, the IAM Admin panels, and the
+     * cross-subject page (docs/session-visibility.md). The id is for keep-checks only and
+     * must never be rendered; {@code handle} is the public identifier a row action names.
+     * Metadata may be {@code null} — pre-upgrade rows, or stores that never learned it —
+     * and renders as a dash.
      */
-    record ActiveSession(String sessionId, java.time.Instant createdAt,
-            java.time.Instant expiresAt) {
+    record ActiveSession(String sessionId, String subject, String handle,
+            java.time.Instant createdAt, java.time.Instant expiresAt,
+            java.time.Instant lastSeenAt, String userAgent, String remoteAddr) {
     }
 
     /**
@@ -97,6 +157,15 @@ public interface SessionStore {
 
     /** Invalidates every session of the subject except the one to keep (sign out others). */
     default void invalidateOthersFor(String subject, String keepSessionId) {
+    }
+
+    /**
+     * Every live session, newest first, for the cross-subject administration page
+     * (docs/session-visibility.md). Default: empty — a custom store that never learned to
+     * enumerate simply renders no rows.
+     */
+    default java.util.List<ActiveSession> activeSessions(int limit) {
+        return java.util.List.of();
     }
 
     String cookieName();

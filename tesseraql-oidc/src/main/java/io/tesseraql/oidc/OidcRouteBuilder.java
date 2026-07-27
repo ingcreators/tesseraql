@@ -119,7 +119,11 @@ final class OidcRouteBuilder extends RouteBuilder {
         Principal validated = validator(metadata).validate(idToken, pending.nonce());
         Principal principal = link(validated);
 
-        String sessionId = sessions.create(principal);
+        String sessionId = sessions.create(principal, SessionStore.ClientInfo.of(
+                exchange.getMessage().getHeader("User-Agent", String.class),
+                exchange.getMessage().getHeader("X-Forwarded-For", String.class),
+                exchange.getMessage().getHeader("CamelVertxPlatformHttpRemoteAddress",
+                        String.class)));
         exchange.getMessage().setHeader("Set-Cookie", sessions.cookieName() + "=" + sessionId
                 + "; Path=/; HttpOnly; SameSite=Lax");
         redirect(exchange, postLoginTarget(exchange));

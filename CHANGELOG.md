@@ -8,6 +8,16 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **Sessions are devices you can see and end** (docs/session-visibility.md): each session
+  now records a public handle, the login user agent and presented address, and a
+  last-seen instant — living and dying with the session row (`V3__session_metadata.sql`).
+  New `tesseraql.sessions.idleTimeout` ends a session unseen for that long, sliding
+  inside the absolute `ttl` (touches are throttled to once per 60s per session).
+  `SessionStore.create` now takes a `ClientInfo` (login, OIDC and SAML all record it —
+  pre-1.0 signature change, old form removed), stores gain
+  `invalidateByHandle(subject, handle)` and `activeSessions(limit)`, and rotation carries
+  the metadata forward so an elevated session does not look freshly created.
+
 - **The ops console covers what its machinery already knew** (docs/ops-console-coverage.md):
   an always-mounted *Audit* page renders the business-route audit trail with the same
   scope narrowing and policy as the JSON API — and names

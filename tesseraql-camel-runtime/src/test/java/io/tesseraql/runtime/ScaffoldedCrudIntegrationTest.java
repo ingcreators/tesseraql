@@ -59,7 +59,8 @@ class ScaffoldedCrudIntegrationTest {
         SessionStore sessions = runtime.camelContext().getRegistry()
                 .lookupByNameAndType(TesseraqlProperties.SESSION_STORE_BEAN, SessionStore.class);
         String sid = sessions.create(new Principal("u001", "sato", "Sato", null,
-                List.of(), List.of("APP_READ", "APP_WRITE"), List.of(), Map.of()));
+                List.of(), List.of("APP_READ", "APP_WRITE"), List.of(), Map.of()),
+                SessionStore.ClientInfo.NONE);
         cookie = sessions.cookieName() + "=" + sid;
         csrf = sessions.csrfToken(sid);
     }

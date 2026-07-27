@@ -274,7 +274,8 @@ class CopilotIntegrationTest {
                         io.tesseraql.security.session.SessionStore.class);
         String sid = sessions.create(new io.tesseraql.security.Principal(
                 "copilot-user", "copilot-user", "Copilot User", null, List.of(),
-                List.of("ADMIN"), List.of(), java.util.Map.of()));
+                List.of("ADMIN"), List.of(), java.util.Map.of()),
+                io.tesseraql.security.session.SessionStore.ClientInfo.NONE);
         sessionCookie = sessions.cookieName() + "=" + sid;
         csrf = sessions.session(sid).csrfToken();
     }

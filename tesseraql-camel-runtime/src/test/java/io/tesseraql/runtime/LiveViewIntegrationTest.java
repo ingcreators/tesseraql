@@ -52,7 +52,7 @@ class LiveViewIntegrationTest {
         SessionStore sessions = runtime.camelContext().getRegistry().lookupByNameAndType(
                 TesseraqlProperties.SESSION_STORE_BEAN, SessionStore.class);
         String sid = sessions.create(new Principal("live-user", "live-user", "Live User", null,
-                List.of(), List.of("ADMIN"), List.of(), Map.of()));
+                List.of(), List.of("ADMIN"), List.of(), Map.of()), SessionStore.ClientInfo.NONE);
         sessionCookie = sessions.cookieName() + "=" + sid;
     }
 
@@ -145,7 +145,7 @@ class LiveViewIntegrationTest {
         SessionStore sessions = runtime.camelContext().getRegistry().lookupByNameAndType(
                 TesseraqlProperties.SESSION_STORE_BEAN, SessionStore.class);
         String sid = sessions.create(new Principal("evicted", "evicted", "Evicted", null,
-                List.of(), List.of("ADMIN"), List.of(), Map.of()));
+                List.of(), List.of("ADMIN"), List.of(), Map.of()), SessionStore.ClientInfo.NONE);
         String cookie = sessions.cookieName() + "=" + sid;
 
         HttpResponse<java.io.InputStream> stream = HttpClient.newHttpClient().send(

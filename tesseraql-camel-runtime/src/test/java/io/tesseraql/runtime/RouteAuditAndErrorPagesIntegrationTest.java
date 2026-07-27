@@ -110,7 +110,8 @@ class RouteAuditAndErrorPagesIntegrationTest {
                         io.tesseraql.security.session.SessionStore.class);
         String sid = sessions.create(new io.tesseraql.security.Principal(
                 "console-op", "console-op", "Console Op", null,
-                List.of(), List.of("OPS"), List.of("ops.app.*"), java.util.Map.of()));
+                List.of(), List.of("OPS"), List.of("ops.app.*"), java.util.Map.of()),
+                io.tesseraql.security.session.SessionStore.ClientInfo.NONE);
 
         HttpRequest request = HttpRequest.newBuilder(
                 URI.create("http://localhost:" + runtime.port()

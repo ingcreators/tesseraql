@@ -255,7 +255,7 @@ class AccountSurfaceIntegrationTest {
                 TesseraqlProperties.SESSION_STORE_BEAN, SessionStore.class);
         String otherSid = sessions.create(new Principal(
                 "account-user", "account-user", "Account User", null, List.of(),
-                List.of("ADMIN"), List.of(), Map.of()));
+                List.of("ADMIN"), List.of(), Map.of()), SessionStore.ClientInfo.NONE);
         try {
             assertThat(get(runtime, sessionCookie, "/_tesseraql/account").body())
                     .contains("2 active")
@@ -446,7 +446,7 @@ class AccountSurfaceIntegrationTest {
                 TesseraqlProperties.SESSION_STORE_BEAN, SessionStore.class);
         String sid = sessions.create(new Principal(
                 "account-user", "account-user", "Account User", null, List.of(),
-                List.of("ADMIN"), List.of(), Map.of()));
+                List.of("ADMIN"), List.of(), Map.of()), SessionStore.ClientInfo.NONE);
         return sessions.cookieName() + "=" + sid;
     }
 

@@ -129,7 +129,7 @@ class EmbeddedDbServeIntegrationTest {
                             io.tesseraql.security.session.SessionStore.class);
             String sid = sessions.create(new io.tesseraql.security.Principal("dev", "dev", "Dev",
                     null, java.util.List.of(), java.util.List.of("ADMIN"), java.util.List.of(),
-                    java.util.Map.of()));
+                    java.util.Map.of()), io.tesseraql.security.session.SessionStore.ClientInfo.NONE);
             HttpResponse<Void> authed = client.send(HttpRequest.newBuilder()
                     .uri(URI.create(base + "/_tesseraql/studio/ui"))
                     .header("Cookie", sessions.cookieName() + "=" + sid)

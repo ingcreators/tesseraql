@@ -142,6 +142,11 @@ public class TesseraqlAuthProducer extends DefaultProducer {
         SessionStore sessions = bean(SessionStore.class, TesseraqlProperties.SESSION_STORE_BEAN);
         String cookie = exchange.getMessage().getHeader("Cookie", String.class);
         Principal principal = new BrowserAuthenticator(sessions).authenticate(cookie);
+        if (principal != null) {
+            // Feeds the idle window and the "last active" column; the store throttles
+            // the write (docs/session-visibility.md).
+            sessions.touch(sessions.sessionIdFromCookie(cookie));
+        }
         String token = sessions.csrfTokenFromCookie(cookie);
         if (token != null) {
             exchange.setProperty(TesseraqlProperties.CSRF_TOKEN, token);
