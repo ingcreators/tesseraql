@@ -67,6 +67,9 @@ public final class FrameworkSurfaces {
             Map.entry("system.logout.others",
                     "LoginRouteBuilder#logoutOthers requires a session and validates the CSRF"
                             + " token before invalidating anything"),
+            Map.entry("system.logout.device",
+                    "LoginRouteBuilder#logoutDevice requires a session and validates the CSRF"
+                            + " token; the handle is scoped to the caller's own subject"),
             Map.entry("mcp.endpoint.post",
                     "McpHttpHandler calls McpAuthenticator with the Authorization header"),
             Map.entry("mcp.endpoint.get",
