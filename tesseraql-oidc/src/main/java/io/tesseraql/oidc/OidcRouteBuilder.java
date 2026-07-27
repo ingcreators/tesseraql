@@ -43,13 +43,45 @@ final class OidcRouteBuilder extends RouteBuilder {
     private static final String NEXT_COOKIE = "tql_oidc_next";
 
     OidcRouteBuilder(OidcConfig config, OidcDiscovery discovery, OidcStateStore stateStore,
-            OidcHttp http, SessionStore sessions, OidcUserLinker linker) {
+            OidcHttp http, SessionStore sessions, OidcUserLinker linker,
+            io.tesseraql.security.throttle.CredentialThrottle throttle) {
         this.config = config;
         this.discovery = discovery;
         this.stateStore = stateStore;
         this.http = http;
         this.sessions = sessions;
         this.linker = linker;
+        this.throttle = throttle;
+    }
+
+    private final io.tesseraql.security.throttle.CredentialThrottle throttle;
+
+    /**
+     * Address-keyed insurance against callback garbage (docs/credential-throttle.md):
+     * the IdP owns the credential behind this flow, so only failures count here - a
+     * successful round-trip is never throttled.
+     */
+    private void guardCallback(Exchange exchange) {
+        if (throttle == null) {
+            return;
+        }
+        String address = io.tesseraql.security.session.SessionStore.ClientInfo.of(null,
+                exchange.getMessage().getHeader("X-Forwarded-For", String.class),
+                exchange.getMessage().getHeader("CamelVertxPlatformHttpRemoteAddress",
+                        String.class))
+                .remoteAddr();
+        if (throttle.retryAfter("oidc", null, address).isPresent()) {
+            throw new OidcException("Too many failed callbacks; retry later");
+        }
+        exchange.setProperty("tqlThrottleAddress", address);
+    }
+
+    private void recordCallbackFailure(Exchange exchange) {
+        if (throttle == null) {
+            return;
+        }
+        Object address = exchange.getProperty("tqlThrottleAddress");
+        throttle.recordFailure(null, address == null ? null : String.valueOf(address));
     }
 
     @Override
@@ -100,19 +132,25 @@ final class OidcRouteBuilder extends RouteBuilder {
 
     /** Completes the flow: validate state, exchange the code, validate the ID token, open a session. */
     private void callback(Exchange exchange) {
+        guardCallback(exchange);
         String state = header(exchange, "state");
         String error = header(exchange, "error");
         if (error != null) {
             // Consume the state even on the OP error path, then fail: prevents state fixation.
             stateStore.consume(state);
+            recordCallbackFailure(exchange);
             throw new OidcException("OIDC provider returned an error: " + error);
         }
         String code = header(exchange, "code");
         if (code == null || state == null) {
+            recordCallbackFailure(exchange);
             throw new OidcException("Missing authorization code or state");
         }
         OidcStateStore.Pending pending = stateStore.consume(state)
-                .orElseThrow(() -> new OidcException("Unknown or replayed state"));
+                .orElseThrow(() -> {
+                    recordCallbackFailure(exchange);
+                    return new OidcException("Unknown or replayed state");
+                });
 
         OidcMetadata metadata = discovery.metadata();
         String idToken = exchangeCode(metadata, code, pending.codeVerifier());

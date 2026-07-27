@@ -54,7 +54,19 @@
               },
               "additionalProperties": true
             },
-            "responseHeaders": {
+            "credentialThrottle": {
+          "type": "object",
+          "description": "Keyed rate limiting over the credential surfaces - login, reset, invite, SSO callbacks (docs/credential-throttle.md). Failures only, never a lockout; on by default.",
+          "properties": {
+            "enabled": { "type": "boolean", "description": "Default true. false disables every budget (tests, dev)." },
+            "loginAttempts": { "type": "integer", "minimum": 1, "description": "Failed attempts per submitted login id before throttling (default 10)." },
+            "loginWindow": { "type": "string", "description": "The login-key window (duration string, default 15m)." },
+            "addressAttempts": { "type": "integer", "minimum": 1, "description": "Failed attempts per presented address before throttling (default 100)." },
+            "addressWindow": { "type": "string", "description": "The address-key window (duration string, default 15m)." }
+          },
+          "additionalProperties": false
+        },
+        "responseHeaders": {
               "type": "object",
               "description": "Response headers stamped on every route response (CSP, X-Frame-Options, ...). A flat map of header name to value.",
               "additionalProperties": { "type": "string" }

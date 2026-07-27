@@ -52,8 +52,10 @@ final class RecoveryRouteBuilder extends RouteBuilder {
     RecoveryRouteBuilder(CredentialTokenStore tokens, IdentityService identity,
             RealmConfig realm, SessionStore sessions,
             io.tesseraql.operations.outbox.JdbcOutboxStore outbox, String channel,
-            String confirmUrl, Duration timeToLive, String appName, boolean inviteEnabled) {
+            String confirmUrl, Duration timeToLive, String appName, boolean inviteEnabled,
+            io.tesseraql.security.throttle.CredentialThrottle throttle) {
         this.tokens = tokens;
+        this.throttle = throttle;
         this.identity = identity;
         this.realm = realm;
         this.sessions = sessions;
@@ -64,6 +66,8 @@ final class RecoveryRouteBuilder extends RouteBuilder {
         this.appName = appName;
         this.inviteEnabled = inviteEnabled;
     }
+
+    private final io.tesseraql.security.throttle.CredentialThrottle throttle;
 
     @Override
     public void configure() {
@@ -98,8 +102,14 @@ final class RecoveryRouteBuilder extends RouteBuilder {
                     + URLEncoder.encode(token, StandardCharsets.UTF_8));
             return;
         }
+        String address = LoginRouteBuilder.presentedAddress(exchange);
+        if (throttle.retryAfter("invite", null, address).isPresent()) {
+            LoginRouteBuilder.redirect(exchange, 303, "/_tesseraql/invite?invalid=1");
+            return;
+        }
         var consumed = tokens.consume(token, CredentialTokenStore.INVITE);
         if (consumed.isEmpty()) {
+            throttle.recordFailure(null, address);
             LoginRouteBuilder.redirect(exchange, 303, "/_tesseraql/invite?invalid=1");
             return;
         }
@@ -122,8 +132,14 @@ final class RecoveryRouteBuilder extends RouteBuilder {
     private void request(Exchange exchange) throws Exception {
         Map<String, Object> body = LoginRouteBuilder.parseBody(exchange);
         String loginId = str(body.get("loginId"));
+        // Every request counts here - issuing mail IS the cost - and a throttled request
+        // keeps the neutral answer: a 429 would itself be an oracle
+        // (docs/credential-throttle.md). Only the issuing stops.
+        String address = LoginRouteBuilder.presentedAddress(exchange);
+        boolean throttled = throttle.retryAfter("reset", loginId, address).isPresent();
+        throttle.recordFailure(loginId, address);
         try {
-            if (!loginId.isBlank()) {
+            if (!loginId.isBlank() && !throttled) {
                 issueAndMail(loginId);
             }
         } catch (RuntimeException ex) {
@@ -166,8 +182,14 @@ final class RecoveryRouteBuilder extends RouteBuilder {
                     + URLEncoder.encode(token, StandardCharsets.UTF_8));
             return;
         }
+        String address = LoginRouteBuilder.presentedAddress(exchange);
+        if (throttle.retryAfter("confirm", null, address).isPresent()) {
+            LoginRouteBuilder.redirect(exchange, 303, "/_tesseraql/reset/confirm?invalid=1");
+            return;
+        }
         var consumed = tokens.consume(token, CredentialTokenStore.RESET);
         if (consumed.isEmpty()) {
+            throttle.recordFailure(null, address);
             // Unknown, used, and expired all land here - one honest dead-link answer.
             LoginRouteBuilder.redirect(exchange, 303, "/_tesseraql/reset/confirm?invalid=1");
             return;

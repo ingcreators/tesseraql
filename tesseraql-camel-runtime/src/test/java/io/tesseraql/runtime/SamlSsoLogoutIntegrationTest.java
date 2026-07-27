@@ -153,6 +153,11 @@ class SamlSsoLogoutIntegrationTest {
                     password: %s
 
                 tesseraql:
+                  # This fixture fails credentials on purpose; the throttle under test
+                  # elsewhere is disabled visibly (docs/credential-throttle.md).
+                  security:
+                    credentialThrottle:
+                      enabled: false
                   saml:
                     enabled: true
                     allowIdpInitiated: true

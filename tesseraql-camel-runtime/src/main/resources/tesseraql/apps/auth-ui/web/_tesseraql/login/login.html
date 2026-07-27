@@ -22,7 +22,10 @@
     <div th:if="${invited}" class="hc-alert" data-variant="success" role="status">
       <p class="hc-alert__title">Account activated. Sign in with your new password.</p>
     </div>
-    <div th:if="${error}" class="hc-alert" data-variant="error" role="alert">
+    <div th:if="${error == 'rate'}" class="hc-alert" data-variant="error" role="alert">
+      <p class="hc-alert__title">Too many attempts. Wait a few minutes and try again.</p>
+    </div>
+    <div th:if="${error != null && error != 'rate'}" class="hc-alert" data-variant="error" role="alert">
       <p class="hc-alert__title">Invalid credentials. Please try again.</p>
     </div>
 

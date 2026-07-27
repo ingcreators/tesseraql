@@ -50,6 +50,9 @@ public final class TesseraqlProperties {
     public static final String MTLS_AUTHENTICATOR_BEAN = "tesseraqlMtlsAuthenticator";
     public static final String SESSION_STORE_BEAN = "tesseraqlSessionStore";
 
+    /** The keyed credential throttle (docs/credential-throttle.md). */
+    public static final String CREDENTIAL_THROTTLE_BEAN = "tesseraqlCredentialThrottle";
+
     /**
      * The app's resolved {@code tesseraql.security.responseHeaders} block, as a plain map.
      *

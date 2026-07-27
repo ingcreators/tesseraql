@@ -60,7 +60,9 @@ public final class OidcRuntimeExtension implements RuntimeExtension {
             linker = new OidcUserLinker(identity, realm, config.provision());
         }
         context.camel().addRoutes(
-                new OidcRouteBuilder(config, discovery, stateStore, http, sessions, linker));
+                new OidcRouteBuilder(config, discovery, stateStore, http, sessions, linker,
+                        context.bean(TesseraqlProperties.CREDENTIAL_THROTTLE_BEAN,
+                                io.tesseraql.security.throttle.CredentialThrottle.class)));
     }
 
     private static void require(String value, String key) {

@@ -412,10 +412,12 @@ else re-derives.
    which was the security half; declaring every existing posture is the documentation half.
 6. **The lifecycle registry and `guarded()`**, closing the template, client, executor, and
    start-failure rows.
-7. **The long tail:** login/reset rate limiting, the scheduling claim-compensation, and the
-   `FrameworkMigrations` component map remain. Rate limiting needs the keyed limiter described
-   with the deviation above — the shipped ones hold one bucket per route, and attaching one to
-   login trades an online-guessing weakness for a trivial lockout of every user.
+7. **The long tail:** the scheduling claim-compensation and the `FrameworkMigrations`
+   component map remain. **Login/reset rate limiting is shipped** as the keyed limiter this
+   row asked for ([credential-throttle.md](credential-throttle.md)): `CredentialThrottle` —
+   per-login + per-address, failures only, never a lockout — guards login, reset, token
+   consumption, and the SSO callbacks; the one-bucket-per-route lockout trap this row warned
+   about is the shape it was designed against.
    **The OIDC/SAML error envelope is shipped:** both answer the framework envelope through a
    shared `FederationErrors`, and the catch-all distinguishes a `TqlException` from an unexpected
    failure instead of reporting every one as the caller's fault.

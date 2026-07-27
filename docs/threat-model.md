@@ -76,6 +76,7 @@ Each table reads: **threat → vector → control → residual**. Controls are c
 | --- | --- | --- | --- |
 | Spoofing (token) | forged or `alg:none` JWT | JDK-only signature verification; algorithm confusion rejected by design | key management is the deployment's (JWKS/secret rotation) |
 | Spoofing (API key) | guessing/replaying a key | keys stored as SHA-256, constant-time compared; the raw key is never stored or logged | key distribution is the operator's |
+| Spoofing (password) | online guessing / credential stuffing | keyed failures-only throttle on login, reset and token consumption (`CredentialThrottle`, docs/credential-throttle.md): per-login budget holds even when the address key is spoof-rotated via XFF; applied before hashing, never a lockout | node-local budgets multiply by node count behind a balancer — accepted; shared-store window is the recorded follow-up |
 | Spoofing (session) | stealing/fixating the cookie | a fresh id minted at login (no pre-auth adoption); the cookie is HTTPS-secured at the edge; the id rotates in place on elevation (`response.session.rotate`, docs/session-rotation.md) | — |
 | Elevation (MFA bypass) | replaying a TOTP step | RFC 6238 window with a recorded last-used step | — |
 | Information disclosure (enumeration) | probing reset/login for valid accounts | neutral responses end to end | — |

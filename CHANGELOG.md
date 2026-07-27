@@ -8,6 +8,17 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **Guessing has a budget** (docs/credential-throttle.md): the credential surfaces —
+  login (password+TOTP), password-reset request and confirm, invite acceptance, and the
+  OIDC/SAML callbacks — now throttle failed attempts, keyed per submitted login id
+  (10/15m, checked before any existence check or hashing: no enumeration oracle, no
+  hash burn) and per presented address (100/15m). Failures only — the 9am rush behind
+  one NAT never throttles — a success clears the login budget, and there is no lockout:
+  windows expire on their own. On by default; tune or disable under
+  `tesseraql.security.credentialThrottle`. Browsers see the login page's rate message,
+  API callers get `429` `TQL-RATE-4292` with `Retry-After`, and hits count into
+  `tesseraql_credential_throttled_total{surface,key}` on the scrape.
+
 - **Session policy is a declaration, not a framework opinion**
   (docs/session-visibility.md addendum): `tesseraql.sessions.maxPerSubject` caps live
   sessions per account with evict-oldest semantics — the newest login wins, a stranded

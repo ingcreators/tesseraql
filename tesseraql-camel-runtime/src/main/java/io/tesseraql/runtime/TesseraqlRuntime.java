@@ -368,6 +368,32 @@ public final class TesseraqlRuntime implements AutoCloseable {
                     sessionIdle, sessionCap);
         }
         context.getRegistry().bind(TesseraqlProperties.SESSION_STORE_BEAN, sessionStore);
+        // Keyed credential throttle (docs/credential-throttle.md): on by default with
+        // generous failures-only budgets; enabled: false is the visible test/dev escape.
+        io.tesseraql.security.throttle.CredentialThrottle credentialThrottle = new io.tesseraql.security.throttle.CredentialThrottle(
+                new io.tesseraql.security.throttle.CredentialThrottle.Config(
+                        manifest.config()
+                                .getString("tesseraql.security.credentialThrottle.enabled")
+                                .map(Boolean::parseBoolean).orElse(true),
+                        manifest.config()
+                                .getString("tesseraql.security.credentialThrottle.loginAttempts")
+                                .map(Integer::parseInt).orElse(10),
+                        java.time.Duration.ofMillis(io.tesseraql.core.util.Durations.toMillis(
+                                manifest.config()
+                                        .getString(
+                                                "tesseraql.security.credentialThrottle.loginWindow")
+                                        .orElse("15m"))),
+                        manifest.config()
+                                .getString("tesseraql.security.credentialThrottle.addressAttempts")
+                                .map(Integer::parseInt).orElse(100),
+                        java.time.Duration.ofMillis(io.tesseraql.core.util.Durations.toMillis(
+                                manifest.config()
+                                        .getString(
+                                                "tesseraql.security.credentialThrottle.addressWindow")
+                                        .orElse("15m")))),
+                effectiveMeter);
+        context.getRegistry().bind(TesseraqlProperties.CREDENTIAL_THROTTLE_BEAN,
+                credentialThrottle);
         JobRepository jobRepository = new JobRepository(dataSource);
         jobRepository.ensureSchema();
         JdbcIdempotencyStore idempotencyStore = new JdbcIdempotencyStore(dataSource);
@@ -1338,7 +1364,8 @@ public final class TesseraqlRuntime implements AutoCloseable {
             totpStore.ensureSchema();
             context.getRegistry().bind(TesseraqlProperties.TOTP_STORE_BEAN, totpStore);
             context.addRoutes(new LoginRouteBuilder(
-                    new PasswordAuthenticator(identity), realm, sessionStore, totpStore));
+                    new PasswordAuthenticator(identity), realm, sessionStore, totpStore,
+                    credentialThrottle));
             // The IAM Admin bulk endpoint (docs/hypermedia-ui.md "Bulk actions"): Java
             // because the form posts repeated ids fields, which the Simple-YAML input
             // surface deliberately does not model. Gated by iam.admin.write like the
@@ -1375,7 +1402,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
                         java.time.Duration.ofMinutes(manifest.config()
                                 .getString("tesseraql.identity.recovery.ttlMinutes")
                                 .map(Long::parseLong).orElse(30L)),
-                        appName, inviteEnabled));
+                        appName, inviteEnabled, credentialThrottle));
             }
             // Optional feature modules (SCIM, SAML, ...) self-install via ServiceLoader, from the
             // classpath or from signature-verified plugin jars in isolated loaders (ch. 47).
