@@ -37,10 +37,12 @@ re-derives nothing new — it acts on the page's subject. Route audit
 
 ## Out of scope
 
-- Rotate-in-place for the *caller's own* session id (needs response-directive cookie
-  plumbing; tracked separately since Phase 36).
-- Per-session revoke, session geography/user-agent enrichment, idle-timeout policy.
-- A cross-subject sessions dashboard in the ops console.
+- ~~Rotate-in-place for the *caller's own* session id~~ — shipped as
+  `response.session.rotate` ([session-rotation.md](session-rotation.md)).
+- ~~Per-session revoke, session user-agent/address enrichment, idle-timeout policy~~ and
+  ~~a cross-subject sessions view~~ — designed in
+  [session-visibility.md](session-visibility.md) once operating practice asked (it did);
+  the view lands in IAM Admin, and the ops console still links nowhere new.
 
 ## Testing
 

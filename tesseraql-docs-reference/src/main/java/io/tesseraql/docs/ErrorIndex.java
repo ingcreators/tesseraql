@@ -425,7 +425,7 @@ final class ErrorIndex {
             "yaml-surface-consumers.md", "ops-console-actions.md",
             "studio-schema-lifecycle.md", "session-administration.md",
             "poll-source-status.md", "poll-source-metrics.md",
-            "ops-console-coverage.md", "session-rotation.md");
+            "ops-console-coverage.md", "session-rotation.md", "session-visibility.md");
 
     /**
      * Marks each code with the cookbook pages whose markdown mentions it — every
