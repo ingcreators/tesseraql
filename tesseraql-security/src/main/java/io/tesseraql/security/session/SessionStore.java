@@ -47,6 +47,23 @@ public interface SessionStore {
 
     void invalidate(String sessionId);
 
+    /**
+     * Rotates a session in place (docs/session-rotation.md): a fresh id and CSRF token for
+     * the same principal, the old id invalidated before the response leaves — no
+     * rotate-later window. Returns the new id, or {@code null} when the id resolves to no
+     * session: an expired session mid-flight is the caller's next 401, not a rotation
+     * crash. Stores with a cheaper primitive can override.
+     */
+    default String rotate(String sessionId) {
+        Session session = sessionId == null ? null : session(sessionId);
+        if (session == null) {
+            return null;
+        }
+        String fresh = create(session.principal());
+        invalidate(sessionId);
+        return fresh;
+    }
+
     /** Invalidates the session named by a {@code Cookie} header, if one resolves (logout). */
     default void invalidateFromCookie(String cookieHeader) {
         String sessionId = Cookies.value(cookieHeader, cookieName());

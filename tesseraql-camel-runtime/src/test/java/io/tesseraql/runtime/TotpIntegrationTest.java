@@ -106,8 +106,21 @@ class TotpIntegrationTest {
 
         // Confirm with the real code: from here the login requires it.
         long confirmStep = Totp.currentStep();
-        assertThat(postForm(cookie, csrf, "/_tesseraql/account/totp/confirm",
-                "code=" + Totp.codeAt(secret, confirmStep)).statusCode()).isEqualTo(303);
+        HttpResponse<String> confirmed = postForm(cookie, csrf,
+                "/_tesseraql/account/totp/confirm", "code=" + Totp.codeAt(secret, confirmStep));
+        assertThat(confirmed.statusCode()).isEqualTo(303);
+        // The elevation rotates the session in place (docs/session-rotation.md): the
+        // response re-issues the cookie with login's attributes, the pre-elevation id
+        // stops resolving, and the CSRF token rotates with the session.
+        String reissued = confirmed.headers().firstValue("set-cookie").orElseThrow();
+        assertThat(reissued).contains("HttpOnly").contains("SameSite=Lax");
+        String freshCookie = reissued.substring(0, reissued.indexOf(';'));
+        assertThat(freshCookie).isNotEqualTo(cookie);
+        assertThat(get(cookie, "/_tesseraql/account").statusCode()).isNotEqualTo(200);
+        String freshCsrf = csrfFor(freshCookie);
+        assertThat(freshCsrf).isNotEqualTo(csrf);
+        cookie = freshCookie;
+        csrf = freshCsrf;
         // Confirmation activates the recovery codes (hashed at rest) and drops the plain
         // pending copy: the page never shows them again.
         assertThat(get(cookie, "/_tesseraql/account").body())

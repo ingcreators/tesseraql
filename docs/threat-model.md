@@ -76,7 +76,7 @@ Each table reads: **threat → vector → control → residual**. Controls are c
 | --- | --- | --- | --- |
 | Spoofing (token) | forged or `alg:none` JWT | JDK-only signature verification; algorithm confusion rejected by design | key management is the deployment's (JWKS/secret rotation) |
 | Spoofing (API key) | guessing/replaying a key | keys stored as SHA-256, constant-time compared; the raw key is never stored or logged | key distribution is the operator's |
-| Spoofing (session) | stealing/fixating the cookie | a fresh id minted at login (no pre-auth adoption); the cookie is HTTPS-secured at the edge | id is not re-issued on privilege elevation — a small residual, tracked as follow-up |
+| Spoofing (session) | stealing/fixating the cookie | a fresh id minted at login (no pre-auth adoption); the cookie is HTTPS-secured at the edge; the id rotates in place on elevation (`response.session.rotate`, docs/session-rotation.md) | — |
 | Elevation (MFA bypass) | replaying a TOTP step | RFC 6238 window with a recorded last-used step | — |
 | Information disclosure (enumeration) | probing reset/login for valid accounts | neutral responses end to end | — |
 
@@ -153,10 +153,10 @@ Carried forward, none an actively-exploitable hole in a correctly-configured dep
 - **Write-scope guard** — *now implemented* as `TQL-SEC-4100` (a warning when a scope-governed
   table is written without a scope predicate); the residual is only that it is a heuristic
   warning, not a hard block, since a deliberately-unscoped admin write is legitimate.
-- **Session id rotation in place on a non-credential elevation** — the fixation case is handled
-  at login, and both a password reset and a self-service password change now end the subject's
-  sessions; the residual is re-issuing the current id in place on a non-credential elevation
-  (e.g. MFA enrollment), which the service layer signs out for instead.
+- **Session id rotation in place on a non-credential elevation** — *now implemented* as the
+  `response.session.rotate` directive (docs/session-rotation.md): a successful elevation
+  re-issues the cookie with a fresh id and CSRF token and invalidates the old id first; the
+  account app's TOTP enrollment confirm declares it.
 - **Curated-marketplace provenance** — signature and publisher verification for shared
   packages, beyond today's hash pinning and the declarative-only admission gate.
 - **This model is living.** Each new surface — a new recipe, a new egress path, a new parser —

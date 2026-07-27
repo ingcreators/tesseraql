@@ -26,6 +26,15 @@ All notable changes to TesseraQL are documented here. The format follows
   display-only reads. Deliberate exceptions live in a probed registry
   (`DISPLAY_ONLY`/`UNWIRED`, both empty today) whose entries must stay true to pass.
 
+- **The session id rotates in place on elevation** (docs/session-rotation.md): a new
+  `response.session.rotate: true` directive re-issues the caller's session cookie after a
+  successful execution — a fresh id and CSRF token, the old id invalidated before the
+  response leaves — closing the ASVS residual where a non-credential elevation kept the
+  pre-elevation id alive. The account app's TOTP enrollment confirm declares it; bearer
+  and public callers on a rotating route are untouched. `SessionStore` gains a default
+  `rotate(sessionId)`, and the auth component gains the `rotate` operation beside
+  authenticate/authorize.
+
 ## 0.8.0 - 2026-07-26
 
 ### Added

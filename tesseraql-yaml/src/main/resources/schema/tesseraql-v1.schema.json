@@ -268,6 +268,14 @@
             "reswap": { "type": "string" }
           },
           "additionalProperties": true
+        },
+        "session": {
+          "type": "object",
+          "description": "Browser-session handling for the response (docs/session-rotation.md).",
+          "properties": {
+            "rotate": { "type": "boolean", "description": "Re-issue the caller's session cookie in place on success: a fresh id and CSRF token, the old id invalidated before the response leaves. Declare on routes that elevate the session (confirming an MFA enrollment); bearer or public callers are untouched." }
+          },
+          "additionalProperties": false
         }
       },
       "additionalProperties": true

@@ -178,7 +178,7 @@ reviewer can check each claim against the source.
 | No session fixation | met | `BrowserAuthenticator.create()` mints a fresh id at login; no pre-auth session is adopted |
 | Logout and "sign out others" invalidate server-side | met | `invalidate()` / `invalidateOthersFor()`; a consumed password reset drops every session of the subject |
 | Sessions ended on a credential change | met | a self-service password change ends every session of the subject and returns the caller to the login page — an attacker's parallel session is evicted |
-| Session id re-issued in place on other elevations | partial | credential changes end sessions; rotating the current id in place on a non-credential elevation (e.g. MFA enrollment) is a smaller follow-up (the service layer cannot re-issue the cookie, so it signs out instead) |
+| Session id re-issued in place on other elevations | met | `response.session.rotate` (docs/session-rotation.md) re-issues the cookie — fresh id and CSRF token, old id invalidated first — after a successful elevation; the account app's TOTP enrollment confirm declares it |
 
 #### V4 Access control
 

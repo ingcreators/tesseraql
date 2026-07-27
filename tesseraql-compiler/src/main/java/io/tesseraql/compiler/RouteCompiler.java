@@ -248,7 +248,8 @@ public final class RouteCompiler {
             buildTransactionalCommand(builder, routeFile);
             return;
         }
-        ProcessorDefinition<?> route = pipelineThroughSql(builder, routeFile)
+        ProcessorDefinition<?> route = applySessionRotation(
+                pipelineThroughSql(builder, routeFile), routeFile.definition())
                 .process(responseRenderer(routeFile.definition()));
         applyHttpCache(route, routeFile.definition());
         applyIdempotencyComplete(route, routeFile.definition());
@@ -290,6 +291,21 @@ public final class RouteCompiler {
                 || !definition.notifications().isEmpty()
                 || ("command-json".equals(definition.recipe())
                         && definition.sql() != null && definition.sql().file() != null);
+    }
+
+    /**
+     * The declared in-place session rotation (docs/session-rotation.md), appended after
+     * successful execution and before the response renders — an execution error diverts
+     * to the error renderer first, so a failed command never half-rotates. Session
+     * mechanics stay in the auth component beside authenticate/authorize.
+     */
+    private ProcessorDefinition<?> applySessionRotation(ProcessorDefinition<?> route,
+            RouteDefinition definition) {
+        if (definition.response() != null && definition.response().session() != null
+                && definition.response().session().rotates()) {
+            return route.to("tesseraql-auth:rotate");
+        }
+        return route;
     }
 
     /** The terminal renderer: a redirect when declared, otherwise the JSON response. */
@@ -367,7 +383,7 @@ public final class RouteCompiler {
                     .process(new io.tesseraql.compiler.binding.NamedQueryBinder(entry.getValue()))
                     .to(executionUri(routeFile, entry.getValue(), entry.getKey()));
         }
-        step.process(responseRenderer(definition));
+        applySessionRotation(step, definition).process(responseRenderer(definition));
         applyIdempotencyComplete(step, definition);
     }
 
@@ -511,7 +527,7 @@ public final class RouteCompiler {
         return new io.tesseraql.yaml.model.ResponseSpec(
                 new io.tesseraql.yaml.model.ResponseSpec.JsonResponse(200,
                         java.util.Map.of("ok", Boolean.TRUE), null, null, null),
-                null, null, null, null, null);
+                null, null, null, null, null, null);
     }
 
     /** The command's binds: the document key (always) plus the transition's declared params. */
