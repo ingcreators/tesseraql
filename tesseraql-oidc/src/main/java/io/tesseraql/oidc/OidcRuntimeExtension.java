@@ -48,7 +48,8 @@ public final class OidcRuntimeExtension implements RuntimeExtension {
                 .map(Durations::parse).orElse(Duration.ofSeconds(5));
         OidcHttp http = new OidcHttp(timeout);
         OidcDiscovery discovery = OidcDiscovery.overHttp(config.discoveryUri(), http);
-        OidcStateStore stateStore = new OidcStateStore(context.dataSource());
+        // Flow state is ambient framework state (docs/framework-datasource.md).
+        OidcStateStore stateStore = new OidcStateStore(context.frameworkDataSource());
         stateStore.ensureSchema();
 
         OidcUserLinker linker = null;

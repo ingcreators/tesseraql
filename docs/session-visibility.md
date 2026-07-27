@@ -107,6 +107,16 @@ visible consequences*, not silent framework opinions:
   unset through 0.x; whether 1.0 ships a modest built-in default (with the ASVS
   refresh) is recorded as a 1.0 decision, not smuggled in here.
 
+## Recorded races (2026-07-27)
+
+- **The cap race**: two concurrent logins at `maxPerSubject` can each evict the same
+  oldest session and both insert — momentarily cap+1, self-healing on the next login
+  (the eviction DELETE is idempotent). Accepted: a serializable check would put locks on
+  the login path to fix an off-by-one.
+- **Rotation is now one transaction** on the JDBC store
+  (docs/framework-datasource.md): the original shape had a crash window between
+  inserting the new session and deleting the old in which both stayed live.
+
 ## Out of scope
 
 - GeoIP resolution (decision 3; SPI seam only if ever asked for).

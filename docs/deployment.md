@@ -244,6 +244,32 @@ tesseraql:
   `work/tmp/tesseraql`; keep session affinity at the load balancer, or point the directory
   at a shared filesystem if you already run one.
 
+## Framework datasource
+
+Ambient framework state — sessions, credential tokens, replay guards, OIDC flow state,
+rate leases, route audit, preferences — rides the `main` pool by default, which means a
+saturating business query can starve *login* of a connection. Point
+`tesseraql.framework.datasource` at any named datasource to isolate it
+(docs/framework-datasource.md has the full store classification):
+
+```yaml
+tesseraql:
+  datasources:
+    framework:
+      jdbcUrl: ${DB_URL}        # the SAME database: pool isolation, zero migration
+      maximumPoolSize: 8        # sessions are millisecond point queries
+  framework:
+    datasource: framework
+```
+
+Start with same-DB/separate-pool — the starvation pain is a pool phenomenon. A genuinely
+separate database is the same one-line change when scale or backup/retention separation
+calls for it; bucket-3 schemas bootstrap there on first start. Switching an existing
+deployment: sessions end (everyone signs in again), outstanding reset/invite links die,
+old audit rows stay behind in the business database — inconvenience, never corruption.
+The transactionally-coupled stores (outbox, workflow, idempotency, webhook replay)
+deliberately ignore this key.
+
 ## Metrics (Prometheus)
 
 Opt in with `tesseraql.metrics.enabled: true` and scrape `GET /_tesseraql/metrics`

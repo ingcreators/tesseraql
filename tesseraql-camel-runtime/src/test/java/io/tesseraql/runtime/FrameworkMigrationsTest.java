@@ -35,8 +35,8 @@ class FrameworkMigrationsTest {
     @Test
     void migratesEveryFrameworkComponentWithItsOwnHistoryAndStaysIdempotent() throws Exception {
         DataSource dataSource = dataSource();
-        FrameworkMigrations.migrate(dataSource);
-        FrameworkMigrations.migrate(dataSource);
+        FrameworkMigrations.migrate(dataSource, dataSource);
+        FrameworkMigrations.migrate(dataSource, dataSource);
 
         assertThat(tables(dataSource))
                 .contains("tql_session", "tql_job_execution", "tql_step_execution",
@@ -61,8 +61,8 @@ class FrameworkMigrationsTest {
         dataSource.setUser(MYSQL.getUsername());
         dataSource.setPassword(MYSQL.getPassword());
 
-        FrameworkMigrations.migrate(dataSource);
-        FrameworkMigrations.migrate(dataSource);
+        FrameworkMigrations.migrate(dataSource, dataSource);
+        FrameworkMigrations.migrate(dataSource, dataSource);
 
         try (Connection connection = dataSource.getConnection();
                 Statement statement = connection.createStatement();

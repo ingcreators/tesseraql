@@ -33,18 +33,30 @@ final class FrameworkMigrations {
     private FrameworkMigrations() {
     }
 
-    /** Migrates every framework component on the main datasource. */
-    static void migrate(DataSource dataSource) {
-        String vendor = DatabaseVendors.vendor(dataSource).orElse(null);
-        if (vendor == null || !FLYWAY_BUNDLED.contains(vendor)) {
-            // Other dialects rely on the stores' idempotent schema bootstrap; the versioned
-            // history needs the matching Flyway database module first (design ch. 42).
-            LOG.info("No bundled Flyway support for '{}'; skipping framework migrations", vendor);
-            return;
-        }
+    /**
+     * Migrates the framework components: {@code security} (sessions — ambient framework
+     * state) follows the framework datasource (docs/framework-datasource.md); {@code
+     * operations} stays on the business datasource — its file set mixes buckets and its
+     * Flyway checksums pin existing deployments, so movable operations-module stores
+     * bootstrap their tables on the framework datasource through their own idempotent
+     * {@code ensureSchema} instead.
+     */
+    static void migrate(DataSource dataSource, DataSource frameworkDataSource) {
         for (Map.Entry<String, String> component : COMPONENTS.entrySet()) {
+            DataSource target = "security".equals(component.getKey())
+                    ? frameworkDataSource
+                    : dataSource;
+            String vendor = DatabaseVendors.vendor(target).orElse(null);
+            if (vendor == null || !FLYWAY_BUNDLED.contains(vendor)) {
+                // Other dialects rely on the stores' idempotent schema bootstrap; the
+                // versioned history needs the matching Flyway database module first
+                // (design ch. 42).
+                LOG.info("No bundled Flyway support for '{}'; skipping framework"
+                        + " migrations for {}", vendor, component.getKey());
+                continue;
+            }
             int applied = Flyway.configure()
-                    .dataSource(dataSource)
+                    .dataSource(target)
                     .locations("classpath:" + location(component.getKey(),
                             component.getValue(), vendor))
                     .table("tql_schema_history__" + component.getKey())

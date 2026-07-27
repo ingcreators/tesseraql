@@ -88,7 +88,9 @@ public final class SamlRuntimeExtension implements RuntimeExtension {
         // Hardening (design ch. 10.14, 20): the JDBC replay guard enforces single-use
         // InResponseTo/RelayState and assertion-replay rejection across nodes; an SP signing key
         // signs HTTP-Redirect messages; inbound logout must be signed unless explicitly relaxed.
-        SamlReplayGuard replayGuard = new SamlReplayGuard(context.dataSource());
+        // Replay state protects sessions, not business writes: ambient framework state
+        // (docs/framework-datasource.md). SCIM provisioning stays on dataSource().
+        SamlReplayGuard replayGuard = new SamlReplayGuard(context.frameworkDataSource());
         replayGuard.ensureSchema();
         java.security.PrivateKey spKey = config.getString("tesseraql.saml.sp.signingKey")
                 .map(path -> SamlKeys.privateKey(readBytes(manifest, path)))

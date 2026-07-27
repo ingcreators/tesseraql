@@ -14,7 +14,18 @@ import org.apache.camel.CamelContext;
  * @param manifest   the main app manifest
  * @param dataSource the main datasource
  */
-public record ExtensionContext(CamelContext camel, AppManifest manifest, DataSource dataSource) {
+public record ExtensionContext(CamelContext camel, AppManifest manifest, DataSource dataSource,
+        DataSource frameworkDataSource) {
+
+    /**
+     * Ambient framework state (docs/framework-datasource.md) constructs against this;
+     * business and identity data stays on {@link #dataSource()}. Same pool unless
+     * {@code tesseraql.framework.datasource} says otherwise.
+     */
+    @Override
+    public DataSource frameworkDataSource() {
+        return frameworkDataSource == null ? dataSource : frameworkDataSource;
+    }
 
     /** Looks up a framework bean by name, or null when absent. */
     public <T> T bean(String name, Class<T> type) {
