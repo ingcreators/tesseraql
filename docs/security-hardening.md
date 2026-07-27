@@ -234,6 +234,7 @@ reviewer can check each claim against the source.
 | Requirement | Status | Evidence |
 | --- | --- | --- |
 | Rate limiting | met | per-node token bucket (`RateLimiter`) and a cluster-wide leased budget (`ClusterRateLimiter`, `TQL-RATE-4291`) that degrades to per-node |
+| Anti-automation on credential surfaces | met | keyed failures-only throttle (`CredentialThrottle`, `TQL-RATE-4292`, docs/credential-throttle.md): per-login (before existence checks — no enumeration oracle) + per-address budgets over login/reset/invite and the SSO callbacks; on by default, never a lockout |
 | Sequential/idempotent business flows | met | the transactional command engine (single-connection commit) + at-least-once messaging with idempotency keys; workflow transition guards |
 
 #### V12 Files and resources

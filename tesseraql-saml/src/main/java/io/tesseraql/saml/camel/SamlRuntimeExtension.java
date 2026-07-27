@@ -100,7 +100,9 @@ public final class SamlRuntimeExtension implements RuntimeExtension {
         SamlAcsRouteBuilder.SamlSecurity security = new SamlAcsRouteBuilder.SamlSecurity(
                 replayGuard, spKey, idpKey, allowIdpInitiated, requireSignedLogout);
         context.camel().addRoutes(new SamlAcsRouteBuilder(
-                validator, mapping, sessions, linker, metadata, endpoints, security));
+                validator, mapping, sessions, linker, metadata, endpoints, security,
+                context.bean(TesseraqlProperties.CREDENTIAL_THROTTLE_BEAN,
+                        io.tesseraql.security.throttle.CredentialThrottle.class)));
     }
 
     private static byte[] readBytes(AppManifest manifest, String relative) {

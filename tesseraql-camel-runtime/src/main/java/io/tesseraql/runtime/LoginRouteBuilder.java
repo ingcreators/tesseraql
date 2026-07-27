@@ -40,13 +40,51 @@ final class LoginRouteBuilder extends RouteBuilder {
     private final RealmConfig realm;
     private final SessionStore sessions;
     private final io.tesseraql.core.credential.TotpStore totp;
+    private final io.tesseraql.security.throttle.CredentialThrottle throttle;
 
     LoginRouteBuilder(PasswordAuthenticator authenticator, RealmConfig realm,
-            SessionStore sessions, io.tesseraql.core.credential.TotpStore totp) {
+            SessionStore sessions, io.tesseraql.core.credential.TotpStore totp,
+            io.tesseraql.security.throttle.CredentialThrottle throttle) {
         this.authenticator = authenticator;
         this.realm = realm;
         this.sessions = sessions;
         this.totp = totp;
+        this.throttle = throttle;
+    }
+
+    /** The presented address, the ClientInfo resolution: XFF first, else the peer. */
+    static String presentedAddress(Exchange exchange) {
+        return SessionStore.ClientInfo.of(null,
+                exchange.getMessage().getHeader("X-Forwarded-For", String.class),
+                exchange.getMessage().getHeader("CamelVertxPlatformHttpRemoteAddress",
+                        String.class))
+                .remoteAddr();
+    }
+
+    /**
+     * Answers a throttled credential attempt (docs/credential-throttle.md): a browser
+     * form bounces to the login page's rate message, an API caller gets the 429 envelope
+     * with Retry-After. Reveals the throttle, never the account.
+     */
+    static void renderThrottled(Exchange exchange, boolean browserForm,
+            java.time.Duration wait, com.fasterxml.jackson.databind.ObjectMapper mapper,
+            String next) throws Exception {
+        if (browserForm) {
+            redirect(exchange, 303, LOGIN_PATH + "?error=rate"
+                    + (next == null
+                            ? ""
+                            : "&next="
+                                    + URLEncoder.encode(next, StandardCharsets.UTF_8)));
+            return;
+        }
+        exchange.getMessage().setHeader(Exchange.HTTP_RESPONSE_CODE, 429);
+        exchange.getMessage().setHeader("Retry-After",
+                String.valueOf(Math.max(1, wait.toSeconds())));
+        exchange.getMessage().setHeader(Exchange.CONTENT_TYPE,
+                "application/json; charset=utf-8");
+        exchange.getMessage().setBody(mapper.writeValueAsString(Map.of("error", Map.of(
+                "code", "TQL-RATE-4292",
+                "message", "Too many attempts; retry later"))));
     }
 
     @Override
@@ -83,6 +121,15 @@ final class LoginRouteBuilder extends RouteBuilder {
         String tenantId = str(body.get("tenantId"));
         String next = safeNext(body.get("next"));
 
+        // Before any existence check or hash computation (docs/credential-throttle.md):
+        // a throttled request pays nothing and learns nothing about the account.
+        String address = presentedAddress(exchange);
+        var wait = throttle.retryAfter("login", loginId, address);
+        if (wait.isPresent()) {
+            renderThrottled(exchange, browserForm, wait.get(), mapper, next);
+            return;
+        }
+
         Optional<Principal> principal = authenticator.authenticate(realm, loginId, password,
                 tenantId);
         // A confirmed TOTP enrollment makes the code field required (roadmap Phase 50
@@ -111,6 +158,7 @@ final class LoginRouteBuilder extends RouteBuilder {
             }
         }
         if (principal.isEmpty()) {
+            throttle.recordFailure(loginId, address);
             if (browserForm) {
                 // Post/redirect/get: bounce back to the login page with an error flag and the
                 // original target, so a refresh does not re-submit the credentials.
@@ -123,6 +171,7 @@ final class LoginRouteBuilder extends RouteBuilder {
 
         // Client facts ride into the session for the visibility surfaces
         // (docs/session-visibility.md): informational, recorded as presented.
+        throttle.recordSuccess(loginId);
         String sessionId = sessions.create(principal.get(), SessionStore.ClientInfo.of(
                 exchange.getMessage().getHeader("User-Agent", String.class),
                 exchange.getMessage().getHeader("X-Forwarded-For", String.class),

@@ -45,6 +45,7 @@ final class SamlAcsRouteBuilder extends RouteBuilder {
     private final SpMetadata metadata;
     private final SamlEndpoints endpoints;
     private final SamlSecurity security;
+    private final io.tesseraql.security.throttle.CredentialThrottle throttle;
 
     /**
      * Hardening options (design ch. 10.14, 20): the replay guard (null disables InResponseTo and
@@ -75,6 +76,13 @@ final class SamlAcsRouteBuilder extends RouteBuilder {
     SamlAcsRouteBuilder(SamlResponseValidator validator, SamlAttributeMapping mapping,
             SessionStore sessions, SamlUserLinker linker, SpMetadata metadata,
             SamlEndpoints endpoints, SamlSecurity security) {
+        this(validator, mapping, sessions, linker, metadata, endpoints, security, null);
+    }
+
+    SamlAcsRouteBuilder(SamlResponseValidator validator, SamlAttributeMapping mapping,
+            SessionStore sessions, SamlUserLinker linker, SpMetadata metadata,
+            SamlEndpoints endpoints, SamlSecurity security,
+            io.tesseraql.security.throttle.CredentialThrottle throttle) {
         this.validator = validator;
         this.mapping = mapping;
         this.sessions = sessions;
@@ -82,6 +90,7 @@ final class SamlAcsRouteBuilder extends RouteBuilder {
         this.metadata = metadata;
         this.endpoints = endpoints;
         this.security = security;
+        this.throttle = throttle;
     }
 
     @Override
@@ -220,6 +229,29 @@ final class SamlAcsRouteBuilder extends RouteBuilder {
     }
 
     private void consume(Exchange exchange) throws Exception {
+        // Address-keyed insurance against garbage assertions - signature validation is
+        // not free (docs/credential-throttle.md). The IdP owns the credential; only
+        // failures count, so a real login is never throttled.
+        String throttleAddress = io.tesseraql.security.session.SessionStore.ClientInfo.of(null,
+                exchange.getMessage().getHeader("X-Forwarded-For", String.class),
+                exchange.getMessage().getHeader("CamelVertxPlatformHttpRemoteAddress",
+                        String.class))
+                .remoteAddr();
+        if (throttle != null
+                && throttle.retryAfter("saml", null, throttleAddress).isPresent()) {
+            throw new SamlException("Too many failed assertions; retry later");
+        }
+        try {
+            consumeValidated(exchange);
+        } catch (SamlException ex) {
+            if (throttle != null) {
+                throttle.recordFailure(null, throttleAddress);
+            }
+            throw ex;
+        }
+    }
+
+    private void consumeValidated(Exchange exchange) throws Exception {
         // platform-http may expose a form field as a header; otherwise parse the urlencoded body.
         String encoded = exchange.getMessage().getHeader("SAMLResponse", String.class);
         if (encoded == null) {

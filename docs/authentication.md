@@ -333,6 +333,12 @@ To run **SSO-only**, hide the password form with `tesseraql.console.login.passwo
 turn the login page off entirely with `tesseraql.console.login.enabled: false`. Logging out is
 `GET /_tesseraql/logout` (invalidates the session, clears the cookie).
 
+Credential guessing has a budget (docs/credential-throttle.md): failed sign-ins throttle
+per submitted login id (10/15m) and per presented address (100/15m), on by default and
+tunable under `tesseraql.security.credentialThrottle` — never a lockout, windows simply
+expire; a throttled browser sees the login page's "too many attempts" message, an API
+caller gets `429` `TQL-RATE-4292` with `Retry-After`.
+
 Session lifetime is `tesseraql.sessions.ttl` (default `12h`, absolute from login).
 `tesseraql.sessions.idleTimeout` additionally ends a session unseen for that long — a sliding
 window inside the absolute ttl, off unless set (newly scaffolded apps declare `30m` in their

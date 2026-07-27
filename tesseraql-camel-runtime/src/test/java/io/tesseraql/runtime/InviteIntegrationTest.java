@@ -239,6 +239,10 @@ class InviteIntegrationTest {
                       username: %s
                       password: %s
                   security:
+                    # This fixture fails credentials on purpose; the throttle under test
+                    # elsewhere is disabled visibly (docs/credential-throttle.md).
+                    credentialThrottle:
+                      enabled: false
                     policies:
                       iam.admin.view:
                         anyOf:

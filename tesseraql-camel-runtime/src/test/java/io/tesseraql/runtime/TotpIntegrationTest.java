@@ -219,6 +219,11 @@ class TotpIntegrationTest {
                   port: 0
 
                 tesseraql:
+                  # This fixture fails credentials on purpose; the throttle under test
+                  # elsewhere is disabled visibly (docs/credential-throttle.md).
+                  security:
+                    credentialThrottle:
+                      enabled: false
                   app:
                     name: totp-it
                   datasources:
