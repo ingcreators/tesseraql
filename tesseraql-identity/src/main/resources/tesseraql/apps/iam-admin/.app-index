@@ -10,5 +10,8 @@ web/_tesseraql/admin/users/{id}/detail.html
 web/_tesseraql/admin/users/{id}/disable/post.yml
 web/_tesseraql/admin/users/{id}/enable/post.yml
 web/_tesseraql/admin/users/{id}/get.yml
+web/_tesseraql/admin/sessions/get.yml
+web/_tesseraql/admin/sessions/revoke/post.yml
+web/_tesseraql/admin/sessions/sessions.html
 web/_tesseraql/admin/users/{id}/sessions/revoke-one/post.yml
 web/_tesseraql/admin/users/{id}/sessions/revoke/post.yml

@@ -208,6 +208,42 @@ class IamAdminIntegrationTest {
         }
     }
 
+    /**
+     * The cross-subject sessions page (docs/session-visibility.md): live rows across
+     * subjects with device facts, a subject-prefix filter, and a per-row sign-out.
+     */
+    @Test
+    void sessionsPageListsFiltersAndRevokesAcrossSubjects() throws Exception {
+        io.tesseraql.security.session.SessionStore sessions = runtime.camelContext()
+                .getRegistry().lookupByNameAndType(
+                        io.tesseraql.camel.TesseraqlProperties.SESSION_STORE_BEAN,
+                        io.tesseraql.security.session.SessionStore.class);
+        String bobPhone = sessions.create(bob(),
+                new io.tesseraql.security.session.SessionStore.ClientInfo(
+                        "Mozilla/5.0 (iPhone)", "198.51.100.9"));
+        try {
+            String page = get("/_tesseraql/admin/sessions", true).body();
+            assertThat(page).contains("Active sessions").contains(">u2<")
+                    .contains("Mozilla/5.0 (iPhone)").contains("198.51.100.9")
+                    .contains("/_tesseraql/admin/users/u2")
+                    .doesNotContain(bobPhone);
+
+            // The filter narrows to the prefix; the admin's own session drops out.
+            String filtered = get("/_tesseraql/admin/sessions?q=u2", true).body();
+            assertThat(filtered).contains(">u2<").doesNotContain(">iam-admin<");
+
+            String handle = sessions.sessionsFor("u2").get(0).handle();
+            HttpResponse<String> revoked = postForm("/_tesseraql/admin/sessions/revoke",
+                    "subject=u2&handle=" + handle);
+            assertThat(revoked.statusCode()).isEqualTo(303);
+            assertThat(revoked.headers().firstValue("location").orElse(""))
+                    .isEqualTo("/_tesseraql/admin/sessions");
+            assertThat(sessions.session(bobPhone)).isNull();
+        } finally {
+            sessions.invalidateOthersFor("u2", "");
+        }
+    }
+
     private static io.tesseraql.security.Principal bob() {
         return new io.tesseraql.security.Principal("u2", "bob", "Bob", null,
                 List.of(), List.of(), List.of(), Map.of());

@@ -1123,6 +1123,37 @@ public final class TesseraqlRuntime implements AutoCloseable {
                                 String.valueOf(params.get("handle")));
                         return Map.of("revoked", true);
                     })
+                    // The cross-subject sessions page (docs/session-visibility.md): live
+                    // store state, newest first, optionally narrowed by subject prefix.
+                    .register("iam.sessions", params -> {
+                        String q = params.get("q") == null
+                                ? ""
+                                : String.valueOf(params.get("q")).trim();
+                        java.util.List<Map<String, Object>> rows = new java.util.ArrayList<>();
+                        for (io.tesseraql.security.session.SessionStore.ActiveSession s : sessionStore
+                                .activeSessions(200)) {
+                            if (!q.isEmpty()
+                                    && (s.subject() == null || !s.subject().startsWith(q))) {
+                                continue;
+                            }
+                            Map<String, Object> row = new LinkedHashMap<>();
+                            row.put("subject", s.subject() == null ? "-" : s.subject());
+                            row.put("createdAt",
+                                    s.createdAt() == null ? "" : s.createdAt().toString());
+                            row.put("lastSeenAt",
+                                    s.lastSeenAt() == null ? "" : s.lastSeenAt().toString());
+                            row.put("userAgent", s.userAgent() == null ? "" : s.userAgent());
+                            row.put("remoteAddr",
+                                    s.remoteAddr() == null ? "" : s.remoteAddr());
+                            row.put("handle", s.handle() == null ? "" : s.handle());
+                            rows.add(row);
+                        }
+                        Map<String, Object> model = new LinkedHashMap<>();
+                        model.put("rows", rows);
+                        model.put("hasRows", !rows.isEmpty());
+                        model.put("q", q);
+                        return model;
+                    })
                     // Disabled means disabled: the status flips AND every session of the
                     // subject ends now, not at cookie expiry. Identity and realm resolve
                     // lazily like identity.invite (they bind later).
