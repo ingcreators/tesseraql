@@ -132,4 +132,6 @@ export const EXCLUDED = [
   'session-visibility.md',
   // Credential throttle (login/reset rate limiting), 2026-07-27.
   'credential-throttle.md',
+  // Framework datasource (transactional-coupling buckets), 2026-07-27.
+  'framework-datasource.md',
 ];
