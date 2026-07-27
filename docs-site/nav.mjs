@@ -128,4 +128,6 @@ export const EXCLUDED = [
   'ops-console-coverage.md',
   // Session rotation in place, 2026-07-26.
   'session-rotation.md',
+  // Session visibility (metadata, per-session revoke, idle timeout, admin page), 2026-07-27.
+  'session-visibility.md',
 ];
