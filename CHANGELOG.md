@@ -8,6 +8,17 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **Ambient framework state can ride its own pool or database**
+  (docs/framework-datasource.md): `tesseraql.framework.datasource` (default `main`)
+  points sessions, credential tokens, SAML replay / OIDC flow state, rate leases, route
+  audit and preferences at any named datasource — same-DB/separate-pool isolates login
+  from business-query saturation with zero migration. Transactionally-coupled stores
+  (outbox, workflow, idempotency markers, webhook replay) deliberately ignore the key:
+  a config line must not be able to break outbox atomicity. An unknown name refuses the
+  boot (`TQL-APP-5205`). Bundled session-store hardening: an `expires_at` index (the
+  login-path prune scanned), and `rotate()` is now a single transaction — the crash
+  window in which an elevated session's old id stayed alive is closed.
+
 - **Guessing has a budget** (docs/credential-throttle.md): the credential surfaces —
   login (password+TOTP), password-reset request and confirm, invite acceptance, and the
   OIDC/SAML callbacks — now throttle failed attempts, keyed per submitted login id

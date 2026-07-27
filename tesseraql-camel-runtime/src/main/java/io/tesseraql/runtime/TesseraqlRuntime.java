@@ -163,6 +163,23 @@ public final class TesseraqlRuntime implements AutoCloseable {
                 override, appHome);
         HikariDataSource dataSource = dataSources.get("main");
         dataSources.forEach((name, pool) -> context.getRegistry().bind(name, pool));
+        // Ambient framework state - sessions, tokens, replay guards, rate leases, audit,
+        // preferences - may ride its own pool or database (docs/framework-datasource.md).
+        // Transactionally- and integrity-coupled stores (outbox, workflow, idempotency,
+        // webhook replay) deliberately ignore this key: a config line must not be able
+        // to break outbox atomicity. An unknown name refuses the boot - a typo that
+        // silently fell back to main would defeat the isolation someone configured.
+        String frameworkDataSourceName = manifest.config()
+                .getString("tesseraql.framework.datasource").orElse("main");
+        javax.sql.DataSource frameworkDataSource = dataSources.get(frameworkDataSourceName);
+        if (frameworkDataSource == null) {
+            throw new io.tesseraql.core.error.TqlException(
+                    new io.tesseraql.core.error.TqlErrorCode(
+                            io.tesseraql.core.error.TqlDomain.APP, 5205),
+                    "tesseraql.framework.datasource names '" + frameworkDataSourceName
+                            + "' but no such datasource is declared under"
+                            + " tesseraql.datasources");
+        }
 
         // OTLP export (design ch. 25.7): when an endpoint is configured, fan spans out to OTLP
         // alongside the in-process ring and export metrics via OpenTelemetry. Independent of
@@ -331,7 +348,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
         // The framework's own migrations run before any store touches the schema (versioned
         // history per component, Flyway's lock serializing concurrent node startups); the
         // stores' direct bootstrap below stays as the idempotent fallback for embedders.
-        FrameworkMigrations.migrate(dataSource);
+        FrameworkMigrations.migrate(dataSource, frameworkDataSource);
         // Browser sessions: in-memory per node by default; "jdbc" shares tql_session across all
         // runtime nodes so a login made on one node resolves on every other (design ch. 11.2).
         // Constructed after Flyway on purpose: the versioned history owns evolutions like the
@@ -358,7 +375,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
         if ("jdbc".equalsIgnoreCase(
                 manifest.config().getString("tesseraql.sessions.store").orElse("memory"))) {
             io.tesseraql.security.session.JdbcSessionStore jdbcSessions = new io.tesseraql.security.session.JdbcSessionStore(
-                    dataSource, sessionTtl, sessionIdle, sessionCap,
+                    frameworkDataSource, sessionTtl, sessionIdle, sessionCap,
                     io.tesseraql.security.session.SessionStore.DEFAULT_COOKIE_NAME);
             jdbcSessions.ensureSchema();
             sessionStore = jdbcSessions;
@@ -407,7 +424,8 @@ public final class TesseraqlRuntime implements AutoCloseable {
         io.tesseraql.operations.audit.JdbcRouteAuditStore routeAuditStore = null;
         if (manifest.config().getString("tesseraql.audit.routes.enabled")
                 .map(Boolean::parseBoolean).orElse(false)) {
-            routeAuditStore = new io.tesseraql.operations.audit.JdbcRouteAuditStore(dataSource);
+            routeAuditStore = new io.tesseraql.operations.audit.JdbcRouteAuditStore(
+                    frameworkDataSource);
             routeAuditStore.ensureSchema();
             context.getRegistry().bind(TesseraqlProperties.ROUTE_AUDIT_SINK_BEAN,
                     routeAuditStore);
@@ -418,7 +436,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
         // truth for both the app mount and this wiring. One final reference, so the account
         // service providers registered below can capture it.
         final io.tesseraql.core.account.PreferenceStore preferences = AccountAppProvider
-                .enabled(manifest.config()) ? accountPreferenceStore(dataSource) : null;
+                .enabled(manifest.config()) ? accountPreferenceStore(frameworkDataSource) : null;
         final io.tesseraql.core.account.ShortcutStore shortcuts;
         if (preferences != null) {
             context.getRegistry().bind(TesseraqlProperties.PREFERENCE_STORE_BEAN, preferences);
@@ -426,7 +444,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
             // Pins and recents (roadmap Phase 51) ride the account surface: the sidebar's
             // Pinned group reads through the same wrapper the mutations refresh.
             io.tesseraql.operations.account.JdbcShortcutStore jdbcShortcuts = new io.tesseraql.operations.account.JdbcShortcutStore(
-                    dataSource);
+                    frameworkDataSource);
             jdbcShortcuts.ensureSchema();
             shortcuts = new io.tesseraql.core.account.CachingShortcutStore(jdbcShortcuts);
             context.getRegistry().bind(TesseraqlProperties.SHORTCUT_STORE_BEAN, shortcuts);
@@ -625,7 +643,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
                 && route.definition().policy().rateLimit() != null
                 && route.definition().policy().rateLimit().isCluster())) {
             io.tesseraql.operations.rate.JdbcRateLeaseStore rateLeases = new io.tesseraql.operations.rate.JdbcRateLeaseStore(
-                    dataSource);
+                    frameworkDataSource);
             rateLeases.ensureSchema();
             context.getRegistry().bind(TesseraqlProperties.RATE_BUDGET_BEAN, rateLeases);
         }
@@ -737,7 +755,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
         final io.tesseraql.core.credential.CredentialTokenStore credentialTokens;
         if (recoveryEnabled || inviteEnabled) {
             io.tesseraql.operations.credential.JdbcCredentialTokenStore jdbcTokens = new io.tesseraql.operations.credential.JdbcCredentialTokenStore(
-                    dataSource);
+                    frameworkDataSource);
             jdbcTokens.ensureSchema();
             credentialTokens = jdbcTokens;
         } else {
@@ -1410,7 +1428,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
                     .discover(manifest.config(), appHome)) {
                 if (extension.enabled(manifest.config())) {
                     extension.install(new io.tesseraql.compiler.ext.ExtensionContext(
-                            context, manifest, dataSource));
+                            context, manifest, dataSource, frameworkDataSource));
                     LOG.info("Installed runtime extension '{}'", extension.name());
                 }
             }

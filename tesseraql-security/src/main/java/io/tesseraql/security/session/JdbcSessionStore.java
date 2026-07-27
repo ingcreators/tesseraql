@@ -89,6 +89,9 @@ public final class JdbcSessionStore implements SessionStore {
             // rows keep null metadata: listed with dashes, aging out at expiry.
             io.tesseraql.core.util.SqlScripts.applyForVendor(dataSource, JdbcSessionStore.class,
                     "/tesseraql/db/migration/security/V3__session_metadata.sql");
+            // The expiry index: the login-path prune scanned (docs/framework-datasource.md).
+            io.tesseraql.core.util.SqlScripts.applyForVendor(dataSource, JdbcSessionStore.class,
+                    "/tesseraql/db/migration/security/V4__session_expiry_index.sql");
         } catch (SQLException ex) {
             throw new IllegalStateException("Failed to create session schema", ex);
         }
@@ -289,27 +292,80 @@ public final class JdbcSessionStore implements SessionStore {
 
     @Override
     public String rotate(String sessionId) {
-        Session session = session(sessionId);
-        if (session == null) {
+        if (sessionId == null) {
             return null;
         }
-        // Carry created-at, the original expiry ceiling, and the client facts: rotation
-        // is the same person on the same device (docs/session-visibility.md). The handle
-        // and CSRF token are freshly minted with the id.
-        Instant createdAt = null;
-        Instant expiresAt = null;
-        ClientInfo client = ClientInfo.NONE;
-        for (ActiveSession active : sessionsFor(session.principal().subject())) {
-            if (sessionId.equals(active.sessionId())) {
-                createdAt = active.createdAt();
-                expiresAt = active.expiresAt();
-                client = new ClientInfo(active.userAgent(), active.remoteAddr());
-                break;
+        // One connection, one transaction (docs/framework-datasource.md): the earlier
+        // shape left a crash window between the insert and the delete in which both
+        // sessions stayed live - the elevation's "old id stops working" promise held
+        // in-process but not across a crash. Created-at, the expiry ceiling, and the
+        // client facts carry (docs/session-visibility.md); id, handle and CSRF are
+        // freshly minted.
+        String fresh = UUID.randomUUID().toString();
+        Instant now = Instant.now();
+        try (Connection connection = dataSource.getConnection()) {
+            boolean autoCommit = connection.getAutoCommit();
+            connection.setAutoCommit(false);
+            try {
+                String principalJson;
+                Timestamp createdAt;
+                Timestamp expiresAt;
+                String userAgent;
+                String remoteAddr;
+                try (PreparedStatement read = connection.prepareStatement(
+                        "select principal_json, created_at, expires_at, user_agent, "
+                                + "remote_addr from tql_session "
+                                + "where session_id = ? and expires_at >= ?")) {
+                    read.setString(1, sessionId);
+                    read.setTimestamp(2, Timestamp.from(now));
+                    try (ResultSet rs = read.executeQuery()) {
+                        if (!rs.next()) {
+                            connection.rollback();
+                            return null;
+                        }
+                        principalJson = rs.getString(1);
+                        createdAt = rs.getTimestamp(2);
+                        expiresAt = rs.getTimestamp(3);
+                        userAgent = rs.getString(4);
+                        remoteAddr = rs.getString(5);
+                    }
+                }
+                Principal principal = mapper.readValue(principalJson, Principal.class);
+                try (PreparedStatement insert = connection.prepareStatement(
+                        "insert into tql_session (session_id, principal_json, csrf_token, "
+                                + "created_at, expires_at, subject, session_handle, "
+                                + "user_agent, remote_addr, last_seen_at) "
+                                + "values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")) {
+                    insert.setString(1, fresh);
+                    insert.setString(2, principalJson);
+                    insert.setString(3, UUID.randomUUID().toString());
+                    insert.setTimestamp(4, createdAt == null ? Timestamp.from(now) : createdAt);
+                    insert.setTimestamp(5, expiresAt == null
+                            ? Timestamp.from(now.plus(timeToLive))
+                            : expiresAt);
+                    insert.setString(6, principal.subject());
+                    insert.setString(7, UUID.randomUUID().toString());
+                    insert.setString(8, userAgent);
+                    insert.setString(9, remoteAddr);
+                    insert.setTimestamp(10, Timestamp.from(now));
+                    insert.executeUpdate();
+                }
+                try (PreparedStatement delete = connection.prepareStatement(
+                        "delete from tql_session where session_id = ?")) {
+                    delete.setString(1, sessionId);
+                    delete.executeUpdate();
+                }
+                connection.commit();
+            } catch (Exception ex) {
+                connection.rollback();
+                throw ex;
+            } finally {
+                connection.setAutoCommit(autoCommit);
             }
+        } catch (SQLException | com.fasterxml.jackson.core.JsonProcessingException ex) {
+            throw new IllegalStateException("Failed to rotate session", ex);
         }
-        String fresh = insert(session.principal(), client,
-                createdAt == null ? Instant.now() : createdAt, expiresAt);
-        invalidate(sessionId);
+        touched.remove(sessionId);
         return fresh;
     }
 

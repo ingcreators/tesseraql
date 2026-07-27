@@ -146,6 +146,13 @@
           },
           "additionalProperties": true
         },
+        "framework": {
+          "type": "object",
+          "properties": {
+            "datasource": { "type": "string", "description": "Named datasource (tesseraql.datasources) carrying ambient framework state - sessions, credential tokens, replay guards, OIDC state, rate leases, route audit, preferences (docs/framework-datasource.md). Default main. Transactionally-coupled stores (outbox, workflow, idempotency, webhook replay) always stay on the business datasource. An unknown name refuses the boot." }
+          },
+          "additionalProperties": true
+        },
         "sessions": {
           "type": "object",
           "properties": {
