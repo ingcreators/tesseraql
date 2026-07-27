@@ -69,7 +69,19 @@ data) stays on `dataSource()`. Every store keeps its own re-runnable `ensureSche
 its own Flyway history table, so pointing the key at a fresh database bootstraps
 bucket 3's schema there on first start.
 
-### 4. Migration honesty
+### 4. The Flyway components split with the buckets — discovered by building it
+
+The runtime's versioned framework migrations run per component. The `security`
+component (sessions) is pure bucket 3 and **follows the key**; the `operations`
+component stays on the business datasource, because its file set mixes buckets (outbox
+and job tables beside rate leases and audit) and its Flyway checksums pin existing
+deployments — restructuring the files would fail their history validation. Movable
+operations-module stores therefore bootstrap their tables on the framework datasource
+through their own idempotent `ensureSchema`, and the Flyway-created copies of those
+tables on the business database sit unused when the key is set — cosmetic, and recorded
+here rather than discovered in surprise.
+
+### 5. Migration honesty
 
 Switching an existing deployment: every session ends (everyone signs in again),
 outstanding reset/invite links die, old audit rows stay in the business database
