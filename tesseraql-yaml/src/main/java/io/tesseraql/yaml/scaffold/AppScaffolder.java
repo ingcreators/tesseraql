@@ -247,6 +247,16 @@ public final class AppScaffolder {
               #   components:
               #     allowed: [smtp]   # beyond the framework's own components
 
+              sessions:
+                # Browser-session posture (docs/session-visibility.md): the absolute lifetime
+                # defaults to 12h; idleTimeout additionally ends a session unseen for this
+                # long. Activity refreshes the window, so signed-in users working normally
+                # never hit it - raise it for long-form workloads rather than removing it.
+                idleTimeout: 30m
+                # To cap live sessions per account (the newest login evicts the oldest;
+                # 1 = single-session policy), declare:
+                # maxPerSubject: 3
+
               security:
                 # Path-matched route security defaults (docs/route-defaults.md): first matching
                 # rule fills auth/csrf/policy a route leaves out; route-local keys always win.

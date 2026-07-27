@@ -85,13 +85,35 @@ exchange); per rule 10 the old signature is deleted outright, CHANGELOG'd.
 - **C — the Sessions page**: iam-admin route + template + nav, subject filter, row
   revoke, user-page links.
 
+## Addendum: declared session policy (2026-07-27)
+
+The two posture questions the first cut left open are answered as *declarations with
+visible consequences*, not silent framework opinions:
+
+- **`tesseraql.sessions.maxPerSubject`** caps live sessions per account, **evict-oldest**:
+  a login beyond the cap ends the subject's oldest session — the newest login wins, the
+  same rule the in-memory global ceiling already applies. Reject-new was rejected as a
+  default because the person it locks out is the legitimate user whose old cookie is
+  stranded on another machine; evict-oldest also pushes a *stolen* session out on the
+  next real login. Single-session policy is not a separate feature: it is
+  `maxPerSubject: 1`. Rotation replaces a session in place and never trips the cap.
+  Unset stays unlimited — the framework cannot know a deployment's compliance regime,
+  but the surfaces built above explain every eviction ("your oldest device was signed
+  out").
+- **The scaffolded config declares `idleTimeout: 30m`** — the visible-default idiom
+  ([config-consumers.md](config-consumers.md)): new apps start with a stated posture the
+  author can see and adjust (long-form workloads raise it in place), while existing
+  apps' behavior never flips through an upgrade. The framework's own code default stays
+  unset through 0.x; whether 1.0 ships a modest built-in default (with the ASVS
+  refresh) is recorded as a 1.0 decision, not smuggled in here.
+
 ## Out of scope
 
 - GeoIP resolution (decision 3; SPI seam only if ever asked for).
-- Session-count limits per subject, concurrent-login policy.
 - Ops console involvement of any kind.
-- Forced idle-timeout defaults: unset stays off; turning it on is a deployment posture
-  call.
+- A framework-level idle-timeout code default before 1.0 (the scaffold declares one;
+  see the addendum).
+- Reject-new as a cap strategy, and per-route/per-role session policies.
 
 ## Testing
 

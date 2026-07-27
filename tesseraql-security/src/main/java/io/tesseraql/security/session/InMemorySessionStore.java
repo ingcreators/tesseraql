@@ -43,6 +43,7 @@ public final class InMemorySessionStore implements SessionStore {
     private final String cookieName;
     private final Duration timeToLive;
     private final Duration idleTimeout;
+    private final Integer maxPerSubject;
 
     public InMemorySessionStore() {
         this(DEFAULT_COOKIE_NAME, null);
@@ -62,17 +63,29 @@ public final class InMemorySessionStore implements SessionStore {
      *                    absolute {@code timeToLive}; {@code null} disables it
      */
     public InMemorySessionStore(String cookieName, Duration timeToLive, Duration idleTimeout) {
+        this(cookieName, timeToLive, idleTimeout, null);
+    }
+
+    /**
+     * @param maxPerSubject the declared session cap per subject (docs/session-visibility.md
+     *                      addendum): a login beyond it evicts the subject's oldest session
+     *                      — the newest login wins; {@code null} means unlimited
+     */
+    public InMemorySessionStore(String cookieName, Duration timeToLive, Duration idleTimeout,
+            Integer maxPerSubject) {
         this.cookieName = cookieName == null || cookieName.isBlank()
                 ? DEFAULT_COOKIE_NAME
                 : cookieName;
         this.timeToLive = timeToLive;
         this.idleTimeout = idleTimeout;
+        this.maxPerSubject = maxPerSubject;
     }
 
     @Override
     public String create(Principal principal, ClientInfo client) {
         // Prune on write, the same opportunistic sweep JdbcSessionStore does on create.
         prune();
+        evictBeyondCap(principal.subject());
         String id = UUID.randomUUID().toString();
         Instant now = Instant.now();
         sessions.put(id, new Session(principal, UUID.randomUUID().toString()));
@@ -118,6 +131,22 @@ public final class InMemorySessionStore implements SessionStore {
         }
         return idleTimeout != null && meta.lastSeenAt() != null
                 && meta.lastSeenAt().plus(idleTimeout).isBefore(now);
+    }
+
+    /**
+     * The declared per-subject cap, evict-oldest: the newest login wins, the same rule the
+     * global ceiling applies — a stolen or forgotten session is pushed out by the login
+     * that follows it, never the legitimate user locked out (docs/session-visibility.md).
+     * Only a fresh login evicts; rotation replaces in place and never trips this.
+     */
+    private void evictBeyondCap(String subject) {
+        if (maxPerSubject == null || maxPerSubject < 1) {
+            return;
+        }
+        java.util.List<ActiveSession> live = sessionsFor(subject);
+        for (int i = live.size() - 1; i >= maxPerSubject - 1; i--) {
+            invalidate(live.get(i).sessionId());
+        }
     }
 
     /** Drops expired sessions, then the oldest survivors if the cap is still exceeded. */

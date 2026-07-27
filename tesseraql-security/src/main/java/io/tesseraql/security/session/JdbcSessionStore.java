@@ -34,6 +34,7 @@ public final class JdbcSessionStore implements SessionStore {
     private final DataSource dataSource;
     private final Duration timeToLive;
     private final Duration idleTimeout;
+    private final Integer maxPerSubject;
     private final String cookieName;
     private final ObjectMapper mapper = new ObjectMapper();
     /** Node-local last-touch instants, keyed by session id; entries die with the session. */
@@ -53,9 +54,20 @@ public final class JdbcSessionStore implements SessionStore {
      */
     public JdbcSessionStore(DataSource dataSource, Duration timeToLive, Duration idleTimeout,
             String cookieName) {
+        this(dataSource, timeToLive, idleTimeout, null, cookieName);
+    }
+
+    /**
+     * @param maxPerSubject the declared session cap per subject (docs/session-visibility.md
+     *                      addendum): a login beyond it evicts the subject's oldest session
+     *                      — the newest login wins; {@code null} means unlimited
+     */
+    public JdbcSessionStore(DataSource dataSource, Duration timeToLive, Duration idleTimeout,
+            Integer maxPerSubject, String cookieName) {
         this.dataSource = dataSource;
         this.timeToLive = timeToLive;
         this.idleTimeout = idleTimeout;
+        this.maxPerSubject = maxPerSubject;
         this.cookieName = cookieName == null || cookieName.isBlank()
                 ? DEFAULT_COOKIE_NAME
                 : cookieName;
@@ -84,6 +96,16 @@ public final class JdbcSessionStore implements SessionStore {
 
     @Override
     public String create(Principal principal, ClientInfo client) {
+        // The declared per-subject cap, evict-oldest: the newest login wins, so a stolen
+        // or forgotten session is pushed out rather than the legitimate user locked out.
+        // Only a fresh login evicts; rotation replaces in place and never trips this
+        // (docs/session-visibility.md).
+        if (maxPerSubject != null && maxPerSubject >= 1) {
+            java.util.List<ActiveSession> live = sessionsFor(principal.subject());
+            for (int i = live.size() - 1; i >= maxPerSubject - 1; i--) {
+                invalidate(live.get(i).sessionId());
+            }
+        }
         return insert(principal, client == null ? ClientInfo.NONE : client, Instant.now(), null);
     }
 

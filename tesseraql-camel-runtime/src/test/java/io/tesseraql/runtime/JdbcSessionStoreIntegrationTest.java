@@ -121,6 +121,25 @@ class JdbcSessionStoreIntegrationTest {
     }
 
     @Test
+    void theCapEvictsTheOldestAndRotationNeverTripsIt() {
+        JdbcSessionStore store = new JdbcSessionStore(dataSource, Duration.ofHours(1), null,
+                2, SessionStore.DEFAULT_COOKIE_NAME);
+        String first = store.create(principal("jdbc-cap"), SessionStore.ClientInfo.NONE);
+        String second = store.create(principal("jdbc-cap"), SessionStore.ClientInfo.NONE);
+        String third = store.create(principal("jdbc-cap"), SessionStore.ClientInfo.NONE);
+
+        assertThat(store.session(first)).isNull();
+        assertThat(store.session(second)).isNotNull();
+        assertThat(store.session(third)).isNotNull();
+
+        // Rotation at the cap replaces in place: the other device survives.
+        String rotated = store.rotate(third);
+        assertThat(rotated).isNotNull();
+        assertThat(store.session(second)).isNotNull();
+        assertThat(store.sessionsFor("jdbc-cap")).hasSize(2);
+    }
+
+    @Test
     void activeSessionsListsNewestFirstWithinTheLimit() {
         JdbcSessionStore store = store(null);
         store.create(principal("jdbc-list-1"), SessionStore.ClientInfo.NONE);

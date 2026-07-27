@@ -30,6 +30,8 @@ public final class ScaffoldedConfigKeys {
                     "tesseraql-camel-runtime/src/main/java/io/tesseraql/runtime/DataSources.java"),
             Map.entry("db.main.maximumPoolSize",
                     "tesseraql-camel-runtime/src/main/java/io/tesseraql/runtime/DataSources.java"),
+            Map.entry("tesseraql.sessions.idleTimeout",
+                    "tesseraql-camel-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java"),
             Map.entry("tesseraql.app.name",
                     "tesseraql-compiler/src/main/java/io/tesseraql/compiler/RouteCompiler.java"),
             Map.entry("tesseraql.app.home",

@@ -8,6 +8,14 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **Session policy is a declaration, not a framework opinion**
+  (docs/session-visibility.md addendum): `tesseraql.sessions.maxPerSubject` caps live
+  sessions per account with evict-oldest semantics — the newest login wins, a stranded
+  or stolen session is pushed out, and `maxPerSubject: 1` is the single-session policy;
+  rotation never trips the cap. Newly scaffolded apps declare `idleTimeout: 30m` in
+  their config visibly (existing apps are untouched; the framework's code default stays
+  unset through 0.x).
+
 - **Sessions are devices you can see and end** (docs/session-visibility.md): each session
   now records a public handle, the login user agent and presented address, and a
   last-seen instant — living and dying with the session row (`V3__session_metadata.sql`).

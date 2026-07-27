@@ -139,6 +139,7 @@
           "properties": {
             "ttl": { "type": "string", "description": "Browser-session lifetime (duration string, default 12h)." },
             "idleTimeout": { "type": "string", "description": "Invalidate a session unseen for this long (duration string) - sliding, inside the absolute ttl. Unset disables it (docs/session-visibility.md)." },
+            "maxPerSubject": { "type": "integer", "minimum": 1, "description": "Cap live sessions per account: a login beyond it evicts the subject's oldest session (newest login wins). 1 = single-session policy. Unset = unlimited." },
             "store": { "type": "string", "enum": ["memory", "jdbc"], "description": "memory (default, per-node) or jdbc (shared, survives restarts)." }
           },
           "additionalProperties": true
