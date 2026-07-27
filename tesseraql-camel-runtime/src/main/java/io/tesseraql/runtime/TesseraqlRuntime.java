@@ -351,17 +351,21 @@ public final class TesseraqlRuntime implements AutoCloseable {
                 .map(value -> java.time.Duration.ofMillis(
                         io.tesseraql.core.util.Durations.toMillis(value)))
                 .orElse(null);
+        // Declared per-subject session cap, evict-oldest (docs/session-visibility.md
+        // addendum); single-session policy is maxPerSubject: 1. Unset = unlimited.
+        Integer sessionCap = manifest.config().getString("tesseraql.sessions.maxPerSubject")
+                .map(Integer::parseInt).orElse(null);
         if ("jdbc".equalsIgnoreCase(
                 manifest.config().getString("tesseraql.sessions.store").orElse("memory"))) {
             io.tesseraql.security.session.JdbcSessionStore jdbcSessions = new io.tesseraql.security.session.JdbcSessionStore(
-                    dataSource, sessionTtl, sessionIdle,
+                    dataSource, sessionTtl, sessionIdle, sessionCap,
                     io.tesseraql.security.session.SessionStore.DEFAULT_COOKIE_NAME);
             jdbcSessions.ensureSchema();
             sessionStore = jdbcSessions;
         } else {
             sessionStore = new io.tesseraql.security.session.InMemorySessionStore(
                     io.tesseraql.security.session.SessionStore.DEFAULT_COOKIE_NAME, sessionTtl,
-                    sessionIdle);
+                    sessionIdle, sessionCap);
         }
         context.getRegistry().bind(TesseraqlProperties.SESSION_STORE_BEAN, sessionStore);
         JobRepository jobRepository = new JobRepository(dataSource);

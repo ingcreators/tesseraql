@@ -335,7 +335,10 @@ turn the login page off entirely with `tesseraql.console.login.enabled: false`. 
 
 Session lifetime is `tesseraql.sessions.ttl` (default `12h`, absolute from login).
 `tesseraql.sessions.idleTimeout` additionally ends a session unseen for that long — a sliding
-window inside the absolute ttl, off unless set. Each session records the user agent and the
+window inside the absolute ttl, off unless set (newly scaffolded apps declare `30m` in their
+config, visibly). `tesseraql.sessions.maxPerSubject` caps live sessions per account: a login
+beyond the cap evicts the subject's oldest session — the newest login wins — and
+`maxPerSubject: 1` is the single-session policy. Each session records the user agent and the
 address the edge presented at login; the account page lists your own sessions per device with a
 per-row sign-out, and IAM Admin holds the administrative views.
 

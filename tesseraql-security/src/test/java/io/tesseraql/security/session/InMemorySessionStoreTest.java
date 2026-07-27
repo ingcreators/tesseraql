@@ -100,6 +100,39 @@ class InMemorySessionStoreTest {
     }
 
     @Test
+    void theCapEvictsTheOldestSessionSoTheNewestLoginWins() {
+        InMemorySessionStore store = new InMemorySessionStore(
+                SessionStore.DEFAULT_COOKIE_NAME, Duration.ofMinutes(5), null, 2);
+        String first = store.create(principal("alice"), SessionStore.ClientInfo.NONE);
+        String second = store.create(principal("alice"), SessionStore.ClientInfo.NONE);
+        String third = store.create(principal("alice"), SessionStore.ClientInfo.NONE);
+
+        // The oldest is pushed out; the legitimate new login is never refused.
+        assertThat(store.session(first)).isNull();
+        assertThat(store.session(second)).isNotNull();
+        assertThat(store.session(third)).isNotNull();
+        // Another subject is untouched by alice's cap.
+        String bob = store.create(principal("bob"), SessionStore.ClientInfo.NONE);
+        assertThat(store.session(bob)).isNotNull();
+        assertThat(store.sessionsFor("alice")).hasSize(2);
+    }
+
+    @Test
+    void rotationReplacesInPlaceAndNeverTripsTheCap() {
+        InMemorySessionStore store = new InMemorySessionStore(
+                SessionStore.DEFAULT_COOKIE_NAME, Duration.ofMinutes(5), null, 2);
+        String laptop = store.create(principal("alice"), SessionStore.ClientInfo.NONE);
+        String phone = store.create(principal("alice"), SessionStore.ClientInfo.NONE);
+
+        String rotated = store.rotate(phone);
+
+        // Net-zero on count: the other device survives an at-cap rotation.
+        assertThat(rotated).isNotNull();
+        assertThat(store.session(laptop)).isNotNull();
+        assertThat(store.sessionsFor("alice")).hasSize(2);
+    }
+
+    @Test
     void rotateMintsAFreshIdAndCsrfAndKillsTheOldOne() {
         InMemorySessionStore store = new InMemorySessionStore(
                 SessionStore.DEFAULT_COOKIE_NAME, Duration.ofMinutes(5));
