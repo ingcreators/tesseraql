@@ -130,4 +130,6 @@ export const EXCLUDED = [
   'session-rotation.md',
   // Session visibility (metadata, per-session revoke, idle timeout, admin page), 2026-07-27.
   'session-visibility.md',
+  // Credential throttle (login/reset rate limiting), 2026-07-27.
+  'credential-throttle.md',
 ];
