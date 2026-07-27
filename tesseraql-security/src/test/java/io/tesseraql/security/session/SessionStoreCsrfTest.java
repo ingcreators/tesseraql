@@ -17,7 +17,8 @@ class SessionStoreCsrfTest {
 
     @Test
     void resolvesTheTokenFromTheCookieHeader() {
-        String sid = sessions.create(principal());
+        String sid = sessions.create(principal(),
+                io.tesseraql.security.session.SessionStore.ClientInfo.NONE);
         String expected = sessions.csrfToken(sid);
 
         String header = "other=1; " + sessions.cookieName() + "=" + sid + "; trailing=2";

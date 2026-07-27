@@ -1,0 +1,27 @@
+version: tesseraql/v1
+id: tql.iamAdmin.sessions.revoke
+kind: route
+recipe: command-json
+
+# Ends one subject's device from the cross-subject page (docs/session-visibility.md):
+# the same subject-scoped handle contract as the user-page row action.
+security:
+  policy: iam.admin.write
+
+input:
+  subject:
+    type: string
+    required: true
+  handle:
+    type: string
+    required: true
+
+sql:
+  service: iam.revokeSession
+  params:
+    userId: params.subject
+    handle: params.handle
+
+response:
+  redirect:
+    location: /_tesseraql/admin/sessions

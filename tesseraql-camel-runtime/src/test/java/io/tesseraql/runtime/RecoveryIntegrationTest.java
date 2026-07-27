@@ -90,7 +90,7 @@ class RecoveryIntegrationTest {
                 TesseraqlProperties.SESSION_STORE_BEAN, SessionStore.class);
         String sid = sessions.create(new Principal(
                 "reset-user", "reset-user", "Reset User", null, List.of(),
-                List.of(), List.of(), Map.of()));
+                List.of(), List.of(), Map.of()), SessionStore.ClientInfo.NONE);
 
         assertThat(postForm("/_tesseraql/reset", "loginId=reset-user")
                 .headers().firstValue("Location").orElse("")).contains("sent=1");

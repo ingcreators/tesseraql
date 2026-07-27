@@ -110,7 +110,8 @@ class QueryJsonIntegrationTest {
         SessionStore sessions = runtime.camelContext().getRegistry()
                 .lookupByNameAndType(TesseraqlProperties.SESSION_STORE_BEAN, SessionStore.class);
         String sid = sessions.create(new Principal("u001", "sato", "Sato", "tenant-a",
-                List.of(), List.of("USER_READ"), List.of(), Map.of()));
+                List.of(), List.of("USER_READ"), List.of(), Map.of()),
+                SessionStore.ClientInfo.NONE);
 
         HttpResponse<String> response = HttpClient.newHttpClient().send(
                 HttpRequest.newBuilder(URI.create("http://localhost:" + runtime.port()
@@ -133,7 +134,7 @@ class QueryJsonIntegrationTest {
     @Test
     void commandSucceedsWithValidCsrf() throws Exception {
         SessionStore sessions = sessionStore();
-        String sid = sessions.create(writer());
+        String sid = sessions.create(writer(), SessionStore.ClientInfo.NONE);
 
         HttpResponse<String> response = postJson("/users/deactivate",
                 sessions.cookieName() + "=" + sid, sessions.csrfToken(sid),
@@ -146,7 +147,7 @@ class QueryJsonIntegrationTest {
     @Test
     void commandRejectedWithoutCsrfToken() throws Exception {
         SessionStore sessions = sessionStore();
-        String sid = sessions.create(writer());
+        String sid = sessions.create(writer(), SessionStore.ClientInfo.NONE);
 
         HttpResponse<String> response = postJson("/users/deactivate",
                 sessions.cookieName() + "=" + sid, null, "{\"name\":\"suzuki\"}");
@@ -159,7 +160,7 @@ class QueryJsonIntegrationTest {
     @Test
     void commandRejectsUnknownInputField() throws Exception {
         SessionStore sessions = sessionStore();
-        String sid = sessions.create(writer());
+        String sid = sessions.create(writer(), SessionStore.ClientInfo.NONE);
 
         HttpResponse<String> response = postJson("/users/deactivate",
                 sessions.cookieName() + "=" + sid, sessions.csrfToken(sid),
@@ -171,7 +172,7 @@ class QueryJsonIntegrationTest {
     @Test
     void commandIsIdempotentPerKey() throws Exception {
         SessionStore sessions = sessionStore();
-        String sid = sessions.create(writer());
+        String sid = sessions.create(writer(), SessionStore.ClientInfo.NONE);
         String cookie = sessions.cookieName() + "=" + sid;
         String csrf = sessions.csrfToken(sid);
         String key = "idem-key-001";

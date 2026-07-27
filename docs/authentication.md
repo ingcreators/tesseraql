@@ -333,6 +333,12 @@ To run **SSO-only**, hide the password form with `tesseraql.console.login.passwo
 turn the login page off entirely with `tesseraql.console.login.enabled: false`. Logging out is
 `GET /_tesseraql/logout` (invalidates the session, clears the cookie).
 
+Session lifetime is `tesseraql.sessions.ttl` (default `12h`, absolute from login).
+`tesseraql.sessions.idleTimeout` additionally ends a session unseen for that long — a sliding
+window inside the absolute ttl, off unless set. Each session records the user agent and the
+address the edge presented at login; the account page lists your own sessions per device with a
+per-row sign-out, and IAM Admin holds the administrative views.
+
 State-changing console actions are CSRF-protected (`csrf: true`): the page publishes the session's
 token as `<meta name="csrf-token">`, the Hypermedia Components kit replays it as the `X-CSRF-Token`
 header on htmx requests, and no-JS forms carry it as a hidden `_csrf` field.

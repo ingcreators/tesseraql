@@ -63,17 +63,20 @@ class OpsConsoleIntegrationTest {
                         io.tesseraql.security.session.SessionStore.class);
         String adminSid = sessions.create(
                 new io.tesseraql.security.Principal("ops-user", "ops-user", "Ops User", null,
-                        List.of(), List.of("ADMIN"), List.of(), Map.of()));
+                        List.of(), List.of("ADMIN"), List.of(), Map.of()),
+                io.tesseraql.security.session.SessionStore.ClientInfo.NONE);
         adminCookie = sessions.cookieName() + "=" + adminSid;
         adminCsrf = sessions.session(adminSid).csrfToken();
         String scopedSid = sessions.create(
                 new io.tesseraql.security.Principal("ops-admin", "ops-admin", "Ops Admin", null,
-                        List.of(), List.of("ADMIN"), List.of("ops.app.*"), Map.of()));
+                        List.of(), List.of("ADMIN"), List.of("ops.app.*"), Map.of()),
+                io.tesseraql.security.session.SessionStore.ClientInfo.NONE);
         scopedCookie = sessions.cookieName() + "=" + scopedSid;
         scopedCsrf = sessions.session(scopedSid).csrfToken();
         String viewerSid = sessions.create(
                 new io.tesseraql.security.Principal("ops-viewer", "ops-viewer", "Ops Viewer",
-                        null, List.of(), List.of("BATCH_VIEWER"), List.of("ops.app.*"), Map.of()));
+                        null, List.of(), List.of("BATCH_VIEWER"), List.of("ops.app.*"), Map.of()),
+                io.tesseraql.security.session.SessionStore.ClientInfo.NONE);
         viewerCookie = sessions.cookieName() + "=" + viewerSid;
         viewerCsrf = sessions.session(viewerSid).csrfToken();
     }

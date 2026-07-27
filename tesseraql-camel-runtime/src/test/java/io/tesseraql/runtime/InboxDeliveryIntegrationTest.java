@@ -49,7 +49,7 @@ class InboxDeliveryIntegrationTest {
                 TesseraqlProperties.SESSION_STORE_BEAN, SessionStore.class);
         String sid = sessions.create(new Principal(
                 "inbox-user", "inbox-user", "Inbox User", null, List.of(),
-                List.of("ADMIN"), List.of(), Map.of()));
+                List.of("ADMIN"), List.of(), Map.of()), SessionStore.ClientInfo.NONE);
         sessionCookie = sessions.cookieName() + "=" + sid;
     }
 

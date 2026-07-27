@@ -238,7 +238,11 @@ final class SamlAcsRouteBuilder extends RouteBuilder {
                         attribute(assertion, mapping.tenant()));
         Principal principal = withFederationClaims(resolved, assertion);
 
-        String sessionId = sessions.create(principal);
+        String sessionId = sessions.create(principal, SessionStore.ClientInfo.of(
+                exchange.getMessage().getHeader("User-Agent", String.class),
+                exchange.getMessage().getHeader("X-Forwarded-For", String.class),
+                exchange.getMessage().getHeader("CamelVertxPlatformHttpRemoteAddress",
+                        String.class)));
         exchange.getMessage().setHeader("Set-Cookie",
                 sessions.cookieName() + "=" + sessionId + "; Path=/; HttpOnly; SameSite=Lax");
 

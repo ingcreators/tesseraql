@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{tql/shell :: page('IAM Admin · Sessions', ~{:: #page-header}, ~{:: #page-content})}">
+<th:block id="page-header">
+  <span class="hc-spacer"></span>
+  <a class="hc-button" data-variant="ghost" data-size="sm" href="/_tesseraql/admin/users">Users</a>
+  <a class="hc-button" data-variant="ghost" data-size="sm" href="/_tesseraql/admin/delegations">Delegations</a>
+</th:block>
+<div id="page-content" class="hc-stack">
+<section class="hc-card hc-stack">
+  <h2>Active sessions</h2>
+  <!-- Live store state: the page lists exactly what the store holds right now
+       (docs/session-visibility.md). -->
+  <form method="get" action="/_tesseraql/admin/sessions" class="hc-cluster">
+    <label class="hc-field">
+      <span class="hc-field__label">Subject starts with</span>
+      <input class="hc-input" data-size="sm" name="q" th:value="${sessions.q}">
+    </label>
+    <button class="hc-button" data-size="sm" type="submit">Filter</button>
+  </form>
+  <div class="hc-empty" th:unless="${sessions.hasRows}"><p class="hc-empty__title">No active sessions.</p></div>
+  <table class="hc-table" th:if="${sessions.hasRows}">
+    <thead><tr><th>Subject</th><th>Signed in</th><th>Last active</th><th>Device</th><th>Address</th><th></th></tr></thead>
+    <tbody>
+      <tr th:each="s : ${sessions.rows}">
+        <td><a th:href="|/_tesseraql/admin/users/${s.subject}|" th:text="${s.subject}"></a></td>
+        <td th:text="${#strings.isEmpty(s.createdAt)} ? '&mdash;' : ${s.createdAt}"></td>
+        <td th:text="${#strings.isEmpty(s.lastSeenAt)} ? '&mdash;' : ${s.lastSeenAt}"></td>
+        <td th:text="${#strings.isEmpty(s.userAgent)} ? '&mdash;' : ${s.userAgent}"></td>
+        <td th:text="${#strings.isEmpty(s.remoteAddr)} ? '&mdash;' : ${s.remoteAddr}"></td>
+        <td>
+          <form th:if="${!#strings.isEmpty(s.handle)}" method="post" action="/_tesseraql/admin/sessions/revoke">
+            <input type="hidden" name="_csrf" th:value="${_csrf}">
+            <input type="hidden" name="subject" th:value="${s.subject}">
+            <input type="hidden" name="handle" th:value="${s.handle}">
+            <button type="submit" class="hc-button" data-variant="ghost" data-size="sm"
+                    th:attr="data-hc-confirm=|Sign this device of ${s.subject} out?|"
+                    data-hc-confirm-title="Confirm sign-out"
+                    data-hc-confirm-ok="Sign out device" data-hc-confirm-variant="error">Sign out</button>
+          </form>
+        </td>
+      </tr>
+    </tbody>
+  </table>
+  <p class="hc-field__message">The newest 200 live sessions, straight from the session
+    store; a session ends here the moment the store drops it.</p>
+</section>
+</div>
+</html>

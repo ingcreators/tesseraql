@@ -51,7 +51,8 @@ class ShortcutIntegrationTest {
         SessionStore sessions = runtime.camelContext().getRegistry().lookupByNameAndType(
                 TesseraqlProperties.SESSION_STORE_BEAN, SessionStore.class);
         String sid = sessions.create(new Principal("pin-user", "pin-user", "Pin User",
-                null, List.of(), List.of("ADMIN"), List.of(), Map.of()));
+                null, List.of(), List.of("ADMIN"), List.of(), Map.of()),
+                SessionStore.ClientInfo.NONE);
         cookie = sessions.cookieName() + "=" + sid;
         csrf = sessions.session(sid).csrfToken();
     }

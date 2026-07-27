@@ -344,15 +344,24 @@ public final class TesseraqlRuntime implements AutoCloseable {
         java.time.Duration sessionTtl = java.time.Duration.ofMillis(
                 io.tesseraql.core.util.Durations.toMillis(
                         manifest.config().getString("tesseraql.sessions.ttl").orElse("12h")));
+        // Optional sliding idle window inside the absolute TTL (docs/session-visibility.md);
+        // unset keeps the pre-existing absolute-only behavior.
+        java.time.Duration sessionIdle = manifest.config()
+                .getString("tesseraql.sessions.idleTimeout")
+                .map(value -> java.time.Duration.ofMillis(
+                        io.tesseraql.core.util.Durations.toMillis(value)))
+                .orElse(null);
         if ("jdbc".equalsIgnoreCase(
                 manifest.config().getString("tesseraql.sessions.store").orElse("memory"))) {
             io.tesseraql.security.session.JdbcSessionStore jdbcSessions = new io.tesseraql.security.session.JdbcSessionStore(
-                    dataSource, sessionTtl);
+                    dataSource, sessionTtl, sessionIdle,
+                    io.tesseraql.security.session.SessionStore.DEFAULT_COOKIE_NAME);
             jdbcSessions.ensureSchema();
             sessionStore = jdbcSessions;
         } else {
             sessionStore = new io.tesseraql.security.session.InMemorySessionStore(
-                    io.tesseraql.security.session.SessionStore.DEFAULT_COOKIE_NAME, sessionTtl);
+                    io.tesseraql.security.session.SessionStore.DEFAULT_COOKIE_NAME, sessionTtl,
+                    sessionIdle);
         }
         context.getRegistry().bind(TesseraqlProperties.SESSION_STORE_BEAN, sessionStore);
         JobRepository jobRepository = new JobRepository(dataSource);
@@ -1086,7 +1095,19 @@ public final class TesseraqlRuntime implements AutoCloseable {
                                             : session.createdAt().toString(),
                                     "expiresAt", session.expiresAt() == null
                                             ? ""
-                                            : session.expiresAt().toString()));
+                                            : session.expiresAt().toString(),
+                                    "lastSeenAt", session.lastSeenAt() == null
+                                            ? ""
+                                            : session.lastSeenAt().toString(),
+                                    "userAgent", session.userAgent() == null
+                                            ? ""
+                                            : session.userAgent(),
+                                    "remoteAddr", session.remoteAddr() == null
+                                            ? ""
+                                            : session.remoteAddr(),
+                                    "handle", session.handle() == null
+                                            ? ""
+                                            : session.handle()));
                         }
                         return Map.of("rows", rows, "count", rows.size());
                     })
@@ -1094,6 +1115,44 @@ public final class TesseraqlRuntime implements AutoCloseable {
                         sessionStore.invalidateOthersFor(
                                 String.valueOf(params.get("userId")), "");
                         return Map.of("revoked", true);
+                    })
+                    // One device, by its subject-scoped handle (docs/session-visibility.md).
+                    .register("iam.revokeSession", params -> {
+                        sessionStore.invalidateByHandle(
+                                String.valueOf(params.get("userId")),
+                                String.valueOf(params.get("handle")));
+                        return Map.of("revoked", true);
+                    })
+                    // The cross-subject sessions page (docs/session-visibility.md): live
+                    // store state, newest first, optionally narrowed by subject prefix.
+                    .register("iam.sessions", params -> {
+                        String q = params.get("q") == null
+                                ? ""
+                                : String.valueOf(params.get("q")).trim();
+                        java.util.List<Map<String, Object>> rows = new java.util.ArrayList<>();
+                        for (io.tesseraql.security.session.SessionStore.ActiveSession s : sessionStore
+                                .activeSessions(200)) {
+                            if (!q.isEmpty()
+                                    && (s.subject() == null || !s.subject().startsWith(q))) {
+                                continue;
+                            }
+                            Map<String, Object> row = new LinkedHashMap<>();
+                            row.put("subject", s.subject() == null ? "-" : s.subject());
+                            row.put("createdAt",
+                                    s.createdAt() == null ? "" : s.createdAt().toString());
+                            row.put("lastSeenAt",
+                                    s.lastSeenAt() == null ? "" : s.lastSeenAt().toString());
+                            row.put("userAgent", s.userAgent() == null ? "" : s.userAgent());
+                            row.put("remoteAddr",
+                                    s.remoteAddr() == null ? "" : s.remoteAddr());
+                            row.put("handle", s.handle() == null ? "" : s.handle());
+                            rows.add(row);
+                        }
+                        Map<String, Object> model = new LinkedHashMap<>();
+                        model.put("rows", rows);
+                        model.put("hasRows", !rows.isEmpty());
+                        model.put("q", q);
+                        return model;
                     })
                     // Disabled means disabled: the status flips AND every session of the
                     // subject ends now, not at cookie expiry. Identity and realm resolve

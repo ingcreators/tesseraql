@@ -8,6 +8,24 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **Sessions are devices you can see and end** (docs/session-visibility.md): each session
+  now records a public handle, the login user agent and presented address, and a
+  last-seen instant — living and dying with the session row (`V3__session_metadata.sql`).
+  New `tesseraql.sessions.idleTimeout` ends a session unseen for that long, sliding
+  inside the absolute `ttl` (touches are throttled to once per 60s per session).
+  `SessionStore.create` now takes a `ClientInfo` (login, OIDC and SAML all record it —
+  pre-1.0 signature change, old form removed), stores gain
+  `invalidateByHandle(subject, handle)` and `activeSessions(limit)`, and rotation carries
+  the metadata forward so an elevated session does not look freshly created.
+
+- **Every session surface shows the device and can end it**: the account page's
+  self-service list and the IAM Admin user panel gain last-active/device/address columns
+  and a per-row *Sign out* — self-service via the new `POST /_tesseraql/logout-device`
+  (revoking the device that is this browser is an ordinary sign-out), admin-side via the
+  subject-scoped handle routes. A new IAM Admin *Sessions* page
+  (`/_tesseraql/admin/sessions`, `iam.admin.view`) lists every live session across
+  subjects with a subject-prefix filter, per-row sign-out, and links to each user page.
+
 - **The ops console covers what its machinery already knew** (docs/ops-console-coverage.md):
   an always-mounted *Audit* page renders the business-route audit trail with the same
   scope narrowing and policy as the JSON API — and names

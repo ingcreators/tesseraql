@@ -63,6 +63,13 @@ final class LoginRouteBuilder extends RouteBuilder {
         // Sign out every session but this one (roadmap Phase 48, the account surface). A
         // state-changing browser POST outside the compiled route pipeline, so the CSRF check
         // runs here explicitly - same validator, header or hidden-field token.
+        // Per-device sign-out (docs/session-visibility.md): ends the caller's session
+        // named by its handle. A Java route like logout-others, because only this layer
+        // can read the cookie - and clear it when the revoked device was this one.
+        rest().post("/_tesseraql/logout-device").to("direct:tql.logoutDevice");
+        from("direct:tql.logoutDevice").routeId("system.logout.device")
+                .process(this::logoutDevice);
+
         rest().post("/_tesseraql/logout-others").to("direct:tql.logoutOthers");
         from("direct:tql.logoutOthers").routeId("system.logout.others")
                 .process(this::logoutOthers);
@@ -114,7 +121,13 @@ final class LoginRouteBuilder extends RouteBuilder {
             throw new TqlException(PolicyEngine.UNAUTHORIZED, "Invalid credentials");
         }
 
-        String sessionId = sessions.create(principal.get());
+        // Client facts ride into the session for the visibility surfaces
+        // (docs/session-visibility.md): informational, recorded as presented.
+        String sessionId = sessions.create(principal.get(), SessionStore.ClientInfo.of(
+                exchange.getMessage().getHeader("User-Agent", String.class),
+                exchange.getMessage().getHeader("X-Forwarded-For", String.class),
+                exchange.getMessage().getHeader("CamelVertxPlatformHttpRemoteAddress",
+                        String.class)));
         setSessionCookie(exchange, sessions.cookieName() + "=" + sessionId
                 + "; Path=/; HttpOnly; SameSite=Lax");
         if (browserForm) {
@@ -133,6 +146,40 @@ final class LoginRouteBuilder extends RouteBuilder {
         setSessionCookie(exchange, sessions.cookieName()
                 + "=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0");
         redirect(exchange, 303, LOGIN_PATH);
+    }
+
+    /**
+     * Invalidates one of the caller's sessions by its public handle
+     * (docs/session-visibility.md). Subject-scoped through the caller's own session, so a
+     * posted handle can never name another subject's device. Revoking the device that made
+     * this request is an ordinary sign-out: cookie cleared, back to the login page.
+     */
+    private void logoutDevice(Exchange exchange) throws Exception {
+        String cookie = exchange.getMessage().getHeader("Cookie", String.class);
+        String sessionId = sessions.sessionIdFromCookie(cookie);
+        SessionStore.Session session = sessionId == null ? null : sessions.session(sessionId);
+        if (session == null) {
+            throw new TqlException(PolicyEngine.UNAUTHORIZED, "No session");
+        }
+        Map<String, Object> body = parseBody(exchange);
+        String token = exchange.getMessage().getHeader("X-CSRF-Token", String.class);
+        if (token == null) {
+            Object field = body.get("_csrf");
+            token = field == null ? null : String.valueOf(field);
+        }
+        new io.tesseraql.security.session.CsrfValidator(sessions).validate(cookie, token);
+        Object handle = body.get("handle");
+        if (handle != null && !String.valueOf(handle).isBlank()) {
+            sessions.invalidateByHandle(session.principal().subject(), String.valueOf(handle));
+        }
+        if (sessions.session(sessionId) == null) {
+            // The revoked device was this one: an ordinary sign-out.
+            setSessionCookie(exchange, sessions.cookieName()
+                    + "=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0");
+            redirect(exchange, 303, LOGIN_PATH);
+            return;
+        }
+        redirect(exchange, 303, "/_tesseraql/account");
     }
 
     /** Invalidates the caller's other sessions, keeping the one that made this request. */
