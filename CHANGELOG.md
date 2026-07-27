@@ -8,6 +8,16 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **The ops console covers what its machinery already knew** (docs/ops-console-coverage.md):
+  an always-mounted *Audit* page renders the business-route audit trail with the same
+  scope narrowing and policy as the JSON API — and names
+  `tesseraql.audit.routes.enabled` honestly when the store is off; the overview gains a
+  health panel (the `health()` roll-up, per-datasource probe badges) and the deployed
+  version; and manual job runs take their declared parameters — the jobs page renders
+  inputs from the `params:` declaration, posted `param.<name>` fields ride to the runner
+  whole, and `bindJobParams` stays the single validation point, refusing a missing
+  required parameter before the job starts.
+
 - **The poll-source registry reaches the scrape** (docs/poll-source-metrics.md):
   `/_tesseraql/metrics` now carries per-node poll-source gauges rendered from the registry
   at scrape time — `tesseraql_poll_source_wired` (0 = refused at wire time),
