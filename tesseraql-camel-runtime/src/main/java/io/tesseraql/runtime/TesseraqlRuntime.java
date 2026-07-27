@@ -1095,13 +1095,32 @@ public final class TesseraqlRuntime implements AutoCloseable {
                                             : session.createdAt().toString(),
                                     "expiresAt", session.expiresAt() == null
                                             ? ""
-                                            : session.expiresAt().toString()));
+                                            : session.expiresAt().toString(),
+                                    "lastSeenAt", session.lastSeenAt() == null
+                                            ? ""
+                                            : session.lastSeenAt().toString(),
+                                    "userAgent", session.userAgent() == null
+                                            ? ""
+                                            : session.userAgent(),
+                                    "remoteAddr", session.remoteAddr() == null
+                                            ? ""
+                                            : session.remoteAddr(),
+                                    "handle", session.handle() == null
+                                            ? ""
+                                            : session.handle()));
                         }
                         return Map.of("rows", rows, "count", rows.size());
                     })
                     .register("iam.revokeSessions", params -> {
                         sessionStore.invalidateOthersFor(
                                 String.valueOf(params.get("userId")), "");
+                        return Map.of("revoked", true);
+                    })
+                    // One device, by its subject-scoped handle (docs/session-visibility.md).
+                    .register("iam.revokeSession", params -> {
+                        sessionStore.invalidateByHandle(
+                                String.valueOf(params.get("userId")),
+                                String.valueOf(params.get("handle")));
                         return Map.of("revoked", true);
                     })
                     // Disabled means disabled: the status flips AND every session of the

@@ -45,11 +45,25 @@
   <th:block th:unless="${#lists.isEmpty(sessions)}">
     <p class="hc-field__message" th:text="|${sessionCount} active ${sessionCount == 1 ? 'session' : 'sessions'}.|"></p>
     <table class="hc-table">
-      <thead><tr><th>Signed in</th><th>Expires</th></tr></thead>
+      <thead><tr><th>Signed in</th><th>Last active</th><th>Device</th><th>Address</th><th>Expires</th><th></th></tr></thead>
       <tbody>
         <tr th:each="s : ${sessions}">
           <td th:text="${s.createdAt}"></td>
+          <td th:text="${#strings.isEmpty(s.lastSeenAt)} ? '&mdash;' : ${s.lastSeenAt}"></td>
+          <td th:text="${#strings.isEmpty(s.userAgent)} ? '&mdash;' : ${s.userAgent}"></td>
+          <td th:text="${#strings.isEmpty(s.remoteAddr)} ? '&mdash;' : ${s.remoteAddr}"></td>
           <td th:text="${#strings.isEmpty(s.expiresAt)} ? '&mdash;' : ${s.expiresAt}"></td>
+          <td>
+            <form th:if="${!#strings.isEmpty(s.handle)}" method="post"
+                  th:action="|/_tesseraql/admin/users/${u.user_id}/sessions/revoke-one|">
+              <input type="hidden" name="_csrf" th:value="${_csrf}">
+              <input type="hidden" name="handle" th:value="${s.handle}">
+              <button type="submit" class="hc-button" data-variant="ghost" data-size="sm"
+                      th:attr="data-hc-confirm=|Sign this device of ${u.login_id} out?|"
+                      data-hc-confirm-title="Confirm sign-out"
+                      data-hc-confirm-ok="Sign out device" data-hc-confirm-variant="error">Sign out</button>
+            </form>
+          </td>
         </tr>
       </tbody>
     </table>

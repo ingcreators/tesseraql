@@ -164,6 +164,50 @@ class IamAdminIntegrationTest {
         }
     }
 
+    /**
+     * One device by its handle (docs/session-visibility.md): the panel shows the device
+     * facts, revoking one row ends exactly that session, and a handle from another
+     * subject deletes nothing.
+     */
+    @Test
+    void sessionsPanelSignsOutOneDevice() throws Exception {
+        io.tesseraql.security.session.SessionStore sessions = runtime.camelContext()
+                .getRegistry().lookupByNameAndType(
+                        io.tesseraql.camel.TesseraqlProperties.SESSION_STORE_BEAN,
+                        io.tesseraql.security.session.SessionStore.class);
+        String laptop = sessions.create(bob(),
+                new io.tesseraql.security.session.SessionStore.ClientInfo(
+                        "Mozilla/5.0 (X11; Linux)", "203.0.113.7"));
+        String phone = sessions.create(bob(),
+                new io.tesseraql.security.session.SessionStore.ClientInfo(
+                        "Mozilla/5.0 (iPhone)", "198.51.100.2"));
+        try {
+            String detail = get("/_tesseraql/admin/users/u2", true).body();
+            assertThat(detail).contains("Mozilla/5.0 (X11; Linux)").contains("203.0.113.7")
+                    .contains("/_tesseraql/admin/users/u2/sessions/revoke-one")
+                    .contains("Last active");
+            // The cookie id itself never reaches the page.
+            assertThat(detail).doesNotContain(laptop).doesNotContain(phone);
+
+            String laptopHandle = sessions.sessionsFor("u2").stream()
+                    .filter(s -> "203.0.113.7".equals(s.remoteAddr()))
+                    .findFirst().orElseThrow().handle();
+            // A handle posted at the wrong subject deletes nothing.
+            assertThat(postForm("/_tesseraql/admin/users/u1/sessions/revoke-one",
+                    "handle=" + laptopHandle).statusCode()).isEqualTo(303);
+            assertThat(sessions.sessionsFor("u2")).hasSize(2);
+
+            HttpResponse<String> revoked = postForm(
+                    "/_tesseraql/admin/users/u2/sessions/revoke-one",
+                    "handle=" + laptopHandle);
+            assertThat(revoked.statusCode()).isEqualTo(303);
+            assertThat(sessions.session(laptop)).isNull();
+            assertThat(sessions.session(phone)).isNotNull();
+        } finally {
+            sessions.invalidateOthersFor("u2", "");
+        }
+    }
+
     private static io.tesseraql.security.Principal bob() {
         return new io.tesseraql.security.Principal("u2", "bob", "Bob", null,
                 List.of(), List.of(), List.of(), Map.of());

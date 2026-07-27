@@ -441,6 +441,55 @@ class AccountSurfaceIntegrationTest {
         }
     }
 
+    /**
+     * The self-service device list (docs/session-visibility.md): rows carry the device
+     * facts, signing out another device leaves this one working, and signing out this
+     * device is an ordinary sign-out.
+     */
+    @Test
+    void sessionsListSignsOutDevices() throws Exception {
+        SessionStore sessions = runtime.camelContext().getRegistry().lookupByNameAndType(
+                TesseraqlProperties.SESSION_STORE_BEAN, SessionStore.class);
+        // Another device of the same subject.
+        String phone = sessions.create(new Principal(
+                "account-user", "account-user", "Account User", null, List.of(),
+                List.of("ADMIN"), List.of(), Map.of()),
+                new SessionStore.ClientInfo("Mozilla/5.0 (iPhone)", "198.51.100.2"));
+
+        String page = get(runtime, sessionCookie, "/_tesseraql/account").body();
+        assertThat(page).contains("Mozilla/5.0 (iPhone)").contains("198.51.100.2")
+                .contains("/_tesseraql/logout-device");
+        assertThat(page).doesNotContain(phone);
+
+        // Sign out the phone: it dies, this browser keeps working.
+        String phoneHandle = sessions.sessionsFor("account-user").stream()
+                .filter(s -> "198.51.100.2".equals(s.remoteAddr()))
+                .findFirst().orElseThrow().handle();
+        HttpResponse<String> other = postForm(runtime, sessionCookie,
+                "/_tesseraql/logout-device", "handle=" + phoneHandle);
+        assertThat(other.statusCode()).isEqualTo(303);
+        assertThat(other.headers().firstValue("location").orElse(""))
+                .isEqualTo("/_tesseraql/account");
+        assertThat(sessions.session(phone)).isNull();
+        assertThat(get(runtime, sessionCookie, "/_tesseraql/account").statusCode())
+                .isEqualTo(200);
+
+        // Sign out this very device: an ordinary sign-out - cookie cleared, to login.
+        String tempSid = sessions.create(new Principal(
+                "account-user", "account-user", "Account User", null, List.of(),
+                List.of("ADMIN"), List.of(), Map.of()), SessionStore.ClientInfo.NONE);
+        String tempCookie = sessions.cookieName() + "=" + tempSid;
+        String ownHandle = sessions.sessionsFor("account-user").stream()
+                .filter(s -> tempSid.equals(s.sessionId()))
+                .findFirst().orElseThrow().handle();
+        HttpResponse<String> self = postForm(runtime, tempCookie,
+                "/_tesseraql/logout-device", "handle=" + ownHandle);
+        assertThat(self.statusCode()).isEqualTo(303);
+        assertThat(self.headers().firstValue("location").orElse("")).contains("login");
+        assertThat(self.headers().firstValue("set-cookie").orElse("")).contains("Max-Age=0");
+        assertThat(sessions.session(tempSid)).isNull();
+    }
+
     private static String establishSession(TesseraqlRuntime target) {
         SessionStore sessions = target.camelContext().getRegistry().lookupByNameAndType(
                 TesseraqlProperties.SESSION_STORE_BEAN, SessionStore.class);

@@ -1,0 +1,25 @@
+version: tesseraql/v1
+id: tql.iamAdmin.users.sessionRevokeOne
+kind: route
+recipe: command-json
+
+# Ends one device of this subject, named by its subject-scoped session handle
+# (docs/session-visibility.md). The handle is a public identifier, never the cookie id;
+# a handle belonging to another subject deletes nothing.
+security:
+  policy: iam.admin.write
+
+input:
+  handle:
+    type: string
+    required: true
+
+sql:
+  service: iam.revokeSession
+  params:
+    userId: path.id
+    handle: params.handle
+
+response:
+  redirect:
+    location: /_tesseraql/admin/users/{path.id}

@@ -75,6 +75,13 @@ final class AccountViews {
                         active.createdAt() == null ? "" : active.createdAt().toString());
                 row.put("expiresAt",
                         active.expiresAt() == null ? "" : active.expiresAt().toString());
+                // Device facts and the public handle for the per-row sign-out
+                // (docs/session-visibility.md); the session id itself stays out.
+                row.put("lastSeenAt",
+                        active.lastSeenAt() == null ? "" : active.lastSeenAt().toString());
+                row.put("userAgent", active.userAgent() == null ? "" : active.userAgent());
+                row.put("remoteAddr", active.remoteAddr() == null ? "" : active.remoteAddr());
+                row.put("handle", active.handle() == null ? "" : active.handle());
                 sessionRows.add(row);
             }
         }
