@@ -132,7 +132,7 @@
     <pdfbox.version>3.0.3</pdfbox.version>
     <awssdk.version>2.46.21</awssdk.version>
     <s3mock.version>4.12.4</s3mock.version>
-    <ojdbc.version>23.26.2.0.0</ojdbc.version>
+    <ojdbc.version>23.26.3.0.0</ojdbc.version>
     <mssql-jdbc.version>13.4.0.jre11</mssql-jdbc.version>
     <!-- DuckDB analytics engine (docs/duckdb.md): MIT licensed, module-channel only — the jar
          bundles per-platform native libraries and never ships in the CLI fat jar. -->
