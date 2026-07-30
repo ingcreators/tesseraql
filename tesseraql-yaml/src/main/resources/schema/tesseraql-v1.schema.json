@@ -159,7 +159,8 @@
         "type": "object",
         "properties": {
           "use": { "type": "string", "description": "Name of a decision declared under decisions/." },
-          "params": { "type": "object", "additionalProperties": { "type": "string" }, "description": "Wiring of each decision input to a request-context expression (params.total, principal.orgUnit, \"principal.role == 'officer'\")." }
+          "params": { "type": "object", "additionalProperties": { "type": "string" }, "description": "Wiring of each decision input to a request-context expression (params.total, principal.orgUnit, \"principal.role == 'officer'\")." },
+          "effectiveAt": { "type": "string", "description": "Reference instant of a dated table-backed decision's effective: window - audit.now unless wired to a document date (params.postingDate)." }
         },
         "required": ["use", "params"],
         "additionalProperties": false

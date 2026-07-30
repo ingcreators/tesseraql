@@ -127,13 +127,25 @@ class SchemaSyncTest {
 
         List<String> documented = new ArrayList<>();
         decision.fieldNames().forEachRemaining(documented::add);
-        List<String> declared = new ArrayList<>();
-        for (var component : io.tesseraql.yaml.model.DecisionsDocument.Decision.class
-                .getRecordComponents()) {
-            declared.add(component.getName());
-        }
 
-        assertThat(documented).containsAll(declared);
+        assertThat(documented).containsAll(
+                yamlNames(io.tesseraql.yaml.model.DecisionsDocument.Decision.class));
+    }
+
+    /** The source mapping's keys are covered too — the shape a table-backed decision authors. */
+    @Test
+    void theDecisionsSchemaCoversEverySourceComponent() throws Exception {
+        JsonNode schema = new ObjectMapper().readTree(
+                getClass().getResourceAsStream("/schema/tesseraql-decisions-v1.schema.json"));
+        JsonNode source = schema.path("properties").path("decisions")
+                .path("additionalProperties").path("properties").path("source")
+                .path("properties");
+
+        List<String> documented = new ArrayList<>();
+        source.fieldNames().forEachRemaining(documented::add);
+
+        assertThat(documented).containsAll(
+                yamlNames(io.tesseraql.yaml.model.DecisionsDocument.Source.class));
     }
 
     /** The route schema's decide: entry covers every authored DecisionUse key. */

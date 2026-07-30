@@ -10,9 +10,15 @@
 > before the workflow document loads, `decision.*` seeded under every statement's parameters
 > (binds and `/*%if */`, unseeded-bind guard `4722`), the lints `4711`/`4715`/`4716`, the
 > decisions JSON Schema with scaffolded `.vscode` association, and the YAML-surface/error
-> reference pages. Pending slices: the table-backed `source:` with `orgSubtree`, consumption
-> plumbing (step `when:`, workflow `decide:` + guard roots, enum-output exhaustiveness
-> `4712`/`4713`), and the scaffolder + gallery archetypes.
+> reference pages. Slice 2 is implemented: the table-backed `source:` — one generated SELECT
+> with a `(col IS NULL OR col ⟨op⟩ ?)` arm per mapped column, `in` via a normalized child
+> table, `orgSubtree` via the managed org closure (with the `tesseraql.orgunit.mode: managed`
+> lint `4717`), dated rows via `effective:` + `effectiveAt:` defaulting to `audit.now`,
+> `ORDER BY priority` with a portable single-row fetch — plus `default:` outputs for table
+> misses, the plain-identifier guard, runtime lookup failures `4723`, and the sidecar DDL
+> lint `4710` (degrading when `.tesseraql/docs/schema.json` is absent, the ReleaseDiff
+> contract). Pending slices: consumption plumbing (step `when:`, workflow `decide:` + guard
+> roots, enum-output exhaustiveness `4712`/`4713`) and the scaffolder + gallery archetypes.
 
 A **decision table** turns a combination of input conditions into declared output values:
 the approval route for an amount and a department, the shipping fee for a weight and a

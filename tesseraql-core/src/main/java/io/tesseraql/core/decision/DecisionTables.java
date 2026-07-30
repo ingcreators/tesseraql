@@ -44,10 +44,12 @@ public final class DecisionTables {
     private static final TqlErrorCode MULTI_HIT = new TqlErrorCode(TqlDomain.DECISION, 4720);
     /** TQL-DECISION-4721: no row matched and the decision declares no default. */
     private static final TqlErrorCode MISS = new TqlErrorCode(TqlDomain.DECISION, 4721);
+    /** TQL-DECISION-4723: the generated lookup of a table-backed decision failed. */
+    private static final TqlErrorCode LOOKUP_FAILED = new TqlErrorCode(TqlDomain.DECISION, 4723);
 
     /** How one input's cells compare (docs/decision-tables.md "The condition model"). */
     public enum MatchKind {
-        EQ, BETWEEN, IN, BOOL;
+        EQ, BETWEEN, IN, BOOL, ORG_SUBTREE;
 
         /** Parses a declared {@code match:} keyword; null/blank defaults to {@code eq}. */
         public static MatchKind parse(String declared, String decision, String input) {
@@ -59,10 +61,10 @@ public final class DecisionTables {
                 case "between" -> BETWEEN;
                 case "in" -> IN;
                 case "bool" -> BOOL;
+                case "orgSubtree" -> ORG_SUBTREE;
                 default -> throw new TqlException(CONTRACT, "Decision '" + decision
                         + "' input '" + input + "': unknown match kind '" + declared
-                        + "' — one of eq, between, in, bool (orgSubtree arrives with the"
-                        + " table source)");
+                        + "' — one of eq, between, in, bool, orgSubtree");
             };
         }
     }
@@ -337,6 +339,12 @@ public final class DecisionTables {
                 yield new Condition.InSet(Set.copyOf(set));
             }
             case BETWEEN -> range(decision, input, literal);
+            // Subtree membership needs the org closure, which lives in the database: a
+            // YAML-backed decision cannot answer it in memory, so the loader restricts the
+            // kind to table sources and this arm is unreachable from a valid declaration.
+            case ORG_SUBTREE -> throw new TqlException(ROW, "Decision '" + decision + "' cell '"
+                    + input + "': an orgSubtree input needs a table source"
+                    + " (docs/decision-tables.md)");
         };
     }
 
@@ -443,18 +451,98 @@ public final class DecisionTables {
     }
 
     /**
-     * One compiled {@code decide:} entry: the table plus this operation's wiring, each input
-     * resolved by a whitelist expression against the request context.
+     * One compiled table-backed decision (docs/decision-tables.md "Two sources, one
+     * contract"): the generated SELECT — each mapped column contributing a
+     * {@code (col IS NULL OR col ⟨op⟩ ?)} arm, ordinary loggable SQL — plus its bind plan.
+     *
+     * @param binds bind slots in placeholder order: an input name, {@link #EFFECTIVE_AT}, or
+     *              {@link #LIMIT}
      */
-    public record Use(String alias, Table table, Map<String, Expr> wiring) {
+    public record TableSource(String name, String sql, List<String> binds,
+            List<String> outputs, boolean unique, Map<String, Object> defaultOut) {
+
+        /** The bind slot carrying the dated-row reference instant. */
+        public static final String EFFECTIVE_AT = "@effectiveAt";
+        /** The bind slot carrying the row-limit of a {@code hitPolicy: first} lookup. */
+        public static final String LIMIT = "@limit";
+
+        /** Runs the generated lookup on the operation's connection, in its transaction. */
+        public Map<String, Object> evaluate(java.sql.Connection connection,
+                Map<String, Object> inputValues, Object effectiveAt, int timeoutSeconds) {
+            java.util.List<Map<String, Object>> hits = new ArrayList<>();
+            try (java.sql.PreparedStatement statement = connection.prepareStatement(sql)) {
+                if (timeoutSeconds > 0) {
+                    statement.setQueryTimeout(timeoutSeconds);
+                }
+                int index = 1;
+                for (String bind : binds) {
+                    statement.setObject(index++, switch (bind) {
+                        case EFFECTIVE_AT -> effectiveAt;
+                        case LIMIT -> 1;
+                        default -> inputValues.get(bind);
+                    });
+                }
+                try (java.sql.ResultSet results = statement.executeQuery()) {
+                    while (results.next() && hits.size() < 2) {
+                        Map<String, Object> row = new LinkedHashMap<>();
+                        for (String output : outputs) {
+                            row.put(output, results.getObject(output));
+                        }
+                        hits.add(row);
+                    }
+                }
+            } catch (java.sql.SQLException ex) {
+                throw TqlException.builder(LOOKUP_FAILED)
+                        .message("Decision '" + name + "': the generated lookup failed: "
+                                + ex.getMessage())
+                        .cause(ex)
+                        .build();
+            }
+            if (unique && hits.size() > 1) {
+                throw new TqlException(MULTI_HIT, "Decision '" + name + "' (hitPolicy: unique)"
+                        + " matched more than one row for inputs " + inputValues + " — the"
+                        + " maintenance routes' write-time integrity checks should have"
+                        + " prevented this");
+            }
+            if (!hits.isEmpty()) {
+                return hits.get(0);
+            }
+            if (defaultOut != null) {
+                return defaultOut;
+            }
+            throw new TqlException(MISS, "Decision '" + name + "' matched no row for inputs "
+                    + inputValues + " and declares no default — a decision never resolves to"
+                    + " silent nulls");
+        }
     }
 
-    /** Compiles one reference's wiring; expressions were root-checked at manifest load. */
+    /**
+     * One compiled {@code decide:} entry: the decision — exactly one of the in-memory
+     * {@code table} (YAML rows) or the {@code source} lookup (a table source) — plus this
+     * operation's wiring, each input resolved by a whitelist expression against the request
+     * context, and the dated-lookup instant ({@code effectiveAt:}, default {@code audit.now}).
+     */
+    public record Use(String alias, Table table, TableSource source, Map<String, Expr> wiring,
+            Expr effectiveAt) {
+    }
+
+    /** Compiles one YAML-rows reference's wiring; root-checked at manifest load. */
     public static Use use(String alias, Table table, Map<String, String> wiring) {
+        return new Use(alias, table, null, compileWiring(wiring), null);
+    }
+
+    /** Compiles one table-source reference's wiring and {@code effectiveAt:}. */
+    public static Use use(String alias, TableSource source, Map<String, String> wiring,
+            String effectiveAt) {
+        return new Use(alias, null, source, compileWiring(wiring), ExpressionParser
+                .parse(effectiveAt == null || effectiveAt.isBlank() ? "audit.now" : effectiveAt));
+    }
+
+    private static Map<String, Expr> compileWiring(Map<String, String> wiring) {
         Map<String, Expr> compiled = new LinkedHashMap<>();
         wiring.forEach((input, expression) -> compiled.put(input,
                 ExpressionParser.parse(expression)));
-        return new Use(alias, table, Map.copyOf(compiled));
+        return Map.copyOf(compiled);
     }
 
     private final List<Use> uses;
@@ -467,17 +555,35 @@ public final class DecisionTables {
         return uses.isEmpty();
     }
 
+    /** Evaluates a {@code decide:} block that declares no table-backed decision. */
+    public Map<String, Map<String, Object>> evaluate(Map<String, Object> context) {
+        return evaluate(context, null, 0);
+    }
+
     /**
      * Evaluates every declared decision against the request context, in authored order, and
-     * returns the {@code decision.*} namespace: outputs by decision alias.
+     * returns the {@code decision.*} namespace: outputs by decision alias. Table-backed
+     * decisions run their generated SELECT on the given connection — the operation's own
+     * transaction, so a rate row committed by an earlier request is visible and the lookup
+     * rides the command's isolation.
      */
-    public Map<String, Map<String, Object>> evaluate(Map<String, Object> context) {
+    public Map<String, Map<String, Object>> evaluate(Map<String, Object> context,
+            java.sql.Connection connection, int timeoutSeconds) {
         Map<String, Map<String, Object>> decisions = new LinkedHashMap<>();
         EvaluationContext evaluation = new EvaluationContext(context);
         for (Use use : uses) {
             Map<String, Object> inputs = new LinkedHashMap<>();
             use.wiring().forEach((input, expr) -> inputs.put(input, expr.eval(evaluation)));
-            decisions.put(use.alias(), use.table().evaluate(inputs));
+            if (use.table() != null) {
+                decisions.put(use.alias(), use.table().evaluate(inputs));
+                continue;
+            }
+            if (connection == null) {
+                throw new TqlException(LOOKUP_FAILED, "Decision '" + use.source().name()
+                        + "' is table-backed and needs the operation's connection");
+            }
+            decisions.put(use.alias(), use.source().evaluate(connection, inputs,
+                    use.effectiveAt().eval(evaluation), timeoutSeconds));
         }
         return decisions;
     }
