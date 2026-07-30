@@ -425,11 +425,6 @@ public final class DecisionSets {
     }
 
     /**
-     * Resolves one route-declared {@code decide:} entry: the reference must name a declared
-     * decision, wire exactly its inputs, and read only the namespaces that exist when
-     * decisions evaluate (before the document loads and before any step runs).
-     */
-    /**
      * {@link #resolve} for a workflow transition's {@code decide:}: the wiring may
      * additionally read {@code document.*}, because a transition's decisions evaluate after
      * the document binds (the amount lives on the row, not in the transition's request body)
@@ -439,6 +434,11 @@ public final class DecisionSets {
         return resolve(alias, declared, source, true);
     }
 
+    /**
+     * Resolves one route-declared {@code decide:} entry: the reference must name a declared
+     * decision, wire exactly its inputs, and read only the namespaces that exist when
+     * decisions evaluate (before the document loads and before any step runs).
+     */
     public DecisionUse resolve(String alias, DecisionUse declared, String source) {
         return resolve(alias, declared, source, false);
     }
