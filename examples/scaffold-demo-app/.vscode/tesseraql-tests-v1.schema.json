@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://tesseraql.io/schema/tesseraql-tests-v1.schema.json",
   "title": "TesseraQL test suite (tests/*.yml)",
-  "$comment": "Deliberately open (additionalProperties: true): newer keys never break older editors. Each case sets exactly one target - sql, contract, validate, notify, messages, or http-call - stated as prose rather than a oneOf so editors report missing keys, not opaque union failures.",
+  "$comment": "Deliberately open (additionalProperties: true): newer keys never break older editors. Each case sets exactly one target - sql, contract, validate, notify, messages, http-call, or decide - stated as prose rather than a oneOf so editors report missing keys, not opaque union failures.",
   "type": "object",
   "required": ["tests"],
   "properties": {
@@ -29,6 +29,15 @@
             },
             "additionalProperties": true,
             "description": "Exercises one declarative validation rule of a route."
+          },
+          "decide": {
+            "type": "object",
+            "properties": {
+              "decision": { "type": "string" },
+              "effectiveAt": { "type": "string" }
+            },
+            "additionalProperties": true,
+            "description": "Evaluates one decision declared under decisions/ against the params as input values (docs decision-tables). Outputs come back as the case's single row; a miss or unique multi-hit comes back as one row carrying code (TQL-DECISION-4721/4720). effectiveAt dates a table-source lookup (ISO-8601 or yyyy-MM-dd HH:mm:ss)."
           },
           "notify": {
             "type": "object",
