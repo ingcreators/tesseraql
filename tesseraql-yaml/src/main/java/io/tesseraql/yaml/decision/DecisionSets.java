@@ -425,11 +425,26 @@ public final class DecisionSets {
     }
 
     /**
+     * {@link #resolve} for a workflow transition's {@code decide:}: the wiring may
+     * additionally read {@code document.*}, because a transition's decisions evaluate after
+     * the document binds (the amount lives on the row, not in the transition's request body)
+     * and before the guard consumes the outputs.
+     */
+    public DecisionUse resolveForWorkflow(String alias, DecisionUse declared, String source) {
+        return resolve(alias, declared, source, true);
+    }
+
+    /**
      * Resolves one route-declared {@code decide:} entry: the reference must name a declared
      * decision, wire exactly its inputs, and read only the namespaces that exist when
      * decisions evaluate (before the document loads and before any step runs).
      */
     public DecisionUse resolve(String alias, DecisionUse declared, String source) {
+        return resolve(alias, declared, source, false);
+    }
+
+    private DecisionUse resolve(String alias, DecisionUse declared, String source,
+            boolean documentBound) {
         if (declared.use() == null || declared.use().isBlank()) {
             throw new TqlException(UNKNOWN, source + ": decide entry '" + alias
                     + "' declares no use: — a decide: entry is always a reference to a"
@@ -447,8 +462,9 @@ public final class DecisionSets {
                     + "' must wire exactly the inputs " + contract + " of decision '"
                     + declared.use() + "', not " + declared.params().keySet());
         }
-        declared.params().forEach(
-                (input, expression) -> checkWiringRoots(alias, input, expression, source));
+        Set<String> wiringRoots = documentBound ? withDocument(WIRING_ROOTS) : WIRING_ROOTS;
+        declared.params().forEach((input, expression) -> checkRoots(alias, input, expression,
+                source, wiringRoots));
         if (declared.effectiveAt() != null && !declared.effectiveAt().isBlank()) {
             if (shared.source() == null) {
                 throw new TqlException(CONTRACT, source + ": decide entry '" + alias
@@ -460,14 +476,16 @@ public final class DecisionSets {
                         + "' declares effectiveAt: but decision '" + declared.use()
                         + "' declares no effective: columns");
             }
-            checkRoots(alias, "effectiveAt", declared.effectiveAt(), source, EFFECTIVE_ROOTS);
+            checkRoots(alias, "effectiveAt", declared.effectiveAt(), source,
+                    documentBound ? withDocument(EFFECTIVE_ROOTS) : EFFECTIVE_ROOTS);
         }
         return declared.resolvedWith(shared);
     }
 
-    private static void checkWiringRoots(String alias, String input, String expression,
-            String source) {
-        checkRoots(alias, input, expression, source, WIRING_ROOTS);
+    private static Set<String> withDocument(Set<String> roots) {
+        Set<String> extended = new LinkedHashSet<>(roots);
+        extended.add("document");
+        return extended;
     }
 
     private static void checkRoots(String alias, String input, String expression,

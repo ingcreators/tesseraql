@@ -1,0 +1,20 @@
+version: tesseraql/v1
+
+# The hand-authored decision-table archetype (docs/decision-tables.md): the approval
+# routing policy, declared once and consumed twice — the create route stamps the lane,
+# and the submit transition resolves its assignee from the same rows. Policy that
+# changes with a release stays YAML; a rate table business users maintain at runtime
+# would declare a table source: instead, same contract.
+decisions:
+  approvalRoute:
+    inputs:
+      amount: { type: number, match: between }
+    outputs:
+      assignee: { type: string, enum: [approver-1, cfo-1] }
+    hitPolicy: first
+    rows:
+      # High-value requests go straight to finance.
+      - when: { amount: "> 100000" }
+        out: { assignee: cfo-1 }
+      # Everything else lands with the standing approver.
+      - out: { assignee: approver-1 }

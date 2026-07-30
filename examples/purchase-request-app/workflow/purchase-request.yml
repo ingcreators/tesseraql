@@ -12,13 +12,19 @@ states:
   - { id: approved, type: terminal }
   - { id: rejected, type: terminal }
 transitions:
-  # Submitting assigns the approval task (approver.sql resolves the assignee) and the guard
-  # keeps zero-amount requests out of the queue.
+  # Submitting assigns the approval task and the guard keeps zero-amount requests out of
+  # the queue. The assignee comes from the shared approvalRoute decision
+  # (decisions/approval.yml): the wiring reads document.amount — a transition's decisions
+  # evaluate after the document binds, before the guard — and approver.sql binds the output.
   - id: submit
     from: draft
     to: submitted
     guard: "document.amount > 0"
     command: submit.sql
+    decide:
+      approvalRoute:
+        use: approvalRoute
+        params: { amount: document.amount }
     assign: { file: approver.sql }
   - { id: approve, from: submitted, to: approved, command: approve.sql }
   - { id: reject, from: submitted, to: rejected, command: reject.sql }

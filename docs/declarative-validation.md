@@ -208,6 +208,59 @@ example, the purchase-request gallery app's `duplicateRequest` rule guards dupli
 applications with the caller identified by the ambient `/* principal.loginId */` bind, so its
 contract is a single `title` bind.
 
+## Decision tables
+
+Where a validation rule answers "is this operation allowed?", a **decision table** turns a
+combination of input conditions into declared **output values**: the approval route for an
+amount and a department, the shipping fee for a weight and a region. Decisions live in
+`decisions/` next to `domains/` and `rules/`, declare a typed contract, and are referenced
+from a command's `decide:` block with the same `use:`/`params:` grammar as shared rules:
+
+```yaml
+# decisions/approval.yml
+version: tesseraql/v1
+decisions:
+  approvalRoute:
+    inputs:
+      amount: { domain: money, match: between }
+    outputs:
+      assignee: { type: string, enum: [approver-1, cfo-1] }
+    hitPolicy: first          # first | unique
+    rows:
+      - when: { amount: "> 100000" }
+        out: { assignee: cfo-1 }
+      - out: { assignee: approver-1 }    # the trailing row without when: is the default
+```
+
+```yaml
+# a route (or a workflow transition) evaluates it once, before validate: rules
+decide:
+  approvalRoute:
+    use: approvalRoute
+    params: { amount: params.amount }
+```
+
+A row is the conjunction of its cells — equality, an inclusive range (`between`),
+membership in a small set (`in`), a boolean, or an org-subtree test (`orgSubtree`, table
+sources) — and an absent cell is a wildcard. Alternatives are separate rows; derivations
+("the caller holds the officer role") belong in the `decide:` wiring, which is an
+expression over the request context. Outputs publish as `decision.<alias>.<output>` for
+SQL binds, `/*%if … */` directives, step `when:` guards, and workflow guards; a lookup
+that matches nothing raises `TQL-DECISION-4721` unless a default answers, never a silent
+null.
+
+The rows have two homes with one contract: **YAML rows** for policy that changes with a
+release (linted at build for overlap, shadowing, and enum-value typos), or an app-owned
+**table** (`source:`) for data business users maintain at runtime — evaluated as one
+generated SELECT in the operation's transaction, with `effective: [from, to]` dating and
+`effectiveAt:` for document-dated lookups. Enum-typed outputs buy build-time exhaustiveness:
+comparing an output to a value the decision cannot produce is `TQL-DECISION-4713`, and a
+workflow state whose guarded transitions leave a declared value unhandled is
+`TQL-DECISION-4712`. The purchase-request gallery app carries the worked example:
+`approvalRoute` resolves the submit transition's assignee from the document's amount. The
+full surface is in the [YAML reference](reference-yaml-surface.md) and the
+`TQL-DECISION-*` rows of the [error-code reference](reference-error-codes.md).
+
 ## The expression language
 
 `validate:` rules, `requiredWhen`, `response.html.headersWhen` guards, and workflow guards

@@ -24,9 +24,15 @@
 > guards and transition guards are checked against declared `decide:` entries (`4711`), and
 > the enum-output lints land: comparing an output to a value the decision cannot produce is
 > `4713`, and a from-state whose equality-guarded transitions leave declared enum values
-> unhandled is `4712` — the unhandled else caught at build. Pending: the scaffolder +
-> gallery archetypes (which also give step-skip and workflow-consumption end-to-end
-> coverage).
+> unhandled is `4712` — the unhandled else caught at build. Slice 4a is implemented: a
+> workflow transition's decisions now evaluate after the document binds and before the
+> guard, so the wiring may read `document.*` (`resolveForWorkflow`); the purchase-request
+> gallery app carries the worked archetype (`decisions/approval.yml` consumed by the submit
+> transition's `decide:` + assignee resolver, exercised by the declarative suite); and the
+> user-facing docs live in declarative-validation.md "Decision tables" and
+> approval-workflow.md "Decision-driven routing". Pending (4b): `scaffold decision`
+> (backing-table migration + declaration + maintenance integrity rules) and the docs-portal
+> Decisions page.
 
 A **decision table** turns a combination of input conditions into declared output values:
 the approval route for an amount and a department, the shipping fee for a weight and a
