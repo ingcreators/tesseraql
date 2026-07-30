@@ -16,11 +16,14 @@ import {
  * declares, nothing more.
  */
 function poolFor(symbols: AppSymbols,
-    kind: 'policy' | 'message' | 'maybe-message' | 'domain' | 'rule') {
+    kind: 'policy' | 'message' | 'maybe-message' | 'domain' | 'shared' | 'decision') {
   switch (kind) {
     case 'policy': return symbols.policies;
     case 'domain': return symbols.domains;
-    case 'rule': return symbols.rules;
+    // A use: names a shared rule in validate: and a shared decision in decide:; the
+    // line alone cannot tell them apart, so both namespaces answer.
+    case 'shared': return [...symbols.rules, ...symbols.decisions];
+    case 'decision': return symbols.decisions;
     default: return symbols.messages;
   }
 }

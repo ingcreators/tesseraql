@@ -51,6 +51,15 @@ export function buildAppTree(home: string): AppNode[] {
     });
   }
 
+  const decisions = collectFiles(path.join(home, 'decisions'), (name) => name.endsWith('.yml'));
+  if (decisions.length > 0) {
+    sections.push({
+      label: 'Decisions',
+      kind: 'section',
+      children: decisions.map((file) => fileNode(path.join(home, 'decisions'), file)),
+    });
+  }
+
   const migrations = collectFiles(path.join(home, 'db'), (name) => name.endsWith('.sql'));
   if (migrations.length > 0) {
     sections.push({

@@ -14,20 +14,24 @@ test('parses the symbols document', () => {
     messages: [{ key: 'users.list.title', source: 'messages/en.yml', line: 3 }],
     domains: [{ name: 'sku', source: 'domains/catalog.yml', line: 3 }],
     rules: [{ name: 'editableStatus', source: 'rules/inventory.yml', line: 7 }],
+    decisions: [{ name: 'approvalRoute', source: 'decisions/approval.yml', line: 4 }],
     routes: [{ id: 'app.home', source: 'web/get.yml', method: 'GET', path: '/', recipe: 'query-html' }],
   }));
   assert.deepEqual(symbols.policies, [{ name: 'app.read', source: 'config/tesseraql.yml', line: 72 }]);
   assert.deepEqual(symbols.messages, [{ name: 'users.list.title', source: 'messages/en.yml', line: 3 }]);
   assert.deepEqual(symbols.domains, [{ name: 'sku', source: 'domains/catalog.yml', line: 3 }]);
   assert.deepEqual(symbols.rules, [{ name: 'editableStatus', source: 'rules/inventory.yml', line: 7 }]);
+  assert.deepEqual(symbols.decisions,
+      [{ name: 'approvalRoute', source: 'decisions/approval.yml', line: 4 }]);
   assert.deepEqual(symbols.routes,
       [{ id: 'app.home', source: 'web/get.yml', method: 'GET', path: '/', recipe: 'query-html' }]);
 });
 
-test('a pre-shared-definitions document degrades to empty domains and rules', () => {
+test('a pre-shared-definitions document degrades to empty domains, rules, and decisions', () => {
   const symbols = parseAppSymbols(JSON.stringify({ policies: [], messages: [] }));
   assert.deepEqual(symbols.domains, []);
   assert.deepEqual(symbols.rules, []);
+  assert.deepEqual(symbols.decisions, []);
   assert.deepEqual(symbols.routes, []);
 });
 
@@ -71,19 +75,24 @@ test('title/label values are maybe-message references', () => {
   assert.equal(symbolReferenceAt('    label: users.list.title', 15)?.kind, 'maybe-message');
 });
 
-test('domain and use values resolve under the cursor', () => {
+test('domain, use, and decision values resolve under the cursor', () => {
   const domain = symbolReferenceAt('    domain: sku', 13);
   assert.deepEqual(domain, { kind: 'domain', value: 'sku', start: 12, end: 15 });
-  const rule = symbolReferenceAt('    use: stockStaysNonNegative', 12);
-  assert.equal(rule?.kind, 'rule');
-  assert.equal(rule?.value, 'stockStaysNonNegative');
+  // A use: names a rule in validate: and a decision in decide: — the shared kind.
+  const shared = symbolReferenceAt('    use: stockStaysNonNegative', 12);
+  assert.equal(shared?.kind, 'shared');
+  assert.equal(shared?.value, 'stockStaysNonNegative');
+  const decision = symbolReferenceAt('    decision: approvalRoute', 20);
+  assert.equal(decision?.kind, 'decision');
+  assert.equal(decision?.value, 'approvalRoute');
 });
 
 test('completion kind is detected mid-typing', () => {
   assert.equal(completionKindAt('  policy: app.', 14), 'policy');
   assert.equal(completionKindAt('  message: ', 11), 'message');
   assert.equal(completionKindAt('    domain: s', 13), 'domain');
-  assert.equal(completionKindAt('    use: ', 9), 'rule');
+  assert.equal(completionKindAt('    use: ', 9), 'shared');
+  assert.equal(completionKindAt('    decision: appr', 18), 'decision');
   assert.equal(completionKindAt('  title: x', 10), undefined);
   assert.equal(completionKindAt('  policy: app.read extra', 24), undefined);
 });

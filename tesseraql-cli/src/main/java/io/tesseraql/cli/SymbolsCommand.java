@@ -27,12 +27,12 @@ import picocli.CommandLine.Option;
 
 /**
  * {@code tesseraql symbols --app <dir>}: prints what the framework declares — security policies,
- * default-locale message keys, shared field domains and validation rules, and routes, each with
- * its source and line — as one JSON object on stdout. The editor language layer
+ * default-locale message keys, shared field domains, validation rules, decision tables, and
+ * routes, each with its source and line — as one JSON object on stdout. The editor language layer
  * (docs/vscode-extension.md, Phase 56) consumes it for completion and go-to-definition; like
  * every editor contract, the document is sorted and deterministic.
  */
-@Command(name = "symbols", description = "Print the app's declared symbols (policies, message keys, domains, rules, routes) as JSON.")
+@Command(name = "symbols", description = "Print the app's declared symbols (policies, message keys, domains, rules, decisions, routes) as JSON.")
 final class SymbolsCommand implements Callable<Integer> {
 
     @Option(names = {"--app"}, required = true, description = "Path to the external app home.")
@@ -51,6 +51,8 @@ final class SymbolsCommand implements Callable<Integer> {
                 file -> parser.parseDomains(file).domains().keySet());
         sharedDefinitions(document.putArray("rules"), home, "rules",
                 file -> parser.parseRuleSets(file).rules().keySet());
+        sharedDefinitions(document.putArray("decisions"), home, "decisions",
+                file -> parser.parseDecisions(file).decisions().keySet());
         routes(document.putArray("routes"), manifest, home);
         System.out.println(mapper.writerWithDefaultPrettyPrinter().writeValueAsString(document));
         return 0;

@@ -24,6 +24,7 @@ export interface AppSymbols {
   messages: DeclaredSymbol[];
   domains: DeclaredSymbol[];
   rules: DeclaredSymbol[];
+  decisions: DeclaredSymbol[];
   routes: RouteSymbol[];
 }
 
@@ -42,15 +43,17 @@ export function parseAppSymbols(stdout: string): AppSymbols {
   }
   const document = parsed as {
     policies: unknown[]; messages: unknown[]; domains?: unknown; rules?: unknown;
-    routes?: unknown;
+    decisions?: unknown; routes?: unknown;
   };
   return {
     policies: document.policies.map((value) => toSymbol(value, 'name')),
     messages: document.messages.map((value) => toSymbol(value, 'key')),
-    // Absent on a pre-0.8 CLI — the shared-definition arrays degrade to empty, not to
-    // a contract error, so lint and policy/message intelligence keep working.
+    // Absent on a pre-0.8 CLI (decisions: pre-0.9) — the shared-definition arrays
+    // degrade to empty, not to a contract error, so lint and policy/message
+    // intelligence keep working.
     domains: optionalSymbols(document.domains),
     rules: optionalSymbols(document.rules),
+    decisions: optionalSymbols(document.decisions),
     routes: optionalRoutes(document.routes),
   };
 }
@@ -116,24 +119,29 @@ function toSymbol(value: unknown, nameField: string): DeclaredSymbol {
 }
 
 /**
- * A `policy:`/`message:`/`domain:`/`use:` value span, or a `title:`/`label:` value
- * that may be a key.
+ * A `policy:`/`message:`/`domain:`/`use:`/`decision:` value span, or a
+ * `title:`/`label:` value that may be a key. A `use:` names a shared rule in a
+ * `validate:` block and a shared decision in a `decide:` block; the line alone cannot
+ * tell them apart, so the reference kind is `shared` and the providers search both
+ * namespaces (names are unique within each, and the pools never overlap in practice).
  */
 export interface SymbolReference {
-  kind: 'policy' | 'message' | 'maybe-message' | 'domain' | 'rule';
+  kind: 'policy' | 'message' | 'maybe-message' | 'domain' | 'shared' | 'decision';
   value: string;
   /** 0-based columns of the value span. */
   start: number;
   end: number;
 }
 
-const REFERENCE = /^(\s*(?:-\s+)?(policy|message|title|label|domain|use):\s*)(["']?)([^\s#"']+)\3/;
+const REFERENCE = /^(\s*(?:-\s+)?(policy|message|title|label|domain|use|decision):\s*)(["']?)([^\s#"']+)\3/;
 
 const KIND_BY_KEY: Record<string, SymbolReference['kind']> = {
   policy: 'policy',
   message: 'message',
   domain: 'domain',
-  use: 'rule',
+  use: 'shared',
+  // The decide: suite target (docs/decision-tables.md) names the decision directly.
+  decision: 'decision',
 };
 
 export function symbolReferenceAt(lineText: string, character: number): SymbolReference | undefined {
@@ -150,10 +158,15 @@ export function symbolReferenceAt(lineText: string, character: number): SymbolRe
   return { kind, value: match[4], start, end };
 }
 
-/** The completion context of a cursor sitting after `policy:`, `message:`, `domain:`, or `use:`. */
+/**
+ * The completion context of a cursor sitting after `policy:`, `message:`, `domain:`,
+ * `use:`, or `decision:`.
+ */
 export function completionKindAt(lineText: string, character: number):
-    'policy' | 'message' | 'domain' | 'rule' | undefined {
+    'policy' | 'message' | 'domain' | 'shared' | 'decision' | undefined {
   const head = lineText.slice(0, character);
-  const match = /^\s*(?:-\s+)?(policy|message|domain|use):\s*(["']?)[^\s#"']*$/.exec(head);
-  return match === null ? undefined : KIND_BY_KEY[match[1]] as 'policy' | 'message' | 'domain' | 'rule';
+  const match = /^\s*(?:-\s+)?(policy|message|domain|use|decision):\s*(["']?)[^\s#"']*$/.exec(head);
+  return match === null
+      ? undefined
+      : KIND_BY_KEY[match[1]] as 'policy' | 'message' | 'domain' | 'shared' | 'decision';
 }

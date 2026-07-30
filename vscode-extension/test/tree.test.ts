@@ -21,6 +21,7 @@ function makeDemoApp(): string {
   write('domains/catalog.yml');
   write('rules/inventory.yml');
   write('rules/validate-stock.sql');
+  write('decisions/approval.yml');
   write('db/migration/V1__create_items.sql');
   write('tests/smoke-test.yml');
   return home;
@@ -35,7 +36,7 @@ function section(tree: AppNode[], label: string): AppNode {
 test('builds the app layout sections', () => {
   const tree = buildAppTree(makeDemoApp());
   assert.deepEqual(tree.map((node) => node.label),
-      ['Routes', 'Views', 'Domains', 'Rules', 'Migrations', 'Tests']);
+      ['Routes', 'Views', 'Domains', 'Rules', 'Decisions', 'Migrations', 'Tests']);
 });
 
 test('routes group by kind and exclude views and SQL', () => {
@@ -58,12 +59,14 @@ test('views, migrations, and tests list their files relative to their roots', ()
       ['smoke-test.yml']);
 });
 
-test('shared definitions list as Domains and Rules, rule SQL included', () => {
+test('shared definitions list as Domains, Rules, and Decisions, rule SQL included', () => {
   const tree = buildAppTree(makeDemoApp());
   assert.deepEqual(section(tree, 'Domains').children.map((node) => node.label),
       ['catalog.yml']);
   assert.deepEqual(section(tree, 'Rules').children.map((node) => node.label),
       ['inventory.yml', 'validate-stock.sql']);
+  assert.deepEqual(section(tree, 'Decisions').children.map((node) => node.label),
+      ['approval.yml']);
 });
 
 test('sections without content disappear', () => {
