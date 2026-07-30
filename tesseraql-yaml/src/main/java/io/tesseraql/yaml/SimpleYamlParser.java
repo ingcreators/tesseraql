@@ -156,6 +156,33 @@ public final class SimpleYamlParser {
         return document;
     }
 
+    private static final TqlErrorCode DECISIONS_MALFORMED = new TqlErrorCode(
+            io.tesseraql.core.error.TqlDomain.DECISION, 4700);
+
+    /**
+     * Parses one {@code decisions/*.yml} document (docs/decision-tables.md). Validation here is
+     * structural — a map with the version, decisions deserialized into the model; the contract
+     * and every row compile in {@link io.tesseraql.yaml.decision.DecisionSets} so a bad match
+     * kind, cell literal, or overlapping unique rows carry their own codes.
+     */
+    public io.tesseraql.yaml.model.DecisionsDocument parseDecisions(Path file) {
+        io.tesseraql.yaml.model.DecisionsDocument document;
+        try {
+            document = mapper.readValue(readFile(file),
+                    io.tesseraql.yaml.model.DecisionsDocument.class);
+        } catch (IOException | RuntimeException ex) {
+            throw schemaError("decisions", file.toString(), ex);
+        }
+        if (document == null) {
+            throw new TqlException(DECISIONS_MALFORMED, "Empty decisions document: " + file);
+        }
+        if (!EXPECTED_VERSION.equals(document.version())) {
+            throw new TqlException(DECISIONS_MALFORMED, "Decisions document " + file
+                    + " must declare version: " + EXPECTED_VERSION);
+        }
+        return document;
+    }
+
     /** Parses a job YAML file. */
     public JobDefinition parseJob(Path file) {
         String content = readFile(file);

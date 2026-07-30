@@ -1,5 +1,19 @@
 # Decision tables
 
+> **Status: in progress.** Slice 1 is implemented: the `decisions/` documents
+> (`DecisionSets`, load errors `TQL-DECISION-4700..4708`, with `domain:` references merged
+> at load and row values checked against declared types and enums — `4708`), the `decide:`
+> reference with load-time resolution and wiring-root checks, the core row evaluator
+> (`DecisionTables`:
+> `eq`/`between`/`in`/`bool` cells, `first`/`unique` hit policies, `onMiss`, the unique
+> overlap check `4714`, runtime `4720`/`4721`), evaluation inside the command transaction
+> before the workflow document loads, `decision.*` seeded under every statement's parameters
+> (binds and `/*%if */`, unseeded-bind guard `4722`), the lints `4711`/`4715`/`4716`, the
+> decisions JSON Schema with scaffolded `.vscode` association, and the YAML-surface/error
+> reference pages. Pending slices: the table-backed `source:` with `orgSubtree`, consumption
+> plumbing (step `when:`, workflow `decide:` + guard roots, enum-output exhaustiveness
+> `4712`/`4713`), and the scaffolder + gallery archetypes.
+
 A **decision table** turns a combination of input conditions into declared output values:
 the approval route for an amount and a department, the shipping fee for a weight and a
 region, the handling priority for an item category and a customer class. TesseraQL already

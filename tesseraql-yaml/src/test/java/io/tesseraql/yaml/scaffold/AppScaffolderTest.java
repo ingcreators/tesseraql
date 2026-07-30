@@ -44,6 +44,7 @@ class AppScaffolderTest {
                 ".vscode/tesseraql-v1.schema.json",
                 ".vscode/tesseraql-domains-v1.schema.json",
                 ".vscode/tesseraql-rules-v1.schema.json",
+                ".vscode/tesseraql-decisions-v1.schema.json",
                 ".vscode/tesseraql-config-v1.schema.json",
                 ".vscode/tesseraql-tests-v1.schema.json",
                 ".vscode/tesseraql-messages-v1.schema.json",

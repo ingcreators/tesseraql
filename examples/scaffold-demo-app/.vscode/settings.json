@@ -12,6 +12,9 @@
     ".vscode/tesseraql-rules-v1.schema.json": [
       "rules/**/*.yml"
     ],
+    ".vscode/tesseraql-decisions-v1.schema.json": [
+      "decisions/**/*.yml"
+    ],
     ".vscode/tesseraql-config-v1.schema.json": [
       "config/tesseraql.yml"
     ],

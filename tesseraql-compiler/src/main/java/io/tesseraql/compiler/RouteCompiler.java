@@ -368,9 +368,9 @@ public final class RouteCompiler {
                         compiledAppHome))
                 .process(new io.tesseraql.compiler.binding.TransactionalCommandProcessor(
                         routeId, definition.sql(), definition.steps(), definition.validate(),
-                        definition.notifications(), stepFile, datasource, dialect,
-                        definition.outbox(), definition.publish(), definition.errors(), appName,
-                        workflow, commandBounds()));
+                        definition.decide(), definition.notifications(), stepFile, datasource,
+                        dialect, definition.outbox(), definition.publish(), definition.errors(),
+                        appName, workflow, commandBounds()));
         // Live-view topics broadcast only after a successful commit: an exception in the
         // command processor (rollback) bypasses this step (docs/realtime.md).
         if (!definition.emit().isEmpty()) {
@@ -422,8 +422,8 @@ public final class RouteCompiler {
             RouteDefinition synthesized = new RouteDefinition("tesseraql/v1", routeId, "route",
                     "command-json", java.util.Map.of(), null, security, null, null, null, command,
                     java.util.Map.of(), java.util.Map.of(), java.util.Map.of(), java.util.Map.of(),
-                    null, null, null, null, null, null, workflowResponse(), null, null,
-                    null, null, null);
+                    java.util.Map.of(), null, null, null, null, null, null, workflowResponse(),
+                    null, null, null, null, null);
             String urlPath = basePath + "/{key}/" + transition.id();
             RouteFile routeFile = new RouteFile("POST", urlPath, workflowFile.source(),
                     synthesized);
@@ -479,7 +479,7 @@ public final class RouteCompiler {
         RouteDefinition definition = new RouteDefinition("tesseraql/v1", routeId, "route",
                 "command-json", java.util.Map.of(), null, def.security(), null, null, null, null,
                 java.util.Map.of(), java.util.Map.of(), java.util.Map.of(), java.util.Map.of(),
-                null,
+                java.util.Map.of(), null,
                 null, null, null, null, null, workflowResponse(), null, null, null, null,
                 null);
         ProcessorDefinition<?> route = builder.from(direct).routeId(routeId);
@@ -627,7 +627,7 @@ public final class RouteCompiler {
                 .end();
         route.process(new io.tesseraql.compiler.binding.TransactionalCommandProcessor(
                 routeId, definition.sql(), definition.steps(), definition.validate(),
-                definition.notifications(), stepFile, datasource, dialect,
+                definition.decide(), definition.notifications(), stepFile, datasource, dialect,
                 definition.outbox(), definition.publish(), definition.errors(), appName,
                 commandBounds()));
     }
@@ -901,9 +901,9 @@ public final class RouteCompiler {
                     .resolve(toolDir.resolve(file).normalize(), dialect);
             step = step.process(new io.tesseraql.compiler.binding.TransactionalCommandProcessor(
                     routeId, definition.sql(), definition.steps(), definition.validate(),
-                    definition.notifications(), stepFile, datasource, dialect,
-                    definition.outbox(), definition.publish(), definition.errors(), appName,
-                    commandBounds()));
+                    definition.decide(), definition.notifications(), stepFile, datasource,
+                    dialect, definition.outbox(), definition.publish(), definition.errors(),
+                    appName, commandBounds()));
         } else if (definition.sql() != null) {
             step = step.to(executionUri(toolDir, definition.sql(), "sql",
                     definition.effectiveDatasource()));

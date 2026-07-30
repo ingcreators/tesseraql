@@ -118,6 +118,49 @@ class SchemaSyncTest {
         assertThat(documented).containsAll(declared);
     }
 
+    @Test
+    void theDecisionsSchemaCoversEveryDecisionComponent() throws Exception {
+        JsonNode schema = new ObjectMapper().readTree(
+                getClass().getResourceAsStream("/schema/tesseraql-decisions-v1.schema.json"));
+        JsonNode decision = schema.path("properties").path("decisions")
+                .path("additionalProperties").path("properties");
+
+        List<String> documented = new ArrayList<>();
+        decision.fieldNames().forEachRemaining(documented::add);
+        List<String> declared = new ArrayList<>();
+        for (var component : io.tesseraql.yaml.model.DecisionsDocument.Decision.class
+                .getRecordComponents()) {
+            declared.add(component.getName());
+        }
+
+        assertThat(documented).containsAll(declared);
+    }
+
+    /** The route schema's decide: entry covers every authored DecisionUse key. */
+    @Test
+    void theRouteSchemaCoversEveryDecideReferenceKey() throws Exception {
+        JsonNode schema = new ObjectMapper().readTree(
+                getClass().getResourceAsStream("/schema/tesseraql-v1.schema.json"));
+        JsonNode reference = schema.path("properties").path("decide")
+                .path("additionalProperties").path("properties");
+
+        List<String> documented = new ArrayList<>();
+        reference.fieldNames().forEachRemaining(documented::add);
+        List<String> declared = new ArrayList<>();
+        for (var component : io.tesseraql.yaml.model.DecisionUse.class.getRecordComponents()) {
+            var field = io.tesseraql.yaml.model.DecisionUse.class
+                    .getDeclaredField(component.getName());
+            // The resolved decision is loader-stamped, never authored, so the schema must not
+            // offer it.
+            if (field.getAnnotation(com.fasterxml.jackson.annotation.JsonIgnore.class) != null) {
+                continue;
+            }
+            declared.add(component.getName());
+        }
+
+        assertThat(documented).containsExactlyInAnyOrderElementsOf(declared);
+    }
+
     /**
      * A field domain's value type <em>is</em> an input field, so the domains schema carries a
      * verbatim copy of the route schema's definition and this test is what keeps the copy

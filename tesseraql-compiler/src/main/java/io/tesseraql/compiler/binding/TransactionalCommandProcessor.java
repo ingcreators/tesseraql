@@ -116,6 +116,7 @@ public final class TransactionalCommandProcessor implements Processor {
     private final String routeId;
     private final List<Step> steps;
     private final ValidationRules validation;
+    private final io.tesseraql.core.decision.DecisionTables decisions;
     private final List<io.tesseraql.yaml.notify.NotifyEvents.CompiledNotify> notifications;
     private final io.tesseraql.yaml.messaging.PublishEvents.CompiledPublish publish;
     private final boolean singleSql;
@@ -172,13 +173,14 @@ public final class TransactionalCommandProcessor implements Processor {
      */
     public TransactionalCommandProcessor(String routeId, SqlBinding sql,
             Map<String, SqlBinding> declaredSteps, Map<String, ValidationRule> validate,
+            Map<String, io.tesseraql.yaml.model.DecisionUse> decide,
             Map<String, io.tesseraql.yaml.model.NotifySpec> notify,
             java.util.function.Function<String, Path> stepFile,
             String datasourceName, String dialect, OutboxSpec outbox,
             io.tesseraql.yaml.model.PublishSpec publish, ErrorsSpec errors,
             String appName, Bounds defaultBounds) {
-        this(routeId, sql, declaredSteps, validate, notify, stepFile, datasourceName, dialect,
-                outbox, publish, errors, appName, null, defaultBounds);
+        this(routeId, sql, declaredSteps, validate, decide, notify, stepFile, datasourceName,
+                dialect, outbox, publish, errors, appName, null, defaultBounds);
     }
 
     /**
@@ -188,6 +190,7 @@ public final class TransactionalCommandProcessor implements Processor {
      */
     public TransactionalCommandProcessor(String routeId, SqlBinding sql,
             Map<String, SqlBinding> declaredSteps, Map<String, ValidationRule> validate,
+            Map<String, io.tesseraql.yaml.model.DecisionUse> decide,
             Map<String, io.tesseraql.yaml.model.NotifySpec> notify,
             java.util.function.Function<String, Path> stepFile,
             String datasourceName, String dialect, OutboxSpec outbox,
@@ -219,6 +222,30 @@ public final class TransactionalCommandProcessor implements Processor {
         this.singleSql = sql != null;
         this.steps = compile(sql, declaredSteps, stepFile);
         this.validation = compileValidation(validate, stepFile);
+        this.decisions = compileDecisions(decide);
+    }
+
+    /**
+     * Compiles the decide: block (docs/decision-tables.md). References arrive resolved by the
+     * manifest loader — the shared decision stamped underneath — and the table compiles through
+     * the same code path the loader already ran, so a failure here means the processor was
+     * built from an unresolved definition.
+     */
+    private io.tesseraql.core.decision.DecisionTables compileDecisions(
+            Map<String, io.tesseraql.yaml.model.DecisionUse> decide) {
+        List<io.tesseraql.core.decision.DecisionTables.Use> uses = new ArrayList<>();
+        (decide == null ? Map.<String, io.tesseraql.yaml.model.DecisionUse>of() : decide)
+                .forEach((alias, use) -> {
+                    if (use.decision() == null) {
+                        throw invalid("decide entry '" + alias + "' is unresolved — the"
+                                + " manifest loader resolves use: references before compilation");
+                    }
+                    uses.add(io.tesseraql.core.decision.DecisionTables.use(alias,
+                            io.tesseraql.yaml.decision.DecisionSets.compile(use.use(),
+                                    use.decision()),
+                            use.params()));
+                });
+        return new io.tesseraql.core.decision.DecisionTables(uses);
     }
 
     /** Compiles the validate: block, failing fast on misdeclared rules (roadmap Phase 19). */
@@ -394,6 +421,15 @@ public final class TransactionalCommandProcessor implements Processor {
             boolean previousAutoCommit = connection.getAutoCommit();
             connection.setAutoCommit(false);
             try {
+                // Decisions evaluate first (docs/decision-tables.md): once per operation, from
+                // the request context alone, before the workflow loads its document — so a
+                // transition guard can consume decision.* while a wiring expression can never
+                // read state that does not exist yet. Outputs ride the context; AmbientBinds
+                // seeds them under every statement's parameters.
+                if (!decisions.isEmpty()) {
+                    context.put(io.tesseraql.core.sql.AmbientBinds.DECISION,
+                            decisions.evaluate(context));
+                }
                 // A workflow transition (roadmap Phase 28) checks legality and the guard inside the
                 // transaction, before validation: load the document, verify the current state allows
                 // this transition, evaluate the guard. The document is bound as `document` so the
