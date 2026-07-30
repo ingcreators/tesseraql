@@ -8,6 +8,25 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **Decision tables: one contract, two row sources** (docs/decision-tables.md, user
+  guide in declarative-validation.md "Decision tables"): named, value-producing
+  decisions — approval routing, fee tiers, assignment matrices — declared once under
+  `decisions/` and referenced from a command's or a workflow transition's `decide:`
+  block. Rows live inline as YAML (release-versioned policy, with build-time overlap /
+  shadowing / enum-typo checks) or in an app-owned table (`source:`) business users
+  maintain at runtime, evaluated as one generated SELECT inside the operation's
+  transaction — `in` via a normalized child table, `orgSubtree` via the managed org
+  closure, dated rows via `effective:` + `effectiveAt:`. Outputs publish as
+  `decision.<alias>.<output>` for SQL binds, `/*%if */` directives, the new step
+  `when:` guards (a falsy guard skips the step, recording `steps.<name>.skipped`), and
+  workflow guards/assignee resolution; a lookup never resolves to silent nulls
+  (`TQL-DECISION-4720/4721`). Enum-typed outputs buy consumption-side proofs: comparing
+  against a value the decision cannot produce is `TQL-DECISION-4713`, and a state whose
+  guarded transitions leave declared values unhandled is `TQL-DECISION-4712`.
+  `scaffold decision` generates the declaration plus the typed backing-table migration;
+  the purchase-request gallery app carries the worked archetype, and the docs portal
+  gains a Decisions page next to Domains and Rules.
+
 - **Ambient framework state can ride its own pool or database**
   (docs/framework-datasource.md): `tesseraql.framework.datasource` (default `main`)
   points sessions, credential tokens, SAML replay / OIDC flow state, rate leases, route

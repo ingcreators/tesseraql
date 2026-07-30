@@ -392,6 +392,60 @@ public final class DocService {
         return entries;
     }
 
+    /**
+     * One shared decision table with the operations referencing it.
+     *
+     * @param name       the decision name declared under {@code decisions/}
+     * @param definition what the decision is: its typed contract, hit and miss policies, and its
+     *                   rows — authored in YAML or carried by an app-owned table
+     * @param usedBy     the routes and workflow transitions whose {@code decide:} references it
+     *                   with {@code use:}
+     */
+    public record DecisionEntry(String name,
+            io.tesseraql.yaml.model.DecisionsDocument.Decision definition, List<RouteRef> usedBy) {
+    }
+
+    /**
+     * The app's shared decision tables, each with the routes and workflow transitions referencing
+     * it — the Rules page's shape applied to {@code decisions/}, drawn from the same loader the
+     * manifest resolves with.
+     *
+     * <p>decision-tables.md exists so a routing choice is declared once and consulted anywhere,
+     * so a reviewer asking "which operations consult this decision" needs the transitions too —
+     * the spec model carries no {@code decide:}, hence the cross-reference reads the manifest.
+     */
+    public List<DecisionEntry> decisions() {
+        io.tesseraql.yaml.decision.DecisionSets declared = io.tesseraql.yaml.decision.DecisionSets
+                .load(appHome, new io.tesseraql.yaml.SimpleYamlParser());
+        AppManifest live = new io.tesseraql.yaml.manifest.ManifestLoader().load(appHome);
+        List<DecisionEntry> entries = new ArrayList<>();
+        declared.decisions().forEach((name, definition) -> {
+            List<RouteRef> refs = new ArrayList<>();
+            for (io.tesseraql.yaml.manifest.RouteFile route : live.routes()) {
+                if (route.definition().decide().values().stream()
+                        .anyMatch(use -> name.equals(use.use()))) {
+                    refs.add(new RouteRef(route.definition().id(), route.httpMethod(),
+                            routeUrl(route.definition().id())));
+                }
+            }
+            for (io.tesseraql.yaml.manifest.WorkflowFile workflow : live.workflows()) {
+                for (io.tesseraql.yaml.model.TransitionSpec transition : workflow.definition()
+                        .transitions()) {
+                    if (transition.decide().values().stream()
+                            .anyMatch(use -> name.equals(use.use()))) {
+                        // A transition is not a route, so it has no route page to link to.
+                        refs.add(new RouteRef(
+                                workflow.definition().id() + "." + transition.id(), "POST",
+                                null));
+                    }
+                }
+            }
+            entries.add(new DecisionEntry(name, definition, refs));
+        });
+        entries.sort(java.util.Comparator.comparing(DecisionEntry::name));
+        return entries;
+    }
+
     /** The app-level constraint catalog (docs/field-domains.md): DB constraint name to mapping. */
     public Map<String, io.tesseraql.yaml.model.ErrorsSpec.ConstraintMapping> constraintCatalog() {
         return io.tesseraql.yaml.domain.FieldDomains.load(appHome).constraints();

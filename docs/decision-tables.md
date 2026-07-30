@@ -30,9 +30,15 @@
 > gallery app carries the worked archetype (`decisions/approval.yml` consumed by the submit
 > transition's `decide:` + assignee resolver, exercised by the declarative suite); and the
 > user-facing docs live in declarative-validation.md "Decision tables" and
-> approval-workflow.md "Decision-driven routing". Pending (4b): `scaffold decision`
-> (backing-table migration + declaration + maintenance integrity rules) and the docs-portal
-> Decisions page.
+> approval-workflow.md "Decision-driven routing". Slice 4b is implemented: `scaffold
+> decision` generates the `decisions/` declaration and the typed backing-table migration
+> from one contract (proven by loading the output through the manifest pass;
+> `TQL-DECISION-4730` for a malformed request), with `scaffold crud` over the generated
+> table as the maintenance surface — the generated write-time integrity rules stay a
+> follow-up, since they only bite once those routes exist; and the docs portal gains a
+> Decisions page beside Domains and Rules. **This design is COMPLETE**; open follow-ups:
+> generated maintenance integrity rules, a `decide:` declarative-test target, YAML→table
+> promotion tooling.
 
 A **decision table** turns a combination of input conditions into declared output values:
 the approval route for an amount and a department, the shipping fee for a weight and a

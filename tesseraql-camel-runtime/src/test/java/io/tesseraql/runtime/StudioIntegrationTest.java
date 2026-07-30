@@ -500,6 +500,7 @@ class StudioIntegrationTest {
                     .contains(">Schema<").contains(">Scaffold<").contains(">Migration<")
                     .contains(">SQL builder<").contains(">Drafts<").contains(">Audit<")
                     .contains(">Wizards<").contains(">Domains<").contains(">Rules<")
+                    .contains(">Decisions<")
                     // every page is reachable from the rail, not only from the explorer's
                     // editable-mode "or create with" cluster (which a read-only user never sees)
                     .contains(">Copilot<").contains(">Connectors<")
@@ -541,6 +542,24 @@ class StudioIntegrationTest {
 
         assertThat(body).contains("Shared validation rules");
         assertThat(body).containsAnyOf("No shared rules declared yet", "unreferenced", "Used by");
+    }
+
+    /**
+     * The shared decision tables reference page renders.
+     *
+     * <p>It extends the Domains → Rules mirror chain deliberately: the three are the same idea
+     * applied to different declarations, and a reader who has learned one should not have to
+     * learn the others.
+     */
+    @Test
+    void docsDecisionsPageRenders() throws Exception {
+        // Order-independent for the same reason the rules page test is: a sibling test may have
+        // written decisions/ into the shared app home.
+        String body = get("/_tesseraql/studio/ui/docs/decisions", true).body();
+
+        assertThat(body).contains("Decision tables");
+        assertThat(body).containsAnyOf("No decision tables declared yet", "unreferenced",
+                "Used by");
     }
 
     @Test
