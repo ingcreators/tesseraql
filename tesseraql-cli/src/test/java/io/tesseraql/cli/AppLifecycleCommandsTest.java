@@ -101,6 +101,18 @@ class AppLifecycleCommandsTest {
                     rule: "params.status == 'draft'"
                     code: not-editable
                 """);
+        Files.createDirectories(app.resolve("decisions"));
+        Files.writeString(app.resolve("decisions/approval.yml"), """
+                version: tesseraql/v1
+                decisions:
+                  approvalRoute:
+                    inputs:
+                      amount: { type: number, match: between }
+                    outputs:
+                      assignee: { type: string }
+                    rows:
+                      - out: { assignee: approver-1 }
+                """);
         Captured captured = executeCapturing("symbols", "--app", app.toString());
         assertThat(captured.exitCode()).isZero();
         JsonNode document = new ObjectMapper().readTree(captured.stdout());
@@ -139,6 +151,16 @@ class AppLifecycleCommandsTest {
         assertThat(rule).as("the declared editableStatus rule").isNotNull();
         assertThat(rule.get("source").asText()).isEqualTo("rules/inventory.yml");
         assertThat(rule.get("line").asInt()).isEqualTo(3);
+
+        JsonNode decision = null;
+        for (JsonNode candidate : document.get("decisions")) {
+            if (candidate.get("name").asText().equals("approvalRoute")) {
+                decision = candidate;
+            }
+        }
+        assertThat(decision).as("the declared approvalRoute decision").isNotNull();
+        assertThat(decision.get("source").asText()).isEqualTo("decisions/approval.yml");
+        assertThat(decision.get("line").asInt()).isEqualTo(3);
 
         assertThat(document.get("routes").size()).isPositive();
         JsonNode route = document.get("routes").get(0);
