@@ -17,8 +17,16 @@
 > `ORDER BY priority` with a portable single-row fetch — plus `default:` outputs for table
 > misses, the plain-identifier guard, runtime lookup failures `4723`, and the sidecar DDL
 > lint `4710` (degrading when `.tesseraql/docs/schema.json` is absent, the ReleaseDiff
-> contract). Pending slices: consumption plumbing (step `when:`, workflow `decide:` + guard
-> roots, enum-output exhaustiveness `4712`/`4713`) and the scaffolder + gallery archetypes.
+> contract). Slice 3 is implemented: consumption plumbing — command steps gain `when:`
+> guards (a falsy guard skips the step and records `steps.<name>.skipped`; the
+> single-statement `sql:` form rejects a guard), workflow transitions gain `decide:` with
+> load-time resolution and `decision` joins the guard roots, `decision.*` references in step
+> guards and transition guards are checked against declared `decide:` entries (`4711`), and
+> the enum-output lints land: comparing an output to a value the decision cannot produce is
+> `4713`, and a from-state whose equality-guarded transitions leave declared enum values
+> unhandled is `4712` — the unhandled else caught at build. Pending: the scaffolder +
+> gallery archetypes (which also give step-skip and workflow-consumption end-to-end
+> coverage).
 
 A **decision table** turns a combination of input conditions into declared output values:
 the approval route for an amount and a department, the shipping fee for a weight and a

@@ -195,6 +195,25 @@ class TransactionalCommandProcessorTest {
                 .hasMessageContaining("TQL-FIELD-2004");
     }
 
+    /**
+     * A when: guard selects among steps (docs/decision-tables.md "Acting on the result"); the
+     * single-statement form IS the command, so a guard there is a declaration error.
+     */
+    @Test
+    void aStepAcceptsAWhenGuardAndTheSingleStatementFormRejectsIt() throws Exception {
+        Map<String, SqlBinding> steps = new java.util.LinkedHashMap<>();
+        steps.put("approve", new SqlBinding(sql("approve.sql"), null, "update", Map.of(), null,
+                null, null, java.util.List.of(), null, null, null,
+                "decision.approvalRoute.level == 1"));
+        assertThat(processor(null, steps)).isNotNull();
+
+        SqlBinding guarded = new SqlBinding(sql("single.sql"), null, "update", Map.of(), null,
+                null, null, java.util.List.of(), null, null, null, "params.qty > 0");
+        assertThatThrownBy(() -> processor(guarded, Map.of()))
+                .isInstanceOf(TqlException.class)
+                .hasMessageContaining("when:");
+    }
+
     /** These tests cover construction and step compilation, not execution bounds. */
     private static final TransactionalCommandProcessor.Bounds UNBOUNDED = new TransactionalCommandProcessor.Bounds(
             0, -1, "fail");

@@ -116,7 +116,9 @@ public final class ManifestLoader {
         List<RouteFile> consumers = applySharedDefinitions(domains, ruleSets, decisions,
                 loadConsumers(home));
         List<ScopeFile> scopes = loadScopes(home);
-        List<WorkflowFile> workflows = loadWorkflows(home);
+        List<WorkflowFile> workflows = new ArrayList<>(loadWorkflows(home));
+        workflows.replaceAll(workflow -> new WorkflowFile(workflow.source(),
+                withWorkflowDecisions(decisions, workflow.source(), workflow.definition())));
         List<AttachmentFile> attachments = loadAttachments(home);
         List<MigrationFile> migrations = loadMigrations(home);
         ManifestIndex index = buildIndex(home, config);
@@ -409,6 +411,32 @@ public final class ManifestLoader {
             RouteDefinition def) {
         return withDecisions(decisions, source,
                 withRuleSets(ruleSets, source, withFieldDomains(domains, source, def)));
+    }
+
+    /**
+     * Resolves each transition's {@code decide:} references (docs/decision-tables.md "Acting
+     * on the result") — a workflow document consumes shared decisions exactly as a route does,
+     * so its references resolve at the same time, with the same errors.
+     */
+    private static io.tesseraql.yaml.model.WorkflowDefinition withWorkflowDecisions(
+            io.tesseraql.yaml.decision.DecisionSets decisions, Path source,
+            io.tesseraql.yaml.model.WorkflowDefinition def) {
+        if (def.transitions().stream().allMatch(transition -> transition.decide().isEmpty())) {
+            return def;
+        }
+        List<io.tesseraql.yaml.model.TransitionSpec> resolved = new ArrayList<>();
+        for (io.tesseraql.yaml.model.TransitionSpec transition : def.transitions()) {
+            Map<String, io.tesseraql.yaml.model.DecisionUse> merged = new java.util.LinkedHashMap<>();
+            transition.decide().forEach((alias, use) -> merged.put(alias,
+                    decisions.resolve(alias, use, source.toString())));
+            resolved.add(new io.tesseraql.yaml.model.TransitionSpec(transition.id(),
+                    transition.from(), transition.to(), transition.guard(),
+                    transition.command(), transition.params(), transition.assign(),
+                    transition.security(), merged));
+        }
+        return new io.tesseraql.yaml.model.WorkflowDefinition(def.version(), def.id(),
+                def.kind(), def.mode(), def.document(), def.http(), def.security(),
+                def.initial(), def.states(), resolved, def.deadlines(), def.reminders());
     }
 
     private static RouteDefinition withDecisions(

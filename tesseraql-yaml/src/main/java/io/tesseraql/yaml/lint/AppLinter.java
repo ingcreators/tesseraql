@@ -638,6 +638,200 @@ public final class AppLinter {
                 .forEach(name -> findings.add(new LintFinding("TQL-DECISION-4716", "warning",
                         "decisions", "Decision '" + name + "' is declared but never referenced")));
         lintDecisionSources(appHome, manifest, sets, findings);
+        lintDecisionConsumption(appHome, manifest, findings);
+    }
+
+    /**
+     * The consumption side of decisions (docs/decision-tables.md "Acting on the result").
+     * Because outputs can be enum-typed, the compiler knows the full value space: a guard or
+     * step {@code when:} comparing an output against a value the decision cannot produce is
+     * {@code TQL-DECISION-4713}; a from-state whose transitions branch on an enum output but
+     * leave declared values unhandled is {@code TQL-DECISION-4712} — the unhandled {@code
+     * else} caught at build. A {@code decision.*} reference naming no {@code decide:} entry
+     * reuses {@code 4711}: it could otherwise only fail at runtime.
+     */
+    private void lintDecisionConsumption(Path appHome, AppManifest manifest,
+            List<LintFinding> findings) {
+        for (Map.Entry<Path, RouteDefinition> document : authoringDocuments(manifest)) {
+            RouteDefinition def = document.getValue();
+            String source = appHome.relativize(document.getKey()).toString().replace('\\', '/');
+            def.steps().forEach((name, step) -> {
+                if (step.when() != null && !step.when().isBlank()) {
+                    checkDecisionExpression(source, "step '" + name + "' when:", step.when(),
+                            def.decide(), findings);
+                }
+            });
+        }
+        for (WorkflowFile workflow : manifest.workflows()) {
+            String source = relative(appHome, workflow.source());
+            Map<String, List<io.tesseraql.yaml.model.TransitionSpec>> byFrom = new LinkedHashMap<>();
+            for (io.tesseraql.yaml.model.TransitionSpec transition : workflow.definition()
+                    .transitions()) {
+                if (transition.guard() != null && !transition.guard().isBlank()) {
+                    checkDecisionExpression(source, "transition '" + transition.id()
+                            + "' guard", transition.guard(), transition.decide(), findings);
+                }
+                byFrom.computeIfAbsent(transition.from(), unused -> new ArrayList<>())
+                        .add(transition);
+            }
+            byFrom.forEach((from, transitions) -> lintBranchCoverage(source, from, transitions,
+                    findings));
+        }
+    }
+
+    /** One {@code decision.<alias>.<output> == literal} (or !=) comparison in an expression. */
+    private record DecisionComparison(String alias, String output, Object literal,
+            boolean equality) {
+    }
+
+    private static void checkDecisionExpression(String source, String where, String expression,
+            Map<String, io.tesseraql.yaml.model.DecisionUse> decide,
+            List<LintFinding> findings) {
+        Expr parsed;
+        try {
+            parsed = io.tesseraql.core.expr.ExpressionParser.parse(expression);
+        } catch (RuntimeException unparseable) {
+            // A malformed expression is its own lint's concern.
+            return;
+        }
+        List<List<String>> paths = new ArrayList<>();
+        collectGuardPaths(parsed, paths);
+        for (List<String> path : paths) {
+            if (path.size() >= 2 && "decision".equals(path.get(0))
+                    && !decide.containsKey(path.get(1))) {
+                findings.add(new LintFinding("TQL-DECISION-4711", "error", source,
+                        where + " references 'decision." + path.get(1) + "' but declares no"
+                                + " decide: entry '" + path.get(1)
+                                + "' — the reference can only resolve null at runtime"));
+            }
+        }
+        for (DecisionComparison comparison : decisionComparisons(parsed)) {
+            List<Object> allowed = allowedValues(decide, comparison.alias(),
+                    comparison.output());
+            if (allowed.isEmpty()) {
+                continue;
+            }
+            boolean known = allowed.stream()
+                    .anyMatch(value -> String.valueOf(value)
+                            .equals(String.valueOf(comparison.literal())));
+            if (!known) {
+                findings.add(new LintFinding("TQL-DECISION-4713", "error", source,
+                        where + " compares decision." + comparison.alias() + "."
+                                + comparison.output() + " to '" + comparison.literal()
+                                + "', which the decision cannot produce — its enum is "
+                                + allowed));
+            }
+        }
+    }
+
+    /**
+     * The unhandled-else check: when every transition out of a state branches on the same
+     * enum-typed output with plain equality, the compiler can prove which declared values
+     * have no receiving transition.
+     */
+    private static void lintBranchCoverage(String source, String from,
+            List<io.tesseraql.yaml.model.TransitionSpec> transitions,
+            List<LintFinding> findings) {
+        if (transitions.size() < 2) {
+            return;
+        }
+        String alias = null;
+        String output = null;
+        List<Object> covered = new ArrayList<>();
+        List<Object> allowed = List.of();
+        for (io.tesseraql.yaml.model.TransitionSpec transition : transitions) {
+            if (transition.guard() == null || transition.guard().isBlank()) {
+                return;
+            }
+            Expr parsed;
+            try {
+                parsed = io.tesseraql.core.expr.ExpressionParser.parse(transition.guard());
+            } catch (RuntimeException unparseable) {
+                return;
+            }
+            List<DecisionComparison> comparisons = decisionComparisons(parsed);
+            // Only the provable shape counts: one equality comparison, nothing else in the
+            // guard, every transition on the same output.
+            if (comparisons.size() != 1 || !comparisons.get(0).equality()
+                    || !(parsed instanceof Expr.Comparison)) {
+                return;
+            }
+            DecisionComparison comparison = comparisons.get(0);
+            if (alias == null) {
+                alias = comparison.alias();
+                output = comparison.output();
+                allowed = allowedValues(transition.decide(), alias, output);
+            } else if (!alias.equals(comparison.alias())
+                    || !output.equals(comparison.output())) {
+                return;
+            }
+            covered.add(comparison.literal());
+        }
+        if (allowed.isEmpty()) {
+            return;
+        }
+        List<Object> unhandled = new ArrayList<>();
+        for (Object value : allowed) {
+            if (covered.stream()
+                    .noneMatch(hit -> String.valueOf(hit).equals(String.valueOf(value)))) {
+                unhandled.add(value);
+            }
+        }
+        if (!unhandled.isEmpty()) {
+            findings.add(new LintFinding("TQL-DECISION-4712", "warning", source,
+                    "State '" + from + "' branches on decision." + alias + "." + output
+                            + " but no transition handles " + unhandled
+                            + " — a value the decision can produce has no receiver"));
+        }
+    }
+
+    private static List<Object> allowedValues(
+            Map<String, io.tesseraql.yaml.model.DecisionUse> decide, String alias,
+            String output) {
+        io.tesseraql.yaml.model.DecisionUse use = decide.get(alias);
+        if (use == null || use.decision() == null) {
+            return List.of();
+        }
+        io.tesseraql.yaml.model.DecisionsDocument.Output spec = use.decision().outputs()
+                .get(output);
+        return spec == null ? List.of() : spec.allowed();
+    }
+
+    /** Every {@code decision.<a>.<o> ==/!= literal} comparison, either operand order. */
+    private static List<DecisionComparison> decisionComparisons(Expr expr) {
+        List<DecisionComparison> out = new ArrayList<>();
+        collectDecisionComparisons(expr, out);
+        return out;
+    }
+
+    private static void collectDecisionComparisons(Expr expr, List<DecisionComparison> out) {
+        switch (expr) {
+            case Expr.Comparison comparison -> {
+                if (comparison.operator() == Expr.Comparison.Operator.EQ
+                        || comparison.operator() == Expr.Comparison.Operator.NE) {
+                    addComparison(comparison.left(), comparison.right(),
+                            comparison.operator() == Expr.Comparison.Operator.EQ, out);
+                    addComparison(comparison.right(), comparison.left(),
+                            comparison.operator() == Expr.Comparison.Operator.EQ, out);
+                }
+            }
+            case Expr.Logical logical -> {
+                collectDecisionComparisons(logical.left(), out);
+                collectDecisionComparisons(logical.right(), out);
+            }
+            case Expr.Not not -> collectDecisionComparisons(not.operand(), out);
+            default -> {
+            }
+        }
+    }
+
+    private static void addComparison(Expr side, Expr other, boolean equality,
+            List<DecisionComparison> out) {
+        if (side instanceof Expr.Path path && other instanceof Expr.Literal literal
+                && path.segments().size() == 3 && "decision".equals(path.segments().get(0))) {
+            out.add(new DecisionComparison(path.segments().get(1), path.segments().get(2),
+                    literal.value(), equality));
+        }
     }
 
     /**
@@ -2212,8 +2406,10 @@ public final class AppLinter {
         }
     }
 
-    /** The roots a transition guard may reference (roadmap Phase 28); {@code task} arrives in slice 2. */
-    private static final Set<String> GUARD_ROOTS = Set.of("document", "task", "principal");
+    /** The roots a transition guard may reference (roadmap Phase 28); {@code decision} covers
+     * the transition's own {@code decide:} outputs (docs/decision-tables.md). */
+    private static final Set<String> GUARD_ROOTS = Set.of("document", "task", "principal",
+            "decision");
 
     /**
      * Lints approval workflows (roadmap Phase 28): each workflow's states and transitions are
@@ -2362,7 +2558,7 @@ public final class AppLinter {
             if (!path.isEmpty() && !GUARD_ROOTS.contains(path.get(0))) {
                 findings.add(new LintFinding("TQL-WORKFLOW-3103", "error", source,
                         where + " guard references '" + String.join(".", path)
-                                + "'; allowed roots are document, task, principal"));
+                                + "'; allowed roots are document, task, principal, decision"));
             }
         }
     }

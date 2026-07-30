@@ -25,11 +25,15 @@ import java.util.Map;
  *                 bindings — a step inside a transactional pipeline cannot pick its own connector
  *                 ({@code TQL-YAML-1037}), because the pipeline is one transaction on one
  *                 connection
+ * @param when     optional guard expression on a command step (docs/decision-tables.md "Acting
+ *                 on the result"): a falsy guard skips the step, which records
+ *                 {@code steps.<name>.skipped} instead of a result — the declared branch point
+ *                 for decision outputs ("level 1 approves directly, others open a workflow")
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public record SqlBinding(String file, String contract, String mode, Map<String, String> params,
         String service, Materialize materialize, String sequence, java.util.List<String> keys,
-        Expect expect, Integer timeoutSeconds, String datasource) {
+        Expect expect, Integer timeoutSeconds, String datasource, String when) {
 
     public SqlBinding {
         params = params == null ? Map.of() : Map.copyOf(params);
@@ -41,7 +45,7 @@ public record SqlBinding(String file, String contract, String mode, Map<String, 
             String service, Materialize materialize, String sequence,
             java.util.List<String> keys, Expect expect) {
         this(file, contract, mode, params, service, materialize, sequence, keys, expect, null,
-                null);
+                null, null);
     }
 
     /** The pre-Phase-53 shape (no per-binding connector), for positional callers. */
@@ -49,7 +53,7 @@ public record SqlBinding(String file, String contract, String mode, Map<String, 
             String service, Materialize materialize, String sequence,
             java.util.List<String> keys, Expect expect, Integer timeoutSeconds) {
         this(file, contract, mode, params, service, materialize, sequence, keys, expect,
-                timeoutSeconds, null);
+                timeoutSeconds, null, null);
     }
 
     /** Whether this binding executes a named Identity SQL Contract instead of a SQL file. */

@@ -153,7 +153,7 @@ public final class TransactionalCommandProcessor implements Processor {
      */
     private record Step(String name, String contextKey, List<SqlNode> nodes, String sourcePath,
             String mode, Map<String, String> params, List<String> keys, SqlBinding.Expect expect,
-            String sequence, Bounds bounds) {
+            String sequence, Bounds bounds, io.tesseraql.core.expr.Expr when) {
 
         boolean isSequence() {
             return sequence != null;
@@ -292,10 +292,19 @@ public final class TransactionalCommandProcessor implements Processor {
             SqlBinding binding = entry.getValue();
             validate(name, binding, seen);
             String contextKey = singleSql ? "sql" : name;
+            // A guard belongs to a step of a pipeline: the single-statement form IS the
+            // command, and a command that conditionally does nothing at all should say so as
+            // two declared steps, not as a sql: that silently no-ops.
+            if (singleSql && binding.when() != null && !binding.when().isBlank()) {
+                throw invalid("sql: cannot declare when: — guards select among steps:");
+            }
+            io.tesseraql.core.expr.Expr when = binding.when() == null || binding.when().isBlank()
+                    ? null
+                    : io.tesseraql.core.expr.ExpressionParser.parse(binding.when());
             if (binding.isSequence()) {
                 compiled.add(new Step(name, contextKey, null, null, "sequence",
                         binding.params(), List.of(), null, binding.sequence(),
-                        boundsFor(binding)));
+                        boundsFor(binding), when));
             } else {
                 Path file = stepFile.apply(binding.file());
                 // Steps default to update (commands write); the single-statement form keeps its
@@ -315,7 +324,7 @@ public final class TransactionalCommandProcessor implements Processor {
                 compiled.add(new Step(name, contextKey, Sql2WayParser.parse(read(file)),
                         file.toString(), mode,
                         binding.params(), binding.keys(), binding.expect(), null,
-                        boundsFor(binding)));
+                        boundsFor(binding), when));
             }
             seen.add(name);
         }
@@ -467,6 +476,16 @@ public final class TransactionalCommandProcessor implements Processor {
                     }
                 }
                 for (Step step : steps) {
+                    // The ValidationRules.when contract, applied to steps: a falsy guard
+                    // skips the step, and the skip is recorded — a later step or the
+                    // response reading steps.<name>.* sees a declared absence, not a
+                    // silently missing entry (docs/decision-tables.md "Acting on the
+                    // result").
+                    if (step.when() != null && !step.when()
+                            .evalBoolean(new io.tesseraql.core.expr.EvaluationContext(context))) {
+                        stepResults.put(step.name(), Map.of("skipped", true));
+                        continue;
+                    }
                     Map<String, Object> result = step.isSequence()
                             ? allocateSequence(exchange, connection, step)
                             : executeSql(exchange, connection, step, context, audit);
