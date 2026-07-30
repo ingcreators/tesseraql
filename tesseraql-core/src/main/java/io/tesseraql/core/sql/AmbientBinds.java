@@ -30,6 +30,14 @@ public final class AmbientBinds {
     /** The parameter-map key the curated principal fields are seeded under. */
     public static final String PRINCIPAL = "principal";
 
+    /**
+     * The parameter-map key the route's evaluated {@code decide:} outputs are seeded under
+     * (docs/decision-tables.md): {@code decision.<alias>.<output>} binds resolve wherever
+     * {@code principal.*} binds do, and the namespace is equally read-only — the route computes
+     * it once, statements only consume it.
+     */
+    public static final String DECISION = "decision";
+
     /** The closed field set; each resolves via the same read-only property access as {@code params:}. */
     private static final List<String> PRINCIPAL_FIELDS = List.of("subject", "loginId", "tenantId",
             "roles", "permissions", "groups");
@@ -75,6 +83,12 @@ public final class AmbientBinds {
      * a route-local {@code params:} entry named {@code principal} wins.
      */
     public static void seed(Map<String, Object> params, EvaluationContext evaluation) {
+        if (!params.containsKey(DECISION)) {
+            Object decisions = evaluation.resolve(List.of(DECISION));
+            if (decisions != null) {
+                params.put(DECISION, decisions);
+            }
+        }
         if (params.containsKey(PRINCIPAL)) {
             return;
         }

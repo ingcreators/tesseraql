@@ -23,6 +23,9 @@ import java.util.Map;
  *                execution context under its own name so one page can render several result sets
  * @param validate declarative validation rules of a command, keyed by rule id and evaluated in
  *                their authored order before the command's steps (roadmap Phase 19)
+ * @param decide  decision-table references of a command (docs/decision-tables.md), keyed by
+ *                alias and evaluated once, in authored order, before the {@code validate:}
+ *                rules; outputs publish into the context as {@code decision.<alias>.<output>}
  * @param notifications the {@code notify:} block of a command, keyed by notification id and
  *                enqueued on the transactional outbox after the steps (roadmap Phase 20)
  * @param errors  declarative error mapping, e.g. constraint names to field-level errors
@@ -55,6 +58,9 @@ public record RouteDefinition(
         Map<String, SqlBinding> steps,
         Map<String, SqlBinding> queries,
         Map<String, ValidationRule> validate,
+        // Named decision-table references evaluated once per operation before validate: rules,
+        // published under decision.* (docs/decision-tables.md).
+        Map<String, DecisionUse> decide,
         // "notify" itself is not a legal record component (it would hide Object.notify()).
         @com.fasterxml.jackson.annotation.JsonProperty("notify") Map<String, NotifySpec> notifications,
         ErrorsSpec errors,
@@ -86,6 +92,9 @@ public record RouteDefinition(
         validate = validate == null
                 ? Map.of()
                 : java.util.Collections.unmodifiableMap(new java.util.LinkedHashMap<>(validate));
+        decide = decide == null
+                ? Map.of()
+                : java.util.Collections.unmodifiableMap(new java.util.LinkedHashMap<>(decide));
         notifications = notifications == null
                 ? Map.of()
                 : java.util.Collections
@@ -106,9 +115,9 @@ public record RouteDefinition(
             return this;
         }
         return new RouteDefinition(version, id, kind, recipe, input, inputPolicy, effective,
-                idempotency, policy, outbox, sql, steps, queries, validate, notifications, errors,
-                fileImport, fileExport, webhook, publish, consume, response, page, datasource,
-                http, cache, emit);
+                idempotency, policy, outbox, sql, steps, queries, validate, decide, notifications,
+                errors, fileImport, fileExport, webhook, publish, consume, response, page,
+                datasource, http, cache, emit);
     }
 
     /**
@@ -122,7 +131,7 @@ public record RouteDefinition(
             return this;
         }
         return new RouteDefinition(version, id, kind, recipe, effectiveInput, inputPolicy,
-                security, idempotency, policy, outbox, sql, steps, queries, validate,
+                security, idempotency, policy, outbox, sql, steps, queries, validate, decide,
                 notifications, effectiveErrors, fileImport, fileExport, webhook, publish, consume,
                 response, page, datasource, http, cache, emit);
     }
@@ -136,9 +145,24 @@ public record RouteDefinition(
             return this;
         }
         return new RouteDefinition(version, id, kind, recipe, input, inputPolicy, security,
-                idempotency, policy, outbox, sql, steps, queries, effective, notifications,
-                errors, fileImport, fileExport, webhook, publish, consume, response, page,
-                datasource, http, cache, emit);
+                idempotency, policy, outbox, sql, steps, queries, effective, decide,
+                notifications, errors, fileImport, fileExport, webhook, publish, consume,
+                response, page, datasource, http, cache, emit);
+    }
+
+    /**
+     * A copy carrying resolved {@code decide:} references — how the manifest loader stamps
+     * shared decision-table references (docs/decision-tables.md) into the route, so the
+     * compiler builds the runtime tables from the route alone.
+     */
+    public RouteDefinition withDecide(Map<String, DecisionUse> effective) {
+        if (effective == decide) {
+            return this;
+        }
+        return new RouteDefinition(version, id, kind, recipe, input, inputPolicy, security,
+                idempotency, policy, outbox, sql, steps, queries, validate, effective,
+                notifications, errors, fileImport, fileExport, webhook, publish, consume,
+                response, page, datasource, http, cache, emit);
     }
 
     /** The input policy, or framework defaults (reject unknown / reject read-only). */

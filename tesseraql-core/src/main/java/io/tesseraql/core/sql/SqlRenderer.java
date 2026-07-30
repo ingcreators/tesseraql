@@ -26,6 +26,9 @@ public final class SqlRenderer {
     /** TQL-SQL-2108: an embedded variable resolved to a value carrying SQL meta-characters. */
     private static final TqlErrorCode UNSAFE_EMBEDDED = new TqlErrorCode(TqlDomain.SQL, 2108);
     private static final TqlErrorCode UNSEEDED_AMBIENT = new TqlErrorCode(TqlDomain.SQL, 2112);
+    /** TQL-DECISION-4722: a decision.* bind names a decision the route never evaluated. */
+    private static final TqlErrorCode UNSEEDED_DECISION = new TqlErrorCode(TqlDomain.DECISION,
+            4722);
     /** A {@code {placeholder}} reference inside an embedded-variable template. */
     private static final Pattern PLACEHOLDER = Pattern.compile("\\{([^}]+)}");
 
@@ -264,6 +267,27 @@ public final class SqlRenderer {
         }
     }
 
+    /**
+     * The {@link #requireSeededAmbient} promise for the decision namespace
+     * (docs/decision-tables.md): a {@code decision.<alias>.*} bind on a statement whose route
+     * never evaluated that decision fails loudly instead of binding null. Only the alias being
+     * absent is an error; an output a matched row genuinely set to null stays null.
+     */
+    private void requireSeededDecision(String expressionSource, int sourceLine) {
+        String expression = expressionSource == null ? "" : expressionSource.trim();
+        if (!expression.startsWith(AmbientBinds.DECISION + ".")) {
+            return;
+        }
+        List<String> path = Arrays.asList(expression.split("\\."));
+        if (path.size() < 2 || context.resolve(path.subList(0, 2)) == null) {
+            throw TqlException.builder(UNSEEDED_DECISION)
+                    .message("Bind '" + expression + "' names no evaluated decision — declare"
+                            + " it in the route's decide: block (docs/decision-tables.md)")
+                    .line(sourceLine)
+                    .build();
+        }
+    }
+
     /** Rejects an interpolated value that could break out of its SQL position (Doma-style guard). */
     private void guardEmbedded(String value, String path, int sourceLine) {
         boolean unsafe = value.indexOf('\'') >= 0 || value.indexOf(';') >= 0
@@ -284,6 +308,7 @@ public final class SqlRenderer {
     private void appendBind(SqlNode.Bind bind) {
         Object value = bind.expression().eval(context);
         requireSeededAmbient(bind.expressionSource(), bind.sourceLine());
+        requireSeededDecision(bind.expressionSource(), bind.sourceLine());
         mapToSource("?", bind.sourceLine());
         parameters.add(new BoundParameter(bind.expressionSource(), value, bind.sourceLine()));
         coverage.coverLine(bind.sourceLine());
@@ -292,6 +317,7 @@ public final class SqlRenderer {
     private void appendListBind(SqlNode.ListBind listBind) {
         Object value = listBind.expression().eval(context);
         requireSeededAmbient(listBind.expressionSource(), listBind.sourceLine());
+        requireSeededDecision(listBind.expressionSource(), listBind.sourceLine());
         List<Object> elements = toList(value, listBind.expressionSource(), listBind.sourceLine());
         coverage.coverLine(listBind.sourceLine());
         if (elements.isEmpty()) {

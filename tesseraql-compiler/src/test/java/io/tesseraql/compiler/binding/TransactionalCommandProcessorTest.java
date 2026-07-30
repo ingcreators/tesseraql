@@ -180,7 +180,7 @@ class TransactionalCommandProcessorTest {
                 new io.tesseraql.yaml.model.NotifySpec("member-mail", null,
                         Map.of("email", "body.email")));
         assertThat(new TransactionalCommandProcessor("orders.create",
-                step(sql("single.sql"), Map.of()), Map.of(), Map.of(), valid,
+                step(sql("single.sql"), Map.of()), Map.of(), Map.of(), Map.of(), valid,
                 file -> dir.resolve(file), "main", "postgres", null, null, null, "orders",
                 UNBOUNDED))
                 .isNotNull();
@@ -188,7 +188,7 @@ class TransactionalCommandProcessorTest {
         Map<String, io.tesseraql.yaml.model.NotifySpec> channelless = Map.of("confirmation",
                 new io.tesseraql.yaml.model.NotifySpec(null, null, Map.of()));
         assertThatThrownBy(() -> new TransactionalCommandProcessor("orders.create",
-                step(sql("single.sql"), Map.of()), Map.of(), Map.of(), channelless,
+                step(sql("single.sql"), Map.of()), Map.of(), Map.of(), Map.of(), channelless,
                 file -> dir.resolve(file), "main", "postgres", null, null, null, "orders",
                 UNBOUNDED))
                 .isInstanceOf(TqlException.class)
@@ -206,8 +206,8 @@ class TransactionalCommandProcessorTest {
     private TransactionalCommandProcessor processor(SqlBinding sql, Map<String, SqlBinding> steps,
             Map<String, ValidationRule> validate) {
         return new TransactionalCommandProcessor("orders.create", sql, steps, validate, Map.of(),
-                file -> dir.resolve(file), "main", "postgres", null, null, null, "orders",
-                UNBOUNDED);
+                Map.of(), file -> dir.resolve(file), "main", "postgres", null, null, null,
+                "orders", UNBOUNDED);
     }
 
     private static SqlBinding step(String file, Map<String, String> params) {

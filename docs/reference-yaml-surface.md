@@ -28,6 +28,7 @@ Schema for TesseraQL Simple YAML documents: routes (web/**/<method>.yml), jobs (
 | `steps` | map of [sqlBinding](#sqlbinding) |  |
 | `queries` | map of [sqlBinding](#sqlbinding) | Additional named queries executed after sql, each bound into the execution context under its name. |
 | `validate` | map of [object](#validate) | Declarative validation rules keyed by rule id. A rule declares exactly one of rule: (a cross-field expression), file: (validation SQL), or use: (a shared rule declared under rules/). Honored on command-json, query-json and webhook routes, on queue consumers, and on MCP tools. |
+| `decide` | map of [object](#decide) | Decision-table references keyed by alias, evaluated once per operation before the validate: rules; outputs publish as decision.<alias>.<output> for SQL binds and directives. Documented in decision-tables.md. |
 | `notify` | map of object | Notifications enqueued with the command on the transactional outbox, keyed by channel. Documented in notifications.md. |
 | `errors` | object | Per-route error mapping: constraint codes and statuses onto response fields and messages. Documented in declarative-validation.md. |
 | `import` | object | file-import parsing and column-to-bind mapping (headerRow, startRow, columns, onError: rollback\|skip). Documented in file-transfers.md. |
@@ -131,6 +132,13 @@ Declarative HTTP caching for query responses (docs/response-shaping.md): Cache-C
 | `when` | string | Guard expression; the rule is skipped when it is falsy. |
 | `code` | string | Machine-readable violation code. |
 | `message` | string | Message catalog key. |
+
+### decide
+
+| Property | Type | Description |
+| --- | --- | --- |
+| `use` \* | string | Name of a decision declared under decisions/. |
+| `params` \* | map of string | Wiring of each decision input to a request-context expression (params.total, principal.orgUnit, "principal.role == 'officer'"). |
 
 ### webhook
 
@@ -318,6 +326,48 @@ Schema for TesseraQL shared validation rule documents (rules/*.yml): named rules
 | `binds` | array of string | The bind contract a reference's params: must satisfy exactly. Ambient binds (principal.*, audit.*) are supplied by the framework and never listed here. |
 | `code` | string | Default stable rule code, overridable at the reference. |
 | `message` | string | Default message key, overridable at the reference. |
+
+### decisions
+
+Schema for TesseraQL shared decision documents (decisions/*.yml): named decision tables a route references from its 'decide:' block with 'use:'. Documented in decision-tables.md.
+
+| Property | Type | Description |
+| --- | --- | --- |
+| `version` | const `tesseraql/v1` | The DSL version. Always tesseraql/v1. |
+| `decisions` | map of [object](#decisionsdecisions) | Named decision tables. Each declares its contract (typed inputs and outputs, hit and miss policies) and rows; how a route wires the inputs (params:) stays at the reference. |
+
+#### decisions.decisions
+
+| Property | Type | Description |
+| --- | --- | --- |
+| `inputs` \* | map of [object](#decisionsdecisionsinputs) | Typed inputs by name; each row cell constrains one of these. |
+| `outputs` \* | map of [object](#decisionsdecisionsoutputs) | Typed outputs by name; every row sets all of them. |
+| `hitPolicy` | enum: `first` \| `unique` | first (default): authored order resolves. unique: more than one conditional match is an error, and overlapping rows fail the build. |
+| `onMiss` | enum: `error` \| `default` | error (default): a lookup no row matches raises TQL-DECISION-4721. default: the trailing row without when: answers. |
+| `rows` \* | array of [object](#decisionsdecisionsrows) | The authored rows, resolved in order. A row is the conjunction of its when: cells (absent cell = wildcard); a trailing row without when: is the default. |
+
+##### decisions.decisions.inputs
+
+| Property | Type | Description |
+| --- | --- | --- |
+| `type` | string | Inline type of the input. |
+| `domain` | string | Field domain reference declaring the input's type. |
+| `match` | enum: `eq` \| `between` \| `in` \| `bool` | How row cells compare against this input: eq (default, equality; empty cell = wildcard), between (inclusive range), in (membership in a small fixed set), bool. |
+
+##### decisions.decisions.outputs
+
+| Property | Type | Description |
+| --- | --- | --- |
+| `type` | string | Inline type of the output. |
+| `domain` | string | Field domain reference declaring the output's type. |
+| `enum` | array of any | The output's full value space, enabling consumption-side exhaustiveness lints. |
+
+##### decisions.decisions.rows
+
+| Property | Type | Description |
+| --- | --- | --- |
+| `when` | object | Cells by input name: a scalar (eq/bool), a range ('>= 10000', '5..10', a number), or a list (in). |
+| `out` \* | object | The outputs this row sets — exactly the declared outputs. |
 
 ## Shared definitions
 

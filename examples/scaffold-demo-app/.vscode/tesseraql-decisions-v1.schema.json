@@ -1,0 +1,88 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tesseraql.io/schema/tesseraql-decisions-v1.schema.json",
+  "title": "TesseraQL decision tables v1",
+  "description": "Schema for TesseraQL shared decision documents (decisions/*.yml): named decision tables a route references from its 'decide:' block with 'use:'. Documented in decision-tables.md.",
+  "type": "object",
+  "properties": {
+    "version": {
+      "type": "string",
+      "const": "tesseraql/v1",
+      "description": "The DSL version. Always tesseraql/v1."
+    },
+    "decisions": {
+      "type": "object",
+      "description": "Named decision tables. Each declares its contract (typed inputs and outputs, hit and miss policies) and rows; how a route wires the inputs (params:) stays at the reference.",
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "inputs": {
+            "type": "object",
+            "description": "Typed inputs by name; each row cell constrains one of these.",
+            "additionalProperties": {
+              "type": "object",
+              "properties": {
+                "type": { "type": "string", "description": "Inline type of the input." },
+                "domain": { "type": "string", "description": "Field domain reference declaring the input's type." },
+                "match": {
+                  "type": "string",
+                  "enum": ["eq", "between", "in", "bool"],
+                  "description": "How row cells compare against this input: eq (default, equality; empty cell = wildcard), between (inclusive range), in (membership in a small fixed set), bool."
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "outputs": {
+            "type": "object",
+            "description": "Typed outputs by name; every row sets all of them.",
+            "additionalProperties": {
+              "type": "object",
+              "properties": {
+                "type": { "type": "string", "description": "Inline type of the output." },
+                "domain": { "type": "string", "description": "Field domain reference declaring the output's type." },
+                "enum": {
+                  "type": "array",
+                  "description": "The output's full value space, enabling consumption-side exhaustiveness lints."
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "hitPolicy": {
+            "type": "string",
+            "enum": ["first", "unique"],
+            "description": "first (default): authored order resolves. unique: more than one conditional match is an error, and overlapping rows fail the build."
+          },
+          "onMiss": {
+            "type": "string",
+            "enum": ["error", "default"],
+            "description": "error (default): a lookup no row matches raises TQL-DECISION-4721. default: the trailing row without when: answers."
+          },
+          "rows": {
+            "type": "array",
+            "description": "The authored rows, resolved in order. A row is the conjunction of its when: cells (absent cell = wildcard); a trailing row without when: is the default.",
+            "items": {
+              "type": "object",
+              "properties": {
+                "when": {
+                  "type": "object",
+                  "description": "Cells by input name: a scalar (eq/bool), a range ('>= 10000', '5..10', a number), or a list (in)."
+                },
+                "out": {
+                  "type": "object",
+                  "description": "The outputs this row sets — exactly the declared outputs."
+                }
+              },
+              "required": ["out"],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": ["inputs", "outputs", "rows"],
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}

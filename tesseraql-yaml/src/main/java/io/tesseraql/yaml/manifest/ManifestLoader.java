@@ -99,7 +99,9 @@ public final class ManifestLoader {
                 .load(home);
         io.tesseraql.yaml.rules.ValidationRuleSets ruleSets = io.tesseraql.yaml.rules.ValidationRuleSets
                 .load(home, parser);
-        List<RouteFile> routes = applySharedDefinitions(domains, ruleSets,
+        io.tesseraql.yaml.decision.DecisionSets decisions = io.tesseraql.yaml.decision.DecisionSets
+                .load(home, parser);
+        List<RouteFile> routes = applySharedDefinitions(domains, ruleSets, decisions,
                 applySecurityDefaults(config, loadRoutes(home, brokenSink)));
         List<JobFile> jobs = loadJobs(home);
         List<ToolFile> tools = new ArrayList<>();
@@ -108,9 +110,10 @@ public final class ManifestLoader {
         List<PromptFile> prompts = new ArrayList<>();
         loadMcp(home, tools, resources, uiResources, prompts);
         tools.replaceAll(tool -> new ToolFile(tool.source(),
-                resolveSharedDefinitions(domains, ruleSets, tool.source(), tool.definition()),
+                resolveSharedDefinitions(domains, ruleSets, decisions, tool.source(),
+                        tool.definition()),
                 tool.description(), tool.uiResource()));
-        List<RouteFile> consumers = applySharedDefinitions(domains, ruleSets,
+        List<RouteFile> consumers = applySharedDefinitions(domains, ruleSets, decisions,
                 loadConsumers(home));
         List<ScopeFile> scopes = loadScopes(home);
         List<WorkflowFile> workflows = loadWorkflows(home);
@@ -375,34 +378,49 @@ public final class ManifestLoader {
         return resolved;
     }
 
-    /** Resolves both shared-definition layers over a list of routes or consumers. */
+    /** Resolves the shared-definition layers over a list of routes or consumers. */
     private static List<RouteFile> applySharedDefinitions(
             io.tesseraql.yaml.domain.FieldDomains domains,
-            io.tesseraql.yaml.rules.ValidationRuleSets ruleSets, List<RouteFile> files) {
-        if (domains.isEmpty() && ruleSets.isEmpty()) {
+            io.tesseraql.yaml.rules.ValidationRuleSets ruleSets,
+            io.tesseraql.yaml.decision.DecisionSets decisions, List<RouteFile> files) {
+        if (domains.isEmpty() && ruleSets.isEmpty() && decisions.isEmpty()) {
             return files;
         }
         List<RouteFile> resolved = new ArrayList<>(files.size());
         for (RouteFile file : files) {
             resolved.add(new RouteFile(file.httpMethod(), file.urlPath(), file.source(),
-                    resolveSharedDefinitions(domains, ruleSets, file.source(),
+                    resolveSharedDefinitions(domains, ruleSets, decisions, file.source(),
                             file.definition())));
         }
         return resolved;
     }
 
     /**
-     * Field-domain references plus shared validation rules for one document
-     * (docs/field-domains.md, docs/validation-rule-sets.md), so the binder, linter, OpenAPI,
-     * coverage, and the MCP schema all see fully-populated inputs and plain rules. An unknown
-     * reference on either layer fails the load: a typo must not silently drop the constraints
-     * it names.
+     * Field-domain references plus shared validation rules plus decision-table references for
+     * one document (docs/field-domains.md, docs/validation-rule-sets.md,
+     * docs/decision-tables.md), so the binder, linter, OpenAPI, coverage, and the MCP schema
+     * all see fully-populated inputs and plain rules. An unknown reference on any layer fails
+     * the load: a typo must not silently drop the constraints it names.
      */
     private static RouteDefinition resolveSharedDefinitions(
             io.tesseraql.yaml.domain.FieldDomains domains,
-            io.tesseraql.yaml.rules.ValidationRuleSets ruleSets, Path source,
+            io.tesseraql.yaml.rules.ValidationRuleSets ruleSets,
+            io.tesseraql.yaml.decision.DecisionSets decisions, Path source,
             RouteDefinition def) {
-        return withRuleSets(ruleSets, source, withFieldDomains(domains, source, def));
+        return withDecisions(decisions, source,
+                withRuleSets(ruleSets, source, withFieldDomains(domains, source, def)));
+    }
+
+    private static RouteDefinition withDecisions(
+            io.tesseraql.yaml.decision.DecisionSets decisions, Path source,
+            RouteDefinition def) {
+        if (def.decide().isEmpty()) {
+            return def;
+        }
+        Map<String, io.tesseraql.yaml.model.DecisionUse> merged = new java.util.LinkedHashMap<>();
+        def.decide().forEach((alias, use) -> merged.put(alias,
+                decisions.resolve(alias, use, source.toString())));
+        return def.withDecide(merged);
     }
 
     private static RouteDefinition withFieldDomains(io.tesseraql.yaml.domain.FieldDomains domains,

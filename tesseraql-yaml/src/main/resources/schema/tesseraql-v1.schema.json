@@ -152,6 +152,19 @@
         "additionalProperties": false
       }
     },
+    "decide": {
+      "type": "object",
+      "description": "Decision-table references keyed by alias, evaluated once per operation before the validate: rules; outputs publish as decision.<alias>.<output> for SQL binds and directives. Documented in decision-tables.md.",
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "use": { "type": "string", "description": "Name of a decision declared under decisions/." },
+          "params": { "type": "object", "additionalProperties": { "type": "string" }, "description": "Wiring of each decision input to a request-context expression (params.total, principal.orgUnit, \"principal.role == 'officer'\")." }
+        },
+        "required": ["use", "params"],
+        "additionalProperties": false
+      }
+    },
     "notify": { "type": "object", "additionalProperties": { "type": "object", "additionalProperties": true }, "description": "Notifications enqueued with the command on the transactional outbox, keyed by channel. Documented in notifications.md." },
     "errors": { "type": "object", "additionalProperties": true, "description": "Per-route error mapping: constraint codes and statuses onto response fields and messages. Documented in declarative-validation.md." },
     "import": { "type": "object", "additionalProperties": true, "description": "file-import parsing and column-to-bind mapping (headerRow, startRow, columns, onError: rollback|skip). Documented in file-transfers.md." },

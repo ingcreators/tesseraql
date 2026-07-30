@@ -576,6 +576,121 @@ public final class AppLinter {
         lintAmbientPrincipal(appHome, manifest, findings);
         lintComponentPolicy(config, findings);
         lintRuleSets(appHome, manifest, findings);
+        lintDecisions(appHome, manifest, findings);
+    }
+
+    /**
+     * Lints decision tables (docs/decision-tables.md). Malformed contracts, bad cells, and
+     * overlapping unique rows already failed the load (TQL-DECISION-4700..4707, 4714); what
+     * remains is what only a whole-app view can see: a {@code decision.*} bind naming no
+     * {@code decide:} entry of its route (which could otherwise only fail at runtime, the
+     * TQL-SEC-4136 line), a first-hit row shadowed entirely by an earlier row, and a decision
+     * nothing references.
+     */
+    private void lintDecisions(Path appHome, AppManifest manifest, List<LintFinding> findings) {
+        Set<String> referenced = new HashSet<>();
+        for (Map.Entry<Path, RouteDefinition> document : authoringDocuments(manifest)) {
+            RouteDefinition def = document.getValue();
+            String source = appHome.relativize(document.getKey()).toString().replace('\\', '/');
+            def.decide().values().forEach(use -> referenced.add(use.use()));
+            for (String bind : decisionBinds(document.getKey(), def)) {
+                String alias = bind.split("\\.")[1];
+                if (!def.decide().containsKey(alias)) {
+                    findings.add(new LintFinding("TQL-DECISION-4711", "error", source,
+                            "Route '" + def.id() + "' binds '" + bind + "' but declares no"
+                                    + " decide: entry '" + alias + "' — the bind can only fail"
+                                    + " at runtime"));
+                }
+            }
+        }
+        io.tesseraql.yaml.decision.DecisionSets sets = io.tesseraql.yaml.decision.DecisionSets
+                .load(appHome, new io.tesseraql.yaml.SimpleYamlParser());
+        if (sets.isEmpty()) {
+            return;
+        }
+        sets.decisions().forEach((name, decision) -> {
+            io.tesseraql.core.decision.DecisionTables.Table table = io.tesseraql.yaml.decision.DecisionSets
+                    .compile(name, decision);
+            if (table.unique()) {
+                // Unique rows may not even overlap (TQL-DECISION-4714), which subsumes shadowing.
+                return;
+            }
+            List<io.tesseraql.core.decision.DecisionTables.Row> rows = table.rows();
+            for (int later = 1; later < rows.size(); later++) {
+                for (int earlier = 0; earlier < later; earlier++) {
+                    if (rows.get(later).containedIn(rows.get(earlier))) {
+                        findings.add(new LintFinding("TQL-DECISION-4715", "warning", "decisions",
+                                "Decision '" + name + "' row " + (later + 1) + " is unreachable"
+                                        + " — row " + (earlier + 1) + " already matches"
+                                        + " everything it matches"));
+                        break;
+                    }
+                }
+            }
+        });
+        sets.decisions().keySet().stream()
+                .filter(name -> !referenced.contains(name))
+                .forEach(name -> findings.add(new LintFinding("TQL-DECISION-4716", "warning",
+                        "decisions", "Decision '" + name + "' is declared but never referenced")));
+    }
+
+    /** The distinct {@code decision.*} bind expressions across a document's parseable SQL files. */
+    private Set<String> decisionBinds(Path source, RouteDefinition def) {
+        Set<String> found = new LinkedHashSet<>();
+        Path dir = source.getParent();
+        List<String> files = new ArrayList<>();
+        if (def.sql() != null && def.sql().file() != null) {
+            files.add(def.sql().file());
+        }
+        def.steps().values().forEach(step -> {
+            if (step.file() != null) {
+                files.add(step.file());
+            }
+        });
+        def.queries().values().forEach(query -> {
+            if (query.file() != null) {
+                files.add(query.file());
+            }
+        });
+        def.validate().values().forEach(rule -> {
+            if (rule.file() != null) {
+                files.add(rule.file());
+            }
+        });
+        for (String file : files) {
+            Path sqlFile = dir.resolve(file).normalize();
+            if (!Files.isRegularFile(sqlFile)) {
+                continue;
+            }
+            try {
+                collectDecisionBinds(Sql2WayParser.parse(Files.readString(sqlFile)), found);
+            } catch (Exception ignored) {
+                // Unparseable SQL is its own lint's concern.
+            }
+        }
+        return found;
+    }
+
+    private static void collectDecisionBinds(List<SqlNode> nodes, Set<String> found) {
+        for (SqlNode node : nodes) {
+            switch (node) {
+                case SqlNode.Bind bind -> addIfDecision(bind.expressionSource(), found);
+                case SqlNode.ListBind bind -> addIfDecision(bind.expressionSource(), found);
+                case SqlNode.If cond -> cond.branches()
+                        .forEach(branch -> collectDecisionBinds(branch.body(), found));
+                case SqlNode.For loop -> collectDecisionBinds(loop.body(), found);
+                default -> {
+                }
+            }
+        }
+    }
+
+    private static void addIfDecision(String expressionSource, Set<String> found) {
+        String expression = expressionSource == null ? "" : expressionSource.trim();
+        if (expression.startsWith(io.tesseraql.core.sql.AmbientBinds.DECISION + ".")
+                && expression.split("\\.").length >= 2) {
+            found.add(expression);
+        }
     }
 
     /**
