@@ -529,6 +529,69 @@ public final class DocViews {
         return model;
     }
 
+    /** The decisions-page url, for cross-links from other portal pages. */
+    public static final String DECISIONS_URL = "/_tesseraql/studio/ui/docs/decisions";
+
+    /**
+     * The shared decision tables reference page (docs/decision-tables.md): every declared
+     * decision with its contract and the routes and workflow transitions referencing it.
+     *
+     * <p>Mirrors the Rules page deliberately: the two are the same idea applied to different
+     * declarations, and a reader who has learned one should not have to learn the other. An
+     * unreferenced decision is marked, the same signal as lint {@code TQL-DECISION-4716}.
+     */
+    public static Map<String, Object> decisions(String appName,
+            List<DocService.DecisionEntry> entries) {
+        Map<String, Object> model = new LinkedHashMap<>();
+        model.put("appName", appName);
+        List<Map<String, Object>> rows = new ArrayList<>();
+        for (DocService.DecisionEntry entry : entries) {
+            var decision = entry.definition();
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("name", entry.name());
+            row.put("hitPolicy",
+                    decision.hitPolicy() == null || decision.hitPolicy().isBlank()
+                            ? "first"
+                            : decision.hitPolicy());
+            row.put("kind", decision.source() == null ? "yaml" : "table");
+            row.put("table", decision.source() == null ? null : decision.source().table());
+            row.put("rows", decision.source() == null
+                    ? decision.rows().size() + (decision.rows().size() == 1 ? " row" : " rows")
+                    : null);
+            // The contract a reference's params: must wire exactly, with how each row cell
+            // compares (match:, defaulting to eq) and each output's declared value space.
+            List<String> inputs = new ArrayList<>();
+            decision.inputs().forEach((input, spec) -> inputs.add(input + " ("
+                    + (spec.match() == null || spec.match().isBlank() ? "eq" : spec.match())
+                    + ")"));
+            row.put("inputs", inputs);
+            List<String> outputs = new ArrayList<>();
+            decision.outputs().forEach((output, spec) -> {
+                List<String> allowed = new ArrayList<>();
+                spec.allowed().forEach(value -> allowed.add(String.valueOf(value)));
+                outputs.add(allowed.isEmpty()
+                        ? output
+                        : output + " (" + String.join("|", allowed) + ")");
+            });
+            row.put("outputs", outputs);
+            List<Map<String, Object>> refs = new ArrayList<>();
+            for (DocService.RouteRef ref : entry.usedBy()) {
+                // A workflow transition's url is null (no route page), which Map.of rejects.
+                Map<String, Object> use = new LinkedHashMap<>();
+                use.put("id", ref.id());
+                use.put("method", ref.method());
+                use.put("url", ref.url());
+                refs.add(use);
+            }
+            row.put("usedBy", refs);
+            row.put("unreferenced", refs.isEmpty());
+            rows.add(row);
+        }
+        model.put("decisions", rows);
+        model.put("hasDecisions", !rows.isEmpty());
+        return model;
+    }
+
     /** Human-readable chips for a domain's declared keys (only what it declares). */
     private static List<String> domainChips(io.tesseraql.yaml.model.InputField field) {
         List<String> chips = new ArrayList<>();

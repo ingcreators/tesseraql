@@ -2914,6 +2914,12 @@ public final class TesseraqlRuntime implements AutoCloseable {
                         // to declare one once — is answerable from the portal.
                         .register("docs.rules", params -> io.tesseraql.studio.DocViews.rules(
                                 doc.appName(), doc.rules()))
+                        // Shared decision tables (docs/decision-tables.md): the same page shape
+                        // applied to decisions/, so "which operations consult this decision" is
+                        // answerable from the portal — workflow transitions included.
+                        .register("docs.decisions",
+                                params -> io.tesseraql.studio.DocViews.decisions(doc.appName(),
+                                        doc.decisions()))
                         // Export/share (documentation portal F8): the OpenAPI document and the htmx
                         // contract, generated live from the manifest by the canonical generators and
                         // streamed as downloadable JSON (the download routes' response.file emits the
