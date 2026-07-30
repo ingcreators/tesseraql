@@ -34,6 +34,8 @@ public record TestSuite(List<TestCase> tests) {
      *                 (roadmap Phase 20; "notify" itself is not a legal record component)
      * @param messages a message-catalog target (roadmap Phase 22)
      * @param httpCall an {@code http-call:} target — a job's outbound REST steps (roadmap Phase 26)
+     * @param decide   a decision-table target (docs/decision-tables.md): the case evaluates one
+     *                 declared decision against the params as input values
      * @param verify   read-back steps of a {@code sql} case, run on the case's transaction after
      *                 the target and rolled back with it (only legal with a {@code sql} target)
      */
@@ -43,11 +45,19 @@ public record TestSuite(List<TestCase> tests) {
             @com.fasterxml.jackson.annotation.JsonProperty("notify") NotifyTarget notifications,
             MessagesTarget messages,
             @com.fasterxml.jackson.annotation.JsonProperty("http-call") HttpCallTarget httpCall,
-            List<VerifyStep> verify) {
+            DecideTarget decide, List<VerifyStep> verify) {
 
         public TestCase {
             params = params == null ? Map.of() : Map.copyOf(params);
             verify = verify == null ? List.of() : List.copyOf(verify);
+        }
+
+        /** Convenience constructor without a {@code decide} target (the pre-decisions shape). */
+        public TestCase(String name, SqlTarget sql, String contract, Map<String, Object> params,
+                Expectation expect, ValidateTarget validate, NotifyTarget notifications,
+                MessagesTarget messages, HttpCallTarget httpCall, List<VerifyStep> verify) {
+            this(name, sql, contract, params, expect, validate, notifications, messages, httpCall,
+                    null, verify);
         }
 
         /** Convenience constructor without {@code verify} steps (the read-only shape). */
@@ -55,7 +65,7 @@ public record TestSuite(List<TestCase> tests) {
                 Expectation expect, ValidateTarget validate, NotifyTarget notifications,
                 MessagesTarget messages, HttpCallTarget httpCall) {
             this(name, sql, contract, params, expect, validate, notifications, messages, httpCall,
-                    null);
+                    null, null);
         }
 
         /** Convenience constructor without an {@code http-call} target (the pre-Phase-26 shape). */
@@ -63,8 +73,25 @@ public record TestSuite(List<TestCase> tests) {
                 Expectation expect, ValidateTarget validate, NotifyTarget notifications,
                 MessagesTarget messages) {
             this(name, sql, contract, params, expect, validate, notifications, messages, null,
-                    null);
+                    null, null);
         }
+    }
+
+    /**
+     * A decision-table target (docs/decision-tables.md): the case evaluates one decision
+     * declared under {@code decisions/} against the case's params — the params ARE the input
+     * values, no {@code decide:} wiring involved, because the target tests the table, not a
+     * reference. The matched row's outputs come back as the case's single row; a miss or a
+     * {@code unique} multi-hit comes back as one row carrying {@code code}
+     * ({@code TQL-DECISION-4721} / {@code 4720}), so suites assert the no-silent-null contract
+     * too. A table-backed decision runs its generated SELECT against the runner's datasource.
+     *
+     * @param decision    the decision name under {@code decisions/}
+     * @param effectiveAt optional reference instant of a dated table source (ISO-8601 instant
+     *                    or {@code yyyy-MM-dd HH:mm:ss}); defaults to the runner's clock
+     */
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public record DecideTarget(String decision, String effectiveAt) {
     }
 
     /**

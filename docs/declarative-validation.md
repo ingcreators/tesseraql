@@ -256,10 +256,14 @@ generated SELECT in the operation's transaction, with `effective: [from, to]` da
 `effectiveAt:` for document-dated lookups. Enum-typed outputs buy build-time exhaustiveness:
 comparing an output to a value the decision cannot produce is `TQL-DECISION-4713`, and a
 workflow state whose guarded transitions leave a declared value unhandled is
-`TQL-DECISION-4712`. The purchase-request gallery app carries the worked example:
-`approvalRoute` resolves the submit transition's assignee from the document's amount. The
-full surface is in the [YAML reference](reference-yaml-surface.md) and the
-`TQL-DECISION-*` rows of the [error-code reference](reference-error-codes.md).
+`TQL-DECISION-4712`. Declarative suites test the table itself with a `decide:` case —
+params are the input values, the matched row's outputs are the expected row, and a miss
+comes back as `code: TQL-DECISION-4721` so the no-silent-null contract is assertable —
+counted by the `decision` coverage kind. The purchase-request gallery app carries the
+worked example: `approvalRoute` resolves the submit transition's assignee from the
+document's amount, and its suite asserts both lanes and the threshold. The full surface is
+in the [YAML reference](reference-yaml-surface.md) and the `TQL-DECISION-*` rows of the
+[error-code reference](reference-error-codes.md).
 
 ## The expression language
 
