@@ -36,9 +36,12 @@
 > `TQL-DECISION-4730` for a malformed request), with `scaffold crud` over the generated
 > table as the maintenance surface — the generated write-time integrity rules stay a
 > follow-up, since they only bite once those routes exist; and the docs portal gains a
-> Decisions page beside Domains and Rules. **This design is COMPLETE**; open follow-ups:
-> generated maintenance integrity rules, a `decide:` declarative-test target, YAML→table
-> promotion tooling.
+> Decisions page beside Domains and Rules. The `decide:` declarative-test target is
+> implemented too: params are the decision's inputs, the matched row's outputs are the
+> case's row, a miss/multi-hit comes back as data (`code: TQL-DECISION-4721/4720`), a
+> table-backed decision runs its generated SELECT against the suite's datasource, and the
+> `decision` coverage kind counts every declared decision. **This design is COMPLETE**;
+> open follow-ups: generated maintenance integrity rules, YAML→table promotion tooling.
 
 A **decision table** turns a combination of input conditions into declared output values:
 the approval route for an amount and a department, the shipping fee for a weight and a

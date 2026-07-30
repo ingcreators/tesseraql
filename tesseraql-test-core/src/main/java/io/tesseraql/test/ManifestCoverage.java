@@ -195,6 +195,33 @@ public final class ManifestCoverage {
         return coverage;
     }
 
+    /**
+     * Decision coverage (docs/decision-tables.md): every decision declared under
+     * {@code decisions/} counts as covered when a suite case targets it with {@code decide:}.
+     * An app with no decisions declares nothing and so reports a 1.0 ratio.
+     */
+    public static ItemCoverage decision(AppManifest manifest, List<TestSuite> suites) {
+        ItemCoverage coverage = new ItemCoverage("decision");
+        Set<String> declared = io.tesseraql.yaml.decision.DecisionSets
+                .load(manifest.appHome(), new io.tesseraql.yaml.SimpleYamlParser())
+                .decisions().keySet();
+        Set<String> tested = new LinkedHashSet<>();
+        for (TestSuite suite : suites) {
+            for (TestSuite.TestCase test : suite.tests()) {
+                if (test.decide() != null && test.decide().decision() != null) {
+                    tested.add(test.decide().decision());
+                }
+            }
+        }
+        for (String name : declared) {
+            coverage.declare(name);
+            if (tested.contains(name)) {
+                coverage.cover(name);
+            }
+        }
+        return coverage;
+    }
+
     /** The scope ids a route applies, scanned from {@code /*%scope%/} directives in its SQL files. */
     private static Set<String> referencedScopes(RouteFile route) {
         Set<String> names = new LinkedHashSet<>();

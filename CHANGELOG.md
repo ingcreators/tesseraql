@@ -25,7 +25,9 @@ All notable changes to TesseraQL are documented here. The format follows
   guarded transitions leave declared values unhandled is `TQL-DECISION-4712`.
   `scaffold decision` generates the declaration plus the typed backing-table migration;
   the purchase-request gallery app carries the worked archetype, and the docs portal
-  gains a Decisions page next to Domains and Rules.
+  gains a Decisions page next to Domains and Rules. Declarative suites test the table
+  itself with a `decide:` case (params in, matched outputs out, misses assertable as
+  `code:` rows), counted by the new `decision` coverage kind.
 
 - **Ambient framework state can ride its own pool or database**
   (docs/framework-datasource.md): `tesseraql.framework.datasource` (default `main`)

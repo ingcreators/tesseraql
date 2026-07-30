@@ -41,6 +41,26 @@ tests:
           field: title
           code: duplicate
 
+  # The approvalRoute decision itself (decisions/approval.yml): params are the input
+  # values, the matched row's outputs are the case's row — both lanes and the boundary.
+  - name: high-value requests route to finance
+    decide:
+      decision: approvalRoute
+    params:
+      amount: 250000
+    expect:
+      rows:
+        - assignee: cfo-1
+
+  - name: the threshold itself stays with the standing approver
+    decide:
+      decision: approvalRoute
+    params:
+      amount: 100000
+    expect:
+      rows:
+        - assignee: approver-1
+
   # The submit transition's assignee resolver consumes the approvalRoute decision
   # (decisions/approval.yml): the runtime seeds decision.* under the statement's
   # parameters exactly as this case does explicitly.
