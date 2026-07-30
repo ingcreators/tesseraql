@@ -428,7 +428,7 @@ public final class ManifestLoader {
         for (io.tesseraql.yaml.model.TransitionSpec transition : def.transitions()) {
             Map<String, io.tesseraql.yaml.model.DecisionUse> merged = new java.util.LinkedHashMap<>();
             transition.decide().forEach((alias, use) -> merged.put(alias,
-                    decisions.resolve(alias, use, source.toString())));
+                    decisions.resolveForWorkflow(alias, use, source.toString())));
             resolved.add(new io.tesseraql.yaml.model.TransitionSpec(transition.id(),
                     transition.from(), transition.to(), transition.guard(),
                     transition.command(), transition.params(), transition.assign(),

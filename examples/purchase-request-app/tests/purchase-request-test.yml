@@ -41,6 +41,21 @@ tests:
           field: title
           code: duplicate
 
+  # The submit transition's assignee resolver consumes the approvalRoute decision
+  # (decisions/approval.yml): the runtime seeds decision.* under the statement's
+  # parameters exactly as this case does explicitly.
+  - name: the assignment resolver binds the decided approver
+    sql:
+      file: workflow/approver.sql
+    params:
+      decision:
+        approvalRoute:
+          assignee: cfo-1
+    expect:
+      rowCount: 1
+      rows:
+        - assignee: cfo-1
+
   - name: a fresh title passes the duplicateRequest rule
     validate:
       route: requests.create

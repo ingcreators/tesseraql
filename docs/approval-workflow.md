@@ -133,6 +133,34 @@ consumed unchanged (`OrgUnitStore.descendants(...)` is the Java seam when resolu
 rather than SQL). In `app` mode the same contract is written against the application's own
 organization tables.
 
+### Decision-driven routing
+
+When the *judgment* behind a transition — which lane, which approver, which threshold — is a
+policy in its own right, it belongs in a shared
+[decision table](declarative-validation.md#decision-tables) rather than in the guard or the
+resolver SQL. A transition declares `decide:`; its decisions evaluate **after the document
+binds and before the guard**, so the wiring may read `document.*` and the guard may consume
+the outputs:
+
+```yaml
+- id: submit
+  from: draft
+  to: submitted
+  guard: "document.amount > 0"
+  decide:
+    approvalRoute:
+      use: approvalRoute                     # decisions/approval.yml
+      params: { amount: document.amount }
+  command: submit.sql
+  assign: { file: approver.sql }             # select /* decision.approvalRoute.assignee */'x' as assignee
+```
+
+Guards may branch on `decision.<alias>.<output>` to select among declared transitions, and
+because outputs can be enum-typed, the linter proves coverage: a from-state whose guarded
+transitions leave a declared value unhandled is `TQL-DECISION-4712`, and comparing against a
+value the decision cannot produce is `TQL-DECISION-4713`. The purchase-request gallery app
+carries the worked example.
+
 ## A transition is a transactional, scoped write
 
 A transition route compiles to a recipe that, in one transaction:

@@ -435,12 +435,11 @@ public final class TransactionalCommandProcessor implements Processor {
             boolean previousAutoCommit = connection.getAutoCommit();
             connection.setAutoCommit(false);
             try {
-                // Decisions evaluate first (docs/decision-tables.md): once per operation, from
-                // the request context alone, before the workflow loads its document — so a
-                // transition guard can consume decision.* while a wiring expression can never
-                // read state that does not exist yet. Outputs ride the context; AmbientBinds
-                // seeds them under every statement's parameters.
-                if (!decisions.isEmpty()) {
+                // Decisions evaluate first (docs/decision-tables.md): once per operation,
+                // from the request context alone. A workflow transition's decisions evaluate
+                // inside beginWorkflow instead — after the document binds (so wiring reads
+                // document.*), still before the guard consumes decision.*.
+                if (workflow == null && !decisions.isEmpty()) {
                     context.put(io.tesseraql.core.sql.AmbientBinds.DECISION,
                             decisions.evaluate(context, connection,
                                     defaultBounds == null ? 0 : defaultBounds.timeoutSeconds()));
@@ -598,6 +597,15 @@ public final class TransactionalCommandProcessor implements Processor {
         String tenantId = tenant == null ? null : String.valueOf(tenant);
         store.ensureInstance(connection, workflow.docType(), docId, workflow.initial(), tenantId);
         context.put("document", loadDocument(connection, docId));
+        // A transition's decisions evaluate here — after the document binds, before the guard
+        // (docs/decision-tables.md "Acting on the result"): the wiring may read document.*
+        // (the amount lives on the row, not in the transition's request body), and the guard
+        // may consume decision.*.
+        if (!decisions.isEmpty()) {
+            context.put(io.tesseraql.core.sql.AmbientBinds.DECISION,
+                    decisions.evaluate(context, connection,
+                            defaultBounds == null ? 0 : defaultBounds.timeoutSeconds()));
+        }
         String current = store.currentState(connection, workflow.docType(), docId);
         String from = current != null ? current : workflow.initial();
         if (!java.util.Objects.equals(workflow.from(), from)) {
