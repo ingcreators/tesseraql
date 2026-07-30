@@ -139,6 +139,7 @@ Declarative HTTP caching for query responses (docs/response-shaping.md): Cache-C
 | --- | --- | --- |
 | `use` \* | string | Name of a decision declared under decisions/. |
 | `params` \* | map of string | Wiring of each decision input to a request-context expression (params.total, principal.orgUnit, "principal.role == 'officer'"). |
+| `effectiveAt` | string | Reference instant of a dated table-backed decision's effective: window - audit.now unless wired to a document date (params.postingDate). |
 
 ### webhook
 
@@ -344,6 +345,8 @@ Schema for TesseraQL shared decision documents (decisions/*.yml): named decision
 | `outputs` \* | map of [object](#decisionsdecisionsoutputs) | Typed outputs by name; every row sets all of them. |
 | `hitPolicy` | enum: `first` \| `unique` | first (default): authored order resolves. unique: more than one conditional match is an error, and overlapping rows fail the build. |
 | `onMiss` | enum: `error` \| `default` | error (default): a lookup no row matches raises TQL-DECISION-4721. default: the trailing row without when: answers. |
+| `source` | [object](#decisionsdecisionssource) | The app-owned table carrying the rows (exactly one of rows:/source:): business users maintain them at runtime, and the decision evaluates as one generated SELECT in the operation's transaction. A NULL cell in any mapped column is the wildcard. |
+| `default` | object | The outputs answering a miss of a table-backed decision. A YAML-backed decision declares its default as a trailing row without when: instead. |
 | `rows` \* | array of [object](#decisionsdecisionsrows) | The authored rows, resolved in order. A row is the conjunction of its when: cells (absent cell = wildcard); a trailing row without when: is the default. |
 
 ##### decisions.decisions.inputs
@@ -352,7 +355,7 @@ Schema for TesseraQL shared decision documents (decisions/*.yml): named decision
 | --- | --- | --- |
 | `type` | string | Inline type of the input. |
 | `domain` | string | Field domain reference declaring the input's type. |
-| `match` | enum: `eq` \| `between` \| `in` \| `bool` | How row cells compare against this input: eq (default, equality; empty cell = wildcard), between (inclusive range), in (membership in a small fixed set), bool. |
+| `match` | enum: `eq` \| `between` \| `in` \| `bool` \| `orgSubtree` | How row cells compare against this input: eq (default, equality; empty cell = wildcard), between (inclusive range), in (membership in a small fixed set), bool, orgSubtree (the bound org unit is in the cell's subtree; table sources only, resolved through the managed org closure). |
 
 ##### decisions.decisions.outputs
 
@@ -361,6 +364,36 @@ Schema for TesseraQL shared decision documents (decisions/*.yml): named decision
 | `type` | string | Inline type of the output. |
 | `domain` | string | Field domain reference declaring the output's type. |
 | `enum` | array of any | The output's full value space, enabling consumption-side exhaustiveness lints. |
+
+##### decisions.decisions.source
+
+The app-owned table carrying the rows (exactly one of rows:/source:): business users maintain them at runtime, and the decision evaluates as one generated SELECT in the operation's transaction. A NULL cell in any mapped column is the wildcard.
+
+| Property | Type | Description |
+| --- | --- | --- |
+| `table` \* | string | The rule table. |
+| `id` | string | The rule table's key column joining set: child tables. Default id. |
+| `match` \* | map of [object](#decisionsdecisionssourcematch) | Column realization per input (all but in): exactly one shape per entry. |
+| `set` | map of [object](#decisionsdecisionssourceset) | Child-table realization of each in input: no child rows = wildcard, membership otherwise. |
+| `priority` | string | The resolution-order column; required for hitPolicy: first. |
+| `effective` | array of string | Optional dated-row window: the [from, to] column pair matched against the reference's effectiveAt: (default audit.now). |
+| `outputs` \* | map of string | Output name to column. |
+
+###### decisions.decisions.source.match
+
+| Property | Type | Description |
+| --- | --- | --- |
+| `eq` | string | One nullable column for an eq/bool input. |
+| `between` | array of string | The nullable [min, max] column pair of a between input. |
+| `subtree` | string | The nullable unit-id column of an orgSubtree input, matched through the managed org closure. |
+
+###### decisions.decisions.source.set
+
+| Property | Type | Description |
+| --- | --- | --- |
+| `table` \* | string | The child table. |
+| `key` \* | string | The child column referencing the rule row's id. |
+| `value` \* | string | The child column carrying one member per row. |
 
 ##### decisions.decisions.rows
 

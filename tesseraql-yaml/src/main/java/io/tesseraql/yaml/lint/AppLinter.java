@@ -609,6 +609,11 @@ public final class AppLinter {
             return;
         }
         sets.decisions().forEach((name, decision) -> {
+            if (decision.source() != null) {
+                // Table rows are runtime data; their integrity checks live on the maintenance
+                // routes and in lintDecisionSources below.
+                return;
+            }
             io.tesseraql.core.decision.DecisionTables.Table table = io.tesseraql.yaml.decision.DecisionSets
                     .compile(name, decision);
             if (table.unique()) {
@@ -632,6 +637,108 @@ public final class AppLinter {
                 .filter(name -> !referenced.contains(name))
                 .forEach(name -> findings.add(new LintFinding("TQL-DECISION-4716", "warning",
                         "decisions", "Decision '" + name + "' is declared but never referenced")));
+        lintDecisionSources(appHome, manifest, sets, findings);
+    }
+
+    /**
+     * Table-backed decision sources (docs/decision-tables.md "Integrity when the rows are
+     * data"): an {@code orgSubtree} input matches through the managed org closure, so it needs
+     * {@code tesseraql.orgunit.mode: managed} (TQL-DECISION-4717); and when the schema
+     * introspection sidecar is present, every mapped table and column is checked against the
+     * real DDL (TQL-DECISION-4710) — the rows are runtime data, but the shape of their table
+     * is checkable at build.
+     */
+    private void lintDecisionSources(Path appHome, AppManifest manifest,
+            io.tesseraql.yaml.decision.DecisionSets sets, List<LintFinding> findings) {
+        boolean managedOrgUnits = io.tesseraql.yaml.org.OrgUnitSettings
+                .from(manifest.config()).managed();
+        Map<String, Set<String>> ddl = sidecarColumns(appHome);
+        sets.decisions().forEach((name, decision) -> {
+            if (decision.source() == null) {
+                return;
+            }
+            boolean subtree = decision.inputs().values().stream()
+                    .anyMatch(input -> "orgSubtree".equals(input.match()));
+            if (subtree && !managedOrgUnits) {
+                findings.add(new LintFinding("TQL-DECISION-4717", "error", "decisions",
+                        "Decision '" + name + "' matches orgSubtree, which resolves through"
+                                + " the managed org closure — set tesseraql.orgunit.mode:"
+                                + " managed or drop the subtree input"));
+            }
+            if (ddl != null) {
+                checkSourceDdl(name, decision.source(), ddl, findings);
+            }
+        });
+    }
+
+    private static void checkSourceDdl(String name,
+            io.tesseraql.yaml.model.DecisionsDocument.Source source,
+            Map<String, Set<String>> ddl, List<LintFinding> findings) {
+        java.util.function.BiConsumer<String, List<String>> check = (table, columns) -> {
+            Set<String> present = ddl.get(table.toLowerCase(java.util.Locale.ROOT));
+            if (present == null) {
+                findings.add(new LintFinding("TQL-DECISION-4710", "error", "decisions",
+                        "Decision '" + name + "' maps table '" + table + "', which the schema"
+                                + " sidecar does not know — regenerate .tesseraql/docs/"
+                                + "schema.json or fix the mapping"));
+                return;
+            }
+            columns.stream()
+                    .filter(column -> column != null && !column.isBlank())
+                    .filter(column -> !present.contains(column.toLowerCase(java.util.Locale.ROOT)))
+                    .forEach(column -> findings.add(new LintFinding("TQL-DECISION-4710",
+                            "error", "decisions", "Decision '" + name + "' maps column '"
+                                    + column + "' of '" + table + "', which the schema sidecar"
+                                    + " does not know")));
+        };
+        List<String> columns = new ArrayList<>();
+        columns.add(source.effectiveId());
+        columns.add(source.priority());
+        columns.addAll(source.effective());
+        source.match().values().forEach(match -> {
+            columns.add(match.eq());
+            columns.addAll(match.between());
+            columns.add(match.subtree());
+        });
+        columns.addAll(source.outputs().values());
+        check.accept(source.table(), columns);
+        source.set().values().forEach(set -> check.accept(set.table(),
+                List.of(set.key(), set.value())));
+    }
+
+    /**
+     * Lower-cased {@code table -> columns} across every datasource of the introspection
+     * sidecar, or null when the sidecar is absent or unreadable — a run artifact a fresh
+     * checkout legitimately lacks (the ReleaseDiff degradation contract).
+     */
+    private static Map<String, Set<String>> sidecarColumns(Path appHome) {
+        Path sidecar = appHome.resolve(".tesseraql/docs/schema.json");
+        if (!Files.isRegularFile(sidecar)) {
+            return null;
+        }
+        try {
+            com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+            com.fasterxml.jackson.databind.JsonNode root = mapper
+                    .readTree(Files.readString(sidecar));
+            Map<String, Set<String>> tables = new LinkedHashMap<>();
+            for (var entry : root.path("datasources").properties()) {
+                io.tesseraql.yaml.scaffold.CatalogSchema schema = mapper.convertValue(
+                        entry.getValue(), io.tesseraql.yaml.scaffold.CatalogSchema.class);
+                if (schema == null || schema.tables() == null) {
+                    continue;
+                }
+                for (io.tesseraql.yaml.scaffold.CatalogSchema.Table table : schema.tables()) {
+                    Set<String> columns = tables.computeIfAbsent(
+                            table.name().toLowerCase(java.util.Locale.ROOT),
+                            unused -> new HashSet<>());
+                    table.columns().forEach(column -> columns
+                            .add(column.name().toLowerCase(java.util.Locale.ROOT)));
+                }
+            }
+            return tables;
+        } catch (java.io.IOException | RuntimeException ex) {
+            return null;
+        }
     }
 
     /** The distinct {@code decision.*} bind expressions across a document's parseable SQL files. */

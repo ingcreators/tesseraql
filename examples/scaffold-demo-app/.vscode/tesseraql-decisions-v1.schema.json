@@ -26,8 +26,8 @@
                 "domain": { "type": "string", "description": "Field domain reference declaring the input's type." },
                 "match": {
                   "type": "string",
-                  "enum": ["eq", "between", "in", "bool"],
-                  "description": "How row cells compare against this input: eq (default, equality; empty cell = wildcard), between (inclusive range), in (membership in a small fixed set), bool."
+                  "enum": ["eq", "between", "in", "bool", "orgSubtree"],
+                  "description": "How row cells compare against this input: eq (default, equality; empty cell = wildcard), between (inclusive range), in (membership in a small fixed set), bool, orgSubtree (the bound org unit is in the cell's subtree; table sources only, resolved through the managed org closure)."
                 }
               },
               "additionalProperties": false
@@ -58,6 +58,50 @@
             "type": "string",
             "enum": ["error", "default"],
             "description": "error (default): a lookup no row matches raises TQL-DECISION-4721. default: the trailing row without when: answers."
+          },
+          "source": {
+            "type": "object",
+            "description": "The app-owned table carrying the rows (exactly one of rows:/source:): business users maintain them at runtime, and the decision evaluates as one generated SELECT in the operation's transaction. A NULL cell in any mapped column is the wildcard.",
+            "properties": {
+              "table": { "type": "string", "description": "The rule table." },
+              "id": { "type": "string", "description": "The rule table's key column joining set: child tables. Default id." },
+              "match": {
+                "type": "object",
+                "description": "Column realization per input (all but in): exactly one shape per entry.",
+                "additionalProperties": {
+                  "type": "object",
+                  "properties": {
+                    "eq": { "type": "string", "description": "One nullable column for an eq/bool input." },
+                    "between": { "type": "array", "items": { "type": "string" }, "description": "The nullable [min, max] column pair of a between input." },
+                    "subtree": { "type": "string", "description": "The nullable unit-id column of an orgSubtree input, matched through the managed org closure." }
+                  },
+                  "additionalProperties": false
+                }
+              },
+              "set": {
+                "type": "object",
+                "description": "Child-table realization of each in input: no child rows = wildcard, membership otherwise.",
+                "additionalProperties": {
+                  "type": "object",
+                  "properties": {
+                    "table": { "type": "string", "description": "The child table." },
+                    "key": { "type": "string", "description": "The child column referencing the rule row's id." },
+                    "value": { "type": "string", "description": "The child column carrying one member per row." }
+                  },
+                  "required": ["table", "key", "value"],
+                  "additionalProperties": false
+                }
+              },
+              "priority": { "type": "string", "description": "The resolution-order column; required for hitPolicy: first." },
+              "effective": { "type": "array", "items": { "type": "string" }, "description": "Optional dated-row window: the [from, to] column pair matched against the reference's effectiveAt: (default audit.now)." },
+              "outputs": { "type": "object", "additionalProperties": { "type": "string" }, "description": "Output name to column." }
+            },
+            "required": ["table", "match", "outputs"],
+            "additionalProperties": false
+          },
+          "default": {
+            "type": "object",
+            "description": "The outputs answering a miss of a table-backed decision. A YAML-backed decision declares its default as a trailing row without when: instead."
           },
           "rows": {
             "type": "array",

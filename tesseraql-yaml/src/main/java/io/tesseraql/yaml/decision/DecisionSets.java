@@ -44,6 +44,11 @@ public final class DecisionSets {
     private static final TqlErrorCode WIRING_ROOT = new TqlErrorCode(TqlDomain.DECISION, 4707);
     /** TQL-DECISION-4708: a row value violates its declared type or enum value space. */
     private static final TqlErrorCode VALUE = new TqlErrorCode(TqlDomain.DECISION, 4708);
+    /** TQL-DECISION-4702 (the core code, raised here for source mappings): malformed contract. */
+    private static final TqlErrorCode CONTRACT_SHAPE = new TqlErrorCode(TqlDomain.DECISION,
+            4702);
+    /** TQL-DECISION-4704 (the core code, raised here for source defaults): miss-policy shape. */
+    private static final TqlErrorCode MISS_SHAPE = new TqlErrorCode(TqlDomain.DECISION, 4704);
 
     /**
      * The context roots a wiring expression may read: what {@code RequestBinder} has bound
@@ -54,6 +59,18 @@ public final class DecisionSets {
      */
     private static final Set<String> WIRING_ROOTS = Set.of("params", "query", "body", "path",
             "principal", "tenant", "flags", "request", "preference");
+
+    /**
+     * {@code effectiveAt:} additionally reads {@code audit} — the command's single clock
+     * reading is seeded before decisions evaluate, and {@code audit.now} is the default
+     * reference instant of a dated lookup.
+     */
+    private static final Set<String> EFFECTIVE_ROOTS;
+    static {
+        Set<String> roots = new LinkedHashSet<>(WIRING_ROOTS);
+        roots.add("audit");
+        EFFECTIVE_ROOTS = Set.copyOf(roots);
+    }
 
     private final Map<String, DecisionsDocument.Decision> decisions;
 
@@ -91,7 +108,15 @@ public final class DecisionSets {
         } catch (IOException ex) {
             throw new UncheckedIOException(ex);
         }
-        decisions.forEach(DecisionSets::compile);
+        decisions.forEach((name, decision) -> {
+            if (decision.source() != null) {
+                // Vendor only shapes the trailing row-limit clause; validating against any
+                // one dialect validates the mapping.
+                compileSource(name, decision, "postgres");
+            } else {
+                compile(name, decision);
+            }
+        });
         return new DecisionSets(decisions);
     }
 
@@ -126,7 +151,7 @@ public final class DecisionSets {
                             : spec.allowed()));
         });
         return new DecisionsDocument.Decision(inputs, outputs, decision.hitPolicy(),
-                decision.onMiss(), decision.rows());
+                decision.onMiss(), decision.rows(), decision.source(), decision.defaultOut());
     }
 
     /**
@@ -139,6 +164,22 @@ public final class DecisionSets {
      */
     public static DecisionTables.Table compile(String name,
             DecisionsDocument.Decision decision) {
+        if (decision.source() != null && !decision.rows().isEmpty()) {
+            throw new TqlException(CONTRACT_SHAPE, "Decision '" + name + "' declares both"
+                    + " rows: and source: — one decision, one home for its rows");
+        }
+        if (decision.defaultOut() != null) {
+            throw new TqlException(CONTRACT_SHAPE, "Decision '" + name + "' declares default:"
+                    + " but is YAML-backed — its default is a trailing row without when:");
+        }
+        decision.inputs().forEach((input, spec) -> {
+            if ("orgSubtree".equals(spec.match())) {
+                throw new TqlException(CONTRACT_SHAPE, "Decision '" + name + "' input '"
+                        + input + "' matches orgSubtree but the decision is YAML-backed —"
+                        + " subtree membership lives in the org closure, so the kind needs a"
+                        + " table source");
+            }
+        });
         Map<String, String> inputs = new LinkedHashMap<>();
         decision.inputs().forEach((input, spec) -> inputs.put(input, spec.match()));
         DecisionTables.Table table = DecisionTables.table(name, inputs,
@@ -149,6 +190,177 @@ public final class DecisionSets {
                         .toList());
         decision.rows().forEach(row -> checkRowValues(name, decision, row));
         return table;
+    }
+
+    /**
+     * Compiles one table-backed decision into its generated lookup
+     * (docs/decision-tables.md "Evaluation"): each mapped column contributes a
+     * {@code (col IS NULL OR col ⟨op⟩ ?)} arm — NULL cell = wildcard, the YAML semantics in
+     * SQL — an {@code in} input an EXISTS against its child table, an {@code orgSubtree}
+     * input an EXISTS through the managed org closure, dated rows an effective-window test,
+     * {@code ORDER BY} the priority column with a portable single-row fetch for
+     * {@code hitPolicy: first}. The result is ordinary SQL, loggable and runnable in a SQL
+     * tool.
+     */
+    public static DecisionTables.TableSource compileSource(String name,
+            DecisionsDocument.Decision decision, String vendor) {
+        DecisionsDocument.Source source = decision.source();
+        if (decision.inputs().isEmpty() || decision.outputs().isEmpty()) {
+            throw new TqlException(CONTRACT_SHAPE,
+                    "Decision '" + name + "' declares no inputs or no outputs");
+        }
+        boolean unique = switch (decision.hitPolicy() == null || decision.hitPolicy().isBlank()
+                ? "first"
+                : decision.hitPolicy()) {
+            case "first" -> false;
+            case "unique" -> true;
+            default -> throw new TqlException(CONTRACT_SHAPE, "Decision '" + name
+                    + "': unknown hitPolicy '" + decision.hitPolicy() + "' — first or unique");
+        };
+        if (!unique && (source.priority() == null || source.priority().isBlank())) {
+            throw new TqlException(CONTRACT_SHAPE, "Decision '" + name + "' (hitPolicy: first)"
+                    + " needs a priority: column — first-hit needs a resolution order");
+        }
+        if (!source.effective().isEmpty() && source.effective().size() != 2) {
+            throw new TqlException(CONTRACT_SHAPE, "Decision '" + name + "' effective: is a"
+                    + " [from, to] column pair, not " + source.effective());
+        }
+        if (!source.outputs().keySet().equals(decision.outputs().keySet())) {
+            throw new TqlException(CONTRACT_SHAPE, "Decision '" + name + "' source.outputs"
+                    + " must map exactly the outputs " + decision.outputs().keySet() + ", not "
+                    + source.outputs().keySet());
+        }
+        Set<String> mapped = new LinkedHashSet<>(source.match().keySet());
+        mapped.retainAll(source.set().keySet());
+        if (!mapped.isEmpty()) {
+            throw new TqlException(CONTRACT_SHAPE, "Decision '" + name + "' maps " + mapped
+                    + " under both match: and set:");
+        }
+        Set<String> covered = new LinkedHashSet<>(source.match().keySet());
+        covered.addAll(source.set().keySet());
+        if (!covered.equals(decision.inputs().keySet())) {
+            throw new TqlException(CONTRACT_SHAPE, "Decision '" + name + "' source must map"
+                    + " exactly the inputs " + decision.inputs().keySet() + ", not " + covered);
+        }
+        if (decision.defaultOut() != null) {
+            if (!decision.defaultOut().keySet().equals(decision.outputs().keySet())) {
+                throw new TqlException(CONTRACT_SHAPE, "Decision '" + name + "' default: must"
+                        + " set exactly the outputs " + decision.outputs().keySet() + ", not "
+                        + decision.defaultOut().keySet());
+            }
+            decision.defaultOut().forEach((output, value) -> checkValue(name,
+                    "default '" + output + "'", decision.outputs().get(output).type(),
+                    decision.outputs().get(output).allowed(), value));
+        }
+        if ("default".equals(decision.onMiss()) && decision.defaultOut() == null) {
+            throw new TqlException(MISS_SHAPE, "Decision '" + name + "' declares onMiss:"
+                    + " default but no default: outputs");
+        }
+        StringBuilder sql = new StringBuilder("select ");
+        List<String> outputs = new java.util.ArrayList<>();
+        source.outputs().forEach((output, column) -> {
+            sql.append(outputs.isEmpty() ? "" : ", ").append("r.")
+                    .append(identifier(name, column)).append(" as ")
+                    .append(identifier(name, output));
+            outputs.add(output);
+        });
+        sql.append(" from ").append(identifier(name, source.table())).append(" r where 1 = 1");
+        List<String> binds = new java.util.ArrayList<>();
+        String id = identifier(name, source.effectiveId());
+        decision.inputs().forEach((input, spec) -> {
+            DecisionTables.MatchKind kind = DecisionTables.MatchKind.parse(spec.match(), name,
+                    input);
+            DecisionsDocument.ColumnMatch match = source.match().get(input);
+            switch (kind) {
+                case EQ, BOOL -> {
+                    requireShape(name, input, match != null && present(match.eq())
+                            && match.between().isEmpty() && !present(match.subtree()),
+                            "one eq: column");
+                    sql.append(" and (r.").append(identifier(name, match.eq()))
+                            .append(" is null or r.").append(identifier(name, match.eq()))
+                            .append(" = ?)");
+                    binds.add(input);
+                }
+                case BETWEEN -> {
+                    requireShape(name, input, match != null && match.between().size() == 2,
+                            "a between: [min, max] column pair");
+                    String min = identifier(name, match.between().get(0));
+                    String max = identifier(name, match.between().get(1));
+                    sql.append(" and (r.").append(min).append(" is null or r.").append(min)
+                            .append(" <= ?) and (r.").append(max).append(" is null or r.")
+                            .append(max).append(" >= ?)");
+                    binds.add(input);
+                    binds.add(input);
+                }
+                case ORG_SUBTREE -> {
+                    requireShape(name, input, match != null && present(match.subtree())
+                            && !present(match.eq()) && match.between().isEmpty(),
+                            "a subtree: unit-id column");
+                    String column = identifier(name, match.subtree());
+                    sql.append(" and (r.").append(column)
+                            .append(" is null or exists (select 1 from tql_org_closure oc")
+                            .append(" where oc.ancestor_id = r.").append(column)
+                            .append(" and oc.descendant_id = ?))");
+                    binds.add(input);
+                }
+                case IN -> {
+                    DecisionsDocument.SetMatch set = source.set().get(input);
+                    requireShape(name, input, set != null && present(set.table())
+                            && present(set.key()) && present(set.value()),
+                            "a set: {table, key, value} child table");
+                    String child = identifier(name, set.table());
+                    String key = identifier(name, set.key());
+                    String value = identifier(name, set.value());
+                    sql.append(" and (not exists (select 1 from ").append(child)
+                            .append(" s where s.").append(key).append(" = r.").append(id)
+                            .append(") or exists (select 1 from ").append(child)
+                            .append(" s where s.").append(key).append(" = r.").append(id)
+                            .append(" and s.").append(value).append(" = ?))");
+                    binds.add(input);
+                }
+            }
+        });
+        if (!source.effective().isEmpty()) {
+            String from = identifier(name, source.effective().get(0));
+            String to = identifier(name, source.effective().get(1));
+            sql.append(" and (r.").append(from).append(" is null or r.").append(from)
+                    .append(" <= ?) and (r.").append(to).append(" is null or r.").append(to)
+                    .append(" >= ?)");
+            binds.add(DecisionTables.TableSource.EFFECTIVE_AT);
+            binds.add(DecisionTables.TableSource.EFFECTIVE_AT);
+        }
+        if (!unique) {
+            sql.append(" order by r.").append(identifier(name, source.priority())).append(' ')
+                    .append(io.tesseraql.core.dialect.Pagination.fetchClause(vendor));
+            binds.add(DecisionTables.TableSource.LIMIT);
+        }
+        return new DecisionTables.TableSource(name, sql.toString(), List.copyOf(binds),
+                List.copyOf(outputs), unique, decision.defaultOut());
+    }
+
+    private static boolean present(String value) {
+        return value != null && !value.isBlank();
+    }
+
+    private static void requireShape(String name, String input, boolean shaped, String shape) {
+        if (!shaped) {
+            throw new TqlException(CONTRACT_SHAPE, "Decision '" + name + "' input '" + input
+                    + "' needs " + shape + " in its source mapping");
+        }
+    }
+
+    /**
+     * Identifiers land verbatim in the generated statement, so anything beyond a plain
+     * (optionally schema-qualified) SQL name is rejected — a mapping is a name, never a
+     * fragment.
+     */
+    private static String identifier(String name, String candidate) {
+        if (candidate == null || !candidate.matches("[A-Za-z_][A-Za-z0-9_]*"
+                + "(\\.[A-Za-z_][A-Za-z0-9_]*)?")) {
+            throw new TqlException(CONTRACT_SHAPE, "Decision '" + name + "': '" + candidate
+                    + "' is not a plain SQL identifier");
+        }
+        return candidate;
     }
 
     private static void checkRowValues(String name, DecisionsDocument.Decision decision,
@@ -237,19 +449,37 @@ public final class DecisionSets {
         }
         declared.params().forEach(
                 (input, expression) -> checkWiringRoots(alias, input, expression, source));
+        if (declared.effectiveAt() != null && !declared.effectiveAt().isBlank()) {
+            if (shared.source() == null) {
+                throw new TqlException(CONTRACT, source + ": decide entry '" + alias
+                        + "' declares effectiveAt: but decision '" + declared.use()
+                        + "' is YAML-backed — dated rows are a table-source concern");
+            }
+            if (shared.source().effective().isEmpty()) {
+                throw new TqlException(CONTRACT, source + ": decide entry '" + alias
+                        + "' declares effectiveAt: but decision '" + declared.use()
+                        + "' declares no effective: columns");
+            }
+            checkRoots(alias, "effectiveAt", declared.effectiveAt(), source, EFFECTIVE_ROOTS);
+        }
         return declared.resolvedWith(shared);
     }
 
     private static void checkWiringRoots(String alias, String input, String expression,
             String source) {
+        checkRoots(alias, input, expression, source, WIRING_ROOTS);
+    }
+
+    private static void checkRoots(String alias, String input, String expression,
+            String source, Set<String> allowed) {
         Expr parsed = ExpressionParser.parse(expression);
         Set<String> roots = new LinkedHashSet<>();
         collectRoots(parsed, roots);
-        roots.removeAll(WIRING_ROOTS);
+        roots.removeAll(allowed);
         if (!roots.isEmpty()) {
             throw new TqlException(WIRING_ROOT, source + ": decide entry '" + alias
                     + "' wires input '" + input + "' from " + roots + " — a wiring expression"
-                    + " reads the request context only (" + WIRING_ROOTS.stream().sorted()
+                    + " reads the request context only (" + allowed.stream().sorted()
                             .collect(java.util.stream.Collectors.joining(", "))
                     + "); document/steps values do not exist when decisions evaluate");
         }

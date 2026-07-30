@@ -240,10 +240,15 @@ public final class TransactionalCommandProcessor implements Processor {
                         throw invalid("decide entry '" + alias + "' is unresolved — the"
                                 + " manifest loader resolves use: references before compilation");
                     }
-                    uses.add(io.tesseraql.core.decision.DecisionTables.use(alias,
-                            io.tesseraql.yaml.decision.DecisionSets.compile(use.use(),
-                                    use.decision()),
-                            use.params()));
+                    uses.add(use.decision().source() != null
+                            ? io.tesseraql.core.decision.DecisionTables.use(alias,
+                                    io.tesseraql.yaml.decision.DecisionSets.compileSource(
+                                            use.use(), use.decision(), dialect),
+                                    use.params(), use.effectiveAt())
+                            : io.tesseraql.core.decision.DecisionTables.use(alias,
+                                    io.tesseraql.yaml.decision.DecisionSets.compile(use.use(),
+                                            use.decision()),
+                                    use.params()));
                 });
         return new io.tesseraql.core.decision.DecisionTables(uses);
     }
@@ -428,7 +433,8 @@ public final class TransactionalCommandProcessor implements Processor {
                 // seeds them under every statement's parameters.
                 if (!decisions.isEmpty()) {
                     context.put(io.tesseraql.core.sql.AmbientBinds.DECISION,
-                            decisions.evaluate(context));
+                            decisions.evaluate(context, connection,
+                                    defaultBounds == null ? 0 : defaultBounds.timeoutSeconds()));
                 }
                 // A workflow transition (roadmap Phase 28) checks legality and the guard inside the
                 // transaction, before validation: load the document, verify the current state allows

@@ -90,6 +90,85 @@ class AppLinterDecisionsTest {
                 && finding.message().contains("approvalRoute"));
     }
 
+    private static final String TABLE_BACKED = """
+            version: tesseraql/v1
+
+            decisions:
+              approvalRoute:
+                inputs:
+                  dept: { type: string, match: orgSubtree }
+                  amount: { type: integer, match: between }
+                outputs:
+                  route: { type: string }
+                source:
+                  table: approval_route_rules
+                  match:
+                    dept: { subtree: dept_unit }
+                    amount: { between: [amount_min, amount_max] }
+                  priority: priority
+                  outputs: { route: route }
+            """;
+
+    private static final String DECIDE_TABLE_BACKED = """
+            decide:
+              approvalRoute:
+                use: approvalRoute
+                params: { dept: principal.subject, amount: params.total }
+            """;
+
+    @Test
+    void orgSubtreeWithoutManagedOrgUnitsIsAnError(@TempDir Path dir) throws Exception {
+        Path app = app(dir, DECIDE_TABLE_BACKED,
+                "insert into requests (route) values (/* decision.approvalRoute.route */'x')\n");
+        Files.writeString(app.resolve("decisions/approval.yml"), TABLE_BACKED);
+
+        List<LintFinding> findings = new AppLinter().lint(app);
+
+        assertThat(findings).anyMatch(finding -> finding.code().equals("TQL-DECISION-4717")
+                && finding.isError());
+
+        Files.writeString(app.resolve("config/tesseraql.yml"), """
+                tesseraql:
+                  app:
+                    name: t
+                  orgunit:
+                    mode: managed
+                """);
+        assertThat(new AppLinter().lint(app))
+                .noneMatch(finding -> finding.code().equals("TQL-DECISION-4717"));
+    }
+
+    /**
+     * The rows are runtime data, but the shape of their table is checkable at build — when
+     * the introspection sidecar is present; a fresh checkout without one degrades silently.
+     */
+    @Test
+    void theSidecarChecksTheMappingAgainstTheRealDdl(@TempDir Path dir) throws Exception {
+        Path app = app(dir, DECIDE_TABLE_BACKED,
+                "insert into requests (route) values (/* decision.approvalRoute.route */'x')\n");
+        Files.writeString(app.resolve("decisions/approval.yml"), TABLE_BACKED);
+        Files.writeString(app.resolve("config/tesseraql.yml"),
+                "tesseraql:\n  app:\n    name: t\n  orgunit:\n    mode: managed\n");
+        assertThat(new AppLinter().lint(app))
+                .noneMatch(finding -> finding.code().equals("TQL-DECISION-4710"));
+
+        Files.createDirectories(app.resolve(".tesseraql/docs"));
+        Files.writeString(app.resolve(".tesseraql/docs/schema.json"), """
+                { "schemaVersion": 1, "datasources": { "main": { "tables": [
+                  { "name": "approval_route_rules", "type": "TABLE", "columns": [
+                    { "name": "id" }, { "name": "dept_unit" }, { "name": "amount_min" },
+                    { "name": "priority" }, { "name": "route" }
+                  ], "primaryKey": [], "foreignKeys": [], "uniqueIndexes": [] }
+                ] } } }
+                """);
+
+        List<LintFinding> findings = new AppLinter().lint(app);
+
+        assertThat(findings).anyMatch(finding -> finding.code().equals("TQL-DECISION-4710")
+                && finding.isError()
+                && finding.message().contains("amount_max"));
+    }
+
     @Test
     void aRowShadowedByAnEarlierRowIsAWarning(@TempDir Path dir) throws Exception {
         Path app = app(dir, DECIDE,
