@@ -389,6 +389,7 @@
         "mode": { "type": "string", "examples": ["query", "query-one", "update", "query-spool"] },
         "timeoutSeconds": { "type": "integer", "minimum": 0, "description": "Per-binding SQL statement timeout override; 0 disables. Default: tesseraql.sql.timeoutSeconds, else 30s." },
         "datasource": { "type": "string", "description": "The named connector this read binding runs on, overriding the route's connector. A step inside a transactional pipeline cannot pick its own connector (TQL-YAML-1037)." },
+        "when": { "type": "string", "description": "Guard expression on a command step: a falsy guard skips the step, recording steps.<name>.skipped. The declared branch point for decision.* outputs (docs decision-tables); not legal on the single-statement sql: form." },
         "params": { "type": "object", "additionalProperties": { "type": "string" } },
         "sequence": { "type": "string" },
         "keys": { "type": "array", "items": { "type": "string" } },

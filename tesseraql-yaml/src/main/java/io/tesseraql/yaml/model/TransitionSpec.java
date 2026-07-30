@@ -29,9 +29,16 @@ import java.util.Map;
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public record TransitionSpec(String id, String from, String to, String guard, String command,
-        Map<String, String> params, AssignSpec assign, SecuritySpec security) {
+        Map<String, String> params, AssignSpec assign, SecuritySpec security,
+        // Decision-table references evaluated before the guard (docs/decision-tables.md
+        // "Acting on the result"): the guard selects among declared transitions by
+        // decision.<alias>.<output>, and assignee-resolution SQL binds the outputs.
+        Map<String, DecisionUse> decide) {
 
     public TransitionSpec {
         params = params == null ? Map.of() : Map.copyOf(params);
+        decide = decide == null
+                ? Map.of()
+                : java.util.Collections.unmodifiableMap(new java.util.LinkedHashMap<>(decide));
     }
 }

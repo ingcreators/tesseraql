@@ -421,9 +421,9 @@ public final class RouteCompiler {
                     : def.security();
             RouteDefinition synthesized = new RouteDefinition("tesseraql/v1", routeId, "route",
                     "command-json", java.util.Map.of(), null, security, null, null, null, command,
-                    java.util.Map.of(), java.util.Map.of(), java.util.Map.of(), java.util.Map.of(),
-                    java.util.Map.of(), null, null, null, null, null, null, workflowResponse(),
-                    null, null, null, null, null);
+                    java.util.Map.of(), java.util.Map.of(), java.util.Map.of(),
+                    transition.decide(), java.util.Map.of(), null, null, null, null, null, null,
+                    workflowResponse(), null, null, null, null, null);
             String urlPath = basePath + "/{key}/" + transition.id();
             RouteFile routeFile = new RouteFile("POST", urlPath, workflowFile.source(),
                     synthesized);

@@ -442,6 +442,7 @@ The app-owned table carrying the rows (exactly one of rows:/source:): business u
 | `mode` | string |  |
 | `timeoutSeconds` | integer ≥ 0 | Per-binding SQL statement timeout override; 0 disables. Default: tesseraql.sql.timeoutSeconds, else 30s. |
 | `datasource` | string | The named connector this read binding runs on, overriding the route's connector. A step inside a transactional pipeline cannot pick its own connector (TQL-YAML-1037). |
+| `when` | string | Guard expression on a command step: a falsy guard skips the step, recording steps.<name>.skipped. The declared branch point for decision.* outputs (docs decision-tables); not legal on the single-statement sql: form. |
 | `params` | map of string |  |
 | `sequence` | string |  |
 | `keys` | array of string |  |
