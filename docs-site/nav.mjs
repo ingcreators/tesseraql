@@ -134,4 +134,6 @@ export const EXCLUDED = [
   'credential-throttle.md',
   // Framework datasource (transactional-coupling buckets), 2026-07-27.
   'framework-datasource.md',
+  // Decision tables (value-producing shared decisions), 2026-07-30.
+  'decision-tables.md',
 ];

@@ -426,7 +426,7 @@ final class ErrorIndex {
             "studio-schema-lifecycle.md", "session-administration.md",
             "poll-source-status.md", "poll-source-metrics.md",
             "ops-console-coverage.md", "session-rotation.md", "session-visibility.md",
-            "credential-throttle.md", "framework-datasource.md");
+            "credential-throttle.md", "framework-datasource.md", "decision-tables.md");
 
     /**
      * Marks each code with the cookbook pages whose markdown mentions it — every
