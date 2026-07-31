@@ -1,0 +1,21 @@
+version: tesseraql/v1
+
+# The table-backed showpiece (docs/decision-tables.md "source:"): the delivery-slip
+# tolerance is business data, not release policy — procurement changes the rows at
+# runtime (web/api/tolerances) and the next proposal is judged by the new tolerance,
+# no deploy involved. Same contract shape as the YAML-rows decisions; consumers
+# cannot tell the difference.
+decisions:
+  deliveryAutoAccept:
+    inputs:
+      slipDays: { type: number, match: between }
+    outputs:
+      action: { type: string, enum: [auto_confirm, review] }
+    hitPolicy: first
+    source:
+      table: delivery_tolerances
+      match:
+        slipDays: { between: [slip_min, slip_max] }
+      priority: priority
+      outputs:
+        action: action

@@ -1,0 +1,35 @@
+version: tesseraql/v1
+id: api.tolerances.update
+kind: route
+recipe: command-json
+
+input:
+  id:
+    type: integer
+    required: true
+    min: 1
+  slipMax:
+    type: integer
+    required: true
+    min: 0
+
+security:
+  policy: rfq.write
+
+# The runtime knob (docs/procurement-demo.md): widen or tighten the auto-confirm band
+# and the very next proposal is judged by the new rows — the decision reads the table
+# inside the transition's transaction, no deploy involved. The finale of the demo tour
+# changes this live. (`tesseraql scaffold crud --table delivery_tolerances` generates
+# the full maintenance surface; this hand route keeps the demo minimal.)
+sql:
+  file: update-tolerance.sql
+  mode: update
+  params:
+    id: params.id
+    slipMax: params.slipMax
+
+response:
+  json:
+    status: 200
+    body:
+      updated: sql.affectedRows

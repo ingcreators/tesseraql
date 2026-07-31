@@ -55,6 +55,16 @@ All notable changes to TesseraQL are documented here. The format follows
   lowest or within 3% issues with no human in the loop (the assign resolver returns
   zero assignees, so no task opens), anything above waits for the procurement head.
 
+- **procurement-app slice 5 — delivery-date negotiation**: the supplier proposes a
+  new date (the slip computed server-side against the ordered promise) and the
+  **table-backed `deliveryAutoAccept` decision** judges it — the tolerance is
+  business data in `delivery_tolerances`, maintained at runtime, and the very next
+  proposal is judged by the new rows with no deploy. Within tolerance the proposal
+  confirms with no human in the loop; outside it a review task opens for whoever
+  placed the order (accept, or decline back to `issued`). Supplier-facing
+  transitions carry per-transition `security:` overrides over the buyer-side
+  workflow default, with the command's scope as the row authority.
+
 ### Fixed
 
 - `TQL-DECISION-4716` no longer flags a decision whose only consumer is a workflow
