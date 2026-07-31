@@ -102,6 +102,10 @@ public record TestSuite(List<TestCase> tests) {
      * @param effectiveAt optional reference instant of a dated table source (ISO-8601 instant
      *                    or {@code yyyy-MM-dd HH:mm:ss}); defaults to the runner's clock
      */
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public record DecideTarget(String decision, String effectiveAt) {
+    }
+
     /**
      * The request principal a case runs as (docs/data-scoping.md): the same shape every
      * authentication mechanism produces, so a suite can exercise scope arms and
@@ -119,10 +123,6 @@ public record TestSuite(List<TestCase> tests) {
                     ? Map.of()
                     : java.util.Collections.unmodifiableMap(new java.util.LinkedHashMap<>(claims));
         }
-    }
-
-    @JsonIgnoreProperties(ignoreUnknown = true)
-    public record DecideTarget(String decision, String effectiveAt) {
     }
 
     /**
