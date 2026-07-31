@@ -155,6 +155,34 @@ public final class DecisionSets {
     }
 
     /**
+     * Compiles a {@code decide:} block into its runtime {@link DecisionTables}
+     * (docs/decision-tables.md). References arrive resolved by the manifest loader — the shared
+     * decision stamped underneath — and each table compiles through the same code path the
+     * loader already ran, so a failure here means the caller was built from an unresolved
+     * definition. The one compile the route processor and the transition executor
+     * (docs/transition-engine.md) both use.
+     */
+    public static DecisionTables compileUses(
+            Map<String, io.tesseraql.yaml.model.DecisionUse> decide, String dialect) {
+        List<DecisionTables.Use> uses = new java.util.ArrayList<>();
+        (decide == null ? Map.<String, io.tesseraql.yaml.model.DecisionUse>of() : decide)
+                .forEach((alias, use) -> {
+                    if (use.decision() == null) {
+                        throw new IllegalStateException("decide entry '" + alias
+                                + "' is unresolved — the manifest loader resolves use:"
+                                + " references before compilation");
+                    }
+                    uses.add(use.decision().source() != null
+                            ? DecisionTables.use(alias,
+                                    compileSource(use.use(), use.decision(), dialect),
+                                    use.params(), use.effectiveAt())
+                            : DecisionTables.use(alias, compile(use.use(), use.decision()),
+                                    use.params()));
+                });
+        return new DecisionTables(uses);
+    }
+
+    /**
      * Compiles one declared decision into its runtime table — the load-time check and the
      * compiler's build are the same code path, so they cannot disagree. Beyond the structural
      * compile, the declared types and value spaces are enforced against every row: an {@code

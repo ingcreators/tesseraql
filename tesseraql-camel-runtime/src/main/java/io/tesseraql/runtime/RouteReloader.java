@@ -389,7 +389,9 @@ final class RouteReloader {
             context.addRoutes(new RouteBuilder() {
                 @Override
                 public void configure() {
-                    restConfiguration().component("platform-http");
+                    // Pinned for the same reason RouteCompiler pins it
+                    // (docs/transition-engine.md track E): topology is a choice.
+                    restConfiguration().component("platform-http").inlineRoutes(true);
                     String direct = "direct:" + id;
                     switch (route.httpMethod() == null ? "GET" : route.httpMethod()) {
                         case "POST" -> rest().post(route.urlPath()).to(direct);

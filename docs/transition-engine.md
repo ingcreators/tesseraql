@@ -1,6 +1,10 @@
 # Transition engine — one pipeline, invoked everywhere
 
-> **Status: designed, not built.** The follow-up campaign from
+> **Status: slice 1 implemented** (`TransitionExecutor` in `tesseraql-yaml`;
+> `TransactionalCommandProcessor` and `TestRunner.fireTransition` delegate;
+> `ColumnWorkflowStore` moved beside it; `inlineRoutes` pinned at both
+> `restConfiguration()` sites). Slices 2–4 remain designed, not built.
+> The follow-up campaign from
 > [workflow expressiveness](workflow-expressiveness.md) (all four slices shipped,
 > #534–#537) and the [procurement demo](procurement-demo.md). Grounded in what the
 > `dispatch:` diagnosis exposed: the transition pipeline exists three times, the

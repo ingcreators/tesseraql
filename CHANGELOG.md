@@ -8,6 +8,17 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **`TransitionExecutor` — the transition pipeline becomes an engine object**
+  (docs/transition-engine.md slice 1): the documented pipeline — document load,
+  `decide:`, state legality, guard (both forms), task authority, conditional advance,
+  `stamp:`, the zero-row command contract — now lives once, in
+  `io.tesseraql.yaml.workflow.TransitionExecutor`; the synthesized transition routes
+  and the declarative suites' `transition:` target both delegate to it, so transition
+  semantics change in exactly one place. Behavior-frozen: codes, payload keys, and
+  suite outcomes are unchanged. `ColumnWorkflowStore` moved beside it
+  (`io.tesseraql.yaml.workflow`), and rest-dsl `inlineRoutes` is now pinned explicitly
+  at both `restConfiguration()` sites — topology is a choice, not a Camel default.
+
 - **The `doc_type` literal lint — the typo dies at build time**
   (docs/workflow-expressiveness.md slice 4): `TQL-WORKFLOW-3114` (warning) flags a
   `doc_type` string literal in application SQL referencing the managed

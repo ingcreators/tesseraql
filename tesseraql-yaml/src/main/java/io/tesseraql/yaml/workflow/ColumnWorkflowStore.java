@@ -1,4 +1,4 @@
-package io.tesseraql.compiler.binding;
+package io.tesseraql.yaml.workflow;
 
 import io.tesseraql.core.error.TqlDomain;
 import io.tesseraql.core.error.TqlErrorCode;
