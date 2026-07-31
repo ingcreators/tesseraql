@@ -92,10 +92,12 @@ public final class TesseraqlCli implements Runnable {
         @Option(names = {"--port"}, description = "Override the configured HTTP port.")
         Integer port;
 
-        @Option(names = {"--watch"}, description = "Watch the app's web/ tree and hot-reload "
-                + "changed routes on save — the editor-first alternative to Studio's Apply, "
-                + "with the same scope: web/ routes reload; jobs, consumers, and config/ "
-                + "changes still need a restart.")
+        @Option(names = {"--watch"}, description = "Watch the app's web/, workflow/, and "
+                + "shared-definition trees (decisions/, rules/, scope/, domains/) and "
+                + "hot-reload on save — the editor-first alternative to Studio's Apply: a "
+                + "route edit bounces that route, a workflow edit rebuilds its transition "
+                + "endpoints, a shared-definition edit rebuilds every route. Jobs, "
+                + "consumers, and config/ changes still need a restart.")
         boolean watch;
 
         @Option(names = {"--modules"}, description = "Directory of optional plugin module jars "

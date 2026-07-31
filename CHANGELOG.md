@@ -8,6 +8,16 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **`serve --watch` covers the whole authoring surface** (the procurement demo's own
+  dev-loop friction, generalized): the watcher now also registers `workflow/` and the
+  shared-definition trees (`decisions/`, `rules/`, `scope/`, `domains/`). A
+  shared-definition edit rebuilds every route (those definitions bake into any route
+  that references them — cheap-and-correct over per-route reference graphs), a
+  workflow edit rebuilds its synthesized transition routes in place, and the reload
+  result names them (`<workflow>.<transition>`). Studio's Apply and the manual reload
+  hammer ride the same reloader, so all three entry points gain the scope at once.
+  Jobs, consumers, and `config/` changes still need a restart.
+
 - **Suites run as a principal, so scoped SQL is finally testable**
   (docs/testing.md "Writing a suite"): a declarative test case may declare
   `principal:` (subject, loginId, roles, permissions, groups, claims) — the shape

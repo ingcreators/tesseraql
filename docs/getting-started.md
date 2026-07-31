@@ -100,9 +100,11 @@ tesseraql package --app .            # build a .tqlapp under work/
 round out the surface. Every subcommand calls the same engine as the matching Maven goal.
 
 Prefer your own editor over Studio? `tesseraql serve --app . --watch` watches the `web/`
-tree and hot-reloads a route the moment you save its SQL, YAML, or template — the same
-instant loop as Studio's **Apply**, with the same scope (jobs, consumers, and `config/`
-changes still need a restart).
+tree — plus `workflow/` and the shared definitions (`decisions/`, `rules/`, `scope/`,
+`domains/`) that bake into routes — and hot-reloads the moment you save: a route edit
+bounces that route, a workflow edit rebuilds its transition endpoints, a shared-definition
+edit rebuilds every route. The same instant loop as Studio's **Apply** (jobs, consumers,
+and `config/` changes still need a restart).
 
 ## The Maven / CI path
 

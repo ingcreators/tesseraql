@@ -30,7 +30,10 @@ import org.slf4j.LoggerFactory;
  * serving. A manifest that fails to <i>load</i> (malformed YAML) still aborts the reload as a
  * whole: there is nothing partial to diff against.
  *
- * <p>Scope: the {@code web/} routes. Jobs, consumers, and MCP documents still need a restart.
+ * <p>Scope: the {@code web/} routes, the shared definitions that bake into them
+ * ({@code decisions/}, {@code rules/}, {@code scope/}, {@code domains/} — a change rebuilds
+ * every route), and the {@code workflow/} surface (a change rebuilds the synthesized
+ * transition routes). Jobs, consumers, config, and MCP documents still need a restart.
  */
 final class RouteReloader {
 
@@ -50,8 +53,10 @@ final class RouteReloader {
     private AppManifest current;
     /** Per-route content fingerprints (source-directory digests) from the last good reload. */
     private Map<String, String> fingerprints;
-    /** The app-wide inputs every compiled route bakes in (config/); a change rebuilds all. */
+    /** The app-wide inputs every compiled route bakes in (config/ + shared definitions). */
     private String appFingerprint;
+    /** The workflow/ tree; a change rebuilds the synthesized transition routes. */
+    private String workflowFingerprint;
 
     RouteReloader(CamelContext context, Path appHome, AppManifest current, StudioService studio,
             String appName, List<SystemApps.MountedApp> mountedApps) {
@@ -63,6 +68,7 @@ final class RouteReloader {
         this.mountedApps = List.copyOf(mountedApps);
         this.fingerprints = fingerprintsOf(current);
         this.appFingerprint = appFingerprintOf(appHome);
+        this.workflowFingerprint = workflowFingerprintOf(appHome);
     }
 
     /** One route that failed to compile on reload; its endpoint serves this error as a 500. */
@@ -192,9 +198,45 @@ final class RouteReloader {
             }
         }
 
+        // The workflow surface (docs/procurement-demo.md's own friction, generalized): a
+        // change under workflow/ rebuilds the synthesized transition routes — the whole
+        // set, since commands, resolvers, and the yml live in one directory. A transition
+        // that fails to recompile is reported and stays un-mounted (no REST stub to hang
+        // it on); the rest keep serving.
+        String workflowNow = workflowFingerprintOf(appHome);
+        if (rebuildAll || !workflowNow.equals(workflowFingerprint)) {
+            Map<String, String> beforeWorkflow = workflowRoutePaths(current);
+            Map<String, String> nowWorkflow = workflowRoutePaths(reloaded);
+            for (String id : beforeWorkflow.keySet()) {
+                try {
+                    stopAndRemove(id);
+                } catch (Exception ex) {
+                    LOG.warn("Could not stop transition route {} before reload: {}", id,
+                            ex.getMessage());
+                }
+                if (!nowWorkflow.containsKey(id)) {
+                    removed.add(id);
+                }
+            }
+            for (Map.Entry<String, String> transition : nowWorkflow.entrySet()) {
+                String id = transition.getKey();
+                try {
+                    context.addRoutes(new RouteCompiler().appName(appName)
+                            .compile(reloaded, true, Set.of(id)));
+                    (beforeWorkflow.containsKey(id) ? reloadedIds : addedIds).add(id);
+                } catch (Exception ex) {
+                    failed.add(new RouteFailure(id, "POST", transition.getValue(),
+                            String.valueOf(ex.getMessage())));
+                    LOG.warn("Transition route {} failed to compile on reload: {}", id,
+                            ex.getMessage());
+                }
+            }
+        }
+
         this.current = reloaded;
         this.fingerprints = prints;
         this.appFingerprint = appNow;
+        this.workflowFingerprint = workflowNow;
         LOG.info("Hot reload: {} reloaded, {} added, {} removed, {} failed, {} unchanged",
                 reloadedIds.size(), addedIds.size(), removed.size(), failed.size(), unchanged);
         return new Result(reloadedIds, addedIds, removed, failed, studio.reload());
@@ -214,11 +256,44 @@ final class RouteReloader {
     }
 
     /**
-     * The app-wide compiled-in inputs: everything under {@code config/}. Flags, menus,
-     * messages, and templates resolve live at render time and never bake into a route.
+     * The app-wide compiled-in inputs: everything under {@code config/} plus the shared
+     * definitions — {@code decisions/}, {@code rules/}, {@code scope/}, {@code domains/} —
+     * which any route may reference (a decision's rows, a rule's SQL, a scope arm, a
+     * domain's constraints all bake into the routes that use them, and cheap-and-correct
+     * beats tracking per-route reference graphs). Flags, menus, messages, and templates
+     * resolve live at render time and never bake into a route.
      */
     private static String appFingerprintOf(Path appHome) {
-        return digestTree(appHome.resolve("config"));
+        StringBuilder joined = new StringBuilder(digestTree(appHome.resolve("config")));
+        for (String shared : List.of("decisions", "rules", "scope", "domains")) {
+            joined.append('|').append(digestTree(appHome.resolve(shared)));
+        }
+        return joined.toString();
+    }
+
+    /** The workflow surface: a change rebuilds every synthesized transition route. */
+    private static String workflowFingerprintOf(Path appHome) {
+        return digestTree(appHome.resolve("workflow"));
+    }
+
+    /**
+     * The synthesized transition route ids ({@code <workflow>.<transition>}, the id contract
+     * {@link RouteCompiler} mounts them under), mapped to their endpoint paths for failure
+     * reporting.
+     */
+    private static Map<String, String> workflowRoutePaths(AppManifest manifest) {
+        Map<String, String> paths = new LinkedHashMap<>();
+        for (io.tesseraql.yaml.manifest.WorkflowFile workflow : manifest.workflows()) {
+            io.tesseraql.yaml.model.WorkflowDefinition def = workflow.definition();
+            String basePath = def.http() == null || def.http().basePath() == null
+                    ? "/" + def.id()
+                    : def.http().basePath();
+            for (io.tesseraql.yaml.model.TransitionSpec transition : def.transitions()) {
+                paths.put(def.id() + "." + transition.id(),
+                        basePath + "/{key}/" + transition.id());
+            }
+        }
+        return paths;
     }
 
     /** Digest of a directory's immediate regular files (name + bytes, sorted). */
