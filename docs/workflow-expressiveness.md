@@ -17,8 +17,11 @@
 > procurement demo's three lane pairs converted (`submit_decision` ×2, `propose`). The
 > enum-disjointness prover (reusing `TQL-DECISION-4712`'s machinery to prove member
 > guards disjoint) is a designed follow-up, not yet built. Slice 4 (the `doc_type`
-> literal lint) remains designed, not built. Grounded throughout in what
-> `examples/procurement-app` had to write before slice 1.
+> literal lint): `TQL-WORKFLOW-3114` warns when a `doc_type` string literal in SQL
+> referencing `tql_workflow_instance` names no declared workflow `document.type` —
+> route SQL, guard files, rules, and scope fragments alike; SQL that never mentions
+> the managed table is out of scope. **All four slices are implemented.** Grounded
+> throughout in what `examples/procurement-app` had to write before slice 1.
 
 ## The three frictions, as shipped code
 
