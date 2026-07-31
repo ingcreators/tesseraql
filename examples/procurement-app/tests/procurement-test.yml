@@ -127,6 +127,93 @@ tests:
       rows:
         - assignee: ota
 
+  # The supplier fence (slice 3, scope/quotes_scope.yml): a supplier reaches only
+  # their own partner's rows; procurement sees every quote.
+  - name: a supplier sees only their own quote
+    sql:
+      file: web/api/supplier/quotes/quotes.sql
+    principal:
+      roles: [SUPPLIER]
+      claims:
+        partner: P-100
+    expect:
+      rowCount: 1
+      rows:
+        - id: Q-RFQ-2001-P-100
+          status: draft
+
+  - name: the competing supplier sees no quote of the other
+    sql:
+      file: web/api/supplier/quotes/quotes.sql
+    principal:
+      roles: [SUPPLIER]
+      claims:
+        partner: P-200
+    expect:
+      rowCount: 0
+
+  - name: procurement sees every quote
+    sql:
+      file: web/api/supplier/quotes/quotes.sql
+    principal:
+      roles: [PROCUREMENT]
+    expect:
+      rowCount: 1
+
+  - name: quote lines ride the quote's partner scope
+    sql:
+      file: web/api/supplier/quotes/{id}/lines/lines.sql
+    principal:
+      roles: [SUPPLIER]
+      claims:
+        partner: P-200
+    params:
+      id: Q-RFQ-2001-P-100
+    expect:
+      rowCount: 0
+
+  # Pricing runs in the case's rolled-back transaction; the verify read-back observes
+  # the uncommitted write under the same principal (docs/testing.md).
+  - name: a supplier prices their own line
+    sql:
+      file: web/api/supplier/quotes/{id}/lines/price-line.sql
+    principal:
+      roles: [SUPPLIER]
+      claims:
+        partner: P-100
+    params:
+      id: Q-RFQ-2001-P-100
+      lineNo: 1
+      unitPrice: 11800
+      promisedDate: "2026-08-25"
+    expect:
+      updateCount: 1
+    verify:
+      - sql:
+          file: web/api/supplier/quotes/{id}/lines/lines.sql
+        params:
+          id: Q-RFQ-2001-P-100
+        expect:
+          rowCount: 1
+          rows:
+            - line_no: 1
+              unit_price: "11800.00"
+
+  - name: the competing supplier cannot price another partner's line
+    sql:
+      file: web/api/supplier/quotes/{id}/lines/price-line.sql
+    principal:
+      roles: [SUPPLIER]
+      claims:
+        partner: P-200
+    params:
+      id: Q-RFQ-2001-P-100
+      lineNo: 1
+      unitPrice: 1
+      promisedDate: "2026-08-25"
+    expect:
+      updateCount: 0
+
   # The assignment resolvers bind real master rows, not literals.
   - name: the first-stage assignee is the requesting department's manager
     sql:

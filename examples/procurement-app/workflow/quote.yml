@@ -1,0 +1,22 @@
+version: tesseraql/v1
+id: quote
+kind: workflow
+# App mode (docs/approval-workflow.md): the quote row's own status column carries the
+# state — contrast with the managed requisition and rfq documents, so this app shows
+# both modes side by side. The submit guard is a plain document-column expression over
+# the counters the pricing surface maintains; the command's /*%scope */ confines the
+# transition to the caller's own partner rows.
+mode: app
+document: { type: quote, table: quotes, key: id, stateColumn: status }
+http: { basePath: /api/supplier/quotes }
+security: { auth: bearer, policy: sup.act }
+initial: draft
+states:
+  - { id: draft, type: initial }
+  - { id: submitted, type: terminal }
+transitions:
+  - id: submit
+    from: draft
+    to: submitted
+    guard: "document.priced_lines == document.total_lines && document.total_lines > 0"
+    command: quote-submit.sql

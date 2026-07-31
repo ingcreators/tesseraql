@@ -1,0 +1,47 @@
+version: tesseraql/v1
+id: api.supplier.quotes.price
+kind: route
+recipe: command-json
+
+input:
+  id:
+    type: string
+    required: true
+    maxLength: 140
+  lineNo:
+    type: integer
+    required: true
+    min: 1
+  unitPrice:
+    type: number
+    required: true
+    min: 0.01
+  promisedDate:
+    type: string
+    required: true
+    pattern: '^\d{4}-\d{2}-\d{2}$'
+
+security:
+  policy: sup.act
+
+# Pricing a line refreshes the priced_lines counter in the same transaction — the
+# counter is what the quote workflow's submit guard reads (workflow/quote.yml), so the
+# guard stays a plain document-column expression.
+steps:
+  price:
+    file: price-line.sql
+    params:
+      id: path.id
+      lineNo: params.lineNo
+      unitPrice: params.unitPrice
+      promisedDate: params.promisedDate
+  counter:
+    file: refresh-counter.sql
+    params:
+      id: path.id
+
+response:
+  json:
+    status: 200
+    body:
+      priced: steps.price.affectedRows
