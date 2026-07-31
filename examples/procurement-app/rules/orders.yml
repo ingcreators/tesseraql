@@ -8,3 +8,4 @@ rules:
     file: selection-reason.sql
     binds: [quoteId, reason]
     code: reason-required
+    message: procurement.rules.reasonRequired

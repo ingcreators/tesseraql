@@ -409,6 +409,21 @@ tests:
           submitted_quotes: 2
           in_transit: 0
 
+  # Slice 7: the catalogs resolve in both locales.
+  - name: the rule messages resolve in Japanese
+    messages:
+      locale: ja
+      keys: [procurement.rules.reasonRequired, procurement.rules.notApproved]
+    expect:
+      rowCount: 2
+
+  - name: the rule messages resolve in English
+    messages:
+      locale: en
+      keys: [procurement.rules.reasonRequired]
+    expect:
+      rowCount: 1
+
   # The assignment resolvers bind real master rows, not literals.
   - name: the first-stage assignee is the requesting department's manager
     sql:

@@ -1,9 +1,17 @@
 # The procurement demo application
 
-> **Status: design.** Nothing here is implemented. This document designs `procurement-app`,
-> a suite-scale gallery application demonstrating an end-to-end buyer/supplier procurement
-> flow. It is the composition proof for the framework — the existing starters each
-> demonstrate one concept; this app demonstrates that the concepts compose.
+> **Status: slices 1–7 implemented** (#523–#528 and the polish slice; slice 8, the EDI
+> companion, remains an explicit open decision). The app lives at
+> `examples/procurement-app`, held to the gallery bar. Composition findings the build
+> surfaced — each fixed in the framework, never worked around: suites could not run
+> scoped SQL (`principal:` on test cases + the production resolver moved to
+> `tesseraql-identity`), suites lacked the managed framework schema (the runner now
+> provisions it), `TQL-DECISION-4716` missed workflow `decide:` references, and a
+> managed-mode transition whose command updated zero rows silently advanced
+> (`TQL-WORKFLOW-3204` now enforces the documented row-authority contract). The
+> comparison pivot stayed per-supplier totals by design — dynamic columns are outside
+> plain-SQL reach; PDFs are deferred to a dedicated documents step resolving the
+> `tesseraql-pdf` module story once for all three documents.
 
 ## Why this app exists
 
