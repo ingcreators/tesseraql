@@ -611,6 +611,10 @@ public final class AppLinter {
                     .transitions()) {
                 transition.decide().values().forEach(use -> referenced.add(use.use()));
             }
+            for (io.tesseraql.yaml.model.DispatchSpec dispatch : workflow.definition()
+                    .dispatch()) {
+                dispatch.decide().values().forEach(use -> referenced.add(use.use()));
+            }
         }
         io.tesseraql.yaml.decision.DecisionSets sets = io.tesseraql.yaml.decision.DecisionSets
                 .load(appHome, new io.tesseraql.yaml.SimpleYamlParser());
@@ -679,20 +683,40 @@ public final class AppLinter {
                 if (transition.guard() != null && transition.guard().expression() != null
                         && !transition.guard().expression().isBlank()) {
                     checkDecisionExpression(source, "transition '" + transition.id()
-                            + "' guard", transition.guard().expression(), transition.decide(),
-                            findings);
+                            + "' guard", transition.guard().expression(),
+                            effectiveDecide(workflow.definition(), transition), findings);
                 }
                 byFrom.computeIfAbsent(transition.from(), unused -> new ArrayList<>())
                         .add(transition);
             }
-            byFrom.forEach((from, transitions) -> lintBranchCoverage(source, from, transitions,
-                    findings));
+            byFrom.forEach((from, transitions) -> lintBranchCoverage(source,
+                    workflow.definition(), from, transitions, findings));
         }
     }
 
     /** One {@code decision.<alias>.<output> == literal} (or !=) comparison in an expression. */
     private record DecisionComparison(String alias, String output, Object literal,
             boolean equality) {
+    }
+
+    /**
+     * A transition's effective {@code decide:}: its own entries plus what any dispatch
+     * naming it contributes (docs/transition-engine.md track B) — a member invoked
+     * through the dispatch reads the dispatch-level results as {@code decision.*}, so
+     * the consumption lints must see them too. The transition's own entries win, though
+     * a collision is itself a lint error.
+     */
+    private static Map<String, io.tesseraql.yaml.model.DecisionUse> effectiveDecide(
+            io.tesseraql.yaml.model.WorkflowDefinition def,
+            io.tesseraql.yaml.model.TransitionSpec transition) {
+        Map<String, io.tesseraql.yaml.model.DecisionUse> merged = new LinkedHashMap<>();
+        for (io.tesseraql.yaml.model.DispatchSpec dispatch : def.dispatch()) {
+            if (dispatch.oneOf().contains(transition.id())) {
+                merged.putAll(dispatch.decide());
+            }
+        }
+        merged.putAll(transition.decide());
+        return merged;
     }
 
     private static void checkDecisionExpression(String source, String where, String expression,
@@ -740,7 +764,8 @@ public final class AppLinter {
      * enum-typed output with plain equality, the compiler can prove which declared values
      * have no receiving transition.
      */
-    private static void lintBranchCoverage(String source, String from,
+    private static void lintBranchCoverage(String source,
+            io.tesseraql.yaml.model.WorkflowDefinition def, String from,
             List<io.tesseraql.yaml.model.TransitionSpec> transitions,
             List<LintFinding> findings) {
         if (transitions.size() < 2) {
@@ -775,7 +800,7 @@ public final class AppLinter {
             if (alias == null) {
                 alias = comparison.alias();
                 output = comparison.output();
-                allowed = allowedValues(transition.decide(), alias, output);
+                allowed = allowedValues(effectiveDecide(def, transition), alias, output);
             } else if (!alias.equals(comparison.alias())
                     || !output.equals(comparison.output())) {
                 return;
@@ -2615,6 +2640,15 @@ public final class AppLinter {
                     findings.add(new LintFinding("TQL-WORKFLOW-3113", "warning", source,
                             where + " member '" + member + "' has no guard and is not last -"
                                     + " the members after it are unreachable"));
+                }
+                // One name, one evaluation (docs/transition-engine.md track B): a member
+                // alias shadowing a dispatch-level alias could only confuse.
+                for (String alias : dispatch.decide().keySet()) {
+                    if (found.decide().containsKey(alias)) {
+                        findings.add(new LintFinding("TQL-WORKFLOW-3112", "error", source,
+                                where + " decide alias '" + alias + "' collides with member '"
+                                        + member + "' declaring its own '" + alias + "'"));
+                    }
                 }
             }
         }

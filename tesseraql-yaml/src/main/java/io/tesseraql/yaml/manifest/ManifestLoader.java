@@ -421,7 +421,8 @@ public final class ManifestLoader {
     private static io.tesseraql.yaml.model.WorkflowDefinition withWorkflowDecisions(
             io.tesseraql.yaml.decision.DecisionSets decisions, Path source,
             io.tesseraql.yaml.model.WorkflowDefinition def) {
-        if (def.transitions().stream().allMatch(transition -> transition.decide().isEmpty())) {
+        if (def.transitions().stream().allMatch(transition -> transition.decide().isEmpty())
+                && def.dispatch().stream().allMatch(dispatch -> dispatch.decide().isEmpty())) {
             return def;
         }
         List<io.tesseraql.yaml.model.TransitionSpec> resolved = new ArrayList<>();
@@ -434,9 +435,19 @@ public final class ManifestLoader {
                     transition.command(), transition.params(), transition.assign(),
                     transition.security(), merged, transition.stamp()));
         }
+        // A dispatch consumes shared decisions the way its members do
+        // (docs/transition-engine.md track B): the same resolution, the same errors.
+        List<io.tesseraql.yaml.model.DispatchSpec> dispatches = new ArrayList<>();
+        for (io.tesseraql.yaml.model.DispatchSpec dispatch : def.dispatch()) {
+            Map<String, io.tesseraql.yaml.model.DecisionUse> merged = new java.util.LinkedHashMap<>();
+            dispatch.decide().forEach((alias, use) -> merged.put(alias,
+                    decisions.resolveForWorkflow(alias, use, source.toString())));
+            dispatches.add(new io.tesseraql.yaml.model.DispatchSpec(dispatch.id(), merged,
+                    dispatch.oneOf()));
+        }
         return new io.tesseraql.yaml.model.WorkflowDefinition(def.version(), def.id(),
                 def.kind(), def.mode(), def.document(), def.http(), def.security(),
-                def.initial(), def.states(), resolved, def.deadlines(), def.dispatch(),
+                def.initial(), def.states(), resolved, def.deadlines(), dispatches,
                 def.reminders());
     }
 

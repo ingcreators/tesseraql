@@ -132,16 +132,39 @@ class WorkflowTransitionIntegrationTest {
 
     @Test
     void aDispatchFiresTheFirstMemberWhoseGuardHolds() throws Exception {
-        // PR-3 is funded: the SQL-guarded member fires (docs/workflow-expressiveness.md).
-        assertThat(post("/funded-requests/PR-3/settle", "requester-1").statusCode())
-                .isEqualTo(200);
+        // PR-3 is funded: the SQL-guarded member fires (docs/workflow-expressiveness.md)
+        // and the response names the winner (docs/transition-engine.md).
+        HttpResponse<String> settled = post("/funded-requests/PR-3/settle", "requester-1");
+        assertThat(settled.statusCode()).isEqualTo(200);
+        assertThat(settled.body()).contains("\"transition\":\"clear\"");
         assertThat(instanceState("funded_request", "PR-3")).isEqualTo("cleared");
 
         // A document already past the shared from-state: no member holds, and the 422
-        // names every attempted transition.
+        // names every attempted transition with its typed refusal code.
         HttpResponse<String> none = post("/funded-requests/PR-3/settle", "requester-1");
         assertThat(none.statusCode()).isEqualTo(422);
-        assertThat(none.body()).contains("attempted").contains("clear").contains("writeoff");
+        assertThat(none.body()).contains("attempted").contains("clear").contains("writeoff")
+                .contains("TQL-WORKFLOW-3201");
+    }
+
+    @Test
+    void aDispatchFallsThroughToTheNextMemberAndNamesTheWinner() throws Exception {
+        // PR-9 is unfunded: clear's SQL guard refuses (not-funded), the selector falls
+        // through in-process, and writeoff (amount == 0) fires.
+        HttpResponse<String> settled = post("/funded-requests/PR-9/settle", "requester-1");
+        assertThat(settled.statusCode()).isEqualTo(200);
+        assertThat(settled.body()).contains("\"transition\":\"writeoff\"");
+        assertThat(instanceState("funded_request", "PR-9")).isEqualTo("cleared");
+    }
+
+    @Test
+    void aDispatchLevelDecideRoutesTheDecideLessMembers() throws Exception {
+        // PR-10 (1200) routes slow: the dispatch evaluates the decision once, before the
+        // loop, and the members - declaring no decide: of their own - read decision.*.
+        HttpResponse<String> routed = post("/routed-requests/PR-10/route_next", "requester-1");
+        assertThat(routed.statusCode()).isEqualTo(200);
+        assertThat(routed.body()).contains("\"transition\":\"slowlane\"");
+        assertThat(instanceState("routed_request", "PR-10")).isEqualTo("routed");
     }
 
     @Test
@@ -330,7 +353,8 @@ class WorkflowTransitionIntegrationTest {
             statement.execute("insert into purchase_requests (id, title, amount) values "
                     + "('PR-1','Laptop',1000), ('PR-2','Pen',0), ('PR-3','Desk',500), "
                     + "('PR-4','Chair',700), ('PR-5','Lamp',300), ('PR-6','Phone',900), "
-                    + "('PR-7','Mouse',150), ('PR-8','Cable',80)");
+                    + "('PR-7','Mouse',150), ('PR-8','Cable',80), ('PR-9','Clip',0), "
+                    + "('PR-10','Server',1200)");
             // App-mode: state lives in the status column, initialized to the initial state.
             statement.execute("create table expenses (id varchar(64) primary key, "
                     + "amount numeric(12,2) not null, status varchar(32) not null, "
@@ -443,6 +467,52 @@ class WorkflowTransitionIntegrationTest {
                 """);
         Files.writeString(workflowDir.resolve("funded.sql"),
                 "select 1 from purchase_requests where id = /* key */ 'x' and amount > 0\n");
+        // A dispatch-level decide: (docs/transition-engine.md track B): the selector
+        // evaluates the decision once and the decide-less members read decision.* from it.
+        Files.createDirectories(home.resolve("decisions"));
+        Files.writeString(home.resolve("decisions/routing.yml"), """
+                version: tesseraql/v1
+                decisions:
+                  routing:
+                    inputs:
+                      amount: { type: number, match: between }
+                    outputs:
+                      lane: { type: string, enum: [fast, slow] }
+                    rows:
+                      - when: { amount: ">= 1000" }
+                        out: { lane: slow }
+                      - out: { lane: fast }
+                """);
+        Files.writeString(workflowDir.resolve("routed_request.yml"), """
+                version: tesseraql/v1
+                id: routed_request
+                kind: workflow
+                document: { type: routed_request, table: purchase_requests, key: id }
+                http: { basePath: /routed-requests }
+                security: { auth: bearer }
+                initial: draft
+                states:
+                  - { id: draft, type: initial }
+                  - { id: routed, type: terminal }
+                transitions:
+                  - id: fastlane
+                    from: draft
+                    to: routed
+                    guard: "decision.routing.lane == 'fast'"
+                    command: approve.sql
+                  - id: slowlane
+                    from: draft
+                    to: routed
+                    guard: "decision.routing.lane == 'slow'"
+                    command: approve.sql
+                dispatch:
+                  - id: route_next
+                    decide:
+                      routing:
+                        use: routing
+                        params: { amount: document.amount }
+                    oneOf: [fastlane, slowlane]
+                """);
 
         Files.writeString(workflowDir.resolve("expense.yml"),
                 """

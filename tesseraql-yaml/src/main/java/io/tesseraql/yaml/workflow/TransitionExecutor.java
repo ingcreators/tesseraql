@@ -156,7 +156,8 @@ public final class TransitionExecutor {
         String tenantId = tenant == null ? null : String.valueOf(tenant);
         collaborators.store().ensureInstance(connection, transition.docType(), docId,
                 transition.initial(), tenantId);
-        context.put("document", loadDocument(connection, transition, docId));
+        context.put("document", loadDocument(connection, transition.table(),
+                transition.keyColumn(), transition.dialect(), docId));
         if (!transition.decisions().isEmpty()) {
             context.put(io.tesseraql.core.sql.AmbientBinds.DECISION,
                     transition.decisions().evaluate(context, connection,
@@ -356,12 +357,14 @@ public final class TransitionExecutor {
 
     /**
      * Loads the document row by key, shaping labels and values the way every other read does, so
-     * a guard reads {@code document.col} with the same spelling a response binding would.
+     * a guard reads {@code document.col} with the same spelling a response binding would. Public
+     * because the dispatch selector loads the document once for its dispatch-level
+     * {@code decide:} (docs/transition-engine.md track B).
      */
-    private static Map<String, Object> loadDocument(Connection connection,
-            CompiledTransition transition, String docId) throws SQLException {
+    public static Map<String, Object> loadDocument(Connection connection, String table,
+            String keyColumn, String dialect, String docId) throws SQLException {
         try (PreparedStatement ps = connection.prepareStatement("select * from "
-                + transition.table() + " where " + transition.keyColumn() + " = ?")) {
+                + table + " where " + keyColumn + " = ?")) {
             ps.setString(1, docId);
             try (ResultSet rs = ps.executeQuery()) {
                 if (!rs.next()) {
@@ -370,7 +373,7 @@ public final class TransitionExecutor {
                 java.sql.ResultSetMetaData metaData = rs.getMetaData();
                 Map<String, Object> row = new LinkedHashMap<>();
                 for (int col = 1; col <= metaData.getColumnCount(); col++) {
-                    row.put(io.tesseraql.core.dialect.ResultRows.label(transition.dialect(),
+                    row.put(io.tesseraql.core.dialect.ResultRows.label(dialect,
                             metaData.getColumnLabel(col)),
                             io.tesseraql.core.dialect.ResultRows.value(rs.getObject(col)));
                 }
