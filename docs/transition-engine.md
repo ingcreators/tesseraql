@@ -14,8 +14,15 @@
 > single-transaction selector would have had to re-implement exactly that tail. The
 > refusal-leaves-nothing-behind property held either way (guards run before the
 > advance); what one-transaction would have added (no inter-attempt race window) the
-> conditional advance already turns into the member's own `409`. Slices 3–4 remain
-> designed, not built. The follow-up campaign from
+> conditional advance already turns into the member's own `409`. Slice 3: the
+> `dispatch:` suite target — the selection loop (dispatch-level `decide:` once, then
+> members over the executor, refusals rolling back to savepoints) in the case's
+> rolled-back transaction; the procurement `propose` pair's duplicated decide collapsed
+> into its dispatch. Note the standing limitation the suite cases inherit: documents
+> start at the initial state (mid-flow fixtures remain the retrospective's open item
+> ⑦), so gallery dispatch cases assert refusal aggregation; the winner paths are
+> engine-tested in `DispatchCaseTest`. Slice 4 remains designed, not built.
+> The follow-up campaign from
 > [workflow expressiveness](workflow-expressiveness.md) (all four slices shipped,
 > #534–#537) and the [procurement demo](procurement-demo.md). Grounded in what the
 > `dispatch:` diagnosis exposed: the transition pipeline exists three times, the

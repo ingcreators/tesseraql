@@ -109,6 +109,9 @@ public final class TestRunner {
             if (test.transition() != null) {
                 return runTransitionCase(test);
             }
+            if (test.dispatch() != null) {
+                return runDispatchCase(test);
+            }
             if (!test.verify().isEmpty()) {
                 throw new IllegalArgumentException("Test '" + test.name()
                         + "' declares verify: steps, which require a sql target");
@@ -214,7 +217,7 @@ public final class TestRunner {
             connection.setAutoCommit(false);
             try {
                 List<Map<String, Object>> rows = List.of(fireTransition(connection, def,
-                        transition, target, managed, table, keyColumn, test));
+                        transition, target, managed, table, keyColumn, test, null));
                 String failure = assertOutcome(test.expect(), new SqlOutcome(rows, null));
                 for (int i = 0; failure == null && i < test.verify().size(); i++) {
                     failure = runVerifyStep(connection, test.verify().get(i), i,
@@ -233,6 +236,118 @@ public final class TestRunner {
     }
 
     /**
+     * Runs a {@code dispatch} case (docs/transition-engine.md track C): the member-selection
+     * loop inside the case's always-rolled-back transaction, each refused attempt rolled back
+     * to its savepoint so the next member (and the verify steps) see what the first one saw.
+     */
+    private TestResult runDispatchCase(TestCase test) {
+        TestSuite.DispatchTarget target = test.dispatch();
+        io.tesseraql.yaml.manifest.WorkflowFile workflowFile = loadManifest().workflows()
+                .stream()
+                .filter(w -> target.workflow().equals(w.definition().id()))
+                .findFirst()
+                .orElseThrow(() -> new IllegalArgumentException("Test '" + test.name()
+                        + "' targets unknown workflow '" + target.workflow() + "'"));
+        io.tesseraql.yaml.model.WorkflowDefinition def = workflowFile.definition();
+        io.tesseraql.yaml.model.DispatchSpec dispatch = def.dispatch().stream()
+                .filter(d -> target.id().equals(d.id()))
+                .findFirst()
+                .orElseThrow(() -> new IllegalArgumentException("Test '" + test.name()
+                        + "' targets unknown dispatch '" + target.id() + "' of workflow '"
+                        + target.workflow() + "'"));
+        boolean managed = "managed".equals(def.mode() != null
+                ? def.mode()
+                : loadManifest().config().getString("tesseraql.workflow.mode").orElse("app"));
+        String table = def.document().table();
+        String keyColumn = def.document().key();
+        try (Connection connection = dataSource.getConnection()) {
+            connection.setAutoCommit(false);
+            try {
+                List<Map<String, Object>> rows = List.of(fireDispatch(connection, def, dispatch,
+                        target, managed, table, keyColumn, test));
+                String failure = assertOutcome(test.expect(), new SqlOutcome(rows, null));
+                for (int i = 0; failure == null && i < test.verify().size(); i++) {
+                    failure = runVerifyStep(connection, test.verify().get(i), i,
+                            test.principal());
+                }
+                return failure == null
+                        ? TestResult.pass(test.name())
+                        : TestResult.fail(test.name(), failure);
+            } finally {
+                connection.rollback();
+                connection.setAutoCommit(true);
+            }
+        } catch (java.sql.SQLException ex) {
+            throw new IllegalStateException("Dispatch failed: " + ex.getMessage(), ex);
+        }
+    }
+
+    /** The selection loop itself; returns the outcome row (winner, code, or none-held). */
+    private Map<String, Object> fireDispatch(Connection connection,
+            io.tesseraql.yaml.model.WorkflowDefinition def,
+            io.tesseraql.yaml.model.DispatchSpec dispatch, TestSuite.DispatchTarget target,
+            boolean managed, String table, String keyColumn, TestCase test)
+            throws java.sql.SQLException {
+        // The dispatch-level decide: once, after the document binds, before the loop.
+        Map<String, Object> inherited = null;
+        if (!dispatch.decide().isEmpty()) {
+            String vendor = io.tesseraql.core.util.DatabaseVendors.vendor(dataSource)
+                    .orElse("postgres");
+            Map<String, Object> context = new LinkedHashMap<>(
+                    withPrincipal(test.params(), test.principal()));
+            context.put("key", target.key());
+            Map<String, Object> document = selectDocument(connection, table, keyColumn,
+                    target.key());
+            context.put("document", document == null ? Map.of() : document);
+            try {
+                inherited = new LinkedHashMap<>(io.tesseraql.yaml.decision.DecisionSets
+                        .compileUses(dispatch.decide(), vendor)
+                        .evaluate(context, connection, 0));
+            } catch (io.tesseraql.core.error.TqlException miss) {
+                Map<String, Object> outcome = new LinkedHashMap<>();
+                outcome.put("workflow", def.id());
+                outcome.put("dispatch", dispatch.id());
+                outcome.put("code", miss.code().toString());
+                return outcome;
+            }
+        }
+        List<String> attempted = new ArrayList<>();
+        for (String memberId : dispatch.oneOf()) {
+            io.tesseraql.yaml.model.TransitionSpec member = def.transitions().stream()
+                    .filter(t -> memberId.equals(t.id())).findFirst().orElse(null);
+            if (member == null) {
+                continue;
+            }
+            java.sql.Savepoint savepoint = connection.setSavepoint();
+            Map<String, Object> outcome = fireTransition(connection, def, member,
+                    new TestSuite.TransitionTarget(target.workflow(), target.key(), memberId),
+                    managed, table, keyColumn, test, inherited);
+            Object code = outcome.get("code");
+            boolean fellThrough = "TQL-WORKFLOW-3201".equals(code)
+                    || "TQL-WORKFLOW-3202".equals(code);
+            if (fellThrough) {
+                connection.rollback(savepoint);
+                attempted.add(memberId);
+                continue;
+            }
+            if (code != null) {
+                // A non-selectable refusal (3204, a decision miss) is the outcome, but its
+                // partial writes must not leak into the verify steps - the runtime rolls
+                // that attempt's own transaction back.
+                connection.rollback(savepoint);
+            }
+            outcome.put("dispatch", dispatch.id());
+            return outcome;
+        }
+        Map<String, Object> outcome = new LinkedHashMap<>();
+        outcome.put("workflow", def.id());
+        outcome.put("dispatch", dispatch.id());
+        outcome.put("code", "TQL-WORKFLOW-3202");
+        outcome.put("attempted", String.join(",", attempted));
+        return outcome;
+    }
+
+    /**
      * Fires the transition through the {@code TransitionExecutor}
      * (docs/transition-engine.md) — the same pipeline implementation the synthesized
      * routes run, in the suite's rolled-back transaction — and shapes the outcome row
@@ -243,7 +358,8 @@ public final class TestRunner {
             io.tesseraql.yaml.model.WorkflowDefinition def,
             io.tesseraql.yaml.model.TransitionSpec transition,
             TestSuite.TransitionTarget target, boolean managed, String table, String keyColumn,
-            TestCase test) throws java.sql.SQLException {
+            TestCase test, Map<String, Object> inheritedDecisions)
+            throws java.sql.SQLException {
         Map<String, Object> outcome = new LinkedHashMap<>();
         outcome.put("workflow", def.id());
         outcome.put("transition", transition.id());
@@ -271,6 +387,11 @@ public final class TestRunner {
                 ? (test.principal() == null ? "suite" : test.principal().subject())
                 : test.principal().loginId();
         context.putIfAbsent("audit", Map.of("user", actor == null ? "suite" : actor));
+        if (inheritedDecisions != null) {
+            // The dispatch-level decide: results (docs/transition-engine.md track B) — a
+            // member with its own decide: overwrites them inside the executor.
+            context.put(io.tesseraql.core.sql.AmbientBinds.DECISION, inheritedDecisions);
+        }
 
         String vendor = io.tesseraql.core.util.DatabaseVendors.vendor(dataSource)
                 .orElse("postgres");

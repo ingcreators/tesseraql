@@ -67,26 +67,19 @@ transitions:
   # table-backed deliveryAutoAccept decision judges the slip: within tolerance the
   # proposal confirms with no human in the loop, outside it a review task opens for
   # whoever placed the order. Both enum values have exactly one path out.
+  # The deliveryAutoAccept judgment lives on the propose dispatch below - evaluated
+  # once, inherited by both members (docs/transition-engine.md); the dispatch is these
+  # members' intended entry (a direct call has no decision.* to read and refuses).
   - id: propose_accept
     from: issued
     to: confirmed
     security: { auth: bearer, policy: sup.act }
-    decide:
-      deliveryAutoAccept:
-        use: deliveryAutoAccept
-        params:
-          slipDays: document.slip_days
     guard: "decision.deliveryAutoAccept.action == 'auto_confirm'"
     command: apply-proposal.sql
   - id: propose_review
     from: issued
     to: date_proposed
     security: { auth: bearer, policy: sup.act }
-    decide:
-      deliveryAutoAccept:
-        use: deliveryAutoAccept
-        params:
-          slipDays: document.slip_days
     guard: "decision.deliveryAutoAccept.action == 'review'"
     command: mark-review.sql
     assign: { file: order-owner.sql }
@@ -126,6 +119,12 @@ dispatch:
   - id: submit_decision
     oneOf: [issue, approve_issue]
   # POST /api/orders/{key}/propose lets the supplier propose a date change without
-  # knowing whether the slip auto-confirms or opens a review task.
+  # knowing whether the slip auto-confirms or opens a review task; the decision
+  # evaluates once, here, and the members inherit decision.deliveryAutoAccept.*.
   - id: propose
+    decide:
+      deliveryAutoAccept:
+        use: deliveryAutoAccept
+        params:
+          slipDays: document.slip_days
     oneOf: [propose_accept, propose_review]

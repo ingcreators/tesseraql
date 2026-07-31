@@ -90,6 +90,16 @@ scope posture, and how the `data-scope` [coverage kind](#coverage-kinds) is earn
   observe the uncommitted command under the same `principal`. Task opening, history,
   notifications, and the task-holder authority check are runtime concerns a rolled-back
   case does not model — the HTTP surface stays the place to prove those.
+- **`dispatch`** — runs a workflow's one-action selector
+  (`dispatch: {workflow: ..., key: ..., id: ...}`,
+  [transition engine](transition-engine.md)): the dispatch-level `decide:` evaluates
+  once after the document binds, then each member fires through the same pipeline the
+  `transition` target runs — a wrong-state (`TQL-WORKFLOW-3201`) or guard (`3202`)
+  refusal rolls back to its savepoint and falls through. The outcome row is the
+  winner's `from`/`to` plus `transition` (which member fired) and `dispatch`; a
+  non-selectable member outcome comes back as its `code` row; no member holding is a
+  `code: TQL-WORKFLOW-3202` row with `attempted` naming the members tried,
+  comma-joined — the button the UI actually calls, asserted without HTTP.
 
 ## Real-send cases
 

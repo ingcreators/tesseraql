@@ -49,11 +49,20 @@ public record TestSuite(List<TestCase> tests) {
             MessagesTarget messages,
             @com.fasterxml.jackson.annotation.JsonProperty("http-call") HttpCallTarget httpCall,
             DecideTarget decide, List<VerifyStep> verify, PrincipalSpec principal,
-            TransitionTarget transition) {
+            TransitionTarget transition, DispatchTarget dispatch) {
 
         public TestCase {
             params = params == null ? Map.of() : Map.copyOf(params);
             verify = verify == null ? List.of() : List.copyOf(verify);
+        }
+
+        /** Convenience constructor without a {@code dispatch} target (the pre-selector shape). */
+        public TestCase(String name, SqlTarget sql, String contract, Map<String, Object> params,
+                Expectation expect, ValidateTarget validate, NotifyTarget notifications,
+                MessagesTarget messages, HttpCallTarget httpCall, DecideTarget decide,
+                List<VerifyStep> verify, PrincipalSpec principal, TransitionTarget transition) {
+            this(name, sql, contract, params, expect, validate, notifications, messages, httpCall,
+                    decide, verify, principal, transition, null);
         }
 
         /** Convenience constructor without a {@code transition} (the pre-workflow shape). */
@@ -133,6 +142,25 @@ public record TestSuite(List<TestCase> tests) {
      */
     @JsonIgnoreProperties(ignoreUnknown = true)
     public record TransitionTarget(String workflow, String key, String id) {
+    }
+
+    /**
+     * A one-action dispatch target (docs/transition-engine.md track C): the case runs the
+     * dispatch's member-selection loop — the dispatch-level {@code decide:} once, then each
+     * member through the documented transition pipeline, a wrong-state ({@code 3201}) or
+     * guard ({@code 3202}) refusal rolling back to its savepoint and falling through — inside
+     * the case's always-rolled-back transaction. The outcome is the case's single row: the
+     * winner's {@code from}/{@code to} plus {@code transition} (which member fired) and
+     * {@code dispatch}, a non-selectable member outcome (its {@code code} row), or the
+     * none-held row: {@code code TQL-WORKFLOW-3202} with {@code attempted} naming the members
+     * tried, comma-joined.
+     *
+     * @param workflow the workflow id under {@code workflow/}
+     * @param key      the business document key
+     * @param id       the dispatch id to run
+     */
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public record DispatchTarget(String workflow, String key, String id) {
     }
 
     /**
