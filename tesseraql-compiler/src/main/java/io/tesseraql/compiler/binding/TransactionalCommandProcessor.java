@@ -1005,7 +1005,6 @@ public final class TransactionalCommandProcessor implements Processor {
         }
     }
 
-    /** Turns a row-count mismatch into a conflict (or error) instead of a silent lost update. */
     /**
      * Applies the transition's decision stamps (docs/workflow-expressiveness.md slice 2):
      * one engine-issued {@code UPDATE <table> SET col = ?, … WHERE <key> = ?} in the
@@ -1054,6 +1053,7 @@ public final class TransactionalCommandProcessor implements Processor {
         return value;
     }
 
+    /** Turns a row-count mismatch into a conflict (or error) instead of a silent lost update. */
     private void checkExpectation(Step step, Integer affected) {
         int actual = affected == null ? 0 : affected;
         if (actual == step.expect().rows()) {
