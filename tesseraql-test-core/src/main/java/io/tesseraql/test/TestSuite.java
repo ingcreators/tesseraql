@@ -48,11 +48,21 @@ public record TestSuite(List<TestCase> tests) {
             @com.fasterxml.jackson.annotation.JsonProperty("notify") NotifyTarget notifications,
             MessagesTarget messages,
             @com.fasterxml.jackson.annotation.JsonProperty("http-call") HttpCallTarget httpCall,
-            DecideTarget decide, List<VerifyStep> verify, PrincipalSpec principal) {
+            DecideTarget decide, List<VerifyStep> verify, PrincipalSpec principal,
+            TransitionTarget transition) {
 
         public TestCase {
             params = params == null ? Map.of() : Map.copyOf(params);
             verify = verify == null ? List.of() : List.copyOf(verify);
+        }
+
+        /** Convenience constructor without a {@code transition} (the pre-workflow shape). */
+        public TestCase(String name, SqlTarget sql, String contract, Map<String, Object> params,
+                Expectation expect, ValidateTarget validate, NotifyTarget notifications,
+                MessagesTarget messages, HttpCallTarget httpCall, DecideTarget decide,
+                List<VerifyStep> verify, PrincipalSpec principal) {
+            this(name, sql, contract, params, expect, validate, notifications, messages, httpCall,
+                    decide, verify, principal, null);
         }
 
         /** Convenience constructor without a {@code principal} (the pre-scoping shape). */
@@ -61,7 +71,7 @@ public record TestSuite(List<TestCase> tests) {
                 MessagesTarget messages, HttpCallTarget httpCall, DecideTarget decide,
                 List<VerifyStep> verify) {
             this(name, sql, contract, params, expect, validate, notifications, messages, httpCall,
-                    decide, verify, null);
+                    decide, verify, null, null);
         }
 
         /** Convenience constructor without a {@code decide} target (the pre-decisions shape). */
@@ -104,6 +114,25 @@ public record TestSuite(List<TestCase> tests) {
      */
     @JsonIgnoreProperties(ignoreUnknown = true)
     public record DecideTarget(String decision, String effectiveAt) {
+    }
+
+    /**
+     * A workflow-transition target (docs/approval-workflow.md, docs/testing.md): the case
+     * fires one declared transition against the document named by {@code key}, inside the
+     * case's always-rolled-back transaction, following the documented pipeline — state
+     * legality, {@code decide:} resolution, the guard, the conditional state advance, the
+     * command with its scope, and the zero-row contract. The outcome is the case's single
+     * row: {@code from}/{@code to} on an advance, or a {@code code} row
+     * ({@code TQL-WORKFLOW-3201/3202/3204}, {@code TQL-DECISION-4720/4721}) so a refusal is
+     * assertable as data. Task opening, history, notifications, and the task-holder
+     * authority check are runtime concerns a rolled-back suite case does not model.
+     *
+     * @param workflow the workflow id under {@code workflow/}
+     * @param key      the business document key
+     * @param id       the transition id to fire
+     */
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public record TransitionTarget(String workflow, String key, String id) {
     }
 
     /**

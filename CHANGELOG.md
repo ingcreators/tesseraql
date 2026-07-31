@@ -8,6 +8,17 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **The `transition:` suite target — the state machine, asserted declaratively**: a
+  test case fires one declared workflow transition against a named document, inside
+  the case's rolled-back transaction, through the documented pipeline (state
+  legality, `decide:` after the document binds, the guard, the conditional advance,
+  the scoped command, the zero-row contract). An advance answers `from`/`to`, a
+  refusal answers a `code` row (`TQL-WORKFLOW-3201/3202/3204`,
+  `TQL-DECISION-4720/4721`) — every posture assertable as data, with `verify:`
+  read-backs observing the uncommitted command under the case's `principal`. The
+  procurement suite now proves its manager-lane stamp and a wrong-state conflict
+  without HTTP.
+
 - **`tesseraql token` — the smoke-test loop's missing tool**: mints a development
   bearer token signed with the app's configured HS256 secret. Roles land under the
   configured `rolesClaim`, permissions under `permissionsClaim`, `--claim name=value`
