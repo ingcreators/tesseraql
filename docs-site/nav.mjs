@@ -138,4 +138,6 @@ export const EXCLUDED = [
   'decision-tables.md',
   // Procurement demo application (suite-scale gallery design), 2026-07-31.
   'procurement-demo.md',
+  // Workflow expressiveness (SQL guards, stamps, dispatch), 2026-07-31.
+  'workflow-expressiveness.md',
 ];
