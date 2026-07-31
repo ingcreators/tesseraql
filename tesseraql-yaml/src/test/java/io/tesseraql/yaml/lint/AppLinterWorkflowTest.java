@@ -103,6 +103,22 @@ class AppLinterWorkflowTest {
     }
 
     @Test
+    void stampLintsColumnIdentifiersAndDecisionAliases(@TempDir Path dir) throws Exception {
+        writeWorkflow(dir, WELL_FORMED.replace("command: submit.sql }",
+                "command: submit.sql, stamp: { \"bad-col\": 1 } }"));
+        assertThat(codes(new AppLinter().lint(dir))).contains("TQL-WORKFLOW-3111");
+
+        writeWorkflow(dir, WELL_FORMED.replace("command: submit.sql }",
+                "command: submit.sql, stamp: { lane: decision.ghost.route } }"));
+        assertThat(codes(new AppLinter().lint(dir))).contains("TQL-WORKFLOW-3111");
+
+        writeWorkflow(dir, WELL_FORMED.replace("command: submit.sql }",
+                "command: submit.sql, stamp: { lane: body.route } }"));
+        assertThat(new AppLinter().lint(dir)).anyMatch(f -> f.code()
+                .equals("TQL-WORKFLOW-3111") && !f.isError());
+    }
+
+    @Test
     void aMissingGuardFileIsAnError(@TempDir Path dir) throws Exception {
         writeWorkflow(dir, WELL_FORMED.replace("guard: \"document.amount > 0\"",
                 "guard: { file: nope.sql }"));

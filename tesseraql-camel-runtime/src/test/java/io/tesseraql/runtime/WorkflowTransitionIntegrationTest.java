@@ -78,6 +78,9 @@ class WorkflowTransitionIntegrationTest {
         assertThat(column("purchase_requests", "last_action", "PR-1")).isEqualTo("approve");
         assertThat(historyCount("PR-1")).isEqualTo(2);
         assertThat(column("purchase_requests", "acted_by", "PR-1")).isEqualTo("approver-1");
+        // The submit's declared stamp (docs/workflow-expressiveness.md slice 2): the
+        // engine persisted the principal path, no author SQL involved.
+        assertThat(column("purchase_requests", "lane", "PR-1")).isEqualTo("approver-1");
     }
 
     @Test
@@ -309,7 +312,7 @@ class WorkflowTransitionIntegrationTest {
                 Statement statement = connection.createStatement()) {
             statement.execute("create table purchase_requests (id varchar(64) primary key, "
                     + "title varchar(200), amount numeric(12,2) not null, "
-                    + "last_action varchar(32), acted_by varchar(64))");
+                    + "last_action varchar(32), acted_by varchar(64), lane varchar(32))");
             statement.execute("insert into purchase_requests (id, title, amount) values "
                     + "('PR-1','Laptop',1000), ('PR-2','Pen',0), ('PR-3','Desk',500), "
                     + "('PR-4','Chair',700), ('PR-5','Lamp',300), ('PR-6','Phone',900), "
@@ -326,7 +329,7 @@ class WorkflowTransitionIntegrationTest {
             statement.execute("insert into escalating_requests (id) values ('ER-1')");
             // A workflow whose 'submitted' deadline auto-fires the approve transition (onBreach.escalate).
             statement.execute("create table auto_requests (id varchar(64) primary key, "
-                    + "last_action varchar(32), acted_by varchar(64))");
+                    + "last_action varchar(32), acted_by varchar(64), lane varchar(32))");
             statement.execute("insert into auto_requests (id) values ('AU-1')");
         }
     }
@@ -375,6 +378,8 @@ class WorkflowTransitionIntegrationTest {
                     from: draft
                     to: submitted
                     guard: "document.amount > 0"
+                    stamp:
+                      lane: principal.subject
                     command: submit.sql
                     assign: { file: approver.sql }
                   - { id: approve, from: submitted, to: approved, command: approve.sql }

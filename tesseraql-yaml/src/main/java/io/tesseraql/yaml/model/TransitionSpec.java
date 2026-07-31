@@ -34,12 +34,20 @@ public record TransitionSpec(String id, String from, String to, GuardSpec guard,
         // Decision-table references evaluated before the guard (docs/decision-tables.md
         // "Acting on the result"): the guard selects among declared transitions by
         // decision.<alias>.<output>, and assignee-resolution SQL binds the outputs.
-        Map<String, DecisionUse> decide) {
+        Map<String, DecisionUse> decide,
+        // Decision stamps (docs/workflow-expressiveness.md slice 2): document columns the
+        // engine persists in the transition's transaction, before the author command —
+        // values are decision.*/document.*/principal.* paths, literals, or null (a rework
+        // transition's declared clearing). Nulls are legal values, so no Map.copyOf.
+        Map<String, Object> stamp) {
 
     public TransitionSpec {
         params = params == null ? Map.of() : Map.copyOf(params);
         decide = decide == null
                 ? Map.of()
                 : java.util.Collections.unmodifiableMap(new java.util.LinkedHashMap<>(decide));
+        stamp = stamp == null
+                ? java.util.Collections.emptyMap()
+                : java.util.Collections.unmodifiableMap(new java.util.LinkedHashMap<>(stamp));
     }
 }

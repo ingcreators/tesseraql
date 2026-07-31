@@ -39,6 +39,10 @@ import java.util.Map;
 public record WorkflowBinding(String workflowId, String transitionId, String docType, String table,
         String keyColumn, String keyExpr, String from, String to, String initial, boolean managed,
         Expr guard, List<SqlNode> guardNodes, String guardCode, String guardMessage,
+        // Decision stamps (docs/workflow-expressiveness.md slice 2): column -> a
+        // decision.*/document.*/principal.* path string, a literal, or null (clearing);
+        // column identifiers are validated at compile.
+        Map<String, Object> stamps,
         WorkflowStore appStore, List<SqlNode> assignNodes,
         Map<String, String> assignParams, Long dueWithinMillis,
         io.tesseraql.yaml.notify.NotifyEvents.CompiledNotify assignNotify) {

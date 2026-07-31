@@ -29,6 +29,8 @@ transitions:
         params:
           isLowest: document.is_lowest
           deltaPct: document.delta_pct
+    stamp:
+      approval_lane: decision.orderApproval.lane
     command: order-submit.sql
     assign: { file: order-approver.sql }
   # The auto lane issues immediately ...
@@ -50,6 +52,8 @@ transitions:
   - id: rework
     from: rejected
     to: draft
+    stamp:
+      approval_lane: null
     command: order-rework.sql
   # The supplier accepts the promised dates as ordered ... (the supplier-facing
   # transitions override the workflow's buyer-side default policy; the command's

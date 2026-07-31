@@ -333,6 +333,32 @@ public final class TestRunner {
                 }
             }
         }
+        // Decision stamps apply after the advance, before the author command — the same
+        // order the runtime uses (docs/workflow-expressiveness.md slice 2).
+        if (!transition.stamp().isEmpty()) {
+            io.tesseraql.core.expr.EvaluationContext evaluation = new io.tesseraql.core.expr.EvaluationContext(
+                    context);
+            Map<String, Object> resolved = new LinkedHashMap<>();
+            transition.stamp().forEach((column, value) -> resolved.put(column,
+                    value instanceof String path && (path.startsWith("decision.")
+                            || path.startsWith("document.") || path.startsWith("principal."))
+                                    ? evaluation.resolve(
+                                            java.util.Arrays.asList(path.split("\\.")))
+                                    : value));
+            StringBuilder stampSql = new StringBuilder("update ").append(table).append(" set ")
+                    .append(String.join(", ", resolved.keySet().stream()
+                            .map(column -> column + " = ?").toList()))
+                    .append(" where ").append(keyColumn).append(" = ?");
+            try (java.sql.PreparedStatement statement = connection
+                    .prepareStatement(stampSql.toString())) {
+                int index = 1;
+                for (Object value : resolved.values()) {
+                    statement.setObject(index++, value);
+                }
+                statement.setObject(index, target.key());
+                statement.executeUpdate();
+            }
+        }
         if (transition.command() != null && !transition.command().isBlank()) {
             Path command = workflowDir(def).resolve(transition.command());
             SqlOutcome result = executeSql(connection, command, context);

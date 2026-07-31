@@ -21,13 +21,17 @@ transitions:
     from: draft
     to: submitted
     guard: "document.amount > 0"
-    command: submit.sql
     decide:
       approvalRoute:
         use: approvalRoute
         params:
           amount: document.amount
           category: document.category
+    # The engine persists the decided lane (docs/workflow-expressiveness.md slice 2);
+    # the command carries only the audit note.
+    stamp:
+      approval_route: decision.approvalRoute.route
+    command: submit.sql
     assign: { file: approver.sql }
   # The manager lane finishes in one approval ...
   - id: approve
@@ -57,4 +61,7 @@ transitions:
   - id: rework
     from: rejected
     to: draft
+    # The declared clearing: the next submit re-evaluates the decision.
+    stamp:
+      approval_route: null
     command: rework.sql

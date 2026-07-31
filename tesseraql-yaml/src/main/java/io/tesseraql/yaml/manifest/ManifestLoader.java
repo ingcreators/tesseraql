@@ -432,7 +432,7 @@ public final class ManifestLoader {
             resolved.add(new io.tesseraql.yaml.model.TransitionSpec(transition.id(),
                     transition.from(), transition.to(), transition.guard(),
                     transition.command(), transition.params(), transition.assign(),
-                    transition.security(), merged));
+                    transition.security(), merged, transition.stamp()));
         }
         return new io.tesseraql.yaml.model.WorkflowDefinition(def.version(), def.id(),
                 def.kind(), def.mode(), def.document(), def.http(), def.security(),

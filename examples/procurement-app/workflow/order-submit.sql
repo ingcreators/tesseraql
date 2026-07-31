@@ -1,7 +1,5 @@
--- Stamps the lane the orderApproval decision chose from the document's own selection
--- facts (is_lowest, delta_pct — computed at creation, not client-asserted).
+-- The lane is the engine's stamp now (order.yml stamp:); this command is the audit
+-- note only.
 update orders
-set approval_lane = /* decision.orderApproval.lane */ 'auto',
-    last_action = 'submit',
-    acted_by = /* audit.user */ 'someone'
+set last_action = 'submit', acted_by = /* audit.user */ 'someone'
 where id = /* key */ 'ORD-0'
