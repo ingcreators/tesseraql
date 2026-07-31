@@ -1,0 +1,22 @@
+version: tesseraql/v1
+id: tql.studio.decisionBuilder.build
+kind: route
+recipe: query-html
+
+# Generates the decide: YAML referencing one declared decision (pure text; copy into the route).
+input:
+  decision:
+    type: string
+    required: false
+
+sql:
+  service: studio.decisionBuilder.build
+  params:
+    decision: params.decision
+
+response:
+  html:
+    status: 200
+    template: build.html
+    model:
+      db: sql

@@ -137,6 +137,7 @@ sql:
     in0minlen: params.in0minlen
     in0pattern: params.in0pattern
     in0enum: params.in0enum
+    in0domain: params.in0domain
     in1name: params.in1name
     in1type: params.in1type
     in1req: params.in1req
@@ -146,6 +147,7 @@ sql:
     in1minlen: params.in1minlen
     in1pattern: params.in1pattern
     in1enum: params.in1enum
+    in1domain: params.in1domain
     in2name: params.in2name
     in2type: params.in2type
     in2req: params.in2req
@@ -155,6 +157,7 @@ sql:
     in2minlen: params.in2minlen
     in2pattern: params.in2pattern
     in2enum: params.in2enum
+    in2domain: params.in2domain
     in3name: params.in3name
     in3type: params.in3type
     in3req: params.in3req
@@ -164,6 +167,7 @@ sql:
     in3minlen: params.in3minlen
     in3pattern: params.in3pattern
     in3enum: params.in3enum
+    in3domain: params.in3domain
     in4name: params.in4name
     in4type: params.in4type
     in4req: params.in4req
@@ -173,6 +177,7 @@ sql:
     in4minlen: params.in4minlen
     in4pattern: params.in4pattern
     in4enum: params.in4enum
+    in4domain: params.in4domain
     in5name: params.in5name
     in5type: params.in5type
     in5req: params.in5req
@@ -182,6 +187,7 @@ sql:
     in5minlen: params.in5minlen
     in5pattern: params.in5pattern
     in5enum: params.in5enum
+    in5domain: params.in5domain
     in6name: params.in6name
     in6type: params.in6type
     in6req: params.in6req
@@ -191,6 +197,7 @@ sql:
     in6minlen: params.in6minlen
     in6pattern: params.in6pattern
     in6enum: params.in6enum
+    in6domain: params.in6domain
     in7name: params.in7name
     in7type: params.in7type
     in7req: params.in7req
@@ -200,6 +207,7 @@ sql:
     in7minlen: params.in7minlen
     in7pattern: params.in7pattern
     in7enum: params.in7enum
+    in7domain: params.in7domain
     in8name: params.in8name
     in8type: params.in8type
     in8req: params.in8req
@@ -209,6 +217,7 @@ sql:
     in8minlen: params.in8minlen
     in8pattern: params.in8pattern
     in8enum: params.in8enum
+    in8domain: params.in8domain
     in9name: params.in9name
     in9type: params.in9type
     in9req: params.in9req
@@ -218,6 +227,7 @@ sql:
     in9minlen: params.in9minlen
     in9pattern: params.in9pattern
     in9enum: params.in9enum
+    in9domain: params.in9domain
     roles: principal.roles
 
 response:

@@ -29,6 +29,13 @@ web/_tesseraql/studio/ui/data/edit/post.yml
 web/_tesseraql/studio/ui/data/export/data.csv.tpl
 web/_tesseraql/studio/ui/data/export/get.yml
 web/_tesseraql/studio/ui/data/get.yml
+web/_tesseraql/studio/ui/decision-builder/build/build.html
+web/_tesseraql/studio/ui/decision-builder/build/post.yml
+web/_tesseraql/studio/ui/decision-builder/decision-builder.html
+web/_tesseraql/studio/ui/decision-builder/get.yml
+web/_tesseraql/studio/ui/decisions/decisions.html
+web/_tesseraql/studio/ui/decisions/get.yml
+web/_tesseraql/studio/ui/decisions/save/post.yml
 web/_tesseraql/studio/ui/discard/post.yml
 web/_tesseraql/studio/ui/docs/coverage/coverage.html
 web/_tesseraql/studio/ui/docs/coverage/get.yml

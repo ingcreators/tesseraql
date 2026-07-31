@@ -1,0 +1,26 @@
+version: tesseraql/v1
+id: tql.studio.decisions
+kind: route
+recipe: query-html
+
+input:
+  name:
+    type: string
+    required: false
+  saved:
+    type: string
+    required: false
+
+sql:
+  service: studio.decisions.view
+  params:
+    name: params.name
+    saved: params.saved
+    roles: principal.roles
+
+response:
+  html:
+    status: 200
+    template: decisions.html
+    model:
+      dg: sql

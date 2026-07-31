@@ -53,6 +53,82 @@ class DocServiceTest {
     }
 
     @Test
+    void columnContractsAndBackingDecisionsComeFromTheTableSource(@TempDir Path dir)
+            throws Exception {
+        Files.createDirectories(dir.resolve("config"));
+        Files.writeString(dir.resolve("config/tesseraql.yml"),
+                "tesseraql:\n  app:\n    name: demo\n");
+        // A table-backed decision exercising every column role, plus a YAML-backed one that
+        // must contribute nothing (its rows have no table to annotate).
+        Files.createDirectories(dir.resolve("decisions"));
+        Files.writeString(dir.resolve("decisions/shipping.yml"), """
+                version: tesseraql/v1
+
+                decisions:
+                  shippingFee:
+                    inputs:
+                      weight: { type: number, match: between }
+                      region: { type: string }
+                      unit: { type: string, match: orgSubtree }
+                      category: { type: string, match: in }
+                    outputs:
+                      fee: { type: number }
+                    hitPolicy: first
+                    source:
+                      table: shipping_fee_rules
+                      match:
+                        weight: { between: [weight_min, weight_max] }
+                        region: { eq: region }
+                        unit: { subtree: org_unit_id }
+                      set:
+                        category:
+                          table: shipping_fee_rule_categories
+                          key: rule_id
+                          value: category
+                      priority: priority
+                      effective: [valid_from, valid_to]
+                      outputs: { fee: fee }
+                  lane:
+                    inputs:
+                      amount: { type: number, match: between }
+                    outputs:
+                      assignee: { type: string }
+                    hitPolicy: first
+                    rows:
+                      - when: { amount: "> 100000" }
+                        out: { assignee: cfo }
+                      - out: { assignee: approver }
+                """);
+        DocService service = new DocService(new ManifestLoader().load(dir));
+
+        // The rule table: every mapped column carries its "<decision>: <role>" label.
+        assertThat(service.columnContracts("shipping_fee_rules"))
+                .containsEntry("id", "shippingFee: rule key")
+                .containsEntry("weight_min", "shippingFee: weight lower bound")
+                .containsEntry("weight_max", "shippingFee: weight upper bound")
+                .containsEntry("region", "shippingFee: region match")
+                .containsEntry("org_unit_id", "shippingFee: unit subtree")
+                .containsEntry("priority", "shippingFee: priority")
+                .containsEntry("valid_from", "shippingFee: effective from")
+                .containsEntry("valid_to", "shippingFee: effective to")
+                .containsEntry("fee", "shippingFee: fee output");
+        // The normalized `in` child table has its own roles; the table match is case-insensitive.
+        assertThat(service.columnContracts("SHIPPING_FEE_RULE_CATEGORIES"))
+                .containsEntry("rule_id", "shippingFee: rule reference")
+                .containsEntry("category", "shippingFee: category member");
+        assertThat(service.columnContracts("no_such_table")).isEmpty();
+        assertThat(service.columnContracts(null)).isEmpty();
+
+        // Both the rule table and the child table back the decision; others do not.
+        assertThat(service.decisionsForTable("shipping_fee_rules"))
+                .containsExactly("shippingFee");
+        assertThat(service.decisionsForTable("SHIPPING_FEE_RULE_CATEGORIES"))
+                .containsExactly("shippingFee");
+        assertThat(service.decisionsForTable("no_such_table")).isEmpty();
+        assertThat(service.decisionsForTable(null)).isEmpty();
+    }
+
+    @Test
     void apiChangelogDiffsTheCurrentSpecAgainstTheBaselineSidecar(@TempDir Path dir)
             throws Exception {
         Files.createDirectories(dir.resolve("config"));

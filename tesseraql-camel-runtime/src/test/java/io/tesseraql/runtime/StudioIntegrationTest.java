@@ -105,6 +105,18 @@ class StudioIntegrationTest {
                 statement.execute("create unique index uq_" + table + "_name on " + table
                         + " (name)");
             }
+            // The rule table backing the `shippingFee` decision (see prepareAppHome): the data
+            // browser overlays each mapped column's contract role on the live table.
+            statement.execute("create table shipping_fee_rules ("
+                    + "id bigserial primary key,"
+                    + "weight_min numeric,"
+                    + "weight_max numeric,"
+                    + "region varchar(40),"
+                    + "priority integer not null,"
+                    + "fee numeric not null)");
+            statement.execute("insert into shipping_fee_rules "
+                    + "(weight_min, weight_max, region, priority, fee) "
+                    + "values (0, 5, 'east', 10, 700)");
         }
     }
 
@@ -501,6 +513,9 @@ class StudioIntegrationTest {
                     .contains(">SQL builder<").contains(">Drafts<").contains(">Audit<")
                     .contains(">Wizards<").contains(">Domains<").contains(">Rules<")
                     .contains(">Decisions<")
+                    // the decision authoring pair (decision-tables Studio slice) sits in the
+                    // Authoring group beside Validation
+                    .contains(">Decide builder<").contains(">Decision rows<")
                     // every page is reachable from the rail, not only from the explorer's
                     // editable-mode "or create with" cluster (which a read-only user never sees)
                     .contains(">Copilot<").contains(">Connectors<")
@@ -1952,22 +1967,30 @@ class StudioIntegrationTest {
 
         String form = "path=" + enc("web/api/formed/get.yml")
                 + "&recipe=query-json&auth=bearer&policy=app.read"
-                + "&in0name=q&in0type=string&in0maxlen=40";
+                + "&in0name=q&in0type=string&in0maxlen=40&in0domain=" + enc("formed.q");
         HttpResponse<String> saved = postForm("/_tesseraql/studio/ui/route-form", form);
         assertThat(saved.statusCode()).isEqualTo(303);
         assertThat(saved.headers().firstValue("Location").orElse(""))
                 .contains("/_tesseraql/studio/ui/source").contains("saved=1");
 
-        // The draft carries the structured change; the form now reads the draft.
+        // The draft carries the structured change; the form now reads the draft. The field
+        // domain must survive the HTTP form -> service hop (the post.yml params mapping the
+        // Java-level unit tests cannot see): without it, the select silently drops and a save
+        // strips an existing domain: from the document.
         HttpResponse<String> reread = get("/_tesseraql/studio/ui/route-form?path="
                 + enc("web/api/formed/get.yml"), true);
         assertThat(reread.body()).contains("Editing the pending draft");
+        String draft = Files.readString(
+                appHome.resolve("work/studio/drafts/web/api/formed/get.yml"));
+        // The re-serialized draft may quote the scalar, so match key and value separately.
+        assertThat(draft).contains("domain:").contains("formed.q");
 
         HttpResponse<String> apply = post(
                 "/_tesseraql/studio/apply?path=" + enc("web/api/formed/get.yml"), "", true);
         assertThat(apply.statusCode()).isEqualTo(200);
         String applied = Files.readString(appHome.resolve("web/api/formed/get.yml"));
-        assertThat(applied).contains("policy").contains("app.read").contains("maxLength: 40");
+        assertThat(applied).contains("policy").contains("app.read").contains("maxLength: 40")
+                .contains("domain:").contains("formed.q");
         // Still serving after the reload, with the declared input bound.
         assertThat(get("/api/formed?q=abc", true).statusCode()).isEqualTo(200);
     }
@@ -2478,6 +2501,42 @@ class StudioIntegrationTest {
     }
 
     @Test
+    void uiDataBrowserBadgesDecisionContractColumns() throws Exception {
+        // The decision-contract overlay (docs/decision-tables.md): browsing the rule table
+        // backing the `shippingFee` decision badges each mapped column with its role. Asserted
+        // here because only this path evaluates data.html against the columnContracts model.
+        HttpResponse<String> response = get(
+                "/_tesseraql/studio/ui/data?table=shipping_fee_rules", true);
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(response.body())
+                .contains("shippingFee: rule key")
+                .contains("shippingFee: weight lower bound")
+                .contains("shippingFee: weight upper bound")
+                .contains("shippingFee: region match")
+                .contains("shippingFee: priority")
+                .contains("shippingFee: fee output");
+        // A table no decision maps stays badge-free.
+        assertThat(get("/_tesseraql/studio/ui/data?table=widgets", true).body())
+                .doesNotContain("shippingFee:");
+    }
+
+    @Test
+    void uiDocsTableChipsTheDecisionsItBacks() throws Exception {
+        // The schema table page says whose routing rows these are: the rule table is chipped
+        // with the decision it backs, linking to the decisions reference page.
+        HttpResponse<String> response = get(
+                "/_tesseraql/studio/ui/docs/schema/table?ds=main&name=shipping_fee_rules", true);
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(response.body()).contains("backs shippingFee")
+                .contains("/_tesseraql/studio/ui/docs/decisions");
+        // A table backing no decision carries no chip.
+        assertThat(get("/_tesseraql/studio/ui/docs/schema/table?ds=main&name=customers", true)
+                .body()).doesNotContain("backs shippingFee");
+    }
+
+    @Test
     void uiDataBrowserExportsTheViewAsCsv() throws Exception {
         HttpResponse<String> response = get(
                 "/_tesseraql/studio/ui/data/export?table=tql_users", true);
@@ -2534,6 +2593,94 @@ class StudioIntegrationTest {
         // The generated snippet is HTML-escaped in the fragment (>= becomes &gt;=).
         assertThat(response.body()).contains("validate:").contains("body.age &gt;= 18")
                 .contains("field: age");
+    }
+
+    @Test
+    void uiDecisionBuilderRendersTheForm() throws Exception {
+        HttpResponse<String> response = get("/_tesseraql/studio/ui/decision-builder", true);
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        // The declared decisions populate the select. Asserted here rather than in a unit test
+        // because only this path evaluates the template (the validation-builder reasoning).
+        assertThat(response.body()).contains("Decide builder").contains("name=\"decision\"")
+                .contains("shippingFee").contains("approvalTier");
+    }
+
+    @Test
+    void uiDecisionBuilderGeneratesADecideSnippet() throws Exception {
+        HttpResponse<String> response = postForm("/_tesseraql/studio/ui/decision-builder/build",
+                "decision=shippingFee");
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        // Every input of the contract is laid out — an omission fails the load
+        // (TQL-DECISION-4706), and a snippet that fails the load is worse than none.
+        assertThat(response.body()).contains("decide:").contains("use: shippingFee")
+                .contains("weight: params.weight").contains("region: params.region");
+    }
+
+    @Test
+    void uiDecisionRowsEditorEditsACellThroughADraft() throws Exception {
+        // The rows-grid editor (docs/decision-tables.md "Studio"): the YAML-backed decision's
+        // rows render as fixed-slot cells; editing one lands a validated draft of the
+        // decisions document — the routeFormSave persistence contract.
+        try {
+            HttpResponse<String> page = get(
+                    "/_tesseraql/studio/ui/decisions?name=approvalTier", true);
+            assertThat(page.statusCode()).isEqualTo(200);
+            assertThat(page.body()).contains("Decision rows").contains("approvalTier")
+                    // fixed slots + posted column meaning
+                    .contains("name=\"r0c0\"").contains("name=\"c0key\"")
+                    .contains("name=\"c2kind\"")
+                    // the authored cells (the between cell HTML-escapes its comparator)
+                    .contains("&gt;= 100000").contains("sales").contains("cfo")
+                    // the canonical-formatting note (the route-form contract)
+                    .contains("canonical formatting");
+
+            HttpResponse<String> saved = postForm("/_tesseraql/studio/ui/decisions/save",
+                    "name=approvalTier"
+                            + "&c0key=amount&c0kind=in&c1key=dept&c1kind=in&c2key=tier&c2kind=out"
+                            + "&r0c0=" + enc(">= 100000") + "&r0c2=cfo"
+                            + "&r1c0=" + enc(">= 10000") + "&r1c1=marketing&r1c2=director"
+                            + "&r2c2=manager");
+            assertThat(saved.statusCode()).isEqualTo(303);
+            assertThat(saved.headers().firstValue("Location").orElse(""))
+                    .contains("/_tesseraql/studio/ui/decisions").contains("saved=1");
+
+            // The draft carries the edited cell; the source of truth is untouched.
+            String draft = Files.readString(
+                    appHome.resolve("work/studio/drafts/decisions/approval.yml"));
+            assertThat(draft).contains("marketing").doesNotContain("sales");
+            assertThat(Files.readString(appHome.resolve("decisions/approval.yml")))
+                    .contains("sales");
+            // Audited, and the grid now reads the draft.
+            assertThat(Files.readString(appHome.resolve("work/studio/audit/audit.jsonl")))
+                    .contains("\"action\":\"decision-rows\"");
+            assertThat(get("/_tesseraql/studio/ui/decisions?name=approvalTier", true).body())
+                    .contains("Editing the pending draft").contains("marketing");
+        } finally {
+            // Discard the draft so the shared app home stays canonical for sibling tests
+            // (an apply-all test would otherwise land this edit).
+            Files.deleteIfExists(appHome.resolve("work/studio/drafts/decisions/approval.yml"));
+            Files.deleteIfExists(
+                    appHome.resolve("work/studio/drafts/decisions/approval.yml.meta"));
+        }
+    }
+
+    @Test
+    void uiDecisionRowsEditorRejectsAnEnumTypoBeforeAnythingLands() throws Exception {
+        // The save validates the rebuilt document (parseDecisions + DecisionSets.compile)
+        // before persisting, so an out cell outside the declared enum answers with its
+        // TQL-DECISION code and no draft is written.
+        HttpResponse<String> rejected = postForm("/_tesseraql/studio/ui/decisions/save",
+                "name=approvalTier"
+                        + "&c0key=amount&c0kind=in&c1key=dept&c1kind=in&c2key=tier&c2kind=out"
+                        + "&r0c0=" + enc(">= 100000") + "&r0c2=vp"
+                        + "&r1c2=manager");
+
+        assertThat(rejected.statusCode()).isEqualTo(422);
+        assertThat(rejected.body()).contains("TQL-DECISION-4708");
+        assertThat(Files.exists(
+                appHome.resolve("work/studio/drafts/decisions/approval.yml"))).isFalse();
     }
 
     @Test
@@ -3056,7 +3203,25 @@ class StudioIntegrationTest {
                       "foreignKeys": [ { "name": "orders_customer_id_fkey",
                                          "columns": ["customer_id"], "refTable": "customers",
                                          "refColumns": ["id"] } ],
-                      "uniqueIndexes": [] }
+                      "uniqueIndexes": [] },
+                    { "name": "shipping_fee_rules", "type": "TABLE", "schema": "public",
+                      "columns": [
+                        { "name": "id", "jdbcType": -5, "sqlTypeName": "bigserial", "size": 19,
+                          "nullable": false, "autoincrement": true, "defaultValue": null },
+                        { "name": "weight_min", "jdbcType": 2, "sqlTypeName": "numeric",
+                          "size": 10, "nullable": true, "autoincrement": false,
+                          "defaultValue": null },
+                        { "name": "weight_max", "jdbcType": 2, "sqlTypeName": "numeric",
+                          "size": 10, "nullable": true, "autoincrement": false,
+                          "defaultValue": null },
+                        { "name": "region", "jdbcType": 12, "sqlTypeName": "varchar",
+                          "size": 40, "nullable": true, "autoincrement": false,
+                          "defaultValue": null },
+                        { "name": "priority", "jdbcType": 4, "sqlTypeName": "int4", "size": 10,
+                          "nullable": false, "autoincrement": false, "defaultValue": null },
+                        { "name": "fee", "jdbcType": 2, "sqlTypeName": "numeric", "size": 10,
+                          "nullable": false, "autoincrement": false, "defaultValue": null } ],
+                      "primaryKey": ["id"], "foreignKeys": [], "uniqueIndexes": [] }
                   ] } } }
                 """);
         // A schema baseline (customers without email, and no orders table) so the migration page's
@@ -3187,6 +3352,62 @@ class StudioIntegrationTest {
         Files.writeString(target.resolve("web/api/multi/main.sql"), "select 'main-live' as tag\n");
         Files.writeString(target.resolve("web/api/multi/active.sql"),
                 "select 'query-live' as tag\n");
+        // A table-backed decision over `shipping_fee_rules` (seeded live in seedScaffoldTable and
+        // introspected by the schema.json overlay above): the data browser badges each mapped
+        // column's role and the docs table page chips the table as backing the decision.
+        Files.createDirectories(target.resolve("decisions"));
+        Files.writeString(target.resolve("decisions/shipping.yml"), """
+                version: tesseraql/v1
+
+                decisions:
+                  shippingFee:
+                    inputs:
+                      weight: { type: number, match: between }
+                      region: { type: string }
+                    outputs:
+                      fee: { type: number }
+                    hitPolicy: first
+                    source:
+                      table: shipping_fee_rules
+                      match:
+                        weight: { between: [weight_min, weight_max] }
+                        region: { eq: region }
+                      priority: priority
+                      outputs: { fee: fee }
+                """);
+        // A YAML-backed decision for the rows-grid editor tests: its rows live in the document,
+        // so the grid renders them and a save lands a draft of this file. The enum on `tier`
+        // gives the validate-before-persist test a typo to reject (TQL-DECISION-4708).
+        Files.writeString(target.resolve("decisions/approval.yml"), """
+                version: tesseraql/v1
+
+                decisions:
+                  approvalTier:
+                    inputs:
+                      amount: { type: number, match: between }
+                      dept: { type: string }
+                    outputs:
+                      tier: { type: string, enum: [manager, director, cfo] }
+                    hitPolicy: first
+                    onMiss: default
+                    rows:
+                      - when: { amount: ">= 100000" }
+                        out: { tier: cfo }
+                      - when: { amount: ">= 10000", dept: sales }
+                        out: { tier: director }
+                      - out: { tier: manager }
+                """);
+        // A field domain for the route-form editor test: saving `domain: formed.q` through the
+        // form must survive the draft AND resolve when the applied route recompiles.
+        Files.createDirectories(target.resolve("domains"));
+        Files.writeString(target.resolve("domains/studio-it.yml"), """
+                version: tesseraql/v1
+
+                domains:
+                  formed.q:
+                    type: string
+                    maxLength: 40
+                """);
         return target;
     }
 

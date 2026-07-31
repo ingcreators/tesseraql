@@ -2285,6 +2285,23 @@ public final class TesseraqlRuntime implements AutoCloseable {
                                         filters);
                                 model.put("table", data.table());
                                 model.put("columns", data.columns());
+                                // Decision-contract overlay (docs/decision-tables.md): when the
+                                // browsed table backs a table-backed decision, each mapped
+                                // column's role, keyed by the displayed column name — a map
+                                // PARALLEL to `columns` (whose shape the filter selects and the
+                                // empty-state colspan reuse), matched case-insensitively against
+                                // the names the decision declares.
+                                Map<String, String> contracts = new io.tesseraql.studio.DocService(
+                                        manifest).columnContracts(data.table());
+                                Map<String, String> columnContracts = new java.util.LinkedHashMap<>();
+                                for (String column : data.columns()) {
+                                    contracts.forEach((mapped, role) -> {
+                                        if (mapped.equalsIgnoreCase(column)) {
+                                            columnContracts.put(column, role);
+                                        }
+                                    });
+                                }
+                                model.put("columnContracts", columnContracts);
                                 java.util.List<Map<String, Object>> rows = new java.util.ArrayList<>();
                                 for (java.util.List<String> values : data.rows()) {
                                     java.util.List<Map<String, Object>> cells = new java.util.ArrayList<>();
@@ -2591,6 +2608,64 @@ public final class TesseraqlRuntime implements AutoCloseable {
                                                 .findFirst()
                                                 .map(io.tesseraql.studio.StudioService.SharedRule::binds)
                                                 .orElse(java.util.List.of()))))
+                        // Decide-snippet builder (docs/decision-tables.md): generate a route's
+                        // decide: block for one declared decision — the validation builder's
+                        // shape applied to the other shared definition. Pure text generation to
+                        // copy into the route; the contract travels with the name because a
+                        // reference must wire the inputs exactly (TQL-DECISION-4706).
+                        .register("studio.decisionBuilder",
+                                params -> Map.of("decisions", studio.sharedDecisions()))
+                        .register("studio.decisionBuilder.build", params -> {
+                            java.util.Optional<io.tesseraql.studio.StudioService.SharedDecision> match = studio
+                                    .sharedDecisions().stream()
+                                    .filter(d -> d.name().equals(str(params, "decision")))
+                                    .findFirst();
+                            return Map.of("snippet", io.tesseraql.studio.DecideSnippetBuilder
+                                    .generate(str(params, "decision"),
+                                            match.map(
+                                                    io.tesseraql.studio.StudioService.SharedDecision::inputs)
+                                                    .orElse(java.util.List.of()),
+                                            match.map(
+                                                    io.tesseraql.studio.StudioService.SharedDecision::dated)
+                                                    .orElse(false)));
+                        })
+                        // Decision rows grid (docs/decision-tables.md "Studio"): a YAML-backed
+                        // decision's rows as a table-shaped editor, saved through the draft flow
+                        // (routeFormSave's persistence contract) after a parse + compile check.
+                        .register("studio.decisions.view", params -> {
+                            Map<String, Object> model = new java.util.LinkedHashMap<>();
+                            model.put("editable", studioAccess.canEdit(params.get("roles")));
+                            model.put("decisions", studio.sharedDecisions());
+                            String name = str(params, "name");
+                            model.put("grid", name == null ? null : studio.decisionGrid(name));
+                            model.put("saved", params.get("saved") != null);
+                            return model;
+                        })
+                        .register("studio.decisions.save", params -> {
+                            studioAccess.requireEdit(params.get("roles"));
+                            String name = String.valueOf(params.get("name"));
+                            java.util.List<io.tesseraql.studio.StudioService.DecisionColumn> columns = new java.util.ArrayList<>();
+                            for (int j = 0; j < io.tesseraql.studio.StudioService.DECISION_GRID_COLUMNS; j++) {
+                                String key = str(params, "c" + j + "key");
+                                if (key == null) {
+                                    continue;
+                                }
+                                java.util.List<String> cells = new java.util.ArrayList<>();
+                                for (int i = 0; i < io.tesseraql.studio.StudioService.DECISION_GRID_ROWS; i++) {
+                                    cells.add(str(params, "r" + i + "c" + j));
+                                }
+                                columns.add(new io.tesseraql.studio.StudioService.DecisionColumn(
+                                        key, str(params, "c" + j + "kind"), cells));
+                            }
+                            java.util.Set<Integer> deletes = new java.util.LinkedHashSet<>();
+                            for (int i = 0; i < io.tesseraql.studio.StudioService.DECISION_GRID_ROWS; i++) {
+                                if (params.get("d" + i) != null) {
+                                    deletes.add(i);
+                                }
+                            }
+                            studio.saveDecisionRows(name, columns, deletes, actorOf(params));
+                            return Map.of("saved", name);
+                        })
                         .register("studio.migration.create", params -> {
                             studioAccess.requireEdit(params.get("roles"));
                             String datasource = params.get("datasource") == null
@@ -2899,7 +2974,8 @@ public final class TesseraqlRuntime implements AutoCloseable {
                                 return Map.of("notFound", true, "name", name, "datasource", ds);
                             }
                             Map<String, Object> model = io.tesseraql.studio.DocViews.table(ds,
-                                    table, doc.routesForTable(name), doc.domainsForTable(name));
+                                    table, doc.routesForTable(name), doc.domainsForTable(name),
+                                    doc.decisionsForTable(name));
                             if (shareLinks.enabled()) {
                                 model.put("shareUrl", shareLinks.mintTable(ds, name));
                             }

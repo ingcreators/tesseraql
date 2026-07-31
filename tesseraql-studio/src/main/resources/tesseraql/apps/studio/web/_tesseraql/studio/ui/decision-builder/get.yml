@@ -1,0 +1,14 @@
+version: tesseraql/v1
+id: tql.studio.decisionBuilder
+kind: route
+recipe: query-html
+
+sql:
+  service: studio.decisionBuilder
+
+response:
+  html:
+    status: 200
+    template: decision-builder.html
+    model:
+      db: sql

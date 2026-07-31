@@ -379,6 +379,18 @@ public final class DocViews {
      */
     public static Map<String, Object> table(String datasource, CatalogSchema.Table table,
             DocService.RouteUsage usage, Map<String, String> columnDomains) {
+        return table(datasource, table, usage, columnDomains, List.of());
+    }
+
+    /**
+     * As {@link #table(String, CatalogSchema.Table, DocService.RouteUsage, Map)}, with the
+     * table chipped by the decisions it backs (docs/decision-tables.md) — the rule table or a
+     * normalized {@code in} child table of a table-backed decision — so the reference page
+     * says whose routing rows these are before anyone edits them as plain data.
+     */
+    public static Map<String, Object> table(String datasource, CatalogSchema.Table table,
+            DocService.RouteUsage usage, Map<String, String> columnDomains,
+            List<String> backingDecisions) {
         Set<String> pk = new HashSet<>(table.primaryKey());
         Map<String, Object> model = new LinkedHashMap<>();
         model.put("datasource", datasource);
@@ -387,6 +399,7 @@ public final class DocViews {
         model.put("schema", table.schema());
         model.put("primaryKey", String.join(", ", table.primaryKey()));
         model.put("hasPrimaryKey", !table.primaryKey().isEmpty());
+        model.put("backingDecisions", backingDecisions);
 
         List<Map<String, Object>> columns = new ArrayList<>();
         for (CatalogSchema.Column column : table.columns()) {

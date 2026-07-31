@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{tql/shell :: studio-page('TesseraQL Studio · Decide builder', ~{:: #page-header}, ~{:: #page-content})}">
+<th:block id="page-header">
+  <span class="hc-spacer"></span>
+  <div class="hc-cluster">
+    <a class="hc-button" data-variant="ghost" data-size="sm" href="/_tesseraql/studio/ui/decisions">Decision rows</a>
+    <a class="hc-button" data-variant="ghost" data-size="sm" href="/_tesseraql/studio/ui/docs/decisions">Reference</a>
+    <a class="hc-button" data-variant="ghost" data-size="sm" href="/_tesseraql/studio/ui">&larr; explorer</a>
+  </div>
+</th:block>
+<div id="page-content" class="hc-stack">
+  <section class="hc-card">
+    <h2>Decide builder</h2>
+    <p class="hc-field__message">Generate a route's <code>decide:</code> block for one declared
+      decision, then copy it into a command route (workflow transitions reference decisions the
+      same way). Every input of the contract is laid out under <code>params:</code> because a
+      reference must wire the contract exactly &mdash; an omission fails the load
+      (<code>TQL-DECISION-4706</code>). The source of each wiring expression is yours to choose;
+      the input names are not.</p>
+    <div class="hc-empty" th:if="${db.decisions.isEmpty()}">
+      <p class="hc-empty__title">No decisions declared yet.</p>
+      <p>Declare a decision once under <code>decisions/</code> (docs/decision-tables.md), then
+        generate its reference here.</p>
+    </div>
+    <form class="hc-stack" th:unless="${db.decisions.isEmpty()}"
+          hx-post="/_tesseraql/studio/ui/decision-builder/build"
+          hx-target="#db-result" hx-swap="innerHTML" hx-trigger="submit, change"
+          hx-disabled-elt="find button">
+      <div class="hc-cluster">
+        <div class="hc-field">
+          <label class="hc-field__label" for="db-decision">Decision</label>
+          <select class="hc-select" id="db-decision" name="decision">
+            <option value="">(choose)</option>
+            <option th:each="d : ${db.decisions}" th:value="${d.name}"
+                    th:text="${d.dated ? d.name + ' (dated)' : d.name}"></option>
+          </select>
+        </div>
+        <button type="submit" class="hc-button" data-variant="primary">Generate</button>
+        <th:block th:replace="~{tql/shell :: busy('Generating…')}"/>
+      </div>
+    </form>
+    <div id="db-result" class="hc-stack"></div>
+  </section>
+</div>
+</html>

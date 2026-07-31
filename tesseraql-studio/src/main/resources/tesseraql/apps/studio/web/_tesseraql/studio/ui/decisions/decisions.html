@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{tql/shell :: studio-page('TesseraQL Studio · Decision rows', ~{:: #page-header}, ~{:: #page-content})}">
+<th:block id="page-header">
+  <span class="hc-spacer"></span>
+  <div class="hc-cluster">
+    <a class="hc-button" data-variant="ghost" data-size="sm" href="/_tesseraql/studio/ui/decision-builder">Decide builder</a>
+    <a class="hc-button" data-variant="ghost" data-size="sm" href="/_tesseraql/studio/ui/docs/decisions">Reference</a>
+    <a class="hc-button" data-variant="ghost" data-size="sm" href="/_tesseraql/studio/ui">&larr; explorer</a>
+  </div>
+</th:block>
+<div id="page-content" class="hc-stack">
+  <section class="hc-card">
+    <h2>Decision rows</h2>
+    <p class="hc-field__message">Edit a YAML-backed decision's rows as a grid &mdash; the
+      contract (inputs, outputs, policies) stays in the
+      <a href="/_tesseraql/studio/ui/source">text editor</a>. Table-backed decisions keep their
+      rows in the app table; edit those in the
+      <a href="/_tesseraql/studio/ui/data">data browser</a>.</p>
+    <form class="hc-cluster" method="get" action="/_tesseraql/studio/ui/decisions">
+      <div class="hc-field">
+        <label class="hc-field__label" for="dr-name">Decision</label>
+        <select class="hc-select" id="dr-name" name="name">
+          <option value="">(choose)</option>
+          <option th:each="d : ${dg.decisions}" th:if="${d.yamlBacked}" th:value="${d.name}"
+                  th:text="${d.name}"
+                  th:selected="${dg.grid != null && d.name == dg.grid.name}"></option>
+        </select>
+      </div>
+      <button class="hc-button" type="submit">Open</button>
+    </form>
+  </section>
+  <section class="hc-card" th:if="${dg.grid}">
+    <h2>Rows <code th:text="${dg.grid.name}"></code></h2>
+    <p class="hc-alert" data-variant="success" role="status" th:if="${dg.saved}">Draft saved.
+      Review the diff and apply it from the text editor.</p>
+    <p class="hc-alert" data-variant="error" role="alert" th:if="${dg.grid.error}"
+       th:text="${dg.grid.error}"></p>
+    <th:block th:if="${dg.grid.error == null}">
+      <p class="hc-alert" data-variant="warning" role="status" th:unless="${dg.grid.yamlBacked}">
+        This decision is table-backed &mdash; its rows live in the app table; edit them in the
+        <a href="/_tesseraql/studio/ui/data">data browser</a>.</p>
+      <th:block th:if="${dg.grid.yamlBacked}">
+        <p class="hc-alert" data-variant="warning" role="status" th:if="${dg.grid.tooLarge}">
+          This decision exceeds the grid (20 rows &times; 12 columns) &mdash; edit its rows in
+          the text editor instead.</p>
+        <th:block th:unless="${dg.grid.tooLarge}">
+          <p class="hc-alert" data-variant="warning" role="status" th:if="${dg.grid.fromDraft}">
+            Editing the pending draft (not the served source).</p>
+          <p class="hc-field__message">A blank condition cell is a wildcard; an <code>in</code>
+            cell lists its members comma-separated; a row with every condition blank is the
+            default row (keep it last). Rows resolve in grid order. Saving lands a
+            <strong>draft</strong> in canonical formatting (comments and hand formatting are not
+            preserved); review and apply it from the text editor. The draft is validated first
+            &mdash; a bad cell answers with its <code>TQL-DECISION</code> code and nothing is
+            written.</p>
+          <form class="hc-stack" method="post" action="/_tesseraql/studio/ui/decisions/save">
+            <input type="hidden" name="_csrf" th:value="${_csrf}">
+            <input type="hidden" name="name" th:value="${dg.grid.name}">
+            <th:block th:each="j : ${#numbers.sequence(0, dg.grid.columns.size() - 1)}">
+              <input type="hidden" th:name="|c${j}key|" th:value="${dg.grid.columns[j].key}">
+              <input type="hidden" th:name="|c${j}kind|" th:value="${dg.grid.columns[j].kind}">
+            </th:block>
+            <div style="overflow-x: auto">
+              <table class="hc-table">
+                <thead>
+                <tr>
+                  <th th:each="c : ${dg.grid.columns}">
+                    <code th:text="${c.key}"></code>
+                    <span class="hc-badge" th:text="${c.kind == 'in' ? 'when' : 'out'}"></span>
+                    <span class="hc-field__message" th:if="${c.hint}" th:text="${c.hint}"></span>
+                  </th>
+                  <th>Delete</th>
+                </tr>
+                </thead>
+                <tbody>
+                <tr th:each="i : ${#numbers.sequence(0, dg.grid.rows.size())}">
+                  <td th:each="j : ${#numbers.sequence(0, dg.grid.columns.size() - 1)}">
+                    <input class="hc-input" data-size="sm" th:name="|r${i}c${j}|"
+                           th:value="${i < dg.grid.rows.size() ? dg.grid.rows[i][j] : null}">
+                  </td>
+                  <td><input type="checkbox" th:name="|d${i}|" value="true"
+                             th:if="${i < dg.grid.rows.size()}"></td>
+                </tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="hc-cluster" th:if="${dg.editable}">
+              <button class="hc-button" data-variant="primary" type="submit">Save as draft</button>
+              <span class="hc-field__message">Then review the diff and apply from the
+                <a th:href="|/_tesseraql/studio/ui/source?path=${#uris.escapeQueryParam(dg.grid.path)}|">text editor</a>
+                (applying recompiles the decision before it lands).</span>
+            </div>
+            <p class="hc-field__message" th:unless="${dg.editable}">You do not have permission
+              to edit decisions; the grid is read-only.</p>
+          </form>
+        </th:block>
+      </th:block>
+    </th:block>
+  </section>
+</div>
+</html>
