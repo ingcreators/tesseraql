@@ -75,6 +75,16 @@ tesseraql:
           - role: PROCUREMENT
           - role: PROCUREMENT_HEAD
           - role: ADMIN
+      # The supplier portal (slice 3): suppliers act on their own partner's rows only —
+      # the policy grants the surface, quotes_scope confines the rows.
+      sup.read:
+        anyOf:
+          - role: SUPPLIER
+          - role: ADMIN
+      sup.act:
+        anyOf:
+          - role: SUPPLIER
+          - role: ADMIN
 
   # Managed workflow state: instances/tasks/history live in the framework's tql_workflow_*
   # tables, so the business table stays clean (docs/approval-workflow.md).

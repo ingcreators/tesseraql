@@ -1,0 +1,25 @@
+version: tesseraql/v1
+id: api.supplier.quotes.lines
+kind: route
+recipe: query-json
+
+input:
+  id:
+    type: string
+    required: true
+    maxLength: 140
+
+security:
+  policy: sup.read
+
+sql:
+  file: lines.sql
+  mode: query
+  params:
+    id: path.id
+
+response:
+  json:
+    status: 200
+    body:
+      data: sql.rows

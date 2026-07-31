@@ -1,0 +1,33 @@
+version: tesseraql/v1
+id: api.supplier.quotes.start
+kind: route
+recipe: command-json
+
+input:
+  rfqId:
+    type: string
+    required: true
+    maxLength: 64
+
+security:
+  policy: sup.act
+
+# Starting a quote copies the requisition's lines behind the RFQ — one transaction, two
+# steps (docs/transactional-writes.md). The quote id is deterministic
+# ('Q-' || rfq || '-' || partner), so starting twice is a zero-row no-op, and the
+# invitation row's scope keeps an uninvited partner from starting anything.
+steps:
+  quote:
+    file: start-quote.sql
+    params:
+      rfqId: params.rfqId
+  lines:
+    file: copy-lines.sql
+    params:
+      rfqId: params.rfqId
+
+response:
+  json:
+    status: 201
+    body:
+      created: steps.quote.affectedRows

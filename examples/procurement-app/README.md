@@ -1,8 +1,9 @@
 # procurement-app
 
 The suite-scale gallery application (docs/procurement-demo.md): an end-to-end
-buyer/supplier procurement flow built up in slices. **Slices 1–2** are in place —
-purchase requisitions with decision-routed approval, and the RFQ leg:
+buyer/supplier procurement flow built up in slices. **Slices 1–3** are in place —
+purchase requisitions with decision-routed approval, the RFQ leg, and the supplier
+portal:
 
 - a `kind: workflow` requisition document whose `submit` evaluates the shared
   **`approvalRoute` decision** (two inputs: amount × category) and stamps the lane;
@@ -18,7 +19,14 @@ purchase requisitions with decision-routed approval, and the RFQ leg:
   state, `rules/rfqs.yml`), invites suppliers, the procurement head approves the issue,
   and the issued state opens a follow-up task with an **engine deadline** — a week
   unattended and the sweeper reassigns it to the head, with assignment/escalation mail
-  riding the transactional outbox (`notify:` + the `procurement-mail` channel).
+  riding the transactional outbox (`notify:` + the `procurement-mail` channel);
+- **the supplier portal** (slice 3): suppliers log into the same app with a `partner`
+  claim and reach **only their own partner's rows** (`scope/quotes_scope.yml`) — a
+  competitor's quote is outside their row reach, not merely hidden. Starting a quote
+  copies the requisition's lines in one two-step transaction (deterministic id, so
+  restarts are no-ops); pricing maintains the counters the quote workflow's submit
+  guard reads — an **app-mode status-column workflow** beside the managed ones, both
+  modes in one app.
 
 Part of the template gallery; held to the marketplace admission profile
 (`tesseraql admission --app .`).
@@ -48,6 +56,15 @@ POST /api/rfqs/{id}/suppliers         # invite a partner (idempotent)
 POST /api/rfqs/{id}/submit            # approval task to the procurement head
 POST /api/rfqs/{id}/issue             # follow-up task + 168h reminder deadline
 GET  /api/partners
+```
+
+The supplier portal (role `SUPPLIER` + a `partner` claim):
+
+```
+GET  /api/supplier/rfqs               # issued RFQs this partner is invited to
+POST /api/supplier/quotes             # start a quote (copies the lines; idempotent)
+POST /api/supplier/quotes/{id}/lines  # price a line (keeps the submit-guard counter)
+POST /api/supplier/quotes/{id}/submit # guarded: every line priced
 ```
 
 ## Test it

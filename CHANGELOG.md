@@ -38,6 +38,15 @@ All notable changes to TesseraQL are documented here. The format follows
   an engine deadline (168h, sweeper reassigns to the procurement head) plus
   assignment/escalation mail through the outbox.
 
+- **procurement-app slice 3 — the supplier portal**: suppliers log into the same app
+  with a `partner` claim and reach only their own partner's rows
+  (`scope/quotes_scope.yml` — a competitor's quote is outside their row reach, not
+  merely hidden). Starting a quote copies the requisition's lines in one two-step
+  transaction with a deterministic id (restarts are no-ops); pricing maintains the
+  counters an **app-mode status-column quote workflow**'s submit guard reads — both
+  workflow modes now live side by side in one app, and a cross-partner transition
+  updates zero rows and fails, deny-by-default.
+
 ### Fixed
 
 - `TQL-DECISION-4716` no longer flags a decision whose only consumer is a workflow

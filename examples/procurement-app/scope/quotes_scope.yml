@@ -1,0 +1,18 @@
+version: tesseraql/v1
+id: quotes_scope
+kind: scope
+# The supplier fence (docs/procurement-demo.md): a supplier principal carries a
+# `partner` claim and reaches only rows addressed to that partner — a competitor's
+# quote is not merely hidden, it is outside the caller's row reach. Buyer-side
+# procurement roles see everything; anyone else, nothing.
+match:
+  - when: { role: ADMIN }
+    apply: all
+  - when: { role: PROCUREMENT }
+    apply: all
+  - when: { role: PROCUREMENT_HEAD }
+    apply: all
+  - when: { role: SUPPLIER }
+    file: own_partner.sql
+    params:
+      partner: principal.claim.partner
