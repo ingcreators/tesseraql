@@ -122,6 +122,28 @@ class TransitionCaseTest {
                 """);
         Files.writeString(appHome.resolve("workflow/tick.sql"),
                 "update docs set last_action = 'ticked' where id = /* key */ 'D-0'\n");
+        // The SQL guard form: D-2's amount is zero, so the set condition finds no row.
+        Files.writeString(appHome.resolve("workflow/funded.sql"),
+                "select 1 from docs where id = /* key */ 'D-0' and amount > 0\n");
+        Files.writeString(appHome.resolve("workflow/guarded.yml"), """
+                version: tesseraql/v1
+                id: guarded
+                kind: workflow
+                mode: app
+                document: { type: guarded, table: docs, key: id, stateColumn: status }
+                http: { basePath: /api/guarded }
+                security: { auth: bearer }
+                initial: draft
+                states:
+                  - { id: draft, type: initial }
+                  - { id: done, type: terminal }
+                transitions:
+                  - id: finish
+                    from: draft
+                    to: done
+                    guard: { file: funded.sql, code: not-funded }
+                    command: tick.sql
+                """);
         Files.writeString(appHome.resolve("workflow/read-back.sql"),
                 "select lane, last_action from docs where id = /* key */ 'D-0'\n");
         Files.writeString(appHome.resolve("workflow/thing.yml"), """
@@ -202,6 +224,19 @@ class TransitionCaseTest {
                         Map.of("from", "draft", "to", "done")))));
         // Both cases pass INDEPENDENTLY: each rolls back, so the app-mode advance
         // succeeds twice - the rolled-back suite contract, asserted here on purpose.
+        assertThat(report.failed()).as(report.toString()).isZero();
+    }
+
+    @Test
+    void aSqlGuardPassesOnRowsAndRefusesWithItsDeclaredCode() {
+        TestReport report = new TestRunner(dataSource, appHome).run(new TestSuite(List.of(
+                fire("a funded document passes the SQL guard", "guarded", "D-1", "finish",
+                        writer("engineering"),
+                        Map.of("from", "draft", "to", "done")),
+                fire("an unfunded document is refused with the declared code", "guarded",
+                        "D-2", "finish", writer("engineering"),
+                        Map.of("code", "TQL-WORKFLOW-3202", "guard", "not-funded",
+                                "from", "draft")))));
         assertThat(report.failed()).as(report.toString()).isZero();
     }
 }

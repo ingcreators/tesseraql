@@ -112,6 +112,22 @@ class WorkflowTransitionIntegrationTest {
     }
 
     @Test
+    void aSqlGuardPassesOnRowsAndRefusesWithItsDeclaredCode() throws Exception {
+        // PR-8 is funded: the guard query finds a row, the transition advances.
+        assertThat(post("/funded-requests/PR-8/clear", "requester-1").statusCode())
+                .isEqualTo(200);
+        assertThat(instanceState("funded_request", "PR-8")).isEqualTo("cleared");
+
+        // PR-2's amount is zero: no row, 422, and the payload names the declared code -
+        // the caller learns WHY, not just "Unprocessable Entity"
+        // (docs/workflow-expressiveness.md).
+        HttpResponse<String> refused = post("/funded-requests/PR-2/clear", "requester-1");
+        assertThat(refused.statusCode()).isEqualTo(422);
+        assertThat(refused.body()).contains("not-funded");
+        assertThat(instanceState("funded_request", "PR-2")).isNull();
+    }
+
+    @Test
     void illegalTransitionFromWrongStateIsConflict() throws Exception {
         assertThat(post("/purchase-requests/PR-3/approve", "approver-1").statusCode())
                 .isEqualTo(409);
@@ -378,6 +394,28 @@ class WorkflowTransitionIntegrationTest {
                 + "last_action = 'reject', acted_by = /* audit.user */ 'x' where id = /* key */ 'x'\n");
         Files.writeString(workflowDir.resolve("approver.sql"),
                 "select 'approver-1' as assignee\n");
+        // The SQL guard form (docs/workflow-expressiveness.md): rows pass, no rows answers
+        // 422 with the declared code in the payload.
+        Files.writeString(workflowDir.resolve("funded_request.yml"), """
+                version: tesseraql/v1
+                id: funded_request
+                kind: workflow
+                document: { type: funded_request, table: purchase_requests, key: id }
+                http: { basePath: /funded-requests }
+                security: { auth: bearer }
+                initial: draft
+                states:
+                  - { id: draft, type: initial }
+                  - { id: cleared, type: terminal }
+                transitions:
+                  - id: clear
+                    from: draft
+                    to: cleared
+                    guard: { file: funded.sql, code: not-funded }
+                    command: approve.sql
+                """);
+        Files.writeString(workflowDir.resolve("funded.sql"),
+                "select 1 from purchase_requests where id = /* key */ 'x' and amount > 0\n");
 
         Files.writeString(workflowDir.resolve("expense.yml"),
                 """

@@ -427,14 +427,34 @@ public final class RouteCompiler {
             String urlPath = basePath + "/{key}/" + transition.id();
             RouteFile routeFile = new RouteFile("POST", urlPath, workflowFile.source(),
                     synthesized);
-            io.tesseraql.core.expr.Expr guard = transition.guard() == null
-                    ? null
-                    : io.tesseraql.core.expr.ExpressionParser.parse(transition.guard());
+            // The two guard forms (docs/workflow-expressiveness.md): the expression parses
+            // here, the SQL file parses here too — a missing or malformed guard file fails
+            // the build, not the first request (the scope-fragment precedent).
+            io.tesseraql.core.expr.Expr guard = null;
+            java.util.List<io.tesseraql.core.sql.SqlNode> guardNodes = null;
+            if (transition.guard() != null && transition.guard().expression() != null) {
+                guard = io.tesseraql.core.expr.ExpressionParser
+                        .parse(transition.guard().expression());
+            } else if (transition.guard() != null && transition.guard().file() != null) {
+                java.nio.file.Path guardFile = workflowFile.source().getParent()
+                        .resolve(transition.guard().file());
+                try {
+                    guardNodes = io.tesseraql.core.sql.Sql2WayParser
+                            .parse(java.nio.file.Files.readString(guardFile));
+                } catch (java.io.IOException unreadable) {
+                    throw new IllegalStateException("Workflow '" + def.id() + "' transition '"
+                            + transition.id() + "': guard file '" + transition.guard().file()
+                            + "' is unreadable: " + unreadable.getMessage(), unreadable);
+                }
+            }
             io.tesseraql.compiler.binding.WorkflowBinding workflow = new io.tesseraql.compiler.binding.WorkflowBinding(
                     def.id(), transition.id(),
                     def.document().type(), def.document().table(), def.document().key(),
                     "path.key", transition.from(), transition.to(), def.initial(), managed,
-                    guard, appStore, compileAssign(workflowFile, transition),
+                    guard, guardNodes,
+                    transition.guard() == null ? null : transition.guard().code(),
+                    transition.guard() == null ? null : transition.guard().message(),
+                    appStore, compileAssign(workflowFile, transition),
                     transition.assign() == null
                             ? java.util.Map.of()
                             : transition.assign().params(),

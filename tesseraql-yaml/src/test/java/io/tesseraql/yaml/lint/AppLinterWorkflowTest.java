@@ -90,6 +90,38 @@ class AppLinterWorkflowTest {
     }
 
     @Test
+    void aSqlGuardFileLintsCleanAndAWriteFileIsRefused(@TempDir Path dir) throws Exception {
+        writeWorkflow(dir, WELL_FORMED.replace("guard: \"document.amount > 0\"",
+                "guard: { file: lines-priced.sql, code: unpriced }"));
+        Files.writeString(dir.resolve("workflow/lines-priced.sql"),
+                "-- rows mean pass\nselect 1 from lines where doc = /* key */ 'x'\n");
+        assertThat(codes(new AppLinter().lint(dir))).isEmpty();
+
+        Files.writeString(dir.resolve("workflow/lines-priced.sql"),
+                "update lines set price = 1\n");
+        assertThat(codes(new AppLinter().lint(dir))).contains("TQL-WORKFLOW-3109");
+    }
+
+    @Test
+    void aMissingGuardFileIsAnError(@TempDir Path dir) throws Exception {
+        writeWorkflow(dir, WELL_FORMED.replace("guard: \"document.amount > 0\"",
+                "guard: { file: nope.sql }"));
+        assertThat(codes(new AppLinter().lint(dir))).contains("TQL-WORKFLOW-3104");
+    }
+
+    @Test
+    void aGuardWithBothFormsOrNeitherIsAnError(@TempDir Path dir) throws Exception {
+        writeWorkflow(dir, WELL_FORMED.replace("guard: \"document.amount > 0\"",
+                "guard: { expression: \"document.amount > 0\", file: lines-priced.sql }"));
+        Files.writeString(dir.resolve("workflow/lines-priced.sql"), "select 1\n");
+        assertThat(codes(new AppLinter().lint(dir))).contains("TQL-WORKFLOW-3108");
+
+        writeWorkflow(dir, WELL_FORMED.replace("guard: \"document.amount > 0\"",
+                "guard: { code: no-forms }"));
+        assertThat(codes(new AppLinter().lint(dir))).contains("TQL-WORKFLOW-3108");
+    }
+
+    @Test
     void managedModeWithoutDocumentTypeIsAnError(@TempDir Path dir) throws Exception {
         writeWorkflow(dir, WELL_FORMED.replace("  type: purchase_request\n", ""));
         assertThat(codes(new AppLinter().lint(dir))).contains("TQL-WORKFLOW-3106");

@@ -24,24 +24,19 @@ input:
 security:
   policy: sup.act
 
-# Pricing a line refreshes the priced_lines counter in the same transaction — the
-# counter is what the quote workflow's submit guard reads (workflow/quote.yml), so the
-# guard stays a plain document-column expression.
-steps:
-  price:
-    file: price-line.sql
-    params:
-      id: path.id
-      lineNo: params.lineNo
-      unitPrice: params.unitPrice
-      promisedDate: params.promisedDate
-  counter:
-    file: refresh-counter.sql
-    params:
-      id: path.id
+# One statement again: the submit guard asks the database directly
+# (workflow/quote-priced.sql), so pricing no longer maintains counters on the side.
+sql:
+  file: price-line.sql
+  mode: update
+  params:
+    id: path.id
+    lineNo: params.lineNo
+    unitPrice: params.unitPrice
+    promisedDate: params.promisedDate
 
 response:
   json:
     status: 200
     body:
-      priced: steps.price.affectedRows
+      priced: sql.affectedRows

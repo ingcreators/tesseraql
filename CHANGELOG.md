@@ -8,6 +8,21 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **SQL guard files — the guard asks the database**
+  (docs/workflow-expressiveness.md slice 1): a workflow transition's `guard:` gains a
+  file form, `guard: {file: …, code: …, message: …}` — a 2-way **query** evaluated on
+  the transition's connection after `decide:` resolution. Rows pass; no rows fails
+  `422` carrying the declared code (and optional `messages/` key) as
+  `guard`/`guardMessage` in the payload, so a refusal names itself instead of
+  surfacing as a generic conflict. Lints: a guard declares exactly one form
+  (`TQL-WORKFLOW-3108`), the file must exist (`3104`) and must be a query — a guard
+  never writes (`3109`). The `transition:` suite target evaluates both forms, a
+  guard-file refusal answering `guard: <code>` as data. The procurement demo converts:
+  the quote submit guard becomes `quote-priced.sql` and the `total_lines`/
+  `priced_lines` counters (plus the counter-refresh step on every pricing write) are
+  **deleted**; the ship gate moves from an exists-in-WHERE command into
+  `shipment-registered.sql` with its own refusal code.
+
 - **The `transition:` suite target — the state machine, asserted declaratively**: a
   test case fires one declared workflow transition against a named document, inside
   the case's rolled-back transaction, through the documented pipeline (state

@@ -281,11 +281,30 @@ public final class TestRunner {
             outcome.put("code", decisionCode);
             return outcome;
         }
-        if (transition.guard() != null && !transition.guard().isBlank()) {
-            boolean legal = io.tesseraql.core.expr.ExpressionParser.parse(transition.guard())
+        if (transition.guard() != null && transition.guard().expression() != null
+                && !transition.guard().expression().isBlank()) {
+            boolean legal = io.tesseraql.core.expr.ExpressionParser
+                    .parse(transition.guard().expression())
                     .evalBoolean(new io.tesseraql.core.expr.EvaluationContext(context));
             if (!legal) {
                 outcome.put("code", "TQL-WORKFLOW-3202");
+                return outcome;
+            }
+        }
+        // The SQL guard form (docs/workflow-expressiveness.md): rows pass, no rows is the
+        // 3202 row carrying the declared app-level code under `guard`.
+        if (transition.guard() != null && transition.guard().file() != null) {
+            SqlOutcome guardRows = executeSql(connection,
+                    workflowDir(def).resolve(transition.guard().file()), context);
+            if (guardRows.rows() == null) {
+                throw new IllegalArgumentException("Guard file '" + transition.guard().file()
+                        + "' must be a query - a guard never writes");
+            }
+            if (guardRows.rows().isEmpty()) {
+                outcome.put("code", "TQL-WORKFLOW-3202");
+                outcome.put("guard", transition.guard().code() == null
+                        ? "guard-failed"
+                        : transition.guard().code());
                 return outcome;
             }
         }

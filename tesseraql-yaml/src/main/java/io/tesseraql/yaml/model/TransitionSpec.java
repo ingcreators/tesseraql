@@ -21,14 +21,15 @@ import java.util.Map;
  * @param id       the transition id (unique within the workflow)
  * @param from     the state the document must be in
  * @param to       the state the document moves to
- * @param guard    the legality expression, or {@code null} for an unconditional transition
+ * @param guard    the legality guard — a whitelist expression or a 2-way SQL query file
+ *                 ({@link GuardSpec}) — or {@code null} for an unconditional transition
  * @param command  the 2-way SQL command file (relative to the workflow document), or {@code null}
  * @param params   bind expressions for the command SQL, resolved against the request context
  * @param assign   the assignee-resolution contract (slice 2), or {@code null}
  * @param security an optional per-transition security override of the workflow default
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
-public record TransitionSpec(String id, String from, String to, String guard, String command,
+public record TransitionSpec(String id, String from, String to, GuardSpec guard, String command,
         Map<String, String> params, AssignSpec assign, SecuritySpec security,
         // Decision-table references evaluated before the guard (docs/decision-tables.md
         // "Acting on the result"): the guard selects among declared transitions by

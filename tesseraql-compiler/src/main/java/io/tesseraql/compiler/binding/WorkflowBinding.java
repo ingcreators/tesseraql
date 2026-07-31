@@ -38,7 +38,8 @@ import java.util.Map;
  */
 public record WorkflowBinding(String workflowId, String transitionId, String docType, String table,
         String keyColumn, String keyExpr, String from, String to, String initial, boolean managed,
-        Expr guard, WorkflowStore appStore, List<SqlNode> assignNodes,
+        Expr guard, List<SqlNode> guardNodes, String guardCode, String guardMessage,
+        WorkflowStore appStore, List<SqlNode> assignNodes,
         Map<String, String> assignParams, Long dueWithinMillis,
         io.tesseraql.yaml.notify.NotifyEvents.CompiledNotify assignNotify) {
 }
