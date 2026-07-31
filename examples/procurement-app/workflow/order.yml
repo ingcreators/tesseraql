@@ -116,3 +116,16 @@ transitions:
     to: received
     security: { auth: bearer, policy: req.act }
     command: order-receive.sql
+# One-action dispatches (docs/workflow-expressiveness.md): the client calls one
+# endpoint and the engine picks the member whose guard holds, so the lane knowledge
+# (which approval_lane value, which deliveryAutoAccept outcome) stays out of the UI.
+# Members remain individually callable for the tour's teaching value.
+dispatch:
+  # POST /api/orders/{key}/submit_decision releases a submitted order down
+  # whichever lane the orderApproval decision stamped.
+  - id: submit_decision
+    oneOf: [issue, approve_issue]
+  # POST /api/orders/{key}/propose lets the supplier propose a date change without
+  # knowing whether the slip auto-confirms or opens a review task.
+  - id: propose
+    oneOf: [propose_accept, propose_review]

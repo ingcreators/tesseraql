@@ -96,7 +96,8 @@ class ReloadContentDiffIntegrationTest {
         MAPPER.readTree(force.body()).get("reloaded")
                 .forEach(id -> forced.add(id.asText()));
         assertThat(forced).containsExactlyInAnyOrder("alpha.list", "beta.list",
-                "thing.submit");
+                "thing.submit", "thing.cancel", "thing.finish",
+                "thing.submit.attempt", "thing.cancel.attempt");
 
         // And a no-change apply-path reload bounces nothing at all.
         assertThat(post("/_tesseraql/studio/drafts?path=" + enc("web/api/alpha/alpha.sql"),
@@ -119,7 +120,8 @@ class ReloadContentDiffIntegrationTest {
         MAPPER.readTree(shared.body()).get("reloaded")
                 .forEach(id -> afterShared.add(id.asText()));
         assertThat(afterShared).containsExactlyInAnyOrder("alpha.list", "beta.list",
-                "thing.submit");
+                "thing.submit", "thing.cancel", "thing.finish",
+                "thing.submit.attempt", "thing.cancel.attempt");
 
         // A workflow edit rebuilds only the synthesized transition routes.
         assertThat(post("/_tesseraql/studio/drafts?path=" + enc("workflow/thing.yml"),
@@ -132,7 +134,8 @@ class ReloadContentDiffIntegrationTest {
         List<String> afterWorkflow = new java.util.ArrayList<>();
         MAPPER.readTree(workflow.body()).get("reloaded")
                 .forEach(id -> afterWorkflow.add(id.asText()));
-        assertThat(afterWorkflow).containsExactly("thing.submit");
+        assertThat(afterWorkflow).containsExactlyInAnyOrder("thing.submit", "thing.cancel",
+                "thing.finish", "thing.submit.attempt", "thing.cancel.attempt");
     }
 
     private static HttpResponse<String> get(String path) throws Exception {
@@ -231,7 +234,15 @@ class ReloadContentDiffIntegrationTest {
                   - id: submit
                     from: draft
                     to: done
+                    guard: "document.touched == false"
                     command: submit.sql
+                  - id: cancel
+                    from: draft
+                    to: done
+                    command: submit.sql
+                dispatch:
+                  - id: finish
+                    oneOf: [submit, cancel]
                 """);
         return target;
     }

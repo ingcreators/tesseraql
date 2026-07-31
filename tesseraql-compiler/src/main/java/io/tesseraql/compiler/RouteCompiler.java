@@ -343,10 +343,16 @@ public final class RouteCompiler {
     private void buildTransactionalCommand(RouteBuilder builder, RouteFile routeFile,
             org.apache.camel.Processor preCommand,
             io.tesseraql.compiler.binding.WorkflowBinding workflow) {
+        buildTransactionalCommand(builder, routeFile, preCommand, workflow, mountRest);
+    }
+
+    private void buildTransactionalCommand(RouteBuilder builder, RouteFile routeFile,
+            org.apache.camel.Processor preCommand,
+            io.tesseraql.compiler.binding.WorkflowBinding workflow, boolean mount) {
         RouteDefinition definition = routeFile.definition();
         String routeId = definition.id();
         String direct = "direct:" + routeId;
-        if (mountRest) {
+        if (mount) {
             restEndpoint(builder, routeFile.httpMethod(), routeFile.urlPath()).to(direct);
         }
 
@@ -407,9 +413,21 @@ public final class RouteCompiler {
                 ? null
                 : new io.tesseraql.compiler.binding.ColumnWorkflowStore(def.document().table(),
                         def.document().key(), def.document().stateColumn());
+        // Transitions named by a dispatch also get an internal shadow route
+        // ({@code direct:<workflow>.<transition>.attempt}): rest-dsl inlining (Camel 4's
+        // inlineRoutes default) folds each transition's direct: pipeline into its REST
+        // route and removes the direct consumer, so the dispatch selector needs its own
+        // never-mounted consumer to try members through.
+        java.util.Set<String> dispatchMembers = def.dispatch().stream()
+                .flatMap(d -> d.oneOf().stream())
+                .collect(java.util.stream.Collectors.toSet());
         for (io.tesseraql.yaml.model.TransitionSpec transition : def.transitions()) {
             String routeId = def.id() + "." + transition.id();
-            if (onlyRouteIds != null && !onlyRouteIds.contains(routeId)) {
+            String attemptId = routeId + ".attempt";
+            boolean buildMain = onlyRouteIds == null || onlyRouteIds.contains(routeId);
+            boolean buildAttempt = dispatchMembers.contains(transition.id())
+                    && (onlyRouteIds == null || onlyRouteIds.contains(attemptId));
+            if (!buildMain && !buildAttempt) {
                 continue;
             }
             io.tesseraql.yaml.model.SqlBinding command = transition.command() == null
@@ -419,14 +437,7 @@ public final class RouteCompiler {
             io.tesseraql.yaml.model.SecuritySpec security = transition.security() != null
                     ? transition.security()
                     : def.security();
-            RouteDefinition synthesized = new RouteDefinition("tesseraql/v1", routeId, "route",
-                    "command-json", java.util.Map.of(), null, security, null, null, null, command,
-                    java.util.Map.of(), java.util.Map.of(), java.util.Map.of(),
-                    transition.decide(), java.util.Map.of(), null, null, null, null, null, null,
-                    workflowResponse(), null, null, null, null, null);
             String urlPath = basePath + "/{key}/" + transition.id();
-            RouteFile routeFile = new RouteFile("POST", urlPath, workflowFile.source(),
-                    synthesized);
             // The two guard forms (docs/workflow-expressiveness.md): the expression parses
             // here, the SQL file parses here too — a missing or malformed guard file fails
             // the build, not the first request (the scope-fragment precedent).
@@ -469,9 +480,47 @@ public final class RouteCompiler {
                             ? java.util.Map.of()
                             : transition.assign().params(),
                     deadlineMillis(def, transition.to()), assignNotify(def));
-            buildTransactionalCommand(builder, routeFile, null, workflow);
+            if (buildMain) {
+                RouteFile routeFile = new RouteFile("POST", urlPath, workflowFile.source(),
+                        synthesizedTransition(routeId, security, command, transition));
+                buildTransactionalCommand(builder, routeFile, null, workflow);
+            }
+            if (buildAttempt) {
+                RouteFile attemptFile = new RouteFile("POST", urlPath, workflowFile.source(),
+                        synthesizedTransition(attemptId, security, command, transition));
+                buildTransactionalCommand(builder, attemptFile, null, workflow, false);
+            }
+        }
+        // One-action dispatches (docs/workflow-expressiveness.md slice 3): a thin route
+        // that tries the member transitions' own direct: pipelines in order — every
+        // attempt enforces its member's security, guard, and transaction itself.
+        for (io.tesseraql.yaml.model.DispatchSpec dispatch : def.dispatch()) {
+            String routeId = def.id() + "." + dispatch.id();
+            if (onlyRouteIds != null && !onlyRouteIds.contains(routeId)) {
+                continue;
+            }
+            String direct = "direct:" + routeId;
+            if (mountRest) {
+                restEndpoint(builder, "POST", basePath + "/{key}/" + dispatch.id())
+                        .to(direct);
+            }
+            builder.from(direct).routeId(routeId)
+                    .process(new io.tesseraql.compiler.binding.WorkflowDispatchProcessor(
+                            def.id(), dispatch.id(), dispatch.oneOf()));
         }
         buildWorkflowDelegate(builder, def, basePath, onlyRouteIds);
+    }
+
+    /** The command-json route a workflow transition compiles to (roadmap Phase 28). */
+    private RouteDefinition synthesizedTransition(String routeId,
+            io.tesseraql.yaml.model.SecuritySpec security,
+            io.tesseraql.yaml.model.SqlBinding command,
+            io.tesseraql.yaml.model.TransitionSpec transition) {
+        return new RouteDefinition("tesseraql/v1", routeId, "route",
+                "command-json", java.util.Map.of(), null, security, null, null, null, command,
+                java.util.Map.of(), java.util.Map.of(), java.util.Map.of(),
+                transition.decide(), java.util.Map.of(), null, null, null, null, null, null,
+                workflowResponse(), null, null, null, null, null);
     }
 
     /** The compiled task-assignment reminder (Phase 20 channels), or {@code null} when undeclared. */

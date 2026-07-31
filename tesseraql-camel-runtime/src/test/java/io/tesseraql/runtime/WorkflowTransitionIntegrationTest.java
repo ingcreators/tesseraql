@@ -131,6 +131,20 @@ class WorkflowTransitionIntegrationTest {
     }
 
     @Test
+    void aDispatchFiresTheFirstMemberWhoseGuardHolds() throws Exception {
+        // PR-3 is funded: the SQL-guarded member fires (docs/workflow-expressiveness.md).
+        assertThat(post("/funded-requests/PR-3/settle", "requester-1").statusCode())
+                .isEqualTo(200);
+        assertThat(instanceState("funded_request", "PR-3")).isEqualTo("cleared");
+
+        // A document already past the shared from-state: no member holds, and the 422
+        // names every attempted transition.
+        HttpResponse<String> none = post("/funded-requests/PR-3/settle", "requester-1");
+        assertThat(none.statusCode()).isEqualTo(422);
+        assertThat(none.body()).contains("attempted").contains("clear").contains("writeoff");
+    }
+
+    @Test
     void illegalTransitionFromWrongStateIsConflict() throws Exception {
         assertThat(post("/purchase-requests/PR-3/approve", "approver-1").statusCode())
                 .isEqualTo(409);
@@ -418,6 +432,14 @@ class WorkflowTransitionIntegrationTest {
                     to: cleared
                     guard: { file: funded.sql, code: not-funded }
                     command: approve.sql
+                  - id: writeoff
+                    from: draft
+                    to: cleared
+                    guard: "document.amount == 0"
+                    command: approve.sql
+                dispatch:
+                  - id: settle
+                    oneOf: [clear, writeoff]
                 """);
         Files.writeString(workflowDir.resolve("funded.sql"),
                 "select 1 from purchase_requests where id = /* key */ 'x' and amount > 0\n");

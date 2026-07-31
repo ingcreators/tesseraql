@@ -8,6 +8,22 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **One-action dispatch — the client calls one endpoint, the engine picks the lane**
+  (docs/workflow-expressiveness.md slice 3): a workflow's `dispatch:` declares a named
+  action over guarded member transitions (`oneOf:`); `POST {basePath}/{key}/{dispatchId}`
+  tries the members in declaration order — each attempt runs the member's own full
+  pipeline (security, decide, guard, advance, scoped command) in its own transaction
+  via an internal `direct:<workflow>.<transition>.attempt` shadow route — and adopts
+  the first outcome that is not a wrong-state (`TQL-WORKFLOW-3201`) or guard (`3202`)
+  refusal. No member holding answers `422` naming every attempted member. Lints:
+  `TQL-WORKFLOW-3112` (error — at least two members, members exist, one shared `from`
+  state, one shared effective security spec, no dispatch/transition id collision) and
+  `TQL-WORKFLOW-3113` (warning — an unguarded member that is not last makes its
+  followers unreachable). Hot reload rebuilds dispatch and shadow routes with the
+  workflow. The procurement demo's three lane pairs convert: requisition
+  `submit_decision` (approve/advance), order `submit_decision` (issue/approve_issue)
+  and `propose` (propose_accept/propose_review) — the client-side lane knowledge goes.
+
 - **Decision stamps — the engine persists what the decision decided**
   (docs/workflow-expressiveness.md slice 2): a transition's `stamp:` maps document
   columns to `decision.*`/`document.*`/`principal.*` paths or literals; the engine

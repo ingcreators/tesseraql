@@ -65,3 +65,9 @@ transitions:
     stamp:
       approval_route: null
     command: rework.sql
+# The one-action dispatch (docs/workflow-expressiveness.md): the approver's UI calls
+# POST /api/requisitions/{key}/submit_decision and the engine fires whichever member
+# the stamped approval_route admits — no client-side lane knowledge.
+dispatch:
+  - id: submit_decision
+    oneOf: [approve, advance]

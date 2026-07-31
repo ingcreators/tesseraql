@@ -7,9 +7,18 @@
 > columns after the advance and before the author command, refreshing the in-memory
 > document; `stamp: {column: null}` is the declared rework clearing; lint
 > `TQL-WORKFLOW-3111` (column identifiers, undeclared decision aliases, whitelist-escape
-> warnings); the three procurement stamp commands shrank to audit notes. Slices 3
-> (`dispatch:`) and 4 (the `doc_type` literal lint) remain designed, not built. Grounded
-> throughout in what `examples/procurement-app` had to write before slice 1.
+> warnings); the three procurement stamp commands shrank to audit notes. Slice 3
+> (`dispatch:`): the one-action selector tries members in declaration order through
+> internal `direct:<workflow>.<transition>.attempt` shadow routes (rest-dsl inlining
+> removes the REST routes' own direct consumers, so members get a never-mounted twin);
+> `3201`/`3202` refusals fall through, anything else is the outcome, none-held answers
+> `422` naming every attempt; lints `TQL-WORKFLOW-3112` (member count/existence, shared
+> `from`, shared security, id collisions) and `3113` (unguarded non-last member); the
+> procurement demo's three lane pairs converted (`submit_decision` ×2, `propose`). The
+> enum-disjointness prover (reusing `TQL-DECISION-4712`'s machinery to prove member
+> guards disjoint) is a designed follow-up, not yet built. Slice 4 (the `doc_type`
+> literal lint) remains designed, not built. Grounded throughout in what
+> `examples/procurement-app` had to write before slice 1.
 
 ## The three frictions, as shipped code
 

@@ -32,12 +32,15 @@ import java.util.List;
 public record WorkflowDefinition(String version, String id, String kind, String mode,
         DocumentSpec document, HttpSpec http, SecuritySpec security, String initial,
         List<StateSpec> states, List<TransitionSpec> transitions, List<DeadlineSpec> deadlines,
+        // One-action dispatches (docs/workflow-expressiveness.md slice 3).
+        List<DispatchSpec> dispatch,
         // "notify" itself is not a legal record component (it would hide Object.notify()).
         @com.fasterxml.jackson.annotation.JsonProperty("notify") WorkflowNotify reminders) {
 
     public WorkflowDefinition {
         states = states == null ? List.of() : List.copyOf(states);
         transitions = transitions == null ? List.of() : List.copyOf(transitions);
+        dispatch = dispatch == null ? List.of() : List.copyOf(dispatch);
         deadlines = deadlines == null ? List.of() : List.copyOf(deadlines);
     }
 

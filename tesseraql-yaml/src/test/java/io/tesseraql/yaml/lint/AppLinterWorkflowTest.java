@@ -119,6 +119,59 @@ class AppLinterWorkflowTest {
     }
 
     @Test
+    void aWellFormedDispatchLintsClean(@TempDir Path dir) throws Exception {
+        writeWorkflow(dir, WELL_FORMED
+                .replace("id: approve, from: submitted, to: approved,",
+                        "id: approve, from: submitted, to: approved,"
+                                + " guard: \"document.amount > 0\",")
+                + "dispatch:\n  - { id: decide, oneOf: [approve, reject] }\n");
+        assertThat(codes(new AppLinter().lint(dir))).isEmpty();
+    }
+
+    @Test
+    void aDispatchWithOneMemberOrAnUnknownMemberIsAnError(@TempDir Path dir) throws Exception {
+        writeWorkflow(dir, WELL_FORMED + "dispatch:\n  - { id: decide, oneOf: [approve] }\n");
+        assertThat(codes(new AppLinter().lint(dir))).contains("TQL-WORKFLOW-3112");
+
+        writeWorkflow(dir, WELL_FORMED
+                + "dispatch:\n  - { id: decide, oneOf: [approve, ghost] }\n");
+        assertThat(codes(new AppLinter().lint(dir))).contains("TQL-WORKFLOW-3112");
+    }
+
+    @Test
+    void dispatchMembersStartingFromDifferentStatesIsAnError(@TempDir Path dir) throws Exception {
+        writeWorkflow(dir,
+                WELL_FORMED + "dispatch:\n  - { id: decide, oneOf: [submit, approve] }\n");
+        assertThat(codes(new AppLinter().lint(dir))).contains("TQL-WORKFLOW-3112");
+    }
+
+    @Test
+    void aDispatchIdCollidingWithATransitionIsAnError(@TempDir Path dir) throws Exception {
+        writeWorkflow(dir,
+                WELL_FORMED + "dispatch:\n  - { id: approve, oneOf: [approve, reject] }\n");
+        assertThat(codes(new AppLinter().lint(dir))).contains("TQL-WORKFLOW-3112");
+    }
+
+    @Test
+    void dispatchMembersWithDifferentSecuritySpecsIsAnError(@TempDir Path dir) throws Exception {
+        writeWorkflow(dir, WELL_FORMED
+                .replace("id: approve, from: submitted, to: approved,",
+                        "id: approve, from: submitted, to: approved,"
+                                + " security: { auth: bearer, policy: other.act },")
+                + "dispatch:\n  - { id: decide, oneOf: [approve, reject] }\n");
+        assertThat(codes(new AppLinter().lint(dir))).contains("TQL-WORKFLOW-3112");
+    }
+
+    @Test
+    void anUnguardedMemberThatIsNotLastIsAWarning(@TempDir Path dir) throws Exception {
+        // 'approve' has no guard, so 'reject' after it can never be attempted.
+        writeWorkflow(dir,
+                WELL_FORMED + "dispatch:\n  - { id: decide, oneOf: [approve, reject] }\n");
+        assertThat(new AppLinter().lint(dir)).anyMatch(f -> f.code()
+                .equals("TQL-WORKFLOW-3113") && !f.isError());
+    }
+
+    @Test
     void aMissingGuardFileIsAnError(@TempDir Path dir) throws Exception {
         writeWorkflow(dir, WELL_FORMED.replace("guard: \"document.amount > 0\"",
                 "guard: { file: nope.sql }"));

@@ -436,7 +436,8 @@ public final class ManifestLoader {
         }
         return new io.tesseraql.yaml.model.WorkflowDefinition(def.version(), def.id(),
                 def.kind(), def.mode(), def.document(), def.http(), def.security(),
-                def.initial(), def.states(), resolved, def.deadlines(), def.reminders());
+                def.initial(), def.states(), resolved, def.deadlines(), def.dispatch(),
+                def.reminders());
     }
 
     private static RouteDefinition withDecisions(

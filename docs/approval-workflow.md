@@ -139,6 +139,35 @@ The stamped value is visible to everything later in the same transaction reading
 `document.<column>`, and later transitions guard on it. Columns must be plain identifiers
 and a `decision.*` value must name a declared `decide:` alias (`TQL-WORKFLOW-3111`).
 
+### One-action dispatch
+
+When one *action* fans into several guarded transitions — the approver's single button,
+where the stamped lane decides whether `approve` or `advance` fires — a **dispatch**
+([workflow expressiveness](workflow-expressiveness.md)) gives the client one endpoint and
+lets the engine pick the member:
+
+```yaml
+dispatch:
+  # POST {basePath}/{key}/submit_decision fires the first member whose guard holds.
+  - id: submit_decision
+    oneOf: [approve, advance]
+```
+
+The selector tries the members **in declaration order**, each through the member's own
+full pipeline — security, decide, guard, state advance, scoped command, one transaction
+per attempt — and adopts the first outcome that is not a wrong-state
+(`TQL-WORKFLOW-3201`) or guard (`3202`) refusal. Correctness never depends on the
+selector: a raced state change surfaces as the member's own conflict, and a refused
+attempt leaves nothing behind. When no member holds, the dispatch answers `422` naming
+every attempted member and its refusal status. Members stay individually callable.
+
+Legality is linted (`TQL-WORKFLOW-3112`, error): at least two members, every member a
+declared transition, all members sharing one `from` state and one effective security
+spec (a dispatch is one action, one audience — a `403` is an outcome, never a
+fall-through), and the dispatch id must not collide with a transition id. A member
+without a guard that is not last makes its followers unreachable (`TQL-WORKFLOW-3113`,
+warning).
+
 ### Assignee resolution is the dual of a scope
 
 A **scope** maps `principal → predicate over rows`. **Assignee resolution** maps `document → set of
