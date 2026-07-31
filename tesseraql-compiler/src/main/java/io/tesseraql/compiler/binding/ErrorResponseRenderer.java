@@ -436,6 +436,7 @@ public final class ErrorResponseRenderer implements Processor {
                 case 3201 -> 409;
                 case 3202 -> 422;
                 case 3203 -> 403;
+                case 3204 -> 409;
                 default -> 500;
             };
             default -> 500;

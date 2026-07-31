@@ -1,0 +1,40 @@
+version: tesseraql/v1
+id: api.orders.shipment
+kind: route
+recipe: command-json
+
+input:
+  id:
+    type: string
+    required: true
+    maxLength: 64
+  shipDate:
+    type: string
+    required: true
+    pattern: '^\d{4}-\d{2}-\d{2}$'
+  carrier:
+    type: string
+    required: true
+    maxLength: 120
+  deliveryNoteNo:
+    type: string
+    required: true
+    maxLength: 60
+
+security:
+  policy: sup.act
+
+sql:
+  file: register-shipment.sql
+  mode: update
+  params:
+    id: path.id
+    shipDate: params.shipDate
+    carrier: params.carrier
+    deliveryNoteNo: params.deliveryNoteNo
+
+response:
+  json:
+    status: 201
+    body:
+      created: sql.affectedRows

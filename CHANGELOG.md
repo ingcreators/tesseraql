@@ -65,8 +65,23 @@ All notable changes to TesseraQL are documented here. The format follows
   transitions carry per-transition `security:` overrides over the buyer-side
   workflow default, with the command's scope as the row authority.
 
+- **procurement-app slice 6 — shipment to receipt**: the supplier registers one
+  shipment per confirmed order (the split-shipment fence is a `unique` constraint),
+  the `ship` transition demands the registered row in its command's WHERE, and the
+  requester who started the chain closes it with `receive` — stamping the shipment
+  in the same transaction as the state advance. A `query-export` CSV covers shipped
+  lines and a `/dashboard` reads the managed workflow state as rows.
+
 ### Fixed
 
+- **A managed-mode workflow transition whose command updates zero rows no longer
+  advances the state** (`TQL-WORKFLOW-3204`, 409). docs/approval-workflow.md always
+  promised that a satisfied guard with no authorized rows — a `/*%scope */` matching
+  nothing, or an absent data state the WHERE demands — updates nothing and fails;
+  app mode enforced it through the state column's own conditional UPDATE, managed
+  mode silently advanced. Found by the procurement demo's ship-without-shipment
+  probe; the same enforcement now also blocks a cross-partner `confirm`/`propose_*`
+  on another supplier's order.
 - `TQL-DECISION-4716` no longer flags a decision whose only consumer is a workflow
   transition's `decide:` block (previously only route documents counted as
   references, so the purchase-request archetype warned on every lint).

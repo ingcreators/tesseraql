@@ -1,0 +1,24 @@
+version: tesseraql/v1
+id: procurement.dashboard.view
+kind: view
+view: dashboard
+title: Procurement dashboard
+panels:
+  - { type: stat, source: sql, column: requisitions, label: Requisitions }
+  - { type: stat, source: sql, column: open_rfqs, label: Open RFQs }
+  - { type: stat, source: sql, column: submitted_quotes, label: Submitted quotes }
+  - { type: stat, source: sql, column: in_transit, label: In transit }
+  - type: chart
+    kind: bar
+    source: ordersByState
+    title: Orders by state
+    x: label
+    y: value
+  - type: table
+    source: openNegotiations
+    title: Delivery dates under review
+    columns:
+      - { name: id, label: Order }
+      - { name: partner }
+      - { name: proposed_date, label: Proposed }
+      - { name: slip_days, label: Slip (days) }

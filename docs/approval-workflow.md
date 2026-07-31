@@ -105,7 +105,9 @@ Two orthogonal checks gate every transition, and they answer different questions
 
 Keeping them separate is deliberate: the guard expresses the process, the scope expresses
 organizational reach. A transition with a satisfied guard but no authorized rows updates nothing and
-returns a `409`/`403`, exactly as a scoped write does today. (Why guards do not use the policy
+returns a `409` (`TQL-WORKFLOW-3204`), exactly as a scoped write does today — enforced after the
+command step(s) and before history, in both workflow modes, so a zero-row command never advances
+the state. (Why guards do not use the policy
 matcher and scopes do: the matcher answers role/permission/claim membership; the guard answers a data
 predicate — the same split data-scoping.md draws between `when:` arms and the expression language.)
 
@@ -210,6 +212,9 @@ open connection / begin tx
   ├─ validate: rules (existing declarative-validation step)
   ├─ store.advanceState(cx, docType, docId, from, to)            # conditional UPDATE; 0 rows → 409
   ├─ author command step(s)                                      # existing step loop: scoped write + audit + expect
+  ├─ if commands ran and affected 0 rows → TQL-WORKFLOW-3204 (409) # row authority: a scope that
+  │                                                              # matched nothing, or an absent
+  │                                                              # data state, never advances
   ├─ store.appendHistory(cx, …)                                  # append-only, same tx
   └─ commit
 ```
