@@ -243,3 +243,8 @@ covered when a declarative suite exercises a route (or consumer) whose SQL appli
 `/*%scope name */` directive — the same SQL-file basis as route coverage. An app with no scopes
 reports a 1.0 ratio. Gate it with `coverage.thresholds.data-scope`. (Per-role-path coverage —
 `<scopeId>#<role>` — is planned but not currently supported.)
+
+A suite exercises scoped SQL by declaring the principal each case runs as
+([testing](testing.md#writing-a-suite)): the runner resolves the directive through the app's
+`scope/` declarations with the production resolver, so one case per role asserts each arm's
+rows and the deny-by-default posture against a real database.

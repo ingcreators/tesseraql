@@ -1,0 +1,14 @@
+version: tesseraql/v1
+id: requisitions
+kind: view
+view: list
+title: Purchase requisitions
+search: q
+columns:
+  - { name: id, label: "#" }
+  - { name: title }
+  - { name: department }
+  - { name: category }
+  - { name: amount }
+  - { name: requested_by, label: Requested by }
+  - { name: last_action, label: Last action }

@@ -1,0 +1,50 @@
+version: tesseraql/v1
+id: api.requisitions.create
+kind: route
+recipe: command-json
+
+input:
+  title:
+    type: string
+    required: true
+    maxLength: 200
+  department:
+    type: string
+    required: true
+    maxLength: 40
+  category:
+    type: string
+    required: true
+    enum: [it-equipment, capex, office, services]
+  amount:
+    type: number
+    required: true
+    min: 0.01
+  budgetLabel:
+    type: string
+    required: false
+    maxLength: 120
+  internalEstimate:
+    type: number
+    required: false
+    min: 0
+
+security:
+  policy: req.write
+
+sql:
+  file: create.sql
+  mode: update
+  params:
+    title: params.title
+    department: params.department
+    category: params.category
+    amount: params.amount
+    budgetLabel: params.budgetLabel
+    internalEstimate: params.internalEstimate
+
+response:
+  json:
+    status: 201
+    body:
+      created: sql.affectedRows

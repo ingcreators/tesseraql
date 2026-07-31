@@ -1,4 +1,4 @@
-package io.tesseraql.compiler.binding;
+package io.tesseraql.identity.scope;
 
 import static org.assertj.core.api.Assertions.assertThat;
 

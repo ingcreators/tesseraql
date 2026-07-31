@@ -1,4 +1,4 @@
-package io.tesseraql.compiler.binding;
+package io.tesseraql.identity.scope;
 
 import io.tesseraql.core.dialect.DialectSqlResolver;
 import io.tesseraql.core.error.TqlDomain;

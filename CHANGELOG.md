@@ -4,6 +4,34 @@ All notable changes to TesseraQL are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [Semantic Versioning](https://semver.org/).
 
+## Unreleased
+
+### Added
+
+- **Suites run as a principal, so scoped SQL is finally testable**
+  (docs/testing.md "Writing a suite"): a declarative test case may declare
+  `principal:` (subject, loginId, roles, permissions, groups, claims) — the shape
+  every authentication mechanism produces. The runner resolves `/*%scope … */`
+  directives through the app's `scope/` declarations with the production resolver
+  (matching arms bind the principal's claims, no matching arm renders `1=0`) and
+  seeds the `principal.*` ambient paths, so one case per role proves each scope
+  posture against a real database and the `data-scope` coverage kind becomes
+  earnable. `CompiledScopeResolver` moved from `tesseraql-compiler` to
+  `tesseraql-identity` (`io.tesseraql.identity.scope`) so the Camel-free test runner
+  shares the exact runtime arm matching.
+- **procurement-app joins the gallery** (docs/procurement-demo.md, slice 1): the
+  suite-scale demo's first slice — purchase requisitions with a two-input
+  `approvalRoute` decision (amount × category) stamping a one-stage or two-stage
+  approval lane, department-claim data scoping with deny-by-default, line items
+  riding the header's scope through the join, and a `req.cost`-gated internal
+  estimate on the JSON surface.
+
+### Fixed
+
+- `TQL-DECISION-4716` no longer flags a decision whose only consumer is a workflow
+  transition's `decide:` block (previously only route documents counted as
+  references, so the purchase-request archetype warned on every lint).
+
 ## 0.9.0 - 2026-07-31
 
 ### Added

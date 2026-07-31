@@ -21,6 +21,19 @@
             "additionalProperties": true
           },
           "contract": { "type": "string", "description": "A named identity contract to execute instead of a SQL file." },
+          "principal": {
+            "type": "object",
+            "properties": {
+              "subject": { "type": "string" },
+              "loginId": { "type": "string" },
+              "roles": { "type": "array", "items": { "type": "string" } },
+              "permissions": { "type": "array", "items": { "type": "string" } },
+              "groups": { "type": "array", "items": { "type": "string" } },
+              "claims": { "type": "object" }
+            },
+            "additionalProperties": true,
+            "description": "The request principal the case runs as (docs data-scoping): resolves /*%scope ... */ directives in the target SQL through the app's scope/ declarations exactly as the runtime would, and seeds the principal.* ambient paths. Without it, a scoped statement renders deny-by-default for arms that need a principal."
+          },
           "validate": {
             "type": "object",
             "properties": {

@@ -1,0 +1,21 @@
+version: tesseraql/v1
+id: requisitions_scope
+kind: scope
+# Row-level reach over purchase_requisitions (docs/data-scoping.md): procurement and
+# admins see every department, a manager or requester sees their own department(s) from
+# the `departments` claim, anyone else sees nothing (deny-by-default).
+match:
+  - when: { role: ADMIN }
+    apply: all
+  - when: { role: PROCUREMENT }
+    apply: all
+  - when: { role: PROCUREMENT_HEAD }
+    apply: all
+  - when: { role: MANAGER }
+    file: own_department.sql
+    params:
+      departments: principal.claim.departments
+  - when: { role: REQUESTER }
+    file: own_department.sql
+    params:
+      departments: principal.claim.departments

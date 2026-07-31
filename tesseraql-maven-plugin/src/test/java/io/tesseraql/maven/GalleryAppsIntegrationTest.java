@@ -35,7 +35,8 @@ class GalleryAppsIntegrationTest {
     static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("postgres:16-alpine");
 
     @ParameterizedTest
-    @ValueSource(strings = {"purchase-request-app", "inventory-app", "helpdesk-app"})
+    @ValueSource(strings = {"purchase-request-app", "inventory-app", "helpdesk-app",
+            "procurement-app"})
     void galleryAppLintsCleanPassesItsSuitesAndClearsAdmission(String appName)
             throws Exception {
         Path example = Paths.get("..", "examples", appName).toAbsolutePath().normalize();

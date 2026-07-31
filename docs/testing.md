@@ -30,6 +30,28 @@ The `sql.file` path is app-relative, including any literal path-parameter direct
 `/*%if*/` blocks the live route evaluates apply, so an omitted parameter skips its branch
 exactly as an omitted query parameter would at runtime.
 
+A case may also declare the **request principal it runs as** — required whenever the target
+SQL carries a `/*%scope … */` directive ([data scoping](data-scoping.md)), and useful for any
+ambient `principal.*` path:
+
+```yaml
+  - name: a requester sees only their own department
+    sql:
+      file: web/api/requisitions/requisitions.sql
+    principal:
+      roles: [REQUESTER]
+      claims:
+        departments: [engineering]
+    expect:
+      rowCount: 1
+```
+
+`principal` takes `subject`, `loginId`, `roles`, `permissions`, `groups`, and `claims` — the
+same shape every authentication mechanism produces. Scope directives resolve through the app's
+`scope/` declarations exactly as at runtime: matching arms bind the principal's claims, no
+matching arm renders deny-by-default (`1=0`). One case per role is how a suite proves each
+scope posture, and how the `data-scope` [coverage kind](#coverage-kinds) is earned.
+
 ## Case kinds
 
 - **`sql`** — runs a 2-way SQL file. A query's result rows are the case's rows; a write file

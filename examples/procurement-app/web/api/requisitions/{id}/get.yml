@@ -1,0 +1,31 @@
+version: tesseraql/v1
+id: api.requisitions.detail
+kind: route
+recipe: query-json
+
+input:
+  id:
+    type: string
+    required: true
+    maxLength: 64
+
+security:
+  policy: req.read
+
+sql:
+  file: requisition.sql
+  mode: query
+  params:
+    id: path.id
+
+response:
+  json:
+    status: 200
+    body:
+      data: sql.rows
+    statusWhen:
+      - when: sql.rowCount == 0
+        status: 404
+    fields:
+      internal_estimate:
+        policy: req.cost

@@ -1,0 +1,33 @@
+version: tesseraql/v1
+id: api.requisitions.list
+kind: route
+recipe: query-json
+
+input:
+  q:
+    type: string
+    required: false
+    maxLength: 100
+
+security:
+  policy: req.read
+
+sql:
+  file: requisitions.sql
+  mode: query
+  params:
+    q: query.q
+
+response:
+  json:
+    status: 200
+    body:
+      data: sql.rows
+      meta:
+        count: sql.rowCount
+    # The buyer-internal estimate is removed from the response unless the caller
+    # clears req.cost (docs/procurement-demo.md: a plain requester sees quantities,
+    # not costs). policy: alone means pass = see it, fail = the field is absent.
+    fields:
+      internal_estimate:
+        policy: req.cost
