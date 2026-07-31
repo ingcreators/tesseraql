@@ -1,9 +1,9 @@
 # procurement-app
 
 The suite-scale gallery application (docs/procurement-demo.md): an end-to-end
-buyer/supplier procurement flow built up in slices. **Slices 1–4** are in place —
+buyer/supplier procurement flow built up in slices. **Slices 1–5** are in place —
 purchase requisitions with decision-routed approval, the RFQ leg, the supplier portal,
-and the comparison-to-order step:
+the comparison-to-order step, and delivery-date negotiation:
 
 - a `kind: workflow` requisition document whose `submit` evaluates the shared
   **`approvalRoute` decision** (two inputs: amount × category) and stamps the lane;
@@ -34,7 +34,14 @@ and the comparison-to-order step:
   (`rules/orders.yml`, 422 before anything writes), and the **`orderApproval`
   decision** routes the submit: lowest or within 3% issues without a human in the
   loop, anything above waits for the procurement head — deviation is allowed,
-  recorded, and approved, never silently blocked.
+  recorded, and approved, never silently blocked;
+- **delivery-date negotiation** (slice 5): the supplier proposes a new date; the slip
+  is computed against the ordered promise (never client-asserted) and judged by the
+  **table-backed `deliveryAutoAccept` decision** — the tolerance is business data in
+  `delivery_tolerances`, maintained at runtime (`/api/tolerances`), and the very next
+  proposal is judged by the new rows, no deploy involved. Within tolerance the
+  proposal confirms with no human in the loop; outside it a review task opens for
+  whoever placed the order, who accepts or declines back to `issued`.
 
 Part of the template gallery; held to the marketplace admission profile
 (`tesseraql admission --app .`).
@@ -83,6 +90,17 @@ POST /api/orders                      # non-lowest pick needs a reason (422 othe
 POST /api/orders/{id}/submit          # orderApproval decision routes the lane
 POST /api/orders/{id}/issue           # auto lane: no human in the loop
 POST /api/orders/{id}/approve_issue   # review lane: the head's task
+```
+
+Delivery-date negotiation:
+
+```
+POST /api/orders/{id}/confirm         # supplier: as ordered
+POST /api/orders/{id}/date-change     # supplier: propose (slip computed server-side)
+POST /api/orders/{id}/propose_accept  # slip within tolerance: auto-confirm
+POST /api/orders/{id}/propose_review  # outside: review task for the buyer
+POST /api/orders/{id}/accept_date | decline_date
+GET/POST /api/tolerances              # the runtime knob the decision reads
 ```
 
 ## Test it

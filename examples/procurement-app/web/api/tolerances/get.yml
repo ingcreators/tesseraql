@@ -1,0 +1,17 @@
+version: tesseraql/v1
+id: api.tolerances.list
+kind: route
+recipe: query-json
+
+security:
+  policy: rfq.write
+
+sql:
+  file: tolerances.sql
+  mode: query
+
+response:
+  json:
+    status: 200
+    body:
+      data: sql.rows

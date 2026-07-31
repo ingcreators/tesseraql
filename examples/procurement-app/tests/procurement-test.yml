@@ -319,6 +319,61 @@ tests:
       rows:
         - lane: head_review
 
+  # Slice 5: the table-backed tolerance — the decide case runs the generated SELECT
+  # against the suite's database, the same statement production runs.
+  - name: a small slip auto-confirms
+    decide:
+      decision: deliveryAutoAccept
+    params:
+      slipDays: 3
+    expect:
+      rows:
+        - action: auto_confirm
+
+  - name: the tolerance boundary itself auto-confirms
+    decide:
+      decision: deliveryAutoAccept
+    params:
+      slipDays: 5
+    expect:
+      rows:
+        - action: auto_confirm
+
+  - name: a large slip falls to the wildcard review row
+    decide:
+      decision: deliveryAutoAccept
+    params:
+      slipDays: 14
+    expect:
+      rows:
+        - action: review
+
+  - name: procurement reads the tolerance rows the decision evaluates
+    sql:
+      file: web/api/tolerances/tolerances.sql
+    expect:
+      rowCount: 2
+      rows:
+        - id: 1
+          action: auto_confirm
+        - id: 2
+          action: review
+
+  - name: widening the tolerance is one row update
+    sql:
+      file: web/api/tolerances/update-tolerance.sql
+    params:
+      id: 1
+      slipMax: 10
+    expect:
+      updateCount: 1
+    verify:
+      - sql:
+          file: web/api/tolerances/tolerances.sql
+        expect:
+          rows:
+            - slip_max: 10
+
   # The assignment resolvers bind real master rows, not literals.
   - name: the first-stage assignee is the requesting department's manager
     sql:

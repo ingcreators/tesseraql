@@ -13,7 +13,9 @@ initial: draft
 states:
   - { id: draft, type: initial }
   - { id: submitted }
-  - { id: issued, type: terminal }
+  - { id: issued }
+  - { id: date_proposed }
+  - { id: confirmed, type: terminal }
   - { id: rejected }
 transitions:
   - id: submit
@@ -47,3 +49,46 @@ transitions:
     from: rejected
     to: draft
     command: order-rework.sql
+  # The supplier accepts the promised dates as ordered ... (the supplier-facing
+  # transitions override the workflow's buyer-side default policy; the command's
+  # scope still confines them to their own partner's rows)
+  - id: confirm
+    from: issued
+    to: confirmed
+    security: { auth: bearer, policy: sup.act }
+    command: order-confirm.sql
+  # ... or proposes a new date (stamped by /api/orders/{id}/date-change first). The
+  # table-backed deliveryAutoAccept decision judges the slip: within tolerance the
+  # proposal confirms with no human in the loop, outside it a review task opens for
+  # whoever placed the order. Both enum values have exactly one path out.
+  - id: propose_accept
+    from: issued
+    to: confirmed
+    security: { auth: bearer, policy: sup.act }
+    decide:
+      deliveryAutoAccept:
+        use: deliveryAutoAccept
+        params:
+          slipDays: document.slip_days
+    guard: "decision.deliveryAutoAccept.action == 'auto_confirm'"
+    command: apply-proposal.sql
+  - id: propose_review
+    from: issued
+    to: date_proposed
+    security: { auth: bearer, policy: sup.act }
+    decide:
+      deliveryAutoAccept:
+        use: deliveryAutoAccept
+        params:
+          slipDays: document.slip_days
+    guard: "decision.deliveryAutoAccept.action == 'review'"
+    command: mark-review.sql
+    assign: { file: order-owner.sql }
+  - id: accept_date
+    from: date_proposed
+    to: confirmed
+    command: apply-proposal.sql
+  - id: decline_date
+    from: date_proposed
+    to: issued
+    command: clear-proposal.sql
