@@ -28,12 +28,14 @@ import org.slf4j.LoggerFactory;
  * app's {@code web/} tree hot-reload through the exact {@link RouteReloader} Studio's apply
  * uses, so "save in your own editor and it is serving" holds without a click in Studio.
  *
- * <p>Scope is the reload's scope: the {@code web/} routes — each route's yml, 2-way SQL, and
- * templates live together in its directory, and that is what the content diff fingerprints.
- * App-level {@code templates/} and {@code messages/} resolve live at render time (a reload
- * would refresh nothing), {@code config/} can redefine datasources and security (a partial
- * refresh would mislead), and jobs/consumers need a restart — so none of those are watched,
- * and {@code work/} (build output) never is.
+ * <p>Scope is the reload's scope: the {@code web/} routes plus everything that bakes into
+ * them — the shared definitions ({@code decisions/}, {@code rules/}, {@code scope/},
+ * {@code domains/}), whose change rebuilds every route, and {@code workflow/}, whose change
+ * rebuilds the synthesized transition routes. App-level {@code templates/} and
+ * {@code messages/} resolve live at render time (a reload would refresh nothing),
+ * {@code config/} can redefine datasources and security (a partial refresh would mislead),
+ * and jobs/consumers need a restart — so none of those are watched, and {@code work/}
+ * (build output) never is.
  *
  * <p>A burst of events (editors save through temp files and fire several) coalesces into one
  * reload after a quiet period; obvious editor noise (backup/swap/temp files, dotfiles) is
@@ -69,16 +71,30 @@ public final class RouteWatcher implements AutoCloseable {
         if (thread != null) {
             return;
         }
-        Path web = appHome.resolve("web");
-        if (!Files.isDirectory(web)) {
-            out.accept("Watch: " + web + " does not exist; nothing to watch.");
+        // The reload's full scope (RouteReloader): the web/ routes plus everything that
+        // bakes into them — shared definitions rebuild every route, a workflow change
+        // rebuilds its synthesized transition routes. Only trees that exist at start are
+        // watched; a surface added later still needs a restart.
+        List<Path> roots = new ArrayList<>();
+        for (String surface : List.of("web", "workflow", "decisions", "rules", "scope",
+                "domains")) {
+            Path root = appHome.resolve(surface);
+            if (Files.isDirectory(root)) {
+                roots.add(root);
+            }
+        }
+        if (roots.isEmpty()) {
+            out.accept("Watch: " + appHome.resolve("web")
+                    + " does not exist; nothing to watch.");
             return;
         }
         try {
-            watchService = web.getFileSystem().newWatchService();
-            registerTree(web);
+            watchService = appHome.getFileSystem().newWatchService();
+            for (Path root : roots) {
+                registerTree(root);
+            }
         } catch (IOException ex) {
-            throw new UncheckedIOException("Could not watch " + web, ex);
+            throw new UncheckedIOException("Could not watch " + appHome, ex);
         }
         thread = new Thread(() -> run(out), "tql-watch");
         thread.setDaemon(true);

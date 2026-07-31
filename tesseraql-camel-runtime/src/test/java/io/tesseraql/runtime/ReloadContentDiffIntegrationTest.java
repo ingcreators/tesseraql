@@ -88,13 +88,15 @@ class ReloadContentDiffIntegrationTest {
         assertThat(get("/api/alpha").body()).contains("value");
         assertThat(get("/api/beta").statusCode()).isEqualTo(200);
 
-        // The manual reload is the recovery hammer: unchanged sources still rebuild.
+        // The manual reload is the recovery hammer: unchanged sources still rebuild —
+        // including the workflow's synthesized transition route.
         HttpResponse<String> force = post("/_tesseraql/studio/reload", "");
         assertThat(force.statusCode()).isEqualTo(200);
         List<String> forced = new java.util.ArrayList<>();
         MAPPER.readTree(force.body()).get("reloaded")
                 .forEach(id -> forced.add(id.asText()));
-        assertThat(forced).containsExactlyInAnyOrder("alpha.list", "beta.list");
+        assertThat(forced).containsExactlyInAnyOrder("alpha.list", "beta.list",
+                "thing.submit");
 
         // And a no-change apply-path reload bounces nothing at all.
         assertThat(post("/_tesseraql/studio/drafts?path=" + enc("web/api/alpha/alpha.sql"),
@@ -103,6 +105,34 @@ class ReloadContentDiffIntegrationTest {
                 "/_tesseraql/studio/apply?path=" + enc("web/api/alpha/alpha.sql"), "");
         assertThat(identical.statusCode()).isEqualTo(200);
         assertThat(MAPPER.readTree(identical.body()).get("reloaded")).isEmpty();
+
+        // A shared-definition edit bakes into any route, so it rebuilds every route —
+        // web and synthesized transitions alike (cheap-and-correct over reference graphs).
+        assertThat(post("/_tesseraql/studio/drafts?path=" + enc("decisions/tiers.yml"),
+                Files.readString(appHome.resolve("decisions/tiers.yml"))
+                        + "# shared-definition touch\n")
+                .statusCode()).isEqualTo(200);
+        HttpResponse<String> shared = post(
+                "/_tesseraql/studio/apply?path=" + enc("decisions/tiers.yml"), "");
+        assertThat(shared.statusCode()).isEqualTo(200);
+        List<String> afterShared = new java.util.ArrayList<>();
+        MAPPER.readTree(shared.body()).get("reloaded")
+                .forEach(id -> afterShared.add(id.asText()));
+        assertThat(afterShared).containsExactlyInAnyOrder("alpha.list", "beta.list",
+                "thing.submit");
+
+        // A workflow edit rebuilds only the synthesized transition routes.
+        assertThat(post("/_tesseraql/studio/drafts?path=" + enc("workflow/thing.yml"),
+                Files.readString(appHome.resolve("workflow/thing.yml"))
+                        + "# workflow touch\n")
+                .statusCode()).isEqualTo(200);
+        HttpResponse<String> workflow = post(
+                "/_tesseraql/studio/apply?path=" + enc("workflow/thing.yml"), "");
+        assertThat(workflow.statusCode()).isEqualTo(200);
+        List<String> afterWorkflow = new java.util.ArrayList<>();
+        MAPPER.readTree(workflow.body()).get("reloaded")
+                .forEach(id -> afterWorkflow.add(id.asText()));
+        assertThat(afterWorkflow).containsExactly("thing.submit");
     }
 
     private static HttpResponse<String> get(String path) throws Exception {
@@ -167,6 +197,42 @@ class ReloadContentDiffIntegrationTest {
                 POSTGRES.getPassword()));
         route(target, "alpha");
         route(target, "beta");
+        // A shared definition and a managed workflow: the reload scope beyond web/.
+        Files.createDirectories(target.resolve("decisions"));
+        Files.writeString(target.resolve("decisions/tiers.yml"), """
+                version: tesseraql/v1
+                decisions:
+                  tiers:
+                    inputs:
+                      amount: { type: number, match: between }
+                    outputs:
+                      tier: { type: string }
+                    rows:
+                      - when: { amount: ">= 100" }
+                        out: { tier: high }
+                      - out: { tier: low }
+                """);
+        Files.createDirectories(target.resolve("workflow"));
+        Files.writeString(target.resolve("workflow/submit.sql"),
+                "update things set touched = true where id = /* key */ 'T-0'\n");
+        Files.writeString(target.resolve("workflow/thing.yml"), """
+                version: tesseraql/v1
+                id: thing
+                kind: workflow
+                mode: managed
+                document: { type: thing, table: things, key: id }
+                http: { basePath: /api/things }
+                security: { auth: bearer }
+                initial: draft
+                states:
+                  - { id: draft, type: initial }
+                  - { id: done, type: terminal }
+                transitions:
+                  - id: submit
+                    from: draft
+                    to: done
+                    command: submit.sql
+                """);
         return target;
     }
 
