@@ -1,0 +1,11 @@
+# Shared rules for the RFQ leg (docs/validation-rule-sets.md): only an approved
+# requisition may source an RFQ. The rule reads the managed workflow state
+# (tql_workflow_instance) the same way an inbox scope reads the task table — process
+# state is just a row (docs/approval-workflow.md "SQL-first, no hidden state").
+version: tesseraql/v1
+
+rules:
+  requisitionApproved:
+    file: requisition-approved.sql
+    binds: [requisitionId]
+    code: not-approved

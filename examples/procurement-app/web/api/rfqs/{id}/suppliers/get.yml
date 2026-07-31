@@ -1,0 +1,25 @@
+version: tesseraql/v1
+id: api.rfqs.suppliers
+kind: route
+recipe: query-json
+
+input:
+  id:
+    type: string
+    required: true
+    maxLength: 64
+
+security:
+  policy: rfq.read
+
+sql:
+  file: suppliers.sql
+  mode: query
+  params:
+    id: path.id
+
+response:
+  json:
+    status: 200
+    body:
+      data: sql.rows

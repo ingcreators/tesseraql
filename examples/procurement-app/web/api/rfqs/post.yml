@@ -1,0 +1,40 @@
+version: tesseraql/v1
+id: api.rfqs.create
+kind: route
+recipe: command-json
+
+input:
+  requisitionId:
+    type: string
+    required: true
+    maxLength: 64
+  quoteDueDate:
+    type: string
+    required: true
+    pattern: '^\d{4}-\d{2}-\d{2}$'
+
+security:
+  policy: rfq.write
+
+# Only an approved requisition can source an RFQ (rules/rfqs.yml).
+validate:
+  requisitionApproved:
+    use: requisitionApproved
+    params:
+      requisitionId: params.requisitionId
+    field: requisitionId
+
+# The cross-document write (docs/procurement-demo.md "composition probes"): the RFQ's
+# title comes straight from the requisition row, in one statement, one transaction.
+sql:
+  file: create-rfq.sql
+  mode: update
+  params:
+    requisitionId: params.requisitionId
+    quoteDueDate: params.quoteDueDate
+
+response:
+  json:
+    status: 201
+    body:
+      created: sql.affectedRows

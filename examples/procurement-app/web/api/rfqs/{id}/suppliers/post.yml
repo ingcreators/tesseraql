@@ -1,0 +1,30 @@
+version: tesseraql/v1
+id: api.rfqs.suppliers.invite
+kind: route
+recipe: command-json
+
+input:
+  id:
+    type: string
+    required: true
+    maxLength: 64
+  partnerId:
+    type: string
+    required: true
+    maxLength: 40
+
+security:
+  policy: rfq.write
+
+sql:
+  file: invite.sql
+  mode: update
+  params:
+    id: path.id
+    partnerId: params.partnerId
+
+response:
+  json:
+    status: 201
+    body:
+      created: sql.affectedRows

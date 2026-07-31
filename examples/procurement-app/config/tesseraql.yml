@@ -59,8 +59,36 @@ tesseraql:
           - role: PROCUREMENT
           - role: PROCUREMENT_HEAD
           - role: ADMIN
+      # The RFQ leg is procurement's surface (docs/procurement-demo.md slice 2).
+      rfq.read:
+        anyOf:
+          - role: PROCUREMENT
+          - role: PROCUREMENT_HEAD
+          - role: ADMIN
+      rfq.write:
+        anyOf:
+          - role: PROCUREMENT
+          - role: PROCUREMENT_HEAD
+          - role: ADMIN
+      rfq.act:
+        anyOf:
+          - role: PROCUREMENT
+          - role: PROCUREMENT_HEAD
+          - role: ADMIN
 
   # Managed workflow state: instances/tasks/history live in the framework's tql_workflow_*
   # tables, so the business table stays clean (docs/approval-workflow.md).
   workflow:
     mode: managed
+
+  # Task reminders (workflow/rfq.yml notify:): point MAIL_HOST at any SMTP (Mailpit for
+  # the demo). The declarative tests assert notifications without touching SMTP.
+  notifications:
+    channels:
+      procurement-mail:
+        type: mail
+        host: ${MAIL_HOST:localhost}
+        port: ${MAIL_PORT:2525}
+        from: procurement@example.com
+        to: procurement@example.com
+        template: templates/mail/rfq-task.txt

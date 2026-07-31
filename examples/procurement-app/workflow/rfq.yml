@@ -1,0 +1,58 @@
+version: tesseraql/v1
+id: rfq
+kind: workflow
+# The chain's second managed document (docs/procurement-demo.md): procurement drafts an
+# RFQ from an approved requisition, the procurement head approves the issue, and the
+# issued state opens a follow-up task for the RFQ's owner with an engine deadline — the
+# reminder machinery is the workflow's own (docs/approval-workflow.md "deadlines"), not a
+# hand-rolled batch job.
+document: { type: rfq, table: rfqs, key: id }
+http: { basePath: /api/rfqs }
+security: { auth: bearer, policy: rfq.act }
+initial: draft
+states:
+  - { id: draft, type: initial }
+  - { id: submitted }
+  - { id: issued }
+  - { id: closed, type: terminal }
+transitions:
+  # Submitting asks the procurement head to approve the issue.
+  - id: submit
+    from: draft
+    to: submitted
+    command: rfq-submit.sql
+    assign: { file: head.sql }
+  # The head sends a draft back rather than approving it.
+  - id: reject
+    from: submitted
+    to: draft
+    command: rfq-reject.sql
+  # Issuing opens the quote-collection follow-up for the RFQ's owner; the deadline below
+  # stamps its due date and escalates an overdue one to the head.
+  - id: issue
+    from: submitted
+    to: issued
+    command: rfq-issue.sql
+    assign: { file: rfq-owner.sql }
+  - id: close
+    from: issued
+    to: closed
+    command: rfq-close.sql
+
+# The quote window's reminder: an issued RFQ left unattended for a week lands on the
+# procurement head's desk, with the escalated notification riding the outbox.
+deadlines:
+  - { state: issued, within: 168h, onBreach: { reassign: head.sql } }
+
+notify:
+  assigned:
+    channel: procurement-mail
+    payload:
+      rfq: document.id
+      title: document.title
+      assignee: assignee
+  escalated:
+    channel: procurement-mail
+    payload:
+      rfq: docId
+      assignee: assignee
