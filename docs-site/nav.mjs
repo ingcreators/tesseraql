@@ -140,4 +140,6 @@ export const EXCLUDED = [
   'procurement-demo.md',
   // Workflow expressiveness (SQL guards, stamps, dispatch), 2026-07-31.
   'workflow-expressiveness.md',
+  // Transition engine (one pipeline invoked everywhere), 2026-07-31.
+  'transition-engine.md',
 ];

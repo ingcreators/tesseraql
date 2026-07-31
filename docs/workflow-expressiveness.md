@@ -22,6 +22,9 @@
 > route SQL, guard files, rules, and scope fragments alike; SQL that never mentions
 > the managed table is out of scope. **All four slices are implemented.** Grounded
 > throughout in what `examples/procurement-app` had to write before slice 1.
+> The retrospective's structural follow-ups — the pipeline as an engine object,
+> engine-level dispatch, the `dispatch:` suite target, the `current_state` lint —
+> are designed in [transition engine](transition-engine.md).
 
 ## The three frictions, as shipped code
 
