@@ -8,6 +8,17 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **The `dispatch:` suite target — the one-button selector asserted as data**
+  (docs/transition-engine.md slice 3): a declarative case runs the dispatch's
+  member-selection loop inside its always-rolled-back transaction — the dispatch-level
+  `decide:` once after the document binds, then each member through the documented
+  transition pipeline, refused attempts rolling back to savepoints and falling
+  through. The outcome row names the winner (`transition`, `dispatch`, `from`/`to`);
+  none held is a `code: TQL-WORKFLOW-3202` row with `attempted` comma-joining the
+  members tried. The procurement demo's `propose` pair drops its duplicated member
+  `decide:` blocks in favor of the dispatch-level one, and the suite gains a dispatch
+  refusal-aggregation case.
+
 - **Engine-level dispatch — typed fall-through, a dispatch-level `decide:`, and a 422
   that explains itself** (docs/transition-engine.md slice 2): the dispatch route is now
   a governed route carrying the members' shared security spec, and its selector invokes

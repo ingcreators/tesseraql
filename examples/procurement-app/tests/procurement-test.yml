@@ -498,6 +498,25 @@ tests:
         - code: TQL-WORKFLOW-3201
           from: draft
 
+  # The dispatch target (docs/transition-engine.md): the one-button selector asserted
+  # as data — a draft fits neither approval lane, and the none-held row names every
+  # member it tried.
+  - name: the approval dispatch on a draft reports both refusals
+    dispatch:
+      workflow: requisition
+      key: REQ-1002
+      id: submit_decision
+    principal:
+      loginId: kishi
+      roles: [MANAGER]
+      claims:
+        departments: [sales]
+    expect:
+      rows:
+        - code: TQL-WORKFLOW-3202
+          dispatch: submit_decision
+          attempted: approve,advance
+
   # The assignment resolvers bind real master rows, not literals.
   - name: the first-stage assignee is the requesting department's manager
     sql:
