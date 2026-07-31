@@ -1,0 +1,4 @@
+Subject: [procurement] RFQ [(${rfq})] needs [(${assignee})]
+
+A quotation task for RFQ [(${rfq})] is on your desk.
+Open the portal to act on it.

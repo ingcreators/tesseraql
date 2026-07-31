@@ -1,3 +1,5 @@
 items:
   - label: Requisitions
     href: /requisitions
+  - label: RFQs
+    href: /rfqs

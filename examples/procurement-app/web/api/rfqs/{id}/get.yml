@@ -1,0 +1,28 @@
+version: tesseraql/v1
+id: api.rfqs.detail
+kind: route
+recipe: query-json
+
+input:
+  id:
+    type: string
+    required: true
+    maxLength: 64
+
+security:
+  policy: rfq.read
+
+sql:
+  file: rfq.sql
+  mode: query
+  params:
+    id: path.id
+
+response:
+  json:
+    status: 200
+    body:
+      data: sql.rows
+    statusWhen:
+      - when: sql.rowCount == 0
+        status: 404

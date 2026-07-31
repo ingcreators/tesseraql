@@ -71,11 +71,34 @@ public final class TestRunner {
 
     /** Runs all cases and returns a report. */
     public TestReport run(TestSuite suite) {
+        ensureManagedSchemas();
         List<TestResult> results = new ArrayList<>();
         for (TestCase test : suite.tests()) {
             results.add(runCase(test));
         }
         return new TestReport(results);
+    }
+
+    /**
+     * Provisions the managed framework tables the runtime would provision at startup
+     * (docs/approval-workflow.md, docs/data-scoping.md), so app SQL that legitimately reads
+     * them — an inbox scope over the task table, a rule reading {@code tql_workflow_instance}
+     * — runs in a suite against the same schema it sees on a request. Without a datasource
+     * (pure decide/messages suites) there is nothing to provision.
+     */
+    private void ensureManagedSchemas() {
+        if (dataSource == null) {
+            return;
+        }
+        AppManifest loaded = loadManifest();
+        if (!loaded.workflows().isEmpty()) {
+            new io.tesseraql.operations.workflow.JdbcWorkflowStore(dataSource).ensureSchema();
+            new io.tesseraql.operations.workflow.JdbcWorkflowTaskStore(dataSource)
+                    .ensureSchema();
+        }
+        if (io.tesseraql.yaml.org.OrgUnitSettings.from(loaded.config()).managed()) {
+            new io.tesseraql.operations.org.JdbcOrgUnitStore(dataSource).ensureSchema();
+        }
     }
 
     private TestResult runCase(TestCase test) {

@@ -26,6 +26,18 @@ All notable changes to TesseraQL are documented here. The format follows
   riding the header's scope through the join, and a `req.cost`-gated internal
   estimate on the JSON surface.
 
+- **Suites provision the managed framework schema** the runtime would provision at
+  startup (`tql_workflow_*`; `tql_org_unit`/`tql_org_closure` when
+  `tesseraql.orgunit.mode: managed`), so app SQL that legitimately reads it — an
+  inbox scope over the task table, a rule reading `tql_workflow_instance` — runs in
+  a declarative suite against the same schema it sees on a request.
+- **procurement-app slice 2 — the RFQ leg**: a second managed workflow (draft →
+  submitted → issued → closed) whose creation route enforces "approved requisitions
+  only" through a shared rule reading the managed workflow state; supplier
+  invitations with an idempotent invite; and a quote-collection follow-up task with
+  an engine deadline (168h, sweeper reassigns to the procurement head) plus
+  assignment/escalation mail through the outbox.
+
 ### Fixed
 
 - `TQL-DECISION-4716` no longer flags a decision whose only consumer is a workflow

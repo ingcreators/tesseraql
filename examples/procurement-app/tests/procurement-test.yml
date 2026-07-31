@@ -74,6 +74,59 @@ tests:
       rows:
         - route: manager
 
+  # The RFQ leg (slice 2): the seeded draft, its invitations, and the sourcing rule.
+  - name: the seeded RFQ carries both invitations
+    sql:
+      file: web/api/rfqs/{id}/suppliers/suppliers.sql
+    params:
+      id: RFQ-2001
+    expect:
+      rowCount: 2
+      rows:
+        - partner_id: P-100
+        - partner_id: P-200
+
+  - name: the RFQ list counts invitations per row
+    sql:
+      file: web/api/rfqs/rfqs.sql
+    expect:
+      rowCount: 1
+      rows:
+        - id: RFQ-2001
+          invited: 2
+
+  - name: an unapproved requisition cannot source an RFQ
+    validate:
+      route: api.rfqs.create
+    params:
+      params:
+        requisitionId: REQ-1002
+    expect:
+      rowCount: 1
+      rows:
+        - rule: requisitionApproved
+          field: requisitionId
+          code: not-approved
+
+  - name: re-inviting an invited supplier is a zero-row no-op
+    sql:
+      file: web/api/rfqs/{id}/suppliers/invite.sql
+    params:
+      id: RFQ-2001
+      partnerId: P-100
+    expect:
+      updateCount: 0
+
+  - name: the quote-collection follow-up lands with the RFQ owner
+    sql:
+      file: workflow/rfq-owner.sql
+    params:
+      key: RFQ-2001
+    expect:
+      rowCount: 1
+      rows:
+        - assignee: ota
+
   # The assignment resolvers bind real master rows, not literals.
   - name: the first-stage assignee is the requesting department's manager
     sql:

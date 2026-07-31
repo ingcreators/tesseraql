@@ -1,0 +1,12 @@
+version: tesseraql/v1
+id: rfqs
+kind: view
+view: list
+title: Requests for quotation
+columns:
+  - { name: id, label: "#" }
+  - { name: title }
+  - { name: quote_due_date, label: Quote due }
+  - { name: invited, label: Invited }
+  - { name: created_by, label: Owner }
+  - { name: last_action, label: Last action }

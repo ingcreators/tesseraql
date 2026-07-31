@@ -1,0 +1,20 @@
+version: tesseraql/v1
+id: rfqs.page
+kind: route
+recipe: query-html
+
+security:
+  policy: rfq.read
+
+page:
+  size: 20
+  count: true
+
+sql:
+  file: rfqs.sql
+  mode: query
+
+response:
+  html:
+    status: 200
+    view: list.view.yml
