@@ -90,9 +90,11 @@ tests:
     sql:
       file: web/api/rfqs/rfqs.sql
     expect:
-      rowCount: 1
+      rowCount: 2
       rows:
         - id: RFQ-2001
+          invited: 2
+        - id: RFQ-2002
           invited: 2
 
   - name: an unapproved requisition cannot source an RFQ
@@ -129,7 +131,7 @@ tests:
 
   # The supplier fence (slice 3, scope/quotes_scope.yml): a supplier reaches only
   # their own partner's rows; procurement sees every quote.
-  - name: a supplier sees only their own quote
+  - name: a supplier sees only their own quotes
     sql:
       file: web/api/supplier/quotes/quotes.sql
     principal:
@@ -137,12 +139,14 @@ tests:
       claims:
         partner: P-100
     expect:
-      rowCount: 1
+      rowCount: 2
       rows:
         - id: Q-RFQ-2001-P-100
           status: draft
+        - id: Q-RFQ-2002-P-100
+          status: submitted
 
-  - name: the competing supplier sees no quote of the other
+  - name: the competing supplier never sees the other partner's quotes
     sql:
       file: web/api/supplier/quotes/quotes.sql
     principal:
@@ -150,7 +154,9 @@ tests:
       claims:
         partner: P-200
     expect:
-      rowCount: 0
+      rowCount: 1
+      rows:
+        - id: Q-RFQ-2002-P-200
 
   - name: procurement sees every quote
     sql:
@@ -158,7 +164,7 @@ tests:
     principal:
       roles: [PROCUREMENT]
     expect:
-      rowCount: 1
+      rowCount: 3
 
   - name: quote lines ride the quote's partner scope
     sql:
@@ -213,6 +219,105 @@ tests:
       promisedDate: "2026-08-25"
     expect:
       updateCount: 0
+
+  # Slice 4: the comparison, the deviation contract, and the orderApproval lanes.
+  - name: the comparison ranks submitted quotes with distance from the lowest
+    sql:
+      file: web/api/rfqs/{id}/comparison/comparison.sql
+    params:
+      id: RFQ-2002
+    expect:
+      rowCount: 2
+      rows:
+        - partner_id: P-200
+          is_lowest: true
+          delta_pct: "0.00"
+        - partner_id: P-100
+          is_lowest: false
+          delta_pct: "0.32"
+
+  - name: selecting a non-lowest quote without a reason is refused
+    validate:
+      route: api.orders.create
+    params:
+      params:
+        quoteId: Q-RFQ-2002-P-100
+    expect:
+      rowCount: 1
+      rows:
+        - rule: selectionReason
+          field: reason
+          code: reason-required
+
+  - name: a written reason satisfies the deviation contract
+    validate:
+      route: api.orders.create
+    params:
+      params:
+        quoteId: Q-RFQ-2002-P-100
+        reason: Only P-100 can meet the September delivery date
+    expect:
+      rowCount: 0
+
+  - name: the lowest quote needs no reason
+    validate:
+      route: api.orders.create
+    params:
+      params:
+        quoteId: Q-RFQ-2002-P-200
+    expect:
+      rowCount: 0
+
+  - name: creating the order stamps computed selection facts, not client claims
+    sql:
+      file: web/api/orders/create-order.sql
+    params:
+      quoteId: Q-RFQ-2002-P-100
+      reason: Only P-100 can meet the September delivery date
+      audit:
+        user: ota
+    expect:
+      updateCount: 1
+    verify:
+      - sql:
+          file: web/api/orders/orders.sql
+        expect:
+          rowCount: 1
+          rows:
+            - partner_id: P-100
+              is_lowest: false
+              delta_pct: "0.32"
+
+  # The orderApproval decision: both dimensions and the boundary.
+  - name: the lowest selection auto-approves
+    decide:
+      decision: orderApproval
+    params:
+      isLowest: true
+      deltaPct: 0
+    expect:
+      rows:
+        - lane: auto
+
+  - name: a near-lowest selection auto-approves at the boundary
+    decide:
+      decision: orderApproval
+    params:
+      isLowest: false
+      deltaPct: 3
+    expect:
+      rows:
+        - lane: auto
+
+  - name: anything above the tolerance waits for the head
+    decide:
+      decision: orderApproval
+    params:
+      isLowest: false
+      deltaPct: 3.01
+    expect:
+      rows:
+        - lane: head_review
 
   # The assignment resolvers bind real master rows, not literals.
   - name: the first-stage assignee is the requesting department's manager

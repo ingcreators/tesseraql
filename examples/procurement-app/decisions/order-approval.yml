@@ -1,0 +1,21 @@
+version: tesseraql/v1
+
+# The purchase-approval policy (docs/procurement-demo.md): deviation is allowed,
+# recorded, and approved — never silently blocked. Selecting the lowest quote
+# auto-approves; a near-lowest selection (within 3%) does too; anything above that
+# routes to the procurement head, and the create route's selectionReason rule has
+# already insisted on a written reason.
+decisions:
+  orderApproval:
+    inputs:
+      isLowest: { type: bool, match: bool }
+      deltaPct: { type: number, match: between }
+    outputs:
+      lane: { type: string, enum: [auto, head_review] }
+    hitPolicy: first
+    rows:
+      - when: { isLowest: true }
+        out: { lane: auto }
+      - when: { deltaPct: "<= 3" }
+        out: { lane: auto }
+      - out: { lane: head_review }

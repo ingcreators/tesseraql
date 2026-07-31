@@ -47,6 +47,14 @@ All notable changes to TesseraQL are documented here. The format follows
   workflow modes now live side by side in one app, and a cross-partner transition
   updates zero rows and fails, deny-by-default.
 
+- **procurement-app slice 4 — comparison to order**: the comparison ranks submitted
+  quotes with each one's distance from the lowest; creating an order computes and
+  stamps the selection facts (total, lowest-or-not, % above lowest) in SQL — never
+  client-asserted. A non-lowest pick demands a written reason (shared rule, 422
+  before anything writes), and the `orderApproval` decision routes the submit:
+  lowest or within 3% issues with no human in the loop (the assign resolver returns
+  zero assignees, so no task opens), anything above waits for the procurement head.
+
 ### Fixed
 
 - `TQL-DECISION-4716` no longer flags a decision whose only consumer is a workflow
