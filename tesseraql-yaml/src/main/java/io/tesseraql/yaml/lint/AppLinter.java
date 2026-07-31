@@ -136,6 +136,7 @@ public final class AppLinter {
         lintPreferences(appHome, findings);
         lintOrgUnitConfig(manifest.config(), findings);
         lintWorkflows(appHome, manifest, findings);
+        lintDocTypeLiterals(appHome, manifest, findings);
         lintWorkflowConfig(manifest.config(), findings);
         lintAttachments(appHome, manifest, findings);
         lintObjectStorageEgress(appHome, manifest, findings);
@@ -2434,6 +2435,65 @@ public final class AppLinter {
     private void lintWorkflows(Path appHome, AppManifest manifest, List<LintFinding> findings) {
         for (WorkflowFile workflow : manifest.workflows()) {
             lintWorkflow(appHome, manifest.config(), workflow, findings);
+        }
+    }
+
+    private static final java.util.regex.Pattern DOC_TYPE_LITERAL = java.util.regex.Pattern
+            .compile("\\bdoc_type\\s*(?:=|in\\s*\\()\\s*'([^']*)'",
+                    java.util.regex.Pattern.CASE_INSENSITIVE);
+
+    /**
+     * The {@code doc_type} literal lint (docs/workflow-expressiveness.md slice 4,
+     * {@code TQL-WORKFLOW-3114}): a string literal compared to {@code doc_type} in SQL
+     * that references the managed {@code tql_workflow_instance} table must name a
+     * declared workflow {@code document.type} — the typo otherwise survives to runtime
+     * as an always-empty join. SQL that never mentions the managed table is skipped, so
+     * an application's own {@code doc_type} column stays out of scope.
+     */
+    private void lintDocTypeLiterals(Path appHome, AppManifest manifest,
+            List<LintFinding> findings) {
+        Set<String> declared = new LinkedHashSet<>();
+        for (WorkflowFile workflow : manifest.workflows()) {
+            WorkflowDefinition def = workflow.definition();
+            if (def.document() != null && def.document().type() != null) {
+                declared.add(def.document().type());
+            }
+        }
+        if (declared.isEmpty()) {
+            return;
+        }
+        for (String root : List.of("web", "workflow", "rules", "scope")) {
+            Path dir = appHome.resolve(root);
+            if (!Files.isDirectory(dir)) {
+                continue;
+            }
+            try (java.util.stream.Stream<Path> files = Files.walk(dir)) {
+                for (Path file : files
+                        .filter(f -> f.getFileName().toString().endsWith(".sql")).toList()) {
+                    String sql;
+                    try {
+                        sql = Files.readString(file);
+                    } catch (java.io.IOException unreadable) {
+                        continue;
+                    }
+                    if (!sql.contains("tql_workflow_instance")) {
+                        continue;
+                    }
+                    java.util.regex.Matcher literals = DOC_TYPE_LITERAL.matcher(sql);
+                    while (literals.find()) {
+                        String literal = literals.group(1);
+                        if (!declared.contains(literal)) {
+                            findings.add(new LintFinding("TQL-WORKFLOW-3114", "warning",
+                                    relative(appHome, file),
+                                    "doc_type literal '" + literal
+                                            + "' names no declared workflow document type"
+                                            + " (declared: " + declared + ")"));
+                        }
+                    }
+                }
+            } catch (java.io.IOException unreadable) {
+                // An unwalkable tree is its own problem; the lint stays quiet.
+            }
         }
     }
 

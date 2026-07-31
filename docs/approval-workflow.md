@@ -301,6 +301,13 @@ Consistent with IAM's managed/SQL realm duality and the org-unit model
   affected means a concurrent transition and surfaces as a `409`. The store is bound only when the
   app declares workflows and the mode is `managed`.
 
+  Application SQL joins the instance table freely (`wi.doc_type = 'order' and wi.doc_id = …` is the
+  gallery idiom for "only issued RFQs"). Because a mistyped type survives to runtime as an
+  always-empty join, a `doc_type` string literal in SQL referencing `tql_workflow_instance` that
+  names no declared workflow `document.type` is linted (`TQL-WORKFLOW-3114`, warning) — in route
+  SQL, guard files, rules, and scope fragments alike. SQL that never mentions the managed table is
+  out of scope, so an application's own `doc_type` column never trips it.
+
 - **`app`** (default) — the application owns its workflow tables (or folds state into the business
   table via `stateColumn`); transitions, tasks, and history are app-provided SQL contracts resolved
   the way IAM resolves a SQL-realm contract from its `sqlRoot`. Nothing managed is provisioned:

@@ -172,6 +172,39 @@ class AppLinterWorkflowTest {
     }
 
     @Test
+    void aDocTypeLiteralNamingNoDeclaredDocumentTypeIsAWarning(@TempDir Path dir)
+            throws Exception {
+        writeWorkflow(dir, WELL_FORMED);
+        Files.createDirectories(dir.resolve("rules"));
+        // The typo ('purchase_requests', the table, not the declared type) that today
+        // survives to runtime as an always-empty join.
+        Files.writeString(dir.resolve("rules/approved.sql"), """
+                select 1 from tql_workflow_instance wi
+                where wi.doc_type = 'purchase_requests' and wi.doc_id = /* id */ 'x'
+                """);
+        assertThat(new AppLinter().lint(dir)).anyMatch(f -> f.code()
+                .equals("TQL-WORKFLOW-3114") && !f.isError());
+
+        // The declared type lints clean.
+        Files.writeString(dir.resolve("rules/approved.sql"), """
+                select 1 from tql_workflow_instance wi
+                where wi.doc_type = 'purchase_request' and wi.doc_id = /* id */ 'x'
+                """);
+        assertThat(codes(new AppLinter().lint(dir))).isEmpty();
+    }
+
+    @Test
+    void aDocTypeColumnOfTheAppsOwnTableIsOutOfScope(@TempDir Path dir) throws Exception {
+        writeWorkflow(dir, WELL_FORMED);
+        // No tql_workflow_instance reference: the app's own doc_type column, any value.
+        Files.createDirectories(dir.resolve("rules"));
+        Files.writeString(dir.resolve("rules/own-column.sql"), """
+                select 1 from attachments where doc_type = 'invoice'
+                """);
+        assertThat(codes(new AppLinter().lint(dir))).isEmpty();
+    }
+
+    @Test
     void aMissingGuardFileIsAnError(@TempDir Path dir) throws Exception {
         writeWorkflow(dir, WELL_FORMED.replace("guard: \"document.amount > 0\"",
                 "guard: { file: nope.sql }"));

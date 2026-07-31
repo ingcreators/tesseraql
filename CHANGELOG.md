@@ -8,6 +8,14 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **The `doc_type` literal lint — the typo dies at build time**
+  (docs/workflow-expressiveness.md slice 4): `TQL-WORKFLOW-3114` (warning) flags a
+  `doc_type` string literal in application SQL referencing the managed
+  `tql_workflow_instance` table that names no declared workflow `document.type` —
+  today that typo survives to runtime as an always-empty join. Route SQL, workflow
+  guard files, rules, and scope fragments are scanned alike; SQL that never mentions
+  the managed table (an application's own `doc_type` column) is out of scope.
+
 - **One-action dispatch — the client calls one endpoint, the engine picks the lane**
   (docs/workflow-expressiveness.md slice 3): a workflow's `dispatch:` declares a named
   action over guarded member transitions (`oneOf:`); `POST {basePath}/{key}/{dispatchId}`
