@@ -9,3 +9,4 @@ rules:
     file: requisition-approved.sql
     binds: [requisitionId]
     code: not-approved
+    message: procurement.rules.notApproved

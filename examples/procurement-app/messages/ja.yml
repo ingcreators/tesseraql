@@ -1,0 +1,5 @@
+procurement:
+  rules:
+    duplicate: 同じ件名の申請が既に登録されています。
+    notApproved: 承認済みの購買依頼のみ見積依頼の対象にできます。
+    reasonRequired: 最安値以外の見積を選定する場合は理由の記入が必要です。

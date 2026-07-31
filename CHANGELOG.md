@@ -72,6 +72,14 @@ All notable changes to TesseraQL are documented here. The format follows
   in the same transaction as the state advance. A `query-export` CSV covers shipped
   lines and a `/dashboard` reads the managed workflow state as rows.
 
+- **procurement-app slice 7 — the demo speaks Japanese**: display names, titles, and
+  budget labels become Japanese-first (a data pass; ids and assertions untouched),
+  the shared rules carry localized messages (`messages/ja.yml` + `en.yml`), and the
+  README gains the scripted three-login tour — one requisition walked from creation
+  to goods receipt across requester, procurement, and two suppliers. With it the
+  committed design (docs/procurement-demo.md slices 1–7) is fully implemented; the
+  EDI companion remains an explicit open decision.
+
 ### Fixed
 
 - **A managed-mode workflow transition whose command updates zero rows no longer

@@ -119,6 +119,33 @@ GET  /api/shipments/export            # CSV download
 GET  /dashboard                       # the chain at a glance
 ```
 
+## The tour — one requisition, three logins
+
+The demo script (docs/procurement-demo.md): walk one purchase requisition from creation
+to goods receipt across the three personas. Sign three dev bearer tokens (HS256 over the
+dev secret) — requester `sato` (`REQUESTER`, `departments: [sales]`), procurement
+`hara`/`ota` (`PROCUREMENT` / `+PROCUREMENT_HEAD`), suppliers `kita`/`minami`
+(`SUPPLIER`, `partner: P-100` / `P-200`) — then:
+
+1. **sato** creates a requisition and submits: the `approvalRoute` decision stamps the
+   lane (capital categories and large amounts go two-stage), the department manager's
+   task opens; the manager (and for two-stage, `ota`) approves.
+2. **hara** turns it into an RFQ (`POST /api/rfqs` — an unapproved source answers 422),
+   invites both partners, submits; **ota** issues — the quote-collection follow-up
+   opens with a 168-hour reminder deadline.
+3. **kita** and **minami** each see only their own invitation (`/api/supplier/rfqs`),
+   start quotes (the lines copy from the requisition), price them, and submit — an
+   unpriced submit is guarded, and neither can touch the other's rows (3204).
+4. **hara** opens `/api/rfqs/{id}/comparison`, picks the *non-lowest* quote → a written
+   reason is demanded (422); with the reason, the `orderApproval` decision routes the
+   order to `ota`'s desk (within 3% it would have issued itself).
+5. The supplier proposes a +3-day delivery date: within the tolerance table it
+   auto-confirms. Tighten `/api/tolerances` to 1 day and the next proposal lands as a
+   review task instead — **the decision reads the table live, no deploy**.
+6. The supplier registers the shipment and ships (shipping without registering answers
+   3204); **sato** receives — the chain closes, `/api/shipments/export` has the CSV,
+   and `/dashboard` shows the story.
+
 ## Test it
 
 ```bash
