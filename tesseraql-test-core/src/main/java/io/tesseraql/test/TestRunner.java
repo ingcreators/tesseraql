@@ -232,7 +232,13 @@ public final class TestRunner {
         }
     }
 
-    /** The pipeline itself; returns the outcome row (advance or coded refusal). */
+    /**
+     * Fires the transition through the {@code TransitionExecutor}
+     * (docs/transition-engine.md) — the same pipeline implementation the synthesized
+     * routes run, in the suite's rolled-back transaction — and shapes the outcome row
+     * (advance or coded refusal). Task authority and tasks/history/notify stay out of
+     * scope, as documented in docs/testing.md.
+     */
     private Map<String, Object> fireTransition(Connection connection,
             io.tesseraql.yaml.model.WorkflowDefinition def,
             io.tesseraql.yaml.model.TransitionSpec transition,
@@ -242,7 +248,8 @@ public final class TestRunner {
         outcome.put("workflow", def.id());
         outcome.put("transition", transition.id());
 
-        // The document row binds into the context first (decisions and guards read it).
+        // The existence pre-check shapes the outcome's `from`; the pipeline itself —
+        // document load, decide, legality, guard, advance, stamps — is the executor's.
         Map<String, Object> document = selectDocument(connection, table, keyColumn,
                 target.key());
         if (document == null) {
@@ -250,164 +257,64 @@ public final class TestRunner {
             outcome.put("from", null);
             return outcome;
         }
-        io.tesseraql.operations.workflow.JdbcWorkflowStore store = managed
+        io.tesseraql.core.workflow.WorkflowStore store = managed
                 ? new io.tesseraql.operations.workflow.JdbcWorkflowStore(dataSource)
-                : null;
-        String current = managed
-                ? store.currentState(connection, def.document().type(), target.key())
-                : String.valueOf(document.get(def.document().stateColumn().toLowerCase(
-                        java.util.Locale.ROOT)));
-        if (current == null) {
-            current = def.initial();
-        }
-        outcome.put("from", current);
-        if (!current.equals(transition.from())) {
-            outcome.put("code", "TQL-WORKFLOW-3201");
-            return outcome;
-        }
+                : new io.tesseraql.yaml.workflow.ColumnWorkflowStore(table, keyColumn,
+                        def.document().stateColumn());
+        String current = store.currentState(connection, def.document().type(), target.key());
+        outcome.put("from", current != null ? current : def.initial());
 
         Map<String, Object> context = new LinkedHashMap<>(
                 withPrincipal(test.params(), test.principal()));
-        context.put("document", document);
         context.put("key", target.key());
         String actor = test.principal() == null || test.principal().loginId() == null
                 ? (test.principal() == null ? "suite" : test.principal().subject())
                 : test.principal().loginId();
         context.putIfAbsent("audit", Map.of("user", actor == null ? "suite" : actor));
 
-        // decide: resolves after the document binds, before the guard (docs/decision-tables.md).
-        String decisionCode = resolveDecisions(connection, transition, context);
-        if (decisionCode != null) {
-            outcome.put("code", decisionCode);
+        String vendor = io.tesseraql.core.util.DatabaseVendors.vendor(dataSource)
+                .orElse("postgres");
+        io.tesseraql.yaml.workflow.TransitionExecutor.CompiledTransition compiled = io.tesseraql.yaml.workflow.TransitionExecutor
+                .compile(def, transition, managed,
+                        vendor, workflowDir(def));
+        // Guard-file SQL joins route coverage through the executor's observer.
+        Path guardFile = transition.guard() == null || transition.guard().file() == null
+                ? null
+                : workflowDir(def).resolve(transition.guard().file());
+        io.tesseraql.yaml.workflow.TransitionExecutor.GuardSqlObserver observer = guardFile == null
+                || coverage == null
+                        ? null
+                        : (nodes, bound) -> coverage.record(
+                                appHome.relativize(guardFile).toString().replace('\\', '/'),
+                                bound.coverageTrace(), SqlCoverableLines.compute(nodes));
+        try {
+            io.tesseraql.yaml.workflow.TransitionExecutor.Session session = io.tesseraql.yaml.workflow.TransitionExecutor
+                    .begin(connection, compiled,
+                            new io.tesseraql.yaml.workflow.TransitionExecutor.Collaborators(
+                                    store, null, scopeResolver(),
+                                    test.principal() == null
+                                            ? null
+                                            : test.principal().subject(),
+                                    List.of(), 0, observer),
+                            target.key(), context);
+            session.advance(connection, context);
+            if (transition.command() != null && !transition.command().isBlank()) {
+                SqlOutcome result = executeSql(connection,
+                        workflowDir(def).resolve(transition.command()), context);
+                session.enforceCommandRows(result.updateCount() != null,
+                        result.updateCount() == null ? 0 : result.updateCount());
+            }
+        } catch (io.tesseraql.core.error.TqlException refusal) {
+            // Every pipeline refusal is typed: the documented code becomes the row, and a
+            // SQL guard file's declared refusal code rides the `guard` column.
+            outcome.put("code", refusal.code().toString());
+            if (refusal.details() != null && refusal.details().get("guard") != null) {
+                outcome.put("guard", refusal.details().get("guard"));
+            }
             return outcome;
-        }
-        if (transition.guard() != null && transition.guard().expression() != null
-                && !transition.guard().expression().isBlank()) {
-            boolean legal = io.tesseraql.core.expr.ExpressionParser
-                    .parse(transition.guard().expression())
-                    .evalBoolean(new io.tesseraql.core.expr.EvaluationContext(context));
-            if (!legal) {
-                outcome.put("code", "TQL-WORKFLOW-3202");
-                return outcome;
-            }
-        }
-        // The SQL guard form (docs/workflow-expressiveness.md): rows pass, no rows is the
-        // 3202 row carrying the declared app-level code under `guard`.
-        if (transition.guard() != null && transition.guard().file() != null) {
-            SqlOutcome guardRows = executeSql(connection,
-                    workflowDir(def).resolve(transition.guard().file()), context);
-            if (guardRows.rows() == null) {
-                throw new IllegalArgumentException("Guard file '" + transition.guard().file()
-                        + "' must be a query - a guard never writes");
-            }
-            if (guardRows.rows().isEmpty()) {
-                outcome.put("code", "TQL-WORKFLOW-3202");
-                outcome.put("guard", transition.guard().code() == null
-                        ? "guard-failed"
-                        : transition.guard().code());
-                return outcome;
-            }
-        }
-
-        // The conditional state advance, then the command, then the zero-row contract —
-        // the documented order (docs/approval-workflow.md "the synthesized route").
-        if (managed) {
-            store.ensureInstance(connection, def.document().type(), target.key(),
-                    def.initial(), null);
-            if (store.advanceState(connection, def.document().type(), target.key(),
-                    transition.from(), transition.to()) == 0) {
-                outcome.put("code", "TQL-WORKFLOW-3201");
-                return outcome;
-            }
-        } else {
-            try (java.sql.PreparedStatement advance = connection.prepareStatement(
-                    "update " + table + " set " + def.document().stateColumn()
-                            + " = ? where " + keyColumn + " = ? and "
-                            + def.document().stateColumn() + " = ?")) {
-                advance.setObject(1, transition.to());
-                advance.setObject(2, target.key());
-                advance.setObject(3, transition.from());
-                if (advance.executeUpdate() == 0) {
-                    outcome.put("code", "TQL-WORKFLOW-3201");
-                    return outcome;
-                }
-            }
-        }
-        // Decision stamps apply after the advance, before the author command — the same
-        // order the runtime uses (docs/workflow-expressiveness.md slice 2).
-        if (!transition.stamp().isEmpty()) {
-            io.tesseraql.core.expr.EvaluationContext evaluation = new io.tesseraql.core.expr.EvaluationContext(
-                    context);
-            Map<String, Object> resolved = new LinkedHashMap<>();
-            transition.stamp().forEach((column, value) -> resolved.put(column,
-                    value instanceof String path && (path.startsWith("decision.")
-                            || path.startsWith("document.") || path.startsWith("principal."))
-                                    ? evaluation.resolve(
-                                            java.util.Arrays.asList(path.split("\\.")))
-                                    : value));
-            StringBuilder stampSql = new StringBuilder("update ").append(table).append(" set ")
-                    .append(String.join(", ", resolved.keySet().stream()
-                            .map(column -> column + " = ?").toList()))
-                    .append(" where ").append(keyColumn).append(" = ?");
-            try (java.sql.PreparedStatement statement = connection
-                    .prepareStatement(stampSql.toString())) {
-                int index = 1;
-                for (Object value : resolved.values()) {
-                    statement.setObject(index++, value);
-                }
-                statement.setObject(index, target.key());
-                statement.executeUpdate();
-            }
-        }
-        if (transition.command() != null && !transition.command().isBlank()) {
-            Path command = workflowDir(def).resolve(transition.command());
-            SqlOutcome result = executeSql(connection, command, context);
-            if (result.updateCount() != null && result.updateCount() == 0) {
-                outcome.put("code", "TQL-WORKFLOW-3204");
-                return outcome;
-            }
         }
         outcome.put("to", transition.to());
         return outcome;
-    }
-
-    /** Resolves the transition's decisions into {@code decision.<alias>}; a coded miss returns. */
-    private String resolveDecisions(Connection connection,
-            io.tesseraql.yaml.model.TransitionSpec transition, Map<String, Object> context) {
-        if (transition.decide().isEmpty()) {
-            return null;
-        }
-        io.tesseraql.yaml.decision.DecisionSets sets = io.tesseraql.yaml.decision.DecisionSets
-                .load(appHome, new io.tesseraql.yaml.SimpleYamlParser());
-        Map<String, Object> decisions = new LinkedHashMap<>();
-        io.tesseraql.core.expr.EvaluationContext evaluation = new io.tesseraql.core.expr.EvaluationContext(
-                context);
-        for (Map.Entry<String, io.tesseraql.yaml.model.DecisionUse> entry : transition.decide()
-                .entrySet()) {
-            io.tesseraql.yaml.model.DecisionsDocument.Decision decision = sets.decisions()
-                    .get(entry.getValue().use());
-            Map<String, Object> inputs = new LinkedHashMap<>();
-            entry.getValue().params().forEach((name, path) -> inputs.put(name,
-                    evaluation.resolve(java.util.Arrays.asList(path.split("\\.")))));
-            try {
-                Map<String, Object> outputs;
-                if (decision.source() == null) {
-                    outputs = io.tesseraql.yaml.decision.DecisionSets
-                            .compile(entry.getValue().use(), decision).evaluate(inputs);
-                } else {
-                    String vendor = io.tesseraql.core.util.DatabaseVendors.vendor(dataSource)
-                            .orElse("postgres");
-                    outputs = io.tesseraql.yaml.decision.DecisionSets
-                            .compileSource(entry.getValue().use(), decision, vendor)
-                            .evaluate(connection, inputs, java.time.Instant.now(), 0);
-                }
-                decisions.put(entry.getKey(), outputs);
-            } catch (io.tesseraql.core.error.TqlException miss) {
-                return miss.code().toString();
-            }
-        }
-        context.put("decision", decisions);
-        return null;
     }
 
     private Map<String, Object> selectDocument(Connection connection, String table,

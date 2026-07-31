@@ -99,25 +99,11 @@ public final class TransactionalCommandProcessor implements Processor {
     private static final TqlErrorCode CHECK_VIOLATION = new TqlErrorCode(TqlDomain.SQL, 4002);
     /** TQL-SQL-4093: a serialization failure or deadlock; the write may succeed if retried (HTTP 409). */
     private static final TqlErrorCode SERIALIZATION = new TqlErrorCode(TqlDomain.SQL, 4093);
-    /** TQL-WORKFLOW-3201: a transition is not legal for the document's current state (HTTP 409). */
-    private static final TqlErrorCode ILLEGAL_TRANSITION = new TqlErrorCode(TqlDomain.WORKFLOW,
-            3201);
-    /** TQL-WORKFLOW-3202: a transition guard rejected the request (HTTP 422). */
-    private static final TqlErrorCode GUARD_FAILED = new TqlErrorCode(TqlDomain.WORKFLOW, 3202);
-    /**
-     * TQL-WORKFLOW-3204: the transition's command updated no rows (HTTP 409) — the caller
-     * holds no row authority over the document (a {@code /*%scope … *}{@code /} in the
-     * command's WHERE) or the data state the command demands is absent. The documented
-     * contract (docs/approval-workflow.md "guards and scopes"): a satisfied guard with no
-     * authorized rows updates nothing and never advances the state.
-     */
-    private static final TqlErrorCode COMMAND_NO_ROWS = new TqlErrorCode(TqlDomain.WORKFLOW,
-            3204);
+    // The TQL-WORKFLOW-3201/3202/3203/3204 pipeline codes are raised by the
+    // TransitionExecutor (docs/transition-engine.md), where the pipeline lives.
     /** TQL-WORKFLOW-3210: a managed transition needs the runtime's WorkflowStore bean. */
     private static final TqlErrorCode NO_WORKFLOW_STORE = new TqlErrorCode(TqlDomain.WORKFLOW,
             3210);
-    /** TQL-WORKFLOW-3203: the caller holds no actionable task for the document (HTTP 403). */
-    private static final TqlErrorCode NOT_ASSIGNED = new TqlErrorCode(TqlDomain.WORKFLOW, 3203);
 
     /** The reserved bind namespace for the canonical audit binds. */
     private static final String AUDIT = "audit";
@@ -231,35 +217,10 @@ public final class TransactionalCommandProcessor implements Processor {
         this.singleSql = sql != null;
         this.steps = compile(sql, declaredSteps, stepFile);
         this.validation = compileValidation(validate, stepFile);
-        this.decisions = compileDecisions(decide);
-    }
-
-    /**
-     * Compiles the decide: block (docs/decision-tables.md). References arrive resolved by the
-     * manifest loader — the shared decision stamped underneath — and the table compiles through
-     * the same code path the loader already ran, so a failure here means the processor was
-     * built from an unresolved definition.
-     */
-    private io.tesseraql.core.decision.DecisionTables compileDecisions(
-            Map<String, io.tesseraql.yaml.model.DecisionUse> decide) {
-        List<io.tesseraql.core.decision.DecisionTables.Use> uses = new ArrayList<>();
-        (decide == null ? Map.<String, io.tesseraql.yaml.model.DecisionUse>of() : decide)
-                .forEach((alias, use) -> {
-                    if (use.decision() == null) {
-                        throw invalid("decide entry '" + alias + "' is unresolved — the"
-                                + " manifest loader resolves use: references before compilation");
-                    }
-                    uses.add(use.decision().source() != null
-                            ? io.tesseraql.core.decision.DecisionTables.use(alias,
-                                    io.tesseraql.yaml.decision.DecisionSets.compileSource(
-                                            use.use(), use.decision(), dialect),
-                                    use.params(), use.effectiveAt())
-                            : io.tesseraql.core.decision.DecisionTables.use(alias,
-                                    io.tesseraql.yaml.decision.DecisionSets.compile(use.use(),
-                                            use.decision()),
-                                    use.params()));
-                });
-        return new io.tesseraql.core.decision.DecisionTables(uses);
+        // The one decide: compile (docs/decision-tables.md), shared with the transition
+        // executor — a workflow transition's decisions ride its CompiledTransition instead
+        // and evaluate inside the executor's pipeline.
+        this.decisions = io.tesseraql.yaml.decision.DecisionSets.compileUses(decide, dialect);
     }
 
     /** Compiles the validate: block, failing fast on misdeclared rules (roadmap Phase 19). */
@@ -454,10 +415,10 @@ public final class TransactionalCommandProcessor implements Processor {
                                     defaultBounds == null ? 0 : defaultBounds.timeoutSeconds()));
                 }
                 // A workflow transition (roadmap Phase 28) checks legality and the guard inside the
-                // transaction, before validation: load the document, verify the current state allows
-                // this transition, evaluate the guard. The document is bound as `document` so the
-                // guard and the command SQL can read it.
-                WorkflowExec wf = workflow == null
+                // transaction, before validation — the pipeline itself is the executor's
+                // (docs/transition-engine.md); the route supplies the stores, the scope
+                // resolver, and the caller's identity.
+                io.tesseraql.yaml.workflow.TransitionExecutor.Session wf = workflow == null
                         ? null
                         : beginWorkflow(exchange, connection, context);
                 // Validation runs first, inside the transaction (roadmap Phase 19): expression
@@ -473,16 +434,11 @@ public final class TransactionalCommandProcessor implements Processor {
                             .details(Map.of("fields", violations))
                             .build();
                 }
-                // Advance the state before the command: the conditional UPDATE affects zero rows
-                // when the document is no longer in `from` (a concurrent transition), which is a 409.
+                // Advance the state before the command (the conditional UPDATE turning a
+                // concurrent transition into a 409) and apply the decision stamps — both the
+                // executor's steps.
                 if (wf != null) {
-                    int advanced = wf.store().advanceState(connection, workflow.docType(),
-                            wf.docId(), workflow.from(), workflow.to());
-                    if (advanced == 0) {
-                        throw illegalTransition(wf.fromState(),
-                                "the document changed state concurrently");
-                    }
-                    applyStamps(connection, context, wf.docId());
+                    wf.advance(connection, context);
                 }
                 for (Step step : steps) {
                     // The ValidationRules.when contract, applied to steps: a falsy guard
@@ -504,10 +460,7 @@ public final class TransactionalCommandProcessor implements Processor {
                     }
                 }
                 // The documented row-authority contract (docs/approval-workflow.md "guards and
-                // scopes"): a transition whose command ran but updated nothing — a /*%scope */
-                // that matched no rows, or an absent data state the WHERE demands — must not
-                // advance the state. App mode enforces this through the state column's own
-                // conditional UPDATE; managed mode must enforce it here, before history/tasks.
+                // scopes"), enforced by the executor before history/tasks commit.
                 if (wf != null && !stepResults.isEmpty()) {
                     boolean anyExecuted = false;
                     int totalAffected = 0;
@@ -521,21 +474,17 @@ public final class TransactionalCommandProcessor implements Processor {
                             totalAffected += rows;
                         }
                     }
-                    if (anyExecuted && totalAffected == 0) {
-                        throw TqlException.builder(COMMAND_NO_ROWS)
-                                .message("Transition '" + workflow.transitionId()
-                                        + "' updated no rows — outside the caller's row"
-                                        + " authority or the required data state is absent")
-                                .build();
-                    }
+                    wf.enforceCommandRows(anyExecuted, totalAffected);
                 }
                 // Append the immutable history row, complete the prior tasks, and open the new
                 // state's tasks — all in the same transaction (roadmap Phase 28), so the audit
                 // record and the inbox change commit or roll back with the state change.
                 if (wf != null) {
                     wf.store().appendHistory(connection, new WorkflowStore.History(null,
-                            workflow.docType(), wf.docId(), workflow.transitionId(),
-                            wf.fromState(), workflow.to(), (String) audit.get("user"),
+                            workflow.transition().docType(), wf.docId(),
+                            workflow.transition().transitionId(),
+                            wf.fromState(), workflow.transition().to(),
+                            (String) audit.get("user"),
                             ((java.sql.Timestamp) audit.get("now")).toInstant(), null));
                     applyTasks(exchange, connection, wf, context, (String) audit.get("user"));
                 }
@@ -609,139 +558,38 @@ public final class TransactionalCommandProcessor implements Processor {
         return audit;
     }
 
-    /** The stores and resolved document/principal identity for an in-flight workflow transition. */
-    private record WorkflowExec(WorkflowStore store, WorkflowTaskStore taskStore, String docId,
-            String fromState, String tenant) {
-    }
-
     /**
-     * Prepares a workflow transition inside the transaction: resolves the stores, ensures the managed
-     * instance exists, loads the document for the guard, verifies the current state allows this
-     * transition, evaluates the guard, and checks task authority (a document with open tasks may only
-     * be transitioned by someone who holds one). Returns the stores and the document's current state.
+     * Opens the transition through the {@code TransitionExecutor}
+     * (docs/transition-engine.md): the route resolves the stores, the document key, the
+     * scope resolver, and the caller's identity; the executor owns the pipeline itself.
      */
-    private WorkflowExec beginWorkflow(Exchange exchange, Connection connection,
-            Map<String, Object> context) throws SQLException {
-        WorkflowStore store = workflow.managed()
+    private io.tesseraql.yaml.workflow.TransitionExecutor.Session beginWorkflow(
+            Exchange exchange, Connection connection, Map<String, Object> context)
+            throws SQLException {
+        WorkflowStore store = workflow.transition().managed()
                 ? lookupWorkflowStore(exchange)
                 : workflow.appStore();
-        WorkflowTaskStore taskStore = lookupTaskStore(exchange);
         EvaluationContext evaluation = new EvaluationContext(context);
         Object keyValue = evaluation.resolve(Arrays.asList(workflow.keyExpr().split("\\.")));
         String docId = keyValue == null ? null : String.valueOf(keyValue);
-        Object tenant = context.get("tenant");
-        String tenantId = tenant == null ? null : String.valueOf(tenant);
-        store.ensureInstance(connection, workflow.docType(), docId, workflow.initial(), tenantId);
-        context.put("document", loadDocument(connection, docId));
-        // A transition's decisions evaluate here — after the document binds, before the guard
-        // (docs/decision-tables.md "Acting on the result"): the wiring may read document.*
-        // (the amount lives on the row, not in the transition's request body), and the guard
-        // may consume decision.*.
-        if (!decisions.isEmpty()) {
-            context.put(io.tesseraql.core.sql.AmbientBinds.DECISION,
-                    decisions.evaluate(context, connection,
-                            defaultBounds == null ? 0 : defaultBounds.timeoutSeconds()));
-        }
-        String current = store.currentState(connection, workflow.docType(), docId);
-        String from = current != null ? current : workflow.initial();
-        if (!java.util.Objects.equals(workflow.from(), from)) {
-            throw illegalTransition(from, "the document is in state '" + from + "'");
-        }
-        if (workflow.guard() != null
-                && !workflow.guard().evalBoolean(new EvaluationContext(context))) {
-            throw TqlException.builder(GUARD_FAILED)
-                    .message("Workflow '" + workflow.workflowId() + "': transition '"
-                            + workflow.transitionId() + "' guard rejected the request")
-                    .build();
-        }
-        // The SQL guard form (docs/workflow-expressiveness.md): a 2-way query evaluated on
-        // the transition's connection — rows pass, no rows fails with the declared code
-        // riding the payload, so the caller learns WHY, not just "Unprocessable Entity".
-        if (workflow.guardNodes() != null) {
-            // The guard sees what the command sees: the request context plus the resolved
-            // document key under `key` (a command gets it from its params wiring; the guard
-            // has no wiring, so it is seeded here).
-            Map<String, Object> guardParams = new java.util.LinkedHashMap<>(context);
-            guardParams.putIfAbsent("key", docId);
-            io.tesseraql.core.sql.BoundSql bound = io.tesseraql.core.sql.SqlRenderer.render(
-                    workflow.guardNodes(), guardParams, scopeResolver(exchange), guardParams);
-            boolean holds;
-            try (java.sql.PreparedStatement statement = connection
-                    .prepareStatement(bound.sql())) {
-                for (int i = 0; i < bound.parameters().size(); i++) {
-                    statement.setObject(i + 1, bound.parameters().get(i).value());
-                }
-                try (java.sql.ResultSet rows = statement.executeQuery()) {
-                    holds = rows.next();
-                }
-            }
-            if (!holds) {
-                // `guard`/`guardMessage`, not `code`/`message`: the renderer's top-level
-                // keys would shadow them (details merge is putIfAbsent).
-                java.util.Map<String, Object> details = new java.util.LinkedHashMap<>();
-                details.put("guard", workflow.guardCode() == null
-                        ? "guard-failed"
-                        : workflow.guardCode());
-                if (workflow.guardMessage() != null) {
-                    details.put("guardMessage", workflow.guardMessage());
-                }
-                throw TqlException.builder(GUARD_FAILED)
-                        .message("Workflow '" + workflow.workflowId() + "': transition '"
-                                + workflow.transitionId() + "' guard matched no rows")
-                        .details(details)
-                        .build();
-            }
-        }
-        // Task authority (roadmap Phase 28 slice 2): a document with open tasks may only be
-        // transitioned by someone who holds one (the direct assignee or a candidate group). A
-        // document with no open tasks (an initial or unassigned state) is gated only by route policy.
-        if (taskStore != null) {
-            Principal principal = context.get("principal") instanceof Principal p ? p : null;
-            String subject = principal == null ? null : principal.subject();
-            List<String> groups = principal == null ? List.of() : principal.groups();
-            if (taskStore.hasOpenTasks(connection, workflow.docType(), docId)
-                    && !taskStore.canAct(connection, workflow.docType(), docId, subject, groups)) {
-                throw TqlException.builder(NOT_ASSIGNED)
-                        .message("Workflow '" + workflow.workflowId() + "': transition '"
-                                + workflow.transitionId()
-                                + "' requires an assigned task the caller does not hold")
-                        .build();
-            }
-        }
-        return new WorkflowExec(store, taskStore, docId, from, tenantId);
-    }
-
-    /**
-     * Loads the document row by key, shaping labels and values the way every other read does, so
-     * a guard reads {@code document.col} with the same spelling a response binding would.
-     */
-    private Map<String, Object> loadDocument(Connection connection, String docId)
-            throws SQLException {
-        try (PreparedStatement ps = connection.prepareStatement("select * from " + workflow.table()
-                + " where " + workflow.keyColumn() + " = ?")) {
-            ps.setString(1, docId);
-            try (ResultSet rs = ps.executeQuery()) {
-                if (!rs.next()) {
-                    return Map.of();
-                }
-                java.sql.ResultSetMetaData metaData = rs.getMetaData();
-                Map<String, Object> row = new LinkedHashMap<>();
-                for (int col = 1; col <= metaData.getColumnCount(); col++) {
-                    row.put(io.tesseraql.core.dialect.ResultRows.label(dialect,
-                            metaData.getColumnLabel(col)),
-                            io.tesseraql.core.dialect.ResultRows.value(rs.getObject(col)));
-                }
-                return row;
-            }
-        }
+        Principal principal = context.get("principal") instanceof Principal p ? p : null;
+        return io.tesseraql.yaml.workflow.TransitionExecutor.begin(connection,
+                workflow.transition(),
+                new io.tesseraql.yaml.workflow.TransitionExecutor.Collaborators(store,
+                        lookupTaskStore(exchange), scopeResolver(exchange),
+                        principal == null ? null : principal.subject(),
+                        principal == null ? List.of() : principal.groups(),
+                        defaultBounds == null ? 0 : defaultBounds.timeoutSeconds(), null),
+                docId, context);
     }
 
     private WorkflowStore lookupWorkflowStore(Exchange exchange) {
         WorkflowStore store = exchange.getContext().getRegistry()
                 .lookupByNameAndType(TesseraqlProperties.WORKFLOW_STORE_BEAN, WorkflowStore.class);
         if (store == null) {
-            throw new TqlException(NO_WORKFLOW_STORE, "Workflow '" + workflow.workflowId()
-                    + "' is managed but no workflow store is configured");
+            throw new TqlException(NO_WORKFLOW_STORE,
+                    "Workflow '" + workflow.transition().workflowId()
+                            + "' is managed but no workflow store is configured");
         }
         return store;
     }
@@ -758,12 +606,14 @@ public final class TransactionalCommandProcessor implements Processor {
      * inside the transaction, after the command, so the inbox change commits with the transition.
      */
     @SuppressWarnings("unchecked")
-    private void applyTasks(Exchange exchange, Connection connection, WorkflowExec wf,
+    private void applyTasks(Exchange exchange, Connection connection,
+            io.tesseraql.yaml.workflow.TransitionExecutor.Session wf,
             Map<String, Object> context, String actor) throws SQLException {
         if (wf.taskStore() == null) {
             return;
         }
-        wf.taskStore().completeOpenTasks(connection, workflow.docType(), wf.docId(), actor);
+        wf.taskStore().completeOpenTasks(connection, workflow.transition().docType(),
+                wf.docId(), actor);
         if (workflow.assignNodes() == null) {
             return;
         }
@@ -800,8 +650,10 @@ public final class TransactionalCommandProcessor implements Processor {
                                 TesseraqlProperties.DELEGATION_STORE_BEAN,
                                 io.tesseraql.core.workflow.DelegationStore.class),
                                 wf.tenant(), assignee);
-                wf.taskStore().openTask(connection, new WorkflowTaskStore.Task(workflow.docType(),
-                        wf.docId(), workflow.to(), resolved.assignee(), candidateGroup, dueAt,
+                wf.taskStore().openTask(connection, new WorkflowTaskStore.Task(
+                        workflow.transition().docType(),
+                        wf.docId(), workflow.transition().to(), resolved.assignee(),
+                        candidateGroup, dueAt,
                         wf.tenant(), resolved.delegatedFrom()));
                 enqueueAssignReminder(exchange, connection, context, resolved.assignee(),
                         candidateGroup);
@@ -830,19 +682,6 @@ public final class TransactionalCommandProcessor implements Processor {
         if (store != null) {
             store.insert(connection, workflow.assignNotify().build(reminderContext, appName));
         }
-    }
-
-    private TqlException illegalTransition(String actualState, String reason) {
-        return TqlException.builder(ILLEGAL_TRANSITION)
-                .message("Workflow '" + workflow.workflowId() + "': transition '"
-                        + workflow.transitionId() + "' requires state '" + workflow.from()
-                        + "' but "
-                        + reason)
-                .details(Map.of("conflict", Map.of(
-                        "expectedState", String.valueOf(workflow.from()),
-                        "actualState", String.valueOf(actualState),
-                        "hint", "tql.workflow.illegal-transition")))
-                .build();
     }
 
     private Map<String, Object> allocateSequence(Exchange exchange, Connection connection,
@@ -1003,54 +842,6 @@ public final class TransactionalCommandProcessor implements Processor {
         for (int i = 0; i < bound.parameters().size(); i++) {
             statement.setObject(i + 1, bound.parameters().get(i).value());
         }
-    }
-
-    /**
-     * Applies the transition's decision stamps (docs/workflow-expressiveness.md slice 2):
-     * one engine-issued {@code UPDATE <table> SET col = ?, … WHERE <key> = ?} in the
-     * transition's transaction, after the state advance and before the author command. A
-     * string value rooted at {@code decision.}/{@code document.}/{@code principal.} resolves
-     * as a path; anything else — including {@code null}, a rework's declared clearing — is
-     * the literal. Column identifiers were validated at compile; values ride {@code ?}
-     * placeholders. The in-memory document map is refreshed so anything later in the same
-     * transaction reading {@code document.<column>} sees the stamped value.
-     */
-    private void applyStamps(Connection connection, Map<String, Object> context, String docId)
-            throws SQLException {
-        if (workflow.stamps().isEmpty()) {
-            return;
-        }
-        EvaluationContext evaluation = new EvaluationContext(context);
-        Map<String, Object> resolved = new LinkedHashMap<>();
-        workflow.stamps().forEach((column, value) -> resolved.put(column,
-                resolveStamp(evaluation, value)));
-        StringBuilder sql = new StringBuilder("update ").append(workflow.table())
-                .append(" set ");
-        sql.append(String.join(", ",
-                resolved.keySet().stream().map(column -> column + " = ?").toList()));
-        sql.append(" where ").append(workflow.keyColumn()).append(" = ?");
-        try (PreparedStatement statement = connection.prepareStatement(sql.toString())) {
-            int index = 1;
-            for (Object value : resolved.values()) {
-                statement.setObject(index++, value);
-            }
-            statement.setObject(index, docId);
-            statement.executeUpdate();
-        }
-        if (context.get("document") instanceof Map<?, ?> document) {
-            Map<String, Object> refreshed = new LinkedHashMap<>();
-            document.forEach((k, v) -> refreshed.put(String.valueOf(k), v));
-            refreshed.putAll(resolved);
-            context.put("document", refreshed);
-        }
-    }
-
-    private static Object resolveStamp(EvaluationContext evaluation, Object value) {
-        if (value instanceof String path && (path.startsWith("decision.")
-                || path.startsWith("document.") || path.startsWith("principal."))) {
-            return evaluation.resolve(Arrays.asList(path.split("\\.")));
-        }
-        return value;
     }
 
     /** Turns a row-count mismatch into a conflict (or error) instead of a silent lost update. */

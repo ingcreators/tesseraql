@@ -93,7 +93,11 @@ public final class RouteCompiler {
             @Override
             public void configure() {
                 if (mountRest) {
-                    restConfiguration().component("platform-http");
+                    // inlineRoutes is pinned, not inherited (docs/transition-engine.md track E):
+                    // it decides whether from(direct:) transition routes keep their own
+                    // consumers, and a Camel default flip must not silently rewire the topology
+                    // (the dispatch selector's 30s DirectComponent.getConsumer hang).
+                    restConfiguration().component("platform-http").inlineRoutes(true);
                 }
                 // Per-route response.onError steering (HX-Retarget/HX-Reswap), resolved at error
                 // time from the failing route id; the error renderer is one shared exception handler.
@@ -411,7 +415,7 @@ public final class RouteCompiler {
         String basePath = workflowBasePath(def);
         io.tesseraql.core.workflow.WorkflowStore appStore = managed
                 ? null
-                : new io.tesseraql.compiler.binding.ColumnWorkflowStore(def.document().table(),
+                : new io.tesseraql.yaml.workflow.ColumnWorkflowStore(def.document().table(),
                         def.document().key(), def.document().stateColumn());
         // Transitions named by a dispatch also get an internal shadow route
         // ({@code direct:<workflow>.<transition>.attempt}): rest-dsl inlining (Camel 4's
@@ -438,43 +442,14 @@ public final class RouteCompiler {
                     ? transition.security()
                     : def.security();
             String urlPath = basePath + "/{key}/" + transition.id();
-            // The two guard forms (docs/workflow-expressiveness.md): the expression parses
-            // here, the SQL file parses here too — a missing or malformed guard file fails
-            // the build, not the first request (the scope-fragment precedent).
-            io.tesseraql.core.expr.Expr guard = null;
-            java.util.List<io.tesseraql.core.sql.SqlNode> guardNodes = null;
-            if (transition.guard() != null && transition.guard().expression() != null) {
-                guard = io.tesseraql.core.expr.ExpressionParser
-                        .parse(transition.guard().expression());
-            } else if (transition.guard() != null && transition.guard().file() != null) {
-                java.nio.file.Path guardFile = workflowFile.source().getParent()
-                        .resolve(transition.guard().file());
-                try {
-                    guardNodes = io.tesseraql.core.sql.Sql2WayParser
-                            .parse(java.nio.file.Files.readString(guardFile));
-                } catch (java.io.IOException unreadable) {
-                    throw new IllegalStateException("Workflow '" + def.id() + "' transition '"
-                            + transition.id() + "': guard file '" + transition.guard().file()
-                            + "' is unreadable: " + unreadable.getMessage(), unreadable);
-                }
-            }
-            // Stamp columns are plain identifiers, validated here — the only string that
-            // reaches the UPDATE's column position (docs/workflow-expressiveness.md).
-            for (String column : transition.stamp().keySet()) {
-                if (!column.matches("[a-zA-Z_][a-zA-Z0-9_]*")) {
-                    throw new IllegalStateException("Workflow '" + def.id() + "' transition '"
-                            + transition.id() + "': stamp column '" + column
-                            + "' is not a plain identifier");
-                }
-            }
+            // The pipeline compiles once, in the executor (docs/transition-engine.md): guard
+            // parsing (both forms — a missing or malformed guard file fails the build, not the
+            // first request), stamp-column validation, and the decide: compile all live there.
             io.tesseraql.compiler.binding.WorkflowBinding workflow = new io.tesseraql.compiler.binding.WorkflowBinding(
-                    def.id(), transition.id(),
-                    def.document().type(), def.document().table(), def.document().key(),
-                    "path.key", transition.from(), transition.to(), def.initial(), managed,
-                    guard, guardNodes,
-                    transition.guard() == null ? null : transition.guard().code(),
-                    transition.guard() == null ? null : transition.guard().message(),
-                    transition.stamp(),
+                    io.tesseraql.yaml.workflow.TransitionExecutor.compile(def, transition,
+                            managed, datasourceDialect(DEFAULT_DATASOURCE),
+                            workflowFile.source().getParent()),
+                    "path.key",
                     appStore, compileAssign(workflowFile, transition),
                     transition.assign() == null
                             ? java.util.Map.of()
