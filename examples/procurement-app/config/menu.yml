@@ -1,4 +1,6 @@
 items:
+  - label: Dashboard
+    href: /dashboard
   - label: Requisitions
     href: /requisitions
   - label: RFQs

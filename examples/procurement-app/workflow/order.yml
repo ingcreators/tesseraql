@@ -15,7 +15,9 @@ states:
   - { id: submitted }
   - { id: issued }
   - { id: date_proposed }
-  - { id: confirmed, type: terminal }
+  - { id: confirmed }
+  - { id: shipped }
+  - { id: received, type: terminal }
   - { id: rejected }
 transitions:
   - id: submit
@@ -92,3 +94,17 @@ transitions:
     from: date_proposed
     to: issued
     command: clear-proposal.sql
+  # Shipping requires the registered shipment (web/api/orders/{id}/shipment): the
+  # command's WHERE demands the shipment row, so an unregistered ship updates nothing
+  # and the transition fails — the guard lives in set-based SQL, not the expression.
+  - id: ship
+    from: confirmed
+    to: shipped
+    security: { auth: bearer, policy: sup.act }
+    command: order-ship.sql
+  # Receiving is the requester's move: the persona who started the chain closes it.
+  - id: receive
+    from: shipped
+    to: received
+    security: { auth: bearer, policy: req.act }
+    command: order-receive.sql

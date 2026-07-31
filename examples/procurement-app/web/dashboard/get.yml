@@ -1,0 +1,22 @@
+version: tesseraql/v1
+id: procurement.dashboard
+kind: route
+recipe: query-html
+
+security:
+  policy: rfq.read
+
+sql:
+  file: totals.sql
+  mode: query
+
+queries:
+  ordersByState:
+    file: orders-by-state.sql
+  openNegotiations:
+    file: open-negotiations.sql
+
+response:
+  html:
+    status: 200
+    view: dashboard.view.yml

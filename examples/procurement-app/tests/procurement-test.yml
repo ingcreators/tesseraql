@@ -374,6 +374,41 @@ tests:
           rows:
             - slip_max: 10
 
+  # Slice 6: shipment and receipt — writes are scoped and set-guarded, the export
+  # joins the chain end to end.
+  - name: an unconfirmed order takes no shipment
+    sql:
+      file: web/api/orders/{id}/shipment/register-shipment.sql
+    principal:
+      roles: [SUPPLIER]
+      claims:
+        partner: P-200
+    params:
+      id: ORD-NONE
+      shipDate: "2026-09-05"
+      carrier: Sagawa
+      deliveryNoteNo: DN-0001
+      audit:
+        user: minami
+    expect:
+      updateCount: 0
+
+  - name: the shipment export starts empty and joins partner names
+    sql:
+      file: web/api/shipments/export/export.sql
+    expect:
+      rowCount: 0
+
+  - name: the dashboard counts the seeded chain
+    sql:
+      file: web/dashboard/totals.sql
+    expect:
+      rowCount: 1
+      rows:
+        - requisitions: 2
+          submitted_quotes: 2
+          in_transit: 0
+
   # The assignment resolvers bind real master rows, not literals.
   - name: the first-stage assignee is the requesting department's manager
     sql:

@@ -1,9 +1,9 @@
 # procurement-app
 
 The suite-scale gallery application (docs/procurement-demo.md): an end-to-end
-buyer/supplier procurement flow built up in slices. **Slices 1–5** are in place —
+buyer/supplier procurement flow built up in slices. **Slices 1–6** are in place —
 purchase requisitions with decision-routed approval, the RFQ leg, the supplier portal,
-the comparison-to-order step, and delivery-date negotiation:
+the comparison-to-order step, delivery-date negotiation, and shipment-to-receipt:
 
 - a `kind: workflow` requisition document whose `submit` evaluates the shared
   **`approvalRoute` decision** (two inputs: amount × category) and stamps the lane;
@@ -41,7 +41,13 @@ the comparison-to-order step, and delivery-date negotiation:
   `delivery_tolerances`, maintained at runtime (`/api/tolerances`), and the very next
   proposal is judged by the new rows, no deploy involved. Within tolerance the
   proposal confirms with no human in the loop; outside it a review task opens for
-  whoever placed the order, who accepts or declines back to `issued`.
+  whoever placed the order, who accepts or declines back to `issued`;
+- **shipment to receipt** (slice 6): the supplier registers one shipment per confirmed
+  order (the split-shipment fence is a `unique` constraint), the `ship` transition's
+  WHERE demands the registered row — the guard lives in set-based SQL — and the
+  **requester who started the chain closes it** with `receive`, stamping the shipment
+  in the same transaction as the state advance. A `query-export` CSV covers the
+  shipped lines, and the `/dashboard` reads the managed workflow state as rows.
 
 Part of the template gallery; held to the marketplace admission profile
 (`tesseraql admission --app .`).
@@ -101,6 +107,16 @@ POST /api/orders/{id}/propose_accept  # slip within tolerance: auto-confirm
 POST /api/orders/{id}/propose_review  # outside: review task for the buyer
 POST /api/orders/{id}/accept_date | decline_date
 GET/POST /api/tolerances              # the runtime knob the decision reads
+```
+
+Shipment and receipt:
+
+```
+POST /api/orders/{id}/shipment        # supplier registers (confirmed orders only)
+POST /api/orders/{id}/ship            # fails without the registered shipment
+POST /api/orders/{id}/receive         # the requester closes the chain
+GET  /api/shipments/export            # CSV download
+GET  /dashboard                       # the chain at a glance
 ```
 
 ## Test it

@@ -104,6 +104,15 @@ public final class TransactionalCommandProcessor implements Processor {
             3201);
     /** TQL-WORKFLOW-3202: a transition guard rejected the request (HTTP 422). */
     private static final TqlErrorCode GUARD_FAILED = new TqlErrorCode(TqlDomain.WORKFLOW, 3202);
+    /**
+     * TQL-WORKFLOW-3204: the transition's command updated no rows (HTTP 409) — the caller
+     * holds no row authority over the document (a {@code /*%scope … *}{@code /} in the
+     * command's WHERE) or the data state the command demands is absent. The documented
+     * contract (docs/approval-workflow.md "guards and scopes"): a satisfied guard with no
+     * authorized rows updates nothing and never advances the state.
+     */
+    private static final TqlErrorCode COMMAND_NO_ROWS = new TqlErrorCode(TqlDomain.WORKFLOW,
+            3204);
     /** TQL-WORKFLOW-3210: a managed transition needs the runtime's WorkflowStore bean. */
     private static final TqlErrorCode NO_WORKFLOW_STORE = new TqlErrorCode(TqlDomain.WORKFLOW,
             3210);
@@ -491,6 +500,32 @@ public final class TransactionalCommandProcessor implements Processor {
                     stepResults.put(step.name(), result);
                     if (singleSql) {
                         context.put(step.contextKey(), result);
+                    }
+                }
+                // The documented row-authority contract (docs/approval-workflow.md "guards and
+                // scopes"): a transition whose command ran but updated nothing — a /*%scope */
+                // that matched no rows, or an absent data state the WHERE demands — must not
+                // advance the state. App mode enforces this through the state column's own
+                // conditional UPDATE; managed mode must enforce it here, before history/tasks.
+                if (wf != null && !stepResults.isEmpty()) {
+                    boolean anyExecuted = false;
+                    int totalAffected = 0;
+                    for (Object stepResult : stepResults.values()) {
+                        if (!(stepResult instanceof Map<?, ?> result)) {
+                            continue;
+                        }
+                        Object affected = result.get("affectedRows");
+                        if (affected instanceof Integer rows) {
+                            anyExecuted = true;
+                            totalAffected += rows;
+                        }
+                    }
+                    if (anyExecuted && totalAffected == 0) {
+                        throw TqlException.builder(COMMAND_NO_ROWS)
+                                .message("Transition '" + workflow.transitionId()
+                                        + "' updated no rows — outside the caller's row"
+                                        + " authority or the required data state is absent")
+                                .build();
                     }
                 }
                 // Append the immutable history row, complete the prior tasks, and open the new
