@@ -471,6 +471,96 @@ public final class DocService {
         return byColumn;
     }
 
+    /**
+     * Column name to decision-contract role for one table (docs/decision-tables.md): what each
+     * raw column <em>means</em> to the table-backed decisions reading it — the rule key, each
+     * input's match/bound/subtree column, the priority and effective-window columns, the output
+     * columns, and a normalized {@code in} child table's key/member pair. Labels are always
+     * prefixed with the decision name ({@code "shippingFee: weight lower bound"}), so two
+     * decisions over the same table stay unambiguous. The table match is case-insensitive; the
+     * keys are the column names as the decision declares them.
+     */
+    public Map<String, String> columnContracts(String tableName) {
+        Map<String, String> contracts = new LinkedHashMap<>();
+        if (tableName == null) {
+            return contracts;
+        }
+        io.tesseraql.yaml.decision.DecisionSets declared = io.tesseraql.yaml.decision.DecisionSets
+                .load(appHome, new io.tesseraql.yaml.SimpleYamlParser());
+        declared.decisions().forEach((name, definition) -> {
+            io.tesseraql.yaml.model.DecisionsDocument.Source source = definition.source();
+            if (source == null) {
+                return; // YAML-backed rows have no table to annotate.
+            }
+            if (tableName.equalsIgnoreCase(source.table())) {
+                contracts.put(source.effectiveId(), name + ": rule key");
+                source.match().forEach((input, match) -> {
+                    if (match.eq() != null) {
+                        contracts.put(match.eq(), name + ": " + input + " match");
+                    }
+                    if (match.between().size() == 2) {
+                        contracts.put(match.between().get(0),
+                                name + ": " + input + " lower bound");
+                        contracts.put(match.between().get(1),
+                                name + ": " + input + " upper bound");
+                    }
+                    if (match.subtree() != null) {
+                        contracts.put(match.subtree(), name + ": " + input + " subtree");
+                    }
+                });
+                if (source.priority() != null) {
+                    contracts.put(source.priority(), name + ": priority");
+                }
+                if (source.effective().size() == 2) {
+                    contracts.put(source.effective().get(0), name + ": effective from");
+                    contracts.put(source.effective().get(1), name + ": effective to");
+                }
+                source.outputs().forEach((output, column) -> contracts.put(column,
+                        name + ": " + output + " output"));
+            }
+            source.set().forEach((input, set) -> {
+                if (set.table() != null && tableName.equalsIgnoreCase(set.table())) {
+                    if (set.key() != null) {
+                        contracts.put(set.key(), name + ": rule reference");
+                    }
+                    if (set.value() != null) {
+                        contracts.put(set.value(), name + ": " + input + " member");
+                    }
+                }
+            });
+        });
+        return contracts;
+    }
+
+    /**
+     * The decisions this table backs (docs/decision-tables.md): its name is listed when the
+     * table is a decision's rule table ({@code source.table}) or one of its normalized
+     * {@code in} child tables — the table page's "backs decision" chip, the table-level
+     * counterpart of the per-column domain chips.
+     */
+    public List<String> decisionsForTable(String tableName) {
+        List<String> names = new ArrayList<>();
+        if (tableName == null) {
+            return names;
+        }
+        io.tesseraql.yaml.decision.DecisionSets declared = io.tesseraql.yaml.decision.DecisionSets
+                .load(appHome, new io.tesseraql.yaml.SimpleYamlParser());
+        declared.decisions().forEach((name, definition) -> {
+            io.tesseraql.yaml.model.DecisionsDocument.Source source = definition.source();
+            if (source == null) {
+                return;
+            }
+            boolean backs = tableName.equalsIgnoreCase(source.table())
+                    || source.set().values().stream()
+                            .anyMatch(set -> tableName.equalsIgnoreCase(set.table()));
+            if (backs) {
+                names.add(name);
+            }
+        });
+        names.sort(null);
+        return names;
+    }
+
     /** camelCase field name back to its snake_case column (the scaffolder's forward mapping). */
     private static String snake(String camel) {
         StringBuilder out = new StringBuilder();

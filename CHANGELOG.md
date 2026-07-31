@@ -27,7 +27,13 @@ All notable changes to TesseraQL are documented here. The format follows
   the purchase-request gallery app carries the worked archetype, and the docs portal
   gains a Decisions page next to Domains and Rules. Declarative suites test the table
   itself with a `decide:` case (params in, matched outputs out, misses assertable as
-  `code:` rows), counted by the new `decision` coverage kind.
+  `code:` rows), counted by the new `decision` coverage kind. The editors keep up:
+  `tesseraql symbols` emits declared decisions and the VS Code extension (0.3.3) adds a
+  Decisions tree with `use:`/`decision:` completion and go-to-definition; Studio adds a
+  decide-snippet builder, a YAML-rows grid editor (validated before it ever persists,
+  through the draft flow), a data-browser overlay naming each decision-backed column's
+  role, and "backs decision" chips on schema pages. The route form also stops dropping
+  a chosen field domain on save (`in<i>domain` was never wired through).
 
 - **Ambient framework state can ride its own pool or database**
   (docs/framework-datasource.md): `tesseraql.framework.datasource` (default `main`)

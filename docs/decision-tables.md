@@ -40,8 +40,14 @@
 > implemented too: params are the decision's inputs, the matched row's outputs are the
 > case's row, a miss/multi-hit comes back as data (`code: TQL-DECISION-4721/4720`), a
 > table-backed decision runs its generated SELECT against the suite's datasource, and the
-> `decision` coverage kind counts every declared decision. **This design is COMPLETE**;
-> open follow-ups: generated maintenance integrity rules, YAML→table promotion tooling.
+> `decision` coverage kind counts every declared decision. The editor and Studio
+> catch-ups are implemented too: `tesseraql symbols` emits decisions and the VS Code
+> extension gains a Decisions tree plus `use:`/`decision:` intelligence (ext 0.3.3);
+> Studio gains the decide-snippet builder, the YAML-rows grid editor (validate before
+> persist through the draft flow, `TQL-STUDIO-4237`; authoring-range decision codes answer
+> 422), the data-browser contract overlay, and the schema-page "backs decision" chips.
+> **This design is COMPLETE**; open follow-ups: generated maintenance integrity rules,
+> YAML→table promotion tooling.
 
 A **decision table** turns a combination of input conditions into declared output values:
 the approval route for an amount and a department, the shipping fee for a weight and a

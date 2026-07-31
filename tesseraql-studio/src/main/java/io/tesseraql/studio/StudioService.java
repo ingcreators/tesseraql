@@ -81,6 +81,8 @@ public final class StudioService {
     private static final TqlErrorCode MESSAGE = new TqlErrorCode(TqlDomain.STUDIO, 4227);
     private static final TqlErrorCode CONFIG = new TqlErrorCode(TqlDomain.STUDIO, 4228);
     private static final TqlErrorCode FLAG = new TqlErrorCode(TqlDomain.STUDIO, 4229);
+    /** A decision-rows grid save that cannot even reach the decision compile (shape/target). */
+    private static final TqlErrorCode DECISION_ROWS = new TqlErrorCode(TqlDomain.STUDIO, 4237);
     private static final TqlErrorCode CONFLICT = new TqlErrorCode(TqlDomain.STUDIO, 4090);
     private static final Pattern LEADING_DIGITS = Pattern.compile("^\\d+");
     private static final Pattern POLICY_ID = Pattern.compile("[A-Za-z0-9_.-]+");
@@ -753,6 +755,326 @@ public final class StudioService {
 
     /** One shared rule offered by the validation builder: its name and its bind contract. */
     public record SharedRule(String name, List<String> binds) {
+    }
+
+    /** The decision-rows grid's fixed slot count: rows {@code r0..r19}. */
+    public static final int DECISION_GRID_ROWS = 20;
+    /** The decision-rows grid's fixed slot count: columns {@code c0..c11}, inputs then outputs. */
+    public static final int DECISION_GRID_COLUMNS = 12;
+
+    /**
+     * Declared decisions with their input contracts, for the decide-snippet builder — the
+     * contract has to travel with the name (the {@link SharedRule} reasoning): a reference must
+     * wire the inputs exactly, and the author cannot be expected to remember them.
+     */
+    public List<SharedDecision> sharedDecisions() {
+        var declared = io.tesseraql.yaml.decision.DecisionSets.load(appHome, parser);
+        List<SharedDecision> decisions = new ArrayList<>();
+        declared.decisions().forEach((name, decision) -> decisions.add(new SharedDecision(name,
+                List.copyOf(decision.inputs().keySet()),
+                decision.source() != null && !decision.source().effective().isEmpty(),
+                decision.source() == null)));
+        decisions.sort(java.util.Comparator.comparing(SharedDecision::name));
+        return decisions;
+    }
+
+    /**
+     * One declared decision offered by the decide builder: its name, its input contract,
+     * whether its table source is dated ({@code effective:} columns, so {@code effectiveAt:}
+     * applies), and whether its rows live in YAML (the rows-grid editor's precondition).
+     */
+    public record SharedDecision(String name, List<String> inputs, boolean dated,
+            boolean yamlBacked) {
+    }
+
+    /**
+     * Loads the rows-grid model for a YAML-backed decision (docs/decision-tables.md "Studio":
+     * the table-shaped editor): one column per input then per output, one row of cell text per
+     * authored row. A blank condition cell is the wildcard; an {@code in} cell joins its
+     * members with commas. Reads the pending draft when one exists, like the route form.
+     */
+    public DecisionGrid decisionGrid(String name) {
+        LocatedDecision located = locateDecision(name);
+        if (located == null) {
+            return new DecisionGrid(name, null, false, false, false, List.of(), List.of(),
+                    "No decision named '" + name + "' is declared under decisions/");
+        }
+        Map<String, io.tesseraql.yaml.model.InputField> domains = io.tesseraql.yaml.domain.FieldDomains
+                .load(appHome).domains();
+        Map<String, Object> decision = located.node();
+        boolean yamlBacked = decision.get("source") == null;
+        List<GridColumn> columns = new ArrayList<>();
+        anyMap(decision.get("inputs")).forEach((key, spec) -> {
+            Map<String, Object> field = anyMap(spec);
+            String match = scalar(field.get("match"));
+            String type = fieldType(field, domains);
+            columns.add(new GridColumn(key, "in",
+                    (match == null ? "eq" : match) + (type == null ? "" : " · " + type)));
+        });
+        anyMap(decision.get("outputs")).forEach((key, spec) -> {
+            Map<String, Object> field = anyMap(spec);
+            String enums = csvOf(field.get("enum"));
+            String type = fieldType(field, domains);
+            columns.add(new GridColumn(key, "out", enums != null ? "enum: " + enums : type));
+        });
+        List<List<String>> rows = new ArrayList<>();
+        for (Object entry : anyList(decision.get("rows"))) {
+            Map<String, Object> row = anyMap(entry);
+            Map<String, Object> when = anyMap(row.get("when"));
+            Map<String, Object> out = anyMap(row.get("out"));
+            List<String> cells = new ArrayList<>();
+            for (GridColumn column : columns) {
+                Object value = "in".equals(column.kind())
+                        ? when.get(column.key())
+                        : out.get(column.key());
+                cells.add(cellText(value));
+            }
+            rows.add(cells);
+        }
+        // One trailing add-row must still fit the fixed slots, so 20 authored rows already
+        // exceed the grid — refusing beats silently truncating on save.
+        boolean tooLarge = columns.size() > DECISION_GRID_COLUMNS
+                || rows.size() >= DECISION_GRID_ROWS;
+        return new DecisionGrid(name, located.path(), yamlBacked, located.fromDraft(), tooLarge,
+                columns, rows, null);
+    }
+
+    /**
+     * Rebuilds a YAML-backed decision's {@code rows:} from the posted grid and saves the
+     * re-serialized document as a draft (the {@code routeFormSave} persistence contract): the
+     * draft/apply flow supplies conflict detection and compile-before-write on apply, and the
+     * document is validated here first — {@code parseDecisions} plus
+     * {@link io.tesseraql.yaml.decision.DecisionSets#compile}, so a bad cell, an overlap, or an
+     * enum typo rejects with its {@code TQL-DECISION} code and nothing is written. Comments and
+     * hand formatting are not preserved (canonical re-serialization, like the route form).
+     */
+    public Path saveDecisionRows(String name, List<DecisionColumn> columns,
+            java.util.Set<Integer> deletes, String actor) {
+        if (readOnly) {
+            throw new TqlException(READ_ONLY, "Studio is read-only; editing decisions is"
+                    + " disabled");
+        }
+        LocatedDecision located = locateDecision(name);
+        if (located == null) {
+            throw new TqlException(NOT_FOUND,
+                    "No decision named '" + name + "' is declared under decisions/");
+        }
+        Map<String, Object> decision = located.node();
+        if (decision.get("source") != null) {
+            throw new TqlException(DECISION_ROWS, "Decision '" + name + "' is table-backed —"
+                    + " its rows live in the app table (edit them in the data browser)");
+        }
+        if (columns.isEmpty()) {
+            throw new TqlException(DECISION_ROWS, "The grid posted no columns");
+        }
+        Map<String, io.tesseraql.yaml.model.InputField> domains = io.tesseraql.yaml.domain.FieldDomains
+                .load(appHome).domains();
+        Map<String, Object> inputs = anyMap(decision.get("inputs"));
+        Map<String, Object> outputs = anyMap(decision.get("outputs"));
+        int posted = columns.stream().mapToInt(column -> column.cells().size()).max().orElse(0);
+        List<Map<String, Object>> rows = new ArrayList<>();
+        for (int i = 0; i < posted; i++) {
+            if (deletes.contains(i)) {
+                continue;
+            }
+            Map<String, Object> when = new LinkedHashMap<>();
+            Map<String, Object> out = new LinkedHashMap<>();
+            for (DecisionColumn column : columns) {
+                String raw = i < column.cells().size()
+                        ? trimToNull(column.cells().get(i))
+                        : null;
+                if (raw == null) {
+                    // Blank = wildcard for a condition; for an output, the compile below
+                    // rejects a half-set row (a row must set every output).
+                    continue;
+                }
+                if ("out".equals(column.kind())) {
+                    out.put(column.key(),
+                            decisionScalar(fieldType(anyMap(outputs.get(column.key())), domains),
+                                    raw));
+                } else {
+                    Map<String, Object> spec = anyMap(inputs.get(column.key()));
+                    String type = fieldType(spec, domains);
+                    if ("in".equals(scalar(spec.get("match")))) {
+                        List<Object> values = new ArrayList<>();
+                        for (String part : raw.split(",")) {
+                            String member = trimToNull(part);
+                            if (member != null) {
+                                values.add(decisionScalar(type, member));
+                            }
+                        }
+                        when.put(column.key(), values);
+                    } else {
+                        when.put(column.key(), decisionScalar(type, raw));
+                    }
+                }
+            }
+            if (when.isEmpty() && out.isEmpty()) {
+                continue; // the blank add-row (or an emptied one)
+            }
+            Map<String, Object> row = new LinkedHashMap<>();
+            if (!when.isEmpty()) {
+                row.put("when", when);
+            }
+            row.put("out", out);
+            rows.add(row);
+        }
+        decision.put("rows", rows);
+        String yaml = parser.write(located.tree());
+        validateDecisionDraft(name, yaml);
+        Path draft = saveDraft(located.path(), yaml);
+        recordAudit(actor, "decision-rows", name);
+        return draft;
+    }
+
+    /** One posted grid column: the declaration key, {@code in}/{@code out}, its cells by row. */
+    public record DecisionColumn(String key, String kind, List<String> cells) {
+    }
+
+    /**
+     * The rows-grid model: the decisions file the decision lives in (app-relative), whether the
+     * grid edits the pending draft, whether the decision fits the fixed slots, the ordered
+     * columns, and each authored row's cell text aligned to the columns.
+     */
+    public record DecisionGrid(String name, String path, boolean yamlBacked, boolean fromDraft,
+            boolean tooLarge, List<GridColumn> columns, List<List<String>> rows, String error) {
+    }
+
+    /** One grid column: the input/output name, {@code in}/{@code out}, and a header hint. */
+    public record GridColumn(String key, String kind, String hint) {
+    }
+
+    /** A decision located in its declaring decisions document (draft preferred, route-form style). */
+    private record LocatedDecision(String path, boolean fromDraft, Map<String, Object> tree,
+            Map<String, Object> node) {
+    }
+
+    /**
+     * Finds the {@code decisions/*.yml} document declaring {@code name} and parses it as a
+     * tree, preferring a pending draft of the file — the same read the route form does, so a
+     * second grid edit sees the first. Returns null when no document declares the decision.
+     */
+    private LocatedDecision locateDecision(String name) {
+        Path dir = appHome.resolve("decisions");
+        if (name == null || name.isBlank() || !Files.isDirectory(dir)) {
+            return null;
+        }
+        List<Path> files;
+        try (Stream<Path> listed = Files.list(dir)) {
+            files = listed.filter(file -> file.getFileName().toString().endsWith(".yml"))
+                    .sorted().toList();
+        } catch (IOException ex) {
+            throw new UncheckedIOException(ex);
+        }
+        for (Path file : files) {
+            String relative = "decisions/" + file.getFileName();
+            String draft = readDraft(relative);
+            String text = draft != null ? draft : sourceIfExists(relative);
+            if (text == null) {
+                continue;
+            }
+            Map<String, Object> tree = parser.parseTree(text);
+            Map<String, Object> declared = anyMap(tree.get("decisions"));
+            if (declared.get(name) instanceof Map) {
+                return new LocatedDecision(relative, draft != null, tree,
+                        anyMap(declared.get(name)));
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Validates the rebuilt decisions document before anything is persisted: the serialized
+     * text must parse as a decisions document, and the edited decision must compile — the
+     * exact checks the manifest load applies, so a bad row dies here with its
+     * {@code TQL-DECISION} code instead of landing in a draft that can never apply. The text
+     * is parsed from a temp file because the decisions parser reads files.
+     */
+    private void validateDecisionDraft(String name, String yaml) {
+        Path temp;
+        try {
+            temp = Files.createTempFile("tql-decisions-", ".yml");
+            Files.writeString(temp, yaml);
+        } catch (IOException ex) {
+            throw new UncheckedIOException(ex);
+        }
+        try {
+            io.tesseraql.yaml.model.DecisionsDocument document = parser.parseDecisions(temp);
+            io.tesseraql.yaml.model.DecisionsDocument.Decision rebuilt = document.decisions()
+                    .get(name);
+            if (rebuilt == null) {
+                throw new TqlException(DECISION_ROWS, "The rebuilt document no longer declares"
+                        + " decision '" + name + "'");
+            }
+            io.tesseraql.yaml.decision.DecisionSets.compile(name, rebuilt);
+        } finally {
+            try {
+                Files.deleteIfExists(temp);
+            } catch (IOException ignored) {
+                // best-effort cleanup
+            }
+        }
+    }
+
+    /** A cell's display text: absent = blank (wildcard), a list joined with commas. */
+    private static String cellText(Object value) {
+        if (value == null) {
+            return "";
+        }
+        if (value instanceof List<?> list) {
+            return list.stream().map(String::valueOf)
+                    .collect(java.util.stream.Collectors.joining(", "));
+        }
+        return String.valueOf(value);
+    }
+
+    /**
+     * A field declaration's effective type: its inline {@code type:}, else its referenced
+     * domain's (docs/field-domains.md) — the merge {@code DecisionSets.load} applies, needed
+     * here so a cell of a domain-typed input coerces like an inline-typed one.
+     */
+    private static String fieldType(Map<String, Object> spec,
+            Map<String, io.tesseraql.yaml.model.InputField> domains) {
+        String type = scalar(spec.get("type"));
+        if (type != null) {
+            return type;
+        }
+        String domain = scalar(spec.get("domain"));
+        if (domain == null) {
+            return null;
+        }
+        io.tesseraql.yaml.model.InputField field = domains.get(domain);
+        return field == null ? null : field.type();
+    }
+
+    /**
+     * Coerces one grid cell into the YAML scalar the rows carry (the {@code routeFormSave}
+     * {@code decimalOrNull} reasoning, widened for cells): numeric- and boolean-looking text
+     * becomes a number or boolean — unless the field's declared type is {@code string}, where
+     * a numeric-looking value must stay a string. Comparator cells ({@code >= 10},
+     * {@code 1..5}) look like neither and stay text, which is what a {@code between} match
+     * parses. A value that fails its declared type survives to the compile step, which rejects
+     * it with {@code TQL-DECISION-4708}.
+     */
+    private static Object decisionScalar(String type, String value) {
+        if ("string".equals(type)) {
+            return value;
+        }
+        if ("true".equals(value) || "false".equals(value)) {
+            return Boolean.valueOf(value);
+        }
+        if (value.matches("-?\\d{1,18}")) {
+            return Long.valueOf(value);
+        }
+        if (value.matches("-?\\d+\\.\\d+")) {
+            return new java.math.BigDecimal(value);
+        }
+        return value;
+    }
+
+    @SuppressWarnings("unchecked")
+    private static List<Object> anyList(Object value) {
+        return value instanceof List ? (List<Object>) value : new ArrayList<>();
     }
 
     /** Loads the structured form model for a route document (Track J1). */

@@ -124,7 +124,15 @@
             <table class="hc-datagrid__table">
               <thead class="hc-datagrid__head"><tr>
                 <th class="hc-datagrid__headcell" th:if="${data.editHrefs != null}"></th>
-                <th class="hc-datagrid__headcell" th:each="c : ${data.columns}" th:text="${c}">col</th>
+                <th class="hc-datagrid__headcell" th:each="c : ${data.columns}">
+                  <span th:text="${c}">col</span>
+                  <!-- The column's role in the table-backed decision reading it
+                       (docs/decision-tables.md): the rows stay raw data, but the header says
+                       which cell is a bound, a priority, or an output. -->
+                  <span class="hc-badge" data-variant="info" data-size="sm"
+                        th:if="${data.columnContracts != null and data.columnContracts[c] != null}"
+                        th:text="${data.columnContracts[c]}">role</span>
+                </th>
               </tr></thead>
               <tbody class="hc-datagrid__body">
                 <tr class="hc-datagrid__row" th:each="row, rowStat : ${data.rows}">

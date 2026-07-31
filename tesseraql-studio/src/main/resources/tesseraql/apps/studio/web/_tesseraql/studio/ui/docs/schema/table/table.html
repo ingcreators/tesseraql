@@ -23,6 +23,10 @@
         <span class="hc-field__label" th:text="|datasource ${tbl.datasource}|"></span>
         <span class="hc-field__label" th:if="${tbl.schema}" th:text="|schema ${tbl.schema}|"></span>
         <span class="hc-field__label" th:if="${tbl.hasPrimaryKey}" th:text="|primary key (${tbl.primaryKey})|"></span>
+        <!-- The decisions this table backs (docs/decision-tables.md): its rows are a decision's
+             rule rows (or an `in` child table's members), not plain data. -->
+        <a class="hc-badge" data-variant="info" th:each="d : ${tbl.backingDecisions}"
+           href="/_tesseraql/studio/ui/docs/decisions" th:text="|backs ${d}|"></a>
         <span class="hc-spacer"></span>
         <a class="hc-button" data-variant="ghost" data-size="sm"
            th:href="|/_tesseraql/studio/ui/data?table=${#uris.escapeQueryParam(tbl.name)}|">Browse data &rarr;</a>
