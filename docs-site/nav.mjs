@@ -136,4 +136,6 @@ export const EXCLUDED = [
   'framework-datasource.md',
   // Decision tables (value-producing shared decisions), 2026-07-30.
   'decision-tables.md',
+  // Procurement demo application (suite-scale gallery design), 2026-07-31.
+  'procurement-demo.md',
 ];
