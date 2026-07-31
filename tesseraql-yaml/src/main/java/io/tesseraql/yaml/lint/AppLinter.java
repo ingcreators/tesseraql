@@ -2467,22 +2467,44 @@ public final class AppLinter {
             .compile("\\bdoc_type\\s*(?:=|in\\s*\\()\\s*'([^']*)'",
                     java.util.regex.Pattern.CASE_INSENSITIVE);
 
+    private static final java.util.regex.Pattern CURRENT_STATE_LITERAL = java.util.regex.Pattern
+            .compile("\\bcurrent_state\\s*(?:=|in\\s*\\()\\s*'([^']*)'",
+                    java.util.regex.Pattern.CASE_INSENSITIVE);
+
     /**
-     * The {@code doc_type} literal lint (docs/workflow-expressiveness.md slice 4,
-     * {@code TQL-WORKFLOW-3114}): a string literal compared to {@code doc_type} in SQL
-     * that references the managed {@code tql_workflow_instance} table must name a
-     * declared workflow {@code document.type} — the typo otherwise survives to runtime
-     * as an always-empty join. SQL that never mentions the managed table is skipped, so
-     * an application's own {@code doc_type} column stays out of scope.
+     * The managed-table literal lints (docs/workflow-expressiveness.md slice 4 and
+     * docs/transition-engine.md track D): in SQL that references the managed
+     * {@code tql_workflow_instance} table, a string literal compared to {@code doc_type}
+     * must name a declared workflow {@code document.type} ({@code TQL-WORKFLOW-3114}) and
+     * one compared to {@code current_state} must name a declared state
+     * ({@code TQL-WORKFLOW-3115}) — either typo otherwise survives to runtime as an
+     * always-empty join. When the file pins exactly one declared document type, its
+     * {@code current_state} literals narrow to that workflow's states; otherwise the
+     * union of all declared states applies. SQL that never mentions the managed table is
+     * skipped, so an application's own columns stay out of scope.
      */
     private void lintDocTypeLiterals(Path appHome, AppManifest manifest,
             List<LintFinding> findings) {
         Set<String> declared = new LinkedHashSet<>();
+        Map<String, Set<String>> statesByType = new LinkedHashMap<>();
+        Set<String> allStates = new LinkedHashSet<>();
         for (WorkflowFile workflow : manifest.workflows()) {
             WorkflowDefinition def = workflow.definition();
-            if (def.document() != null && def.document().type() != null) {
-                declared.add(def.document().type());
+            if (def.document() == null || def.document().type() == null) {
+                continue;
             }
+            declared.add(def.document().type());
+            Set<String> states = new LinkedHashSet<>();
+            for (StateSpec state : def.states()) {
+                if (state.id() != null) {
+                    states.add(state.id());
+                }
+            }
+            statesByType.merge(def.document().type(), states, (a, b) -> {
+                a.addAll(b);
+                return a;
+            });
+            allStates.addAll(states);
         }
         if (declared.isEmpty()) {
             return;
@@ -2504,15 +2526,39 @@ public final class AppLinter {
                     if (!sql.contains("tql_workflow_instance")) {
                         continue;
                     }
+                    Set<String> pinnedTypes = new LinkedHashSet<>();
                     java.util.regex.Matcher literals = DOC_TYPE_LITERAL.matcher(sql);
                     while (literals.find()) {
                         String literal = literals.group(1);
-                        if (!declared.contains(literal)) {
+                        if (declared.contains(literal)) {
+                            pinnedTypes.add(literal);
+                        } else {
                             findings.add(new LintFinding("TQL-WORKFLOW-3114", "warning",
                                     relative(appHome, file),
                                     "doc_type literal '" + literal
                                             + "' names no declared workflow document type"
                                             + " (declared: " + declared + ")"));
+                        }
+                    }
+                    // The narrowing: one pinned type means the file's states are that
+                    // workflow's; anything else falls back to the union.
+                    Set<String> states = pinnedTypes.size() == 1
+                            ? statesByType.get(pinnedTypes.iterator().next())
+                            : allStates;
+                    java.util.regex.Matcher stateLiterals = CURRENT_STATE_LITERAL.matcher(sql);
+                    while (stateLiterals.find()) {
+                        String literal = stateLiterals.group(1);
+                        if (!states.contains(literal)) {
+                            findings.add(new LintFinding("TQL-WORKFLOW-3115", "warning",
+                                    relative(appHome, file),
+                                    "current_state literal '" + literal
+                                            + "' names no declared workflow state"
+                                            + (pinnedTypes.size() == 1
+                                                    ? " of document type '"
+                                                            + pinnedTypes.iterator().next()
+                                                            + "'"
+                                                    : "")
+                                            + " (declared: " + states + ")"));
                         }
                     }
                 }

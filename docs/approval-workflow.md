@@ -338,12 +338,17 @@ Consistent with IAM's managed/SQL realm duality and the org-unit model
   affected means a concurrent transition and surfaces as a `409`. The store is bound only when the
   app declares workflows and the mode is `managed`.
 
-  Application SQL joins the instance table freely (`wi.doc_type = 'order' and wi.doc_id = …` is the
-  gallery idiom for "only issued RFQs"). Because a mistyped type survives to runtime as an
-  always-empty join, a `doc_type` string literal in SQL referencing `tql_workflow_instance` that
-  names no declared workflow `document.type` is linted (`TQL-WORKFLOW-3114`, warning) — in route
-  SQL, guard files, rules, and scope fragments alike. SQL that never mentions the managed table is
-  out of scope, so an application's own `doc_type` column never trips it.
+  Application SQL joins the instance table freely (`wi.doc_type = 'order' and
+  wi.current_state = 'issued'` is the gallery idiom for "only issued RFQs"). Because a mistyped
+  value survives to runtime as an always-empty join, string literals in SQL referencing
+  `tql_workflow_instance` are linted — in route SQL, guard files, rules, and scope fragments
+  alike: a `doc_type` literal must name a declared workflow `document.type`
+  (`TQL-WORKFLOW-3114`, warning), and a `current_state` literal must name a declared state
+  (`TQL-WORKFLOW-3115`, warning). When the file pins exactly one declared document type, its
+  `current_state` literals are checked against *that workflow's* states — so a real state of the
+  wrong workflow still warns; otherwise the union of declared states applies. SQL that never
+  mentions the managed table is out of scope, so an application's own columns never trip either
+  lint.
 
 - **`app`** (default) — the application owns its workflow tables (or folds state into the business
   table via `stateColumn`); transitions, tasks, and history are app-provided SQL contracts resolved
