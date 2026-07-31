@@ -1,0 +1,46 @@
+version: tesseraql/v1
+id: api.orders.create
+kind: route
+recipe: command-json
+
+input:
+  quoteId:
+    type: string
+    required: true
+    maxLength: 140
+  reason:
+    type: string
+    required: false
+    maxLength: 400
+
+security:
+  policy: rfq.write
+
+# Selecting a non-lowest quote demands a written reason (rules/orders.yml) — the rule
+# computes "lowest" from the submitted quotes itself, 422 before anything writes.
+validate:
+  selectionReason:
+    use: selectionReason
+    params:
+      quoteId: params.quoteId
+      reason: params.reason
+    field: reason
+
+# One transaction: the order header captures the selection facts (total, lowest?,
+# % above lowest) from the submitted quotes, then the lines copy from the quote.
+steps:
+  order:
+    file: create-order.sql
+    params:
+      quoteId: params.quoteId
+      reason: params.reason
+  lines:
+    file: copy-order-lines.sql
+    params:
+      quoteId: params.quoteId
+
+response:
+  json:
+    status: 201
+    body:
+      created: steps.order.affectedRows

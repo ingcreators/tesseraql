@@ -1,0 +1,10 @@
+# The deviation contract (docs/procurement-demo.md): selecting a non-lowest quote is
+# allowed, but only with a written reason — the rule computes "lowest" from the
+# submitted quotes itself, so the client cannot assert it.
+version: tesseraql/v1
+
+rules:
+  selectionReason:
+    file: selection-reason.sql
+    binds: [quoteId, reason]
+    code: reason-required

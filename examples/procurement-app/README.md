@@ -1,9 +1,9 @@
 # procurement-app
 
 The suite-scale gallery application (docs/procurement-demo.md): an end-to-end
-buyer/supplier procurement flow built up in slices. **Slices 1–3** are in place —
-purchase requisitions with decision-routed approval, the RFQ leg, and the supplier
-portal:
+buyer/supplier procurement flow built up in slices. **Slices 1–4** are in place —
+purchase requisitions with decision-routed approval, the RFQ leg, the supplier portal,
+and the comparison-to-order step:
 
 - a `kind: workflow` requisition document whose `submit` evaluates the shared
   **`approvalRoute` decision** (two inputs: amount × category) and stamps the lane;
@@ -26,7 +26,15 @@ portal:
   copies the requisition's lines in one two-step transaction (deterministic id, so
   restarts are no-ops); pricing maintains the counters the quote workflow's submit
   guard reads — an **app-mode status-column workflow** beside the managed ones, both
-  modes in one app.
+  modes in one app;
+- **comparison → purchase approval → order** (slice 4): the comparison ranks submitted
+  quotes with each one's distance from the lowest; creating an order **computes and
+  stamps the selection facts** (total, lowest-or-not, % above lowest) — never
+  client-asserted. Picking a non-lowest quote demands a written reason
+  (`rules/orders.yml`, 422 before anything writes), and the **`orderApproval`
+  decision** routes the submit: lowest or within 3% issues without a human in the
+  loop, anything above waits for the procurement head — deviation is allowed,
+  recorded, and approved, never silently blocked.
 
 Part of the template gallery; held to the marketplace admission profile
 (`tesseraql admission --app .`).
@@ -65,6 +73,16 @@ GET  /api/supplier/rfqs               # issued RFQs this partner is invited to
 POST /api/supplier/quotes             # start a quote (copies the lines; idempotent)
 POST /api/supplier/quotes/{id}/lines  # price a line (keeps the submit-guard counter)
 POST /api/supplier/quotes/{id}/submit # guarded: every line priced
+```
+
+Comparison and ordering (procurement):
+
+```
+GET  /api/rfqs/{id}/comparison        # submitted quotes ranked, distance from lowest
+POST /api/orders                      # non-lowest pick needs a reason (422 otherwise)
+POST /api/orders/{id}/submit          # orderApproval decision routes the lane
+POST /api/orders/{id}/issue           # auto lane: no human in the loop
+POST /api/orders/{id}/approve_issue   # review lane: the head's task
 ```
 
 ## Test it

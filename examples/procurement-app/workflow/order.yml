@@ -1,0 +1,49 @@
+version: tesseraql/v1
+id: order
+kind: workflow
+# The chain's third managed document (docs/procurement-demo.md): created from a
+# selected quote (web/api/orders), submitted through the orderApproval decision —
+# the lowest or near-lowest selection issues without a human in the loop, anything
+# else waits for the procurement head. Both lanes leave through `issued`, so the
+# enum lint proves nothing the decision can produce is unhandled.
+document: { type: order, table: orders, key: id }
+http: { basePath: /api/orders }
+security: { auth: bearer, policy: rfq.act }
+initial: draft
+states:
+  - { id: draft, type: initial }
+  - { id: submitted }
+  - { id: issued, type: terminal }
+  - { id: rejected }
+transitions:
+  - id: submit
+    from: draft
+    to: submitted
+    decide:
+      orderApproval:
+        use: orderApproval
+        params:
+          isLowest: document.is_lowest
+          deltaPct: document.delta_pct
+    command: order-submit.sql
+    assign: { file: order-approver.sql }
+  # The auto lane issues immediately ...
+  - id: issue
+    from: submitted
+    to: issued
+    guard: "document.approval_lane == 'auto'"
+    command: order-issue.sql
+  # ... the review lane waits for the head's task.
+  - id: approve_issue
+    from: submitted
+    to: issued
+    guard: "document.approval_lane == 'head_review'"
+    command: order-issue.sql
+  - id: reject
+    from: submitted
+    to: rejected
+    command: order-reject.sql
+  - id: rework
+    from: rejected
+    to: draft
+    command: order-rework.sql
