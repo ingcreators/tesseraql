@@ -8,6 +8,19 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **Engine-level dispatch — typed fall-through, a dispatch-level `decide:`, and a 422
+  that explains itself** (docs/transition-engine.md slice 2): the dispatch route is now
+  a governed route carrying the members' shared security spec, and its selector invokes
+  each member's own command processor in-process — a `TQL-WORKFLOW-3201`/`3202` refusal
+  falls through **as the typed exception it is**, never matched against a rendered HTTP
+  body, and the `direct:<workflow>.<transition>.attempt` shadow routes are deleted. The
+  none-held `422` now names each attempt's refusal (`attempted[].code`, and the SQL
+  guard file's declared code as `attempted[].guard`); the success payload names the
+  winner (`"transition": "<member>"`). A dispatch may declare `decide:` — evaluated
+  once, before the member loop, after the document binds; decide-less members inherit
+  the results as `decision.*` (a member alias colliding with a dispatch alias lints as
+  `TQL-WORKFLOW-3112`, and the consumption lints see inherited aliases).
+
 - **`TransitionExecutor` — the transition pipeline becomes an engine object**
   (docs/transition-engine.md slice 1): the documented pipeline — document load,
   `decide:`, state legality, guard (both forms), task authority, conditional advance,

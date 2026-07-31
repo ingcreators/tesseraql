@@ -162,6 +162,64 @@ class AppLinterWorkflowTest {
         assertThat(codes(new AppLinter().lint(dir))).contains("TQL-WORKFLOW-3112");
     }
 
+    /** The shared decision the dispatch-decide tests wire (docs/transition-engine.md). */
+    private static void writeRoutingDecision(Path dir) throws Exception {
+        Files.createDirectories(dir.resolve("decisions"));
+        Files.writeString(dir.resolve("decisions/routing.yml"), """
+                version: tesseraql/v1
+                decisions:
+                  routing:
+                    inputs:
+                      amount: { type: number, match: between }
+                    outputs:
+                      lane: { type: string, enum: [fast, slow] }
+                    rows:
+                      - when: { amount: ">= 1000" }
+                        out: { lane: slow }
+                      - out: { lane: fast }
+                """);
+    }
+
+    @Test
+    void aMemberGuardMayReadTheDispatchLevelDecision(@TempDir Path dir) throws Exception {
+        writeRoutingDecision(dir);
+        writeWorkflow(dir, WELL_FORMED
+                .replace("id: approve, from: submitted, to: approved,",
+                        "id: approve, from: submitted, to: approved,"
+                                + " guard: \"decision.routing.lane == 'fast'\",")
+                .replace("id: reject, from: submitted, to: rejected,",
+                        "id: reject, from: submitted, to: rejected,"
+                                + " guard: \"decision.routing.lane == 'slow'\",")
+                + """
+                        dispatch:
+                          - id: decide_next
+                            decide:
+                              routing: { use: routing, params: { amount: document.amount } }
+                            oneOf: [approve, reject]
+                        """);
+        // No 4711 (the members inherit the dispatch's alias), no 4712 (both enum values
+        // covered), no workflow findings.
+        assertThat(new AppLinter().lint(dir)).isEmpty();
+    }
+
+    @Test
+    void aDispatchDecideAliasCollidingWithAMemberIsAnError(@TempDir Path dir) throws Exception {
+        writeRoutingDecision(dir);
+        writeWorkflow(dir, WELL_FORMED
+                .replace("id: approve, from: submitted, to: approved,",
+                        "id: approve, from: submitted, to: approved, decide:"
+                                + " { routing: { use: routing, params:"
+                                + " { amount: document.amount } } },")
+                + """
+                        dispatch:
+                          - id: decide_next
+                            decide:
+                              routing: { use: routing, params: { amount: document.amount } }
+                            oneOf: [approve, reject]
+                        """);
+        assertThat(codes(new AppLinter().lint(dir))).contains("TQL-WORKFLOW-3112");
+    }
+
     @Test
     void anUnguardedMemberThatIsNotLastIsAWarning(@TempDir Path dir) throws Exception {
         // 'approve' has no guard, so 'reject' after it can never be attempted.

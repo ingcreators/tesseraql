@@ -154,19 +154,56 @@ dispatch:
 ```
 
 The selector tries the members **in declaration order**, each through the member's own
-full pipeline — security, decide, guard, state advance, scoped command, one transaction
-per attempt — and adopts the first outcome that is not a wrong-state
-(`TQL-WORKFLOW-3201`) or guard (`3202`) refusal. Correctness never depends on the
-selector: a raced state change surfaces as the member's own conflict, and a refused
-attempt leaves nothing behind. When no member holds, the dispatch answers `422` naming
-every attempted member and its refusal status. Members stay individually callable.
+full pipeline — decide, guard, state advance, scoped command, tasks, history, notify;
+one transaction per attempt — by invoking the member's command processor in-process
+([transition engine](transition-engine.md)). A wrong-state (`TQL-WORKFLOW-3201`) or
+guard (`3202`) refusal is caught **as the typed exception the pipeline threw** and
+falls through to the next member; any other outcome (success, `403`, row-authority
+`3204`, `500`) is the dispatch's outcome. Correctness never depends on the selector: a
+raced state change surfaces as the member's own conflict, and a refused attempt leaves
+nothing behind. The dispatch route itself carries the members' **shared** security
+spec, enforced once — the `3112` lint below makes that legal.
+
+The success payload names the winner:
+
+```json
+{ "ok": true, "transition": "advance" }
+```
+
+and no member holding answers `422` with each attempt's refusal — the code, and for
+SQL guard files the declared refusal code:
+
+```json
+{ "error": { "code": "TQL-WORKFLOW-3202", "dispatch": "submit_decision",
+             "attempted": [ { "transition": "approve", "status": 422,
+                              "code": "TQL-WORKFLOW-3202", "guard": "not-funded" },
+                            { "transition": "advance", "status": 409,
+                              "code": "TQL-WORKFLOW-3201" } ] } }
+```
+
+A dispatch may declare its own `decide:`, evaluated **once**, before the member loop,
+after the document binds; members that declare no `decide:` of their own inherit the
+results as `decision.*`:
+
+```yaml
+dispatch:
+  - id: route_next
+    decide:
+      routing: { use: routing, params: { amount: document.amount } }
+    oneOf: [fastlane, slowlane]     # their guards read decision.routing.lane
+```
+
+A member alias colliding with a dispatch-level alias is a lint error (`3112` — one
+name, one evaluation). Members stay individually callable over REST; note that a
+member whose guard reads a dispatch-level decision refuses (`3202`) when called
+directly without it — the dispatch is that member's intended entry.
 
 Legality is linted (`TQL-WORKFLOW-3112`, error): at least two members, every member a
 declared transition, all members sharing one `from` state and one effective security
 spec (a dispatch is one action, one audience — a `403` is an outcome, never a
-fall-through), and the dispatch id must not collide with a transition id. A member
-without a guard that is not last makes its followers unreachable (`TQL-WORKFLOW-3113`,
-warning).
+fall-through), no dispatch/transition id collision, and no decide-alias collision. A
+member without a guard that is not last makes its followers unreachable
+(`TQL-WORKFLOW-3113`, warning).
 
 ### Assignee resolution is the dual of a scope
 

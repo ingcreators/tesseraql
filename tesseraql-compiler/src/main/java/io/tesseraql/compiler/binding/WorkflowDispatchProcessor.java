@@ -1,93 +1,143 @@
 package io.tesseraql.compiler.binding;
 
+import io.tesseraql.camel.TesseraqlProperties;
+import io.tesseraql.camel.tenant.TenantRouting;
+import io.tesseraql.core.decision.DecisionTables;
+import io.tesseraql.core.error.TqlDomain;
+import io.tesseraql.core.error.TqlErrorCode;
+import io.tesseraql.core.error.TqlException;
+import io.tesseraql.core.expr.EvaluationContext;
+import io.tesseraql.core.sql.AmbientBinds;
+import io.tesseraql.yaml.workflow.TransitionExecutor;
+import java.sql.Connection;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import javax.sql.DataSource;
 import org.apache.camel.Exchange;
 import org.apache.camel.Processor;
-import org.apache.camel.ProducerTemplate;
 
 /**
- * The one-action dispatch (docs/workflow-expressiveness.md slice 3): tries its member
- * transitions — through the internal {@code direct:<workflow>.<transition>.attempt}
- * shadow routes, which run the same pipeline as the members' REST endpoints (rest-dsl
- * inlining removes the REST routes' own direct consumers, so the shadows exist to be
- * sent to) — in declaration order, and adopts the first outcome that is
- * not a wrong-state ({@code TQL-WORKFLOW-3201}) or guard ({@code 3202}) refusal. Each
- * attempt runs the member's own full pipeline (security, decide, guard, advance, scoped
- * command, tasks, history) in its own transaction, so a refused attempt leaves nothing
- * behind and correctness never depends on the selector: a raced state change simply
- * surfaces as the member's own conflict. Security stays deny-by-default per member — a
- * 403 is an outcome, never a fall-through.
+ * The one-action dispatch, engine-level (docs/transition-engine.md track B): tries its
+ * member transitions in declaration order by invoking each member's own command
+ * processor — the same full pipeline (decide, guard, advance, stamps, scoped command,
+ * tasks, history, notify) the member's REST endpoint runs, each attempt in its own
+ * transaction, so a refused attempt leaves nothing behind and correctness never depends
+ * on the selector: a raced state change surfaces as the member's own conflict. The
+ * dispatch route carries the members' shared security spec (the
+ * {@code TQL-WORKFLOW-3112} lint guarantees one audience), so a {@code 403} is an
+ * outcome, never a fall-through.
  *
- * <p>No member holding answers {@code 422} with the attempted transitions and each one's
- * refusal, so the caller sees the whole picture instead of the last member's complaint.
+ * <p>Fall-through is typed: a member refusing with {@code TQL-WORKFLOW-3201}
+ * (wrong state) or {@code 3202} (guard) is caught as the exception it threw — never
+ * matched against a rendered HTTP body — and its refusal (code, declared guard code)
+ * joins the {@code attempted} list. No member holding throws {@code 3202} carrying
+ * {@code dispatch} and {@code attempted}, so the caller sees the whole picture. The
+ * winner's id rides the response as {@code transition} (the {@code dispatch.transition}
+ * context path).
+ *
+ * <p>A dispatch-level {@code decide:} evaluates once, before the loop, against the
+ * loaded document; members that declare no {@code decide:} of their own inherit the
+ * results as {@code decision.*}.
  */
 public final class WorkflowDispatchProcessor implements Processor {
 
+    /** TQL-WORKFLOW-3202: no dispatch member transition holds (HTTP 422). */
+    private static final TqlErrorCode NONE_HELD = new TqlErrorCode(TqlDomain.WORKFLOW, 3202);
+
+    /** A member transition and the command processor running its full pipeline. */
+    public record Member(String id, Processor processor) {
+    }
+
     private final String workflowId;
     private final String dispatchId;
-    private final List<String> members;
-    private volatile ProducerTemplate template;
+    private final List<Member> members;
+    private final DecisionTables decisions;
+    private final String table;
+    private final String keyColumn;
+    private final String dialect;
+    private final String datasourceName;
+    private final int decisionTimeoutSeconds;
 
-    public WorkflowDispatchProcessor(String workflowId, String dispatchId,
-            List<String> members) {
+    public WorkflowDispatchProcessor(String workflowId, String dispatchId, List<Member> members,
+            DecisionTables decisions, String table, String keyColumn, String dialect,
+            String datasourceName, int decisionTimeoutSeconds) {
         this.workflowId = workflowId;
         this.dispatchId = dispatchId;
         this.members = List.copyOf(members);
+        this.decisions = decisions;
+        this.table = table;
+        this.keyColumn = keyColumn;
+        this.dialect = dialect;
+        this.datasourceName = datasourceName;
+        this.decisionTimeoutSeconds = decisionTimeoutSeconds;
     }
 
     @Override
+    @SuppressWarnings("unchecked")
     public void process(Exchange exchange) throws Exception {
-        if (template == null) {
-            template = exchange.getContext().createProducerTemplate();
+        Map<String, Object> context = exchange.getProperty(TesseraqlProperties.CONTEXT,
+                Map.class);
+        if (context == null) {
+            context = new java.util.HashMap<>();
+            exchange.setProperty(TesseraqlProperties.CONTEXT, context);
         }
-        // Materialize the (typically empty) request body once: a platform-http stream can
-        // only be read by one attempt, and a second read blocks.
-        String requestBody = exchange.getMessage().getBody(String.class);
-        exchange.getMessage().setBody(requestBody);
+        // The dispatch-level decide: one evaluation for the whole selection, after the
+        // document binds (the wiring may read document.*), on a short read-only
+        // connection — each attempt's own transaction re-reads what it advances.
+        if (!decisions.isEmpty()) {
+            DataSource dataSource = TenantRouting.dataSource(exchange, datasourceName);
+            try (Connection connection = dataSource.getConnection()) {
+                EvaluationContext evaluation = new EvaluationContext(context);
+                Object keyValue = evaluation.resolve(List.of("path", "key"));
+                String docId = keyValue == null ? null : String.valueOf(keyValue);
+                Map<String, Object> decideContext = new LinkedHashMap<>(context);
+                decideContext.put("document", TransitionExecutor.loadDocument(connection,
+                        table, keyColumn, dialect, docId));
+                context.put(AmbientBinds.DECISION,
+                        decisions.evaluate(decideContext, connection, decisionTimeoutSeconds));
+            }
+        }
+        // Attempts mutate the shared context (document, steps, audit, their own
+        // decisions); a refused attempt restores this snapshot so the next member sees
+        // what the first one saw.
+        Map<String, Object> snapshot = new LinkedHashMap<>(context);
         List<Map<String, Object>> attempted = new ArrayList<>();
-        for (String member : members) {
-            Exchange attempt = exchange.copy();
-            attempt.getMessage().setBody(requestBody);
-            template.send("direct:" + workflowId + "." + member + ".attempt", attempt);
-            Integer status = attempt.getMessage().getHeader(Exchange.HTTP_RESPONSE_CODE,
-                    Integer.class);
-            String body = attempt.getMessage().getBody(String.class);
-            boolean fellThrough = status != null && (status == 409 || status == 422)
-                    && body != null && (body.contains("TQL-WORKFLOW-3201")
-                            || body.contains("TQL-WORKFLOW-3202"));
-            if (!fellThrough
-                    && attempt.getException() instanceof io.tesseraql.core.error.TqlException tql
-                    && (tql.code().toString().equals("TQL-WORKFLOW-3201")
-                            || tql.code().toString().equals("TQL-WORKFLOW-3202"))) {
-                fellThrough = true;
-                status = tql.code().toString().endsWith("3201") ? 409 : 422;
-            }
-            if (!fellThrough && attempt.getException() != null) {
-                // A non-selectable failure: rethrow so the standard error path renders it.
-                throw attempt.getException();
-            }
-            if (!fellThrough) {
-                // Success or a non-selectable failure (403, 3204, 500): the member's
-                // outcome is the dispatch's outcome, headers and all.
-                exchange.setMessage(attempt.getMessage());
+        for (Member member : members) {
+            try {
+                member.processor().process(exchange);
+                context.put("dispatch", Map.of("transition", member.id()));
                 return;
+            } catch (Exception failure) {
+                String code = failure instanceof TqlException tql ? tql.code().toString() : null;
+                boolean fellThrough = "TQL-WORKFLOW-3201".equals(code)
+                        || "TQL-WORKFLOW-3202".equals(code);
+                if (!fellThrough) {
+                    // A non-selectable outcome (403, 3204, 500): the member's failure is
+                    // the dispatch's failure, rendered by the standard error path.
+                    throw failure;
+                }
+                TqlException refused = (TqlException) failure;
+                Map<String, Object> refusal = new LinkedHashMap<>();
+                refusal.put("transition", member.id());
+                refusal.put("status", code.endsWith("3201") ? 409 : 422);
+                refusal.put("code", code);
+                if (refused.details() != null && refused.details().get("guard") != null) {
+                    refusal.put("guard", refused.details().get("guard"));
+                }
+                attempted.add(refusal);
+                context.clear();
+                context.putAll(snapshot);
             }
-            Map<String, Object> refusal = new LinkedHashMap<>();
-            refusal.put("transition", member);
-            refusal.put("status", status);
-            attempted.add(refusal);
         }
-        Map<String, Object> error = new LinkedHashMap<>();
-        error.put("code", "TQL-WORKFLOW-3202");
-        error.put("message", "Unprocessable Entity");
-        error.put("dispatch", dispatchId);
-        error.put("attempted", attempted);
-        exchange.getMessage().setHeader(Exchange.HTTP_RESPONSE_CODE, 422);
-        exchange.getMessage().setHeader(Exchange.CONTENT_TYPE, "application/json");
-        exchange.getMessage().setBody(new com.fasterxml.jackson.databind.ObjectMapper()
-                .writeValueAsString(Map.of("error", error)));
+        Map<String, Object> details = new LinkedHashMap<>();
+        details.put("dispatch", dispatchId);
+        details.put("attempted", attempted);
+        throw TqlException.builder(NONE_HELD)
+                .message("Workflow '" + workflowId + "': dispatch '" + dispatchId
+                        + "' found no member transition that holds")
+                .details(details)
+                .build();
     }
 }

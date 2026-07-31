@@ -347,25 +347,12 @@ public final class RouteCompiler {
     private void buildTransactionalCommand(RouteBuilder builder, RouteFile routeFile,
             org.apache.camel.Processor preCommand,
             io.tesseraql.compiler.binding.WorkflowBinding workflow) {
-        buildTransactionalCommand(builder, routeFile, preCommand, workflow, mountRest);
-    }
-
-    private void buildTransactionalCommand(RouteBuilder builder, RouteFile routeFile,
-            org.apache.camel.Processor preCommand,
-            io.tesseraql.compiler.binding.WorkflowBinding workflow, boolean mount) {
         RouteDefinition definition = routeFile.definition();
         String routeId = definition.id();
         String direct = "direct:" + routeId;
-        if (mount) {
+        if (mountRest) {
             restEndpoint(builder, routeFile.httpMethod(), routeFile.urlPath()).to(direct);
         }
-
-        Path routeDir = routeFile.source().getParent();
-        String datasource = definition.effectiveDatasource();
-        requirePlainSqlOffMain(definition);
-        String dialect = datasourceDialect(datasource);
-        java.util.function.Function<String, Path> stepFile = file -> io.tesseraql.core.dialect.DialectSqlResolver
-                .resolve(routeDir.resolve(file).normalize(), dialect);
 
         ProcessorDefinition<?> route = builder.from(direct).routeId(routeId);
         applyCommonGovernance(route, routeFile);
@@ -376,11 +363,7 @@ public final class RouteCompiler {
         ProcessorDefinition<?> step = route
                 .process(new RequestBinder(definition, pathParams(routeFile.urlPath()),
                         compiledAppHome))
-                .process(new io.tesseraql.compiler.binding.TransactionalCommandProcessor(
-                        routeId, definition.sql(), definition.steps(), definition.validate(),
-                        definition.decide(), definition.notifications(), stepFile, datasource,
-                        dialect, definition.outbox(), definition.publish(), definition.errors(),
-                        appName, workflow, commandBounds()));
+                .process(commandProcessor(routeFile, workflow));
         // Live-view topics broadcast only after a successful commit: an exception in the
         // command processor (rollback) bypasses this step (docs/realtime.md).
         if (!definition.emit().isEmpty()) {
@@ -395,6 +378,28 @@ public final class RouteCompiler {
         }
         applySessionRotation(step, definition).process(responseRenderer(definition));
         applyIdempotencyComplete(step, definition);
+    }
+
+    /**
+     * The transactional command processor a route (or a dispatch attempt — the selector
+     * invokes members' processors directly, docs/transition-engine.md track B) runs: one
+     * construction path, so a member fired through a dispatch is the same pipeline its own
+     * REST endpoint runs.
+     */
+    private io.tesseraql.compiler.binding.TransactionalCommandProcessor commandProcessor(
+            RouteFile routeFile, io.tesseraql.compiler.binding.WorkflowBinding workflow) {
+        RouteDefinition definition = routeFile.definition();
+        Path routeDir = routeFile.source().getParent();
+        String datasource = definition.effectiveDatasource();
+        requirePlainSqlOffMain(definition);
+        String dialect = datasourceDialect(datasource);
+        java.util.function.Function<String, Path> stepFile = file -> io.tesseraql.core.dialect.DialectSqlResolver
+                .resolve(routeDir.resolve(file).normalize(), dialect);
+        return new io.tesseraql.compiler.binding.TransactionalCommandProcessor(
+                definition.id(), definition.sql(), definition.steps(), definition.validate(),
+                definition.decide(), definition.notifications(), stepFile, datasource,
+                dialect, definition.outbox(), definition.publish(), definition.errors(),
+                appName, workflow, commandBounds());
     }
 
     /**
@@ -417,73 +422,117 @@ public final class RouteCompiler {
                 ? null
                 : new io.tesseraql.yaml.workflow.ColumnWorkflowStore(def.document().table(),
                         def.document().key(), def.document().stateColumn());
-        // Transitions named by a dispatch also get an internal shadow route
-        // ({@code direct:<workflow>.<transition>.attempt}): rest-dsl inlining (Camel 4's
-        // inlineRoutes default) folds each transition's direct: pipeline into its REST
-        // route and removes the direct consumer, so the dispatch selector needs its own
-        // never-mounted consumer to try members through.
-        java.util.Set<String> dispatchMembers = def.dispatch().stream()
-                .flatMap(d -> d.oneOf().stream())
-                .collect(java.util.stream.Collectors.toSet());
         for (io.tesseraql.yaml.model.TransitionSpec transition : def.transitions()) {
             String routeId = def.id() + "." + transition.id();
-            String attemptId = routeId + ".attempt";
-            boolean buildMain = onlyRouteIds == null || onlyRouteIds.contains(routeId);
-            boolean buildAttempt = dispatchMembers.contains(transition.id())
-                    && (onlyRouteIds == null || onlyRouteIds.contains(attemptId));
-            if (!buildMain && !buildAttempt) {
+            if (onlyRouteIds != null && !onlyRouteIds.contains(routeId)) {
                 continue;
             }
-            io.tesseraql.yaml.model.SqlBinding command = transition.command() == null
-                    ? null
-                    : new io.tesseraql.yaml.model.SqlBinding(transition.command(), null, "update",
-                            commandParams(transition), null, null, null, null, null);
-            io.tesseraql.yaml.model.SecuritySpec security = transition.security() != null
-                    ? transition.security()
-                    : def.security();
-            String urlPath = basePath + "/{key}/" + transition.id();
-            // The pipeline compiles once, in the executor (docs/transition-engine.md): guard
-            // parsing (both forms — a missing or malformed guard file fails the build, not the
-            // first request), stamp-column validation, and the decide: compile all live there.
-            io.tesseraql.compiler.binding.WorkflowBinding workflow = new io.tesseraql.compiler.binding.WorkflowBinding(
-                    io.tesseraql.yaml.workflow.TransitionExecutor.compile(def, transition,
-                            managed, datasourceDialect(DEFAULT_DATASOURCE),
-                            workflowFile.source().getParent()),
-                    "path.key",
-                    appStore, compileAssign(workflowFile, transition),
-                    transition.assign() == null
-                            ? java.util.Map.of()
-                            : transition.assign().params(),
-                    deadlineMillis(def, transition.to()), assignNotify(def));
-            if (buildMain) {
-                RouteFile routeFile = new RouteFile("POST", urlPath, workflowFile.source(),
-                        synthesizedTransition(routeId, security, command, transition));
-                buildTransactionalCommand(builder, routeFile, null, workflow);
-            }
-            if (buildAttempt) {
-                RouteFile attemptFile = new RouteFile("POST", urlPath, workflowFile.source(),
-                        synthesizedTransition(attemptId, security, command, transition));
-                buildTransactionalCommand(builder, attemptFile, null, workflow, false);
-            }
+            buildTransactionalCommand(builder,
+                    transitionRouteFile(workflowFile, def, transition, basePath),
+                    null, transitionBinding(workflowFile, def, transition, managed, appStore));
         }
-        // One-action dispatches (docs/workflow-expressiveness.md slice 3): a thin route
-        // that tries the member transitions' own direct: pipelines in order — every
-        // attempt enforces its member's security, guard, and transaction itself.
+        // One-action dispatches, engine-level (docs/transition-engine.md track B): a
+        // governed route carrying the members' shared security spec (the 3112 lint
+        // guarantees one audience) whose selector invokes each member's own command
+        // processor in order — the full pipeline per attempt, typed 3201/3202
+        // fall-through, no shadow routes.
         for (io.tesseraql.yaml.model.DispatchSpec dispatch : def.dispatch()) {
             String routeId = def.id() + "." + dispatch.id();
             if (onlyRouteIds != null && !onlyRouteIds.contains(routeId)) {
                 continue;
             }
+            String urlPath = basePath + "/{key}/" + dispatch.id();
+            io.tesseraql.yaml.model.SecuritySpec security = def.security();
+            java.util.List<io.tesseraql.compiler.binding.WorkflowDispatchProcessor.Member> members = new java.util.ArrayList<>();
+            for (String memberId : dispatch.oneOf()) {
+                io.tesseraql.yaml.model.TransitionSpec member = def.transitions().stream()
+                        .filter(t -> memberId.equals(t.id())).findFirst().orElse(null);
+                if (member == null) {
+                    // The 3112 lint names the unknown member; the endpoint still mounts so
+                    // the remaining members serve.
+                    continue;
+                }
+                if (members.isEmpty()) {
+                    security = member.security() != null ? member.security() : def.security();
+                }
+                members.add(new io.tesseraql.compiler.binding.WorkflowDispatchProcessor.Member(
+                        memberId, commandProcessor(
+                                transitionRouteFile(workflowFile, def, member, basePath),
+                                transitionBinding(workflowFile, def, member, managed,
+                                        appStore))));
+            }
+            RouteDefinition definition = new RouteDefinition("tesseraql/v1", routeId, "route",
+                    "command-json", java.util.Map.of(), null, security, null, null, null, null,
+                    java.util.Map.of(), java.util.Map.of(), java.util.Map.of(),
+                    java.util.Map.of(), java.util.Map.of(), null, null, null, null, null, null,
+                    dispatchResponse(), null, null, null, null, null);
             String direct = "direct:" + routeId;
             if (mountRest) {
-                restEndpoint(builder, "POST", basePath + "/{key}/" + dispatch.id())
-                        .to(direct);
+                restEndpoint(builder, "POST", urlPath).to(direct);
             }
-            builder.from(direct).routeId(routeId)
+            String dialect = datasourceDialect(DEFAULT_DATASOURCE);
+            ProcessorDefinition<?> route = builder.from(direct).routeId(routeId);
+            applyCommonGovernance(route, routeId, "POST", urlPath, definition);
+            route.process(new RequestBinder(definition, pathParams(urlPath), compiledAppHome))
                     .process(new io.tesseraql.compiler.binding.WorkflowDispatchProcessor(
-                            def.id(), dispatch.id(), dispatch.oneOf()));
+                            def.id(), dispatch.id(), members,
+                            io.tesseraql.yaml.decision.DecisionSets.compileUses(
+                                    dispatch.decide(), dialect),
+                            def.document().table(), def.document().key(), dialect,
+                            DEFAULT_DATASOURCE, commandBounds() == null
+                                    ? 0
+                                    : commandBounds().timeoutSeconds()))
+                    .process(responseRenderer(definition));
         }
         buildWorkflowDelegate(builder, def, basePath, onlyRouteIds);
+    }
+
+    /** The synthesized route file a transition compiles to (roadmap Phase 28). */
+    private RouteFile transitionRouteFile(io.tesseraql.yaml.manifest.WorkflowFile workflowFile,
+            io.tesseraql.yaml.model.WorkflowDefinition def,
+            io.tesseraql.yaml.model.TransitionSpec transition, String basePath) {
+        io.tesseraql.yaml.model.SqlBinding command = transition.command() == null
+                ? null
+                : new io.tesseraql.yaml.model.SqlBinding(transition.command(), null, "update",
+                        commandParams(transition), null, null, null, null, null);
+        io.tesseraql.yaml.model.SecuritySpec security = transition.security() != null
+                ? transition.security()
+                : def.security();
+        return new RouteFile("POST", basePath + "/{key}/" + transition.id(),
+                workflowFile.source(),
+                synthesizedTransition(def.id() + "." + transition.id(), security, command,
+                        transition));
+    }
+
+    /**
+     * The workflow binding a transition route carries: the executor-compiled pipeline
+     * (docs/transition-engine.md — guard parsing in both forms, stamp-column validation, the
+     * decide: compile) plus the route-flavored assign/deadline/reminder collaborators.
+     */
+    private io.tesseraql.compiler.binding.WorkflowBinding transitionBinding(
+            io.tesseraql.yaml.manifest.WorkflowFile workflowFile,
+            io.tesseraql.yaml.model.WorkflowDefinition def,
+            io.tesseraql.yaml.model.TransitionSpec transition, boolean managed,
+            io.tesseraql.core.workflow.WorkflowStore appStore) {
+        return new io.tesseraql.compiler.binding.WorkflowBinding(
+                io.tesseraql.yaml.workflow.TransitionExecutor.compile(def, transition, managed,
+                        datasourceDialect(DEFAULT_DATASOURCE), workflowFile.source().getParent()),
+                "path.key",
+                appStore, compileAssign(workflowFile, transition),
+                transition.assign() == null
+                        ? java.util.Map.of()
+                        : transition.assign().params(),
+                deadlineMillis(def, transition.to()), assignNotify(def));
+    }
+
+    /** The dispatch response: the member outcome plus which member fired. */
+    private static io.tesseraql.yaml.model.ResponseSpec dispatchResponse() {
+        return new io.tesseraql.yaml.model.ResponseSpec(
+                new io.tesseraql.yaml.model.ResponseSpec.JsonResponse(200,
+                        java.util.Map.of("ok", Boolean.TRUE, "transition",
+                                "dispatch.transition"),
+                        null, null, null),
+                null, null, null, null, null, null);
     }
 
     /** The command-json route a workflow transition compiles to (roadmap Phase 28). */

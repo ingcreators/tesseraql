@@ -1,10 +1,21 @@
 # Transition engine — one pipeline, invoked everywhere
 
-> **Status: slice 1 implemented** (`TransitionExecutor` in `tesseraql-yaml`;
-> `TransactionalCommandProcessor` and `TestRunner.fireTransition` delegate;
-> `ColumnWorkflowStore` moved beside it; `inlineRoutes` pinned at both
-> `restConfiguration()` sites). Slices 2–4 remain designed, not built.
-> The follow-up campaign from
+> **Status: slices 1–2 implemented.** Slice 1: `TransitionExecutor` in
+> `tesseraql-yaml`; `TransactionalCommandProcessor` and `TestRunner.fireTransition`
+> delegate; `ColumnWorkflowStore` moved beside it; `inlineRoutes` pinned at both
+> `restConfiguration()` sites. Slice 2: engine-level dispatch — the governed dispatch
+> route invokes members' own command processors directly with **typed** `3201`/`3202`
+> fall-through (no shadow routes, no body matching), dispatch-level `decide:`
+> (inherit-if-absent, alias collisions lint as `3112`), `attempted[].code`/`guard` in
+> the none-held `422`, and the winner named as `transition` in the success payload.
+> One refinement against the original track B text: the selection is **sequential
+> full-pipeline attempts, each in its own transaction** — not one shared transaction —
+> because track A deliberately left tasks/history/notify in the route layer, and a
+> single-transaction selector would have had to re-implement exactly that tail. The
+> refusal-leaves-nothing-behind property held either way (guards run before the
+> advance); what one-transaction would have added (no inter-attempt race window) the
+> conditional advance already turns into the member's own `409`. Slices 3–4 remain
+> designed, not built. The follow-up campaign from
 > [workflow expressiveness](workflow-expressiveness.md) (all four slices shipped,
 > #534–#537) and the [procurement demo](procurement-demo.md). Grounded in what the
 > `dispatch:` diagnosis exposed: the transition pipeline exists three times, the
