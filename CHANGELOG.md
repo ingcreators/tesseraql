@@ -8,6 +8,15 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **`tesseraql token` — the smoke-test loop's missing tool**: mints a development
+  bearer token signed with the app's configured HS256 secret. Roles land under the
+  configured `rolesClaim`, permissions under `permissionsClaim`, `--claim name=value`
+  adds custom claims (a JSON-looking value — `'["a","b"]'`, `7`, `true` — embeds
+  structurally), `--ttl 30m/12h/7d` bounds the lifetime. Development only by
+  construction: an app that verifies asymmetrically (publicKey/JWKS) has nothing the
+  command could sign with, and it says what it signed on stderr. The procurement
+  demo's tour now mints its five persona tokens in five lines.
+
 - **`serve --watch` covers the whole authoring surface** (the procurement demo's own
   dev-loop friction, generalized): the watcher now also registers `workflow/` and the
   shared-definition trees (`decisions/`, `rules/`, `scope/`, `domains/`). A

@@ -58,8 +58,8 @@ Part of the template gallery; held to the marketplace admission profile
 tesseraql serve --app . --embedded-db     # embedded PostgreSQL, auto-seeded
 ```
 
-Sign a dev bearer token (roles `REQUESTER` + claim `departments: [engineering]`, or
-`PROCUREMENT`) and walk the flow:
+Mint a dev bearer token (`tesseraql token --app . --role PROCUREMENT`, or `REQUESTER`
+with `--claim 'departments=["engineering"]'`) and walk the flow:
 
 ```
 GET  /api/requisitions                # scoped list; internal_estimate needs req.cost
@@ -122,10 +122,17 @@ GET  /dashboard                       # the chain at a glance
 ## The tour — one requisition, three logins
 
 The demo script (docs/procurement-demo.md): walk one purchase requisition from creation
-to goods receipt across the three personas. Sign three dev bearer tokens (HS256 over the
-dev secret) — requester `sato` (`REQUESTER`, `departments: [sales]`), procurement
-`hara`/`ota` (`PROCUREMENT` / `+PROCUREMENT_HEAD`), suppliers `kita`/`minami`
-(`SUPPLIER`, `partner: P-100` / `P-200`) — then:
+to goods receipt across the three personas. Mint the persona tokens with the CLI:
+
+```bash
+SATO=$(tesseraql token --app . --sub sato --role REQUESTER --claim 'departments=["sales"]')
+HARA=$(tesseraql token --app . --sub hara --role PROCUREMENT)
+OTA=$(tesseraql token --app . --sub ota --role PROCUREMENT --role PROCUREMENT_HEAD)
+KITA=$(tesseraql token --app . --sub kita --role SUPPLIER --claim partner=P-100)
+MINAMI=$(tesseraql token --app . --sub minami --role SUPPLIER --claim partner=P-200)
+```
+
+Then:
 
 1. **sato** creates a requisition and submits: the `approvalRoute` decision stamps the
    lane (capital categories and large amounts go two-stage), the department manager's
