@@ -94,13 +94,17 @@ transitions:
     from: date_proposed
     to: issued
     command: clear-proposal.sql
-  # Shipping requires the registered shipment (web/api/orders/{id}/shipment): the
-  # command's WHERE demands the shipment row, so an unregistered ship updates nothing
-  # and the transition fails — the guard lives in set-based SQL, not the expression.
+  # Shipping requires the registered shipment (web/api/orders/{id}/shipment): a SQL
+  # guard file (docs/workflow-expressiveness.md), so the refusal names itself instead
+  # of surfacing as a generic zero-row conflict.
   - id: ship
     from: confirmed
     to: shipped
     security: { auth: bearer, policy: sup.act }
+    guard:
+      file: shipment-registered.sql
+      code: shipment-not-registered
+      message: procurement.ship.unregistered
     command: order-ship.sql
   # Receiving is the requester's move: the persona who started the chain closes it.
   - id: receive

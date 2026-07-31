@@ -675,9 +675,11 @@ public final class AppLinter {
             Map<String, List<io.tesseraql.yaml.model.TransitionSpec>> byFrom = new LinkedHashMap<>();
             for (io.tesseraql.yaml.model.TransitionSpec transition : workflow.definition()
                     .transitions()) {
-                if (transition.guard() != null && !transition.guard().isBlank()) {
+                if (transition.guard() != null && transition.guard().expression() != null
+                        && !transition.guard().expression().isBlank()) {
                     checkDecisionExpression(source, "transition '" + transition.id()
-                            + "' guard", transition.guard(), transition.decide(), findings);
+                            + "' guard", transition.guard().expression(), transition.decide(),
+                            findings);
                 }
                 byFrom.computeIfAbsent(transition.from(), unused -> new ArrayList<>())
                         .add(transition);
@@ -748,12 +750,16 @@ public final class AppLinter {
         List<Object> covered = new ArrayList<>();
         List<Object> allowed = List.of();
         for (io.tesseraql.yaml.model.TransitionSpec transition : transitions) {
-            if (transition.guard() == null || transition.guard().isBlank()) {
+            // Only expression guards are provable here; a SQL guard file is opaque to the
+            // enum-coverage analysis, so its presence conservatively ends it.
+            if (transition.guard() == null || transition.guard().expression() == null
+                    || transition.guard().expression().isBlank()) {
                 return;
             }
             Expr parsed;
             try {
-                parsed = io.tesseraql.core.expr.ExpressionParser.parse(transition.guard());
+                parsed = io.tesseraql.core.expr.ExpressionParser
+                        .parse(transition.guard().expression());
             } catch (RuntimeException unparseable) {
                 return;
             }
@@ -2476,7 +2482,7 @@ public final class AppLinter {
                 findings.add(new LintFinding("TQL-WORKFLOW-3101", "error", source,
                         where + " to-state '" + t.to() + "' is not declared in states"));
             }
-            lintGuard(t.guard(), where, source, findings);
+            lintGuard(t.guard(), dir, where, source, findings);
             if (t.command() != null && !Files.isRegularFile(dir.resolve(t.command()))) {
                 findings.add(new LintFinding("TQL-WORKFLOW-3104", "error", source,
                         where + " references missing command '" + t.command() + "'"));
@@ -2547,14 +2553,53 @@ public final class AppLinter {
         lintWorkflowMode(def, config, source, findings);
     }
 
-    /** Parses a guard and checks every path it reads is rooted at an allowed variable. */
-    private void lintGuard(String guard, String where, String source, List<LintFinding> findings) {
-        if (guard == null || guard.isBlank()) {
+    /**
+     * Lints a guard in either form (docs/workflow-expressiveness.md): the expression form
+     * parses and reads only allowed roots ({@code TQL-WORKFLOW-3103}); the SQL form names
+     * exactly one of expression/file ({@code 3108}), the file exists ({@code 3104}), and the
+     * file is a query — a guard must never write ({@code 3109}).
+     */
+    private void lintGuard(io.tesseraql.yaml.model.GuardSpec guard, Path dir, String where,
+            String source, List<LintFinding> findings) {
+        if (guard == null) {
+            return;
+        }
+        boolean hasExpression = guard.expression() != null && !guard.expression().isBlank();
+        boolean hasFile = guard.file() != null && !guard.file().isBlank();
+        if (hasExpression == hasFile) {
+            findings.add(new LintFinding("TQL-WORKFLOW-3108", "error", source,
+                    where + " guard must declare exactly one of an expression or a file"));
+            return;
+        }
+        if (hasFile) {
+            Path file = dir.resolve(guard.file());
+            if (!Files.isRegularFile(file)) {
+                findings.add(new LintFinding("TQL-WORKFLOW-3104", "error", source,
+                        where + " references missing guard file '" + guard.file() + "'"));
+                return;
+            }
+            String sql;
+            try {
+                sql = Files.readString(file);
+            } catch (java.io.IOException unreadable) {
+                findings.add(new LintFinding("TQL-WORKFLOW-3104", "error", source,
+                        where + " guard file '" + guard.file() + "' is unreadable: "
+                                + unreadable.getMessage()));
+                return;
+            }
+            String head = sql.replaceAll("(?s)/\\*.*?\\*/", " ")
+                    .replaceAll("(?m)^\\s*--.*$", " ").strip()
+                    .toLowerCase(java.util.Locale.ROOT);
+            if (!head.startsWith("select") && !head.startsWith("with")) {
+                findings.add(new LintFinding("TQL-WORKFLOW-3109", "error", source,
+                        where + " guard file '" + guard.file()
+                                + "' must be a query - a guard never writes"));
+            }
             return;
         }
         Expr expr;
         try {
-            expr = ExpressionParser.parse(guard);
+            expr = ExpressionParser.parse(guard.expression());
         } catch (RuntimeException ex) {
             findings.add(new LintFinding("TQL-WORKFLOW-3103", "error", source,
                     where + " guard is not a valid expression: " + ex.getMessage()));

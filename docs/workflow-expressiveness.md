@@ -1,9 +1,11 @@
 # Workflow expressiveness — SQL guards, decision stamps, one-action dispatch
 
-> **Status: design.** Nothing here is implemented. Three related workflow-surface gaps the
-> procurement demo (docs/procurement-demo.md) forced into app-side idioms; this document
-> designs the declarative replacements. Grounded throughout in what
-> `examples/procurement-app` must write today.
+> **Status: slice 1 (SQL guard files) implemented** — `guard: {file, code, message}` with
+> lints `TQL-WORKFLOW-3108/3109`, runtime + `transition:` suite-target evaluation, and the
+> procurement conversion (the quote counters deleted, the ship gate self-naming); user
+> docs in approval-workflow.md "guards and scopes". Slices 2 (`stamp:`), 3 (`dispatch:`),
+> and 4 (the `doc_type` literal lint) remain designed, not built. Grounded throughout in
+> what `examples/procurement-app` had to write before slice 1.
 
 ## The three frictions, as shipped code
 

@@ -653,6 +653,44 @@ public final class TransactionalCommandProcessor implements Processor {
                             + workflow.transitionId() + "' guard rejected the request")
                     .build();
         }
+        // The SQL guard form (docs/workflow-expressiveness.md): a 2-way query evaluated on
+        // the transition's connection — rows pass, no rows fails with the declared code
+        // riding the payload, so the caller learns WHY, not just "Unprocessable Entity".
+        if (workflow.guardNodes() != null) {
+            // The guard sees what the command sees: the request context plus the resolved
+            // document key under `key` (a command gets it from its params wiring; the guard
+            // has no wiring, so it is seeded here).
+            Map<String, Object> guardParams = new java.util.LinkedHashMap<>(context);
+            guardParams.putIfAbsent("key", docId);
+            io.tesseraql.core.sql.BoundSql bound = io.tesseraql.core.sql.SqlRenderer.render(
+                    workflow.guardNodes(), guardParams, scopeResolver(exchange), guardParams);
+            boolean holds;
+            try (java.sql.PreparedStatement statement = connection
+                    .prepareStatement(bound.sql())) {
+                for (int i = 0; i < bound.parameters().size(); i++) {
+                    statement.setObject(i + 1, bound.parameters().get(i).value());
+                }
+                try (java.sql.ResultSet rows = statement.executeQuery()) {
+                    holds = rows.next();
+                }
+            }
+            if (!holds) {
+                // `guard`/`guardMessage`, not `code`/`message`: the renderer's top-level
+                // keys would shadow them (details merge is putIfAbsent).
+                java.util.Map<String, Object> details = new java.util.LinkedHashMap<>();
+                details.put("guard", workflow.guardCode() == null
+                        ? "guard-failed"
+                        : workflow.guardCode());
+                if (workflow.guardMessage() != null) {
+                    details.put("guardMessage", workflow.guardMessage());
+                }
+                throw TqlException.builder(GUARD_FAILED)
+                        .message("Workflow '" + workflow.workflowId() + "': transition '"
+                                + workflow.transitionId() + "' guard matched no rows")
+                        .details(details)
+                        .build();
+            }
+        }
         // Task authority (roadmap Phase 28 slice 2): a document with open tasks may only be
         // transitioned by someone who holds one (the direct assignee or a candidate group). A
         // document with no open tasks (an initial or unassigned state) is gated only by route policy.

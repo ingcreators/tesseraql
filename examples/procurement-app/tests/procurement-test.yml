@@ -424,6 +424,40 @@ tests:
     expect:
       rowCount: 1
 
+  # The SQL guard file (docs/workflow-expressiveness.md): the seeded quote's line is
+  # unpriced, so the submit refuses with the guard's own code — as a data row.
+  - name: an unpriced quote cannot be submitted, and the refusal names itself
+    transition:
+      workflow: quote
+      key: Q-RFQ-2001-P-100
+      id: submit
+    principal:
+      loginId: kita
+      roles: [SUPPLIER]
+      claims:
+        partner: P-100
+    expect:
+      rows:
+        - code: TQL-WORKFLOW-3202
+          guard: unpriced-lines
+          from: draft
+
+  - name: pricing the line satisfies the guard and the submit advances
+    sql:
+      file: web/api/supplier/quotes/{id}/lines/price-line.sql
+    principal:
+      loginId: kita
+      roles: [SUPPLIER]
+      claims:
+        partner: P-100
+    params:
+      id: Q-RFQ-2001-P-100
+      lineNo: 1
+      unitPrice: 11800
+      promisedDate: "2026-08-25"
+    expect:
+      updateCount: 1
+
   # The transition target (docs/testing.md): the state machine asserted declaratively —
   # the submit advance stamps the decided lane, and a wrong-state fire is a 3201 row.
   - name: submitting the office requisition takes the manager lane

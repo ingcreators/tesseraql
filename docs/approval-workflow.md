@@ -93,11 +93,22 @@ document surface — deadlines, `mode`, `http`, and `security` — is in the
 
 Two orthogonal checks gate every transition, and they answer different questions:
 
-- The **guard** (`io.tesseraql.core.expr`) answers *is this transition legal right now?* — a
-  whitelist-only boolean over `document.*`, `task.*`, and `principal.*` paths (e.g.
-  `document.amount > 0`, `principal.role == 'approver'`). It is the same evaluator the `validate:`
-  rules ([declarative validation](declarative-validation.md)) and `/*%if … */` directives use:
-  comparison and logical operators, dotted paths, no function calls, no side effects.
+- The **guard** answers *is this transition legal right now?* — in one of two forms
+  ([workflow expressiveness](workflow-expressiveness.md)):
+  - the **expression** (`io.tesseraql.core.expr`): a whitelist-only boolean over
+    `document.*`, `task.*`, `principal.*`, and `decision.*` paths (e.g.
+    `document.amount > 0`). The same evaluator the `validate:` rules and `/*%if … */`
+    directives use: comparison and logical operators, dotted paths, no function calls,
+    no side effects. The right tool for column checks.
+  - the **SQL guard file** (`guard: {file: …, code: …, message: …}`): a 2-way **query**
+    evaluated on the transition's connection, after `decide:` resolution — rows pass, no
+    rows fails `422` carrying the declared `code` (and optional `messages/` key) in the
+    payload as `guard`/`guardMessage`, so the caller learns *why*. The right tool for set
+    conditions ("every line is priced", "a shipment is registered") that would otherwise
+    force denormalized counters or zero-row commands failing as a generic conflict.
+    `document.*`, `decision.*`, `principal.*`, `key`, and ambient binds are in scope
+    exactly as in a command; a guard file must be a query (`TQL-WORKFLOW-3109`) and a
+    guard declares exactly one of the two forms (`TQL-WORKFLOW-3108`).
 - The **scope** ([data scoping](data-scoping.md)) answers *does this caller have authority over this
   row?* — a `/*%scope … */` directive in the transition's `UPDATE … WHERE`, resolved against the
   principal, parameterized, deny-by-default. The write touches only rows the caller is authorized
