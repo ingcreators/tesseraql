@@ -2505,6 +2505,59 @@ public final class AppLinter {
                 }
             }
         }
+        // One-action dispatches (docs/workflow-expressiveness.md slice 3): every member
+        // exists and starts from one shared state (3112); a member without a guard that is
+        // not last makes its followers unreachable (3113).
+        for (io.tesseraql.yaml.model.DispatchSpec dispatch : def.dispatch()) {
+            String where = "workflow '" + id + "' dispatch '" + dispatch.id() + "'";
+            if (dispatch.id() != null && def.transitions().stream()
+                    .anyMatch(t -> dispatch.id().equals(t.id()))) {
+                findings.add(new LintFinding("TQL-WORKFLOW-3112", "error", source,
+                        where + " collides with a transition of the same id"));
+            }
+            if (dispatch.oneOf().size() < 2) {
+                findings.add(new LintFinding("TQL-WORKFLOW-3112", "error", source,
+                        where + " needs at least two member transitions"));
+            }
+            String sharedFrom = null;
+            io.tesseraql.yaml.model.SecuritySpec sharedSecurity = null;
+            boolean securitySeen = false;
+            for (int i = 0; i < dispatch.oneOf().size(); i++) {
+                String member = dispatch.oneOf().get(i);
+                io.tesseraql.yaml.model.TransitionSpec found = def.transitions().stream()
+                        .filter(t -> member.equals(t.id())).findFirst().orElse(null);
+                if (found == null) {
+                    findings.add(new LintFinding("TQL-WORKFLOW-3112", "error", source,
+                            where + " names unknown transition '" + member + "'"));
+                    continue;
+                }
+                if (sharedFrom == null) {
+                    sharedFrom = found.from();
+                } else if (!sharedFrom.equals(found.from())) {
+                    findings.add(new LintFinding("TQL-WORKFLOW-3112", "error", source,
+                            where + " members start from different states ('" + sharedFrom
+                                    + "' vs '" + found.from() + "')"));
+                }
+                // A dispatch is one action, one audience: every member must carry the
+                // same effective security spec — the selector has none of its own, each
+                // attempt enforces its member's.
+                io.tesseraql.yaml.model.SecuritySpec effective = found.security() != null
+                        ? found.security()
+                        : def.security();
+                if (!securitySeen) {
+                    sharedSecurity = effective;
+                    securitySeen = true;
+                } else if (!java.util.Objects.equals(sharedSecurity, effective)) {
+                    findings.add(new LintFinding("TQL-WORKFLOW-3112", "error", source,
+                            where + " members carry different security specs"));
+                }
+                if (found.guard() == null && i < dispatch.oneOf().size() - 1) {
+                    findings.add(new LintFinding("TQL-WORKFLOW-3113", "warning", source,
+                            where + " member '" + member + "' has no guard and is not last -"
+                                    + " the members after it are unreachable"));
+                }
+            }
+        }
         for (StateSpec state : def.states()) {
             boolean hasOutgoing = outgoing.containsKey(state.id());
             if (state.isTerminal() && hasOutgoing) {

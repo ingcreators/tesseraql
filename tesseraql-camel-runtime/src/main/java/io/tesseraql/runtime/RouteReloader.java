@@ -292,6 +292,16 @@ final class RouteReloader {
                 paths.put(def.id() + "." + transition.id(),
                         basePath + "/{key}/" + transition.id());
             }
+            for (io.tesseraql.yaml.model.DispatchSpec dispatch : def.dispatch()) {
+                paths.put(def.id() + "." + dispatch.id(),
+                        basePath + "/{key}/" + dispatch.id());
+                // Each member's internal shadow route (never REST-mounted) reloads with
+                // the workflow too — the dispatch selector sends attempts through it.
+                for (String member : dispatch.oneOf()) {
+                    paths.put(def.id() + "." + member + ".attempt",
+                            basePath + "/{key}/" + member);
+                }
+            }
         }
         return paths;
     }

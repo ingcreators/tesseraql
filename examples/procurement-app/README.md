@@ -65,7 +65,7 @@ with `--claim 'departments=["engineering"]'`) and walk the flow:
 GET  /api/requisitions                # scoped list; internal_estimate needs req.cost
 POST /api/requisitions                # create (draft)
 POST /api/requisitions/{id}/submit    # decision stamps the lane, task goes to the dept manager
-POST /api/requisitions/{id}/advance   # two-stage lane: on to the procurement head
+POST /api/requisitions/{id}/submit_decision  # dispatch: fires approve or advance per the stamped lane
 POST /api/requisitions/{id}/approve_final
 ```
 
@@ -94,17 +94,18 @@ Comparison and ordering (procurement):
 GET  /api/rfqs/{id}/comparison        # submitted quotes ranked, distance from lowest
 POST /api/orders                      # non-lowest pick needs a reason (422 otherwise)
 POST /api/orders/{id}/submit          # orderApproval decision routes the lane
-POST /api/orders/{id}/issue           # auto lane: no human in the loop
-POST /api/orders/{id}/approve_issue   # review lane: the head's task
+POST /api/orders/{id}/submit_decision # dispatch: issue (auto lane) or approve_issue (head review)
 ```
+
+(`issue` and `approve_issue` stay individually callable — the dispatch is the UI's
+one button, the members are the teaching detail.)
 
 Delivery-date negotiation:
 
 ```
 POST /api/orders/{id}/confirm         # supplier: as ordered
 POST /api/orders/{id}/date-change     # supplier: propose (slip computed server-side)
-POST /api/orders/{id}/propose_accept  # slip within tolerance: auto-confirm
-POST /api/orders/{id}/propose_review  # outside: review task for the buyer
+POST /api/orders/{id}/propose        # dispatch: auto-confirm within tolerance, review task outside
 POST /api/orders/{id}/accept_date | decline_date
 GET/POST /api/tolerances              # the runtime knob the decision reads
 ```
@@ -136,7 +137,8 @@ Then:
 
 1. **sato** creates a requisition and submits: the `approvalRoute` decision stamps the
    lane (capital categories and large amounts go two-stage), the department manager's
-   task opens; the manager (and for two-stage, `ota`) approves.
+   task opens; the manager's one button is `submit_decision` — the dispatch fires
+   `approve` or `advance` per the stamped lane (and for two-stage, `ota` finishes).
 2. **hara** turns it into an RFQ (`POST /api/rfqs` — an unapproved source answers 422),
    invites both partners, submits; **ota** issues — the quote-collection follow-up
    opens with a 168-hour reminder deadline.
@@ -146,9 +148,10 @@ Then:
 4. **hara** opens `/api/rfqs/{id}/comparison`, picks the *non-lowest* quote → a written
    reason is demanded (422); with the reason, the `orderApproval` decision routes the
    order to `ota`'s desk (within 3% it would have issued itself).
-5. The supplier proposes a +3-day delivery date: within the tolerance table it
-   auto-confirms. Tighten `/api/tolerances` to 1 day and the next proposal lands as a
-   review task instead — **the decision reads the table live, no deploy**.
+5. The supplier proposes a +3-day delivery date through the one-action `propose`
+   dispatch: within the tolerance table it auto-confirms. Tighten `/api/tolerances` to
+   1 day and the next proposal lands as a review task instead — **the decision reads
+   the table live, no deploy**, and the supplier's client never learns which lane fired.
 6. The supplier registers the shipment and ships (shipping without registering answers
    3204); **sato** receives — the chain closes, `/api/shipments/export` has the CSV,
    and `/dashboard` shows the story.
