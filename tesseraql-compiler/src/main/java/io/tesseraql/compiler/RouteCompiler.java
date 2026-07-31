@@ -447,6 +447,15 @@ public final class RouteCompiler {
                             + "' is unreadable: " + unreadable.getMessage(), unreadable);
                 }
             }
+            // Stamp columns are plain identifiers, validated here — the only string that
+            // reaches the UPDATE's column position (docs/workflow-expressiveness.md).
+            for (String column : transition.stamp().keySet()) {
+                if (!column.matches("[a-zA-Z_][a-zA-Z0-9_]*")) {
+                    throw new IllegalStateException("Workflow '" + def.id() + "' transition '"
+                            + transition.id() + "': stamp column '" + column
+                            + "' is not a plain identifier");
+                }
+            }
             io.tesseraql.compiler.binding.WorkflowBinding workflow = new io.tesseraql.compiler.binding.WorkflowBinding(
                     def.id(), transition.id(),
                     def.document().type(), def.document().table(), def.document().key(),
@@ -454,6 +463,7 @@ public final class RouteCompiler {
                     guard, guardNodes,
                     transition.guard() == null ? null : transition.guard().code(),
                     transition.guard() == null ? null : transition.guard().message(),
+                    transition.stamp(),
                     appStore, compileAssign(workflowFile, transition),
                     transition.assign() == null
                             ? java.util.Map.of()

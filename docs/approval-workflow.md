@@ -122,6 +122,23 @@ the state. (Why guards do not use the policy
 matcher and scopes do: the matcher answers role/permission/claim membership; the guard answers a data
 predicate — the same split data-scoping.md draws between `when:` arms and the expression language.)
 
+### Decision stamps
+
+A transition may declare **stamps** ([workflow expressiveness](workflow-expressiveness.md)):
+document columns the engine persists in the transition's transaction — after the state
+advance, before the author command — from `decision.*`/`document.*`/`principal.*` paths or
+literals, with `null` as a declared clearing (the rework transition's "re-evaluate next
+time"):
+
+```yaml
+stamp:
+  approval_route: decision.approvalRoute.route   # submit persists the decided lane
+```
+
+The stamped value is visible to everything later in the same transaction reading
+`document.<column>`, and later transitions guard on it. Columns must be plain identifiers
+and a `decision.*` value must name a declared `decide:` alias (`TQL-WORKFLOW-3111`).
+
 ### Assignee resolution is the dual of a scope
 
 A **scope** maps `principal → predicate over rows`. **Assignee resolution** maps `document → set of

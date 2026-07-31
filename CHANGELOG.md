@@ -8,6 +8,19 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **Decision stamps — the engine persists what the decision decided**
+  (docs/workflow-expressiveness.md slice 2): a transition's `stamp:` maps document
+  columns to `decision.*`/`document.*`/`principal.*` paths or literals; the engine
+  issues one UPDATE in the transition's transaction — after the state advance, before
+  the author command — and refreshes the in-memory document so later reads see the
+  stamped value. `stamp: {column: null}` is the declared rework clearing. Lint
+  `TQL-WORKFLOW-3111`: columns must be plain identifiers, a `decision.*` value must
+  name a declared `decide:` alias, and a dotted value outside the whitelist warns
+  before being stamped as a literal. The `transition:` suite target applies stamps
+  identically. The procurement demo's three hand-written stamp commands (submit ×2,
+  rework ×2) shrink to audit notes — the forgot-to-clear-the-lane bug class goes
+  with them.
+
 - **SQL guard files — the guard asks the database**
   (docs/workflow-expressiveness.md slice 1): a workflow transition's `guard:` gains a
   file form, `guard: {file: …, code: …, message: …}` — a 2-way **query** evaluated on

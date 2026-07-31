@@ -482,6 +482,7 @@ public final class TransactionalCommandProcessor implements Processor {
                         throw illegalTransition(wf.fromState(),
                                 "the document changed state concurrently");
                     }
+                    applyStamps(connection, context, wf.docId());
                 }
                 for (Step step : steps) {
                     // The ValidationRules.when contract, applied to steps: a falsy guard
@@ -1002,6 +1003,54 @@ public final class TransactionalCommandProcessor implements Processor {
         for (int i = 0; i < bound.parameters().size(); i++) {
             statement.setObject(i + 1, bound.parameters().get(i).value());
         }
+    }
+
+    /**
+     * Applies the transition's decision stamps (docs/workflow-expressiveness.md slice 2):
+     * one engine-issued {@code UPDATE <table> SET col = ?, … WHERE <key> = ?} in the
+     * transition's transaction, after the state advance and before the author command. A
+     * string value rooted at {@code decision.}/{@code document.}/{@code principal.} resolves
+     * as a path; anything else — including {@code null}, a rework's declared clearing — is
+     * the literal. Column identifiers were validated at compile; values ride {@code ?}
+     * placeholders. The in-memory document map is refreshed so anything later in the same
+     * transaction reading {@code document.<column>} sees the stamped value.
+     */
+    private void applyStamps(Connection connection, Map<String, Object> context, String docId)
+            throws SQLException {
+        if (workflow.stamps().isEmpty()) {
+            return;
+        }
+        EvaluationContext evaluation = new EvaluationContext(context);
+        Map<String, Object> resolved = new LinkedHashMap<>();
+        workflow.stamps().forEach((column, value) -> resolved.put(column,
+                resolveStamp(evaluation, value)));
+        StringBuilder sql = new StringBuilder("update ").append(workflow.table())
+                .append(" set ");
+        sql.append(String.join(", ",
+                resolved.keySet().stream().map(column -> column + " = ?").toList()));
+        sql.append(" where ").append(workflow.keyColumn()).append(" = ?");
+        try (PreparedStatement statement = connection.prepareStatement(sql.toString())) {
+            int index = 1;
+            for (Object value : resolved.values()) {
+                statement.setObject(index++, value);
+            }
+            statement.setObject(index, docId);
+            statement.executeUpdate();
+        }
+        if (context.get("document") instanceof Map<?, ?> document) {
+            Map<String, Object> refreshed = new LinkedHashMap<>();
+            document.forEach((k, v) -> refreshed.put(String.valueOf(k), v));
+            refreshed.putAll(resolved);
+            context.put("document", refreshed);
+        }
+    }
+
+    private static Object resolveStamp(EvaluationContext evaluation, Object value) {
+        if (value instanceof String path && (path.startsWith("decision.")
+                || path.startsWith("document.") || path.startsWith("principal."))) {
+            return evaluation.resolve(Arrays.asList(path.split("\\.")));
+        }
+        return value;
     }
 
     /** Turns a row-count mismatch into a conflict (or error) instead of a silent lost update. */

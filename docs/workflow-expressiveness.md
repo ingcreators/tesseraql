@@ -1,11 +1,15 @@
 # Workflow expressiveness — SQL guards, decision stamps, one-action dispatch
 
-> **Status: slice 1 (SQL guard files) implemented** — `guard: {file, code, message}` with
-> lints `TQL-WORKFLOW-3108/3109`, runtime + `transition:` suite-target evaluation, and the
-> procurement conversion (the quote counters deleted, the ship gate self-naming); user
-> docs in approval-workflow.md "guards and scopes". Slices 2 (`stamp:`), 3 (`dispatch:`),
-> and 4 (the `doc_type` literal lint) remain designed, not built. Grounded throughout in
-> what `examples/procurement-app` had to write before slice 1.
+> **Status: slices 1–2 implemented.** Slice 1 (SQL guard files): `guard: {file, code,
+> message}` with lints `TQL-WORKFLOW-3108/3109`, runtime + `transition:` suite-target
+> evaluation, and the procurement conversion (the quote counters deleted, the ship gate
+> self-naming). Slice 2 (`stamp:`): the engine persists decision outputs to document
+> columns after the advance and before the author command, refreshing the in-memory
+> document; `stamp: {column: null}` is the declared rework clearing; lint
+> `TQL-WORKFLOW-3111` (column identifiers, undeclared decision aliases, whitelist-escape
+> warnings); the three procurement stamp commands shrank to audit notes. Slices 3
+> (`dispatch:`) and 4 (the `doc_type` literal lint) remain designed, not built. Grounded
+> throughout in what `examples/procurement-app` had to write before slice 1.
 
 ## The three frictions, as shipped code
 

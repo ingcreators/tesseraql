@@ -2483,6 +2483,7 @@ public final class AppLinter {
                         where + " to-state '" + t.to() + "' is not declared in states"));
             }
             lintGuard(t.guard(), dir, where, source, findings);
+            lintStamp(t, where, source, findings);
             if (t.command() != null && !Files.isRegularFile(dir.resolve(t.command()))) {
                 findings.add(new LintFinding("TQL-WORKFLOW-3104", "error", source,
                         where + " references missing command '" + t.command() + "'"));
@@ -2551,6 +2552,38 @@ public final class AppLinter {
         }
 
         lintWorkflowMode(def, config, source, findings);
+    }
+
+    /**
+     * Lints a transition's decision stamps (docs/workflow-expressiveness.md slice 2): a
+     * column must be a plain identifier — the only string reaching an UPDATE's column
+     * position — and a {@code decision.*} value must name a declared {@code decide:} alias
+     * ({@code TQL-WORKFLOW-3111}). A dotted string outside the whitelist roots is stamped
+     * as a literal; the common context roots get a warning so a typo is not silent.
+     */
+    private void lintStamp(io.tesseraql.yaml.model.TransitionSpec transition, String where,
+            String source, List<LintFinding> findings) {
+        transition.stamp().forEach((column, value) -> {
+            if (!column.matches("[a-zA-Z_][a-zA-Z0-9_]*")) {
+                findings.add(new LintFinding("TQL-WORKFLOW-3111", "error", source,
+                        where + " stamp column '" + column + "' is not a plain identifier"));
+            }
+            if (value instanceof String path) {
+                if (path.startsWith("decision.")) {
+                    String alias = path.split("\\.").length > 1 ? path.split("\\.")[1] : "";
+                    if (!transition.decide().containsKey(alias)) {
+                        findings.add(new LintFinding("TQL-WORKFLOW-3111", "error", source,
+                                where + " stamps '" + path + "' but declares no decide: entry '"
+                                        + alias + "'"));
+                    }
+                } else if (path.matches("(task|params|body|query|path|audit)\\..+")) {
+                    findings.add(new LintFinding("TQL-WORKFLOW-3111", "warning", source,
+                            where + " stamp value '" + path + "' is outside the "
+                                    + "decision/document/principal whitelist and will be "
+                                    + "stamped as a literal string"));
+                }
+            }
+        });
     }
 
     /**
