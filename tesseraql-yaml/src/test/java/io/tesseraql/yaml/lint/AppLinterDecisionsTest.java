@@ -90,6 +90,41 @@ class AppLinterDecisionsTest {
                 && finding.message().contains("approvalRoute"));
     }
 
+    @Test
+    void aDecisionReferencedOnlyByAWorkflowTransitionIsNotUnreferenced(@TempDir Path dir)
+            throws Exception {
+        Path app = app(dir, "", "select 1\n");
+        Files.createDirectories(app.resolve("workflow"));
+        Files.writeString(app.resolve("workflow/submit.sql"),
+                "update requests set route = /* decision.approvalRoute.route */'x'"
+                        + " where id = /* key */ 'R-0'\n");
+        Files.writeString(app.resolve("workflow/request.yml"), """
+                version: tesseraql/v1
+                id: request
+                kind: workflow
+                document: { type: request, table: requests, key: id }
+                http: { basePath: /api/requests }
+                security: { auth: bearer, policy: req.write }
+                initial: draft
+                states:
+                  - { id: draft, type: initial }
+                  - { id: submitted, type: terminal }
+                transitions:
+                  - id: submit
+                    from: draft
+                    to: submitted
+                    command: submit.sql
+                    decide:
+                      approvalRoute:
+                        use: approvalRoute
+                        params: { amount: document.amount }
+                """);
+
+        List<LintFinding> findings = new AppLinter().lint(app);
+
+        assertThat(findings).noneMatch(finding -> finding.code().equals("TQL-DECISION-4716"));
+    }
+
     private static final String TABLE_BACKED = """
             version: tesseraql/v1
 

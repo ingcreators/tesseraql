@@ -603,6 +603,14 @@ public final class AppLinter {
                 }
             }
         }
+        // Workflow transitions consume decisions too (docs/decision-tables.md "decide:"),
+        // so a decision only they reference is not unreferenced.
+        for (WorkflowFile workflow : manifest.workflows()) {
+            for (io.tesseraql.yaml.model.TransitionSpec transition : workflow.definition()
+                    .transitions()) {
+                transition.decide().values().forEach(use -> referenced.add(use.use()));
+            }
+        }
         io.tesseraql.yaml.decision.DecisionSets sets = io.tesseraql.yaml.decision.DecisionSets
                 .load(appHome, new io.tesseraql.yaml.SimpleYamlParser());
         if (sets.isEmpty()) {

@@ -1,0 +1,40 @@
+version: tesseraql/v1
+id: api.requisitions.lines.add
+kind: route
+recipe: command-json
+
+input:
+  id:
+    type: string
+    required: true
+    maxLength: 64
+  itemId:
+    type: string
+    required: true
+    maxLength: 40
+  qty:
+    type: number
+    required: true
+    min: 0.01
+  desiredDate:
+    type: string
+    required: false
+    pattern: '^\d{4}-\d{2}-\d{2}$'
+
+security:
+  policy: req.write
+
+sql:
+  file: add-line.sql
+  mode: update
+  params:
+    id: path.id
+    itemId: params.itemId
+    qty: params.qty
+    desiredDate: params.desiredDate
+
+response:
+  json:
+    status: 201
+    body:
+      created: sql.affectedRows

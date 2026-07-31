@@ -38,6 +38,9 @@ public record TestSuite(List<TestCase> tests) {
      *                 declared decision against the params as input values
      * @param verify   read-back steps of a {@code sql} case, run on the case's transaction after
      *                 the target and rolled back with it (only legal with a {@code sql} target)
+     * @param principal the request principal the case runs as (docs/data-scoping.md): resolves
+     *                 {@code /*%scope … *}{@code /} directives in the target SQL exactly as the
+     *                 runtime would, and seeds the {@code principal.*} ambient paths
      */
     @JsonIgnoreProperties(ignoreUnknown = true)
     public record TestCase(String name, SqlTarget sql, String contract,
@@ -45,11 +48,20 @@ public record TestSuite(List<TestCase> tests) {
             @com.fasterxml.jackson.annotation.JsonProperty("notify") NotifyTarget notifications,
             MessagesTarget messages,
             @com.fasterxml.jackson.annotation.JsonProperty("http-call") HttpCallTarget httpCall,
-            DecideTarget decide, List<VerifyStep> verify) {
+            DecideTarget decide, List<VerifyStep> verify, PrincipalSpec principal) {
 
         public TestCase {
             params = params == null ? Map.of() : Map.copyOf(params);
             verify = verify == null ? List.of() : List.copyOf(verify);
+        }
+
+        /** Convenience constructor without a {@code principal} (the pre-scoping shape). */
+        public TestCase(String name, SqlTarget sql, String contract, Map<String, Object> params,
+                Expectation expect, ValidateTarget validate, NotifyTarget notifications,
+                MessagesTarget messages, HttpCallTarget httpCall, DecideTarget decide,
+                List<VerifyStep> verify) {
+            this(name, sql, contract, params, expect, validate, notifications, messages, httpCall,
+                    decide, verify, null);
         }
 
         /** Convenience constructor without a {@code decide} target (the pre-decisions shape). */
@@ -90,6 +102,25 @@ public record TestSuite(List<TestCase> tests) {
      * @param effectiveAt optional reference instant of a dated table source (ISO-8601 instant
      *                    or {@code yyyy-MM-dd HH:mm:ss}); defaults to the runner's clock
      */
+    /**
+     * The request principal a case runs as (docs/data-scoping.md): the same shape every
+     * authentication mechanism produces, so a suite can exercise scope arms and
+     * {@code principal.*} ambient paths per posture — one case per role, no tokens involved.
+     */
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public record PrincipalSpec(String subject, String loginId, List<String> roles,
+            List<String> permissions, List<String> groups, Map<String, Object> claims) {
+
+        public PrincipalSpec {
+            roles = roles == null ? List.of() : List.copyOf(roles);
+            permissions = permissions == null ? List.of() : List.copyOf(permissions);
+            groups = groups == null ? List.of() : List.copyOf(groups);
+            claims = claims == null
+                    ? Map.of()
+                    : java.util.Collections.unmodifiableMap(new java.util.LinkedHashMap<>(claims));
+        }
+    }
+
     @JsonIgnoreProperties(ignoreUnknown = true)
     public record DecideTarget(String decision, String effectiveAt) {
     }

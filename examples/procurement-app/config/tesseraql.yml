@@ -1,0 +1,66 @@
+tesseraql:
+  app:
+    name: procurement
+
+  datasources:
+    main:
+      jdbcUrl: ${db.main.url}
+      username: ${db.main.username}
+      password: ${db.main.password}
+
+  security:
+    # Path-matched route security defaults (docs/route-defaults.md): the API surface is
+    # bearer, everything else is a browser page/fragment with CSRF on writes.
+    defaults:
+      routes:
+        - match: /api/**
+          auth: bearer
+        - match: /**
+          auth: browser
+          csrf: auto
+
+    # The security header block every HTML response sends (docs/response-shaping.md
+    # "Default response headers"); a route overrides per header name, `unset` suppresses.
+    responseHeaders:
+      Content-Security-Policy: "default-src 'self'; style-src 'self' 'unsafe-inline'; frame-ancestors 'none'"
+      X-Content-Type-Options: nosniff
+      X-Frame-Options: DENY
+      Referrer-Policy: no-referrer
+    jwt:
+      secret: ${JWT_SECRET:dev-only-secret-change-me-in-production}
+      rolesClaim: roles
+      permissionsClaim: permissions
+    # Deny-by-default, defined HERE (the marketplace admission bar, docs/admission.md).
+    # The persona split (docs/procurement-demo.md): requesters author, managers and the
+    # procurement head approve, procurement sees costs.
+    policies:
+      req.read:
+        anyOf:
+          - role: REQUESTER
+          - role: MANAGER
+          - role: PROCUREMENT
+          - role: PROCUREMENT_HEAD
+          - role: ADMIN
+      req.write:
+        anyOf:
+          - role: REQUESTER
+          - role: ADMIN
+      req.act:
+        anyOf:
+          - role: REQUESTER
+          - role: MANAGER
+          - role: PROCUREMENT_HEAD
+          - role: ADMIN
+      # Unmasks the buyer-internal cost estimate (web/api/requisitions): procurement
+      # and approvers see it, a plain requester listing their department does not.
+      req.cost:
+        anyOf:
+          - role: MANAGER
+          - role: PROCUREMENT
+          - role: PROCUREMENT_HEAD
+          - role: ADMIN
+
+  # Managed workflow state: instances/tasks/history live in the framework's tql_workflow_*
+  # tables, so the business table stays clean (docs/approval-workflow.md).
+  workflow:
+    mode: managed

@@ -1,0 +1,30 @@
+version: tesseraql/v1
+id: requisitions.page
+kind: route
+recipe: query-html
+
+input:
+  q:
+    type: string
+    required: false
+    maxLength: 100
+  sort: { type: string, required: false }
+  dir: { type: string, required: false, enum: [asc, desc] }
+
+security:
+  policy: req.read
+
+page:
+  size: 20
+  count: true
+
+sql:
+  file: requisitions.sql
+  mode: query
+  params:
+    q: query.q
+
+response:
+  html:
+    status: 200
+    view: list.view.yml

@@ -48,6 +48,7 @@ public final class TestRunner {
     private final RealmConfig realm;
     private final SqlCoverage coverage;
     private AppManifest manifest;
+    private io.tesseraql.core.sql.ScopeResolver scopeResolver;
 
     public TestRunner(DataSource dataSource, Path appHome) {
         this(dataSource, appHome, null, null, null);
@@ -132,10 +133,12 @@ public final class TestRunner {
             connection.setAutoCommit(false);
             try {
                 SqlOutcome outcome = executeSql(connection,
-                        appHome.resolve(test.sql().file()), test.params());
+                        appHome.resolve(test.sql().file()),
+                        withPrincipal(test.params(), test.principal()));
                 String failure = assertOutcome(test.expect(), outcome);
                 for (int i = 0; failure == null && i < test.verify().size(); i++) {
-                    failure = runVerifyStep(connection, test.verify().get(i), i);
+                    failure = runVerifyStep(connection, test.verify().get(i), i,
+                            test.principal());
                 }
                 return failure == null
                         ? TestResult.pass(test.name())
@@ -150,13 +153,14 @@ public final class TestRunner {
     }
 
     /** Runs one read-back on the case's transaction; null on pass, else the failure message. */
-    private String runVerifyStep(Connection connection, TestSuite.VerifyStep step, int index) {
+    private String runVerifyStep(Connection connection, TestSuite.VerifyStep step, int index,
+            TestSuite.PrincipalSpec principal) {
         String label = "verify[" + index + "]";
         if (step.sql() == null || step.sql().file() == null) {
             throw new IllegalArgumentException(label + " needs a sql.file target");
         }
         SqlOutcome outcome = executeSql(connection, appHome.resolve(step.sql().file()),
-                step.params());
+                withPrincipal(step.params(), principal));
         if (outcome.rows() == null) {
             throw new IllegalArgumentException(label + " (" + step.sql().file()
                     + ") is a write; verify steps are read-backs and must return rows");
@@ -244,10 +248,11 @@ public final class TestRunner {
                     + (test.validate().rule() == null ? "" : " '" + test.validate().rule() + "'"));
         }
         try (Connection connection = dataSource.getConnection()) {
-            // A declarative case supplies its own params and carries no request principal, so a
-            // scope directive has nothing to resolve against: reject it rather than pretend.
-            return new ValidationRules(rules).evaluate(test.params(), connection,
-                    io.tesseraql.core.sql.ScopeResolver.UNSUPPORTED,
+            // The case's principal: (when declared) seeds the scope context and the ambient
+            // principal.* paths, so a scoped rule renders exactly as it would on a request.
+            return new ValidationRules(rules).evaluate(
+                    withPrincipal(test.params(), test.principal()), connection,
+                    scopeResolver(),
                     (rule, bound) -> recordRuleCoverage(rule, bound));
         } catch (java.sql.SQLException ex) {
             throw new IllegalStateException("Validation SQL failed: " + ex.getMessage(), ex);
@@ -745,11 +750,55 @@ public final class TestRunner {
     private record SqlOutcome(List<Map<String, Object>> rows, Integer updateCount) {
     }
 
+    /**
+     * Seeds the case's {@code principal:} under the parameters (and so the scope context):
+     * ambient {@code principal.*} binds and scope-arm params resolve against the same
+     * {@link io.tesseraql.security.Principal} shape the runtime's request context carries.
+     * Explicit {@code params.principal} wins, so pre-scoping suites keep their meaning.
+     */
+    private static Map<String, Object> withPrincipal(Map<String, Object> params,
+            TestSuite.PrincipalSpec principal) {
+        if (principal == null || params.containsKey("principal")) {
+            return params;
+        }
+        Map<String, Object> seeded = new java.util.LinkedHashMap<>(params);
+        seeded.put("principal", new io.tesseraql.security.Principal(principal.subject(),
+                principal.loginId(), null, null, principal.groups(), principal.roles(),
+                principal.permissions(), principal.claims()));
+        return seeded;
+    }
+
+    /**
+     * The production scope resolver over the app's {@code scope/} declarations
+     * (docs/data-scoping.md), compiled once for the runner's database vendor — the same
+     * arm matching and fragments the runtime uses, so a scoped statement renders here
+     * exactly as it would on a request. An app with no scopes keeps the reject-any-scope
+     * default: an accidental directive still fails loudly.
+     */
+    private io.tesseraql.core.sql.ScopeResolver scopeResolver() {
+        if (scopeResolver == null) {
+            AppManifest loaded = loadManifest();
+            scopeResolver = loaded.scopes().isEmpty()
+                    ? io.tesseraql.core.sql.ScopeResolver.UNSUPPORTED
+                    : new io.tesseraql.identity.scope.CompiledScopeResolver(loaded.scopes(),
+                            io.tesseraql.core.util.DatabaseVendors.vendor(dataSource)
+                                    .orElse("postgres"));
+        }
+        return scopeResolver;
+    }
+
+    private AppManifest loadManifest() {
+        if (manifest == null) {
+            manifest = new ManifestLoader().load(appHome);
+        }
+        return manifest;
+    }
+
     /** Executes a 2-way SQL file on the given (case-transaction) connection, recording coverage. */
     private SqlOutcome executeSql(Connection connection, Path sqlFile,
             Map<String, Object> params) {
         List<SqlNode> nodes = Sql2WayParser.parse(read(sqlFile));
-        BoundSql bound = SqlRenderer.render(nodes, params);
+        BoundSql bound = SqlRenderer.render(nodes, params, scopeResolver(), params);
         if (coverage != null) {
             coverage.record(appHome.relativize(sqlFile).toString().replace('\\', '/'),
                     bound.coverageTrace(), SqlCoverableLines.compute(nodes));

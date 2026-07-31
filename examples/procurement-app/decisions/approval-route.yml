@@ -1,0 +1,23 @@
+version: tesseraql/v1
+
+# The requisition approval routing policy (docs/procurement-demo.md): two input
+# dimensions, one lane output. Capital-heavy categories always take the two-stage lane
+# regardless of amount; otherwise the amount decides. Release-versioned policy stays
+# YAML rows (docs/decision-tables.md); the delivery tolerance in a later slice shows
+# the table-backed source.
+decisions:
+  approvalRoute:
+    inputs:
+      amount: { type: number, match: between }
+      category: { type: string, match: in }
+    outputs:
+      route: { type: string, enum: [manager, two_stage] }
+    hitPolicy: first
+    rows:
+      # Capital categories are two-stage no matter how small the amount.
+      - when: { category: [it-equipment, capex] }
+        out: { route: two_stage }
+      # Everything else escalates on amount alone.
+      - when: { amount: "> 300000" }
+        out: { route: two_stage }
+      - out: { route: manager }

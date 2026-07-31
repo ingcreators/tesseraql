@@ -265,7 +265,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
         // producer falls back to its reject-any-scope default everywhere else.
         if (!manifest.scopes().isEmpty()) {
             context.getRegistry().bind(TesseraqlProperties.SCOPE_RESOLVER_BEAN,
-                    new io.tesseraql.compiler.binding.CompiledScopeResolver(
+                    new io.tesseraql.identity.scope.CompiledScopeResolver(
                             manifest.scopes(), datasourceDialect(manifest.config())));
         }
         // Analytics file scopes (docs/duckdb.md): ${scope.*} placeholders resolve only when a
