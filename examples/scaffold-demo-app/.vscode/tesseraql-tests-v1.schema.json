@@ -52,6 +52,16 @@
             "additionalProperties": true,
             "description": "Evaluates one decision declared under decisions/ against the params as input values (docs decision-tables). Outputs come back as the case's single row; a miss or unique multi-hit comes back as one row carrying code (TQL-DECISION-4721/4720). effectiveAt dates a table-source lookup (ISO-8601 or yyyy-MM-dd HH:mm:ss)."
           },
+          "transition": {
+            "type": "object",
+            "properties": {
+              "workflow": { "type": "string" },
+              "key": { "type": "string" },
+              "id": { "type": "string" }
+            },
+            "additionalProperties": true,
+            "description": "Fires one declared workflow transition against the document named by key, inside the case's rolled-back transaction, through the documented pipeline (state legality, decide, guard, conditional advance, scoped command, zero-row contract). The outcome is the case's single row: from/to on an advance, or a code row (TQL-WORKFLOW-3201/3202/3204, TQL-DECISION-4720/4721) so a refusal is assertable as data. Pair with principal for scoped commands."
+          },
           "notify": {
             "type": "object",
             "properties": {

@@ -79,6 +79,17 @@ scope posture, and how the `data-scope` [coverage kind](#coverage-kinds) is earn
 - **`messages`** — resolves keys from the app's `messages/<locale>.yml` catalogs: one row per
   key with `key`, `locale`, and `text`. Omit `keys` to resolve every key the locale sees; an
   unresolvable key yields a null `text`, so the expectation fails visibly.
+- **`transition`** — fires one declared workflow transition
+  (`transition: {workflow: ..., key: ..., id: ...}`) against the named document, inside the
+  case's always-rolled-back transaction, through the documented pipeline
+  ([approval workflow](approval-workflow.md)): state legality, `decide:` resolution after
+  the document binds, the guard, the conditional state advance, the command with its
+  `/*%scope */`, and the zero-row contract. The outcome is the case's single row —
+  `from`/`to` on an advance, or a `code` row (`TQL-WORKFLOW-3201/3202/3204`,
+  `TQL-DECISION-4720/4721`) so a refusal is assertable as data; `verify:` read-backs
+  observe the uncommitted command under the same `principal`. Task opening, history,
+  notifications, and the task-holder authority check are runtime concerns a rolled-back
+  case does not model — the HTTP surface stays the place to prove those.
 
 ## Real-send cases
 

@@ -424,6 +424,46 @@ tests:
     expect:
       rowCount: 1
 
+  # The transition target (docs/testing.md): the state machine asserted declaratively —
+  # the submit advance stamps the decided lane, and a wrong-state fire is a 3201 row.
+  - name: submitting the office requisition takes the manager lane
+    transition:
+      workflow: requisition
+      key: REQ-1002
+      id: submit
+    principal:
+      loginId: sato
+      roles: [REQUESTER]
+      claims:
+        departments: [sales]
+    expect:
+      rows:
+        - from: draft
+          to: submitted
+    verify:
+      - sql:
+          file: web/api/requisitions/{id}/requisition.sql
+        params:
+          id: REQ-1002
+        expect:
+          rows:
+            - approval_route: manager
+
+  - name: approving a draft is a conflict row, not an exception
+    transition:
+      workflow: requisition
+      key: REQ-1002
+      id: approve
+    principal:
+      loginId: kishi
+      roles: [MANAGER]
+      claims:
+        departments: [sales]
+    expect:
+      rows:
+        - code: TQL-WORKFLOW-3201
+          from: draft
+
   # The assignment resolvers bind real master rows, not literals.
   - name: the first-stage assignee is the requesting department's manager
     sql:
