@@ -8,6 +8,14 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **The `current_state` literal lint — the other half of the typo class**
+  (docs/transition-engine.md slice 4): `TQL-WORKFLOW-3115` (warning) flags a
+  `current_state` string literal in SQL referencing the managed
+  `tql_workflow_instance` table that names no declared workflow state — the exact
+  sibling of `TQL-WORKFLOW-3114`, one column over, and far more frequent in real SQL.
+  When the file pins exactly one declared `doc_type`, the check narrows to that
+  workflow's states, so a real state of the wrong workflow still warns.
+
 - **The `dispatch:` suite target — the one-button selector asserted as data**
   (docs/transition-engine.md slice 3): a declarative case runs the dispatch's
   member-selection loop inside its always-rolled-back transaction — the dispatch-level

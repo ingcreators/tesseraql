@@ -252,6 +252,57 @@ class AppLinterWorkflowTest {
     }
 
     @Test
+    void aCurrentStateLiteralNamingNoDeclaredStateIsAWarning(@TempDir Path dir)
+            throws Exception {
+        writeWorkflow(dir, WELL_FORMED);
+        Files.createDirectories(dir.resolve("rules"));
+        // 'approved ' with a trailing typo character survives to runtime as an
+        // always-empty join today; a declared state lints clean.
+        Files.writeString(dir.resolve("rules/approved.sql"), """
+                select 1 from tql_workflow_instance wi
+                where wi.doc_type = 'purchase_request'
+                  and wi.current_state = 'aproved' and wi.doc_id = /* id */ 'x'
+                """);
+        assertThat(new AppLinter().lint(dir)).anyMatch(f -> f.code()
+                .equals("TQL-WORKFLOW-3115") && !f.isError());
+
+        Files.writeString(dir.resolve("rules/approved.sql"), """
+                select 1 from tql_workflow_instance wi
+                where wi.doc_type = 'purchase_request'
+                  and wi.current_state = 'approved' and wi.doc_id = /* id */ 'x'
+                """);
+        assertThat(codes(new AppLinter().lint(dir))).isEmpty();
+    }
+
+    @Test
+    void aPinnedDocTypeNarrowsTheStateSpace(@TempDir Path dir) throws Exception {
+        // Two workflows: 'other' declares state 'shipped', purchase_request does not.
+        writeWorkflow(dir, WELL_FORMED);
+        Files.writeString(dir.resolve("workflow/other.yml"), """
+                version: tesseraql/v1
+                id: other
+                kind: workflow
+                mode: managed
+                document: { type: other, table: purchase_requests, key: id }
+                initial: open
+                states:
+                  - { id: open, type: initial }
+                  - { id: shipped, type: terminal }
+                transitions:
+                  - { id: ship, from: open, to: shipped, command: approve.sql }
+                """);
+        Files.createDirectories(dir.resolve("rules"));
+        // The file pins purchase_request, so 'shipped' — a real state, of the WRONG
+        // workflow — warns; without the pin the union would have hidden the mismatch.
+        Files.writeString(dir.resolve("rules/narrowed.sql"), """
+                select 1 from tql_workflow_instance wi
+                where wi.doc_type = 'purchase_request'
+                  and wi.current_state = 'shipped' and wi.doc_id = /* id */ 'x'
+                """);
+        assertThat(codes(new AppLinter().lint(dir))).contains("TQL-WORKFLOW-3115");
+    }
+
+    @Test
     void aDocTypeColumnOfTheAppsOwnTableIsOutOfScope(@TempDir Path dir) throws Exception {
         writeWorkflow(dir, WELL_FORMED);
         // No tql_workflow_instance reference: the app's own doc_type column, any value.
