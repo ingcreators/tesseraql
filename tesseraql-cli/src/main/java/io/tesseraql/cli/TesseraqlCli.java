@@ -27,6 +27,7 @@ import picocli.CommandLine.Option;
         NewCommand.class,
         ScaffoldCommand.class,
         LintCommand.class,
+        TokenCommand.class,
         TestCommand.class,
         CoverageCommand.class,
         GenerateCommand.class,

@@ -106,6 +106,17 @@ bounces that route, a workflow edit rebuilds its transition endpoints, a shared-
 edit rebuilds every route. The same instant loop as Studio's **Apply** (jobs, consumers,
 and `config/` changes still need a restart).
 
+Smoke-testing a bearer-authenticated API? `tesseraql token --app . --role ADMIN` mints a
+development JWT signed with the app's configured HS256 secret — roles land under the
+configured `rolesClaim`, `--claim partner=P-100` adds custom claims (a JSON-looking value
+embeds structurally), `--ttl 30m` bounds it. Development only by construction: an app that
+verifies asymmetrically (publicKey/JWKS) has nothing this command could sign with.
+
+```bash
+curl -H "Authorization: Bearer $(tesseraql token --app . --role ADMIN)" \
+  http://localhost:8080/api/things
+```
+
 ## The Maven / CI path
 
 `tesseraql new` also scaffolds a thin wrapper `pom.xml` and the Maven Wrapper, so CI needs only a
