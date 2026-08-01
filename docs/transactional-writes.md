@@ -105,6 +105,12 @@ sql:
 The CRUD scaffold ([scaffolding](scaffolding.md)) uses exactly this for its sortable list
 datagrid.
 
+The whole header+lines shape ships runnable in the procurement gallery app
+(`examples/procurement-app`, `POST /api/requisitions`): a generated-key header step, a
+`%for` detail insert bound to the request's `lines` array, and a `validate:` rule
+(`params.lines.size > 0`) refusing an empty order — suite-covered, so the pattern in
+this page is proven, not illustrative.
+
 ## Audit binds
 
 `/* audit.user */` and `/* audit.now */` resolve from the authenticated principal (login id,

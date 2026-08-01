@@ -8,7 +8,7 @@ tests:
     principal:
       roles: [PROCUREMENT]
     expect:
-      rowCount: 2
+      rowCount: 3
 
   - name: a requester sees only their own department
     sql:
@@ -18,9 +18,10 @@ tests:
       claims:
         departments: [engineering]
     expect:
-      rowCount: 1
+      rowCount: 2
       rows:
         - id: REQ-1001
+        - id: REQ-1003
 
   - name: no matching scope arm means no rows, not all rows
     sql:
@@ -44,6 +45,46 @@ tests:
 
   # The approvalRoute decision (decisions/approval-route.yml): both dimensions and the
   # amount boundary.
+  # The header+lines shape (docs/transactional-writes.md): the %for detail insert
+  # writes the whole lines array in one statement against the just-created draft.
+  - name: the detail insert writes every line of the array in one statement
+    sql:
+      file: web/api/requisitions/create-lines.sql
+    principal:
+      roles: [PROCUREMENT]
+    params:
+      requisitionId: REQ-1003
+      lines:
+        - itemId: SV-001
+          qty: 1
+          desiredDate: "2026-09-15"
+        - itemId: IT-002
+          qty: 2
+    expect:
+      updateCount: 2
+    verify:
+      - sql:
+          file: web/api/requisitions/{id}/lines/lines.sql
+        params:
+          id: REQ-1003
+        expect:
+          rowCount: 2
+
+  - name: a requisition without lines is refused before anything writes
+    validate:
+      route: api.requisitions.create
+    params:
+      params:
+        title: An empty order
+        department: engineering
+        category: office
+        amount: 100
+    expect:
+      rowCount: 1
+      rows:
+        - rule: linesRequired
+          code: lines-required
+
   - name: capital categories are two-stage regardless of amount
     decide:
       decision: approvalRoute
@@ -405,7 +446,7 @@ tests:
     expect:
       rowCount: 1
       rows:
-        - requisitions: 2
+        - requisitions: 3
           submitted_quotes: 2
           in_transit: 0
 

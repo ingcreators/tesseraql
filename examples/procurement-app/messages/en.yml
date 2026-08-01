@@ -3,6 +3,7 @@ procurement:
     duplicate: A request with this title is already filed.
     notApproved: Only an approved requisition can source an RFQ.
     reasonRequired: Selecting a quote that is not the lowest requires a written reason.
+    linesRequired: A requisition needs at least one line item.
   quote:
     unpriced: Every line needs a price before the quote can be submitted.
   ship:
