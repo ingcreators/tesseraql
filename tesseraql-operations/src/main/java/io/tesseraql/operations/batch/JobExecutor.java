@@ -157,10 +157,23 @@ public final class JobExecutor {
     public JobExecution run(JobFile jobFile, DataSource dataSource,
             io.tesseraql.core.tenant.TenantContext tenant, String appName,
             Map<String, Object> jobParams, String triggerType, String triggeredBy) {
+        return run(jobFile, dataSource, tenant, appName, jobParams, triggerType, triggeredBy,
+                java.util.Set.of());
+    }
+
+    /**
+     * Runs the job, recording the named pipeline steps as {@code SKIPPED} instead of running
+     * them — {@code tesseraql job rerun --from-failed-step} passes the source execution's
+     * completed steps (docs/batch-platform.md track D).
+     */
+    public JobExecution run(JobFile jobFile, DataSource dataSource,
+            io.tesseraql.core.tenant.TenantContext tenant, String appName,
+            Map<String, Object> jobParams, String triggerType, String triggeredBy,
+            java.util.Set<String> skipSteps) {
         JobDefinition job = jobFile.definition();
         java.time.LocalDate businessDate = resolveBusinessDate(jobParams);
         String executionId = repository.startExecution(job.id(), appName, triggerType,
-                triggeredBy, businessDate);
+                triggeredBy, businessDate, paramsJson(jobParams));
         Map<String, Object> stepResults = new LinkedHashMap<>();
         Map<String, Object> context = new HashMap<>();
         context.put("job", jobParams == null ? Map.of() : jobParams);
@@ -188,6 +201,12 @@ public final class JobExecutor {
         io.tesseraql.core.telemetry.SpanContext jobContext = jobSpan.context();
         try {
             for (PipelineStep step : job.effectiveSteps()) {
+                if (skipSteps.contains(step.id())) {
+                    // Recorded, not run: the source execution already completed this step.
+                    repository.skipStep(repository.startStep(executionId, step.id()));
+                    stepResults.put(step.id(), Map.of("skipped", true));
+                    continue;
+                }
                 runStepTracked(jobFile, step, dataSource, context, stepResults, executionId,
                         appName, jobContext);
             }
@@ -202,6 +221,27 @@ public final class JobExecutor {
             jobSpan.end();
         }
         return repository.findExecution(executionId).orElseThrow();
+    }
+
+    /**
+     * The run's parameters as recorded JSON ({@code tesseraql job rerun} re-binds them), values
+     * stringified the way HTTP input arrives. Never fails the run: an unserializable map is
+     * recorded as null and a rerun falls back to the business date alone.
+     */
+    private String paramsJson(Map<String, Object> jobParams) {
+        if (jobParams == null || jobParams.isEmpty()) {
+            return null;
+        }
+        try {
+            Map<String, String> stringified = new LinkedHashMap<>();
+            jobParams.forEach((name, value) -> stringified.put(name,
+                    value == null ? null : String.valueOf(value)));
+            return mapper.writeValueAsString(stringified);
+        } catch (RuntimeException | com.fasterxml.jackson.core.JsonProcessingException ex) {
+            LOG.warn("Job parameters not recorded (rerun will reuse the business date only): {}",
+                    ex.getMessage());
+            return null;
+        }
     }
 
     /**

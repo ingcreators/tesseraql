@@ -8,6 +8,20 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **The external-scheduler execution contract — `tesseraql job list/run/rerun`**
+  (docs/batch-platform.md slice 4): schedulers drive batch by executing a command and
+  branching on the exit code, and now that command exists. `job run` executes in-process
+  (no server), prints the execution id and per-step summary, and exits 0 on COMPLETED,
+  1 on FAILED, **3 when the business-day calendar filtered the date out** — distinct,
+  so "holiday" can be success-with-note (`--ignore-calendar` forces). Every execution
+  now records its parameters, so `job rerun` re-runs the same fact — the source's
+  parameters and business date, with chunk checkpoints resuming where the failure
+  stopped — and `--from-failed-step` records the source's completed steps as `SKIPPED`.
+  Light chaining lands with it: `trigger: { after: <jobId> }` fires a job when the named
+  job completes successfully in the same app, carrying the business date, in the CLI and
+  the serving runtime alike (lint `TQL-BATCH-4209` refuses unknown targets and cycles;
+  the job-net DAG stays with external schedulers by design).
+
 - **The chunk step — restartable, skip-aware, committed in slices**
   (docs/batch-platform.md slice 3): a pipeline step's fourth body. `chunk:` streams a
   keyset-ordered reader on one connection and runs its writer once per row on a second,

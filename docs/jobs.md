@@ -56,6 +56,13 @@ trigger:
 `cron` takes a Quartz cron expression (seconds-first). `fixedDelay` re-fires at
 a fixed period. Declare one or the other, not both.
 
+A third trigger kind chains lightly: `after: <jobId>` fires the job when the named job's
+execution **completes successfully** in the same app, carrying the parent's business date —
+enough for "extract, then send". A trigger declares one kind; a chain must name a declared
+job and must not loop (`TQL-BATCH-4209`). Anything wider than a chain — generational
+reruns, cross-system dependencies, an operator console — belongs to the external scheduler
+by design ([batch platform](batch-platform.md)).
+
 ## The business date
 
 Business batch is date-driven: "run the 2026-07-31 close" and "rerun the 14th after
@@ -137,6 +144,34 @@ execution id and final status. The JSON request body becomes the job's parameter
 `params:` on the job document the expected names and types; each value is available to steps
 as `job.<name>`. Scheduled firings run with no parameters, so a scheduled job's SQL must
 work when its `job.*` binds are null.
+
+## Driving jobs from an external scheduler
+
+Enterprise batch estates already own a job-net scheduler; it drives work by executing a
+command and branching on the exit code. That command is the CLI — in-process (manifest plus
+datasource config, no server needed), with codes a scheduler can branch on:
+
+```console
+$ tesseraql job list --app .
+$ tesseraql job run nightly.close --app . --business-date 2026-07-31 [--param k=v]…
+$ tesseraql job rerun <executionId> --app . [--from-failed-step]
+```
+
+- **`job run`** waits, prints the execution id and per-step summary, and exits **0** on
+  `COMPLETED`, **1** on `FAILED`, and **3** when the job's business-day calendar filtered
+  the date out — distinct, so the scheduler can treat "holiday" as success-with-note
+  (`--ignore-calendar` forces the run). A request that cannot run at all — an unknown job
+  or execution id — exits 2. A completed run fires `after:` chains exactly as the serving
+  runtime does; a failed chained job flips the exit code to 1 even though the parent's
+  success stands, because a scheduler must hear about a broken link.
+- **`job rerun`** starts a new execution with the source run's **recorded parameters and
+  business date** (parameters are recorded on every execution for exactly this), so it
+  re-runs the same fact — and a [chunk step](#the-chunk-step) resumes from its checkpoint.
+  `--from-failed-step` additionally records the steps the source execution completed as
+  `SKIPPED`, starting at its first failure.
+- `notify:` steps enqueue on the durable outbox — the serving runtime delivers them when
+  it next runs. A `perTenant` job runs untenanted under the CLI; drive per-tenant runs
+  through the operations API.
 
 ## Pipeline steps and the step context
 
@@ -301,6 +336,7 @@ Every run is persisted as an execution with its steps, visible three ways:
 | `TQL-BATCH-4206` | a malformed `chunk:` — missing `reader:`/`writer:` files, `commitEvery` below 1, or a negative `skipLimit` (lint) |
 | `TQL-BATCH-4207` | a chunk reader without `order by` — no deterministic resume point (lint) |
 | `TQL-BATCH-4208` | a chunk reader that never binds `chunk.after` — restarts reprocess from the top (lint warning) |
+| `TQL-BATCH-4209` | an `after:` chain naming an unknown job, or a chain that loops (lint) |
 | `TQL-BATCH-5001` | the execution store could not record a run |
 | `TQL-BATCH-5002` | a step failed (its SQL raised an error), a chunk step exceeded its `skipLimit`, or a step is misdeclared |
 

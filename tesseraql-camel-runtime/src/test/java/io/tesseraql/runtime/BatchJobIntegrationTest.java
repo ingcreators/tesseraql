@@ -267,6 +267,26 @@ class BatchJobIntegrationTest {
     }
 
     @Test
+    void anAfterTriggerChainsOnCompletionCarryingTheBusinessDate() throws Exception {
+        String token = token(List.of("BATCH_OPERATOR"));
+
+        // The ops manual run goes through the runner the scheduler uses, so the chain fires.
+        HttpResponse<String> run = send("POST",
+                "/_tesseraql/ops/batch/jobs/user.chainExtract/run", token,
+                "{\"businessDate\": \"2026-08-03\"}");
+        assertThat(run.statusCode()).isEqualTo(200);
+        assertThat(run.body()).contains("COMPLETED");
+
+        JobExecution chained = runtime.jobRepository().listExecutions(500).stream()
+                .filter(execution -> "user.chainSend".equals(execution.jobId()))
+                .findFirst().orElseThrow();
+        assertThat(chained.status()).isEqualTo(JobStatus.COMPLETED);
+        assertThat(chained.triggerType()).isEqualTo("after");
+        // The chain runs the same fact: the parent's business date, not today's default.
+        assertThat(chained.businessDate()).isEqualTo(java.time.LocalDate.parse("2026-08-03"));
+    }
+
+    @Test
     void operationsOverviewReportsBatchAndLanes() throws Exception {
         String token = token(List.of("BATCH_OPERATOR"));
         send("POST", "/_tesseraql/ops/batch/jobs/user.dailyMaintenance/run", token, "{}");
@@ -524,6 +544,27 @@ class BatchJobIntegrationTest {
                     values (/* row.item_key */ 'x01', cast(/* row.payload */ '1' as integer))
                     """.formatted(set));
         }
+        // Light chaining (docs/batch-platform.md track D): send fires after extract completes,
+        // carrying the business date.
+        Files.createDirectories(target.resolve("batch/chain"));
+        Files.writeString(target.resolve("batch/chain/extract.yml"), """
+                version: tesseraql/v1
+                id: user.chainExtract
+                kind: job
+                recipe: batch-tasklet
+                sql: { file: noop.sql, mode: update }
+                """);
+        Files.writeString(target.resolve("batch/chain/send.yml"), """
+                version: tesseraql/v1
+                id: user.chainSend
+                kind: job
+                recipe: batch-tasklet
+                trigger:
+                  after: user.chainExtract
+                sql: { file: noop.sql, mode: update }
+                """);
+        Files.writeString(target.resolve("batch/chain/noop.sql"),
+                "update users set name = name where name = '___none___'\n");
         StringBuilder chunkFixtures = new StringBuilder();
         for (String set : List.of("a", "b")) {
             chunkFixtures.append("create table chunk_items_").append(set)

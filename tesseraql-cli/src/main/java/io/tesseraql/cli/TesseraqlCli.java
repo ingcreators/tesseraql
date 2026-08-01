@@ -37,6 +37,7 @@ import picocli.CommandLine.Option;
         GovernanceCommand.class,
         AdmissionCommand.class,
         MigrateCommand.class,
+        JobCommand.class,
         IdentitySchemaCommand.class,
         PackageCommand.class,
         VerifyCommand.class,
