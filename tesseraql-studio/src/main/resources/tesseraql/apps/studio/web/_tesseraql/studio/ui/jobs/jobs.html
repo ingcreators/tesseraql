@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{tql/shell :: studio-page('TesseraQL Studio · Job policies', ~{:: #page-header}, ~{:: #page-content})}">
+<th:block id="page-header">
+  <span class="hc-spacer"></span>
+  <div class="hc-cluster">
+    <a class="hc-button" data-variant="ghost" data-size="sm" href="/_tesseraql/studio/ui/calendars">Calendars</a>
+    <a class="hc-button" data-variant="ghost" data-size="sm" href="/_tesseraql/studio/ui">&larr; explorer</a>
+  </div>
+</th:block>
+<div id="page-content" class="hc-stack">
+  <section class="hc-card">
+    <h2>Job policies</h2>
+    <p class="hc-field__message">A job's trigger &mdash; schedule with its calendar
+      qualifiers, or an <code>after:</code> chain &mdash; and its operational promises
+      (<code>overlap:</code>, <code>sla:</code>) as a form. Pipeline steps stay in the
+      <a href="/_tesseraql/studio/ui/source">text editor</a>.</p>
+    <div class="hc-empty" th:unless="${jp.hasJobs}"><p class="hc-empty__title">No jobs declared
+      under batch/.</p></div>
+    <form class="hc-cluster" method="get" action="/_tesseraql/studio/ui/jobs" th:if="${jp.hasJobs}">
+      <div class="hc-field">
+        <label class="hc-field__label" for="jp-name">Job</label>
+        <select class="hc-select" id="jp-name" name="name">
+          <option value="">(choose)</option>
+          <option th:each="j : ${jp.jobs}" th:value="${j.id}"
+                  th:text="|${j.id} — ${j.trigger}|"
+                  th:selected="${jp.form != null && j.id == jp.form.jobId}"></option>
+        </select>
+      </div>
+      <button class="hc-button" type="submit">Open</button>
+    </form>
+  </section>
+  <section class="hc-card" th:if="${jp.form}">
+    <h2>Policies <code th:text="${jp.form.jobId}"></code></h2>
+    <p class="hc-alert" data-variant="success" role="status" th:if="${jp.saved}">Draft saved.
+      Review the diff and apply it from the text editor.</p>
+    <p class="hc-alert" data-variant="warning" role="status" th:if="${jp.form.pollTriggered}">
+      This job is poll-triggered &mdash; its trigger carries connector security; edit it in the
+      <a href="/_tesseraql/studio/ui/source">text editor</a>.</p>
+    <form class="hc-stack" method="post" action="/_tesseraql/studio/ui/jobs/save"
+          th:if="${jp.editable && !jp.form.pollTriggered}">
+      <input type="hidden" name="_csrf" th:value="${_csrf}">
+      <input type="hidden" name="name" th:value="${jp.form.jobId}">
+      <div class="hc-cluster">
+        <label class="hc-field">
+          <span class="hc-field__label">cron (seconds-first)</span>
+          <input class="hc-input" data-size="sm" name="cron" th:value="${jp.form.cron}">
+        </label>
+        <label class="hc-field">
+          <span class="hc-field__label">fixedDelay (e.g. 15m)</span>
+          <input class="hc-input" data-size="sm" name="fixedDelay" th:value="${jp.form.fixedDelay}">
+        </label>
+        <div class="hc-field">
+          <label class="hc-field__label" for="jp-after">after (chain)</label>
+          <select class="hc-select" id="jp-after" name="after">
+            <option value="">(none)</option>
+            <option th:each="j : ${jp.jobs}" th:if="${j.id != jp.form.jobId}" th:value="${j.id}"
+                    th:text="${j.id}" th:selected="${j.id == jp.form.after}"></option>
+          </select>
+        </div>
+      </div>
+      <div class="hc-cluster">
+        <div class="hc-field">
+          <label class="hc-field__label" for="jp-cal">calendar</label>
+          <select class="hc-select" id="jp-cal" name="calendar">
+            <option value="">(none)</option>
+            <option th:each="c : ${jp.calendars}" th:value="${c.name}" th:text="${c.name}"
+                    th:selected="${c.name == jp.form.calendar}"></option>
+          </select>
+        </div>
+        <div class="hc-field">
+          <label class="hc-field__label" for="jp-runon">runOn</label>
+          <select class="hc-select" id="jp-runon" name="runOn">
+            <option value="">(businessDay)</option>
+            <option value="firstBusinessDayOfMonth" th:selected="${jp.form.runOn == 'firstBusinessDayOfMonth'}">firstBusinessDayOfMonth</option>
+            <option value="lastBusinessDayOfMonth" th:selected="${jp.form.runOn == 'lastBusinessDayOfMonth'}">lastBusinessDayOfMonth</option>
+          </select>
+        </div>
+        <label class="hc-field">
+          <span class="hc-field__label">dayOfMonth (1&ndash;31)</span>
+          <input class="hc-input" data-size="sm" name="dayOfMonth" type="number" min="1" max="31"
+                 th:value="${jp.form.dayOfMonth}">
+        </label>
+        <div class="hc-field">
+          <label class="hc-field__label" for="jp-shift">shift</label>
+          <select class="hc-select" id="jp-shift" name="shift">
+            <option value="">(nextBusinessDay)</option>
+            <option value="previousBusinessDay" th:selected="${jp.form.shift == 'previousBusinessDay'}">previousBusinessDay</option>
+          </select>
+        </div>
+      </div>
+      <div class="hc-cluster">
+        <div class="hc-field">
+          <label class="hc-field__label" for="jp-overlap">overlap</label>
+          <select class="hc-select" id="jp-overlap" name="overlap">
+            <option value="" th:selected="${jp.form.overlap == null}">(concurrent)</option>
+            <option value="skip" th:selected="${jp.form.overlap == 'skip'}">skip</option>
+          </select>
+        </div>
+        <label class="hc-field">
+          <span class="hc-field__label">sla completeBy (HH:mm)</span>
+          <input class="hc-input" data-size="sm" name="slaCompleteBy" th:value="${jp.form.slaCompleteBy}">
+        </label>
+        <label class="hc-field">
+          <span class="hc-field__label">sla runningLongerThan (e.g. 2h)</span>
+          <input class="hc-input" data-size="sm" name="slaRunningLongerThan"
+                 th:value="${jp.form.slaRunningLongerThan}">
+        </label>
+      </div>
+      <button class="hc-button" data-variant="primary" type="submit">Save draft</button>
+      <p class="hc-field__message">One trigger kind (a schedule or <code>after:</code>), one
+        cadence (cron or fixedDelay), one calendar qualifier (runOn or dayOfMonth). Everything
+        is validated before the draft lands (<code>TQL-STUDIO-4239</code>); blank fields remove
+        their declarations. Saving writes canonical formatting &mdash; comments are not
+        preserved; review and apply from the text editor.</p>
+    </form>
+  </section>
+</div>
+</html>
