@@ -1,28 +1,32 @@
 # Batch platform — the executor enterprise schedulers drive
 
-> **Status: slices 1–3 implemented** — slice 1: `batch.businessDate`/
-> `batch.executionId` ambient binds, the recorded `business_date` column, the reserved
-> `businessDate` run parameter (`TQL-BATCH-4041` on garbage). Slice 2: `calendars/`
-> shared definitions, the `calendar:`/`runOn:` schedule qualifiers with the fire-time
-> filter after the cluster claim, lints `TQL-BATCH-4201`–`4205`. Slice 3: the `chunk:`
-> step — streaming reader + per-row writer with savepoints, `commitEvery` commits,
-> `tql_job_checkpoint` restart per business date, `tql_job_skips` + `skipLimit`, lints
-> `TQL-BATCH-4206`–`4208`. Slice 4: `tesseraql job list/run/rerun` with the 0/1/3 exit
-> contract, recorded run parameters, `--from-failed-step` (`SKIPPED` steps), and
-> `trigger: after:` chaining (lint `TQL-BATCH-4209`). Slice 5: `overlap: skip` (SKIPPED
-> executions naming the running one) and `sla:` alert-only deadlines through
-> `ops.jobSla` (lint `TQL-BATCH-4210`). **All five slices are implemented**, plus the
-> post-campaign lifted deferrals: slice 6 — the shifted nominal day
-> (`dayOfMonth:`/`shift:`, the run recorded for the nominal date); slice 7 — the
-> cooperative stop (`job cancel` / the ops cancel endpoint, `STOPPED` at step and
-> chunk-commit boundaries, `TQL-BATCH-4042`). This document remains the campaign map;
-> `docs/jobs.md` is the user guide. The batch follow-up to the web-runtime maturation:
-> what `docs/jobs.md` ships today is a sound skeleton (two recipes, Quartz cron /
-> fixed delay, poll triggers, per-tenant fan-out, claim-row cluster safety, execution
-> history, failure alerts, `query-spool`), and what business-application batch still
-> needs is exactly five things: a business date, a business-day calendar, restartable
-> chunked processing, an external-scheduler execution contract, and overlap/SLA
-> hardening.
+> **Status: the campaign is complete and released in v0.10.0.** All five slices
+> shipped — the business date (`batch.businessDate`, `TQL-BATCH-4041`), business-day
+> calendars (`calendars/`, the daily-consider qualifiers, `TQL-BATCH-4201`–`4205`),
+> the `chunk:` step (checkpoint restart per business date, skips,
+> `TQL-BATCH-4206`–`4208`), the external-scheduler contract (`tesseraql job
+> list/run/rerun`, exit 0/1/3, recorded run parameters, `after:` chaining,
+> `TQL-BATCH-4209`), and overlap/SLA (`overlap: skip`, `ops.jobSla`,
+> `TQL-BATCH-4210`) — plus the two deferrals the post-campaign review lifted:
+> slice 6, the shifted nominal day (`dayOfMonth:`/`shift:`, the run recorded for the
+> nominal date), and slice 7, the cooperative stop (`job cancel` / the ops cancel
+> endpoint, `STOPPED` at step and chunk-commit boundaries, `TQL-BATCH-4042`).
+>
+> The surface follow-ups landed after v0.10.0 (0.11-bound): the **editor catch-up**
+> (ext 0.3.6 — `calendars`/`jobs` in the symbols contract, `calendar:`/`after:`
+> completion and navigation, the batch snippets), the **operations console** (the
+> unified trigger story via `TriggerSpec.describe`, overlap/SLA badges, the
+> *Calendar next* column, `GET /ops/batch/jobs` as objects), and the **Studio
+> surfaces** (the calendars month grid + form, `TQL-STUDIO-4238`; the job-policies
+> form, `TQL-STUDIO-4239`). This document remains the campaign map; `docs/jobs.md`
+> is the user guide.
+>
+> The original premise, kept for the record: pre-campaign `docs/jobs.md` was a sound
+> skeleton (two recipes, Quartz cron / fixed delay, poll triggers, per-tenant
+> fan-out, claim-row cluster safety, execution history, failure alerts,
+> `query-spool`), and business-application batch needed exactly five things — a
+> business date, a business-day calendar, restartable chunked processing, an
+> external-scheduler execution contract, and overlap/SLA hardening.
 
 ## The stance: be the best executor, not another scheduler
 
@@ -95,8 +99,9 @@ trigger:
   maintains next year's holidays as rows, no deploy (the tolerances-table story).
 - Lints: a schedule naming an unknown calendar, `runOn:` without `calendar:`, a
   calendar declaring both `dates:` and `source:` (one home for its rows).
-- The editor/symbols catch-up (calendars array, `calendar:` completion) follows the
-  established #478/#519/#543 pattern, in its own slice when the surface settles.
+- The editor/symbols catch-up shipped as planned (ext 0.3.6): `calendars` and `jobs`
+  in the symbols contract, `calendar:`/`after:` completion and navigation, and the
+  batch snippets.
 
 ## Track C — the chunk step: restartable, skip-aware, committed in slices
 
@@ -186,7 +191,7 @@ Two former entries were lifted after the post-campaign review: **holiday-shift f
 (track B — the missed-date-memory premise turned out false, see above) and **hard kill**
 (reframed as the cooperative stop).
 
-## Slices
+## Slices (all shipped)
 
 1. **Business date** (track A): `batch.*` ambient binds, `business_date` on the
    execution record + ops surfaces, the reserved `businessDate` parameter, docs.
