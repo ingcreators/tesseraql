@@ -28,23 +28,43 @@ input:
     type: number
     required: false
     min: 0
+  # The header+lines shape (docs/transactional-writes.md): the request carries the
+  # line items, one transaction writes header and lines together.
+  lines:
+    type: array
+    required: true
 
 security:
   policy: req.write
 
-sql:
-  file: create.sql
-  mode: update
-  params:
-    title: params.title
-    department: params.department
-    category: params.category
-    amount: params.amount
-    budgetLabel: params.budgetLabel
-    internalEstimate: params.internalEstimate
+validate:
+  linesRequired:
+    rule: "params.lines != null && params.lines.size > 0"
+    field: lines
+    code: lines-required
+    message: procurement.rules.linesRequired
+
+steps:
+  header:
+    file: create.sql
+    keys: [id]
+    params:
+      title: params.title
+      department: params.department
+      category: params.category
+      amount: params.amount
+      budgetLabel: params.budgetLabel
+      internalEstimate: params.internalEstimate
+  lines:
+    file: create-lines.sql
+    params:
+      requisitionId: steps.header.keys.id
+      lines: params.lines
 
 response:
   json:
     status: 201
     body:
-      created: sql.affectedRows
+      id: steps.header.keys.id
+      created: steps.header.affectedRows
+      lines: steps.lines.affectedRows

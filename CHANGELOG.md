@@ -8,6 +8,14 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **The header+lines pattern ships runnable** (docs/transactional-writes.md, the
+  procurement retrospective's cookbook item): `POST /api/requisitions` in the
+  procurement gallery now creates the header and its line items in one transaction —
+  a generated-key header step, a `%for` detail insert bound to the request's `lines`
+  array, and a `validate:` rule (`params.lines.size > 0`) refusing an empty order
+  before anything writes. Suite-covered (the multi-row insert and the refusal as
+  cases), so the documented pattern is proven, not illustrative.
+
 - **`given:` fixture steps — mid-flow workflow states become assertable**
   (docs/testing.md): a `transition:`/`dispatch:` suite case may declare `given:` —
   transitions fired before the target, in the same always-rolled-back transaction,

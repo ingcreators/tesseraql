@@ -63,7 +63,7 @@ with `--claim 'departments=["engineering"]'`) and walk the flow:
 
 ```
 GET  /api/requisitions                # scoped list; internal_estimate needs req.cost
-POST /api/requisitions                # create (draft)
+POST /api/requisitions                # create (draft) - header + lines, one transaction
 POST /api/requisitions/{id}/submit    # decision stamps the lane, task goes to the dept manager
 POST /api/requisitions/{id}/submit_decision  # dispatch: fires approve or advance per the stamped lane
 POST /api/requisitions/{id}/approve_final
