@@ -4,6 +4,26 @@ All notable changes to TesseraQL are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [Semantic Versioning](https://semver.org/).
 
+## Unreleased
+
+### Added
+
+- **The console tells the whole trigger story** (docs/jobs.md): the operations
+  console's jobs page now shows the calendar qualifiers (`cron …, calendar jp-banking
+  (day 5)`), the operational policies (`overlap: skip`, `sla by 06:00`, `sla > 2h`) as
+  badges, and — the piece nothing else could show — **Calendar next**: the next date
+  the business-day calendar lets a firing count, shifted nominal dates included
+  (`2026-08-03 (for 2026-07-31)`). A calendar-filtered firing leaves no execution row
+  by design, so this column is where "why didn't it run today" gets its answer. The
+  one-line trigger story now lives in `TriggerSpec.describe` — the CLI, the symbols
+  contract, and the console share it, so the three surfaces can never drift.
+
+### Changed
+
+- **`GET /_tesseraql/ops/batch/jobs` returns objects** — `{id, app, trigger, overlap,
+  sla}` instead of the bare job-id strings, so the API tells at least as much as
+  `tesseraql job list`. Consumers reading the old string array take the `id` field.
+
 ## 0.10.0 - 2026-08-01
 
 ### Added

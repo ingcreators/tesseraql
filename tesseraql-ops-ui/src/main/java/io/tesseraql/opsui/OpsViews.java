@@ -170,12 +170,13 @@ public final class OpsViews {
 
     /**
      * One jobs-catalog row (docs/ops-console-actions.md): the declared job, its owning app,
-     * its trigger, and its most recent execution (null when it has never run).
+     * its definition (trigger, params, and the operational policies), its most recent
+     * execution (null when it has never run), and — for a calendar-qualified schedule — the
+     * next date the calendar lets a firing count, computed by the runtime.
      */
     public record JobCatalogEntry(String id, String app,
-            io.tesseraql.yaml.model.TriggerSpec trigger, JobExecution lastExecution,
-            PollSourceStatus.SourceState pollSource,
-            Map<String, io.tesseraql.yaml.model.InputField> params) {
+            io.tesseraql.yaml.model.JobDefinition definition, JobExecution lastExecution,
+            PollSourceStatus.SourceState pollSource, String calendarNext) {
     }
 
     /** The jobs page model: the scope-filtered catalog with each job's last run summarized. */
@@ -185,7 +186,25 @@ public final class OpsViews {
             Map<String, Object> row = new LinkedHashMap<>();
             row.put("id", entry.id());
             row.put("app", dash(entry.app()));
-            row.put("trigger", triggerSummary(entry.trigger()));
+            row.put("trigger",
+                    io.tesseraql.yaml.model.TriggerSpec.describe(entry.definition().trigger()));
+            // The operational promises (docs/jobs.md): visible where the operator watches,
+            // because a calendar-filtered or overlap-skipped firing leaves no execution row.
+            List<String> policies = new ArrayList<>();
+            if (entry.definition().skipsOverlap()) {
+                policies.add("overlap: skip");
+            }
+            io.tesseraql.yaml.model.SlaSpec sla = entry.definition().sla();
+            if (sla != null && sla.completeBy() != null && !sla.completeBy().isBlank()) {
+                policies.add("sla by " + sla.completeBy());
+            }
+            if (sla != null && sla.runningLongerThan() != null
+                    && !sla.runningLongerThan().isBlank()) {
+                policies.add("sla > " + sla.runningLongerThan());
+            }
+            row.put("policies", policies);
+            row.put("hasPolicies", !policies.isEmpty());
+            row.put("calendarNext", dash(entry.calendarNext()));
             JobExecution last = entry.lastExecution();
             row.put("hasRun", last != null);
             row.put("lastStatus", last == null ? "-" : name(last.status()));
@@ -196,7 +215,7 @@ public final class OpsViews {
             // The declared-params form (docs/ops-console-coverage.md): name, required,
             // and a numeric input for number params; bindJobParams stays the validator.
             List<Map<String, Object>> params = new ArrayList<>();
-            entry.params().forEach((name, field) -> params.add(Map.of(
+            entry.definition().params().forEach((name, field) -> params.add(Map.of(
                     "name", name,
                     "required", field != null && field.required(),
                     "numeric", field != null && "number".equals(field.type()))));
@@ -226,22 +245,6 @@ public final class OpsViews {
     }
 
     /** How a job starts, one glanceable phrase: its schedule, its poll source, or "manual". */
-    private static String triggerSummary(io.tesseraql.yaml.model.TriggerSpec trigger) {
-        if (trigger == null) {
-            return "manual";
-        }
-        if (trigger.schedule() != null) {
-            if (trigger.schedule().cron() != null && !trigger.schedule().cron().isBlank()) {
-                return "cron " + trigger.schedule().cron();
-            }
-            if (trigger.schedule().fixedDelay() != null
-                    && !trigger.schedule().fixedDelay().isBlank()) {
-                return "every " + trigger.schedule().fixedDelay();
-            }
-        }
-        return trigger.poll() != null ? "poll" : "manual";
-    }
-
     /** The trace page model: the trace tree flattened with per-node indents. */
     public static Map<String, Object> traces(List<TraceNode> tree) {
         List<Map<String, Object>> rows = new ArrayList<>();

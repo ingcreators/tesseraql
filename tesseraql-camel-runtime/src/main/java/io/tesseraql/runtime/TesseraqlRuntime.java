@@ -874,6 +874,14 @@ public final class TesseraqlRuntime implements AutoCloseable {
             return execution;
         };
 
+        // Business-day calendars (docs/batch-platform.md track B): loaded at startup so a
+        // broken calendars/ dir fails fast. One decision helper answers both the scheduling
+        // gate and the console's next-counting preview, so the two can never drift.
+        io.tesseraql.yaml.calendar.Calendars calendars = io.tesseraql.yaml.calendar.Calendars
+                .load(appHome, new io.tesseraql.yaml.SimpleYamlParser());
+        CalendarDecisions calendarDecisions = new CalendarDecisions(calendars, dataSource,
+                dataSources);
+
         io.tesseraql.core.outbox.OutboxEventSink outboxSink;
         // Per-node poll-source health (docs/poll-source-status.md): fed by the polling
         // wiring below, read by the dashboard's alerts and the console's jobs page.
@@ -992,9 +1000,11 @@ public final class TesseraqlRuntime implements AutoCloseable {
                     manifest.config().getString("tesseraql.metrics.unauthenticated")
                             .map(Boolean::parseBoolean).orElse(false),
                     aggregatingMeter, pollSourceStatus);
+            Map<String, io.tesseraql.yaml.model.JobDefinition> jobDefinitions = new LinkedHashMap<>();
+            jobs.forEach((id, jobFile) -> jobDefinitions.put(id, jobFile.definition()));
             context.addRoutes(new OperationsRouteBuilder(
-                    jobRunner, jobRepository, ownedJobs, opsDashboard, outboxStore,
-                    metricsSettings, routeAuditStore));
+                    jobRunner, jobRepository, ownedJobs, jobDefinitions, opsDashboard,
+                    outboxStore, metricsSettings, routeAuditStore));
             // Service providers expose non-SQL runtime state to mounted yaml/template apps
             // (the bundled ops-console and studio apps render these, design ch. 26.11, 16, 47).
             io.tesseraql.opsui.OpsDashboard dashboardRef = opsDashboard;
@@ -1063,10 +1073,11 @@ public final class TesseraqlRuntime implements AutoCloseable {
                             String owner = jobOwners.getOrDefault(id, appName);
                             if (scope.test(owner)) {
                                 entries.add(new io.tesseraql.opsui.OpsViews.JobCatalogEntry(
-                                        id, owner, jobFile.definition().trigger(),
+                                        id, owner, jobFile.definition(),
                                         jobRepository.latestExecution(id).orElse(null),
                                         pollSourceStatus.forJob(id).orElse(null),
-                                        jobFile.definition().params()));
+                                        calendarDecisions.nextCounting(jobFile,
+                                                java.time.LocalDate.now())));
                             }
                         });
                         return io.tesseraql.opsui.OpsViews.jobs(entries);
@@ -1354,67 +1365,13 @@ public final class TesseraqlRuntime implements AutoCloseable {
             Map<String, String> claimKeys = new LinkedHashMap<>();
             jobs.keySet().forEach(
                     id -> claimKeys.put(id, jobOwners.getOrDefault(id, appName) + ":" + id));
-            // Business-day calendars (docs/batch-platform.md track B): loaded at startup so a
-            // broken calendars/ dir fails fast; holiday ROWS of a table-backed calendar are
-            // read at fire time on the job's datasource, after the cluster claim. Failure to
-            // resolve fails open with a warning: silently skipping a close-job on a read error
-            // would be worse than running it — the job's own SQL hits the same database next.
-            io.tesseraql.yaml.calendar.Calendars calendars = io.tesseraql.yaml.calendar.Calendars
-                    .load(appHome, new io.tesseraql.yaml.SimpleYamlParser());
+            // The daily-consider gate (docs/batch-platform.md track B), evaluated after the
+            // cluster claim; the decision arithmetic is shared with the console preview.
             SchedulingRouteBuilder.CalendarGate calendarGate = (jobId, fireDate) -> {
                 JobFile jobFile = jobs.get(jobId);
-                io.tesseraql.yaml.model.TriggerSpec.Schedule schedule = jobFile == null
-                        || jobFile.definition().trigger() == null
-                                ? null
-                                : jobFile.definition().trigger().schedule();
-                if (schedule == null || schedule.calendar() == null
-                        || schedule.calendar().isBlank()) {
-                    return SchedulingRouteBuilder.CalendarGate.Decision.RUNS;
-                }
-                io.tesseraql.yaml.model.CalendarsDocument.Calendar calendar = calendars
-                        .calendars().get(schedule.calendar());
-                if (calendar == null) {
-                    LOG.warn("Job {} names unknown calendar '{}'; firing runs unfiltered",
-                            jobId, schedule.calendar());
-                    return SchedulingRouteBuilder.CalendarGate.Decision.RUNS;
-                }
-                java.util.Set<java.time.LocalDate> holidays;
-                try {
-                    if (calendar.holidays() != null && calendar.holidays().source() != null) {
-                        String declared = jobFile.definition().datasource();
-                        javax.sql.DataSource pool = declared == null || declared.isBlank()
-                                || "main".equals(declared)
-                                        ? dataSource
-                                        : dataSources.get(declared);
-                        try (java.sql.Connection connection = pool.getConnection()) {
-                            holidays = io.tesseraql.yaml.calendar.Calendars.readHolidays(
-                                    connection, schedule.calendar(),
-                                    calendar.holidays().source());
-                        }
-                    } else {
-                        holidays = io.tesseraql.yaml.calendar.Calendars
-                                .staticHolidays(calendar);
-                    }
-                } catch (Exception ex) {
-                    LOG.warn("Job {} calendar '{}' holiday read failed; firing runs unfiltered",
-                            jobId, schedule.calendar(), ex);
-                    return SchedulingRouteBuilder.CalendarGate.Decision.RUNS;
-                }
-                // The shifted nominal-day rule ("the 5th, or the next business day"): the
-                // firing counts only on the shifted target, and the run is FOR the nominal
-                // date - batch.businessDate records the 5th even when executed on the 7th.
-                if (schedule.dayOfMonth() != null) {
-                    java.time.LocalDate nominal = io.tesseraql.yaml.calendar.Calendars
-                            .shiftedNominal(calendar, schedule.dayOfMonth(), schedule.shift(),
-                                    fireDate, holidays);
-                    return nominal == null
-                            ? SchedulingRouteBuilder.CalendarGate.Decision.FILTERED
-                            : new SchedulingRouteBuilder.CalendarGate.Decision(true, nominal);
-                }
-                return io.tesseraql.yaml.calendar.Calendars.counts(calendar, schedule.runOn(),
-                        fireDate, holidays)
-                                ? SchedulingRouteBuilder.CalendarGate.Decision.RUNS
-                                : SchedulingRouteBuilder.CalendarGate.Decision.FILTERED;
+                return jobFile == null
+                        ? SchedulingRouteBuilder.CalendarGate.Decision.RUNS
+                        : calendarDecisions.decide(jobFile, fireDate);
             };
             context.addRoutes(new SchedulingRouteBuilder(
                     jobRunner, jobRepository, List.copyOf(jobs.values()), claimKeys,
