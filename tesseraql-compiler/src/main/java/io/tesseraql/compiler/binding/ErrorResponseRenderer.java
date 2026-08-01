@@ -413,6 +413,7 @@ public final class ErrorResponseRenderer implements Processor {
             case BATCH -> switch (code.number()) {
                 case 4040 -> 404;
                 case 4041 -> 400;
+                case 4042 -> 409; // cancel target is not running - nothing left to stop
                 default -> 500;
             };
             case ACCOUNT -> switch (code.number()) {

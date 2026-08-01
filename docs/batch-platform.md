@@ -13,8 +13,10 @@
 > executions naming the running one) and `sla:` alert-only deadlines through
 > `ops.jobSla` (lint `TQL-BATCH-4210`). **All five slices are implemented**, plus the
 > post-campaign lifted deferrals: slice 6 — the shifted nominal day
-> (`dayOfMonth:`/`shift:`, the run recorded for the nominal date). This document
-> remains the campaign map; `docs/jobs.md` is the user guide. The batch follow-up to the web-runtime maturation:
+> (`dayOfMonth:`/`shift:`, the run recorded for the nominal date); slice 7 — the
+> cooperative stop (`job cancel` / the ops cancel endpoint, `STOPPED` at step and
+> chunk-commit boundaries, `TQL-BATCH-4042`). This document remains the campaign map;
+> `docs/jobs.md` is the user guide. The batch follow-up to the web-runtime maturation:
 > what `docs/jobs.md` ships today is a sound skeleton (two recipes, Quartz cron /
 > fixed delay, poll triggers, per-tenant fan-out, claim-row cluster safety, execution
 > history, failure alerts, `query-spool`), and what business-application batch still

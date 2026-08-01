@@ -88,6 +88,8 @@ final class OperationsRouteBuilder extends RouteBuilder {
         rest().get("/_tesseraql/ops/batch/executions").to("direct:ops.batch.executions");
         rest().get("/_tesseraql/ops/batch/executions/{id}").to("direct:ops.batch.executionDetail");
         rest().post("/_tesseraql/ops/batch/jobs/{jobId}/run").to("direct:ops.batch.run");
+        rest().post("/_tesseraql/ops/batch/executions/{id}/cancel")
+                .to("direct:ops.batch.cancel");
         rest().get("/_tesseraql/ops/overview").to("direct:ops.overview");
         rest().get("/_tesseraql/ops/lanes").to("direct:ops.lanes");
         rest().get("/_tesseraql/ops/slow-sql").to("direct:ops.slowSql");
@@ -176,6 +178,12 @@ final class OperationsRouteBuilder extends RouteBuilder {
         from("direct:ops.batch.run").routeId("ops.batch.run")
                 .to(VIEW).to("tesseraql-auth:authorize?policy=ops.batch.run")
                 .process(jsonProcessor(this::runJob));
+
+        // The cooperative stop (docs/jobs.md "Stopping a run"): sets the flag the running
+        // executor polls at step and chunk-commit boundaries; gated like starting a run.
+        from("direct:ops.batch.cancel").routeId("ops.batch.cancel")
+                .to(VIEW).to("tesseraql-auth:authorize?policy=ops.batch.run")
+                .process(jsonProcessor(this::cancelExecution));
 
         from("direct:ops.overview").routeId("ops.overview")
                 .to(VIEW).to("tesseraql-auth:authorize?policy=ops.batch.view")
@@ -278,6 +286,30 @@ final class OperationsRouteBuilder extends RouteBuilder {
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("executionId", execution.id());
         result.put("status", execution.status().name());
+        return result;
+    }
+
+    /** TQL-BATCH-4042: the cancel target is not running — nothing left to stop (HTTP 409). */
+    private static final io.tesseraql.core.error.TqlErrorCode NOT_RUNNING = new io.tesseraql.core.error.TqlErrorCode(
+            io.tesseraql.core.error.TqlDomain.BATCH, 4042);
+
+    private Object cancelExecution(Exchange exchange) {
+        String id = exchange.getMessage().getHeader("id", String.class);
+        JobExecution execution = repository.findExecution(id)
+                .filter(found -> scope(exchange).test(found.appName()))
+                .orElse(null);
+        if (execution == null) {
+            return NOT_FOUND;
+        }
+        if (!repository.requestCancel(id)) {
+            throw io.tesseraql.core.error.TqlException.builder(NOT_RUNNING)
+                    .message("Execution " + id + " is " + execution.status()
+                            + " — only a RUNNING execution can be stopped")
+                    .build();
+        }
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("executionId", id);
+        result.put("cancelRequested", true);
         return result;
     }
 

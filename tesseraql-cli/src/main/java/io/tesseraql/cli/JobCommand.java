@@ -47,10 +47,10 @@ import picocli.CommandLine.Parameters;
         + " (exit 0 completed, 1 failed, 3 calendar-filtered).")
 final class JobCommand implements Callable<Integer> {
 
-    @Parameters(index = "0", description = "list, run, or rerun.")
+    @Parameters(index = "0", description = "list, run, rerun, or cancel.")
     String operation;
 
-    @Parameters(index = "1", arity = "0..1", description = "The job id (run) or execution id (rerun).")
+    @Parameters(index = "1", arity = "0..1", description = "The job id (run) or execution id (rerun/cancel).")
     String target;
 
     @Option(names = {"--app"}, required = true, description = "Path to the external app home.")
@@ -90,12 +90,39 @@ final class JobCommand implements Callable<Integer> {
             case "list" -> list(jobs);
             case "run" -> run(manifest, jobs);
             case "rerun" -> rerun(manifest, jobs);
+            case "cancel" -> cancel(manifest);
             default -> {
-                System.err.println("Unknown operation '" + operation + "': use list, run, or"
-                        + " rerun");
+                System.err.println("Unknown operation '" + operation + "': use list, run,"
+                        + " rerun, or cancel");
                 yield 2;
             }
         };
+    }
+
+    /**
+     * Requests a cooperative stop of a running execution — the flag travels through the
+     * shared database, so it reaches a run on any node (or another terminal's in-process
+     * run) and takes effect at its next step or chunk-commit boundary.
+     */
+    private Integer cancel(AppManifest manifest) throws Exception {
+        if (target == null || target.isBlank()) {
+            System.err.println("job cancel needs an execution id");
+            return 2;
+        }
+        Wiring wiring = wire(manifest);
+        JobExecution execution = wiring.repository().findExecution(target).orElse(null);
+        if (execution == null) {
+            System.err.println("Unknown execution '" + target + "'");
+            return 2;
+        }
+        if (!wiring.repository().requestCancel(target)) {
+            System.err.println("Execution " + target + " is " + execution.status()
+                    + " — only a RUNNING execution can be stopped");
+            return 2;
+        }
+        System.out.println("Cancel requested for execution " + target
+                + " — takes effect at its next step or chunk-commit boundary");
+        return 0;
     }
 
     private Integer list(Map<String, JobFile> jobs) {
