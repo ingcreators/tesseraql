@@ -177,11 +177,20 @@ final class JobCommand implements Callable<Integer> {
         // The calendar gate (docs/jobs.md "Business-day calendars"): the scheduler surface is
         // exactly where "holiday" must be a distinct answer, so `run` consults the calendar
         // the way a scheduled firing does — and exit 3 says filtered, not failed.
-        if (!ignoreCalendar && filtered(manifest, job, effectiveDate, wiring)) {
-            System.out.println("Filtered: " + effectiveDate + " does not count under calendar '"
-                    + job.definition().trigger().schedule().calendar()
-                    + "' — exit 3 (use --ignore-calendar to force)");
-            return 3;
+        if (!ignoreCalendar) {
+            CalendarDecision decision = decide(manifest, job, effectiveDate, wiring);
+            if (!decision.counts()) {
+                System.out.println("Filtered: " + effectiveDate
+                        + " does not count under calendar '"
+                        + job.definition().trigger().schedule().calendar()
+                        + "' — exit 3 (use --ignore-calendar to force)");
+                return 3;
+            }
+            // A shifted nominal-day rule names the date the run is FOR: the 5th's close,
+            // executed on its shifted business day, records the 5th.
+            if (decision.nominal() != null) {
+                runParams.put("businessDate", decision.nominal().toString());
+            }
         }
         return execute(manifest, jobs, wiring, job, runParams, "manual", Set.of());
     }
@@ -309,17 +318,26 @@ final class JobCommand implements Callable<Integer> {
         }
     }
 
-    /** Whether the job's business-day calendar filters {@code date} out (fail-open on errors). */
-    private boolean filtered(AppManifest manifest, JobFile job, LocalDate date, Wiring wiring) {
+    /**
+     * @param counts  whether the effective date counts under the job's calendar
+     * @param nominal the nominal date a shifted {@code dayOfMonth:} rule runs for, when the
+     *                effective date is its shifted target
+     */
+    private record CalendarDecision(boolean counts, LocalDate nominal) {
+    }
+
+    /** The job's business-day calendar applied to {@code date} (fail-open on errors). */
+    private CalendarDecision decide(AppManifest manifest, JobFile job, LocalDate date,
+            Wiring wiring) {
         TriggerSpec trigger = job.definition().trigger();
         TriggerSpec.Schedule schedule = trigger == null ? null : trigger.schedule();
         if (schedule == null || schedule.calendar() == null || schedule.calendar().isBlank()) {
-            return false;
+            return new CalendarDecision(true, null);
         }
         Calendars calendars = Calendars.load(app, new io.tesseraql.yaml.SimpleYamlParser());
         CalendarsDocument.Calendar calendar = calendars.calendars().get(schedule.calendar());
         if (calendar == null) {
-            return false;
+            return new CalendarDecision(true, null);
         }
         try {
             Set<LocalDate> holidays;
@@ -332,11 +350,17 @@ final class JobCommand implements Callable<Integer> {
             } else {
                 holidays = Calendars.staticHolidays(calendar);
             }
-            return !Calendars.counts(calendar, schedule.runOn(), date, holidays);
+            if (schedule.dayOfMonth() != null) {
+                LocalDate nominal = Calendars.shiftedNominal(calendar, schedule.dayOfMonth(),
+                        schedule.shift(), date, holidays);
+                return new CalendarDecision(nominal != null, nominal);
+            }
+            return new CalendarDecision(
+                    Calendars.counts(calendar, schedule.runOn(), date, holidays), null);
         } catch (Exception ex) {
             System.err.println("Calendar '" + schedule.calendar()
                     + "' could not be resolved; running unfiltered: " + ex.getMessage());
-            return false;
+            return new CalendarDecision(true, null);
         }
     }
 

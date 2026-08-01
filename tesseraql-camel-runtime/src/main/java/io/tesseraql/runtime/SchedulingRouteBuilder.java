@@ -27,11 +27,25 @@ final class SchedulingRouteBuilder extends RouteBuilder {
     /**
      * Whether a claimed firing counts under the job's business-day calendar
      * (docs/batch-platform.md track B). Evaluated after the claim, so on a multi-node
-     * deployment exactly one node reads a table-backed calendar per firing.
+     * deployment exactly one node reads a table-backed calendar per firing. A shifted
+     * nominal-day rule additionally names the business date the run is <em>for</em> — "the
+     * 5th's run, executed on the 7th" carries the 5th.
      */
     @FunctionalInterface
     interface CalendarGate {
-        boolean counts(String jobId, java.time.LocalDate fireDate);
+
+        Decision decide(String jobId, java.time.LocalDate fireDate);
+
+        /**
+         * @param counts       whether the firing runs
+         * @param businessDate the nominal date a shifted rule runs for, or null to default
+         *                     to the firing's local date
+         */
+        record Decision(boolean counts, java.time.LocalDate businessDate) {
+
+            static final Decision RUNS = new Decision(true, null);
+            static final Decision FILTERED = new Decision(false, null);
+        }
     }
 
     private final OperationsRouteBuilder.JobRunner runner;
@@ -90,13 +104,20 @@ final class SchedulingRouteBuilder extends RouteBuilder {
         // this firing counts. A filtered-out firing is not a run — no execution is recorded.
         java.time.LocalDate fireDate = fireTime.atZone(java.time.ZoneId.systemDefault())
                 .toLocalDate();
-        if (!calendarGate.counts(jobId, fireDate)) {
+        CalendarGate.Decision decision = calendarGate.decide(jobId, fireDate);
+        if (!decision.counts()) {
             LOG.log(System.Logger.Level.INFO,
                     "Skipping job {0} firing for {1}: filtered by its business-day calendar",
                     jobId, fireDate);
             return;
         }
-        runner.run(jobId, Map.of(), "schedule", null);
+        // A shifted nominal-day rule names the business date the run is FOR (track A meets
+        // track B): the 5th's close executed on the 7th records the 5th.
+        runner.run(jobId,
+                decision.businessDate() == null
+                        ? Map.of()
+                        : Map.of("businessDate", decision.businessDate().toString()),
+                "schedule", null);
     }
 
     /** Quartz's scheduled fire time is computed from the cron, so it matches across nodes. */

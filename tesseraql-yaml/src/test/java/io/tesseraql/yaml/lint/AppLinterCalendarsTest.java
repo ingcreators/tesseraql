@@ -93,6 +93,34 @@ class AppLinterCalendarsTest {
     }
 
     @Test
+    void nominalDayQualifiersAreValidated(@TempDir Path dir) throws Exception {
+        // dayOfMonth without a calendar, out of range, combined with runOn - and runOn is
+        // itself missing its calendar: four distinct declarations that cannot mean anything.
+        List<LintFinding> findings = new AppLinter().lint(app(dir, null,
+                "    cron: \"0 0 8 * * ?\"\n    dayOfMonth: 45\n    runOn: businessDay"));
+        assertThat(findings.stream().filter(f -> "TQL-BATCH-4202".equals(f.code())))
+                .hasSize(4);
+
+        findings = new AppLinter().lint(app(dir, """
+                version: tesseraql/v1
+                calendars:
+                  jp-banking:
+                    weekend: [saturday, sunday]
+                """, "    cron: \"0 0 8 * * ?\"\n    calendar: jp-banking\n    shift: sideways"));
+        assertThat(findings.stream().filter(f -> "TQL-BATCH-4202".equals(f.code())))
+                .hasSize(2); // shift without dayOfMonth, and an unknown direction
+
+        findings = new AppLinter().lint(app(dir, """
+                version: tesseraql/v1
+                calendars:
+                  jp-banking:
+                    weekend: [saturday, sunday]
+                """, "    cron: \"0 0 8 * * ?\"\n    calendar: jp-banking\n"
+                + "    dayOfMonth: 5\n    shift: nextBusinessDay"));
+        assertThat(findings).noneMatch(finding -> finding.code().startsWith("TQL-BATCH-42"));
+    }
+
+    @Test
     void aWellFormedCalendarReferenceIsClean(@TempDir Path dir) throws Exception {
         List<LintFinding> findings = new AppLinter().lint(app(dir, """
                 version: tesseraql/v1

@@ -61,6 +61,14 @@ class JobCommandIntegrationTest {
         assertThat(execute(args(app, "job", "run", "demo.gated", "--ignore-calendar")))
                 .isZero();
 
+        // run: the shifted nominal day — yesterday (a holiday) shifts to today, and the run
+        // records the NOMINAL date; the sibling whose nominal day is tomorrow exits 3.
+        Captured payday = executeCapturing(args(app, "job", "run", "demo.payday"));
+        assertThat(payday.exitCode()).isZero();
+        assertThat(payday.stdout())
+                .contains("business date " + java.time.LocalDate.now().minusDays(1));
+        assertThat(execute(args(app, "job", "run", "demo.paydayGated"))).isEqualTo(3);
+
         // run: a failing pipeline exits 1 after its first step committed.
         Captured failed = executeCapturing(args(app, "job", "run", "demo.flaky"));
         assertThat(failed.exitCode()).isEqualTo(1);
@@ -130,14 +138,44 @@ class JobCommandIntegrationTest {
                 "insert into job_marks (note) values ('ran')\n");
         Files.writeString(app.resolve("batch/demo/send.sql"),
                 "insert into flaky_target values (1)\n");
-        // A calendar under which no day counts: every day is weekend.
+        // A calendar under which no day counts, and one where yesterday is a holiday so a
+        // shifted nominal day lands on today.
+        java.time.LocalDate nominal = java.time.LocalDate.now().minusDays(1);
         Files.createDirectories(app.resolve("calendars"));
         Files.writeString(app.resolve("calendars/test.yml"), """
                 version: tesseraql/v1
                 calendars:
                   never:
                     weekend: [monday, tuesday, wednesday, thursday, friday, saturday, sunday]
-                """);
+                  pay-cal:
+                    weekend: []
+                    holidays:
+                      dates: [%s]
+                """.formatted(nominal));
+        Files.writeString(app.resolve("batch/demo/payday.yml"), """
+                version: tesseraql/v1
+                id: demo.payday
+                kind: job
+                recipe: batch-tasklet
+                trigger:
+                  schedule:
+                    cron: "0 0 8 * * ?"
+                    calendar: pay-cal
+                    dayOfMonth: %d
+                sql: { file: noop.sql, mode: query }
+                """.formatted(nominal.getDayOfMonth()));
+        Files.writeString(app.resolve("batch/demo/payday-gated.yml"), """
+                version: tesseraql/v1
+                id: demo.paydayGated
+                kind: job
+                recipe: batch-tasklet
+                trigger:
+                  schedule:
+                    cron: "0 0 8 * * ?"
+                    calendar: pay-cal
+                    dayOfMonth: %d
+                sql: { file: noop.sql, mode: query }
+                """.formatted(java.time.LocalDate.now().plusDays(1).getDayOfMonth()));
         Files.writeString(app.resolve("db/migration/V90__job_marks.sql"),
                 "create table job_marks (note varchar(32));\n");
     }

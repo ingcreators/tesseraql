@@ -11,8 +11,10 @@
 > contract, recorded run parameters, `--from-failed-step` (`SKIPPED` steps), and
 > `trigger: after:` chaining (lint `TQL-BATCH-4209`). Slice 5: `overlap: skip` (SKIPPED
 > executions naming the running one) and `sla:` alert-only deadlines through
-> `ops.jobSla` (lint `TQL-BATCH-4210`). **All five slices are implemented** — this
-> document remains the campaign map; `docs/jobs.md` is the user guide. The batch follow-up to the web-runtime maturation:
+> `ops.jobSla` (lint `TQL-BATCH-4210`). **All five slices are implemented**, plus the
+> post-campaign lifted deferrals: slice 6 — the shifted nominal day
+> (`dayOfMonth:`/`shift:`, the run recorded for the nominal date). This document
+> remains the campaign map; `docs/jobs.md` is the user guide. The batch follow-up to the web-runtime maturation:
 > what `docs/jobs.md` ships today is a sound skeleton (two recipes, Quartz cron /
 > fixed delay, poll triggers, per-tenant fan-out, claim-row cluster safety, execution
 > history, failure alerts, `query-spool`), and what business-application batch still
@@ -79,10 +81,14 @@ trigger:
 - **The daily-consider model**: the cron fires, the calendar filters. "Last business
   day of month" is a daily cron plus a filter — no deferred one-shot firings, no
   scheduler state. A filtered-out firing is skipped silently (it is not a run).
-  Holiday-shift semantics (`5日, 休日なら翌営業日`) are deliberately **deferred**:
-  they require remembering a missed nominal date across firings, and v1 refuses to
-  half-build that; the workaround (daily cron + a guard on the business date in SQL)
-  is documented.
+- **The shifted nominal day** (`5日, 休日なら翌営業日`) was first deferred on the
+  belief that it needs missed-date memory across firings — the detailed review found it
+  does not: the shifted target is a **pure function of the calendar** ("does the fire
+  date equal the first business day on or after this month's 5th?"), so
+  `dayOfMonth: 5` + `shift: nextBusinessDay|previousBusinessDay` are just two more
+  schedule qualifiers under the same model. The run's business date is the **nominal**
+  date — the 5th's close, executed on the 7th, records the 5th — which is exactly what
+  track A's business-date machinery exists to say.
 - Table-backed holidays are read at fire time on the job's datasource — operations
   maintains next year's holidays as rows, no deploy (the tolerances-table story).
 - Lints: a schedule naming an unknown calendar, `runOn:` without `calendar:`, a
@@ -164,11 +170,19 @@ code. Today the only manual trigger is an ops HTTP endpoint.
 ## Out of scope (named, so they stay decisions)
 
 - **Job-net/DAG orchestration** — external schedulers own it; `after:` is the ceiling.
-- **Holiday-shift firing** (`nextBusinessDay` deferral) — needs missed-date memory;
-  documented workaround until a real design.
 - **Fixed-length/Shift_JIS file formats, count trailers** — demand-driven follow-up
-  on the poll/import and spool surfaces.
-- **Hard kill on timeout, `queue` overlap, parallel chunk partitions** — deferred.
+  on the poll/import and spool surfaces; if EDI lands, design them together.
+- **`queue` overlap** — `skip` + the next firing + `job rerun` cover the real cases;
+  a depth-1 promote-on-complete design exists if a concrete need appears.
+- **Parallel chunk partitions** — deferred until a measured bottleneck; the design
+  that preserves the restart contract is `partitionBy: <column>` with per-partition
+  checkpoints (a worker pool would break the "last handled key" contract).
+- **Preemptive kill** — a false sense of "timeout means stopped" is worse than an
+  honest page; the *cooperative* stop (step/chunk-boundary cancellation) is in scope.
+
+Two former entries were lifted after the post-campaign review: **holiday-shift firing**
+(track B — the missed-date-memory premise turned out false, see above) and **hard kill**
+(reframed as the cooperative stop).
 
 ## Slices
 

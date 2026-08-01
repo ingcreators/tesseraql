@@ -46,6 +46,9 @@ public final class Calendars {
     public static final Set<String> RUN_ON = Set.of("businessDay", "firstBusinessDayOfMonth",
             "lastBusinessDayOfMonth");
 
+    /** The {@code shift:} directions a nominal day may declare (default: next). */
+    public static final Set<String> SHIFTS = Set.of("nextBusinessDay", "previousBusinessDay");
+
     private static final Set<DayOfWeek> DEFAULT_WEEKEND = Set.of(DayOfWeek.SATURDAY,
             DayOfWeek.SUNDAY);
     /** Table and column names reach SQL text verbatim, so they stay plain identifiers. */
@@ -170,6 +173,45 @@ public final class Calendars {
     private static boolean isBusinessDay(LocalDate date, Set<DayOfWeek> weekend,
             Set<LocalDate> holidays) {
         return !weekend.contains(date.getDayOfWeek()) && !holidays.contains(date);
+    }
+
+    /**
+     * The shifted-nominal-day rule ("the 5th, or the next business day when it is a holiday"):
+     * whether {@code fireDate} is the shifted target of a month's nominal day, and if so
+     * <em>which</em> nominal date the firing is for — the run's business date defaults to it,
+     * because "the 5th's close, executed on the 7th" is about the 5th.
+     *
+     * <p>Stateless by construction: the shifted target is a pure function of the calendar, so
+     * no missed-date memory exists anywhere. A shift can cross a month boundary in either
+     * direction (the 31st shifting forward into the 1st; the 1st shifting back into the 30th),
+     * so the neighbouring month's nominal day is checked too. {@code dayOfMonth} beyond the
+     * month's length rounds down to its last day (the "31st" of April is the 30th).
+     *
+     * @return the nominal date the firing is for, or null when the fire date does not count
+     */
+    public static LocalDate shiftedNominal(CalendarsDocument.Calendar calendar, int dayOfMonth,
+            String shift, LocalDate fireDate, Set<LocalDate> holidays) {
+        Set<DayOfWeek> weekend = weekend(calendar);
+        boolean previous = "previousBusinessDay".equals(shift);
+        // Forward shifts can land in the month after their nominal day; backward shifts in the
+        // month before. Check the fire month and the one neighbour that can reach it.
+        LocalDate[] months = {fireDate.withDayOfMonth(1),
+                previous
+                        ? fireDate.withDayOfMonth(1).plusMonths(1)
+                        : fireDate.withDayOfMonth(1).minusMonths(1)};
+        for (LocalDate month : months) {
+            LocalDate nominal = month
+                    .withDayOfMonth(Math.min(dayOfMonth, month.lengthOfMonth()));
+            LocalDate target = nominal;
+            // A calendar with no business days at all must terminate: give up after a year.
+            for (int step = 0; step < 366 && !isBusinessDay(target, weekend, holidays); step++) {
+                target = previous ? target.minusDays(1) : target.plusDays(1);
+            }
+            if (isBusinessDay(target, weekend, holidays) && target.equals(fireDate)) {
+                return nominal;
+            }
+        }
+        return null;
     }
 
     /** The calendar's fixed {@code dates:} as parsed dates (validated at load). */

@@ -1369,14 +1369,14 @@ public final class TesseraqlRuntime implements AutoCloseable {
                                 : jobFile.definition().trigger().schedule();
                 if (schedule == null || schedule.calendar() == null
                         || schedule.calendar().isBlank()) {
-                    return true;
+                    return SchedulingRouteBuilder.CalendarGate.Decision.RUNS;
                 }
                 io.tesseraql.yaml.model.CalendarsDocument.Calendar calendar = calendars
                         .calendars().get(schedule.calendar());
                 if (calendar == null) {
                     LOG.warn("Job {} names unknown calendar '{}'; firing runs unfiltered",
                             jobId, schedule.calendar());
-                    return true;
+                    return SchedulingRouteBuilder.CalendarGate.Decision.RUNS;
                 }
                 java.util.Set<java.time.LocalDate> holidays;
                 try {
@@ -1398,10 +1398,23 @@ public final class TesseraqlRuntime implements AutoCloseable {
                 } catch (Exception ex) {
                     LOG.warn("Job {} calendar '{}' holiday read failed; firing runs unfiltered",
                             jobId, schedule.calendar(), ex);
-                    return true;
+                    return SchedulingRouteBuilder.CalendarGate.Decision.RUNS;
+                }
+                // The shifted nominal-day rule ("the 5th, or the next business day"): the
+                // firing counts only on the shifted target, and the run is FOR the nominal
+                // date - batch.businessDate records the 5th even when executed on the 7th.
+                if (schedule.dayOfMonth() != null) {
+                    java.time.LocalDate nominal = io.tesseraql.yaml.calendar.Calendars
+                            .shiftedNominal(calendar, schedule.dayOfMonth(), schedule.shift(),
+                                    fireDate, holidays);
+                    return nominal == null
+                            ? SchedulingRouteBuilder.CalendarGate.Decision.FILTERED
+                            : new SchedulingRouteBuilder.CalendarGate.Decision(true, nominal);
                 }
                 return io.tesseraql.yaml.calendar.Calendars.counts(calendar, schedule.runOn(),
-                        fireDate, holidays);
+                        fireDate, holidays)
+                                ? SchedulingRouteBuilder.CalendarGate.Decision.RUNS
+                                : SchedulingRouteBuilder.CalendarGate.Decision.FILTERED;
             };
             context.addRoutes(new SchedulingRouteBuilder(
                     jobRunner, jobRepository, List.copyOf(jobs.values()), claimKeys,
