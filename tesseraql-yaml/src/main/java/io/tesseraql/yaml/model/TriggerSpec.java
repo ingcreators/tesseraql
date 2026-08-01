@@ -25,6 +25,46 @@ public record TriggerSpec(Schedule schedule, PollSpec poll, String after) {
     }
 
     /**
+     * The one-line trigger story — "how does this job start" — shared by the CLI's
+     * {@code job list}, the symbols contract, and the operations console, so the three
+     * surfaces can never drift: {@code on demand}, {@code after <jobId>},
+     * {@code poll <source>}, or the schedule with its calendar qualifiers
+     * ({@code cron 0 0 2 * * ?, calendar jp-banking (day 5)}).
+     */
+    public static String describe(TriggerSpec trigger) {
+        if (trigger == null) {
+            return "on demand";
+        }
+        if (trigger.after() != null && !trigger.after().isBlank()) {
+            return "after " + trigger.after();
+        }
+        if (trigger.poll() != null) {
+            return "poll " + trigger.poll().effectiveSource();
+        }
+        Schedule schedule = trigger.schedule();
+        if (schedule == null) {
+            return "on demand";
+        }
+        StringBuilder story = new StringBuilder();
+        if (schedule.cron() != null && !schedule.cron().isBlank()) {
+            story.append("cron ").append(schedule.cron());
+        } else if (schedule.fixedDelay() != null && !schedule.fixedDelay().isBlank()) {
+            story.append("every ").append(schedule.fixedDelay());
+        } else {
+            story.append("on demand");
+        }
+        if (schedule.calendar() != null && !schedule.calendar().isBlank()) {
+            story.append(", calendar ").append(schedule.calendar());
+            if (schedule.dayOfMonth() != null) {
+                story.append(" (day ").append(schedule.dayOfMonth()).append(")");
+            } else if (schedule.runOn() != null) {
+                story.append(" (").append(schedule.runOn()).append(")");
+            }
+        }
+        return story.toString();
+    }
+
+    /**
      * A scheduled trigger. The calendar qualifiers (docs/batch-platform.md track B) follow the
      * daily-consider model: the cron says when to consider a firing, the calendar says whether
      * it counts — a filtered-out firing is skipped silently.

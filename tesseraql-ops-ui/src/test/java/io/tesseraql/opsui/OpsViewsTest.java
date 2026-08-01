@@ -128,6 +128,28 @@ class OpsViewsTest {
     }
 
     @Test
+    void jobsRowsCarryTheTriggerStoryPoliciesAndCalendarNext() {
+        io.tesseraql.yaml.model.JobDefinition definition = new io.tesseraql.yaml.model.JobDefinition(
+                "tesseraql/v1", "nightly.close", "job", "batch-tasklet", null,
+                new io.tesseraql.yaml.model.TriggerSpec(
+                        new io.tesseraql.yaml.model.TriggerSpec.Schedule(
+                                "0 0 8 * * ?", null, "jp-banking", null, 5, null)),
+                Map.of(), null, List.of(), false, null, "skip",
+                new io.tesseraql.yaml.model.SlaSpec("06:00", "2h"));
+
+        Map<String, Object> model = OpsViews.jobs(List.of(new OpsViews.JobCatalogEntry(
+                "nightly.close", "app", definition, null, null, "2026-08-03 (for 2026-07-31)")));
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> row = ((List<Map<String, Object>>) model.get("rows")).get(0);
+        assertThat(row.get("trigger"))
+                .isEqualTo("cron 0 0 8 * * ?, calendar jp-banking (day 5)");
+        assertThat(row.get("policies"))
+                .isEqualTo(List.of("overlap: skip", "sla by 06:00", "sla > 2h"));
+        assertThat(row.get("calendarNext")).isEqualTo("2026-08-03 (for 2026-07-31)");
+    }
+
+    @Test
     void executionBuildsDetailModel() {
         JobExecution execution = new JobExecution("e-9", "nightly", "app", JobStatus.COMPLETED,
                 "cron", null, java.time.LocalDate.parse("2026-06-10"),

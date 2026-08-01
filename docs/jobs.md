@@ -383,8 +383,13 @@ nothing left to stop.
 Every run is persisted as an execution with its steps, visible three ways:
 
 - the **operations console** (`/_tesseraql/ops/console`) lists recent batch executions —
-  job, app, status, trigger, duration — and each links to a per-step detail screen;
-- the **operations API**: `GET /_tesseraql/ops/batch/jobs` (declared jobs),
+  job, app, status, trigger, duration — and each links to a per-step detail screen. Its
+  jobs page tells the whole trigger story (calendar qualifiers included), shows the
+  `overlap:`/`sla:` policies as badges, and — because a calendar-filtered firing leaves
+  no execution row by design — a **Calendar next** column: the next date the calendar
+  lets a firing count, shifted nominal dates included (`2026-08-03 (for 2026-07-31)`);
+- the **operations API**: `GET /_tesseraql/ops/batch/jobs` (declared jobs as
+  `{id, app, trigger, overlap, sla}` objects — the same trigger story the CLI prints),
   `GET /_tesseraql/ops/batch/executions` and `.../executions/{id}` (runs and step detail),
   all bearer-authenticated and gated by the `ops.batch.view` policy. `ops.app.<name>`
   grants scope which apps' jobs and executions a caller sees;

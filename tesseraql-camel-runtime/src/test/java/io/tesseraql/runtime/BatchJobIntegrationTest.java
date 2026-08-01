@@ -135,6 +135,26 @@ class BatchJobIntegrationTest {
         assertThat(list.statusCode()).isEqualTo(200);
         assertThat(MAPPER.readTree(list.body()).isArray()).isTrue();
         assertThat(MAPPER.readTree(list.body())).isNotEmpty();
+
+        // The jobs listing tells the API at least as much as the CLI (docs/jobs.md):
+        // trigger story with calendar qualifiers, and the operational policies.
+        JsonNode jobs = MAPPER.readTree(
+                send("GET", "/_tesseraql/ops/batch/jobs", token, null).body());
+        JsonNode shifted = null;
+        JsonNode overlap = null;
+        for (JsonNode job : jobs) {
+            if ("user.calShifted".equals(job.path("id").asText())) {
+                shifted = job;
+            }
+            if ("user.overlapSkip".equals(job.path("id").asText())) {
+                overlap = job;
+            }
+        }
+        assertThat(shifted).isNotNull();
+        assertThat(shifted.path("trigger").asText())
+                .startsWith("every 1s, calendar shift-cal (day ");
+        assertThat(overlap).isNotNull();
+        assertThat(overlap.path("overlap").asText()).isEqualTo("skip");
     }
 
     @Test

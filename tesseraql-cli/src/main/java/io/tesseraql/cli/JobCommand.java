@@ -137,40 +137,9 @@ final class JobCommand implements Callable<Integer> {
                     job.definition().id(),
                     job.definition().recipe() == null ? "-" : job.definition().recipe(),
                     declared == null || declared.isBlank() ? "main" : declared,
-                    describeTrigger(job.definition().trigger()));
+                    TriggerSpec.describe(job.definition().trigger()));
         }
         return 0;
-    }
-
-    private static String describeTrigger(TriggerSpec trigger) {
-        if (trigger == null) {
-            return "on demand";
-        }
-        if (trigger.after() != null && !trigger.after().isBlank()) {
-            return "after " + trigger.after();
-        }
-        if (trigger.poll() != null) {
-            return "poll " + trigger.poll().effectiveSource();
-        }
-        TriggerSpec.Schedule schedule = trigger.schedule();
-        if (schedule == null) {
-            return "on demand";
-        }
-        StringBuilder text = new StringBuilder();
-        if (schedule.cron() != null && !schedule.cron().isBlank()) {
-            text.append("cron ").append(schedule.cron());
-        } else if (schedule.fixedDelay() != null && !schedule.fixedDelay().isBlank()) {
-            text.append("every ").append(schedule.fixedDelay());
-        } else {
-            text.append("on demand");
-        }
-        if (schedule.calendar() != null && !schedule.calendar().isBlank()) {
-            text.append(", calendar ").append(schedule.calendar());
-            if (schedule.runOn() != null) {
-                text.append(" (").append(schedule.runOn()).append(")");
-            }
-        }
-        return text.toString();
     }
 
     private Integer run(AppManifest manifest, Map<String, JobFile> jobs) throws Exception {

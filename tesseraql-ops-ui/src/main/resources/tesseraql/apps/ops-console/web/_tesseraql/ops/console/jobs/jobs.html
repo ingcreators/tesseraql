@@ -19,6 +19,8 @@
           <th class="hc-datagrid__headcell">Job</th>
           <th class="hc-datagrid__headcell">App</th>
           <th class="hc-datagrid__headcell">Trigger</th>
+          <th class="hc-datagrid__headcell">Calendar next</th>
+          <th class="hc-datagrid__headcell">Policy</th>
           <th class="hc-datagrid__headcell">Source</th>
           <th class="hc-datagrid__headcell">Last run</th>
           <th class="hc-datagrid__headcell">Started</th>
@@ -29,6 +31,17 @@
             <td class="hc-datagrid__cell" th:text="${j.id}"></td>
             <td class="hc-datagrid__cell" th:text="${j.app}"></td>
             <td class="hc-datagrid__cell" th:text="${j.trigger}"></td>
+            <!-- The next date the business-day calendar lets a firing count: a filtered
+                 firing leaves no execution row, so this is where "why didn't it run
+                 today" gets its answer. -->
+            <td class="hc-datagrid__cell" th:text="${j.calendarNext}"></td>
+            <td class="hc-datagrid__cell">
+              <th:block th:if="${j.hasPolicies}">
+                <span class="hc-badge" data-variant="neutral" th:each="p : ${j.policies}"
+                      th:text="${p}"></span>
+              </th:block>
+              <span th:unless="${j.hasPolicies}">-</span>
+            </td>
             <td class="hc-datagrid__cell">
               <th:block th:if="${j.hasPollSource}">
                 <span class="hc-badge" th:attr="data-variant=${j.pollVariant}" th:text="${j.pollState}"></span>

@@ -201,42 +201,9 @@ final class SymbolsCommand implements Callable<Integer> {
             entry.put("source", home.relativize(job.source()).toString().replace('\\', '/'));
             int line = firstKeyLine(readLines(job.source()), "id");
             entry.put("line", line == 0 ? null : line);
-            entry.put("trigger", triggerStory(job.definition().trigger()));
+            entry.put("trigger",
+                    io.tesseraql.yaml.model.TriggerSpec.describe(job.definition().trigger()));
         }
-    }
-
-    /** The one-line trigger story: how a job starts, calendar qualifiers included. */
-    private static String triggerStory(io.tesseraql.yaml.model.TriggerSpec trigger) {
-        if (trigger == null) {
-            return "on demand";
-        }
-        if (trigger.after() != null && !trigger.after().isBlank()) {
-            return "after " + trigger.after();
-        }
-        if (trigger.poll() != null) {
-            return "poll " + trigger.poll().effectiveSource();
-        }
-        io.tesseraql.yaml.model.TriggerSpec.Schedule schedule = trigger.schedule();
-        if (schedule == null) {
-            return "on demand";
-        }
-        StringBuilder story = new StringBuilder();
-        if (schedule.cron() != null && !schedule.cron().isBlank()) {
-            story.append("cron ").append(schedule.cron());
-        } else if (schedule.fixedDelay() != null && !schedule.fixedDelay().isBlank()) {
-            story.append("every ").append(schedule.fixedDelay());
-        } else {
-            story.append("on demand");
-        }
-        if (schedule.calendar() != null && !schedule.calendar().isBlank()) {
-            story.append(", calendar ").append(schedule.calendar());
-            if (schedule.dayOfMonth() != null) {
-                story.append(" (day ").append(schedule.dayOfMonth()).append(")");
-            } else if (schedule.runOn() != null) {
-                story.append(" (").append(schedule.runOn()).append(")");
-            }
-        }
-        return story.toString();
     }
 
     private static List<String> readLines(Path file) throws IOException {

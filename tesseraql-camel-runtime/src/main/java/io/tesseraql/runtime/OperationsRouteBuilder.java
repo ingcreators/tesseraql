@@ -39,6 +39,7 @@ final class OperationsRouteBuilder extends RouteBuilder {
     private final JobRunner runner;
     private final JobRepository repository;
     private final Map<String, String> jobOwners;
+    private final Map<String, io.tesseraql.yaml.model.JobDefinition> definitions;
     private final io.tesseraql.opsui.OpsDashboard dashboard;
     private final io.tesseraql.operations.outbox.JdbcOutboxStore outbox;
     private final MetricsSettings metrics;
@@ -66,13 +67,17 @@ final class OperationsRouteBuilder extends RouteBuilder {
     }
 
     OperationsRouteBuilder(JobRunner runner, JobRepository repository,
-            Map<String, String> jobOwners, io.tesseraql.opsui.OpsDashboard dashboard,
+            Map<String, String> jobOwners,
+            Map<String, io.tesseraql.yaml.model.JobDefinition> definitions,
+            io.tesseraql.opsui.OpsDashboard dashboard,
             io.tesseraql.operations.outbox.JdbcOutboxStore outbox, MetricsSettings metrics,
             io.tesseraql.operations.audit.JdbcRouteAuditStore routeAudit) {
         this.runner = runner;
         this.repository = repository;
         // Job id -> owning app, insertion-ordered so the job list keeps its declaration order.
         this.jobOwners = java.util.Collections.unmodifiableMap(new LinkedHashMap<>(jobOwners));
+        this.definitions = java.util.Collections
+                .unmodifiableMap(new LinkedHashMap<>(definitions));
         this.dashboard = dashboard;
         this.outbox = outbox;
         this.metrics = metrics;
@@ -155,9 +160,11 @@ final class OperationsRouteBuilder extends RouteBuilder {
                 .to(VIEW).to("tesseraql-auth:authorize?policy=ops.batch.view")
                 .process(jsonProcessor(exchange -> {
                     Predicate<String> scope = scope(exchange);
+                    // Objects since 0.11 (docs/jobs.md): the trigger story and the
+                    // operational promises, so the API is at least as told as the CLI.
                     return jobOwners.entrySet().stream()
                             .filter(entry -> scope.test(entry.getValue()))
-                            .map(Map.Entry::getKey)
+                            .map(entry -> jobMap(entry.getKey(), entry.getValue()))
                             .toList();
                 }));
 
@@ -271,6 +278,28 @@ final class OperationsRouteBuilder extends RouteBuilder {
     private static Predicate<String> scope(Exchange exchange) {
         Principal principal = exchange.getProperty(TesseraqlProperties.PRINCIPAL, Principal.class);
         return OpsScope.allowedApps(principal == null ? null : principal.permissions());
+    }
+
+    /** One declared job for the API listing: identity, trigger story, and policies. */
+    private Map<String, Object> jobMap(String jobId, String app) {
+        Map<String, Object> map = new LinkedHashMap<>();
+        map.put("id", jobId);
+        map.put("app", app);
+        io.tesseraql.yaml.model.JobDefinition definition = definitions.get(jobId);
+        map.put("trigger", definition == null
+                ? "on demand"
+                : io.tesseraql.yaml.model.TriggerSpec.describe(definition.trigger()));
+        map.put("overlap", definition != null && definition.skipsOverlap()
+                ? "skip"
+                : "concurrent");
+        io.tesseraql.yaml.model.SlaSpec sla = definition == null ? null : definition.sla();
+        if (sla != null) {
+            Map<String, Object> slaMap = new LinkedHashMap<>();
+            slaMap.put("completeBy", sla.completeBy());
+            slaMap.put("runningLongerThan", sla.runningLongerThan());
+            map.put("sla", slaMap);
+        }
+        return map;
     }
 
     private Object runJob(Exchange exchange) {
