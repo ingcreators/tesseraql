@@ -18,12 +18,14 @@ never disagree with the build.
   Problems panel.
 - **The explorer.** A *TesseraQL* view in the Explorer sidebar: routes grouped by
   kind (`web/`, `consume/`, `batch/`, `mcp/`), views, shared field domains
-  (`domains/`), shared validation rules (`rules/`), migrations, and test suites —
+  (`domains/`), shared validation rules (`rules/`), shared decisions
+  (`decisions/`), approval workflows (`workflow/`), migrations, and test suites —
   one click to the source. Route files show their served identity
   (`GET /api/users · query-json`) once the symbols index has answered.
 - **Declared-symbol intelligence.** Completion and go-to-definition for `policy:`,
-  `message:`, `domain:`, and `use:` values over the `tesseraql symbols` contract —
-  the editor offers exactly what the framework declares, nothing more.
+  `message:`, `domain:`, `use:`, `decision:`, and `workflow:` values over the
+  `tesseraql symbols` contract — the editor offers exactly what the framework
+  declares, nothing more.
 - **Test Explorer with SQL coverage.** App test suites run in the native Test
   Explorer (`tesseraql test --format json`), single cases included; a coverage run
   paints per-file SQL line coverage in the editor.
@@ -36,8 +38,9 @@ never disagree with the build.
   `.mcp.json` for MCP-capable editors and agents.
 - **Error-code hovers.** Hover any `TQL-<DOMAIN>-<n>` literal for a link into the
   error-code reference.
-- **Snippets** for the blessed route shapes (`tql-query-json`, `tql-query-html`,
-  `tql-command`, `tql-view-list`, `tql-test`).
+- **Snippets** for the blessed shapes (`tql-query-json`, `tql-query-html`,
+  `tql-command`, `tql-view-list`, `tql-workflow`, `tql-test`,
+  `tql-test-transition`, `tql-test-dispatch`).
 
 Schema-driven completion stays with the scaffolded wiring: `tesseraql new` associates
 the committed JSON Schema through the recommended

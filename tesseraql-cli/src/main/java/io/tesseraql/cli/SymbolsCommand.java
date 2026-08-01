@@ -27,12 +27,13 @@ import picocli.CommandLine.Option;
 
 /**
  * {@code tesseraql symbols --app <dir>}: prints what the framework declares — security policies,
- * default-locale message keys, shared field domains, validation rules, decision tables, and
- * routes, each with its source and line — as one JSON object on stdout. The editor language layer
+ * default-locale message keys, shared field domains, validation rules, decision tables, routes,
+ * and workflows (with their transition and dispatch ids), each with its source and line — as one
+ * JSON object on stdout. The editor language layer
  * (docs/vscode-extension.md, Phase 56) consumes it for completion and go-to-definition; like
  * every editor contract, the document is sorted and deterministic.
  */
-@Command(name = "symbols", description = "Print the app's declared symbols (policies, message keys, domains, rules, decisions, routes) as JSON.")
+@Command(name = "symbols", description = "Print the app's declared symbols (policies, message keys, domains, rules, decisions, routes, workflows) as JSON.")
 final class SymbolsCommand implements Callable<Integer> {
 
     @Option(names = {"--app"}, required = true, description = "Path to the external app home.")
@@ -54,6 +55,7 @@ final class SymbolsCommand implements Callable<Integer> {
         sharedDefinitions(document.putArray("decisions"), home, "decisions",
                 file -> parser.parseDecisions(file).decisions().keySet());
         routes(document.putArray("routes"), manifest, home);
+        workflows(document.putArray("workflows"), manifest, home);
         System.out.println(mapper.writerWithDefaultPrettyPrinter().writeValueAsString(document));
         return 0;
     }
@@ -144,6 +146,40 @@ final class SymbolsCommand implements Callable<Integer> {
             entry.put("method", route.httpMethod());
             entry.put("path", route.urlPath());
             entry.put("recipe", route.definition().recipe());
+        }
+    }
+
+    /**
+     * The declared workflows (docs/approval-workflow.md), each with its transition and dispatch
+     * ids — the suite targets ({@code transition:}/{@code dispatch:}) name them, so the editor
+     * completes {@code workflow:} values and navigates to the declaring file.
+     */
+    private static void workflows(ArrayNode into, AppManifest manifest, Path home)
+            throws IOException {
+        List<io.tesseraql.yaml.manifest.WorkflowFile> workflows = new ArrayList<>(
+                manifest.workflows());
+        workflows.sort(Comparator.comparing(workflow -> String.valueOf(
+                workflow.definition().id())));
+        for (io.tesseraql.yaml.manifest.WorkflowFile workflow : workflows) {
+            io.tesseraql.yaml.model.WorkflowDefinition def = workflow.definition();
+            ObjectNode entry = into.addObject();
+            entry.put("id", def.id());
+            entry.put("source",
+                    home.relativize(workflow.source()).toString().replace('\\', '/'));
+            int line = firstKeyLine(readLines(workflow.source()), "id");
+            entry.put("line", line == 0 ? null : line);
+            ArrayNode transitions = entry.putArray("transitions");
+            for (io.tesseraql.yaml.model.TransitionSpec transition : def.transitions()) {
+                if (transition.id() != null) {
+                    transitions.add(transition.id());
+                }
+            }
+            ArrayNode dispatches = entry.putArray("dispatches");
+            for (io.tesseraql.yaml.model.DispatchSpec dispatch : def.dispatch()) {
+                if (dispatch.id() != null) {
+                    dispatches.add(dispatch.id());
+                }
+            }
         }
     }
 

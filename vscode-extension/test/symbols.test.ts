@@ -33,6 +33,31 @@ test('a pre-shared-definitions document degrades to empty domains, rules, and de
   assert.deepEqual(symbols.rules, []);
   assert.deepEqual(symbols.decisions, []);
   assert.deepEqual(symbols.routes, []);
+  assert.deepEqual(symbols.workflows, []);
+});
+
+test('parses workflows with their transition and dispatch ids', () => {
+  const symbols = parseAppSymbols(JSON.stringify({
+    policies: [], messages: [],
+    workflows: [{
+      id: 'purchase_request', source: 'workflow/purchase_request.yml', line: 2,
+      transitions: ['approve', 'escalate'], dispatches: ['decide_next'],
+    }],
+  }));
+  assert.deepEqual(symbols.workflows, [{
+    name: 'purchase_request', source: 'workflow/purchase_request.yml', line: 2,
+    transitions: ['approve', 'escalate'], dispatches: ['decide_next'],
+  }]);
+});
+
+test('a workflow: value is a workflow reference and completes as one', () => {
+  const line = "      workflow: purchase_request";
+  const reference = symbolReferenceAt(line, line.indexOf('purchase') + 3);
+  assert.deepEqual(reference, {
+    kind: 'workflow', value: 'purchase_request',
+    start: line.indexOf('purchase_request'), end: line.length,
+  });
+  assert.equal(completionKindAt('      workflow: pur', 19), 'workflow');
 });
 
 test('a route without a source is a contract error, missing identity parts are not', () => {

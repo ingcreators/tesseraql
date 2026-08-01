@@ -10,6 +10,15 @@ export interface DeclaredSymbol {
   line: number | null;
 }
 
+/** A declared workflow: its file plus the transition and dispatch ids it mounts. */
+export interface WorkflowSymbol {
+  name: string;
+  source: string;
+  line: number | null;
+  transitions: string[];
+  dispatches: string[];
+}
+
 /** A mounted route as the manifest resolves it: the file plus its served identity. */
 export interface RouteSymbol {
   id: string | null;
@@ -26,6 +35,7 @@ export interface AppSymbols {
   rules: DeclaredSymbol[];
   decisions: DeclaredSymbol[];
   routes: RouteSymbol[];
+  workflows: WorkflowSymbol[];
 }
 
 export class SymbolsContractError extends Error {}
@@ -43,7 +53,7 @@ export function parseAppSymbols(stdout: string): AppSymbols {
   }
   const document = parsed as {
     policies: unknown[]; messages: unknown[]; domains?: unknown; rules?: unknown;
-    decisions?: unknown; routes?: unknown;
+    decisions?: unknown; routes?: unknown; workflows?: unknown;
   };
   return {
     policies: document.policies.map((value) => toSymbol(value, 'name')),
@@ -55,7 +65,30 @@ export function parseAppSymbols(stdout: string): AppSymbols {
     rules: optionalSymbols(document.rules),
     decisions: optionalSymbols(document.decisions),
     routes: optionalRoutes(document.routes),
+    // Absent on a pre-0.10 CLI: workflows degrade to empty, same rule.
+    workflows: optionalWorkflows(document.workflows),
   };
+}
+
+function optionalWorkflows(value: unknown): WorkflowSymbol[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value.map((entry) => {
+    const base = toSymbol(entry, 'id');
+    const workflow = entry as Record<string, unknown>;
+    return {
+      ...base,
+      transitions: stringList(workflow.transitions),
+      dispatches: stringList(workflow.dispatches),
+    };
+  });
+}
+
+function stringList(value: unknown): string[] {
+  return Array.isArray(value)
+      ? value.filter((entry): entry is string => typeof entry === 'string')
+      : [];
 }
 
 function optionalSymbols(value: unknown): DeclaredSymbol[] {
@@ -126,14 +159,15 @@ function toSymbol(value: unknown, nameField: string): DeclaredSymbol {
  * namespaces (names are unique within each, and the pools never overlap in practice).
  */
 export interface SymbolReference {
-  kind: 'policy' | 'message' | 'maybe-message' | 'domain' | 'shared' | 'decision';
+  kind: 'policy' | 'message' | 'maybe-message' | 'domain' | 'shared' | 'decision'
+      | 'workflow';
   value: string;
   /** 0-based columns of the value span. */
   start: number;
   end: number;
 }
 
-const REFERENCE = /^(\s*(?:-\s+)?(policy|message|title|label|domain|use|decision):\s*)(["']?)([^\s#"']+)\3/;
+const REFERENCE = /^(\s*(?:-\s+)?(policy|message|title|label|domain|use|decision|workflow):\s*)(["']?)([^\s#"']+)\3/;
 
 const KIND_BY_KEY: Record<string, SymbolReference['kind']> = {
   policy: 'policy',
@@ -142,6 +176,9 @@ const KIND_BY_KEY: Record<string, SymbolReference['kind']> = {
   use: 'shared',
   // The decide: suite target (docs/decision-tables.md) names the decision directly.
   decision: 'decision',
+  // The transition:/dispatch: suite targets (docs/transition-engine.md) name the
+  // workflow directly.
+  workflow: 'workflow',
 };
 
 export function symbolReferenceAt(lineText: string, character: number): SymbolReference | undefined {
@@ -163,10 +200,11 @@ export function symbolReferenceAt(lineText: string, character: number): SymbolRe
  * `use:`, or `decision:`.
  */
 export function completionKindAt(lineText: string, character: number):
-    'policy' | 'message' | 'domain' | 'shared' | 'decision' | undefined {
+    'policy' | 'message' | 'domain' | 'shared' | 'decision' | 'workflow' | undefined {
   const head = lineText.slice(0, character);
-  const match = /^\s*(?:-\s+)?(policy|message|domain|use|decision):\s*(["']?)[^\s#"']*$/.exec(head);
+  const match = /^\s*(?:-\s+)?(policy|message|domain|use|decision|workflow):\s*(["']?)[^\s#"']*$/.exec(head);
   return match === null
       ? undefined
-      : KIND_BY_KEY[match[1]] as 'policy' | 'message' | 'domain' | 'shared' | 'decision';
+      : KIND_BY_KEY[match[1]] as
+          'policy' | 'message' | 'domain' | 'shared' | 'decision' | 'workflow';
 }

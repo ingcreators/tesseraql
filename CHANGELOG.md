@@ -8,6 +8,15 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **Workflows join the editor's declared-symbol contract**: `tesseraql symbols` now
+  emits a `workflows` array — each declared workflow with its source, line, and its
+  transition and dispatch ids — and the VS Code extension (0.3.5) adds a *Workflows*
+  explorer section (`workflow/` YAML and SQL), completion and go-to-definition for
+  `workflow:` values (the suite `transition:`/`dispatch:` targets), and snippets for
+  the workflow shape and both suite targets (`tql-workflow`, `tql-test-transition`,
+  `tql-test-dispatch`). A pre-0.10 CLI omits the array and the extension degrades to
+  empty, the established contract-evolution rule.
+
 - **The `current_state` literal lint — the other half of the typo class**
   (docs/transition-engine.md slice 4): `TQL-WORKFLOW-3115` (warning) flags a
   `current_state` string literal in SQL referencing the managed
