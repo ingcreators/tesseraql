@@ -1,0 +1,22 @@
+version: tesseraql/v1
+id: pricing.dailyReport
+kind: job
+recipe: batch-pipeline
+datasource: analytics
+
+# The export step (docs/jobs.md "The export step"): once the summary refresh lands,
+# write the day's report as a CSV through the transfer machinery — retrievable from
+# the operations console's transfers page.
+trigger:
+  after: pricing.loadSummary
+
+pipeline:
+  - id: report
+    export:
+      format: csv
+      filename: price-summary-{batch.businessDate}.csv
+      sql: { file: price-report.sql, mode: query }
+      columns:
+        - { name: sku, header: SKU }
+        - { name: best_price, header: Best price }
+        - { name: suppliers, header: Suppliers }

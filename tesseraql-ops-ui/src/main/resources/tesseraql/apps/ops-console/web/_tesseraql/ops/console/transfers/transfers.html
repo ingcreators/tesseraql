@@ -36,7 +36,11 @@
             <td class="hc-datagrid__cell" th:text="${t.format}"></td>
             <td class="hc-datagrid__cell"><span class="hc-badge" th:attr="data-variant=${t.statusVariant}" th:text="${t.status}"></span></td>
             <td class="hc-datagrid__cell" th:text="${t.rows}"></td>
-            <td class="hc-datagrid__cell" th:text="${t.filename}"></td>
+            <td class="hc-datagrid__cell">
+              <a th:if="${t.downloadHref != null}" th:href="${t.downloadHref}" download
+                 th:text="${t.filename}">file</a>
+              <span th:if="${t.downloadHref == null}" th:text="${t.filename}"></span>
+            </td>
             <td class="hc-datagrid__cell" th:text="${t.downloaded}"></td>
             <td class="hc-datagrid__cell" th:text="${t.createdAt}"></td>
           </tr>

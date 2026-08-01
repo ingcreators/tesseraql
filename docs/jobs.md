@@ -213,6 +213,8 @@ Each pipeline step has an `id` and declares **exactly one** of:
 - `http-call:` — issue one synchronous outbound REST request
 - `chunk:` — restartable per-row processing, committed in slices
   ([below](#the-chunk-step))
+- `export:` — write a formatted file from an extraction query
+  ([below](#the-export-step))
 
 Steps run in order, and each step publishes its result into a shared context that later
 steps bind from:
@@ -223,6 +225,7 @@ steps bind from:
 | `step.<id>.affectedRows`   | rows affected (update) or returned (query) by an earlier step      |
 | `step.<id>.status` / `step.<id>.body` / `step.<id>.headers` | an earlier `http-call` step's response |
 | `step.<id>.eventId`        | the outbox event id an earlier `notify:` step enqueued             |
+| `step.<id>.transferId` / `step.<id>.filename` / `step.<id>.rows` | an earlier `export:` step's produced transfer |
 | `tenant.id`                | the current tenant, on a [per-tenant job](#per-tenant-jobs)        |
 
 A SQL step names its file (relative to the job's directory) and an execution mode:
@@ -303,6 +306,55 @@ point would be undefined), and a reader that never binds `chunk.after` is a warn
 (`TQL-BATCH-4208` — a restart reprocesses from the top, which only an idempotent writer
 survives). The `key` column's values must be unique and ascending under the reader's
 `order by`; the gallery's `user.anonymizeInactive` job is the runnable reference.
+
+## The export step
+
+The scheduled "close the day, write the report" move: an `export:` step is the
+[route recipes' export vocabulary](file-transfers.md) — `format`, `filename`,
+`columns`, `locale`/`timezone`, workbook and PDF `template:` options — on a pipeline
+step, run on the job's datasource:
+
+```yaml
+pipeline:
+  - id: refresh
+    sql: { file: load-summary.sql, mode: update }
+  - id: report
+    export:
+      format: excel
+      filename: price-summary-{batch.businessDate}.xlsx
+      sql: { file: report.sql, mode: query }
+      columns:
+        - { name: category, header: Category }
+        - { name: total, header: Total, type: number, format: "#,##0" }
+  - id: announce
+    notify:
+      channel: reports
+      payload:
+        rows: step.report.rows
+        transferId: step.report.transferId
+```
+
+- **Same machinery, synchronous shape.** The extraction streams through the format codec
+  into the managed spool and records the same execution and transfer rows an HTTP
+  `file-export` records — the step just runs it inline, on the job's thread, and fails
+  the step on error instead of leaving a status to poll. The transfer's route id is
+  `<jobId>#<stepId>`, so the console tells job-produced files from route-produced ones.
+- **The extraction SQL renders like a `sql:` step's**: the dialect variant beside the
+  file, ambient `batch.*` binds, file placeholders against the job's datasource. On a
+  `duckdb` datasource this is the analytics report in one step — `report.sql` reads
+  Parquet, lake tables, or an attach, and the codec writes CSV, Excel, or PDF.
+- **`filename:` interpolates `{dotted.path}` context values** — `{batch.businessDate}`
+  being the one that matters. `template:` resolves beside the job file; `locale:` and
+  `timezone:` are literals (a job has no request to resolve them from).
+- **`after:` runs in the extraction transaction.** `timing: download` stays route
+  vocabulary — a job-produced file's download is an ops action, not a business signal
+  (`TQL-YAML-1041` at build time).
+- **Retrieval is the operations console**: the transfers page links every completed
+  export, and machine callers fetch
+  `GET /_tesseraql/ops/batch/transfers/{transferId}/file` under `ops.batch.view`. The
+  step publishes `transferId`, `rows`, and `filename` into the step context, so a
+  follow-up `notify:` carries the pointer and an `http-call:` can tell a partner system
+  the drop is ready.
 
 ## Transactions
 
@@ -436,7 +488,10 @@ The `notify:` and `http-call:` step families report their own codes in the same 
 [error-code reference](reference-error-codes.md).
 
 Lint checks jobs statically: a step not declaring exactly one of `sql:`/`notify:`/
-`http-call:`/`chunk:` (`TQL-FIELD-2004`), a job with both a schedule and a poll trigger or
+`http-call:`/`chunk:`/`export:` (`TQL-FIELD-2004`), a malformed `export:` step — no
+extraction query, no format, or a `download`-timed follow-up (`TQL-YAML-1041`, with the
+pdf template checks and the datasource refusal shared with routes), a job with both a
+schedule and a poll trigger or
 a malformed poll source (`TQL-YAML-1005`), a poll job without its `import:` block
 (`TQL-YAML-1006`), non-allow-listed poll or HTTP egress (`TQL-SEC-4070`,
 `TQL-SEC-4080`), calendar qualifiers that would fail open at fire time

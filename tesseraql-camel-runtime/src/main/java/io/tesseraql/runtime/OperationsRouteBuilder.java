@@ -44,6 +44,7 @@ final class OperationsRouteBuilder extends RouteBuilder {
     private final io.tesseraql.operations.outbox.JdbcOutboxStore outbox;
     private final MetricsSettings metrics;
     private final io.tesseraql.operations.audit.JdbcRouteAuditStore routeAudit;
+    private final io.tesseraql.core.files.FileTransferService transfers;
 
     /**
      * Runs a job by id; decouples the route builder from the runtime instance. The trigger
@@ -71,9 +72,11 @@ final class OperationsRouteBuilder extends RouteBuilder {
             Map<String, io.tesseraql.yaml.model.JobDefinition> definitions,
             io.tesseraql.opsui.OpsDashboard dashboard,
             io.tesseraql.operations.outbox.JdbcOutboxStore outbox, MetricsSettings metrics,
-            io.tesseraql.operations.audit.JdbcRouteAuditStore routeAudit) {
+            io.tesseraql.operations.audit.JdbcRouteAuditStore routeAudit,
+            io.tesseraql.core.files.FileTransferService transfers) {
         this.runner = runner;
         this.repository = repository;
+        this.transfers = transfers;
         // Job id -> owning app, insertion-ordered so the job list keeps its declaration order.
         this.jobOwners = java.util.Collections.unmodifiableMap(new LinkedHashMap<>(jobOwners));
         this.definitions = java.util.Collections
@@ -95,6 +98,10 @@ final class OperationsRouteBuilder extends RouteBuilder {
         rest().post("/_tesseraql/ops/batch/jobs/{jobId}/run").to("direct:ops.batch.run");
         rest().post("/_tesseraql/ops/batch/executions/{id}/cancel")
                 .to("direct:ops.batch.cancel");
+        rest().get("/_tesseraql/ops/batch/transfers/{id}/file")
+                .to("direct:ops.batch.transferFile");
+        rest().get("/_tesseraql/ops/console/transfers/{id}/file")
+                .to("direct:ops.console.transferFile");
         rest().get("/_tesseraql/ops/overview").to("direct:ops.overview");
         rest().get("/_tesseraql/ops/lanes").to("direct:ops.lanes");
         rest().get("/_tesseraql/ops/slow-sql").to("direct:ops.slowSql");
@@ -191,6 +198,19 @@ final class OperationsRouteBuilder extends RouteBuilder {
         from("direct:ops.batch.cancel").routeId("ops.batch.cancel")
                 .to(VIEW).to("tesseraql-auth:authorize?policy=ops.batch.run")
                 .process(jsonProcessor(this::cancelExecution));
+
+        // A job-produced export has no route-scoped download URL, so it is fetched here
+        // (docs/analytics-experience.md track 3) — view-gated and app-scoped like the
+        // transfers listing; unknown and out-of-scope read the same (TQL-BATCH-4040). Two
+        // faces, one handler: the API for machine callers, the console for the browser
+        // session behind the transfers page.
+        from("direct:ops.batch.transferFile").routeId("ops.batch.transferFile")
+                .to(VIEW).to("tesseraql-auth:authorize?policy=ops.batch.view")
+                .process(this::transferFile);
+        from("direct:ops.console.transferFile").routeId("ops.console.transferFile")
+                .to("tesseraql-auth:authenticate?auth=browser")
+                .to("tesseraql-auth:authorize?policy=ops.batch.view")
+                .process(this::transferFile);
 
         from("direct:ops.overview").routeId("ops.overview")
                 .to(VIEW).to("tesseraql-auth:authorize?policy=ops.batch.view")
@@ -435,5 +455,41 @@ final class OperationsRouteBuilder extends RouteBuilder {
                     "application/json; charset=utf-8");
             exchange.getMessage().setBody(mapper.writeValueAsString(body));
         };
+    }
+
+    /**
+     * Streams one completed export (docs/analytics-experience.md track 3). Unknown ids and
+     * transfers outside the caller's {@code ops.app.<name>} scope read the same 404; a
+     * transfer that is not a completed export is a 409 ({@code TQL-LD-2823}, the route
+     * download's refusal).
+     */
+    private void transferFile(Exchange exchange) throws java.io.IOException {
+        String id = exchange.getMessage().getHeader("id", String.class);
+        io.tesseraql.core.files.FileTransferService.TransferStatus status = transfers
+                .status(id).orElse(null);
+        if (status == null || !scope(exchange).test(status.appName())) {
+            exchange.getMessage().setHeader(Exchange.HTTP_RESPONSE_CODE, 404);
+            exchange.getMessage().setHeader(Exchange.CONTENT_TYPE,
+                    "application/json; charset=utf-8");
+            exchange.getMessage().setBody(mapper.writeValueAsString(NOT_FOUND));
+            return;
+        }
+        io.tesseraql.core.files.FileTransferService.Download download = transfers.download(id)
+                .orElse(null);
+        if (download == null) {
+            exchange.getMessage().setHeader(Exchange.HTTP_RESPONSE_CODE, 409);
+            exchange.getMessage().setHeader(Exchange.CONTENT_TYPE,
+                    "application/json; charset=utf-8");
+            exchange.getMessage().setBody(mapper.writeValueAsString(Map.of("error",
+                    Map.of("code", "TQL-LD-2823",
+                            "message", "Transfer has no downloadable file"))));
+            return;
+        }
+        exchange.getMessage().removeHeaders("*");
+        exchange.getMessage().setHeader(Exchange.HTTP_RESPONSE_CODE, 200);
+        exchange.getMessage().setHeader(Exchange.CONTENT_TYPE, download.contentType());
+        exchange.getMessage().setHeader("Content-Disposition", "attachment; filename=\""
+                + download.filename().replaceAll("[\\r\\n\"]", "_") + "\"");
+        exchange.getMessage().setBody(download.content());
     }
 }

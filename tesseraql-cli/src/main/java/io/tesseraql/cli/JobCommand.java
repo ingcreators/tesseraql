@@ -386,12 +386,22 @@ final class JobCommand implements Callable<Integer> {
         Path scratch = io.tesseraql.yaml.config.WorkHome.resolve(app, manifest.config())
                 .resolve("tmp").resolve("tesseraql");
         Files.createDirectories(scratch);
-        JobExecutor executor = new JobExecutor(repository,
-                new io.tesseraql.core.spool.FileTempStore(scratch))
+        io.tesseraql.core.spool.FileTempStore tempStore = new io.tesseraql.core.spool.FileTempStore(
+                scratch);
+        // export: steps write through the same transfer machinery `serve` wires
+        // (docs/analytics-experience.md track 3), so a CLI-run job records the same
+        // execution + transfer rows and the console download works either way.
+        io.tesseraql.operations.files.JdbcFileTransferService transfers = new io.tesseraql.operations.files.JdbcFileTransferService(
+                repository, tempStore, main, io.tesseraql.core.files.FileCodecs.discover());
+        transfers.sqlTimeoutSeconds(manifest.config().getString("tesseraql.sql.timeoutSeconds")
+                .map(Integer::parseInt).orElse(30));
+        transfers.ensureSchema();
+        JobExecutor executor = new JobExecutor(repository, tempStore)
                 .sqlTimeoutSeconds(manifest.config().getString("tesseraql.sql.timeoutSeconds")
                         .map(Integer::parseInt).orElse(30))
                 // notify: steps enqueue on the durable outbox; the serving runtime delivers.
                 .notificationOutbox(outbox)
+                .fileTransfers(transfers, app)
                 .httpCall(new io.tesseraql.operations.http.HttpCallClient(
                         io.tesseraql.yaml.http.HttpOutbound.load(manifest.config()),
                         manifest.config(), io.tesseraql.core.telemetry.NoopTracer.INSTANCE,

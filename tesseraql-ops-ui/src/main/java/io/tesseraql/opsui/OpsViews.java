@@ -125,6 +125,14 @@ public final class OpsViews {
             row.put("statusVariant", variant(transfer.status()));
             row.put("rows", transfer.rows());
             row.put("filename", dash(transfer.filename()));
+            // A completed export is fetchable through the ops download endpoint — the
+            // retrieval path for job-produced files, which have no route-scoped URL
+            // (docs/analytics-experience.md track 3).
+            row.put("downloadHref", "EXPORT".equals(transfer.direction())
+                    && "COMPLETED".equals(transfer.status())
+                            ? "/_tesseraql/ops/console/transfers/" + transfer.transferId()
+                                    + "/file"
+                            : null);
             row.put("downloaded", transfer.downloaded() ? "yes" : "-");
             row.put("createdAt", transfer.createdAt() == null
                     ? "-"

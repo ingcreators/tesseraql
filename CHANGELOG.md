@@ -8,6 +8,19 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **A job can produce a file: the `export:` pipeline step** (docs/jobs.md): the route
+  recipes' export vocabulary — `format`, `filename`, `columns`, templates — as a fifth
+  step body, run inline on the job's datasource through the same codec → spool →
+  transfer machinery HTTP `file-export` uses. The extraction SQL renders like a `sql:`
+  step's (dialect variants, ambient `batch.*` binds, file placeholders), `filename:`
+  interpolates `{batch.businessDate}`-style context paths, and the step publishes
+  `transferId`/`rows`/`filename` for follow-up `notify:`/`http-call:` steps. Retrieval:
+  the ops console transfers page links every completed export, backed by
+  `GET /_tesseraql/ops/console/transfers/{id}/file` (browser session) and
+  `GET /_tesseraql/ops/batch/transfers/{id}/file` (bearer) under `ops.batch.view`,
+  app-scoped like the listing. Malformed steps are `TQL-YAML-1041`; `after.timing:
+  download` stays route vocabulary.
+
 - **Dashboard charts are the kit's charts** (docs/declarative-views.md,
   docs/hypermedia-ui.md): the `chart` panel adopts Hypermedia Components'
   `data-hc-chart` recipe — the server renders the panel's rows as a real table (the

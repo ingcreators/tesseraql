@@ -196,6 +196,34 @@ class BatchJobIntegrationTest {
     }
 
     @Test
+    void anExportStepWritesTheFileThroughTheTransferMachinery() throws Exception {
+        String token = token(List.of("BATCH_OPERATOR"));
+        HttpResponse<String> run = send("POST",
+                "/_tesseraql/ops/batch/jobs/user.exportReport/run", token,
+                "{\"businessDate\": \"2026-03-31\"}");
+        assertThat(run.body()).contains("COMPLETED");
+
+        // The step published its row count to the step context; the next step stamped it.
+        // (Sibling tests seed their own rows, so only the shape is deterministic.)
+        assertThat(statusOf("pending-user")).startsWith("ROWS-");
+        // The transfer row is keyed by the job#step route id.
+        String transferId = transferIdOf("user.exportReport#extract");
+
+        // The produced file downloads through the ops API face, named by the business date
+        // the filename interpolated.
+        HttpResponse<String> file = send("GET",
+                "/_tesseraql/ops/batch/transfers/" + transferId + "/file", token, null);
+        assertThat(file.statusCode()).isEqualTo(200);
+        assertThat(file.headers().firstValue("Content-Disposition").orElse(""))
+                .contains("users-2026-03-31.csv");
+        assertThat(file.body()).startsWith("Name,Status").contains("sato");
+
+        // Unknown ids read exactly like out-of-scope ones.
+        assertThat(send("GET", "/_tesseraql/ops/batch/transfers/no-such/file", token, null)
+                .statusCode()).isEqualTo(404);
+    }
+
+    @Test
     void businessDayCalendarsFilterScheduledFirings() throws Exception {
         // The control job — a calendar where every day counts — proves the scheduler fires.
         long deadline = System.currentTimeMillis() + 60_000;
@@ -593,6 +621,19 @@ class BatchJobIntegrationTest {
         }
     }
 
+    private static String transferIdOf(String routeId) {
+        try (Connection connection = DriverManager.getConnection(
+                POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword());
+                Statement statement = connection.createStatement();
+                ResultSet rs = statement.executeQuery(
+                        "select transfer_id from tql_file_transfer where route_id = '"
+                                + routeId + "' order by created_at desc")) {
+            return rs.next() ? rs.getString(1) : null;
+        } catch (Exception ex) {
+            throw new IllegalStateException(ex);
+        }
+    }
+
     private static String statusOf(String name) {
         try (Connection connection = DriverManager.getConnection(
                 POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword());
@@ -636,6 +677,35 @@ class BatchJobIntegrationTest {
         Files.writeString(target.resolve("batch/stamp/stamp.sql"),
                 "update users set status = 'ASOF-' || cast(cast(/* batch.businessDate */"
                         + " '2026-01-01' as date) as varchar) where name = 'pending-user'\n");
+        // An export step (docs/analytics-experience.md track 3): a CSV report through the
+        // transfer machinery, its result published to the step context for the next step.
+        Files.createDirectories(target.resolve("batch/report"));
+        Files.writeString(target.resolve("batch/report/job.yml"), """
+                version: tesseraql/v1
+                id: user.exportReport
+                kind: job
+                recipe: batch-pipeline
+                pipeline:
+                  - id: extract
+                    export:
+                      format: csv
+                      filename: users-{batch.businessDate}.csv
+                      sql: { file: report.sql, mode: query }
+                      columns:
+                        - { name: name, header: Name }
+                        - { name: status, header: Status }
+                  - id: stamp
+                    sql:
+                      file: stamp-transfer.sql
+                      mode: update
+                      params:
+                        exported: step.extract.rows
+                """);
+        Files.writeString(target.resolve("batch/report/report.sql"),
+                "select name, status from users order by name\n");
+        Files.writeString(target.resolve("batch/report/stamp-transfer.sql"),
+                "update users set status = 'ROWS-' || cast(/* exported */ 0 as varchar)"
+                        + " where name = 'pending-user'\n");
         // Business-day calendars (docs/batch-platform.md track B): a control calendar where
         // every day counts, a static holiday list naming today, and a table-backed source the
         // migration seeds with today's row — the gated siblings must never record a run.

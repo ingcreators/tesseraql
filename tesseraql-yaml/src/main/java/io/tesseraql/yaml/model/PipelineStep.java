@@ -8,8 +8,9 @@ import com.fasterxml.jackson.annotation.JsonProperty;
  *
  * <p>A step declares exactly one of {@code sql:} (a SQL execution binding), {@code notify:} (a
  * notification enqueued on the transactional outbox, roadmap Phase 20), {@code http-call:} (a
- * synchronous outbound REST call, roadmap Phase 26), or {@code chunk:} (restartable chunked
- * processing, docs/batch-platform.md track C).
+ * synchronous outbound REST call, roadmap Phase 26), {@code chunk:} (restartable chunked
+ * processing, docs/batch-platform.md track C), or {@code export:} (a formatted file written
+ * through the transfer machinery, docs/analytics-experience.md track 3).
  *
  * @param id           unique step id within the job
  * @param sql          the SQL execution binding for this step
@@ -18,26 +19,35 @@ import com.fasterxml.jackson.annotation.JsonProperty;
  * @param httpCall     the {@code http-call:} declaration of an outbound REST step (roadmap
  *                     Phase 26)
  * @param chunk        the {@code chunk:} declaration of a reader/writer chunk step
+ * @param export       the {@code export:} declaration of a file-producing step — the route
+ *                     recipes' export vocabulary, run on the job's datasource
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public record PipelineStep(String id, SqlBinding sql,
         @JsonProperty("notify") NotifySpec notification,
         @JsonProperty("http-call") HttpCallSpec httpCall,
-        ChunkSpec chunk) {
+        ChunkSpec chunk,
+        ExportSpec export) {
 
     /** Convenience constructor for a SQL step (the pre-Phase-20 shape). */
     public PipelineStep(String id, SqlBinding sql) {
-        this(id, sql, null, null, null);
+        this(id, sql, null, null, null, null);
     }
 
     /** Convenience constructor for a SQL or notification step (the pre-Phase-26 shape). */
     public PipelineStep(String id, SqlBinding sql, NotifySpec notification) {
-        this(id, sql, notification, null, null);
+        this(id, sql, notification, null, null, null);
     }
 
     /** Convenience constructor for a step without a {@code chunk:} body (the pre-chunk shape). */
     public PipelineStep(String id, SqlBinding sql, NotifySpec notification,
             HttpCallSpec httpCall) {
-        this(id, sql, notification, httpCall, null);
+        this(id, sql, notification, httpCall, null, null);
+    }
+
+    /** Convenience constructor for a step without an {@code export:} body (the pre-export shape). */
+    public PipelineStep(String id, SqlBinding sql, NotifySpec notification,
+            HttpCallSpec httpCall, ChunkSpec chunk) {
+        this(id, sql, notification, httpCall, chunk, null);
     }
 }
