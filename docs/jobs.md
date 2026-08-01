@@ -78,6 +78,54 @@ select cast(/* batch.businessDate */ '2026-01-01' as date), sum(amount)
 from   orders where order_date = /* batch.businessDate */ '2026-01-01'
 ```
 
+## Business-day calendars
+
+Cron cannot say "the last business day of the month" or "skip national holidays".
+A business-day calendar can — declared once under `calendars/`, referenced from any
+schedule ([batch platform](batch-platform.md) track B):
+
+```yaml
+# calendars/jp.yml
+version: tesseraql/v1
+calendars:
+  jp-banking:
+    weekend: [saturday, sunday]   # omit for the Saturday/Sunday default; [] means none
+    holidays:
+      source: { table: holidays, date: holiday_date, calendar: calendar_id }
+      # or, for small fixed sets:  dates: [2026-01-01, 2026-01-02]
+```
+
+```yaml
+trigger:
+  schedule:
+    cron: "0 0 2 * * ?"           # the cron says when to CONSIDER a firing
+    calendar: jp-banking          # the calendar says whether it COUNTS
+    runOn: lastBusinessDayOfMonth # businessDay (default) | firstBusinessDayOfMonth
+                                  # | lastBusinessDayOfMonth
+```
+
+This is the **daily-consider model**: "last business day of the month" is a daily cron
+plus a filter, with no scheduler state. A filtered-out firing is skipped silently — it
+is considered, claimed (so one node decides per firing), and **not a run**: no execution
+is recorded. Holidays live in exactly one home per calendar: a fixed `dates:` list for
+small closed sets, or a table-backed `source:` read on the job's datasource **at fire
+time** — operations maintains next year's holidays as rows, no deploy. When the named
+`calendar:` column is present, rows are filtered to the declaring calendar's name.
+
+Two edges are deliberate:
+
+- **Manual runs bypass the calendar.** An operator forcing a run through the ops API is
+  saying "run it now"; the filter governs scheduled firings.
+- **Resolution failures fail open.** If the holiday table cannot be read at fire time,
+  the firing runs and a warning is logged — silently skipping a close-job on a transient
+  read error would be worse, and the job's own SQL reaches the same database next. The
+  place typos get to be loud is the build: lint checks every reference
+  (`TQL-BATCH-4201`–`4203` below).
+
+Holiday-shift semantics ("the 5th, or the next business day if it's a holiday") are
+deferred — they need missed-date memory across firings. The workaround is a daily cron
+plus a guard on the business date in the job's SQL.
+
 A `file-import` job can instead declare a **`poll:` trigger** that watches a local, SFTP, or
 FTPS directory and feeds each arriving file through the job's `import:` block, under a
 deny-by-default host allow-list. Polling is part of the managed-connector surface — see
@@ -190,6 +238,11 @@ Every run is persisted as an execution with its steps, visible three ways:
 | --- | --- |
 | `TQL-BATCH-4040` | the operations API was asked about a job or execution that does not exist — or that the caller's app scope does not include |
 | `TQL-BATCH-4041` | the reserved `businessDate` run parameter is not an ISO date (`yyyy-MM-dd`) |
+| `TQL-BATCH-4201` | a schedule names a calendar that no `calendars/*.yml` declares (lint) |
+| `TQL-BATCH-4202` | `runOn:` without a `calendar:`, or an unknown `runOn:` value (lint) |
+| `TQL-BATCH-4203` | a calendar declares both `dates:` and `source:` — holiday rows have exactly one home (lint) |
+| `TQL-BATCH-4204` | the same calendar name is declared in two `calendars/*.yml` documents |
+| `TQL-BATCH-4205` | a calendar that cannot be evaluated: an unknown weekend day name, a non-ISO holiday date, or a `source:` whose table/columns are not plain identifiers |
 | `TQL-BATCH-5001` | the execution store could not record a run |
 | `TQL-BATCH-5002` | a step failed (its SQL raised an error), or a step is misdeclared |
 
@@ -201,8 +254,9 @@ The `notify:` and `http-call:` step families report their own codes in the same 
 Lint checks jobs statically: a step declaring both or neither of `sql:`/`notify:`/
 `http-call:` (`TQL-FIELD-2004`), a job with both a schedule and a poll trigger or a
 malformed poll source (`TQL-YAML-1005`), a poll job without its `import:` block
-(`TQL-YAML-1006`), and non-allow-listed poll or HTTP egress (`TQL-SEC-4070`,
-`TQL-SEC-4080`).
+(`TQL-YAML-1006`), non-allow-listed poll or HTTP egress (`TQL-SEC-4070`,
+`TQL-SEC-4080`), and calendar qualifiers that would fail open at fire time
+(`TQL-BATCH-4201`–`4203`).
 
 ## Related pages
 

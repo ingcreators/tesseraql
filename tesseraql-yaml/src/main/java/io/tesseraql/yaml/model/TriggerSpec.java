@@ -17,12 +17,22 @@ public record TriggerSpec(Schedule schedule, PollSpec poll) {
     }
 
     /**
-     * A scheduled trigger.
+     * A scheduled trigger. The calendar qualifiers (docs/batch-platform.md track B) follow the
+     * daily-consider model: the cron says when to consider a firing, the calendar says whether
+     * it counts — a filtered-out firing is skipped silently.
      *
      * @param cron       a cron expression, e.g. {@code "0 0 2 * * ?"}
      * @param fixedDelay a fixed delay between runs, e.g. {@code "5s"}
+     * @param calendar   a business-day calendar declared under {@code calendars/}
+     * @param runOn      {@code businessDay} (the default), {@code firstBusinessDayOfMonth}, or
+     *                   {@code lastBusinessDayOfMonth}
      */
     @JsonIgnoreProperties(ignoreUnknown = true)
-    public record Schedule(String cron, String fixedDelay) {
+    public record Schedule(String cron, String fixedDelay, String calendar, String runOn) {
+
+        /** Convenience constructor for an unqualified schedule (the pre-calendar shape). */
+        public Schedule(String cron, String fixedDelay) {
+            this(cron, fixedDelay, null, null);
+        }
     }
 }

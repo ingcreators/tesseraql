@@ -8,6 +8,18 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **Business-day calendars — the cron considers, the calendar counts**
+  (docs/batch-platform.md slice 2): named calendars declared once under `calendars/`
+  (a weekend definition plus holidays as a fixed `dates:` list or a table-backed
+  `source:` read on the job's datasource at fire time), referenced from any schedule
+  via `calendar:` and `runOn: businessDay | firstBusinessDayOfMonth |
+  lastBusinessDayOfMonth`. Under the daily-consider model a filtered-out firing is
+  skipped silently after the cluster claim — considered, not a run. Manual runs
+  bypass the filter and resolution failures fail open with a warning, so the build is
+  where typos get loud: lint checks every reference (`TQL-BATCH-4201`–`4203`), and a
+  calendar that cannot be evaluated refuses to load (`TQL-BATCH-4204`/`4205`). The
+  inventory gallery's market-data summary is now calendar-gated.
+
 - **The business date — a batch run knows what it is for**
   (docs/batch-platform.md slice 1): every job execution now carries a business date —
   defaulted from the firing's local date, overridden by the reserved `businessDate`

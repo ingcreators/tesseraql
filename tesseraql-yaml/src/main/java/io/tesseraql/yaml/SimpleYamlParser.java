@@ -183,6 +183,32 @@ public final class SimpleYamlParser {
         return document;
     }
 
+    private static final TqlErrorCode CALENDARS_MALFORMED = new TqlErrorCode(
+            io.tesseraql.core.error.TqlDomain.BATCH, 4205);
+
+    /**
+     * Parses one {@code calendars/*.yml} document (docs/batch-platform.md track B). Validation
+     * here is structural — day names, date literals, and source columns are checked in
+     * {@link io.tesseraql.yaml.calendar.Calendars} where the app-wide namespace is built.
+     */
+    public io.tesseraql.yaml.model.CalendarsDocument parseCalendars(Path file) {
+        io.tesseraql.yaml.model.CalendarsDocument document;
+        try {
+            document = mapper.readValue(readFile(file),
+                    io.tesseraql.yaml.model.CalendarsDocument.class);
+        } catch (IOException | RuntimeException ex) {
+            throw schemaError("calendars", file.toString(), ex);
+        }
+        if (document == null) {
+            throw new TqlException(CALENDARS_MALFORMED, "Empty calendars document: " + file);
+        }
+        if (!EXPECTED_VERSION.equals(document.version())) {
+            throw new TqlException(CALENDARS_MALFORMED, "Calendars document " + file
+                    + " must declare version: " + EXPECTED_VERSION);
+        }
+        return document;
+    }
+
     /** Parses a job YAML file. */
     public JobDefinition parseJob(Path file) {
         String content = readFile(file);
