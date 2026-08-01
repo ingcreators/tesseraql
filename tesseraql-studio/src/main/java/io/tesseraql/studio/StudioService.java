@@ -1079,7 +1079,6 @@ public final class StudioService {
         return value instanceof List ? (List<Object>) value : new ArrayList<>();
     }
 
-    /** Loads the structured form model for a route document (Track J1). */
     /**
      * The declared business-day calendars (docs/jobs.md "Business-day calendars"), sorted —
      * name, declaring file, the effective weekend, and where the holidays live: a fixed
@@ -1291,6 +1290,7 @@ public final class StudioService {
         return null;
     }
 
+    /** Loads the structured form model for a route document (Track J1). */
     public RouteForm routeForm(String relativePath) {
         requireRouteDoc(relativePath);
         String draft = readDraft(relativePath);
