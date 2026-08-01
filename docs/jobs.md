@@ -187,3 +187,5 @@ malformed poll source (`TQL-YAML-1005`), a poll job without its `import:` block
 - [Notifications](notifications.md) — the `notify:` step, channels, alerts, notify test cases
 - [Transactional writes](transactional-writes.md) — the command-side transaction model jobs deliberately differ from
 - [Deployment](deployment.md) — multi-node semantics and operations permissions
+- [Batch platform](batch-platform.md) — the campaign map: business dates, calendars, chunked
+  restart, the external-scheduler CLI contract
