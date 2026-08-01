@@ -276,7 +276,9 @@ How a job starts (kind: job): a schedule, or a directory/SFTP/FTPS poll source f
 | `cron` | string | A Quartz cron expression; firings are claimed cluster-wide so one node runs each. |
 | `fixedDelay` | string | A period (duration string, e.g. 5m); mutually exclusive with cron. |
 | `calendar` | string | A business-day calendar declared under calendars/ - the cron says when to consider a firing, the calendar says whether it counts. Documented in jobs.md. |
-| `runOn` | enum: `businessDay` \| `firstBusinessDayOfMonth` \| `lastBusinessDayOfMonth` | Which considered firings count under the calendar (default businessDay). |
+| `runOn` | enum: `businessDay` \| `firstBusinessDayOfMonth` \| `lastBusinessDayOfMonth` | Which considered firings count under the calendar (default businessDay); mutually exclusive with dayOfMonth. |
+| `dayOfMonth` | integer ≥ 1 ≤ 31 | The shifted nominal-day rule: fire on this day of month, or its shifted business day when it is not one - and the run's business date is the nominal date. Rounds down to the month's last day. Documented in jobs.md. |
+| `shift` | enum: `nextBusinessDay` \| `previousBusinessDay` | Where a non-business nominal day moves (default nextBusinessDay); requires dayOfMonth. |
 
 #### trigger.poll
 

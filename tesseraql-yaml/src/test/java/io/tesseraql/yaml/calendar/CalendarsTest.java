@@ -142,4 +142,58 @@ class CalendarsTest {
     void aMissingCalendarsDirectoryIsSimplyEmpty(@TempDir Path dir) {
         assertThat(Calendars.load(dir, PARSER).isEmpty()).isTrue();
     }
+
+    @Test
+    void theShiftedNominalDayIsAPureFunctionOfTheCalendar(@TempDir Path dir) throws Exception {
+        Calendars calendars = load(dir, """
+                version: tesseraql/v1
+                calendars:
+                  jp:
+                    holidays:
+                      dates: [2026-06-05, 2026-07-31, 2026-09-01]
+                """);
+        CalendarsDocument.Calendar calendar = calendars.calendars().get("jp");
+        Set<LocalDate> holidays = Calendars.staticHolidays(calendar);
+
+        // The nominal day is a business day: only that date counts, and it is its own nominal.
+        assertThat(Calendars.shiftedNominal(calendar, 5, null, LocalDate.parse("2026-08-05"),
+                holidays)).isEqualTo(LocalDate.parse("2026-08-05"));
+        assertThat(Calendars.shiftedNominal(calendar, 5, null, LocalDate.parse("2026-08-06"),
+                holidays)).isNull();
+
+        // 2026-06-05 is a Friday holiday: the firing counts on Monday the 8th, FOR the 5th.
+        assertThat(Calendars.shiftedNominal(calendar, 5, null, LocalDate.parse("2026-06-08"),
+                holidays)).isEqualTo(LocalDate.parse("2026-06-05"));
+        assertThat(Calendars.shiftedNominal(calendar, 5, null, LocalDate.parse("2026-06-05"),
+                holidays)).isNull(); // the holiday itself is not the target
+
+        // Forward shift across the month boundary: July 31 (Friday holiday) + weekend lands
+        // on Monday August 3 - the previous month's nominal is checked too.
+        assertThat(Calendars.shiftedNominal(calendar, 31, null, LocalDate.parse("2026-08-03"),
+                holidays)).isEqualTo(LocalDate.parse("2026-07-31"));
+
+        // Backward shift across the month boundary: September 1 (Tuesday holiday) shifts back
+        // to Monday August 31 - the next month's nominal reaches this month.
+        assertThat(Calendars.shiftedNominal(calendar, 1, "previousBusinessDay",
+                LocalDate.parse("2026-08-31"), holidays))
+                .isEqualTo(LocalDate.parse("2026-09-01"));
+
+        // dayOfMonth beyond the month's length rounds down: the "31st" of June is the 30th.
+        assertThat(Calendars.shiftedNominal(calendar, 31, null, LocalDate.parse("2026-06-30"),
+                holidays)).isEqualTo(LocalDate.parse("2026-06-30"));
+    }
+
+    @Test
+    void aCalendarWithNoBusinessDaysNeverCounts(@TempDir Path dir) throws Exception {
+        Calendars calendars = load(dir, """
+                version: tesseraql/v1
+                calendars:
+                  never:
+                    weekend: [monday, tuesday, wednesday, thursday, friday, saturday, sunday]
+                """);
+        CalendarsDocument.Calendar calendar = calendars.calendars().get("never");
+
+        assertThat(Calendars.shiftedNominal(calendar, 5, null, LocalDate.parse("2026-08-05"),
+                Set.of())).isNull(); // the bounded walk gives up instead of spinning
+    }
 }

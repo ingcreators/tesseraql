@@ -8,6 +8,17 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **The shifted nominal day — 「5日、休日なら翌営業日」 without scheduler state**
+  (docs/batch-platform.md, a lifted deferral): a schedule may declare `dayOfMonth: 5`
+  with `shift: nextBusinessDay` (default) or `previousBusinessDay`. The shifted target
+  is a pure function of the business-day calendar — the firing counts only on it, across
+  month boundaries in either direction, with over-length days rounding to the month's
+  last day — so the daily-consider model needs no missed-date memory. The run's business
+  date is the **nominal** date: the 5th's close, executed on the 7th, records the 5th,
+  in the scheduler, the ops API, and `tesseraql job run` alike. Lint `TQL-BATCH-4202`
+  refuses a nominal day without a calendar, out of range, combined with `runOn:`, or a
+  `shift:` that names no direction.
+
 - **Overlap policy and the SLA that pages someone**
   (docs/batch-platform.md slice 5, closing the batch-platform campaign): a job may declare
   `overlap: skip` — a firing that finds the previous execution still `RUNNING` is recorded

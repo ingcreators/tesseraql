@@ -287,6 +287,24 @@ class BatchJobIntegrationTest {
     }
 
     @Test
+    void aShiftedNominalDayFiringRunsForTheNominalDate() throws Exception {
+        long deadline = System.currentTimeMillis() + 60_000;
+        while (System.currentTimeMillis() < deadline && executionsOf("user.calShifted") < 1) {
+            Thread.sleep(250);
+        }
+        JobExecution shifted = runtime.jobRepository().listExecutions(500).stream()
+                .filter(execution -> "user.calShifted".equals(execution.jobId()))
+                .findFirst().orElseThrow();
+
+        // Yesterday was the nominal day and a holiday: today's firing counts, and the run is
+        // FOR yesterday — batch.businessDate records the nominal date, not the fire date.
+        assertThat(shifted.businessDate())
+                .isEqualTo(java.time.LocalDate.now().minusDays(1));
+        // The sibling's nominal day is tomorrow: today's firings never count.
+        assertThat(executionsOf("user.calShiftedGated")).isZero();
+    }
+
+    @Test
     void overlapSkipRecordsASkippedExecutionNamingTheRunningOne() {
         // A previous execution is still RUNNING (recorded directly - a real one would be).
         String runningId = runtime.jobRepository().startExecution("user.overlapSkip",
@@ -601,6 +619,39 @@ class BatchJobIntegrationTest {
                     values (/* row.item_key */ 'x01', cast(/* row.payload */ '1' as integer))
                     """.formatted(set));
         }
+        // The shifted nominal-day rule (docs/batch-platform.md track B follow-up): yesterday
+        // is the nominal day and a declared holiday, so today's firing counts and runs FOR
+        // yesterday; the gated sibling's nominal day is tomorrow, so today never counts.
+        java.time.LocalDate nominal = java.time.LocalDate.now().minusDays(1);
+        Files.writeString(target.resolve("calendars/shift.yml"), """
+                version: tesseraql/v1
+                calendars:
+                  shift-cal:
+                    weekend: []
+                    holidays:
+                      dates: [%s]
+                """.formatted(nominal));
+        Files.createDirectories(target.resolve("batch/shifted"));
+        Files.writeString(target.resolve("batch/shifted/job.yml"), """
+                version: tesseraql/v1
+                id: user.calShifted
+                kind: job
+                recipe: batch-tasklet
+                trigger:
+                  schedule: { fixedDelay: 1s, calendar: shift-cal, dayOfMonth: %d }
+                sql: { file: noop.sql, mode: update }
+                """.formatted(nominal.getDayOfMonth()));
+        Files.writeString(target.resolve("batch/shifted/gated.yml"), """
+                version: tesseraql/v1
+                id: user.calShiftedGated
+                kind: job
+                recipe: batch-tasklet
+                trigger:
+                  schedule: { fixedDelay: 1s, calendar: shift-cal, dayOfMonth: %d }
+                sql: { file: noop.sql, mode: update }
+                """.formatted(java.time.LocalDate.now().plusDays(1).getDayOfMonth()));
+        Files.writeString(target.resolve("batch/shifted/noop.sql"),
+                "update users set name = name where name = '___none___'\n");
         // Light chaining (docs/batch-platform.md track D): send fires after extract completes,
         // carrying the business date.
         Files.createDirectories(target.resolve("batch/chain"));

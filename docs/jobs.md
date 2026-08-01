@@ -119,19 +119,36 @@ small closed sets, or a table-backed `source:` read on the job's datasource **at
 time** — operations maintains next year's holidays as rows, no deploy. When the named
 `calendar:` column is present, rows are filtered to the declaring calendar's name.
 
+**The shifted nominal day** ("the 5th, or the next business day when it is a holiday")
+is the same daily-consider model — the shift is a pure function of the calendar, so no
+scheduler state exists anywhere:
+
+```yaml
+trigger:
+  schedule:
+    cron: "0 0 8 * * ?"
+    calendar: jp-banking
+    dayOfMonth: 5                 # the nominal day the run is FOR
+    shift: nextBusinessDay        # default; previousBusinessDay for pay-date-style rules
+```
+
+The firing counts only on the shifted target — and the run's **business date is the
+nominal date**: the 5th's close, executed on the 7th, records the 5th
+(`batch.businessDate`, the execution row, and the ops API all carry it). A shift can
+cross a month boundary in either direction, and a `dayOfMonth` beyond the month's length
+rounds down to its last day (the "31st" of April is the 30th). `dayOfMonth` and `runOn`
+are mutually exclusive — one qualifier decides which firings count.
+
 Two edges are deliberate:
 
 - **Manual runs bypass the calendar.** An operator forcing a run through the ops API is
-  saying "run it now"; the filter governs scheduled firings.
+  saying "run it now"; the filter governs scheduled firings (and `tesseraql job run`,
+  which is the scheduler surface — see below).
 - **Resolution failures fail open.** If the holiday table cannot be read at fire time,
   the firing runs and a warning is logged — silently skipping a close-job on a transient
   read error would be worse, and the job's own SQL reaches the same database next. The
   place typos get to be loud is the build: lint checks every reference
   (`TQL-BATCH-4201`–`4203` below).
-
-Holiday-shift semantics ("the 5th, or the next business day if it's a holiday") are
-deferred — they need missed-date memory across firings. The workaround is a daily cron
-plus a guard on the business date in the job's SQL.
 
 A `file-import` job can instead declare a **`poll:` trigger** that watches a local, SFTP, or
 FTPS directory and feeds each arriving file through the job's `import:` block, under a

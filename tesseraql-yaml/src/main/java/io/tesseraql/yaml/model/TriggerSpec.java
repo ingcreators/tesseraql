@@ -29,18 +29,33 @@ public record TriggerSpec(Schedule schedule, PollSpec poll, String after) {
      * daily-consider model: the cron says when to consider a firing, the calendar says whether
      * it counts — a filtered-out firing is skipped silently.
      *
+     * <p>The nominal-day qualifiers express the shifted monthly date ("the 5th, or the next
+     * business day when it is a holiday"): the shift is a pure function of the calendar, so a
+     * daily cron plus these two keys needs no scheduler state, and the run's business date
+     * defaults to the <em>nominal</em> date — "the 5th's run, executed on the 7th".
+     *
      * @param cron       a cron expression, e.g. {@code "0 0 2 * * ?"}
      * @param fixedDelay a fixed delay between runs, e.g. {@code "5s"}
      * @param calendar   a business-day calendar declared under {@code calendars/}
      * @param runOn      {@code businessDay} (the default), {@code firstBusinessDayOfMonth}, or
      *                   {@code lastBusinessDayOfMonth}
+     * @param dayOfMonth the nominal day (1–31, rounded down to the month's last day) the
+     *                   firing is <em>for</em>; mutually exclusive with {@code runOn}
+     * @param shift      where a non-business nominal day moves: {@code nextBusinessDay} (the
+     *                   default) or {@code previousBusinessDay}
      */
     @JsonIgnoreProperties(ignoreUnknown = true)
-    public record Schedule(String cron, String fixedDelay, String calendar, String runOn) {
+    public record Schedule(String cron, String fixedDelay, String calendar, String runOn,
+            Integer dayOfMonth, String shift) {
 
         /** Convenience constructor for an unqualified schedule (the pre-calendar shape). */
         public Schedule(String cron, String fixedDelay) {
-            this(cron, fixedDelay, null, null);
+            this(cron, fixedDelay, null, null, null, null);
+        }
+
+        /** Convenience constructor without nominal-day qualifiers (the pre-shift shape). */
+        public Schedule(String cron, String fixedDelay, String calendar, String runOn) {
+            this(cron, fixedDelay, calendar, runOn, null, null);
         }
     }
 }

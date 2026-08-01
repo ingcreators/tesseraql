@@ -3996,6 +3996,37 @@ public final class AppLinter {
                                         io.tesseraql.yaml.calendar.Calendars.RUN_ON)));
             }
         }
+        if (schedule.dayOfMonth() != null) {
+            if (!hasCalendar) {
+                findings.add(new LintFinding("TQL-BATCH-4202", "error", source,
+                        "Job '" + jobId + "' schedule declares dayOfMonth: without calendar:"
+                                + " — the shift needs a business-day calendar"));
+            }
+            if (schedule.dayOfMonth() < 1 || schedule.dayOfMonth() > 31) {
+                findings.add(new LintFinding("TQL-BATCH-4202", "error", source,
+                        "Job '" + jobId + "' schedule dayOfMonth " + schedule.dayOfMonth()
+                                + " is outside 1-31"));
+            }
+            if (schedule.runOn() != null) {
+                findings.add(new LintFinding("TQL-BATCH-4202", "error", source,
+                        "Job '" + jobId + "' schedule declares both runOn: and dayOfMonth: —"
+                                + " one qualifier decides which firings count"));
+            }
+        }
+        if (schedule.shift() != null) {
+            if (schedule.dayOfMonth() == null) {
+                findings.add(new LintFinding("TQL-BATCH-4202", "error", source,
+                        "Job '" + jobId + "' schedule declares shift: without dayOfMonth: —"
+                                + " a shift moves a nominal day"));
+            }
+            if (!io.tesseraql.yaml.calendar.Calendars.SHIFTS.contains(schedule.shift())) {
+                findings.add(new LintFinding("TQL-BATCH-4202", "error", source,
+                        "Job '" + jobId + "' schedule shift '" + schedule.shift()
+                                + "' is not one of "
+                                + new java.util.TreeSet<>(
+                                        io.tesseraql.yaml.calendar.Calendars.SHIFTS)));
+            }
+        }
     }
 
     /**
