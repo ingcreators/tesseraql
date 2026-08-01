@@ -196,6 +196,10 @@ channel:
 
 - `ops.jobFailure` — a batch execution failed; payload `jobId`, `executionId`, `app`,
   `error`
+- `ops.jobSla` — a job's declared `sla:` was missed ([jobs](jobs.md)): payload `jobId` and
+  `kind` (`runningLongerThan` with `executionId`/`threshold`/`startedAt`, or `completeBy`
+  with `deadline`/`businessDate`). Checked every `tesseraql.batch.slaSweepInterval`
+  (default `60s`); each miss alerts once — per execution, or per business date
 - `ops.alert` — a dashboard alert was raised (error-rate, slow-rate, lane saturation,
   batch-failure-rate, pinning, dead letters); payload `code`, `severity`, `message`.
   Checked every `tesseraql.notifications.alerts.checkInterval` (default `60s`); each code

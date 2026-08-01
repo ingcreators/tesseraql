@@ -8,6 +8,17 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **Overlap policy and the SLA that pages someone**
+  (docs/batch-platform.md slice 5, closing the batch-platform campaign): a job may declare
+  `overlap: skip` — a firing that finds the previous execution still `RUNNING` is recorded
+  as a `SKIPPED` execution naming it (auditable, no steps, `tesseraql job run` exits 3),
+  while `concurrent` stays the default — and `sla: { completeBy: "06:00",
+  runningLongerThan: 2h }`, checked by a periodic managed sweep that raises `ops.jobSla`
+  through the configured alerts channel, once per missed business date and once per
+  too-long execution (cluster-deduplicated via the claim table). Alert-only by design:
+  a false sense of "timeout means stopped" is worse than an honest page. Malformed
+  declarations refuse at build time (`TQL-BATCH-4210`).
+
 - **The external-scheduler execution contract — `tesseraql job list/run/rerun`**
   (docs/batch-platform.md slice 4): schedulers drive batch by executing a command and
   branching on the exit code, and now that command exists. `job run` executes in-process

@@ -9,8 +9,10 @@
 > `tql_job_checkpoint` restart per business date, `tql_job_skips` + `skipLimit`, lints
 > `TQL-BATCH-4206`–`4208`. Slice 4: `tesseraql job list/run/rerun` with the 0/1/3 exit
 > contract, recorded run parameters, `--from-failed-step` (`SKIPPED` steps), and
-> `trigger: after:` chaining (lint `TQL-BATCH-4209`). Slice 5 remains designed, not
-> built. The batch follow-up to the web-runtime maturation:
+> `trigger: after:` chaining (lint `TQL-BATCH-4209`). Slice 5: `overlap: skip` (SKIPPED
+> executions naming the running one) and `sla:` alert-only deadlines through
+> `ops.jobSla` (lint `TQL-BATCH-4210`). **All five slices are implemented** — this
+> document remains the campaign map; `docs/jobs.md` is the user guide. The batch follow-up to the web-runtime maturation:
 > what `docs/jobs.md` ships today is a sound skeleton (two recipes, Quartz cron /
 > fixed delay, poll triggers, per-tenant fan-out, claim-row cluster safety, execution
 > history, failure alerts, `query-spool`), and what business-application batch still

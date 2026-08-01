@@ -21,6 +21,10 @@ import java.util.Map;
  * @param perTenant when true, the job runs once per configured tenant (design ch. 30.3)
  * @param fileImport the {@code import:} block of a poll-triggered {@code file-import} job
  *                 (roadmap Phase 26): the runtime feeds every polled file through it
+ * @param overlap  what a firing does while the previous execution is still running
+ *                 (docs/batch-platform.md track E): {@code concurrent} (the default) runs
+ *                 anyway, {@code skip} records a SKIPPED execution naming the running one
+ * @param sla      the deadline expectations a periodic check alerts on (alert-only)
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public record JobDefinition(
@@ -34,11 +38,21 @@ public record JobDefinition(
         SqlBinding sql,
         List<PipelineStep> pipeline,
         boolean perTenant,
-        @com.fasterxml.jackson.annotation.JsonProperty("import") ImportSpec fileImport) {
+        @com.fasterxml.jackson.annotation.JsonProperty("import") ImportSpec fileImport,
+        String overlap,
+        SlaSpec sla) {
 
     public JobDefinition {
         params = params == null ? Map.of() : Map.copyOf(params);
         pipeline = pipeline == null ? List.of() : List.copyOf(pipeline);
+    }
+
+    /** Convenience constructor without overlap/SLA declarations (the pre-track-E shape). */
+    public JobDefinition(String version, String id, String kind, String recipe, String datasource,
+            TriggerSpec trigger, Map<String, InputField> params, SqlBinding sql,
+            List<PipelineStep> pipeline, boolean perTenant, ImportSpec fileImport) {
+        this(version, id, kind, recipe, datasource, trigger, params, sql, pipeline, perTenant,
+                fileImport, null, null);
     }
 
     /** Convenience constructor for a job on the main datasource (the pre-duckdb shape). */
@@ -46,14 +60,20 @@ public record JobDefinition(
             Map<String, InputField> params, SqlBinding sql, List<PipelineStep> pipeline,
             boolean perTenant, ImportSpec fileImport) {
         this(version, id, kind, recipe, null, trigger, params, sql, pipeline, perTenant,
-                fileImport);
+                fileImport, null, null);
     }
 
     /** Convenience constructor for a job without an {@code import:} block (the pre-Phase-26 shape). */
     public JobDefinition(String version, String id, String kind, String recipe, TriggerSpec trigger,
             Map<String, InputField> params, SqlBinding sql, List<PipelineStep> pipeline,
             boolean perTenant) {
-        this(version, id, kind, recipe, null, trigger, params, sql, pipeline, perTenant, null);
+        this(version, id, kind, recipe, null, trigger, params, sql, pipeline, perTenant, null,
+                null, null);
+    }
+
+    /** Whether a firing skips while the previous execution still runs (track E). */
+    public boolean skipsOverlap() {
+        return "skip".equals(overlap);
     }
 
     /** Returns the steps to run: the explicit pipeline, or a single synthetic step for a tasklet. */

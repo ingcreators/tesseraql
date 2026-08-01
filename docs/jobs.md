@@ -308,6 +308,33 @@ With `tesseraql.notifications.alerts.channel` configured, every failed execution
 `ops.jobFailure` alert through that channel — see the operations-alerts section of
 [notifications](notifications.md).
 
+## Overlap, and the SLA that pages someone
+
+By default a firing runs even while the previous execution is still `RUNNING`
+(`overlap: concurrent`). A job whose runs must not stack declares the alternative:
+
+```yaml
+overlap: skip          # a firing that finds the previous run RUNNING is recorded
+                       # SKIPPED, naming the running execution - auditable, not a run
+sla:
+  completeBy: "06:00"          # a day's run must have COMPLETED by this wall-clock time
+  runningLongerThan: 2h        # a running execution beyond this raises the alert
+```
+
+A skipped firing is an execution row with status `SKIPPED` and no steps — visible in the
+console and the API like any run, and `tesseraql job run` exits **3** for it (did not run
+by policy, the calendar-filtered answer). The check is a cheap read against the execution
+table; scheduled firings are already serialized by the cluster claim. A `queue` policy is
+deliberately deferred.
+
+`sla:` is checked by a periodic managed sweep (every `tesseraql.batch.slaSweepInterval`,
+default `60s`) that raises **`ops.jobSla`** through the configured alerts channel —
+`completeBy` when the day's business date has no `COMPLETED` execution past the deadline
+(once per date), `runningLongerThan` when an execution exceeds the duration (once per
+execution). **Alert-only by design**: killing an in-flight JDBC statement safely is its own
+project, and a false sense of "timeout means stopped" is worse than an honest page.
+Malformed declarations refuse at build time (`TQL-BATCH-4210`).
+
 ## Observing runs
 
 Every run is persisted as an execution with its steps, visible three ways:
@@ -337,6 +364,7 @@ Every run is persisted as an execution with its steps, visible three ways:
 | `TQL-BATCH-4207` | a chunk reader without `order by` — no deterministic resume point (lint) |
 | `TQL-BATCH-4208` | a chunk reader that never binds `chunk.after` — restarts reprocess from the top (lint warning) |
 | `TQL-BATCH-4209` | an `after:` chain naming an unknown job, or a chain that loops (lint) |
+| `TQL-BATCH-4210` | an unknown `overlap:` policy, or an `sla:` that is empty or does not parse (lint) |
 | `TQL-BATCH-5001` | the execution store could not record a run |
 | `TQL-BATCH-5002` | a step failed (its SQL raised an error), a chunk step exceeded its `skipLimit`, or a step is misdeclared |
 

@@ -232,6 +232,11 @@ final class JobCommand implements Callable<Integer> {
         JobExecution execution = runOne(manifest, wiring, job, runParams, triggerType,
                 skipSteps);
         print(wiring, execution);
+        if (execution.status() == JobStatus.SKIPPED) {
+            // Did not run by policy (overlap: skip) — the same scheduler answer as a
+            // calendar-filtered date: not a success, not a failure.
+            return 3;
+        }
         boolean chainFailed = false;
         if (execution.status() == JobStatus.COMPLETED) {
             chainFailed = chain(manifest, jobs, wiring, job.definition().id(), execution);
