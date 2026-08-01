@@ -101,6 +101,29 @@ scope posture, and how the `data-scope` [coverage kind](#coverage-kinds) is earn
   `code: TQL-WORKFLOW-3202` row with `attempted` naming the members tried,
   comma-joined — the button the UI actually calls, asserted without HTTP.
 
+Both workflow targets accept **`given:` fixture steps** — transitions fired before the
+target, in the same always-rolled-back transaction, through the same documented
+pipeline, so stamps, decisions, and state advances are real:
+
+```yaml
+- name: the manager's one button fires the stamped lane
+  given:
+    - workflow: requisition
+      key: REQ-1002
+      id: submit
+      principal: { loginId: sato, roles: [REQUESTER] }   # the fixture's own actor
+  dispatch: { workflow: requisition, key: REQ-1002, id: submit_decision }
+  principal: { loginId: kishi, roles: [MANAGER] }
+  expect:
+    rows:
+      - { transition: approve, from: submitted, to: approved }
+```
+
+A `given:` step is unasserted but must advance — a refusal fails the case naming the
+step and its code, never a half-seeded state. Each step may carry its own
+`principal:` (the requester submits, the manager approves), defaulting to the
+case's. Documents no longer have to start at the initial state to be assertable.
+
 ## Real-send cases
 
 Planning and evaluation prove the declarations resolve; `send: true` proves the **wire**. The

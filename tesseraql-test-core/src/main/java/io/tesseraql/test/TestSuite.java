@@ -49,11 +49,22 @@ public record TestSuite(List<TestCase> tests) {
             MessagesTarget messages,
             @com.fasterxml.jackson.annotation.JsonProperty("http-call") HttpCallTarget httpCall,
             DecideTarget decide, List<VerifyStep> verify, PrincipalSpec principal,
-            TransitionTarget transition, DispatchTarget dispatch) {
+            TransitionTarget transition, DispatchTarget dispatch, List<GivenStep> given) {
 
         public TestCase {
             params = params == null ? Map.of() : Map.copyOf(params);
             verify = verify == null ? List.of() : List.copyOf(verify);
+            given = given == null ? List.of() : List.copyOf(given);
+        }
+
+        /** Convenience constructor without {@code given} steps (the initial-state shape). */
+        public TestCase(String name, SqlTarget sql, String contract, Map<String, Object> params,
+                Expectation expect, ValidateTarget validate, NotifyTarget notifications,
+                MessagesTarget messages, HttpCallTarget httpCall, DecideTarget decide,
+                List<VerifyStep> verify, PrincipalSpec principal, TransitionTarget transition,
+                DispatchTarget dispatch) {
+            this(name, sql, contract, params, expect, validate, notifications, messages, httpCall,
+                    decide, verify, principal, transition, dispatch, null);
         }
 
         /** Convenience constructor without a {@code dispatch} target (the pre-selector shape). */
@@ -161,6 +172,23 @@ public record TestSuite(List<TestCase> tests) {
      */
     @JsonIgnoreProperties(ignoreUnknown = true)
     public record DispatchTarget(String workflow, String key, String id) {
+    }
+
+    /**
+     * A mid-flow fixture step (docs/testing.md): a transition fired — unasserted, but it
+     * must advance — before the case's {@code transition:}/{@code dispatch:} target, in the
+     * same always-rolled-back transaction, through the same documented pipeline (so stamps,
+     * decisions, and state advances are real). A refused step fails the case naming the step
+     * and its code. The optional {@code principal} lets the fixture change actors — the
+     * requester submits, the manager approves — falling back to the case's principal.
+     *
+     * @param workflow  the workflow id under {@code workflow/}
+     * @param key       the business document key
+     * @param id        the transition id to fire
+     * @param principal the step's actor, or {@code null} for the case's principal
+     */
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public record GivenStep(String workflow, String key, String id, PrincipalSpec principal) {
     }
 
     /**

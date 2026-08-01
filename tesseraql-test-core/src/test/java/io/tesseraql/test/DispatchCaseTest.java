@@ -183,6 +183,44 @@ class DispatchCaseTest {
     }
 
     @Test
+    void givenStepsSeedTheMidFlowStateWithinTheRolledBackCase() {
+        // D-1 starts at draft; the given step routes it to done through the dispatch's
+        // member pipeline (real advance, real stamps), then the target dispatch finds
+        // no member holding from the terminal state - the mid-flow refusal asserted
+        // without committing anything.
+        TestReport report = new TestRunner(dataSource, appHome).run(new TestSuite(List.of(
+                new TestCase("a settled document fits no lane", null, null, Map.of(),
+                        new Expectation(1, List.of(Map.of("code", "TQL-WORKFLOW-3202",
+                                "attempted", "clear,writeoff")), null),
+                        null, null, null, null, null, List.of(),
+                        new PrincipalSpec("u1", "aoki", List.of("writer"), null, null,
+                                Map.of()),
+                        null, new DispatchTarget("settleable", "D-1", "settle"),
+                        List.of(new TestSuite.GivenStep("settleable", "D-1", "clear",
+                                null))))));
+        assertThat(report.failed()).as(report.toString()).isZero();
+    }
+
+    @Test
+    void aRefusedGivenStepFailsTheCaseNamingTheStep() {
+        // D-4 (-5) satisfies neither guard: the fixture itself cannot advance, and the
+        // case fails naming the step instead of asserting a half-seeded state.
+        TestReport report = new TestRunner(dataSource, appHome).run(new TestSuite(List.of(
+                new TestCase("a fixture that cannot advance fails loudly", null, null,
+                        Map.of(),
+                        new Expectation(1, List.of(Map.of("to", "done")), null),
+                        null, null, null, null, null, List.of(),
+                        new PrincipalSpec("u1", "aoki", List.of("writer"), null, null,
+                                Map.of()),
+                        null, new DispatchTarget("settleable", "D-4", "settle"),
+                        List.of(new TestSuite.GivenStep("settleable", "D-4", "clear",
+                                null))))));
+        assertThat(report.failed()).isEqualTo(1);
+        assertThat(report.toString()).contains("given step 1")
+                .contains("settleable.clear");
+    }
+
+    @Test
     void theDispatchLevelDecideRoutesTheDecideLessMembers() {
         TestReport report = new TestRunner(dataSource, appHome).run(new TestSuite(List.of(
                 run("500 routes slow", "routed", "D-1", "route_next",
