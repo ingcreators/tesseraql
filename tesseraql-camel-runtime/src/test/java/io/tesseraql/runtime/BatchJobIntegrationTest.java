@@ -197,6 +197,76 @@ class BatchJobIntegrationTest {
     }
 
     @Test
+    void chunkStepSkipsPoisonRowsWithinTheLimit() throws Exception {
+        JobExecution execution = runtime.runJob("user.chunkSkips",
+                Map.of("businessDate", "2026-08-01"));
+
+        assertThat(execution.status()).isEqualTo(JobStatus.COMPLETED);
+        StepExecution step = runtime.jobRepository().findSteps(execution.id()).get(0);
+        assertThat(step.affectedRows()).isEqualTo(10); // 12 rows, 2 poison
+        assertThat(step.skippedRows()).isEqualTo(2);
+        assertThat(countOf("chunk_results_a")).isEqualTo(10);
+
+        // The skips are recorded per execution and served by the operations API.
+        String token = token(List.of("BATCH_OPERATOR"));
+        JsonNode detail = MAPPER.readTree(send("GET",
+                "/_tesseraql/ops/batch/executions/" + execution.id(), token, null).body());
+        assertThat(detail.path("skips")).hasSize(2);
+        List<String> skippedKeys = new java.util.ArrayList<>();
+        detail.path("skips").forEach(skip -> skippedKeys.add(skip.path("rowKey").asText()));
+        assertThat(skippedKeys).containsExactlyInAnyOrder("a04", "a08");
+
+        // A completed step clears its checkpoint: the next run reads from the top.
+        assertThat(runtime.jobRepository().findCheckpoint("user.chunkSkips", "load",
+                java.time.LocalDate.parse("2026-08-01"))).isEmpty();
+    }
+
+    @Test
+    void chunkStepResumesFromTheCheckpointAfterAFailure() throws Exception {
+        // skipLimit 0 (the default): the poison row at b08 fails the step after the first
+        // committed chunk (b01..b05); the uncommitted b06/b07 roll back with the chunk.
+        JobExecution failed = runtime.runJob("user.chunkRestart",
+                Map.of("businessDate", "2026-08-02"));
+        assertThat(failed.status()).isEqualTo(JobStatus.FAILED);
+        assertThat(countOf("chunk_results_b")).isEqualTo(5);
+        assertThat(runtime.jobRepository().findCheckpoint("user.chunkRestart", "load",
+                java.time.LocalDate.parse("2026-08-02"))).contains("b05");
+
+        // Fix the data and rerun the same business date: the reader binds chunk.after and
+        // resumes at b06 — the primary key on the results table proves nothing reprocessed.
+        execSql("update chunk_items_b set payload = '1' where item_key = 'b08'");
+        JobExecution rerun = runtime.runJob("user.chunkRestart",
+                Map.of("businessDate", "2026-08-02"));
+        assertThat(rerun.status()).isEqualTo(JobStatus.COMPLETED);
+        assertThat(countOf("chunk_results_b")).isEqualTo(15);
+        StepExecution step = runtime.jobRepository().findSteps(rerun.id()).get(0);
+        assertThat(step.affectedRows()).isEqualTo(10);
+        assertThat(runtime.jobRepository().findCheckpoint("user.chunkRestart", "load",
+                java.time.LocalDate.parse("2026-08-02"))).isEmpty();
+    }
+
+    private static long countOf(String table) {
+        try (Connection connection = DriverManager.getConnection(
+                POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword());
+                Statement statement = connection.createStatement();
+                ResultSet rs = statement.executeQuery("select count(*) from " + table)) {
+            return rs.next() ? rs.getLong(1) : -1;
+        } catch (Exception ex) {
+            throw new IllegalStateException(ex);
+        }
+    }
+
+    private static void execSql(String sql) {
+        try (Connection connection = DriverManager.getConnection(
+                POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword());
+                Statement statement = connection.createStatement()) {
+            statement.executeUpdate(sql);
+        } catch (Exception ex) {
+            throw new IllegalStateException(ex);
+        }
+    }
+
+    @Test
     void operationsOverviewReportsBatchAndLanes() throws Exception {
         String token = token(List.of("BATCH_OPERATOR"));
         send("POST", "/_tesseraql/ops/batch/jobs/user.dailyMaintenance/run", token, "{}");
@@ -409,6 +479,68 @@ class BatchJobIntegrationTest {
         }
         Files.writeString(target.resolve("batch/calendar/noop.sql"),
                 "update users set name = name where name = '___none___'\n");
+        // The chunk step (docs/batch-platform.md track C): a skip-tolerant load and a
+        // checkpoint-restart load, each over its own keyset-ordered source. The poison rows
+        // carry a payload that refuses to cast to integer inside the writer.
+        Files.createDirectories(target.resolve("batch/chunk"));
+        Files.writeString(target.resolve("batch/chunk/skips.yml"), """
+                version: tesseraql/v1
+                id: user.chunkSkips
+                kind: job
+                recipe: batch-pipeline
+                pipeline:
+                  - id: load
+                    chunk:
+                      reader: { file: reader-a.sql }
+                      writer: { file: writer-a.sql }
+                      key: item_key
+                      commitEvery: 5
+                      onError: { skipLimit: 2 }
+                """);
+        Files.writeString(target.resolve("batch/chunk/restart.yml"), """
+                version: tesseraql/v1
+                id: user.chunkRestart
+                kind: job
+                recipe: batch-pipeline
+                pipeline:
+                  - id: load
+                    chunk:
+                      reader: { file: reader-b.sql }
+                      writer: { file: writer-b.sql }
+                      key: item_key
+                      commitEvery: 5
+                """);
+        for (String set : List.of("a", "b")) {
+            Files.writeString(target.resolve("batch/chunk/reader-" + set + ".sql"), """
+                    select item_key, payload
+                    from chunk_items_%s
+                    /*%%if chunk.after != null */
+                    where item_key > /* chunk.after */ 'x00'
+                    /*%%end*/
+                    order by item_key
+                    """.formatted(set));
+            Files.writeString(target.resolve("batch/chunk/writer-" + set + ".sql"), """
+                    insert into chunk_results_%s (item_key, val)
+                    values (/* row.item_key */ 'x01', cast(/* row.payload */ '1' as integer))
+                    """.formatted(set));
+        }
+        StringBuilder chunkFixtures = new StringBuilder();
+        for (String set : List.of("a", "b")) {
+            chunkFixtures.append("create table chunk_items_").append(set)
+                    .append(" (item_key varchar(32) primary key, payload varchar(32) not null);\n")
+                    .append("create table chunk_results_").append(set)
+                    .append(" (item_key varchar(32) primary key, val integer not null);\n");
+        }
+        for (int i = 1; i <= 12; i++) {
+            chunkFixtures.append("insert into chunk_items_a values ('a%02d', '%s');%n"
+                    .formatted(i, i == 4 || i == 8 ? "oops" : "1"));
+        }
+        for (int i = 1; i <= 15; i++) {
+            chunkFixtures.append("insert into chunk_items_b values ('b%02d', '%s');%n"
+                    .formatted(i, i == 8 ? "oops" : "1"));
+        }
+        Files.writeString(target.resolve("db/migration/V3__chunk_fixtures.sql"),
+                chunkFixtures.toString());
         Files.writeString(target.resolve("db/migration/V2__holidays.sql"), """
                 create table holidays (
                   calendar_id  varchar(64) not null,
