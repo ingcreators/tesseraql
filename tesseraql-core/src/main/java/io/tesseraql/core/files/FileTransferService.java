@@ -39,8 +39,9 @@ public interface FileTransferService {
     }
 
     /** The transfer state: the execution status plus transfer-specific detail. */
-    record TransferStatus(String transferId, String routeId, String direction, String status,
-            long rows, List<RowError> errors, String filename, boolean downloaded) {
+    record TransferStatus(String transferId, String routeId, String appName, String direction,
+            String status, long rows, List<RowError> errors, String filename,
+            boolean downloaded) {
     }
 
     /** A ready file: stream plus response metadata. */

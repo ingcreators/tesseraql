@@ -630,6 +630,9 @@ public final class TesseraqlRuntime implements AutoCloseable {
                 // Outbound REST for http-call pipeline steps (roadmap Phase 26): deny-by-default
                 // egress, secret-managed credentials, timeouts, and circuit breaking from config.
                 .httpCall(httpCallClient)
+                // export: pipeline steps write through the same transfer machinery HTTP
+                // file-export routes use (docs/analytics-experience.md track 3).
+                .fileTransfers(fileTransfers, appHome)
                 // ETL job SQL on a duckdb datasource resolves ${scope.*} placeholders through the
                 // same declared file scopes as routes (docs/duckdb.md).
                 .filePathResolvers(datasourceName -> datasourceName != null
@@ -1004,7 +1007,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
             jobs.forEach((id, jobFile) -> jobDefinitions.put(id, jobFile.definition()));
             context.addRoutes(new OperationsRouteBuilder(
                     jobRunner, jobRepository, ownedJobs, jobDefinitions, opsDashboard,
-                    outboxStore, metricsSettings, routeAuditStore));
+                    outboxStore, metricsSettings, routeAuditStore, fileTransfers));
             // Service providers expose non-SQL runtime state to mounted yaml/template apps
             // (the bundled ops-console and studio apps render these, design ch. 26.11, 16, 47).
             io.tesseraql.opsui.OpsDashboard dashboardRef = opsDashboard;

@@ -203,6 +203,12 @@ queries like any other query.
 | `TQL-LD-2823` | The transfer has no downloadable file yet (still running, failed, or an import) — 409 |
 | `TQL-LD-2824` / `TQL-LD-2825` | Poll-driven import variants — see [connectors.md](connectors.md) |
 | `TQL-LD-2830` | PDF is output-only; `file-import` cannot read it |
+| `TQL-YAML-1041` | A malformed `export:` **pipeline step** — no extraction query, no format, or a `download`-timed follow-up ([the export step](jobs.md#the-export-step)) |
+
+A scheduled job can produce a file through the same vocabulary — the
+[`export:` pipeline step](jobs.md#the-export-step) runs the extraction inline on the
+job's datasource, records the same transfer rows, and the operations console's
+transfers page links the completed file.
 
 ## Related pages
 

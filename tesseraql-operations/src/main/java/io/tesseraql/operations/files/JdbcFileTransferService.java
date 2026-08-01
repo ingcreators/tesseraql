@@ -194,7 +194,8 @@ public final class JdbcFileTransferService implements FileTransferService {
         String transferId = jobs.startExecution(request.routeId(), request.appName(), "export",
                 null);
         insertTransfer(transferId, request.routeId(), request.appName(), "EXPORT",
-                request.format(), filename, request.afterExtract() == null ? null
+                request.format(), filename, request.afterExtract() == null
+                        ? null
                         : AFTER_EXTRACT,
                 null, Map.of());
         // The runExport shape, synchronous: extraction and follow-up commit together on the
@@ -245,8 +246,8 @@ public final class JdbcFileTransferService implements FileTransferService {
         String executionStatus = jobs.findExecution(transferId)
                 .map(execution -> execution.status().name()).orElse("UNKNOWN");
         return findTransfer(transferId).map(transfer -> new TransferStatus(
-                transferId, transfer.routeId(), transfer.direction(), executionStatus,
-                transfer.rowCount(), transfer.errors(), transfer.filename(),
+                transferId, transfer.routeId(), transfer.appName(), transfer.direction(),
+                executionStatus, transfer.rowCount(), transfer.errors(), transfer.filename(),
                 transfer.downloadedAt() != null));
     }
 

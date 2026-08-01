@@ -71,6 +71,8 @@ public final class JobExecutor {
     private io.tesseraql.core.account.PreferenceStore preferenceStore;
     private FailureListener failureListener;
     private java.util.function.Function<String, io.tesseraql.core.sql.FilePathResolver> filePathResolvers;
+    private io.tesseraql.core.files.FileTransferService fileTransfers;
+    private Path appHome;
 
     public JobExecutor(JobRepository repository, TempStore tempStore) {
         this(repository, tempStore, io.tesseraql.core.diag.NoopSqlExecutionLog.INSTANCE);
@@ -114,6 +116,19 @@ public final class JobExecutor {
     /** Wires the outbound HTTP client {@code http-call:} steps issue through (roadmap Phase 26). */
     public JobExecutor httpCall(io.tesseraql.operations.http.HttpCallClient client) {
         this.httpCallClient = client;
+        return this;
+    }
+
+    /**
+     * Wires the transfer service {@code export:} steps write through
+     * (docs/analytics-experience.md track 3); {@code appHome} is the resource-confinement
+     * root export templates may reference. Optional — an export step without the wire fails
+     * with a plain message.
+     */
+    public JobExecutor fileTransfers(io.tesseraql.core.files.FileTransferService transfers,
+            Path appHome) {
+        this.fileTransfers = transfers;
+        this.appHome = appHome;
         return this;
     }
 
@@ -324,6 +339,8 @@ public final class JobExecutor {
             } else if (step.chunk() != null) {
                 result = runChunkStep(jobFile, step, dataSource, context, executionId,
                         stepContext);
+            } else if (step.export() != null) {
+                result = runExportStep(jobFile, step, dataSource, context, appName);
             } else {
                 result = runStep(jobFile, step, dataSource, context, stepContext);
             }
@@ -483,6 +500,88 @@ public final class JobExecutor {
         } finally {
             span.end();
         }
+    }
+
+    /**
+     * Runs an export step (docs/analytics-experience.md track 3): the route recipes' export
+     * vocabulary on the job's datasource. The extraction SQL renders exactly like a
+     * {@code sql:} step's — dialect variant beside the file, ambient {@code batch.*} binds,
+     * file placeholders against the job's datasource — and the transfer service executes it
+     * synchronously through the codec into the spool, recording the same execution + transfer
+     * rows an HTTP {@code file-export} records. The step publishes {@code transferId},
+     * {@code rows}, and {@code filename} to the step context; {@code after:} runs in the
+     * extraction transaction (the only timing a step supports).
+     */
+    private Map<String, Object> runExportStep(JobFile jobFile, PipelineStep step,
+            DataSource dataSource, Map<String, Object> context, String appName) {
+        if (fileTransfers == null) {
+            throw TqlException.builder(STEP_ERROR)
+                    .message("Step '" + step.id() + "' declares export: but no file-transfer"
+                            + " service is wired")
+                    .build();
+        }
+        io.tesseraql.yaml.model.ExportSpec export = step.export();
+        io.tesseraql.core.sql.FilePathResolver filePathResolver = filePathResolvers == null
+                ? io.tesseraql.core.sql.FilePathResolver.UNSUPPORTED
+                : filePathResolvers.apply(jobFile.definition().datasource());
+        BoundSql query = renderStepSql(jobFile, export.sql(), dataSource, context,
+                filePathResolver);
+        BoundSql afterExtract = export.after() == null || export.after().sql() == null
+                ? null
+                : renderStepSql(jobFile, export.after().sql(), dataSource, context,
+                        filePathResolver);
+        Path template = export.template() == null
+                ? null
+                : jobFile.source().getParent().resolve(export.template()).normalize();
+        // A job has no request to resolve formatting from, so locale:/timezone: are literals.
+        io.tesseraql.core.files.FileWriteSpec writeSpec = export
+                .toWriteSpec(template, appHome)
+                .withFormatting(export.locale(), export.timezone());
+        io.tesseraql.core.files.FileTransferService.InlineResult result = fileTransfers
+                .exportInline(new io.tesseraql.core.files.FileTransferService.InlineExport(
+                        jobFile.definition().id() + "#" + step.id(), appName,
+                        export.format(), writeSpec,
+                        interpolate(export.filename(), context), query, afterExtract),
+                        dataSource);
+        Map<String, Object> stepResult = new LinkedHashMap<>();
+        stepResult.put("affectedRows", (int) result.rows());
+        stepResult.put("rows", result.rows());
+        stepResult.put("transferId", result.transferId());
+        stepResult.put("filename", result.filename());
+        return stepResult;
+    }
+
+    /** Renders one step-owned 2-way SQL file the way {@link #runStep} does. */
+    private BoundSql renderStepSql(JobFile jobFile, io.tesseraql.yaml.model.SqlBinding binding,
+            DataSource dataSource, Map<String, Object> context,
+            io.tesseraql.core.sql.FilePathResolver filePathResolver) {
+        Path sqlPath = io.tesseraql.core.dialect.DialectSqlResolver.resolve(
+                jobFile.source().getParent().resolve(binding.file()).normalize(),
+                dialectOf(dataSource));
+        return SqlRenderer.render(io.tesseraql.core.sql.Sql2WayParser.parse(read(sqlPath)),
+                resolveParams(binding, context), io.tesseraql.core.sql.ScopeResolver.UNSUPPORTED,
+                context, filePathResolver);
+    }
+
+    /**
+     * Resolves {@code {dotted.path}} placeholders in an export filename against the job
+     * context ({@code batch.businessDate} being the one that matters); an unresolved
+     * placeholder renders empty rather than failing the step.
+     */
+    private static String interpolate(String template, Map<String, Object> context) {
+        if (template == null || !template.contains("{")) {
+            return template;
+        }
+        EvaluationContext evaluation = new EvaluationContext(context);
+        java.util.regex.Matcher matcher = java.util.regex.Pattern
+                .compile("\\{([A-Za-z0-9_.]+)}").matcher(template);
+        StringBuilder out = new StringBuilder();
+        while (matcher.find()) {
+            Object value = evaluation.resolve(Arrays.asList(matcher.group(1).split("\\.")));
+            matcher.appendReplacement(out, java.util.regex.Matcher
+                    .quoteReplacement(value == null ? "" : String.valueOf(value)));
+        }
+        return matcher.appendTail(out).toString();
     }
 
     /**
