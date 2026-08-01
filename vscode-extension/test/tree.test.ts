@@ -22,6 +22,8 @@ function makeDemoApp(): string {
   write('rules/inventory.yml');
   write('rules/validate-stock.sql');
   write('decisions/approval.yml');
+  write('workflow/purchase_request.yml');
+  write('workflow/approve.sql');
   write('db/migration/V1__create_items.sql');
   write('tests/smoke-test.yml');
   return home;
@@ -36,7 +38,8 @@ function section(tree: AppNode[], label: string): AppNode {
 test('builds the app layout sections', () => {
   const tree = buildAppTree(makeDemoApp());
   assert.deepEqual(tree.map((node) => node.label),
-      ['Routes', 'Views', 'Domains', 'Rules', 'Decisions', 'Migrations', 'Tests']);
+      ['Routes', 'Views', 'Domains', 'Rules', 'Decisions', 'Workflows', 'Migrations',
+        'Tests']);
 });
 
 test('routes group by kind and exclude views and SQL', () => {

@@ -16,7 +16,8 @@ import {
  * declares, nothing more.
  */
 function poolFor(symbols: AppSymbols,
-    kind: 'policy' | 'message' | 'maybe-message' | 'domain' | 'shared' | 'decision') {
+    kind: 'policy' | 'message' | 'maybe-message' | 'domain' | 'shared' | 'decision'
+        | 'workflow') {
   switch (kind) {
     case 'policy': return symbols.policies;
     case 'domain': return symbols.domains;
@@ -24,6 +25,8 @@ function poolFor(symbols: AppSymbols,
     // line alone cannot tell them apart, so both namespaces answer.
     case 'shared': return [...symbols.rules, ...symbols.decisions];
     case 'decision': return symbols.decisions;
+    // The transition:/dispatch: suite targets name a workflow.
+    case 'workflow': return symbols.workflows;
     default: return symbols.messages;
   }
 }

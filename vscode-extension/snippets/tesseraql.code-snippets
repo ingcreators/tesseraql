@@ -129,5 +129,62 @@
       "    expect:",
       "      rowCount: ${5:1}"
     ]
+  },
+  "TesseraQL approval workflow": {
+    "prefix": "tql-workflow",
+    "description": "An approval workflow with a guarded pair and a one-action dispatch (docs/approval-workflow.md)",
+    "body": [
+      "version: tesseraql/v1",
+      "id: ${1:purchase_request}",
+      "kind: workflow",
+      "document: { type: ${1:purchase_request}, table: ${2:purchase_requests}, key: ${3:id} }",
+      "http: { basePath: ${4:/api/requests} }",
+      "security: { auth: bearer }",
+      "initial: draft",
+      "states:",
+      "  - { id: draft, type: initial }",
+      "  - { id: submitted }",
+      "  - { id: approved, type: terminal }",
+      "transitions:",
+      "  - id: submit",
+      "    from: draft",
+      "    to: submitted",
+      "    guard: \"document.${5:amount} > 0\"",
+      "    command: ${6:submit.sql}",
+      "  - id: approve",
+      "    from: submitted",
+      "    to: approved",
+      "    command: ${7:approve.sql}"
+    ]
+  },
+  "TesseraQL transition test case": {
+    "prefix": "tql-test-transition",
+    "description": "A workflow-transition suite case (docs/testing.md)",
+    "body": [
+      "  - name: ${1:submitting advances the document}",
+      "    transition:",
+      "      workflow: ${2:purchase_request}",
+      "      key: ${3:PR-1}",
+      "      id: ${4:submit}",
+      "    expect:",
+      "      rows:",
+      "        - from: ${5:draft}",
+      "          to: ${6:submitted}"
+    ]
+  },
+  "TesseraQL dispatch test case": {
+    "prefix": "tql-test-dispatch",
+    "description": "A one-action dispatch suite case - the selector asserted as data (docs/transition-engine.md)",
+    "body": [
+      "  - name: ${1:the dispatch fires the lane the guard admits}",
+      "    dispatch:",
+      "      workflow: ${2:purchase_request}",
+      "      key: ${3:PR-1}",
+      "      id: ${4:submit_decision}",
+      "    expect:",
+      "      rows:",
+      "        - transition: ${5:approve}",
+      "          to: ${6:approved}"
+    ]
   }
 }

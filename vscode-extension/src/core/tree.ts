@@ -60,6 +60,17 @@ export function buildAppTree(home: string): AppNode[] {
     });
   }
 
+  // Approval workflows and the command/guard/assign SQL beside them.
+  const workflows = collectFiles(path.join(home, 'workflow'),
+      (name) => name.endsWith('.yml') || name.endsWith('.sql'));
+  if (workflows.length > 0) {
+    sections.push({
+      label: 'Workflows',
+      kind: 'section',
+      children: workflows.map((file) => fileNode(path.join(home, 'workflow'), file)),
+    });
+  }
+
   const migrations = collectFiles(path.join(home, 'db'), (name) => name.endsWith('.sql'));
   if (migrations.length > 0) {
     sections.push({

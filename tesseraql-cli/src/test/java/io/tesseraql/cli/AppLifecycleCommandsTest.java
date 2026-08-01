@@ -113,9 +113,41 @@ class AppLifecycleCommandsTest {
                     rows:
                       - out: { assignee: approver-1 }
                 """);
+        Files.createDirectories(app.resolve("workflow"));
+        Files.writeString(app.resolve("workflow/tick.sql"),
+                "update purchase_requests set last_action = 'tick' where id = /* key */ 'x'\n");
+        Files.writeString(app.resolve("workflow/purchase_request.yml"), """
+                version: tesseraql/v1
+                id: purchase_request
+                kind: workflow
+                mode: app
+                document: { type: purchase_request, table: purchase_requests, key: id,
+                            stateColumn: status }
+                initial: draft
+                states:
+                  - { id: draft, type: initial }
+                  - { id: approved, type: terminal }
+                  - { id: escalated, type: terminal }
+                transitions:
+                  - { id: approve, from: draft, to: approved,
+                      guard: "document.amount > 0", command: tick.sql }
+                  - { id: escalate, from: draft, to: escalated, command: tick.sql }
+                dispatch:
+                  - { id: decide_next, oneOf: [approve, escalate] }
+                """);
         Captured captured = executeCapturing("symbols", "--app", app.toString());
         assertThat(captured.exitCode()).isZero();
         JsonNode document = new ObjectMapper().readTree(captured.stdout());
+
+        assertThat(document.get("workflows")).hasSize(1);
+        JsonNode workflow = document.get("workflows").get(0);
+        assertThat(workflow.get("id").asText()).isEqualTo("purchase_request");
+        assertThat(workflow.get("source").asText()).isEqualTo("workflow/purchase_request.yml");
+        assertThat(workflow.get("line").asInt()).isEqualTo(2);
+        assertThat(workflow.get("transitions")).extracting(JsonNode::asText)
+                .containsExactly("approve", "escalate");
+        assertThat(workflow.get("dispatches")).extracting(JsonNode::asText)
+                .containsExactly("decide_next");
 
         JsonNode appRead = null;
         for (JsonNode policy : document.get("policies")) {
