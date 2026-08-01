@@ -172,6 +172,21 @@ public final class JobExecutor {
             java.util.Set<String> skipSteps) {
         JobDefinition job = jobFile.definition();
         java.time.LocalDate businessDate = resolveBusinessDate(jobParams);
+        // overlap: skip (docs/batch-platform.md track E): while the previous execution still
+        // runs, this firing is recorded SKIPPED naming it — auditable and alertable, not a
+        // run. The check is a cheap read; scheduled firings are already serialized by the
+        // cluster claim, so the residual race is the concurrent-manual-run window.
+        if (job.skipsOverlap()) {
+            java.util.List<JobExecution> running = repository.findRunning(job.id());
+            if (!running.isEmpty()) {
+                String skippedId = repository.recordSkipped(job.id(), appName, triggerType,
+                        businessDate, "skipped: execution " + running.get(0).id()
+                                + " is still running (overlap: skip)");
+                LOG.info("Job {} firing skipped: execution {} still running", job.id(),
+                        running.get(0).id());
+                return repository.findExecution(skippedId).orElseThrow();
+            }
+        }
         String executionId = repository.startExecution(job.id(), appName, triggerType,
                 triggeredBy, businessDate, paramsJson(jobParams));
         Map<String, Object> stepResults = new LinkedHashMap<>();

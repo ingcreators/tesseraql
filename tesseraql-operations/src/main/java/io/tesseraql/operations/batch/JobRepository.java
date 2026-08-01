@@ -122,6 +122,72 @@ public final class JobRepository {
         return id;
     }
 
+    /** The still-RUNNING executions of a job, newest first ({@code overlap: skip}, SLA sweep). */
+    public List<JobExecution> findRunning(String jobId) {
+        List<JobExecution> executions = new ArrayList<>();
+        try (Connection connection = dataSource.getConnection();
+                PreparedStatement ps = connection.prepareStatement(
+                        "select * from tql_job_execution where job_id = ? and status = ?"
+                                + " order by start_time desc")) {
+            ps.setString(1, jobId);
+            ps.setString(2, JobStatus.RUNNING.name());
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    executions.add(readExecution(rs));
+                }
+            }
+        } catch (SQLException ex) {
+            throw error("Failed to find running executions", ex);
+        }
+        return executions;
+    }
+
+    /**
+     * Records a firing {@code overlap: skip} declined to run (docs/batch-platform.md track E):
+     * auditable, alertable, and cheap to check against this table — but not a run.
+     */
+    public String recordSkipped(String jobId, String appName, String triggerType,
+            java.time.LocalDate businessDate, String message) {
+        String id = UUID.randomUUID().toString();
+        Instant now = Instant.now();
+        execute("""
+                insert into tql_job_execution
+                  (job_execution_id, job_id, app_name, status, trigger_type, business_date,
+                   start_time, end_time, exit_message, created_at)
+                values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                ps -> {
+                    ps.setString(1, id);
+                    ps.setString(2, jobId);
+                    ps.setString(3, appName);
+                    ps.setString(4, JobStatus.SKIPPED.name());
+                    ps.setString(5, triggerType);
+                    ps.setDate(6,
+                            businessDate == null ? null : java.sql.Date.valueOf(businessDate));
+                    ps.setTimestamp(7, Timestamp.from(now));
+                    ps.setTimestamp(8, Timestamp.from(now));
+                    ps.setString(9, message);
+                    ps.setTimestamp(10, Timestamp.from(now));
+                });
+        return id;
+    }
+
+    /** Whether the job has a COMPLETED execution for the business date (SLA completeBy). */
+    public boolean hasCompleted(String jobId, java.time.LocalDate businessDate) {
+        try (Connection connection = dataSource.getConnection();
+                PreparedStatement ps = connection.prepareStatement(
+                        "select 1 from tql_job_execution where job_id = ? and status = ?"
+                                + " and business_date = ?")) {
+            ps.setString(1, jobId);
+            ps.setString(2, JobStatus.COMPLETED.name());
+            ps.setDate(3, java.sql.Date.valueOf(businessDate));
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next();
+            }
+        } catch (SQLException ex) {
+            throw error("Failed to check the SLA completion", ex);
+        }
+    }
+
     /** The recorded parameters of an execution ({@code tesseraql job rerun}), when present. */
     public Optional<String> findExecutionParams(String executionId) {
         try (Connection connection = dataSource.getConnection();

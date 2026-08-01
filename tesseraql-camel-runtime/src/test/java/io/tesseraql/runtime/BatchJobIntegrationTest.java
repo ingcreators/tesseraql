@@ -287,6 +287,63 @@ class BatchJobIntegrationTest {
     }
 
     @Test
+    void overlapSkipRecordsASkippedExecutionNamingTheRunningOne() {
+        // A previous execution is still RUNNING (recorded directly - a real one would be).
+        String runningId = runtime.jobRepository().startExecution("user.overlapSkip",
+                "user-admin", "manual", null, java.time.LocalDate.parse("2026-08-04"));
+        try {
+            JobExecution skipped = runtime.runJob("user.overlapSkip", Map.of());
+            assertThat(skipped.status()).isEqualTo(JobStatus.SKIPPED);
+            assertThat(skipped.exitMessage()).contains(runningId).contains("overlap: skip");
+            // Skipped means recorded, not run: no steps.
+            assertThat(runtime.jobRepository().findSteps(skipped.id())).isEmpty();
+        } finally {
+            runtime.jobRepository().completeExecution(runningId);
+        }
+        // With the previous run finished, the same firing runs normally.
+        assertThat(runtime.runJob("user.overlapSkip", Map.of()).status())
+                .isEqualTo(JobStatus.COMPLETED);
+    }
+
+    @Test
+    void slaSweepAlertsOnceOnTooLongAndMissedDeadline() throws Exception {
+        // A job expecting completion by midnight (already past) and runs under a second.
+        Path slaDir = Files.createDirectories(appHome.resolve("batch/sla"));
+        Files.writeString(slaDir.resolve("job.yml"), """
+                version: tesseraql/v1
+                id: user.slaWatch
+                kind: job
+                recipe: batch-tasklet
+                sla: { completeBy: "00:00", runningLongerThan: 1s }
+                sql: { file: noop.sql, mode: update }
+                """);
+        Files.writeString(slaDir.resolve("noop.sql"),
+                "update users set name = name where name = '___none___'\n");
+        io.tesseraql.yaml.manifest.JobFile job = new io.tesseraql.yaml.manifest.JobFile(
+                slaDir.resolve("job.yml"),
+                new io.tesseraql.yaml.SimpleYamlParser().parseJob(slaDir.resolve("job.yml")));
+        String runningId = runtime.jobRepository().startExecution("user.slaWatch",
+                "user-admin", "schedule", null, java.time.LocalDate.now());
+        try {
+            execSql("update tql_job_execution set start_time = start_time - interval '1 hour'"
+                    + " where job_execution_id = '" + runningId + "'");
+            List<Map<String, Object>> alerts = new java.util.ArrayList<>();
+            JobSlaSweeper sweeper = new JobSlaSweeper(List.of(job),
+                    Map.of("user.slaWatch", "user-admin"), "user-admin",
+                    runtime.jobRepository(), (payload, app) -> alerts.add(payload),
+                    java.time.Clock.systemDefaultZone());
+
+            assertThat(sweeper.sweep()).isEqualTo(2); // too-long + missed deadline
+            assertThat(alerts).extracting(alert -> alert.get("kind"))
+                    .containsExactlyInAnyOrder("runningLongerThan", "completeBy");
+            // The claims make every alert cluster-unique and once-only: a second sweep is quiet.
+            assertThat(sweeper.sweep()).isZero();
+        } finally {
+            runtime.jobRepository().completeExecution(runningId);
+        }
+    }
+
+    @Test
     void operationsOverviewReportsBatchAndLanes() throws Exception {
         String token = token(List.of("BATCH_OPERATOR"));
         send("POST", "/_tesseraql/ops/batch/jobs/user.dailyMaintenance/run", token, "{}");
@@ -564,6 +621,19 @@ class BatchJobIntegrationTest {
                 sql: { file: noop.sql, mode: update }
                 """);
         Files.writeString(target.resolve("batch/chain/noop.sql"),
+                "update users set name = name where name = '___none___'\n");
+        // Overlap policy (docs/batch-platform.md track E): while the previous execution is
+        // still RUNNING, a firing is recorded SKIPPED naming it.
+        Files.createDirectories(target.resolve("batch/overlap"));
+        Files.writeString(target.resolve("batch/overlap/job.yml"), """
+                version: tesseraql/v1
+                id: user.overlapSkip
+                kind: job
+                recipe: batch-tasklet
+                overlap: skip
+                sql: { file: noop.sql, mode: update }
+                """);
+        Files.writeString(target.resolve("batch/overlap/noop.sql"),
                 "update users set name = name where name = '___none___'\n");
         StringBuilder chunkFixtures = new StringBuilder();
         for (String set : List.of("a", "b")) {

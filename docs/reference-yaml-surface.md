@@ -49,6 +49,8 @@ Schema for TesseraQL Simple YAML documents: routes (web/**/<method>.yml), jobs (
 | `children` | object |  |
 | `slots` | map of string |  |
 | `trigger` | [object](#trigger) | How a job starts (kind: job): a schedule, or a directory/SFTP/FTPS poll source feeding the import: pipeline. Documented in jobs.md and connectors.md. |
+| `overlap` | enum: `concurrent` \| `skip` | What a firing does while the previous execution still runs (kind: job): concurrent (default) runs anyway, skip records a SKIPPED execution naming the running one. Documented in jobs.md. |
+| `sla` | [object](#sla) | Deadline expectations a periodic managed check alerts on through the alerts channel (kind: job) - alert-only, nothing is killed. Documented in jobs.md. |
 | `perTenant` | boolean | Run this job once per configured tenant, each on its own datasource and tenant context (kind: job). Documented in multi-tenancy.md. |
 | `params` | map of [inputField](#inputfield) | A job's declared parameters (kind: job) - the same field contract routes declare with input:. Documented in jobs.md. |
 | `pipeline` | array of object | A batch-pipeline job's ordered steps (sql, http-call, or notify per step), each publishing its result to the step context. Documented in jobs.md. |
@@ -265,6 +267,7 @@ How a job starts (kind: job): a schedule, or a directory/SFTP/FTPS poll source f
 | --- | --- | --- |
 | `schedule` | [object](#triggerschedule) |  |
 | `poll` | [object](#triggerpoll) |  |
+| `after` | string | Light chaining: fire when the named job's execution completes successfully in the same app, carrying its business date. Documented in jobs.md. |
 
 #### trigger.schedule
 
@@ -272,6 +275,8 @@ How a job starts (kind: job): a schedule, or a directory/SFTP/FTPS poll source f
 | --- | --- | --- |
 | `cron` | string | A Quartz cron expression; firings are claimed cluster-wide so one node runs each. |
 | `fixedDelay` | string | A period (duration string, e.g. 5m); mutually exclusive with cron. |
+| `calendar` | string | A business-day calendar declared under calendars/ - the cron says when to consider a firing, the calendar says whether it counts. Documented in jobs.md. |
+| `runOn` | enum: `businessDay` \| `firstBusinessDayOfMonth` \| `lastBusinessDayOfMonth` | Which considered firings count under the calendar (default businessDay). |
 
 #### trigger.poll
 
@@ -286,6 +291,15 @@ How a job starts (kind: job): a schedule, or a directory/SFTP/FTPS poll source f
 | `delay` | string | Poll interval (duration string). |
 | `move` | string | Relative directory for processed files (default .done). Plain names only - no paths or placeholders. |
 | `moveFailed` | string | Relative directory for failed files (default .error). Plain names only. |
+
+### sla
+
+Deadline expectations a periodic managed check alerts on through the alerts channel (kind: job) - alert-only, nothing is killed. Documented in jobs.md.
+
+| Property | Type | Description |
+| --- | --- | --- |
+| `completeBy` | string | Wall-clock time (HH:mm) by which a day's run must have completed for that business date. |
+| `runningLongerThan` | string | A duration (e.g. 2h) beyond which a still-running execution raises the alert. |
 
 ## Other document kinds
 

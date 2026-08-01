@@ -1406,6 +1406,20 @@ public final class TesseraqlRuntime implements AutoCloseable {
             context.addRoutes(new SchedulingRouteBuilder(
                     jobRunner, jobRepository, List.copyOf(jobs.values()), claimKeys,
                     calendarGate));
+            // Batch SLA alerts (docs/batch-platform.md track E): jobs declaring sla: get a
+            // periodic check that pages through the configured alerts channel — alert-only,
+            // deduplicated per execution / per business date via the claim table.
+            if (alertChannel != null
+                    && jobs.values().stream().anyMatch(job -> job.definition().sla() != null)) {
+                JobSlaSweeper slaSweeper = new JobSlaSweeper(List.copyOf(jobs.values()),
+                        jobOwners, appName, jobRepository, (payload, jobApp) -> outboxStore
+                                .insert(io.tesseraql.yaml.notify.NotifyEvents.event(
+                                        alertChannel, "ops.jobSla", payload, jobApp)),
+                        java.time.Clock.systemDefaultZone());
+                long slaPeriod = io.tesseraql.core.util.Durations.toMillis(manifest.config()
+                        .getString("tesseraql.batch.slaSweepInterval").orElse("60s"));
+                context.addRoutes(new JobSlaRoutes(slaSweeper, slaPeriod));
+            }
             // Approval-workflow deadline sweeper (roadmap Phase 28 slice 3): a cluster-safe timer
             // escalates overdue tasks, so exactly one node sweeps per interval.
             if (workflowSweeper != null) {
