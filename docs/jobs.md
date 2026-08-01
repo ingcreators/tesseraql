@@ -150,6 +150,14 @@ Two edges are deliberate:
   place typos get to be loud is the build: lint checks every reference
   (`TQL-BATCH-4201`–`4203` below).
 
+**Studio** has a calendars surface (`/_tesseraql/studio/ui/calendars`): every declared
+calendar with a **month grid** that draws the daily-consider outcome — business days,
+weekends, holidays, and, when previewing a `dayOfMonth:` rule, the nominal date and the
+one day the firing actually counts. Weekend and fixed `dates:` edit as a form and land
+as a draft (validated first, `TQL-STUDIO-4238`); table-backed holiday rows are data and
+stay with the data browser. The preview reads table-backed holidays from the main
+datasource.
+
 A `file-import` job can instead declare a **`poll:` trigger** that watches a local, SFTP, or
 FTPS directory and feeds each arriving file through the job's `import:` block, under a
 deny-by-default host allow-list. Polling is part of the managed-connector surface — see

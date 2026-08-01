@@ -18,6 +18,13 @@ All notable changes to TesseraQL are documented here. The format follows
   one-line trigger story now lives in `TriggerSpec.describe` — the CLI, the symbols
   contract, and the console share it, so the three surfaces can never drift.
 
+- **Studio draws the calendar** (docs/jobs.md): a calendars surface with a month grid
+  that makes the daily-consider model visible — business days, weekends, holidays, and,
+  when previewing a `dayOfMonth:` rule, the nominal date and the one day the firing
+  actually counts. Weekend and fixed `dates:` edit as a form through the draft flow
+  (day names and ISO dates validated first, `TQL-STUDIO-4238`); table-backed holiday
+  rows stay with the data browser, and their preview reads the main datasource.
+
 ### Changed
 
 - **`GET /_tesseraql/ops/batch/jobs` returns objects** — `{id, app, trigger, overlap,

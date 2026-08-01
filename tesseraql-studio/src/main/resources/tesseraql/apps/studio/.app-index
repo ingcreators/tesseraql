@@ -33,6 +33,9 @@ web/_tesseraql/studio/ui/decision-builder/build/build.html
 web/_tesseraql/studio/ui/decision-builder/build/post.yml
 web/_tesseraql/studio/ui/decision-builder/decision-builder.html
 web/_tesseraql/studio/ui/decision-builder/get.yml
+web/_tesseraql/studio/ui/calendars/calendars.html
+web/_tesseraql/studio/ui/calendars/get.yml
+web/_tesseraql/studio/ui/calendars/save/post.yml
 web/_tesseraql/studio/ui/decisions/decisions.html
 web/_tesseraql/studio/ui/decisions/get.yml
 web/_tesseraql/studio/ui/decisions/save/post.yml
