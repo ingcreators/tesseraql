@@ -142,4 +142,6 @@ export const EXCLUDED = [
   'workflow-expressiveness.md',
   // Transition engine (one pipeline invoked everywhere), 2026-07-31.
   'transition-engine.md',
+  // Batch platform (business date, calendars, chunking, CLI contract), 2026-08-01.
+  'batch-platform.md',
 ];
