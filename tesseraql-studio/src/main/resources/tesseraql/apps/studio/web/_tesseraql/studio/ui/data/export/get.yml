@@ -4,6 +4,7 @@ kind: route
 recipe: query-html
 
 input:
+  ds: { type: string, required: false }
   table: { type: string, required: true }
   sort: { type: string, required: false }
   dir: { type: string, required: false }
@@ -27,6 +28,7 @@ input:
 sql:
   service: studio.data.export
   params:
+    ds: params.ds
     table: params.table
     sort: params.sort
     dir: params.dir

@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.io.StringWriter;
 import java.math.BigDecimal;
 import java.sql.Connection;
+import java.sql.DatabaseMetaData;
 import java.sql.Date;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -17,32 +18,51 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.Function;
 import javax.sql.DataSource;
 import org.apache.commons.csv.CSVFormat;
 import org.apache.commons.csv.CSVPrinter;
 
 /**
- * The Studio data browser: read-only, paginated row access over the app's {@code main} datasource
- * (Studio backlog). Opt-in via {@code tesseraql.studio.dataBrowser.enabled} because it exposes row
- * data. Every query runs on a read-only connection with a statement timeout, and pagination is done
- * with JDBC {@code setMaxRows} + row skipping (no dialect-specific {@code LIMIT}/{@code OFFSET}), so
- * it works across dialects. The requested table is validated against the live catalog before use, so
- * the name can never be an injection vector.
+ * The Studio data browser: read-only, paginated row access over the app's declared datasources
+ * (Studio backlog; docs/analytics-experience.md track 1). Opt-in via
+ * {@code tesseraql.studio.dataBrowser.enabled} because it exposes row data — the opt-in spans
+ * every declared datasource. Every query runs on a read-only connection (best effort — a driver
+ * that does not support it does not fail the browse; the browser's own SQL is {@code SELECT}
+ * over validated identifiers) with a statement timeout, and pagination is done with JDBC
+ * {@code setMaxRows} + row skipping (no dialect-specific {@code LIMIT}/{@code OFFSET}), so it
+ * works across dialects. The requested datasource is validated against the declared set and the
+ * requested table against the live catalog before use, so neither can ever be an injection
+ * vector.
+ *
+ * <p>On a server datasource the table list is the connection's own catalog, as always. A
+ * {@code duckdb} connection's own catalog is empty scratch by design — everything interesting
+ * is an attach or a lake — so there the browser lists tables and views across every catalog
+ * visible on the connection, displayed and addressed as {@code catalog.schema.table}.
+ *
+ * <p>Row editing stays on {@code main}: non-main data is derived data (a projection, a replica,
+ * a query engine's view of files), so the editor never grows a datasource parameter.
  */
 final class StudioDataService {
 
     static final int PAGE_SIZE = 50;
 
+    /** DuckDB catalogs/schemas that are engine furniture, not browsable data. */
+    private static final Set<String> ENGINE_CATALOGS = Set.of("system", "temp");
+    private static final Set<String> ENGINE_SCHEMAS = Set.of("information_schema", "pg_catalog");
+
     private final Function<String, DataSource> datasources;
+    private final List<String> datasourceNames;
     private final boolean enabled;
     private final int queryTimeoutSeconds;
     private final int maxScan;
     private final boolean editEnabled;
 
-    StudioDataService(Function<String, DataSource> datasources, boolean enabled,
-            boolean editEnabled, int queryTimeoutSeconds, int maxScan) {
+    StudioDataService(Function<String, DataSource> datasources, List<String> datasourceNames,
+            boolean enabled, boolean editEnabled, int queryTimeoutSeconds, int maxScan) {
         this.datasources = datasources;
+        this.datasourceNames = List.copyOf(datasourceNames);
         this.enabled = enabled;
         this.editEnabled = editEnabled;
         this.queryTimeoutSeconds = queryTimeoutSeconds;
@@ -63,16 +83,47 @@ final class StudioDataService {
         return maxScan;
     }
 
-    /** The user tables in the {@code main} datasource's catalog, sorted. */
-    List<String> tables() {
-        try (Connection connection = datasources.apply("main").getConnection()) {
-            connection.setReadOnly(true);
+    /** The declared datasource names, declaration order ({@code main} first). */
+    List<String> datasourceNames() {
+        return datasourceNames;
+    }
+
+    /** The declared datasource {@code name}, or a refusal — never a fallback to another pool. */
+    private DataSource dataSource(String name) {
+        if (!datasourceNames.contains(name)) {
+            throw new IllegalArgumentException("No such datasource: " + name);
+        }
+        return datasources.apply(name);
+    }
+
+    /** A blank or absent selector means {@code main}, never "whatever comes first". */
+    static String normalizeDatasource(String datasource) {
+        return datasource == null || datasource.isBlank() ? "main" : datasource;
+    }
+
+    /**
+     * One browsable table: its JDBC coordinates plus the display form the UI addresses it by
+     * (bare name on a server datasource, {@code catalog.schema.table} on a duckdb one).
+     */
+    private record TableRef(String catalog, String schema, String name, String display) {
+
+        /** The identifier as it appears in generated SQL, each part quoted independently. */
+        String quoted(String quote) {
+            if (schema == null) {
+                return quoteId(quote, name);
+            }
+            return quoteId(quote, catalog) + "." + quoteId(quote, schema) + "."
+                    + quoteId(quote, name);
+        }
+    }
+
+    /** The browsable tables of {@code datasource}, sorted by display name. */
+    List<String> tables(String datasource) {
+        try (Connection connection = dataSource(datasource).getConnection()) {
+            readOnly(connection);
             List<String> tables = new ArrayList<>();
-            try (ResultSet rs = connection.getMetaData().getTables(connection.getCatalog(), null,
-                    "%", new String[]{"TABLE"})) {
-                while (rs.next()) {
-                    tables.add(rs.getString("TABLE_NAME"));
-                }
+            for (TableRef ref : listTables(connection)) {
+                tables.add(ref.display());
             }
             Collections.sort(tables);
             return tables;
@@ -81,28 +132,90 @@ final class StudioDataService {
         }
     }
 
+    private static List<TableRef> listTables(Connection connection) throws SQLException {
+        DatabaseMetaData metaData = connection.getMetaData();
+        List<TableRef> refs = new ArrayList<>();
+        if (isDuckDb(metaData)) {
+            // The type filter is applied on the read side: DuckDB reports base tables as
+            // "BASE TABLE" (the information_schema spelling), and a driver-side filter
+            // string would have to guess which spelling the driver normalizes to.
+            Set<String> browsable = Set.of("TABLE", "BASE TABLE", "VIEW");
+            try (ResultSet rs = metaData.getTables(null, null, "%", null)) {
+                while (rs.next()) {
+                    String catalog = rs.getString("TABLE_CAT");
+                    String schema = rs.getString("TABLE_SCHEM");
+                    String name = rs.getString("TABLE_NAME");
+                    String type = rs.getString("TABLE_TYPE");
+                    if (catalog == null || schema == null || type == null
+                            || !browsable.contains(type.toUpperCase(Locale.ROOT))
+                            || ENGINE_CATALOGS.contains(catalog.toLowerCase(Locale.ROOT))
+                            || ENGINE_SCHEMAS.contains(schema.toLowerCase(Locale.ROOT))) {
+                        continue;
+                    }
+                    refs.add(new TableRef(catalog, schema, name,
+                            catalog + "." + schema + "." + name));
+                }
+            }
+            return refs;
+        }
+        try (ResultSet rs = metaData.getTables(connection.getCatalog(), null, "%",
+                new String[]{"TABLE"})) {
+            while (rs.next()) {
+                String name = rs.getString("TABLE_NAME");
+                refs.add(new TableRef(connection.getCatalog(), null, name, name));
+            }
+        }
+        return refs;
+    }
+
+    private static boolean isDuckDb(DatabaseMetaData metaData) throws SQLException {
+        return "duckdb".equalsIgnoreCase(metaData.getDatabaseProductName());
+    }
+
+    /** Resolves a display name against the live listing — membership or refusal, never parsing. */
+    private static TableRef resolve(Connection connection, String table) throws SQLException {
+        for (TableRef ref : listTables(connection)) {
+            if (ref.display().equals(table)) {
+                return ref;
+            }
+        }
+        throw new IllegalArgumentException("No such table: " + table);
+    }
+
+    /**
+     * Read-only is defense in depth, not the boundary: the browser's SQL surface is
+     * {@code SELECT} over validated identifiers with bound values, so a driver that cannot
+     * switch (DuckDB's) does not fail the browse.
+     */
+    private static void readOnly(Connection connection) {
+        try {
+            connection.setReadOnly(true);
+        } catch (SQLException unsupported) {
+            // Best effort by design.
+        }
+    }
+
     /** One filter condition: a validated {@code column}, an {@code op}, and a bound {@code value}. */
     record FilterCond(String column, String op, String value) {
     }
 
     /**
-     * One page of rows of {@code table}; {@code page} is zero-based. {@code filters} are conditions
-     * (each a validated column + operator + bound value) joined by {@code combinator} (AND/OR), and
-     * {@code sortColumn} orders the results. Every column is validated against the table's real
-     * columns before use (so it can never be an injection vector) and every value is a bound parameter.
+     * One page of rows of {@code table} on {@code datasource}; {@code page} is zero-based.
+     * {@code filters} are conditions (each a validated column + operator + bound value) joined by
+     * {@code combinator} (AND/OR), and {@code sortColumn} orders the results. Every column is
+     * validated against the table's real columns before use (so it can never be an injection
+     * vector) and every value is a bound parameter.
      */
-    DataPage browse(String table, int page, String sortColumn, String sortDir, String combinator,
-            List<FilterCond> filters) {
-        if (!tables().contains(table)) {
-            throw new IllegalArgumentException("No such table: " + table);
-        }
+    DataPage browse(String datasource, String table, int page, String sortColumn, String sortDir,
+            String combinator, List<FilterCond> filters) {
         int safePage = Math.max(0, page);
         int offset = safePage * PAGE_SIZE;
-        try (Connection connection = datasources.apply("main").getConnection()) {
-            connection.setReadOnly(true);
+        try (Connection connection = dataSource(datasource).getConnection()) {
+            readOnly(connection);
+            TableRef ref = resolve(connection, table);
             String quote = connection.getMetaData().getIdentifierQuoteString();
-            Map<String, Integer> columnTypes = columnTypes(connection, table);
-            Query query = buildQuery(quote, table, columnTypes, filters, combinator, sortColumn,
+            Map<String, Integer> columnTypes = columnTypes(connection, ref);
+            Query query = buildQuery(quote, ref, columnTypes, filters, combinator, sortColumn,
                     sortDir);
             try (PreparedStatement statement = connection.prepareStatement(query.sql())) {
                 statement.setQueryTimeout(queryTimeoutSeconds);
@@ -135,7 +248,7 @@ final class StudioDataService {
                         }
                         rows.add(row);
                     }
-                    return new DataPage(table, columns, rows, safePage, hasNext);
+                    return new DataPage(ref.display(), columns, rows, safePage, hasNext);
                 }
             }
         } catch (SQLException ex) {
@@ -144,20 +257,18 @@ final class StudioDataService {
     }
 
     /**
-     * The current view (table + filters + sort) as CSV, capped at the scan limit. Same column
-     * validation + bound values as {@link #browse}; the whole capped result is exported (no
-     * pagination), one row per line, RFC-4180 quoting.
+     * The current view (datasource + table + filters + sort) as CSV, capped at the scan limit.
+     * Same column validation + bound values as {@link #browse}; the whole capped result is
+     * exported (no pagination), one row per line, RFC-4180 quoting.
      */
-    String exportCsv(String table, String sortColumn, String sortDir, String combinator,
-            List<FilterCond> filters) {
-        if (!tables().contains(table)) {
-            throw new IllegalArgumentException("No such table: " + table);
-        }
-        try (Connection connection = datasources.apply("main").getConnection()) {
-            connection.setReadOnly(true);
+    String exportCsv(String datasource, String table, String sortColumn, String sortDir,
+            String combinator, List<FilterCond> filters) {
+        try (Connection connection = dataSource(datasource).getConnection()) {
+            readOnly(connection);
+            TableRef ref = resolve(connection, table);
             String quote = connection.getMetaData().getIdentifierQuoteString();
-            Map<String, Integer> columnTypes = columnTypes(connection, table);
-            Query query = buildQuery(quote, table, columnTypes, filters, combinator, sortColumn,
+            Map<String, Integer> columnTypes = columnTypes(connection, ref);
+            Query query = buildQuery(quote, ref, columnTypes, filters, combinator, sortColumn,
                     sortDir);
             try (PreparedStatement statement = connection.prepareStatement(query.sql())) {
                 statement.setQueryTimeout(queryTimeoutSeconds);
@@ -193,12 +304,12 @@ final class StudioDataService {
         }
     }
 
-    /** The columns of {@code table} in the {@code main} catalog → their JDBC type (for validation). */
-    private static Map<String, Integer> columnTypes(Connection connection, String table)
+    /** The columns of the resolved table → their JDBC type (for validation). */
+    private static Map<String, Integer> columnTypes(Connection connection, TableRef ref)
             throws SQLException {
         Map<String, Integer> columns = new LinkedHashMap<>();
-        try (ResultSet rs = connection.getMetaData().getColumns(connection.getCatalog(), null,
-                table, "%")) {
+        try (ResultSet rs = connection.getMetaData().getColumns(ref.catalog(), ref.schema(),
+                ref.name(), "%")) {
             while (rs.next()) {
                 columns.put(rs.getString("COLUMN_NAME"), rs.getInt("DATA_TYPE"));
             }
@@ -221,9 +332,9 @@ final class StudioDataService {
      * (gt/lt/ge/le) compare the raw column with the value coerced to the column's type (numeric/date/
      * timestamp), so numbers and dates order correctly. Every value is a bound parameter.
      */
-    private static Query buildQuery(String quote, String table, Map<String, Integer> columnTypes,
+    private static Query buildQuery(String quote, TableRef ref, Map<String, Integer> columnTypes,
             List<FilterCond> filters, String combinator, String sortColumn, String sortDir) {
-        StringBuilder sql = new StringBuilder("SELECT * FROM ").append(quoteId(quote, table));
+        StringBuilder sql = new StringBuilder("SELECT * FROM ").append(ref.quoted(quote));
         List<String> where = new ArrayList<>();
         List<Object> binds = new ArrayList<>();
         if (filters != null) {
@@ -284,23 +395,23 @@ final class StudioDataService {
         };
     }
 
-    /** The table's primary-key columns (live JDBC, key-sequence order); empty when none. */
+    /**
+     * The table's primary-key columns (live JDBC, key-sequence order); empty when none. Editing
+     * is a {@code main}-only affordance, so this never takes a datasource.
+     */
     List<String> primaryKey(String table) {
-        if (!tables().contains(table)) {
-            return List.of();
-        }
-        try (Connection connection = datasources.apply("main").getConnection()) {
-            return primaryKey(connection, table);
-        } catch (SQLException ex) {
+        try (Connection connection = dataSource("main").getConnection()) {
+            return primaryKey(connection, resolve(connection, table));
+        } catch (SQLException | IllegalArgumentException ex) {
             return List.of();
         }
     }
 
-    private static List<String> primaryKey(Connection connection, String table)
+    private static List<String> primaryKey(Connection connection, TableRef ref)
             throws SQLException {
         java.util.TreeMap<Short, String> bySeq = new java.util.TreeMap<>();
-        try (ResultSet rs = connection.getMetaData().getPrimaryKeys(connection.getCatalog(),
-                null, table)) {
+        try (ResultSet rs = connection.getMetaData().getPrimaryKeys(ref.catalog(), ref.schema(),
+                ref.name())) {
             while (rs.next()) {
                 bySeq.put(rs.getShort("KEY_SEQ"), rs.getString("COLUMN_NAME"));
             }
@@ -317,16 +428,14 @@ final class StudioDataService {
         if (!isEditEnabled()) {
             throw new IllegalStateException("The data browser row editor is not enabled");
         }
-        if (!tables().contains(table)) {
-            throw new IllegalArgumentException("No such table: " + table);
-        }
-        try (Connection connection = datasources.apply("main").getConnection()) {
-            connection.setReadOnly(true);
+        try (Connection connection = dataSource("main").getConnection()) {
+            readOnly(connection);
+            TableRef ref = resolve(connection, table);
             String quote = connection.getMetaData().getIdentifierQuoteString();
-            Map<String, Integer> columnTypes = columnTypes(connection, table);
-            List<String> pkColumns = requireFullKey(connection, table, pk, columnTypes);
+            Map<String, Integer> columnTypes = columnTypes(connection, ref);
+            List<String> pkColumns = requireFullKey(connection, ref, pk, columnTypes);
             StringBuilder sql = new StringBuilder("select * from ")
-                    .append(quoteId(quote, table)).append(" where ");
+                    .append(ref.quoted(quote)).append(" where ");
             List<Object> binds = new ArrayList<>();
             appendKeyPredicate(sql, binds, quote, pkColumns, columnTypes, pk);
             try (PreparedStatement statement = connection.prepareStatement(sql.toString())) {
@@ -348,7 +457,7 @@ final class StudioDataService {
                         field.put("pk", containsIgnoreCase(pkColumns, name));
                         fields.add(field);
                     }
-                    return new RowView(table, pkColumns, fields);
+                    return new RowView(ref.display(), pkColumns, fields);
                 }
             }
         } catch (SQLException ex) {
@@ -366,13 +475,11 @@ final class StudioDataService {
         if (!isEditEnabled()) {
             throw new IllegalStateException("The data browser row editor is not enabled");
         }
-        if (!tables().contains(table)) {
-            throw new IllegalArgumentException("No such table: " + table);
-        }
-        try (Connection connection = datasources.apply("main").getConnection()) {
+        try (Connection connection = dataSource("main").getConnection()) {
+            TableRef ref = resolve(connection, table);
             String quote = connection.getMetaData().getIdentifierQuoteString();
-            Map<String, Integer> columnTypes = columnTypes(connection, table);
-            List<String> pkColumns = requireFullKey(connection, table, pk, columnTypes);
+            Map<String, Integer> columnTypes = columnTypes(connection, ref);
+            List<String> pkColumns = requireFullKey(connection, ref, pk, columnTypes);
             List<String> setColumns = new ArrayList<>();
             List<Object> binds = new ArrayList<>();
             for (Map.Entry<String, String> change : changes.entrySet()) {
@@ -389,7 +496,7 @@ final class StudioDataService {
             if (setColumns.isEmpty()) {
                 throw new IllegalArgumentException("No editable column was selected");
             }
-            StringBuilder sql = new StringBuilder("update ").append(quoteId(quote, table))
+            StringBuilder sql = new StringBuilder("update ").append(ref.quoted(quote))
                     .append(" set ");
             for (int i = 0; i < setColumns.size(); i++) {
                 sql.append(i > 0 ? ", " : "").append(quoteId(quote, setColumns.get(i)))
@@ -413,12 +520,12 @@ final class StudioDataService {
     }
 
     /** The pk parameter must name the table's FULL primary key (a PK-less table is not editable). */
-    private static List<String> requireFullKey(Connection connection, String table,
+    private static List<String> requireFullKey(Connection connection, TableRef ref,
             Map<String, String> pk, Map<String, Integer> columnTypes) throws SQLException {
-        List<String> pkColumns = primaryKey(connection, table);
+        List<String> pkColumns = primaryKey(connection, ref);
         if (pkColumns.isEmpty()) {
             throw new IllegalArgumentException(
-                    "Table " + table + " has no primary key; rows are not editable");
+                    "Table " + ref.display() + " has no primary key; rows are not editable");
         }
         for (String column : pkColumns) {
             if (pk.get(column) == null) {

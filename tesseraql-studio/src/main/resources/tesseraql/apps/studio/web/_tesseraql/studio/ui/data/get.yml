@@ -7,6 +7,7 @@ input:
   updated:
     type: string
     required: false
+  ds: { type: string, required: false }
   table: { type: string, required: false }
   page: { type: string, required: false }
   sort: { type: string, required: false }
@@ -33,6 +34,7 @@ sql:
   params:
     roles: principal.roles
     updated: params.updated
+    ds: params.ds
     table: params.table
     page: params.page
     sort: params.sort
