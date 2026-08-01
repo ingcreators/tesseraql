@@ -83,6 +83,8 @@ public final class StudioService {
     private static final TqlErrorCode FLAG = new TqlErrorCode(TqlDomain.STUDIO, 4229);
     /** A decision-rows grid save that cannot even reach the decision compile (shape/target). */
     private static final TqlErrorCode DECISION_ROWS = new TqlErrorCode(TqlDomain.STUDIO, 4237);
+    /** TQL-STUDIO-4238: a calendar edit that cannot mean anything (docs/jobs.md). */
+    private static final TqlErrorCode CALENDAR_EDIT = new TqlErrorCode(TqlDomain.STUDIO, 4238);
     private static final TqlErrorCode CONFLICT = new TqlErrorCode(TqlDomain.STUDIO, 4090);
     private static final Pattern LEADING_DIGITS = Pattern.compile("^\\d+");
     private static final Pattern POLICY_ID = Pattern.compile("[A-Za-z0-9_.-]+");
@@ -1078,6 +1080,217 @@ public final class StudioService {
     }
 
     /** Loads the structured form model for a route document (Track J1). */
+    /**
+     * The declared business-day calendars (docs/jobs.md "Business-day calendars"), sorted —
+     * name, declaring file, the effective weekend, and where the holidays live: a fixed
+     * {@code dates:} list the form edits, or a table the data browser owns.
+     */
+    public List<CalendarSummary> calendars() {
+        var declared = io.tesseraql.yaml.calendar.Calendars.load(appHome, parser);
+        List<CalendarSummary> out = new ArrayList<>();
+        declared.calendars().forEach((name, calendar) -> {
+            boolean tableBacked = calendar.holidays() != null
+                    && calendar.holidays().source() != null;
+            out.add(new CalendarSummary(name, declared.sourceOf(name),
+                    calendar.weekend() == null
+                            ? List.of("saturday", "sunday")
+                            : List.copyOf(calendar.weekend()),
+                    tableBacked,
+                    tableBacked ? calendar.holidays().source().table() : null,
+                    calendar.holidays() == null
+                            ? List.of()
+                            : List.copyOf(calendar.holidays().dates())));
+        });
+        out.sort(java.util.Comparator.comparing(CalendarSummary::name));
+        return out;
+    }
+
+    /**
+     * One declared calendar: its effective weekend (the Saturday/Sunday default made
+     * explicit) and its holiday home — {@code dates} when fixed, {@code sourceTable} when
+     * operations maintains the rows.
+     */
+    public record CalendarSummary(String name, String source, List<String> weekend,
+            boolean tableBacked, String sourceTable, List<String> dates) {
+    }
+
+    /**
+     * The month grid (docs/batch-platform.md track B, Studio): one month of the calendar with
+     * each day classified — business, weekend, holiday — and, when a nominal-day rule is
+     * being previewed, the nominal date and its shifted landing highlighted. The
+     * daily-consider model is invisible until its outcome is drawn somewhere; this is where.
+     * Table-backed holidays arrive resolved by the caller (the runtime reads the main
+     * datasource); a null set renders the grid without holiday knowledge, flagged as such.
+     */
+    public CalendarMonthGrid calendarMonth(String name, String month, Integer dayOfMonth,
+            String shift, java.util.Set<java.time.LocalDate> tableHolidays) {
+        var declared = io.tesseraql.yaml.calendar.Calendars.load(appHome, parser);
+        var calendar = declared.calendars().get(name);
+        if (calendar == null) {
+            return new CalendarMonthGrid(name, null, null, null, null, List.of(), false,
+                    dayOfMonth, shift,
+                    "No calendar named '" + name + "' is declared under calendars/");
+        }
+        boolean tableBacked = calendar.holidays() != null
+                && calendar.holidays().source() != null;
+        java.util.Set<java.time.LocalDate> holidays = tableBacked
+                ? (tableHolidays == null ? java.util.Set.of() : tableHolidays)
+                : io.tesseraql.yaml.calendar.Calendars.staticHolidays(calendar);
+        java.time.YearMonth yearMonth;
+        try {
+            yearMonth = month == null || month.isBlank()
+                    ? java.time.YearMonth.now()
+                    : java.time.YearMonth.parse(month);
+        } catch (java.time.format.DateTimeParseException badMonth) {
+            yearMonth = java.time.YearMonth.now();
+        }
+        java.time.LocalDate nominal = dayOfMonth == null
+                ? null
+                : yearMonth.atDay(Math.min(dayOfMonth, yearMonth.lengthOfMonth()));
+        java.time.LocalDate cursor = yearMonth.atDay(1);
+        while (cursor.getDayOfWeek() != java.time.DayOfWeek.MONDAY) {
+            cursor = cursor.minusDays(1);
+        }
+        List<List<CalendarDayCell>> weeks = new ArrayList<>();
+        while (!java.time.YearMonth.from(cursor).isAfter(yearMonth)) {
+            List<CalendarDayCell> week = new ArrayList<>();
+            for (int day = 0; day < 7; day++) {
+                boolean inMonth = java.time.YearMonth.from(cursor).equals(yearMonth);
+                boolean business = io.tesseraql.yaml.calendar.Calendars.counts(calendar, null,
+                        cursor, holidays);
+                boolean holiday = holidays.contains(cursor);
+                boolean lands = dayOfMonth != null
+                        && io.tesseraql.yaml.calendar.Calendars.shiftedNominal(calendar,
+                                dayOfMonth, shift, cursor, holidays) != null;
+                week.add(new CalendarDayCell(cursor.getDayOfMonth(), inMonth, business,
+                        !business && !holiday, holiday, cursor.equals(nominal), lands));
+                cursor = cursor.plusDays(1);
+            }
+            weeks.add(week);
+        }
+        return new CalendarMonthGrid(name, yearMonth.toString(), yearMonth.getMonth() + " "
+                + yearMonth.getYear(), yearMonth.minusMonths(1).toString(),
+                yearMonth.plusMonths(1).toString(), weeks, tableBacked, dayOfMonth, shift,
+                null);
+    }
+
+    /** One day cell of the month grid; a day outside the month renders dimmed. */
+    public record CalendarDayCell(int day, boolean inMonth, boolean business, boolean weekend,
+            boolean holiday, boolean nominal, boolean lands) {
+    }
+
+    /** The month-grid model, weeks Monday-first, with prev/next month cursors. */
+    public record CalendarMonthGrid(String name, String month, String monthLabel,
+            String prevMonth, String nextMonth, List<List<CalendarDayCell>> weeks,
+            boolean tableBacked, Integer dayOfMonth, String shift, String error) {
+    }
+
+    /**
+     * Saves a calendar's weekend and fixed holiday dates through the draft flow
+     * (docs/jobs.md). A table-backed calendar refuses the form — its rows are data, owned by
+     * the data browser — and a name not yet declared becomes a new {@code calendars/} draft.
+     * Invalid day names and dates die here with {@code TQL-STUDIO-4238} instead of landing
+     * in a draft the manifest load would reject.
+     */
+    public Path saveCalendar(String name, List<String> weekend, List<String> dates,
+            String actor) {
+        if (readOnly) {
+            throw new TqlException(READ_ONLY, "Studio is read-only; editing calendars is"
+                    + " disabled");
+        }
+        if (name == null || !name.matches("[A-Za-z0-9][A-Za-z0-9._-]*")) {
+            throw new TqlException(CALENDAR_EDIT,
+                    "Calendar name '" + name + "' is not a plain identifier");
+        }
+        for (String day : weekend) {
+            try {
+                java.time.DayOfWeek.valueOf(day.trim().toUpperCase(java.util.Locale.ROOT));
+            } catch (IllegalArgumentException ex) {
+                throw new TqlException(CALENDAR_EDIT,
+                        "Unknown weekend day '" + day + "' — use monday…sunday");
+            }
+        }
+        List<String> cleanDates = new ArrayList<>();
+        for (String date : dates) {
+            String trimmed = trimToNull(date);
+            if (trimmed == null) {
+                continue;
+            }
+            try {
+                java.time.LocalDate.parse(trimmed);
+            } catch (java.time.format.DateTimeParseException ex) {
+                throw new TqlException(CALENDAR_EDIT,
+                        "Holiday '" + trimmed + "' is not an ISO date (yyyy-MM-dd)");
+            }
+            cleanDates.add(trimmed);
+        }
+        LocatedCalendar located = locateCalendar(name);
+        Map<String, Object> tree;
+        String relative;
+        Map<String, Object> node;
+        if (located == null) {
+            relative = "calendars/" + name + ".yml";
+            tree = new LinkedHashMap<>();
+            tree.put("version", "tesseraql/v1");
+            Map<String, Object> calendars = new LinkedHashMap<>();
+            node = new LinkedHashMap<>();
+            calendars.put(name, node);
+            tree.put("calendars", calendars);
+        } else {
+            relative = located.path();
+            tree = located.tree();
+            node = located.node();
+            if (anyMap(node.get("holidays")).get("source") != null) {
+                throw new TqlException(CALENDAR_EDIT, "Calendar '" + name + "' is table-backed"
+                        + " — its holiday rows are data (edit them in the data browser)");
+            }
+        }
+        node.put("weekend", new ArrayList<>(weekend));
+        if (cleanDates.isEmpty()) {
+            node.remove("holidays");
+        } else {
+            Map<String, Object> holidays = new LinkedHashMap<>();
+            holidays.put("dates", cleanDates);
+            node.put("holidays", holidays);
+        }
+        Path draft = saveDraft(relative, parser.write(tree));
+        recordAudit(actor, "calendar", name);
+        return draft;
+    }
+
+    private record LocatedCalendar(String path, Map<String, Object> tree,
+            Map<String, Object> node) {
+    }
+
+    /** The draft-aware locate (the decisions pattern): the file declaring {@code name}. */
+    private LocatedCalendar locateCalendar(String name) {
+        Path dir = appHome.resolve("calendars");
+        if (name == null || name.isBlank() || !Files.isDirectory(dir)) {
+            return null;
+        }
+        List<Path> files;
+        try (Stream<Path> listed = Files.list(dir)) {
+            files = listed.filter(file -> file.getFileName().toString().endsWith(".yml"))
+                    .sorted().toList();
+        } catch (IOException ex) {
+            throw new UncheckedIOException(ex);
+        }
+        for (Path file : files) {
+            String relative = "calendars/" + file.getFileName();
+            String draft = readDraft(relative);
+            String text = draft != null ? draft : sourceIfExists(relative);
+            if (text == null) {
+                continue;
+            }
+            Map<String, Object> tree = parser.parseTree(text);
+            Map<String, Object> declared = anyMap(tree.get("calendars"));
+            if (declared.get(name) instanceof Map) {
+                return new LocatedCalendar(relative, tree, anyMap(declared.get(name)));
+            }
+        }
+        return null;
+    }
+
     public RouteForm routeForm(String relativePath) {
         requireRouteDoc(relativePath);
         String draft = readDraft(relativePath);

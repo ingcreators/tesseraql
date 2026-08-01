@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{tql/shell :: studio-page('TesseraQL Studio · Calendars', ~{:: #page-header}, ~{:: #page-content})}">
+<th:block id="page-header">
+  <span class="hc-spacer"></span>
+  <div class="hc-cluster">
+    <a class="hc-button" data-variant="ghost" data-size="sm" href="/_tesseraql/studio/ui">&larr; explorer</a>
+  </div>
+</th:block>
+<div id="page-content" class="hc-stack">
+  <section class="hc-card">
+    <h2>Business-day calendars</h2>
+    <p class="hc-field__message">The cron says when to <em>consider</em> a firing, the calendar
+      says whether it <em>counts</em>. The month grid below shows the outcome: business days,
+      weekends, holidays &mdash; and, for a nominal-day rule, where a holiday nominal lands.</p>
+    <div class="hc-empty" th:unless="${cal.hasCalendars}">
+      <p class="hc-empty__title">No calendars declared under calendars/.</p>
+      <p class="hc-field__message">Create one below, or start from the <code>tql-calendar</code>
+        editor snippet.</p>
+    </div>
+    <form class="hc-cluster" method="get" action="/_tesseraql/studio/ui/calendars"
+          th:if="${cal.hasCalendars}">
+      <div class="hc-field">
+        <label class="hc-field__label" for="cal-name">Calendar</label>
+        <select class="hc-select" id="cal-name" name="name">
+          <option value="">(choose)</option>
+          <option th:each="c : ${cal.calendars}" th:value="${c.name}"
+                  th:text="${c.tableBacked} ? |${c.name} (table: ${c.sourceTable})| : ${c.name}"
+                  th:selected="${cal.selected != null && c.name == cal.selected.name}"></option>
+        </select>
+      </div>
+      <button class="hc-button" type="submit">Open</button>
+    </form>
+  </section>
+  <section class="hc-card" th:if="${cal.grid}">
+    <h2>Month grid <code th:text="${cal.grid.name}"></code></h2>
+    <p class="hc-alert" data-variant="success" role="status" th:if="${cal.saved}">Draft saved.
+      Review the diff and apply it from the text editor.</p>
+    <p class="hc-alert" data-variant="error" role="alert" th:if="${cal.grid.error}"
+       th:text="${cal.grid.error}"></p>
+    <th:block th:if="${cal.grid.error == null}">
+      <p class="hc-alert" data-variant="warning" role="status" th:if="${cal.grid.tableBacked}">
+        Table-backed holidays: the preview reads the <strong>main</strong> datasource; the rows
+        themselves are data &mdash; maintain them in the
+        <a href="/_tesseraql/studio/ui/data">data browser</a>.</p>
+      <form class="hc-cluster" method="get" action="/_tesseraql/studio/ui/calendars">
+        <input type="hidden" name="name" th:value="${cal.grid.name}">
+        <input type="hidden" name="month" th:value="${cal.grid.prevMonth}">
+        <input type="hidden" name="dayOfMonth" th:value="${cal.grid.dayOfMonth}">
+        <input type="hidden" name="shift" th:value="${cal.grid.shift}">
+        <button class="hc-button" data-size="sm" type="submit">&larr;</button>
+        <strong th:text="${cal.grid.monthLabel}"></strong>
+      </form>
+      <form class="hc-cluster" method="get" action="/_tesseraql/studio/ui/calendars">
+        <input type="hidden" name="name" th:value="${cal.grid.name}">
+        <input type="hidden" name="month" th:value="${cal.grid.nextMonth}">
+        <input type="hidden" name="dayOfMonth" th:value="${cal.grid.dayOfMonth}">
+        <input type="hidden" name="shift" th:value="${cal.grid.shift}">
+        <button class="hc-button" data-size="sm" type="submit">&rarr;</button>
+      </form>
+      <div class="hc-datagrid">
+        <div class="hc-datagrid__scroll">
+          <table class="hc-datagrid__table">
+            <thead class="hc-datagrid__head"><tr>
+              <th class="hc-datagrid__headcell">Mon</th><th class="hc-datagrid__headcell">Tue</th>
+              <th class="hc-datagrid__headcell">Wed</th><th class="hc-datagrid__headcell">Thu</th>
+              <th class="hc-datagrid__headcell">Fri</th><th class="hc-datagrid__headcell">Sat</th>
+              <th class="hc-datagrid__headcell">Sun</th>
+            </tr></thead>
+            <tbody class="hc-datagrid__body">
+              <tr class="hc-datagrid__row" th:each="week : ${cal.grid.weeks}">
+                <td class="hc-datagrid__cell" th:each="d : ${week}"
+                    th:style="${!d.inMonth} ? 'opacity: 0.35' : ''">
+                  <span th:text="${d.day}"></span>
+                  <span class="hc-badge" data-variant="success" th:if="${d.inMonth && d.lands}">runs</span>
+                  <span class="hc-badge" data-variant="info" th:if="${d.inMonth && d.nominal && !d.lands}">nominal</span>
+                  <span class="hc-badge" data-variant="error" th:if="${d.inMonth && d.holiday}">holiday</span>
+                  <span class="hc-badge" data-variant="neutral"
+                        th:if="${d.inMonth && d.weekend && !d.holiday}">weekend</span>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <form class="hc-cluster" method="get" action="/_tesseraql/studio/ui/calendars">
+        <input type="hidden" name="name" th:value="${cal.grid.name}">
+        <input type="hidden" name="month" th:value="${cal.grid.month}">
+        <div class="hc-field">
+          <label class="hc-field__label" for="cal-dom">Preview a nominal day (1&ndash;31)</label>
+          <input class="hc-input" data-size="sm" id="cal-dom" name="dayOfMonth" type="number"
+                 min="1" max="31" th:value="${cal.grid.dayOfMonth}">
+        </div>
+        <div class="hc-field">
+          <label class="hc-field__label" for="cal-shift">Shift</label>
+          <select class="hc-select" id="cal-shift" name="shift">
+            <option value="nextBusinessDay" th:selected="${cal.grid.shift != 'previousBusinessDay'}">nextBusinessDay</option>
+            <option value="previousBusinessDay" th:selected="${cal.grid.shift == 'previousBusinessDay'}">previousBusinessDay</option>
+          </select>
+        </div>
+        <button class="hc-button" data-size="sm" type="submit">Preview</button>
+      </form>
+      <p class="hc-field__message">With a nominal day set, <strong>runs</strong> marks the one
+        date the firing counts &mdash; the run records the <em>nominal</em> date as its business
+        date (docs: jobs &mdash; the shifted nominal day).</p>
+    </th:block>
+  </section>
+  <section class="hc-card" th:if="${cal.editable && cal.selected != null && !cal.selected.tableBacked}">
+    <h2>Edit <code th:text="${cal.selected.name}"></code></h2>
+    <form class="hc-stack" method="post" action="/_tesseraql/studio/ui/calendars/save">
+      <input type="hidden" name="_csrf" th:value="${_csrf}">
+      <input type="hidden" name="name" th:value="${cal.selected.name}">
+      <div class="hc-field">
+        <span class="hc-field__label">Weekend</span>
+        <div class="hc-cluster">
+          <label th:each="day : ${ {'monday','tuesday','wednesday','thursday','friday','saturday','sunday'} }">
+            <input type="checkbox" th:name="|weekend_${day}|" value="on"
+                   th:checked="${cal.selected.weekend.contains(day)}">
+            <span th:text="${day}"></span>
+          </label>
+        </div>
+      </div>
+      <label class="hc-field">
+        <span class="hc-field__label">Holidays (ISO dates, one per line)</span>
+        <textarea class="hc-input" name="dates" rows="8"
+                  th:text="${#strings.listJoin(cal.selected.dates, '&#10;')}"></textarea>
+      </label>
+      <button class="hc-button" data-variant="primary" type="submit">Save draft</button>
+      <p class="hc-field__message">Saving lands a <strong>draft</strong> in canonical formatting
+        (comments are not preserved); review and apply it from the text editor. Day names and
+        dates are validated first (<code>TQL-STUDIO-4238</code>).</p>
+    </form>
+  </section>
+</div>
+</html>

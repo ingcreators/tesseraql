@@ -1,0 +1,38 @@
+version: tesseraql/v1
+id: tql.studio.calendars
+kind: route
+recipe: query-html
+
+input:
+  name:
+    type: string
+    required: false
+  month:
+    type: string
+    required: false
+  dayOfMonth:
+    type: string
+    required: false
+  shift:
+    type: string
+    required: false
+  saved:
+    type: string
+    required: false
+
+sql:
+  service: studio.calendars.view
+  params:
+    name: params.name
+    month: params.month
+    dayOfMonth: params.dayOfMonth
+    shift: params.shift
+    saved: params.saved
+    roles: principal.roles
+
+response:
+  html:
+    status: 200
+    template: calendars.html
+    model:
+      cal: sql

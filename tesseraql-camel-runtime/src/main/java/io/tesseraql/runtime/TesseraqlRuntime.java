@@ -2746,6 +2746,73 @@ public final class TesseraqlRuntime implements AutoCloseable {
                             studio.saveDecisionRows(name, columns, deletes, actorOf(params));
                             return Map.of("saved", name);
                         })
+                        // Business-day calendars (docs/jobs.md, Studio): list + month grid
+                        // preview + form editing of weekend/dates through the draft flow.
+                        // Table-backed holiday rows are read on the MAIN datasource for the
+                        // preview; the rows themselves belong to the data browser.
+                        .register("studio.calendars.view", params -> {
+                            Map<String, Object> model = new java.util.LinkedHashMap<>();
+                            model.put("editable", studioAccess.canEdit(params.get("roles")));
+                            List<io.tesseraql.studio.StudioService.CalendarSummary> declared = studio
+                                    .calendars();
+                            model.put("calendars", declared);
+                            model.put("hasCalendars", !declared.isEmpty());
+                            String name = str(params, "name");
+                            model.put("saved", params.get("saved") != null);
+                            if (name == null) {
+                                model.put("grid", null);
+                                model.put("selected", null);
+                                return model;
+                            }
+                            io.tesseraql.studio.StudioService.CalendarSummary selected = declared
+                                    .stream().filter(c -> c.name().equals(name)).findFirst()
+                                    .orElse(null);
+                            model.put("selected", selected);
+                            java.util.Set<java.time.LocalDate> tableHolidays = null;
+                            if (selected != null && selected.tableBacked()) {
+                                io.tesseraql.yaml.calendar.Calendars loaded = io.tesseraql.yaml.calendar.Calendars
+                                        .load(appHome, new io.tesseraql.yaml.SimpleYamlParser());
+                                io.tesseraql.yaml.model.CalendarsDocument.Calendar calendar = loaded
+                                        .calendars().get(name);
+                                try (java.sql.Connection connection = dataSource
+                                        .getConnection()) {
+                                    tableHolidays = io.tesseraql.yaml.calendar.Calendars
+                                            .readHolidays(connection, name,
+                                                    calendar.holidays().source());
+                                } catch (Exception ex) {
+                                    LOG.warn("Calendar '{}' holiday read failed for the"
+                                            + " preview", name, ex);
+                                }
+                            }
+                            Integer dayOfMonth = null;
+                            String rawDay = str(params, "dayOfMonth");
+                            if (rawDay != null && rawDay.matches("[0-9]{1,2}")) {
+                                dayOfMonth = Integer.parseInt(rawDay);
+                            }
+                            model.put("grid", studio.calendarMonth(name, str(params, "month"),
+                                    dayOfMonth, str(params, "shift"), tableHolidays));
+                            return model;
+                        })
+                        .register("studio.calendars.save", params -> {
+                            studioAccess.requireEdit(params.get("roles"));
+                            String name = String.valueOf(params.get("name"));
+                            java.util.List<String> weekend = new java.util.ArrayList<>();
+                            for (String day : java.util.List.of("monday", "tuesday",
+                                    "wednesday", "thursday", "friday", "saturday", "sunday")) {
+                                if (params.get("weekend_" + day) != null) {
+                                    weekend.add(day);
+                                }
+                            }
+                            java.util.List<String> dates = new java.util.ArrayList<>();
+                            String rawDates = str(params, "dates");
+                            if (rawDates != null) {
+                                for (String line : rawDates.split("[\\r\\n,]+")) {
+                                    dates.add(line);
+                                }
+                            }
+                            studio.saveCalendar(name, weekend, dates, actorOf(params));
+                            return Map.of("saved", name);
+                        })
                         .register("studio.migration.create", params -> {
                             studioAccess.requireEdit(params.get("roles"));
                             String datasource = params.get("datasource") == null
