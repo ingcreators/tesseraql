@@ -1612,6 +1612,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
                 StudioDataService studioData = new StudioDataService(
                         name -> context.getRegistry().lookupByNameAndType(name,
                                 javax.sql.DataSource.class),
+                        java.util.List.copyOf(dataSources.keySet()),
                         dataBrowserEnabled, dataEditEnabled, testTimeout, testMaxRows);
                 // Granular read-only (backlog D6): an optional editRoles allow-list refines the
                 // writable master switch — when set, only callers holding one of those roles may edit.
@@ -2313,9 +2314,22 @@ public final class TesseraqlRuntime implements AutoCloseable {
                             if (!studioData.isEnabled()) {
                                 return model;
                             }
-                            model.put("tables", studioData.tables());
+                            // The datasource is a browsing dimension (docs/analytics-experience.md
+                            // track 1): every declared datasource is browsable, validated by
+                            // membership like the table name; editing stays a main-only affordance.
+                            String datasource = StudioDataService.normalizeDatasource(
+                                    str(params, "ds"));
+                            model.put("datasources", studioData.datasourceNames());
+                            model.put("datasource", datasource);
                             model.put("exportMax", studioData.exportLimit());
                             String table = str(params, "table");
+                            try {
+                                model.put("tables", studioData.tables(datasource));
+                            } catch (RuntimeException ex) {
+                                model.put("tables", java.util.List.of());
+                                model.put("error", ex.getMessage());
+                                return model;
+                            }
                             if (table == null) {
                                 return model;
                             }
@@ -2356,13 +2370,13 @@ public final class TesseraqlRuntime implements AutoCloseable {
                             // and keeps the filter disclosure open. The count labels the summary.
                             model.put("hasFilters", !filters.isEmpty() || sortColumn != null);
                             model.put("filterCount", filters.size());
-                            model.put("queryBase", dataQueryBase(table, combinator, sortColumn,
-                                    sortDir, filterRows));
+                            model.put("queryBase", dataQueryBase(datasource, table, combinator,
+                                    sortColumn, sortDir, filterRows));
                             try {
                                 int page = parseIndex(params.get("page"));
-                                StudioDataService.DataPage data = studioData.browse(table,
-                                        page < 0 ? 0 : page, sortColumn, sortDir, combinator,
-                                        filters);
+                                StudioDataService.DataPage data = studioData.browse(datasource,
+                                        table, page < 0 ? 0 : page, sortColumn, sortDir,
+                                        combinator, filters);
                                 model.put("table", data.table());
                                 model.put("columns", data.columns());
                                 // Decision-contract overlay (docs/decision-tables.md): when the
@@ -2408,7 +2422,9 @@ public final class TesseraqlRuntime implements AutoCloseable {
                             // Row editing (Track J4): the edit affordance appears only when
                             // the editor opt-in, the caller's edit permission, AND a primary
                             // key all line up; links carry the PK columns and the row's values.
-                            boolean rowEditable = studioData.isEditEnabled()
+                            // Non-main data is derived data, so the editor never leaves main.
+                            boolean rowEditable = "main".equals(datasource)
+                                    && studioData.isEditEnabled()
                                     && studioAccess.canEdit(params.get("roles"));
                             model.put("editEnabled", rowEditable);
                             model.put("updated", params.get("updated"));
@@ -2519,7 +2535,9 @@ public final class TesseraqlRuntime implements AutoCloseable {
                                 return Map.of("csv", "# The data browser is disabled.\r\n");
                             }
                             try {
-                                return Map.of("csv", studioData.exportCsv(str(params, "table"),
+                                return Map.of("csv", studioData.exportCsv(
+                                        StudioDataService.normalizeDatasource(str(params, "ds")),
+                                        str(params, "table"),
                                         str(params, "sort"),
                                         "desc".equalsIgnoreCase(String.valueOf(params.get("dir")))
                                                 ? "desc"
@@ -3635,9 +3653,10 @@ public final class TesseraqlRuntime implements AutoCloseable {
     }
 
     /** The URL-encoded query string (table + combinator + filter slots + sort) reused by the links. */
-    private static String dataQueryBase(String table, String combinator, String sortColumn,
-            String sortDir, java.util.List<Map<String, Object>> filterRows) {
-        StringBuilder query = new StringBuilder("table=").append(urlEncode(table))
+    private static String dataQueryBase(String datasource, String table, String combinator,
+            String sortColumn, String sortDir, java.util.List<Map<String, Object>> filterRows) {
+        StringBuilder query = new StringBuilder("ds=").append(urlEncode(datasource))
+                .append("&table=").append(urlEncode(table))
                 .append("&combinator=").append(urlEncode(combinator));
         for (int i = 0; i < filterRows.size(); i++) {
             Map<String, Object> row = filterRows.get(i);

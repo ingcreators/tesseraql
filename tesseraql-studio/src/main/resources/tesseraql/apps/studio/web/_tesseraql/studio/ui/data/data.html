@@ -20,9 +20,25 @@
     </div>
 
     <th:block th:if="${data.enabled}">
-      <p class="hc-field__message">Read-only, paginated rows of a table in the <code>main</code>
-        datasource. Queries run on a read-only connection with a statement timeout and a scan cap.</p>
+      <p class="hc-field__message">Read-only, paginated rows of a table in a declared
+        datasource. Queries run on a read-only connection with a statement timeout and a scan
+        cap; on a <code>duckdb</code> datasource, tables list across every attached catalog as
+        <code>catalog.schema.table</code>. Row editing stays on <code>main</code>.</p>
+      <!-- Switching the datasource resubmits without a table: the table list is the selected
+           datasource's own catalog, so a carried-over name would be a lie. -->
+      <form class="hc-cluster" method="get" action="/_tesseraql/studio/ui/data"
+            th:if="${#lists.size(data.datasources) > 1}">
+        <div class="hc-field">
+          <label class="hc-field__label" for="data-ds">Datasource</label>
+          <select class="hc-select" id="data-ds" name="ds">
+            <option th:each="d : ${data.datasources}" th:value="${d}" th:text="${d}"
+                    th:selected="${d == data.datasource}">main</option>
+          </select>
+        </div>
+        <button type="submit" class="hc-button" data-variant="ghost">Switch</button>
+      </form>
       <form class="hc-cluster" method="get" action="/_tesseraql/studio/ui/data">
+        <input type="hidden" name="ds" th:value="${data.datasource}">
         <div class="hc-field">
           <label class="hc-field__label" for="data-table">Table</label>
           <select class="hc-select" id="data-table" name="table">
@@ -41,6 +57,7 @@
         <!-- Up to three AND-combined filter conditions + sort. Columns are validated server-side and
              values are bound params; comparisons run on the text representation of each column. -->
         <form class="hc-stack" method="get" action="/_tesseraql/studio/ui/data">
+          <input type="hidden" name="ds" th:value="${data.datasource}">
           <input type="hidden" name="table" th:value="${data.table}">
           <!-- The condition slots are folded behind a disclosure so the initial view is just
                sort + Apply. It opens automatically when a filter is active, and the summary
@@ -108,7 +125,7 @@
             </div>
             <button type="submit" class="hc-button" data-variant="primary">Apply</button>
             <a th:if="${data.hasFilters}" class="hc-button" data-variant="ghost"
-               th:href="|/_tesseraql/studio/ui/data?table=${#uris.escapeQueryParam(data.table)}|">Clear filters</a>
+               th:href="|/_tesseraql/studio/ui/data?ds=${#uris.escapeQueryParam(data.datasource)}&amp;table=${#uris.escapeQueryParam(data.table)}|">Clear filters</a>
           </div>
         </form>
         <div class="hc-cluster">

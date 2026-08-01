@@ -58,7 +58,10 @@ around — every stop is live against the seeded data:
    2-way SQL file.
 2. **Data browser** — the seeded rows (the demo app ships with
    `tesseraql.studio.dataBrowser.enabled: true`). Filter, sort, export CSV; with the row
-   editor enabled, fix a value under audit + confirm.
+   editor enabled, fix a value under audit + confirm. The opt-in spans every declared
+   datasource — switch to the `analytics` DuckDB datasource and the same browser lists
+   its attached catalogs and lake tables as `catalog.schema.table` (editing stays on
+   `main`).
 3. **The instant loop** — edit the SQL in the source editor, apply, and the running page
    changes; scaffold a CRUD slice from a table and its pages serve immediately; create a
    migration and press **Migrate now**. No restart anywhere.

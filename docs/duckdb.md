@@ -375,5 +375,9 @@ with its URL and endpoint.
   [multi-datasource](multi-datasource.md) stance stands; `attach:` is the one
   declared exception, and it lives inside the DuckDB engine under the read-only
   default.
-- **Studio's data browser and schema introspection over DuckDB** — they stay on
-  `main` for now, as for other non-main datasources.
+- **Build-time schema introspection over DuckDB** — the docs portal's `schema.json`
+  stays a `main`-catalog introspection: a DuckDB catalog only exists on a live
+  connection with its attaches performed, so there is nothing to introspect at build
+  time. The live surface exists instead: Studio's data browser browses any declared
+  datasource, and on a `duckdb` one it lists tables and views across every attached
+  catalog — the lake included — as `catalog.schema.table`.
