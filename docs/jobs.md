@@ -56,6 +56,28 @@ trigger:
 `cron` takes a Quartz cron expression (seconds-first). `fixedDelay` re-fires at
 a fixed period. Declare one or the other, not both.
 
+## The business date
+
+Business batch is date-driven: "run the 2026-07-31 close" and "rerun the 14th after
+the fix" name a date the run is *for*, not the date it happens to run on. Every
+execution carries one ([batch platform](batch-platform.md)):
+
+- **`batch.businessDate`** is an ambient SQL bind in every step — seeded the way
+  `audit.*` is seeded into commands, no `params:` wiring needed. `batch.executionId`
+  rides along for correlation columns.
+- It defaults to the firing's local date. A manual run overrides it with the reserved
+  **`businessDate`** parameter (ISO `yyyy-MM-dd`) in the run request body; a malformed
+  value refuses with `TQL-BATCH-4041` before anything executes.
+- The date is **recorded** on the execution (`businessDate` in the operations API), so
+  the audit trail distinguishes "ran on the 1st" from "ran the 31st's close on the
+  1st".
+
+```sql
+insert into daily_totals (business_date, total)
+select cast(/* batch.businessDate */ '2026-01-01' as date), sum(amount)
+from   orders where order_date = /* batch.businessDate */ '2026-01-01'
+```
+
 A `file-import` job can instead declare a **`poll:` trigger** that watches a local, SFTP, or
 FTPS directory and feeds each arriving file through the job's `import:` block, under a
 deny-by-default host allow-list. Polling is part of the managed-connector surface — see
@@ -167,6 +189,7 @@ Every run is persisted as an execution with its steps, visible three ways:
 | Code | Meaning |
 | --- | --- |
 | `TQL-BATCH-4040` | the operations API was asked about a job or execution that does not exist — or that the caller's app scope does not include |
+| `TQL-BATCH-4041` | the reserved `businessDate` run parameter is not an ISO date (`yyyy-MM-dd`) |
 | `TQL-BATCH-5001` | the execution store could not record a run |
 | `TQL-BATCH-5002` | a step failed (its SQL raised an error), or a step is misdeclared |
 
