@@ -186,6 +186,58 @@ public final class JdbcFileTransferService implements FileTransferService {
     }
 
     @Override
+    public InlineResult exportInline(InlineExport request, javax.sql.DataSource extraction) {
+        FileCodec codec = codecs.require(request.format());
+        String filename = request.filename() != null && !request.filename().isBlank()
+                ? request.filename()
+                : request.routeId() + codec.extension();
+        String transferId = jobs.startExecution(request.routeId(), request.appName(), "export",
+                null);
+        insertTransfer(transferId, request.routeId(), request.appName(), "EXPORT",
+                request.format(), filename, request.afterExtract() == null ? null
+                        : AFTER_EXTRACT,
+                null, Map.of());
+        // The runExport shape, synchronous: extraction and follow-up commit together on the
+        // caller's datasource; bookkeeping lands in the shared tables so the ops transfers
+        // page and the download endpoint see a step-produced file like any other.
+        try (Connection connection = extraction.getConnection()) {
+            boolean autoCommit = connection.getAutoCommit();
+            connection.setAutoCommit(false);
+            try {
+                long rows;
+                SpoolWriter writer = tempStore.createWriter(SpoolKind.BINARY);
+                try (writer;
+                        PreparedStatement statement = prepare(connection, request.query());
+                        ResultSet results = statement.executeQuery();
+                        OutputStream out = new SpoolOutputStream(writer)) {
+                    RowIterator iterator = new RowIterator(results,
+                            io.tesseraql.core.util.DatabaseVendors.vendor(extraction)
+                                    .orElse(null));
+                    codec.write(out, request.writeSpec(), iterator);
+                    rows = iterator.count;
+                    writer.incrementRows(rows);
+                }
+                if (request.afterExtract() != null) {
+                    executeUpdate(connection, request.afterExtract());
+                }
+                connection.commit();
+                recordSpool(transferId, writer.toRef(), rows);
+                jobs.completeExecution(transferId);
+                return new InlineResult(transferId, filename, rows);
+            } catch (Exception ex) {
+                connection.rollback();
+                throw ex;
+            } finally {
+                connection.setAutoCommit(autoCommit);
+            }
+        } catch (Exception ex) {
+            jobs.failExecution(transferId, ex.getMessage());
+            throw new TqlException(TRANSFER_ERROR,
+                    "Export step failed: " + ex.getMessage(), ex);
+        }
+    }
+
+    @Override
     public Optional<TransferStatus> status(String transferId) {
         // Read the execution status before the transfer detail: the run records its counts and
         // errors before completing, so a terminal status guarantees the detail row is final

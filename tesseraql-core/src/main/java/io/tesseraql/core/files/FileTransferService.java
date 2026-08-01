@@ -63,6 +63,30 @@ public interface FileTransferService {
     /** Starts an asynchronous export; returns the transfer id. */
     String startExport(ExportRequest request);
 
+    /**
+     * A batch step's extraction, pre-rendered by its executor: the caller resolves the dialect
+     * variant and the file placeholders it already owns, so the service only executes. The
+     * follow-up, when present, is extraction-timed by construction (a step refuses
+     * {@code timing: download} at lint time).
+     */
+    record InlineExport(String routeId, String appName, String format, FileWriteSpec writeSpec,
+            String filename, io.tesseraql.core.sql.BoundSql query,
+            io.tesseraql.core.sql.BoundSql afterExtract) {
+    }
+
+    /** The produced transfer: its id (also the download handle) and the row count written. */
+    record InlineResult(String transferId, String filename, long rows) {
+    }
+
+    /**
+     * Runs an export synchronously on the given connection source — the batch export step
+     * (docs/analytics-experience.md track 3). Bookkeeping is identical to
+     * {@link #startExport}: an execution row, a transfer row, the spool; only the shape
+     * differs — the caller's thread, the caller's datasource, and a thrown error instead of a
+     * failed status to poll.
+     */
+    InlineResult exportInline(InlineExport request, javax.sql.DataSource extraction);
+
     /** The transfer state, or empty when the id is unknown. */
     Optional<TransferStatus> status(String transferId);
 

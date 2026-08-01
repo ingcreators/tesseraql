@@ -3774,10 +3774,13 @@ public final class AppLinter {
             if (step.chunk() != null) {
                 declared++;
             }
+            if (step.export() != null) {
+                declared++;
+            }
             if (declared != 1) {
                 findings.add(new LintFinding("TQL-FIELD-2004", "error", source, "Step '"
-                        + step.id()
-                        + "' must declare exactly one of sql:, notify:, http-call:, or chunk:"));
+                        + step.id() + "' must declare exactly one of sql:, notify:, http-call:,"
+                        + " chunk:, or export:"));
                 continue;
             }
             if (step.notification() != null) {
@@ -3786,7 +3789,64 @@ public final class AppLinter {
                 lintHttpCall(config, step.id(), step.httpCall(), source, findings);
             } else if (step.chunk() != null) {
                 lintChunk(job, step, source, findings);
+            } else if (step.export() != null) {
+                lintExportStep(job, step, source, findings);
             }
+        }
+    }
+
+    /**
+     * Statically checks an export step (docs/analytics-experience.md track 3): the extraction
+     * query is required, the step runs on the job's datasource (the {@code TQL-YAML-1037}
+     * stance — a pipeline step cannot pick its own connector), and {@code after.timing:
+     * download} stays route vocabulary — a job-produced file's download is an ops action, not
+     * a business signal, so the only follow-up a step supports is the extraction-transaction
+     * one ({@code TQL-YAML-1041}).
+     */
+    private void lintExportStep(io.tesseraql.yaml.manifest.JobFile job,
+            io.tesseraql.yaml.model.PipelineStep step, String source,
+            List<LintFinding> findings) {
+        io.tesseraql.yaml.model.ExportSpec export = step.export();
+        if (export.sql() == null || export.sql().file() == null
+                || export.sql().file().isBlank()) {
+            findings.add(new LintFinding("TQL-YAML-1041", "error", source, "Step '" + step.id()
+                    + "': export needs sql: { file: … } (the extraction query)"));
+            return;
+        }
+        if (export.sql().datasource() != null) {
+            findings.add(new LintFinding("TQL-YAML-1037", "error", source, "Step '" + step.id()
+                    + "': export.sql cannot declare datasource: — a pipeline step runs on the"
+                    + " job's datasource"));
+        }
+        if (export.format() == null || export.format().isBlank()) {
+            findings.add(new LintFinding("TQL-YAML-1041", "error", source, "Step '" + step.id()
+                    + "': export needs format: (csv, excel, or pdf)"));
+        }
+        if (export.after() != null && io.tesseraql.core.files.FileTransferService.AFTER_DOWNLOAD
+                .equals(export.after().effectiveTiming())) {
+            findings.add(new LintFinding("TQL-YAML-1041", "error", source, "Step '" + step.id()
+                    + "': after.timing: download is route vocabulary — an export step supports"
+                    + " timing: extract only"));
+        }
+        if ("pdf".equals(export.format())) {
+            if (export.sheet() != null || export.startCell() != null) {
+                findings.add(new LintFinding("TQL-YAML-1005", "error", source,
+                        "pdf export: sheet:/startCell: are workbook options - a pdf lays out"
+                                + " through its template, not cell placement"));
+            }
+            if (export.template() != null && !export.template().endsWith(".html")) {
+                findings.add(new LintFinding("TQL-YAML-1006", "error", source,
+                        "pdf export template '" + export.template()
+                                + "' must be an .html file (it renders through the template"
+                                + " engine before PDF conversion)"));
+            }
+        }
+        if (export.template() != null && (!"pdf".equals(export.format())
+                || export.template().endsWith(".html"))
+                && !Files.isRegularFile(
+                        job.source().getParent().resolve(export.template()))) {
+            findings.add(new LintFinding("TQL-YAML-1006", "error", source, "Step '" + step.id()
+                    + "': export references a missing template: " + export.template()));
         }
     }
 
