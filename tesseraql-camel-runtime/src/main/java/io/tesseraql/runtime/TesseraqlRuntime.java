@@ -2813,6 +2813,41 @@ public final class TesseraqlRuntime implements AutoCloseable {
                             studio.saveCalendar(name, weekend, dates, actorOf(params));
                             return Map.of("saved", name);
                         })
+                        // Job operational policies (docs/jobs.md, Studio): trigger + calendar
+                        // qualifiers + overlap/sla as a structured form through the draft flow.
+                        .register("studio.jobs.view", params -> {
+                            Map<String, Object> model = new java.util.LinkedHashMap<>();
+                            model.put("editable", studioAccess.canEdit(params.get("roles")));
+                            List<Map<String, Object>> declared = new java.util.ArrayList<>();
+                            for (JobFile jobFile : manifest.jobs()) {
+                                Map<String, Object> row = new java.util.LinkedHashMap<>();
+                                row.put("id", jobFile.definition().id());
+                                row.put("trigger", io.tesseraql.yaml.model.TriggerSpec
+                                        .describe(jobFile.definition().trigger()));
+                                declared.add(row);
+                            }
+                            declared.sort(java.util.Comparator
+                                    .comparing(row -> String.valueOf(row.get("id"))));
+                            model.put("jobs", declared);
+                            model.put("hasJobs", !declared.isEmpty());
+                            model.put("calendars", studio.calendars());
+                            model.put("saved", params.get("saved") != null);
+                            String name = str(params, "name");
+                            model.put("form",
+                                    name == null ? null : studio.jobPolicyForm(name));
+                            return model;
+                        })
+                        .register("studio.jobs.save", params -> {
+                            studioAccess.requireEdit(params.get("roles"));
+                            String jobId = String.valueOf(params.get("name"));
+                            studio.saveJobPolicies(jobId, str(params, "cron"),
+                                    str(params, "fixedDelay"), str(params, "calendar"),
+                                    str(params, "runOn"), str(params, "dayOfMonth"),
+                                    str(params, "shift"), str(params, "after"),
+                                    str(params, "overlap"), str(params, "slaCompleteBy"),
+                                    str(params, "slaRunningLongerThan"), actorOf(params));
+                            return Map.of("saved", jobId);
+                        })
                         .register("studio.migration.create", params -> {
                             studioAccess.requireEdit(params.get("roles"));
                             String datasource = params.get("datasource") == null

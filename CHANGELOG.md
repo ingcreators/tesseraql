@@ -18,6 +18,12 @@ All notable changes to TesseraQL are documented here. The format follows
   one-line trigger story now lives in `TriggerSpec.describe` — the CLI, the symbols
   contract, and the console share it, so the three surfaces can never drift.
 
+- **Studio edits the job policies** (docs/jobs.md): a job-policies form — trigger
+  (cron/fixedDelay, calendar + runOn/dayOfMonth/shift, or an `after:` chain picked from
+  the declared jobs) plus `overlap:` and `sla:` as structured fields, saved through the
+  draft flow with the linter's rules enforced before the draft exists
+  (`TQL-STUDIO-4239`). Poll-triggered jobs keep the text editor by design.
+
 - **Studio draws the calendar** (docs/jobs.md): a calendars surface with a month grid
   that makes the daily-consider model visible — business days, weekends, holidays, and,
   when previewing a `dayOfMonth:` rule, the nominal date and the one day the firing
