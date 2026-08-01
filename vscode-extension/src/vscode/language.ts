@@ -17,7 +17,7 @@ import {
  */
 function poolFor(symbols: AppSymbols,
     kind: 'policy' | 'message' | 'maybe-message' | 'domain' | 'shared' | 'decision'
-        | 'workflow') {
+        | 'workflow' | 'calendar' | 'job') {
   switch (kind) {
     case 'policy': return symbols.policies;
     case 'domain': return symbols.domains;
@@ -27,6 +27,10 @@ function poolFor(symbols: AppSymbols,
     case 'decision': return symbols.decisions;
     // The transition:/dispatch: suite targets name a workflow.
     case 'workflow': return symbols.workflows;
+    // A schedule's business-day calendar (calendars/*.yml, docs/jobs.md).
+    case 'calendar': return symbols.calendars;
+    // trigger: after: chains to a declared job (docs/jobs.md).
+    case 'job': return symbols.jobs;
     default: return symbols.messages;
   }
 }
@@ -144,7 +148,11 @@ export class SymbolCompletionProvider implements vscode.CompletionItemProvider {
           kind === 'message'
               ? vscode.CompletionItemKind.Text
               : vscode.CompletionItemKind.Value);
-      item.detail = symbol.source;
+      // A job completion says how the target starts — "after x" chains read at a glance.
+      const trigger = (symbol as { trigger?: string | null }).trigger;
+      item.detail = typeof trigger === 'string' && trigger !== ''
+          ? `${trigger} · ${symbol.source}`
+          : symbol.source;
       return item;
     });
   }

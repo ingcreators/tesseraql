@@ -28,14 +28,24 @@ export interface RouteSymbol {
   recipe: string | null;
 }
 
+/** A declared batch job: its file plus the one-line trigger story. */
+export interface JobSymbol {
+  name: string;
+  source: string;
+  line: number | null;
+  trigger: string | null;
+}
+
 export interface AppSymbols {
   policies: DeclaredSymbol[];
   messages: DeclaredSymbol[];
   domains: DeclaredSymbol[];
   rules: DeclaredSymbol[];
   decisions: DeclaredSymbol[];
+  calendars: DeclaredSymbol[];
   routes: RouteSymbol[];
   workflows: WorkflowSymbol[];
+  jobs: JobSymbol[];
 }
 
 export class SymbolsContractError extends Error {}
@@ -53,7 +63,8 @@ export function parseAppSymbols(stdout: string): AppSymbols {
   }
   const document = parsed as {
     policies: unknown[]; messages: unknown[]; domains?: unknown; rules?: unknown;
-    decisions?: unknown; routes?: unknown; workflows?: unknown;
+    decisions?: unknown; calendars?: unknown; routes?: unknown; workflows?: unknown;
+    jobs?: unknown;
   };
   return {
     policies: document.policies.map((value) => toSymbol(value, 'name')),
@@ -64,10 +75,27 @@ export function parseAppSymbols(stdout: string): AppSymbols {
     domains: optionalSymbols(document.domains),
     rules: optionalSymbols(document.rules),
     decisions: optionalSymbols(document.decisions),
+    // Absent on a pre-0.10 CLI (batch-platform track B): degrades to empty, same rule.
+    calendars: optionalSymbols(document.calendars),
     routes: optionalRoutes(document.routes),
     // Absent on a pre-0.10 CLI: workflows degrade to empty, same rule.
     workflows: optionalWorkflows(document.workflows),
+    jobs: optionalJobs(document.jobs),
   };
+}
+
+function optionalJobs(value: unknown): JobSymbol[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value.map((entry) => {
+    const base = toSymbol(entry, 'id');
+    const job = entry as Record<string, unknown>;
+    return {
+      ...base,
+      trigger: typeof job.trigger === 'string' ? job.trigger : null,
+    };
+  });
 }
 
 function optionalWorkflows(value: unknown): WorkflowSymbol[] {
@@ -160,14 +188,14 @@ function toSymbol(value: unknown, nameField: string): DeclaredSymbol {
  */
 export interface SymbolReference {
   kind: 'policy' | 'message' | 'maybe-message' | 'domain' | 'shared' | 'decision'
-      | 'workflow';
+      | 'workflow' | 'calendar' | 'job';
   value: string;
   /** 0-based columns of the value span. */
   start: number;
   end: number;
 }
 
-const REFERENCE = /^(\s*(?:-\s+)?(policy|message|title|label|domain|use|decision|workflow):\s*)(["']?)([^\s#"']+)\3/;
+const REFERENCE = /^(\s*(?:-\s+)?(policy|message|title|label|domain|use|decision|workflow|calendar|after):\s*)(["']?)([^\s#"']+)\3/;
 
 const KIND_BY_KEY: Record<string, SymbolReference['kind']> = {
   policy: 'policy',
@@ -179,6 +207,11 @@ const KIND_BY_KEY: Record<string, SymbolReference['kind']> = {
   // The transition:/dispatch: suite targets (docs/transition-engine.md) name the
   // workflow directly.
   workflow: 'workflow',
+  // A schedule's business-day calendar (docs/jobs.md): fail-open at fire time, so the
+  // editor is where a typo gets caught early.
+  calendar: 'calendar',
+  // trigger: after: chains to a declared job (docs/jobs.md).
+  after: 'job',
 };
 
 export function symbolReferenceAt(lineText: string, character: number): SymbolReference | undefined {
@@ -200,11 +233,13 @@ export function symbolReferenceAt(lineText: string, character: number): SymbolRe
  * `use:`, or `decision:`.
  */
 export function completionKindAt(lineText: string, character: number):
-    'policy' | 'message' | 'domain' | 'shared' | 'decision' | 'workflow' | undefined {
+    'policy' | 'message' | 'domain' | 'shared' | 'decision' | 'workflow' | 'calendar'
+    | 'job' | undefined {
   const head = lineText.slice(0, character);
-  const match = /^\s*(?:-\s+)?(policy|message|domain|use|decision|workflow):\s*(["']?)[^\s#"']*$/.exec(head);
+  const match = /^\s*(?:-\s+)?(policy|message|domain|use|decision|workflow|calendar|after):\s*(["']?)[^\s#"']*$/.exec(head);
   return match === null
       ? undefined
       : KIND_BY_KEY[match[1]] as
-          'policy' | 'message' | 'domain' | 'shared' | 'decision' | 'workflow';
+          'policy' | 'message' | 'domain' | 'shared' | 'decision' | 'workflow'
+          | 'calendar' | 'job';
 }

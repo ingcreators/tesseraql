@@ -22,6 +22,7 @@ function makeDemoApp(): string {
   write('rules/inventory.yml');
   write('rules/validate-stock.sql');
   write('decisions/approval.yml');
+  write('calendars/jp.yml');
   write('workflow/purchase_request.yml');
   write('workflow/approve.sql');
   write('db/migration/V1__create_items.sql');
@@ -38,8 +39,8 @@ function section(tree: AppNode[], label: string): AppNode {
 test('builds the app layout sections', () => {
   const tree = buildAppTree(makeDemoApp());
   assert.deepEqual(tree.map((node) => node.label),
-      ['Routes', 'Views', 'Domains', 'Rules', 'Decisions', 'Workflows', 'Migrations',
-        'Tests']);
+      ['Routes', 'Views', 'Domains', 'Rules', 'Decisions', 'Calendars', 'Workflows',
+        'Migrations', 'Tests']);
 });
 
 test('routes group by kind and exclude views and SQL', () => {
@@ -70,6 +71,8 @@ test('shared definitions list as Domains, Rules, and Decisions, rule SQL include
       ['inventory.yml', 'validate-stock.sql']);
   assert.deepEqual(section(tree, 'Decisions').children.map((node) => node.label),
       ['approval.yml']);
+  assert.deepEqual(section(tree, 'Calendars').children.map((node) => node.label),
+      ['jp.yml']);
 });
 
 test('sections without content disappear', () => {
