@@ -144,4 +144,6 @@ export const EXCLUDED = [
   'transition-engine.md',
   // Batch platform (business date, calendars, chunking, CLI contract), 2026-08-01.
   'batch-platform.md',
+  // Analytics experience (browse named datasources, kit charts, export step), 2026-08-01.
+  'analytics-experience.md',
 ];
