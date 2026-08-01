@@ -1,11 +1,13 @@
 # Batch platform — the executor enterprise schedulers drive
 
-> **Status: slices 1–2 implemented** — slice 1: `batch.businessDate`/
+> **Status: slices 1–3 implemented** — slice 1: `batch.businessDate`/
 > `batch.executionId` ambient binds, the recorded `business_date` column, the reserved
 > `businessDate` run parameter (`TQL-BATCH-4041` on garbage). Slice 2: `calendars/`
 > shared definitions, the `calendar:`/`runOn:` schedule qualifiers with the fire-time
-> filter after the cluster claim, lints `TQL-BATCH-4201`–`4205`. Slices 3–5 remain
-> designed, not built. The batch follow-up to the web-runtime maturation:
+> filter after the cluster claim, lints `TQL-BATCH-4201`–`4205`. Slice 3: the `chunk:`
+> step — streaming reader + per-row writer with savepoints, `commitEvery` commits,
+> `tql_job_checkpoint` restart per business date, `tql_job_skips` + `skipLimit`, lints
+> `TQL-BATCH-4206`–`4208`. Slices 4–5 remain designed, not built. The batch follow-up to the web-runtime maturation:
 > what `docs/jobs.md` ships today is a sound skeleton (two recipes, Quartz cron /
 > fixed delay, poll triggers, per-tenant fan-out, claim-row cluster safety, execution
 > history, failure alerts, `query-spool`), and what business-application batch still

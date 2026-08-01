@@ -287,6 +287,11 @@ public final class OpsViews {
             row.put("affectedRows", step.affectedRows() == null
                     ? "-"
                     : String.valueOf(step.affectedRows()));
+            // Skips are only a chunk step's concern; the dash keeps other steps quiet.
+            row.put("skippedRows",
+                    step.skippedRows() == null || step.skippedRows() == 0
+                            ? "-"
+                            : String.valueOf(step.skippedRows()));
             row.put("durationMs",
                     step.durationMs() == null ? "-" : String.valueOf(step.durationMs()));
             row.put("errorMessage", dash(step.errorMessage()));

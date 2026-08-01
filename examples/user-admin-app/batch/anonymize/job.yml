@@ -1,0 +1,16 @@
+version: tesseraql/v1
+id: user.anonymizeInactive
+kind: job
+recipe: batch-pipeline
+
+# The chunk step (docs/jobs.md "The chunk step"): a per-row rewrite too large for one
+# transaction. No trigger - an operator or an external scheduler runs it on demand;
+# a rerun for the same business date resumes from the checkpoint.
+pipeline:
+  - id: anonymize
+    chunk:
+      reader: { file: inactive-users.sql }
+      writer: { file: anonymize-user.sql }
+      key: id
+      commitEvery: 200
+      onError: { skipLimit: 10 }

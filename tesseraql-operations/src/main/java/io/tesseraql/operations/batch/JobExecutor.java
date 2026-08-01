@@ -249,12 +249,16 @@ public final class JobExecutor {
                 result = runHttpStep(step, context, stepContext);
             } else if (step.notification() != null) {
                 result = runNotifyStep(jobFile, step, context, appName);
+            } else if (step.chunk() != null) {
+                result = runChunkStep(jobFile, step, dataSource, context, executionId,
+                        stepContext);
             } else {
                 result = runStep(jobFile, step, dataSource, context, stepContext);
             }
             stepResults.put(step.id(), result);
             repository.completeStep(stepExecutionId,
-                    ((Number) result.getOrDefault("affectedRows", 0)).intValue());
+                    ((Number) result.getOrDefault("affectedRows", 0)).intValue(),
+                    ((Number) result.getOrDefault("skipped", 0)).intValue());
         } catch (RuntimeException ex) {
             stepSpan.recordError(ex);
             repository.failStep(stepExecutionId, ex.getMessage());
@@ -345,7 +349,7 @@ public final class JobExecutor {
                 jobFile.source().getParent().resolve(step.sql().file()).normalize(),
                 dialectOf(dataSource));
         String source = read(sqlPath);
-        Map<String, Object> sqlParams = resolveParams(step, context);
+        Map<String, Object> sqlParams = resolveParams(step.sql(), context);
         // File placeholders (docs/duckdb.md) resolve against the job's datasource; the job
         // context doubles as the resolver context, so a perTenant run's tenant partitions scopes.
         io.tesseraql.core.sql.FilePathResolver filePathResolver = filePathResolvers == null
@@ -400,6 +404,188 @@ public final class JobExecutor {
         }
     }
 
+    /**
+     * Runs a chunk step (docs/batch-platform.md track C): the reader streams its keyset-ordered
+     * SELECT on one connection, the writer runs once per row on a second connection committing
+     * every {@code commitEvery} handled rows, and each committed chunk checkpoints its last
+     * handled key so a rerun for the same business date resumes where the failure stopped.
+     *
+     * <p>A writer failure on one row rolls back to a per-row savepoint, is recorded in
+     * {@code tql_job_skips}, and processing continues — until {@code skipLimit} is exceeded,
+     * which discards the uncommitted chunk and fails the step. Skipped rows advance the
+     * checkpoint like processed ones: they were handled (recorded), not lost.
+     */
+    private Map<String, Object> runChunkStep(JobFile jobFile, PipelineStep step,
+            DataSource dataSource, Map<String, Object> context, String executionId,
+            io.tesseraql.core.telemetry.SpanContext parentContext) {
+        io.tesseraql.yaml.model.ChunkSpec chunk = step.chunk();
+        if (chunk.reader() == null || chunk.reader().file() == null
+                || chunk.writer() == null || chunk.writer().file() == null) {
+            throw TqlException.builder(STEP_ERROR)
+                    .message("Step '" + step.id() + "': chunk needs reader.file and writer.file")
+                    .build();
+        }
+        String jobId = jobFile.definition().id();
+        java.time.LocalDate businessDate = ((java.sql.Date) ((Map<?, ?>) context.get("batch"))
+                .get("businessDate")).toLocalDate();
+        String after = repository.findCheckpoint(jobId, step.id(), businessDate).orElse(null);
+        Map<String, Object> chunkContext = new LinkedHashMap<>();
+        chunkContext.put("after", after);
+        context.put("chunk", chunkContext);
+
+        String dialect = dialectOf(dataSource);
+        Path readerPath = io.tesseraql.core.dialect.DialectSqlResolver.resolve(
+                jobFile.source().getParent().resolve(chunk.reader().file()).normalize(), dialect);
+        Path writerPath = io.tesseraql.core.dialect.DialectSqlResolver.resolve(
+                jobFile.source().getParent().resolve(chunk.writer().file()).normalize(), dialect);
+        BoundSql boundReader = SqlRenderer.render(
+                io.tesseraql.core.sql.Sql2WayParser.parse(read(readerPath)),
+                resolveParams(chunk.reader(), context),
+                io.tesseraql.core.sql.ScopeResolver.UNSUPPORTED, context,
+                io.tesseraql.core.sql.FilePathResolver.UNSUPPORTED);
+        java.util.List<io.tesseraql.core.sql.SqlNode> writerTemplate = io.tesseraql.core.sql.Sql2WayParser
+                .parse(read(writerPath));
+
+        io.tesseraql.core.telemetry.Span span = tracer.start("tesseraql.sql.execute", parentContext)
+                .attribute("sqlId", readerPath.toString())
+                .attribute("mode", "chunk")
+                .attribute("stepId", step.id());
+        long startedAt = System.currentTimeMillis();
+        long startNanos = System.nanoTime();
+        int processed = 0;
+        int skipped = 0;
+        try (Connection reader = dataSource.getConnection();
+                Connection writer = dataSource.getConnection()) {
+            // A held cursor needs its own transaction (PostgreSQL only streams with autocommit
+            // off), and the writer's commit cadence is the whole point of the chunk.
+            reader.setAutoCommit(false);
+            writer.setAutoCommit(false);
+            Map<String, PreparedStatement> writerStatements = new LinkedHashMap<>();
+            try (PreparedStatement select = reader.prepareStatement(boundReader.sql())) {
+                if (sqlTimeoutSeconds > 0) {
+                    select.setQueryTimeout(sqlTimeoutSeconds);
+                }
+                select.setFetchSize(Math.max(100, Math.min(chunk.effectiveCommitEvery(), 1000)));
+                bind(select, boundReader);
+                String lastKey = null;
+                int sinceCommit = 0;
+                try (ResultSet rows = select.executeQuery()) {
+                    ResultSetMetaData metaData = rows.getMetaData();
+                    int columns = metaData.getColumnCount();
+                    while (rows.next()) {
+                        Map<String, Object> row = new LinkedHashMap<>();
+                        for (int col = 1; col <= columns; col++) {
+                            String label = metaData.getColumnLabel(col);
+                            Object value = rows.getObject(col);
+                            row.put(label, value);
+                            // Oracle answers uppercase labels; binds are written lowercase.
+                            row.putIfAbsent(label.toLowerCase(java.util.Locale.ROOT), value);
+                        }
+                        Object keyValue = keyOf(row, chunk.effectiveKey(), step.id(), readerPath);
+                        context.put("row", row);
+                        BoundSql boundWriter = SqlRenderer.render(writerTemplate,
+                                resolveParams(chunk.writer(), context),
+                                io.tesseraql.core.sql.ScopeResolver.UNSUPPORTED, context,
+                                io.tesseraql.core.sql.FilePathResolver.UNSUPPORTED);
+                        PreparedStatement statement = writerStatements.get(boundWriter.sql());
+                        if (statement == null) {
+                            statement = writer.prepareStatement(boundWriter.sql());
+                            if (sqlTimeoutSeconds > 0) {
+                                statement.setQueryTimeout(sqlTimeoutSeconds);
+                            }
+                            writerStatements.put(boundWriter.sql(), statement);
+                        }
+                        java.sql.Savepoint beforeRow = writer.setSavepoint();
+                        try {
+                            bind(statement, boundWriter);
+                            statement.executeUpdate();
+                            processed++;
+                        } catch (SQLException rowFailure) {
+                            // The failed statement may have poisoned the transaction (design
+                            // stance: PostgreSQL aborts it) — the savepoint keeps the chunk.
+                            writer.rollback(beforeRow);
+                            skipped++;
+                            repository.recordSkip(executionId, step.id(),
+                                    String.valueOf(keyValue), rowFailure.getMessage());
+                            if (skipped > chunk.effectiveSkipLimit()) {
+                                writer.rollback();
+                                throw TqlException.builder(STEP_ERROR)
+                                        .message("Step '" + step.id() + "' exceeded skipLimit "
+                                                + chunk.effectiveSkipLimit() + " (row "
+                                                + keyValue + ": " + rowFailure.getMessage()
+                                                + ")")
+                                        .source(writerPath.toString())
+                                        .cause(rowFailure)
+                                        .build();
+                            }
+                        }
+                        lastKey = String.valueOf(keyValue);
+                        sinceCommit++;
+                        if (sinceCommit >= chunk.effectiveCommitEvery()) {
+                            writer.commit();
+                            repository.saveCheckpoint(jobId, step.id(), businessDate, lastKey);
+                            sinceCommit = 0;
+                        }
+                    }
+                }
+                writer.commit();
+                repository.clearCheckpoint(jobId, step.id(), businessDate);
+            } finally {
+                for (PreparedStatement statement : writerStatements.values()) {
+                    try {
+                        statement.close();
+                    } catch (SQLException ignored) {
+                        // closing the pooled connection reclaims them regardless
+                    }
+                }
+                context.remove("row");
+            }
+            long durationMs = (System.nanoTime() - startNanos) / 1_000_000L;
+            span.attribute("affectedRows", (long) processed);
+            span.attribute("skippedRows", (long) skipped);
+            slowSqlLog.record(new io.tesseraql.core.diag.SqlExecution(
+                    readerPath.toString(), "chunk", durationMs, processed, startedAt));
+            Map<String, Object> result = new LinkedHashMap<>();
+            result.put("affectedRows", processed);
+            result.put("skipped", skipped);
+            return result;
+        } catch (SQLException ex) {
+            TqlException failure = TqlException.builder(STEP_ERROR)
+                    .message("Step '" + step.id() + "' failed: " + ex.getMessage())
+                    .source(readerPath.toString())
+                    .cause(ex)
+                    .build();
+            span.recordError(failure);
+            throw failure;
+        } catch (TqlException ex) {
+            span.recordError(ex);
+            throw ex;
+        } finally {
+            span.end();
+        }
+    }
+
+    /** The checkpoint key of one reader row; a reader that never selects it is misdeclared. */
+    private static Object keyOf(Map<String, Object> row, String key, String stepId,
+            Path readerPath) {
+        if (row.containsKey(key)) {
+            return row.get(key);
+        }
+        String lower = key.toLowerCase(java.util.Locale.ROOT);
+        if (row.containsKey(lower)) {
+            return row.get(lower);
+        }
+        String upper = key.toUpperCase(java.util.Locale.ROOT);
+        if (row.containsKey(upper)) {
+            return row.get(upper);
+        }
+        throw TqlException.builder(STEP_ERROR)
+                .message("Step '" + stepId + "': the reader's rows carry no '" + key
+                        + "' column — chunk.key must name a selected column")
+                .source(readerPath.toString())
+                .build();
+    }
+
     /** Streams the result set to a JSONL spool, exposing the SpoolRef to later steps (ch. 28.6). */
     private Map<String, Object> spool(PreparedStatement statement)
             throws SQLException, IOException {
@@ -427,16 +613,24 @@ public final class JobExecutor {
         return result;
     }
 
-    private static Map<String, Object> resolveParams(PipelineStep step,
+    private static Map<String, Object> resolveParams(io.tesseraql.yaml.model.SqlBinding binding,
             Map<String, Object> context) {
         EvaluationContext evaluation = new EvaluationContext(context);
         Map<String, Object> params = new LinkedHashMap<>();
-        step.sql().params().forEach((bindName, sourceExpr) -> params.put(bindName,
+        binding.params().forEach((bindName, sourceExpr) -> params.put(bindName,
                 evaluation.resolve(Arrays.asList(sourceExpr.split("\\.")))));
         // The batch.* ambient namespace (docs/batch-platform.md track A) is seeded the
         // way audit.* is seeded into commands: every step SQL reads the business date
-        // without wiring it, and a declared param of the same name still wins.
+        // without wiring it, and a declared param of the same name still wins. A chunk
+        // step's reader and writer additionally read chunk.after and the current row.*
+        // (docs/batch-platform.md track C).
         params.putIfAbsent("batch", context.get("batch"));
+        if (context.containsKey("chunk")) {
+            params.putIfAbsent("chunk", context.get("chunk"));
+        }
+        if (context.containsKey("row")) {
+            params.putIfAbsent("row", context.get("row"));
+        }
         return params;
     }
 

@@ -8,6 +8,19 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **The chunk step — restartable, skip-aware, committed in slices**
+  (docs/batch-platform.md slice 3): a pipeline step's fourth body. `chunk:` streams a
+  keyset-ordered reader on one connection and runs its writer once per row on a second,
+  committing every `commitEvery` rows; each committed chunk checkpoints its last handled
+  key in the managed `tql_job_checkpoint` table so a rerun for the same business date
+  resumes where the failure stopped (the reader binds it as `chunk.after`), and a
+  completed step clears it. A writer failure on one row rolls back to a per-row
+  savepoint, lands in the managed `tql_job_skips` table, and processing continues until
+  `skipLimit` (default 0) is exceeded. Processed/skipped counts reach the step
+  execution, the operations API, and the console; lints guard the restart contract
+  (`TQL-BATCH-4206`–`4208`). The gallery's `user.anonymizeInactive` is the runnable
+  reference.
+
 - **Business-day calendars — the cron considers, the calendar counts**
   (docs/batch-platform.md slice 2): named calendars declared once under `calendars/`
   (a weekend definition plus holidays as a fixed `dates:` list or a table-backed

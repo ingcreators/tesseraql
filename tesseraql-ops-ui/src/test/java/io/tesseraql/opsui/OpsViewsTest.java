@@ -134,7 +134,7 @@ class OpsViewsTest {
                 java.time.Instant.parse("2026-06-10T00:00:00Z"),
                 java.time.Instant.parse("2026-06-10T00:00:02Z"), 2000L, "ok");
         StepExecution step = new StepExecution("s-1", "e-9", "load", StepStatus.FAILED,
-                null, null, 1500L, 42, "boom");
+                null, null, 1500L, 42, null, "boom");
 
         Map<String, Object> model = OpsViews.execution("e-9", execution, List.of(step));
 

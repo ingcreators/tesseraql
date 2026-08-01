@@ -2156,6 +2156,14 @@ public final class AppLinter {
                 if (step.sql() != null && step.sql().file() != null) {
                     files.add(step.sql().file());
                 }
+                if (step.chunk() != null) {
+                    if (step.chunk().reader() != null && step.chunk().reader().file() != null) {
+                        files.add(step.chunk().reader().file());
+                    }
+                    if (step.chunk().writer() != null && step.chunk().writer().file() != null) {
+                        files.add(step.chunk().writer().file());
+                    }
+                }
             });
         }
         ImportSpec fileImport = definition.fileImport();
@@ -3761,17 +3769,76 @@ public final class AppLinter {
             if (step.httpCall() != null) {
                 declared++;
             }
+            if (step.chunk() != null) {
+                declared++;
+            }
             if (declared != 1) {
                 findings.add(new LintFinding("TQL-FIELD-2004", "error", source, "Step '"
                         + step.id()
-                        + "' must declare exactly one of sql:, notify:, or http-call:"));
+                        + "' must declare exactly one of sql:, notify:, http-call:, or chunk:"));
                 continue;
             }
             if (step.notification() != null) {
                 lintNotifySpec(config, step.id(), step.notification(), source, findings);
             } else if (step.httpCall() != null) {
                 lintHttpCall(config, step.id(), step.httpCall(), source, findings);
+            } else if (step.chunk() != null) {
+                lintChunk(job, step, source, findings);
             }
+        }
+    }
+
+    /**
+     * Statically checks a chunk step (docs/batch-platform.md track C). The restart contract
+     * lives in the reader's SQL, so the reader is read here: without an {@code order by} the
+     * resume point is undefined ({@code TQL-BATCH-4207}, an error), and a reader that never
+     * binds {@code chunk.after} reprocesses from the top on every restart — legal for an
+     * idempotent writer, worth saying out loud ({@code TQL-BATCH-4208}, a warning).
+     */
+    private void lintChunk(io.tesseraql.yaml.manifest.JobFile job,
+            io.tesseraql.yaml.model.PipelineStep step, String source,
+            List<LintFinding> findings) {
+        io.tesseraql.yaml.model.ChunkSpec chunk = step.chunk();
+        if (chunk.reader() == null || chunk.reader().file() == null
+                || chunk.reader().file().isBlank()
+                || chunk.writer() == null || chunk.writer().file() == null
+                || chunk.writer().file().isBlank()) {
+            findings.add(new LintFinding("TQL-BATCH-4206", "error", source, "Step '" + step.id()
+                    + "': chunk needs reader: { file: … } and writer: { file: … }"));
+            return;
+        }
+        if (chunk.commitEvery() != null && chunk.commitEvery() < 1) {
+            findings.add(new LintFinding("TQL-BATCH-4206", "error", source, "Step '" + step.id()
+                    + "': chunk commitEvery must be at least 1 (was " + chunk.commitEvery()
+                    + ")"));
+        }
+        if (chunk.onError() != null && chunk.onError().skipLimit() != null
+                && chunk.onError().skipLimit() < 0) {
+            findings.add(new LintFinding("TQL-BATCH-4206", "error", source, "Step '" + step.id()
+                    + "': chunk skipLimit must not be negative (was "
+                    + chunk.onError().skipLimit() + ")"));
+        }
+        Path readerPath = job.source().getParent().resolve(chunk.reader().file()).normalize();
+        if (!java.nio.file.Files.isRegularFile(readerPath)) {
+            return; // the missing file is its own finding where SQL files are checked
+        }
+        String readerSql;
+        try {
+            readerSql = java.nio.file.Files.readString(readerPath);
+        } catch (java.io.IOException unreadable) {
+            return;
+        }
+        String lower = readerSql.toLowerCase(java.util.Locale.ROOT);
+        if (!lower.contains("order by")) {
+            findings.add(new LintFinding("TQL-BATCH-4207", "error", source, "Step '" + step.id()
+                    + "': the chunk reader has no order by — without a deterministic order"
+                    + " the checkpoint cannot say where to resume"));
+        }
+        if (!readerSql.contains("chunk.after")) {
+            findings.add(new LintFinding("TQL-BATCH-4208", "warning", source, "Step '"
+                    + step.id() + "': the chunk reader never binds chunk.after — a restart"
+                    + " reprocesses from the top, which is only safe for an idempotent"
+                    + " writer"));
         }
     }
 

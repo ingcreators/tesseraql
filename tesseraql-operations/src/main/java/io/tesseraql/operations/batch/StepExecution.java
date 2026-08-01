@@ -12,7 +12,9 @@ import java.time.Instant;
  * @param startTime        when the step started
  * @param endTime          when it finished, or null while running
  * @param durationMs       duration in milliseconds, or null while running
- * @param affectedRows     rows affected (update) or read (query)
+ * @param affectedRows     rows affected (update) or read (query); processed rows for a chunk step
+ * @param skippedRows      rows a chunk step's skip policy tolerated (docs/batch-platform.md
+ *                         track C), null for rows recorded before the column existed
  * @param errorMessage     error message, when failed
  */
 public record StepExecution(
@@ -24,5 +26,6 @@ public record StepExecution(
         Instant endTime,
         Long durationMs,
         Integer affectedRows,
+        Integer skippedRows,
         String errorMessage) {
 }

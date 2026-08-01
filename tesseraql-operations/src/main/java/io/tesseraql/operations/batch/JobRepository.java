@@ -40,6 +40,14 @@ public final class JobRepository {
                     "/tesseraql/db/migration/operations/V1__framework_operations.sql");
             io.tesseraql.core.util.SqlScripts.applyForVendor(dataSource, JobRepository.class,
                     "/tesseraql/db/migration/operations/V3__job_execution_actor.sql");
+            // The columns and tables this store reads and writes must exist even where only
+            // the bootstrap runs (no Flyway): the business date (V4) and the chunk step's
+            // checkpoint/skip machinery (V5) — column adds stay idempotent through the
+            // bootstrap's tolerated duplicate-column errors, like V3.
+            io.tesseraql.core.util.SqlScripts.applyForVendor(dataSource, JobRepository.class,
+                    "/tesseraql/db/migration/operations/V4__job_execution_business_date.sql");
+            io.tesseraql.core.util.SqlScripts.applyForVendor(dataSource, JobRepository.class,
+                    "/tesseraql/db/migration/operations/V5__chunk_checkpoints.sql");
         } catch (SQLException ex) {
             throw error("Failed to create batch repository schema", ex);
         }
@@ -143,16 +151,129 @@ public final class JobRepository {
     }
 
     public void completeStep(String stepExecutionId, int affectedRows) {
+        completeStep(stepExecutionId, affectedRows, 0);
+    }
+
+    /** Completes a step recording its processed and skipped counts (chunk steps). */
+    public void completeStep(String stepExecutionId, int affectedRows, int skippedRows) {
         execute("""
                 update tql_step_execution
-                set status = ?, end_time = ?, affected_rows = ?
+                set status = ?, end_time = ?, affected_rows = ?, skipped_rows = ?
                 where step_execution_id = ?""",
                 ps -> {
                     ps.setString(1, StepStatus.COMPLETED.name());
                     ps.setTimestamp(2, Timestamp.from(Instant.now()));
                     ps.setInt(3, affectedRows);
-                    ps.setString(4, stepExecutionId);
+                    ps.setInt(4, skippedRows);
+                    ps.setString(5, stepExecutionId);
                 });
+    }
+
+    /**
+     * The chunk checkpoint a rerun resumes from (docs/batch-platform.md track C): the last
+     * handled key of the newest committed chunk, one row per job/step/business date.
+     */
+    public Optional<String> findCheckpoint(String jobId, String stepId,
+            java.time.LocalDate businessDate) {
+        try (Connection connection = dataSource.getConnection();
+                PreparedStatement ps = connection.prepareStatement(
+                        "select last_key from tql_job_checkpoint"
+                                + " where job_id = ? and step_id = ? and business_date = ?")) {
+            ps.setString(1, jobId);
+            ps.setString(2, stepId);
+            ps.setDate(3, java.sql.Date.valueOf(businessDate));
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next() ? Optional.ofNullable(rs.getString(1)) : Optional.empty();
+            }
+        } catch (SQLException ex) {
+            throw error("Failed to read the chunk checkpoint", ex);
+        }
+    }
+
+    /** Records a committed chunk's last handled key; only the claiming node writes it. */
+    public void saveCheckpoint(String jobId, String stepId, java.time.LocalDate businessDate,
+            String lastKey) {
+        Timestamp now = Timestamp.from(Instant.now());
+        try (Connection connection = dataSource.getConnection()) {
+            try (PreparedStatement update = connection.prepareStatement(
+                    "update tql_job_checkpoint set last_key = ?, updated_at = ?"
+                            + " where job_id = ? and step_id = ? and business_date = ?")) {
+                update.setString(1, lastKey);
+                update.setTimestamp(2, now);
+                update.setString(3, jobId);
+                update.setString(4, stepId);
+                update.setDate(5, java.sql.Date.valueOf(businessDate));
+                if (update.executeUpdate() > 0) {
+                    return;
+                }
+            }
+            try (PreparedStatement insert = connection.prepareStatement(
+                    "insert into tql_job_checkpoint"
+                            + " (job_id, step_id, business_date, last_key, updated_at)"
+                            + " values (?, ?, ?, ?, ?)")) {
+                insert.setString(1, jobId);
+                insert.setString(2, stepId);
+                insert.setDate(3, java.sql.Date.valueOf(businessDate));
+                insert.setString(4, lastKey);
+                insert.setTimestamp(5, now);
+                insert.executeUpdate();
+            }
+        } catch (SQLException ex) {
+            throw error("Failed to save the chunk checkpoint", ex);
+        }
+    }
+
+    /** A step that completes clears its checkpoint — the next run reads from the top. */
+    public void clearCheckpoint(String jobId, String stepId, java.time.LocalDate businessDate) {
+        execute("delete from tql_job_checkpoint"
+                + " where job_id = ? and step_id = ? and business_date = ?",
+                ps -> {
+                    ps.setString(1, jobId);
+                    ps.setString(2, stepId);
+                    ps.setDate(3, java.sql.Date.valueOf(businessDate));
+                });
+    }
+
+    /** Records one row the chunk skip policy tolerated (docs/batch-platform.md track C). */
+    public void recordSkip(String executionId, String stepId, String rowKey, String message) {
+        execute("""
+                insert into tql_job_skips
+                  (skip_id, job_execution_id, step_id, row_key, message, created_at)
+                values (?, ?, ?, ?, ?, ?)""",
+                ps -> {
+                    ps.setString(1, UUID.randomUUID().toString());
+                    ps.setString(2, executionId);
+                    ps.setString(3, stepId);
+                    ps.setString(4, rowKey);
+                    ps.setString(5, message == null
+                            ? null
+                            : message.substring(0, Math.min(message.length(), 2000)));
+                    ps.setTimestamp(6, Timestamp.from(Instant.now()));
+                });
+    }
+
+    /** One skipped row of an execution, for the operations API and console. */
+    public record SkippedRow(String stepId, String rowKey, String message, Instant createdAt) {
+    }
+
+    /** The rows an execution's chunk steps skipped, oldest first. */
+    public List<SkippedRow> findSkips(String executionId) {
+        List<SkippedRow> skips = new ArrayList<>();
+        try (Connection connection = dataSource.getConnection();
+                PreparedStatement ps = connection.prepareStatement(
+                        "select step_id, row_key, message, created_at from tql_job_skips"
+                                + " where job_execution_id = ? order by created_at")) {
+            ps.setString(1, executionId);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    skips.add(new SkippedRow(rs.getString(1), rs.getString(2), rs.getString(3),
+                            instant(rs.getTimestamp(4))));
+                }
+            }
+        } catch (SQLException ex) {
+            throw error("Failed to read skipped rows", ex);
+        }
+        return skips;
     }
 
     public void failStep(String stepExecutionId, String message) {
@@ -274,6 +395,7 @@ public final class JobRepository {
                 end,
                 durationMs(start, end),
                 (Integer) rs.getObject("affected_rows"),
+                (Integer) rs.getObject("skipped_rows"),
                 rs.getString("error_message"));
     }
 

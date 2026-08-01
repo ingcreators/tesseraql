@@ -145,6 +145,8 @@ Each pipeline step has an `id` and declares **exactly one** of:
 - `sql:` — render and execute a 2-way SQL file
 - `notify:` — enqueue a notification on the transactional outbox
 - `http-call:` — issue one synchronous outbound REST request
+- `chunk:` — restartable per-row processing, committed in slices
+  ([below](#the-chunk-step))
 
 Steps run in order, and each step publishes its result into a shared context that later
 steps bind from:
@@ -182,6 +184,59 @@ The `notify:` step is the job-side twin of a command's `notify:` block — same 
 outbox delivery, same per-user opt-out and declarative test cases; see
 [notifications](notifications.md). The `http-call:` step interleaves an allow-listed
 outbound REST call with SQL steps; see [managed connectors](connectors.md).
+
+## The chunk step
+
+A per-row rewrite too large for one transaction — revalue a million orders, anonymize
+inactive accounts — needs what a single `sql:` step cannot give: intermediate commits, a
+restart that does not start over, and a policy for the one bad row
+([batch platform](batch-platform.md) track C):
+
+```yaml
+pipeline:
+  - id: revalue
+    chunk:
+      reader: { file: unprocessed-orders.sql }   # SELECT, keyset-ordered
+      writer: { file: revalue-order.sql }        # runs once per row
+      key: id                                    # the reader column checkpoints track
+      commitEvery: 1000                          # default 500
+      onError: { skipLimit: 100 }                # default 0 - fail-fast
+```
+
+**Two connections.** The reader streams its SELECT on one connection (a fetch-sized
+cursor); the writer runs once per row on a second connection that commits every
+`commitEvery` handled rows. The writer's binds are the reader's row (**`row.<column>`**)
+plus the ambient `batch.*`/`job.*` context.
+
+**Checkpoint restart.** After each committed chunk, the last handled `key` value lands in
+the managed `tql_job_checkpoint` table (one row per job, step, and business date). A rerun
+for the **same business date** finds it and binds it as **`chunk.after`**; a completed step
+clears it. The reader's contract is keyset pagination, guarded so a fresh run reads from
+the top — and since checkpoint values bind as strings, a numeric key casts its bind:
+
+```sql
+select id, amount
+from   orders
+/*%if chunk.after != null */
+where  id > cast(/* chunk.after */ '0' as bigint)
+/*%end*/
+order by id
+```
+
+**The skip policy.** A writer failure on one row rolls back to a per-row savepoint (the
+failed statement cannot poison the chunk's transaction), is recorded in the managed
+`tql_job_skips` table with the row key and message, and processing continues — until
+`skipLimit` is exceeded, which discards the uncommitted chunk and fails the step. Skipped
+rows advance the checkpoint like processed ones: they were handled and recorded, not lost.
+Processed and skipped counts land on the step execution (`affectedRows` / `skippedRows`),
+the operations API (`skips` on the execution detail), and the console's steps table.
+
+Two lints guard the restart contract, because it lives in the reader's SQL where only the
+build can see it: a reader without `order by` is an error (`TQL-BATCH-4207` — the resume
+point would be undefined), and a reader that never binds `chunk.after` is a warning
+(`TQL-BATCH-4208` — a restart reprocesses from the top, which only an idempotent writer
+survives). The `key` column's values must be unique and ascending under the reader's
+`order by`; the gallery's `user.anonymizeInactive` job is the runnable reference.
 
 ## Transactions
 
@@ -243,20 +298,24 @@ Every run is persisted as an execution with its steps, visible three ways:
 | `TQL-BATCH-4203` | a calendar declares both `dates:` and `source:` — holiday rows have exactly one home (lint) |
 | `TQL-BATCH-4204` | the same calendar name is declared in two `calendars/*.yml` documents |
 | `TQL-BATCH-4205` | a calendar that cannot be evaluated: an unknown weekend day name, a non-ISO holiday date, or a `source:` whose table/columns are not plain identifiers |
+| `TQL-BATCH-4206` | a malformed `chunk:` — missing `reader:`/`writer:` files, `commitEvery` below 1, or a negative `skipLimit` (lint) |
+| `TQL-BATCH-4207` | a chunk reader without `order by` — no deterministic resume point (lint) |
+| `TQL-BATCH-4208` | a chunk reader that never binds `chunk.after` — restarts reprocess from the top (lint warning) |
 | `TQL-BATCH-5001` | the execution store could not record a run |
-| `TQL-BATCH-5002` | a step failed (its SQL raised an error), or a step is misdeclared |
+| `TQL-BATCH-5002` | a step failed (its SQL raised an error), a chunk step exceeded its `skipLimit`, or a step is misdeclared |
 
 The `notify:` and `http-call:` step families report their own codes in the same domain
 (channels `TQL-BATCH-5301`…, outbound HTTP `TQL-BATCH-5305`…); see
 [notifications](notifications.md), [managed connectors](connectors.md), and the
 [error-code reference](reference-error-codes.md).
 
-Lint checks jobs statically: a step declaring both or neither of `sql:`/`notify:`/
-`http-call:` (`TQL-FIELD-2004`), a job with both a schedule and a poll trigger or a
-malformed poll source (`TQL-YAML-1005`), a poll job without its `import:` block
+Lint checks jobs statically: a step not declaring exactly one of `sql:`/`notify:`/
+`http-call:`/`chunk:` (`TQL-FIELD-2004`), a job with both a schedule and a poll trigger or
+a malformed poll source (`TQL-YAML-1005`), a poll job without its `import:` block
 (`TQL-YAML-1006`), non-allow-listed poll or HTTP egress (`TQL-SEC-4070`,
-`TQL-SEC-4080`), and calendar qualifiers that would fail open at fire time
-(`TQL-BATCH-4201`–`4203`).
+`TQL-SEC-4080`), calendar qualifiers that would fail open at fire time
+(`TQL-BATCH-4201`–`4203`), and a chunk step whose restart contract is broken or unstated
+(`TQL-BATCH-4206`–`4208`).
 
 ## Related pages
 

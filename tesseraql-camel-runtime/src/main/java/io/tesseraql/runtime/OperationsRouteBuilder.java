@@ -295,6 +295,18 @@ final class OperationsRouteBuilder extends RouteBuilder {
             steps.add(stepMap(step));
         }
         detail.put("steps", steps);
+        // The rows a chunk step's skip policy tolerated (docs/batch-platform.md track C):
+        // recorded per execution, so "COMPLETED with 3 skips" is inspectable, not folklore.
+        List<Object> skips = new ArrayList<>();
+        for (JobRepository.SkippedRow skip : repository.findSkips(id)) {
+            Map<String, Object> map = new LinkedHashMap<>();
+            map.put("stepId", skip.stepId());
+            map.put("rowKey", skip.rowKey());
+            map.put("message", skip.message());
+            map.put("at", skip.createdAt() == null ? null : skip.createdAt().toString());
+            skips.add(map);
+        }
+        detail.put("skips", skips);
         return detail;
     }
 
@@ -321,6 +333,7 @@ final class OperationsRouteBuilder extends RouteBuilder {
         map.put("stepId", step.stepId());
         map.put("status", step.status().name());
         map.put("affectedRows", step.affectedRows());
+        map.put("skippedRows", step.skippedRows());
         map.put("durationMs", step.durationMs());
         map.put("errorMessage", step.errorMessage());
         return map;
