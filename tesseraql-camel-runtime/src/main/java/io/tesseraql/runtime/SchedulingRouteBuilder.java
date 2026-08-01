@@ -24,21 +24,33 @@ final class SchedulingRouteBuilder extends RouteBuilder {
     private static final System.Logger LOG = System
             .getLogger(SchedulingRouteBuilder.class.getName());
 
+    /**
+     * Whether a claimed firing counts under the job's business-day calendar
+     * (docs/batch-platform.md track B). Evaluated after the claim, so on a multi-node
+     * deployment exactly one node reads a table-backed calendar per firing.
+     */
+    @FunctionalInterface
+    interface CalendarGate {
+        boolean counts(String jobId, java.time.LocalDate fireDate);
+    }
+
     private final OperationsRouteBuilder.JobRunner runner;
     private final JobRepository repository;
     private final List<JobFile> jobs;
     private final Map<String, String> claimKeys;
+    private final CalendarGate calendarGate;
 
     /**
      * @param claimKeys the cluster-wide claim key per job id ({@code <app>:<jobId>}), so
      *                  different apps sharing a database never contend for each other's firings
      */
     SchedulingRouteBuilder(OperationsRouteBuilder.JobRunner runner, JobRepository repository,
-            List<JobFile> jobs, Map<String, String> claimKeys) {
+            List<JobFile> jobs, Map<String, String> claimKeys, CalendarGate calendarGate) {
         this.runner = runner;
         this.repository = repository;
         this.jobs = List.copyOf(jobs);
         this.claimKeys = Map.copyOf(claimKeys);
+        this.calendarGate = calendarGate;
     }
 
     @Override
@@ -72,6 +84,16 @@ final class SchedulingRouteBuilder extends RouteBuilder {
         if (!repository.tryClaimFiring(claimKeys.getOrDefault(jobId, jobId), fireTime)) {
             LOG.log(System.Logger.Level.DEBUG,
                     "Skipping job {0} firing at {1}: claimed by another node", jobId, fireTime);
+            return;
+        }
+        // The daily-consider model: the cron said when to consider, the calendar says whether
+        // this firing counts. A filtered-out firing is not a run — no execution is recorded.
+        java.time.LocalDate fireDate = fireTime.atZone(java.time.ZoneId.systemDefault())
+                .toLocalDate();
+        if (!calendarGate.counts(jobId, fireDate)) {
+            LOG.log(System.Logger.Level.INFO,
+                    "Skipping job {0} firing for {1}: filtered by its business-day calendar",
+                    jobId, fireDate);
             return;
         }
         runner.run(jobId, Map.of(), "schedule", null);

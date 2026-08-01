@@ -1308,8 +1308,58 @@ public final class TesseraqlRuntime implements AutoCloseable {
             Map<String, String> claimKeys = new LinkedHashMap<>();
             jobs.keySet().forEach(
                     id -> claimKeys.put(id, jobOwners.getOrDefault(id, appName) + ":" + id));
+            // Business-day calendars (docs/batch-platform.md track B): loaded at startup so a
+            // broken calendars/ dir fails fast; holiday ROWS of a table-backed calendar are
+            // read at fire time on the job's datasource, after the cluster claim. Failure to
+            // resolve fails open with a warning: silently skipping a close-job on a read error
+            // would be worse than running it — the job's own SQL hits the same database next.
+            io.tesseraql.yaml.calendar.Calendars calendars = io.tesseraql.yaml.calendar.Calendars
+                    .load(appHome, new io.tesseraql.yaml.SimpleYamlParser());
+            SchedulingRouteBuilder.CalendarGate calendarGate = (jobId, fireDate) -> {
+                JobFile jobFile = jobs.get(jobId);
+                io.tesseraql.yaml.model.TriggerSpec.Schedule schedule = jobFile == null
+                        || jobFile.definition().trigger() == null
+                                ? null
+                                : jobFile.definition().trigger().schedule();
+                if (schedule == null || schedule.calendar() == null
+                        || schedule.calendar().isBlank()) {
+                    return true;
+                }
+                io.tesseraql.yaml.model.CalendarsDocument.Calendar calendar = calendars
+                        .calendars().get(schedule.calendar());
+                if (calendar == null) {
+                    LOG.warn("Job {} names unknown calendar '{}'; firing runs unfiltered",
+                            jobId, schedule.calendar());
+                    return true;
+                }
+                java.util.Set<java.time.LocalDate> holidays;
+                try {
+                    if (calendar.holidays() != null && calendar.holidays().source() != null) {
+                        String declared = jobFile.definition().datasource();
+                        javax.sql.DataSource pool = declared == null || declared.isBlank()
+                                || "main".equals(declared)
+                                        ? dataSource
+                                        : dataSources.get(declared);
+                        try (java.sql.Connection connection = pool.getConnection()) {
+                            holidays = io.tesseraql.yaml.calendar.Calendars.readHolidays(
+                                    connection, schedule.calendar(),
+                                    calendar.holidays().source());
+                        }
+                    } else {
+                        holidays = io.tesseraql.yaml.calendar.Calendars
+                                .staticHolidays(calendar);
+                    }
+                } catch (Exception ex) {
+                    LOG.warn("Job {} calendar '{}' holiday read failed; firing runs unfiltered",
+                            jobId, schedule.calendar(), ex);
+                    return true;
+                }
+                return io.tesseraql.yaml.calendar.Calendars.counts(calendar, schedule.runOn(),
+                        fireDate, holidays);
+            };
             context.addRoutes(new SchedulingRouteBuilder(
-                    jobRunner, jobRepository, List.copyOf(jobs.values()), claimKeys));
+                    jobRunner, jobRepository, List.copyOf(jobs.values()), claimKeys,
+                    calendarGate));
             // Approval-workflow deadline sweeper (roadmap Phase 28 slice 3): a cluster-safe timer
             // escalates overdue tasks, so exactly one node sweeps per interval.
             if (workflowSweeper != null) {

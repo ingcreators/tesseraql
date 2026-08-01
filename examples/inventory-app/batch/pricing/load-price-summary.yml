@@ -7,6 +7,10 @@ datasource: analytics
 trigger:
   schedule:
     cron: "0 0 4 * * ?"
+    # The daily-consider model: the cron says when to consider, the calendar
+    # (calendars/jp.yml) says whether the firing counts - weekends and market
+    # holidays have no rows to summarize, so those firings are skipped silently.
+    calendar: jp-market
 
 pipeline:
   - id: clear

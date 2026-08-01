@@ -113,8 +113,9 @@ public final class AppLinter {
         for (RouteFile route : manifest.routes()) {
             lintRoute(appHome, manifest.config(), route, findings);
         }
+        io.tesseraql.yaml.calendar.Calendars calendars = lintCalendars(appHome, findings);
         for (io.tesseraql.yaml.manifest.JobFile job : manifest.jobs()) {
-            lintJob(appHome, manifest.config(), job, findings);
+            lintJob(appHome, manifest.config(), job, calendars, findings);
         }
         for (io.tesseraql.yaml.manifest.ToolFile tool : manifest.tools()) {
             lintTool(appHome, manifest.config(), tool, findings);
@@ -3740,10 +3741,14 @@ public final class AppLinter {
      * route's, and http-call steps lint their egress against the allow-list (deny by default).
      */
     private void lintJob(Path appHome, AppConfig config, io.tesseraql.yaml.manifest.JobFile job,
-            List<LintFinding> findings) {
+            io.tesseraql.yaml.calendar.Calendars calendars, List<LintFinding> findings) {
         String source = appHome.relativize(job.source()).toString().replace('\\', '/');
         if (job.definition().trigger() != null && job.definition().trigger().poll() != null) {
             lintPollJob(config, job, source, findings);
+        }
+        if (job.definition().trigger() != null && job.definition().trigger().schedule() != null) {
+            lintScheduleCalendar(job, job.definition().trigger().schedule(), calendars, source,
+                    findings);
         }
         for (io.tesseraql.yaml.model.PipelineStep step : job.definition().pipeline()) {
             int declared = 0;
@@ -3766,6 +3771,70 @@ public final class AppLinter {
                 lintNotifySpec(config, step.id(), step.notification(), source, findings);
             } else if (step.httpCall() != null) {
                 lintHttpCall(config, step.id(), step.httpCall(), source, findings);
+            }
+        }
+    }
+
+    /**
+     * Loads the app's business-day calendars for reference checking (docs/batch-platform.md
+     * track B). A structurally broken calendars/ dir — duplicate names, bad dates, unknown day
+     * names — surfaces as an error finding instead of aborting the whole lint, and a calendar
+     * declaring both {@code dates:} and {@code source:} gets {@code TQL-BATCH-4203}: holiday
+     * rows have exactly one home.
+     */
+    private io.tesseraql.yaml.calendar.Calendars lintCalendars(Path appHome,
+            List<LintFinding> findings) {
+        io.tesseraql.yaml.calendar.Calendars calendars;
+        try {
+            calendars = io.tesseraql.yaml.calendar.Calendars.load(appHome,
+                    new io.tesseraql.yaml.SimpleYamlParser());
+        } catch (io.tesseraql.core.error.TqlException ex) {
+            findings.add(new LintFinding(ex.code().toString(), "error", "calendars/",
+                    ex.getMessage()));
+            return io.tesseraql.yaml.calendar.Calendars.empty();
+        }
+        calendars.calendars().forEach((name, calendar) -> {
+            if (calendar.holidays() != null && !calendar.holidays().dates().isEmpty()
+                    && calendar.holidays().source() != null) {
+                findings.add(new LintFinding("TQL-BATCH-4203", "error",
+                        calendars.sourceOf(name), "Calendar '" + name
+                                + "' declares both dates: and source: — holiday rows have"
+                                + " exactly one home"));
+            }
+        });
+        return calendars;
+    }
+
+    /**
+     * Statically checks a schedule's calendar qualifiers (docs/batch-platform.md track B): the
+     * named calendar must exist ({@code TQL-BATCH-4201}) and {@code runOn:} must ride on a
+     * {@code calendar:} with a known value ({@code TQL-BATCH-4202}) — at fire time both fail
+     * open, so the place to hear about a typo is the build.
+     */
+    private void lintScheduleCalendar(io.tesseraql.yaml.manifest.JobFile job,
+            io.tesseraql.yaml.model.TriggerSpec.Schedule schedule,
+            io.tesseraql.yaml.calendar.Calendars calendars, String source,
+            List<LintFinding> findings) {
+        String jobId = job.definition().id();
+        boolean hasCalendar = schedule.calendar() != null && !schedule.calendar().isBlank();
+        if (hasCalendar && !calendars.calendars().containsKey(schedule.calendar())) {
+            findings.add(new LintFinding("TQL-BATCH-4201", "error", source,
+                    "Job '" + jobId + "' schedule names unknown calendar '"
+                            + schedule.calendar()
+                            + "' — declare it under calendars/ or fix the reference"));
+        }
+        if (schedule.runOn() != null) {
+            if (!hasCalendar) {
+                findings.add(new LintFinding("TQL-BATCH-4202", "error", source,
+                        "Job '" + jobId + "' schedule declares runOn: without calendar: —"
+                                + " runOn qualifies a business-day calendar"));
+            }
+            if (!io.tesseraql.yaml.calendar.Calendars.RUN_ON.contains(schedule.runOn())) {
+                findings.add(new LintFinding("TQL-BATCH-4202", "error", source,
+                        "Job '" + jobId + "' schedule runOn '" + schedule.runOn()
+                                + "' is not one of "
+                                + new java.util.TreeSet<>(
+                                        io.tesseraql.yaml.calendar.Calendars.RUN_ON)));
             }
         }
     }

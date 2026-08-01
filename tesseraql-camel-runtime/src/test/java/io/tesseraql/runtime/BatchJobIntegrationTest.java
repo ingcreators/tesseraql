@@ -175,6 +175,28 @@ class BatchJobIntegrationTest {
     }
 
     @Test
+    void businessDayCalendarsFilterScheduledFirings() throws Exception {
+        // The control job — a calendar where every day counts — proves the scheduler fires.
+        long deadline = System.currentTimeMillis() + 60_000;
+        while (System.currentTimeMillis() < deadline && executionsOf("user.calControl") < 3) {
+            Thread.sleep(250);
+        }
+        assertThat(executionsOf("user.calControl")).isGreaterThanOrEqualTo(3);
+
+        // Today is a holiday for both gated siblings — once as a fixed dates: entry, once as
+        // a table row read at fire time. Their firings were considered, claimed, and filtered:
+        // not a run, so no execution is ever recorded.
+        assertThat(executionsOf("user.calStaticGated")).isZero();
+        assertThat(executionsOf("user.calTableGated")).isZero();
+    }
+
+    private static long executionsOf(String jobId) {
+        return runtime.jobRepository().listExecutions(500).stream()
+                .filter(execution -> jobId.equals(execution.jobId()))
+                .count();
+    }
+
+    @Test
     void operationsOverviewReportsBatchAndLanes() throws Exception {
         String token = token(List.of("BATCH_OPERATOR"));
         send("POST", "/_tesseraql/ops/batch/jobs/user.dailyMaintenance/run", token, "{}");
@@ -351,6 +373,49 @@ class BatchJobIntegrationTest {
         Files.writeString(target.resolve("batch/stamp/stamp.sql"),
                 "update users set status = 'ASOF-' || cast(cast(/* batch.businessDate */"
                         + " '2026-01-01' as date) as varchar) where name = 'pending-user'\n");
+        // Business-day calendars (docs/batch-platform.md track B): a control calendar where
+        // every day counts, a static holiday list naming today, and a table-backed source the
+        // migration seeds with today's row — the gated siblings must never record a run.
+        Files.createDirectories(target.resolve("calendars"));
+        Files.writeString(target.resolve("calendars/test.yml"), """
+                version: tesseraql/v1
+                calendars:
+                  open-cal:
+                    weekend: []
+                  static-cal:
+                    weekend: []
+                    holidays:
+                      dates: [%s]
+                  table-cal:
+                    weekend: []
+                    holidays:
+                      source: { table: holidays, date: holiday_date, calendar: calendar_id }
+                """.formatted(java.time.LocalDate.now()));
+        Files.createDirectories(target.resolve("batch/calendar"));
+        for (Map.Entry<String, String> job : Map.of(
+                "user.calControl", "open-cal",
+                "user.calStaticGated", "static-cal",
+                "user.calTableGated", "table-cal").entrySet()) {
+            Files.writeString(target.resolve("batch/calendar/"
+                    + job.getKey().substring("user.".length()) + ".yml"), """
+                            version: tesseraql/v1
+                            id: %s
+                            kind: job
+                            recipe: batch-tasklet
+                            trigger:
+                              schedule: { fixedDelay: 1s, calendar: %s }
+                            sql: { file: noop.sql, mode: update }
+                            """.formatted(job.getKey(), job.getValue()));
+        }
+        Files.writeString(target.resolve("batch/calendar/noop.sql"),
+                "update users set name = name where name = '___none___'\n");
+        Files.writeString(target.resolve("db/migration/V2__holidays.sql"), """
+                create table holidays (
+                  calendar_id  varchar(64) not null,
+                  holiday_date date not null
+                );
+                insert into holidays (calendar_id, holiday_date) values ('table-cal', current_date);
+                """);
         Files.writeString(target.resolve("config/application.yml"), """
                 server:
                   port: 0
