@@ -48,6 +48,8 @@ public final class JobRepository {
                     "/tesseraql/db/migration/operations/V4__job_execution_business_date.sql");
             io.tesseraql.core.util.SqlScripts.applyForVendor(dataSource, JobRepository.class,
                     "/tesseraql/db/migration/operations/V5__chunk_checkpoints.sql");
+            io.tesseraql.core.util.SqlScripts.applyForVendor(dataSource, JobRepository.class,
+                    "/tesseraql/db/migration/operations/V6__execution_params.sql");
         } catch (SQLException ex) {
             throw error("Failed to create batch repository schema", ex);
         }
@@ -91,13 +93,19 @@ public final class JobRepository {
     /** Starts an execution recording the business date the run is for (docs/batch-platform.md). */
     public String startExecution(String jobId, String appName, String triggerType,
             String triggeredBy, java.time.LocalDate businessDate) {
+        return startExecution(jobId, appName, triggerType, triggeredBy, businessDate, null);
+    }
+
+    /** Starts an execution also recording its parameters, so a rerun re-runs the same fact. */
+    public String startExecution(String jobId, String appName, String triggerType,
+            String triggeredBy, java.time.LocalDate businessDate, String paramsJson) {
         String id = UUID.randomUUID().toString();
         Instant now = Instant.now();
         execute("""
                 insert into tql_job_execution
                   (job_execution_id, job_id, app_name, status, trigger_type, triggered_by,
-                   business_date, start_time, created_at)
-                values (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                   business_date, params_json, start_time, created_at)
+                values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 ps -> {
                     ps.setString(1, id);
                     ps.setString(2, jobId);
@@ -107,10 +115,25 @@ public final class JobRepository {
                     ps.setString(6, triggeredBy);
                     ps.setDate(7,
                             businessDate == null ? null : java.sql.Date.valueOf(businessDate));
-                    ps.setTimestamp(8, Timestamp.from(now));
+                    ps.setString(8, paramsJson);
                     ps.setTimestamp(9, Timestamp.from(now));
+                    ps.setTimestamp(10, Timestamp.from(now));
                 });
         return id;
+    }
+
+    /** The recorded parameters of an execution ({@code tesseraql job rerun}), when present. */
+    public Optional<String> findExecutionParams(String executionId) {
+        try (Connection connection = dataSource.getConnection();
+                PreparedStatement ps = connection.prepareStatement(
+                        "select params_json from tql_job_execution where job_execution_id = ?")) {
+            ps.setString(1, executionId);
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next() ? Optional.ofNullable(rs.getString(1)) : Optional.empty();
+            }
+        } catch (SQLException ex) {
+            throw error("Failed to read execution parameters", ex);
+        }
     }
 
     public void completeExecution(String executionId) {
@@ -274,6 +297,19 @@ public final class JobRepository {
             throw error("Failed to read skipped rows", ex);
         }
         return skips;
+    }
+
+    /** Marks a step SKIPPED: recorded, not run (a rerun's {@code --from-failed-step}). */
+    public void skipStep(String stepExecutionId) {
+        execute("""
+                update tql_step_execution
+                set status = ?, end_time = ?
+                where step_execution_id = ?""",
+                ps -> {
+                    ps.setString(1, StepStatus.SKIPPED.name());
+                    ps.setTimestamp(2, Timestamp.from(Instant.now()));
+                    ps.setString(3, stepExecutionId);
+                });
     }
 
     public void failStep(String stepExecutionId, String message) {

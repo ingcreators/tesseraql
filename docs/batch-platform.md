@@ -7,7 +7,10 @@
 > filter after the cluster claim, lints `TQL-BATCH-4201`–`4205`. Slice 3: the `chunk:`
 > step — streaming reader + per-row writer with savepoints, `commitEvery` commits,
 > `tql_job_checkpoint` restart per business date, `tql_job_skips` + `skipLimit`, lints
-> `TQL-BATCH-4206`–`4208`. Slices 4–5 remain designed, not built. The batch follow-up to the web-runtime maturation:
+> `TQL-BATCH-4206`–`4208`. Slice 4: `tesseraql job list/run/rerun` with the 0/1/3 exit
+> contract, recorded run parameters, `--from-failed-step` (`SKIPPED` steps), and
+> `trigger: after:` chaining (lint `TQL-BATCH-4209`). Slice 5 remains designed, not
+> built. The batch follow-up to the web-runtime maturation:
 > what `docs/jobs.md` ships today is a sound skeleton (two recipes, Quartz cron /
 > fixed delay, poll triggers, per-tenant fan-out, claim-row cluster safety, execution
 > history, failure alerts, `query-spool`), and what business-application batch still

@@ -788,7 +788,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
 
         TenantDataSources tenantPools = tenantDataSources;
         AppConfig runtimeConfig = manifest.config();
-        OperationsRouteBuilder.JobRunner jobRunner = (jobId, params, triggerType, triggeredBy) -> {
+        OperationsRouteBuilder.JobRunner runOne = (jobId, params, triggerType, triggeredBy) -> {
             JobFile jobFile = jobs.get(jobId);
             if (jobFile == null) {
                 throw new IllegalArgumentException("Unknown job: " + jobId);
@@ -826,6 +826,52 @@ public final class TesseraqlRuntime implements AutoCloseable {
                 }
             }
             return jobExecutor.run(jobFile, jobPool, owner, boundParams, triggerType, triggeredBy);
+        };
+        // Light chaining (docs/batch-platform.md track D): trigger: { after: <jobId> } fires a
+        // job when the named job's execution completes successfully in the same app, carrying
+        // the business date so "extract, then send" runs the same fact. Breadth-first with a
+        // fired-set, so a declared cycle (a lint error) cannot loop at runtime; anything wider
+        // than a chain belongs to the external scheduler by design.
+        OperationsRouteBuilder.JobRunner jobRunner = (jobId, params, triggerType, triggeredBy) -> {
+            JobExecution execution = runOne.run(jobId, params, triggerType, triggeredBy);
+            if (execution == null
+                    || execution.status() != io.tesseraql.operations.batch.JobStatus.COMPLETED) {
+                return execution;
+            }
+            java.util.Set<String> fired = new java.util.LinkedHashSet<>();
+            fired.add(jobId);
+            java.util.ArrayDeque<String> completed = new java.util.ArrayDeque<>();
+            completed.add(jobId);
+            while (!completed.isEmpty()) {
+                String parent = completed.poll();
+                String parentOwner = jobOwners.getOrDefault(parent, appName);
+                for (JobFile candidate : jobs.values()) {
+                    String candidateId = candidate.definition().id();
+                    io.tesseraql.yaml.model.TriggerSpec trigger = candidate.definition()
+                            .trigger();
+                    if (trigger == null || !parent.equals(trigger.after())
+                            || !parentOwner.equals(jobOwners.getOrDefault(candidateId, appName))
+                            || !fired.add(candidateId)) {
+                        continue;
+                    }
+                    Map<String, Object> chainedParams = execution.businessDate() == null
+                            ? Map.of()
+                            : Map.of("businessDate", execution.businessDate().toString());
+                    try {
+                        JobExecution chained = runOne.run(candidateId, chainedParams, "after",
+                                null);
+                        if (chained != null && chained
+                                .status() == io.tesseraql.operations.batch.JobStatus.COMPLETED) {
+                            completed.add(candidateId);
+                        }
+                    } catch (RuntimeException chainFailure) {
+                        // A broken link stops its own chain; the parent's success stands.
+                        LOG.warn("Chained job {} (after {}) failed: {}", candidateId, parent,
+                                chainFailure.getMessage());
+                    }
+                }
+            }
+            return execution;
         };
 
         io.tesseraql.core.outbox.OutboxEventSink outboxSink;

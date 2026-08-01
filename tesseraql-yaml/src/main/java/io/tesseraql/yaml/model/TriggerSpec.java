@@ -7,13 +7,21 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
  *
  * @param schedule scheduled trigger for batch jobs
  * @param poll     a directory-polling trigger for a {@code file-import} job (roadmap Phase 26)
+ * @param after    light chaining (docs/batch-platform.md track D): the job fires when the
+ *                 named job's execution completes successfully in the same app — enough for
+ *                 "extract, then send"; job-net orchestration stays with external schedulers
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
-public record TriggerSpec(Schedule schedule, PollSpec poll) {
+public record TriggerSpec(Schedule schedule, PollSpec poll, String after) {
 
     /** Convenience constructor for a scheduled trigger (the pre-Phase-26 shape). */
     public TriggerSpec(Schedule schedule) {
-        this(schedule, null);
+        this(schedule, null, null);
+    }
+
+    /** Convenience constructor without chaining (the pre-chaining shape). */
+    public TriggerSpec(Schedule schedule, PollSpec poll) {
+        this(schedule, poll, null);
     }
 
     /**
