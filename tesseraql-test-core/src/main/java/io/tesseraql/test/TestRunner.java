@@ -103,6 +103,12 @@ public final class TestRunner {
 
     private TestResult runCase(TestCase test) {
         try {
+            if (!test.given().isEmpty() && test.transition() == null
+                    && test.dispatch() == null) {
+                throw new IllegalArgumentException("Test '" + test.name()
+                        + "' declares given: steps, which require a transition or"
+                        + " dispatch target");
+            }
             if (test.sql() != null && test.sql().file() != null) {
                 return runSqlCase(test);
             }
@@ -216,8 +222,13 @@ public final class TestRunner {
         try (Connection connection = dataSource.getConnection()) {
             connection.setAutoCommit(false);
             try {
+                String given = runGiven(connection, test);
+                if (given != null) {
+                    return TestResult.fail(test.name(), given);
+                }
                 List<Map<String, Object>> rows = List.of(fireTransition(connection, def,
-                        transition, target, managed, table, keyColumn, test, null));
+                        transition, target, managed, table, keyColumn, test,
+                        test.principal(), null));
                 String failure = assertOutcome(test.expect(), new SqlOutcome(rows, null));
                 for (int i = 0; failure == null && i < test.verify().size(); i++) {
                     failure = runVerifyStep(connection, test.verify().get(i), i,
@@ -263,6 +274,10 @@ public final class TestRunner {
         try (Connection connection = dataSource.getConnection()) {
             connection.setAutoCommit(false);
             try {
+                String given = runGiven(connection, test);
+                if (given != null) {
+                    return TestResult.fail(test.name(), given);
+                }
                 List<Map<String, Object>> rows = List.of(fireDispatch(connection, def, dispatch,
                         target, managed, table, keyColumn, test));
                 String failure = assertOutcome(test.expect(), new SqlOutcome(rows, null));
@@ -280,6 +295,50 @@ public final class TestRunner {
         } catch (java.sql.SQLException ex) {
             throw new IllegalStateException("Dispatch failed: " + ex.getMessage(), ex);
         }
+    }
+
+    /**
+     * Fires the case's {@code given:} fixture steps (docs/testing.md) on the case's
+     * connection — each through the full documented pipeline, so stamps and state advances
+     * are real — and returns a failure message when a step refuses instead of advancing.
+     * Steps may name their own actor; the case's principal is the default.
+     */
+    private String runGiven(Connection connection, TestCase test) throws java.sql.SQLException {
+        for (int i = 0; i < test.given().size(); i++) {
+            TestSuite.GivenStep step = test.given().get(i);
+            io.tesseraql.yaml.manifest.WorkflowFile workflowFile = loadManifest().workflows()
+                    .stream()
+                    .filter(w -> step.workflow() != null
+                            && step.workflow().equals(w.definition().id()))
+                    .findFirst()
+                    .orElse(null);
+            if (workflowFile == null) {
+                return "given step " + (i + 1) + " targets unknown workflow '"
+                        + step.workflow() + "'";
+            }
+            io.tesseraql.yaml.model.WorkflowDefinition def = workflowFile.definition();
+            io.tesseraql.yaml.model.TransitionSpec transition = def.transitions().stream()
+                    .filter(t -> step.id() != null && step.id().equals(t.id()))
+                    .findFirst()
+                    .orElse(null);
+            if (transition == null) {
+                return "given step " + (i + 1) + " targets unknown transition '" + step.id()
+                        + "' of workflow '" + step.workflow() + "'";
+            }
+            boolean managed = "managed".equals(def.mode() != null
+                    ? def.mode()
+                    : loadManifest().config().getString("tesseraql.workflow.mode")
+                            .orElse("app"));
+            Map<String, Object> outcome = fireTransition(connection, def, transition,
+                    new TestSuite.TransitionTarget(step.workflow(), step.key(), step.id()),
+                    managed, def.document().table(), def.document().key(), test,
+                    step.principal() != null ? step.principal() : test.principal(), null);
+            if (outcome.get("to") == null) {
+                return "given step " + (i + 1) + " (" + step.workflow() + "." + step.id()
+                        + " on '" + step.key() + "') refused: " + outcome;
+            }
+        }
+        return null;
     }
 
     /** The selection loop itself; returns the outcome row (winner, code, or none-held). */
@@ -321,7 +380,7 @@ public final class TestRunner {
             java.sql.Savepoint savepoint = connection.setSavepoint();
             Map<String, Object> outcome = fireTransition(connection, def, member,
                     new TestSuite.TransitionTarget(target.workflow(), target.key(), memberId),
-                    managed, table, keyColumn, test, inherited);
+                    managed, table, keyColumn, test, test.principal(), inherited);
             Object code = outcome.get("code");
             boolean fellThrough = "TQL-WORKFLOW-3201".equals(code)
                     || "TQL-WORKFLOW-3202".equals(code);
@@ -358,7 +417,8 @@ public final class TestRunner {
             io.tesseraql.yaml.model.WorkflowDefinition def,
             io.tesseraql.yaml.model.TransitionSpec transition,
             TestSuite.TransitionTarget target, boolean managed, String table, String keyColumn,
-            TestCase test, Map<String, Object> inheritedDecisions)
+            TestCase test, TestSuite.PrincipalSpec principal,
+            Map<String, Object> inheritedDecisions)
             throws java.sql.SQLException {
         Map<String, Object> outcome = new LinkedHashMap<>();
         outcome.put("workflow", def.id());
@@ -381,11 +441,11 @@ public final class TestRunner {
         outcome.put("from", current != null ? current : def.initial());
 
         Map<String, Object> context = new LinkedHashMap<>(
-                withPrincipal(test.params(), test.principal()));
+                withPrincipal(test.params(), principal));
         context.put("key", target.key());
-        String actor = test.principal() == null || test.principal().loginId() == null
-                ? (test.principal() == null ? "suite" : test.principal().subject())
-                : test.principal().loginId();
+        String actor = principal == null || principal.loginId() == null
+                ? (principal == null ? "suite" : principal.subject())
+                : principal.loginId();
         context.putIfAbsent("audit", Map.of("user", actor == null ? "suite" : actor));
         if (inheritedDecisions != null) {
             // The dispatch-level decide: results (docs/transition-engine.md track B) — a

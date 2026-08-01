@@ -498,6 +498,35 @@ tests:
         - code: TQL-WORKFLOW-3201
           from: draft
 
+  # The mid-flow fixture (docs/testing.md given:): the requester submits — a real
+  # advance, the approvalRoute decision stamped — then the manager's one button fires
+  # whichever lane the stamp admits, all inside the rolled-back case.
+  - name: the manager's one button fires the stamped lane
+    given:
+      - workflow: requisition
+        key: REQ-1002
+        id: submit
+        principal:
+          loginId: sato
+          roles: [REQUESTER]
+          claims:
+            departments: [sales]
+    dispatch:
+      workflow: requisition
+      key: REQ-1002
+      id: submit_decision
+    principal:
+      loginId: kishi
+      roles: [MANAGER]
+      claims:
+        departments: [sales]
+    expect:
+      rows:
+        - transition: approve
+          from: submitted
+          to: approved
+          dispatch: submit_decision
+
   # The dispatch target (docs/transition-engine.md): the one-button selector asserted
   # as data — a draft fits neither approval lane, and the none-held row names every
   # member it tried.

@@ -18,10 +18,10 @@
 > `dispatch:` suite target — the selection loop (dispatch-level `decide:` once, then
 > members over the executor, refusals rolling back to savepoints) in the case's
 > rolled-back transaction; the procurement `propose` pair's duplicated decide collapsed
-> into its dispatch. Note the standing limitation the suite cases inherit: documents
-> start at the initial state (mid-flow fixtures remain the retrospective's open item
-> ⑦), so gallery dispatch cases assert refusal aggregation; the winner paths are
-> engine-tested in `DispatchCaseTest`. Slice 4: lint `TQL-WORKFLOW-3115` —
+> into its dispatch. The initial-state limitation the suite cases inherited was
+> lifted right after the campaign by `given:` fixture steps (docs/testing.md — the
+> retrospective's open item ⑦): the gallery now asserts the winner path through a
+> submitted requisition with an actor handoff. Slice 4: lint `TQL-WORKFLOW-3115` —
 > `current_state` literals against declared states, narrowed to one workflow's states
 > when the file pins exactly one declared `doc_type`. **All four slices are
 > implemented**; track F (structured error details) remains gated on the Phase 34

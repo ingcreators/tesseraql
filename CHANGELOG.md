@@ -8,6 +8,17 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **`given:` fixture steps — mid-flow workflow states become assertable**
+  (docs/testing.md): a `transition:`/`dispatch:` suite case may declare `given:` —
+  transitions fired before the target, in the same always-rolled-back transaction,
+  through the same documented pipeline, so stamps, decisions, and state advances are
+  real. A step that refuses fails the case naming the step and its code — never a
+  half-seeded state — and each step may carry its own `principal:` (the requester
+  submits, the manager approves), defaulting to the case's. The procurement suite
+  gains the winner-path case the initial-state limitation previously excluded: the
+  requester's submit stamps the lane, the manager's `submit_decision` dispatch fires
+  `approve`.
+
 - **Workflows join the editor's declared-symbol contract**: `tesseraql symbols` now
   emits a `workflows` array — each declared workflow with its source, line, and its
   transition and dispatch ids — and the VS Code extension (0.3.5) adds a *Workflows*
