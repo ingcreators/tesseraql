@@ -2437,10 +2437,29 @@ class StudioIntegrationTest {
         // With a filter active, the Clear-filters reset link (back to the bare table) is offered.
         assertThat(get("/_tesseraql/studio/ui/data?table=tql_users&fc0=login_id&fo0=contains&fv0=a",
                 true).body()).contains("Clear filters")
-                .contains("/_tesseraql/studio/ui/data?table=tql_users\"");
+                .contains("/_tesseraql/studio/ui/data?ds=main&amp;table=tql_users\"");
         // With no filter/sort, it is not shown.
         assertThat(get("/_tesseraql/studio/ui/data?table=tql_users", true).body())
                 .doesNotContain("Clear filters");
+    }
+
+    @Test
+    void uiDataBrowserOffersTheDatasourceDimension() throws Exception {
+        // Two declared datasources → the selector renders with main selected by default.
+        HttpResponse<String> response = get("/_tesseraql/studio/ui/data", true);
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(response.body()).contains("name=\"ds\"").contains(">analytics<");
+
+        // The duckdb engine's own catalogs are scratch (no attaches declared here), so
+        // browsing it succeeds against an intentionally empty listing — and never offers
+        // the row editor, which stays a main-only affordance.
+        HttpResponse<String> analytics = get("/_tesseraql/studio/ui/data?ds=analytics", true);
+        assertThat(analytics.statusCode()).isEqualTo(200);
+        assertThat(analytics.body()).doesNotContain("/_tesseraql/studio/ui/data/edit?");
+
+        // An undeclared datasource is a refusal, never a silent fallback to main.
+        assertThat(get("/_tesseraql/studio/ui/data?ds=nope", true).body())
+                .contains("No such datasource");
     }
 
     @Test
@@ -3128,6 +3147,13 @@ class StudioIntegrationTest {
                     password: %s
 
                 tesseraql:
+                  # A second, duckdb datasource: the data browser's datasource selector and
+                  # its non-main browsing (docs/analytics-experience.md track 1). No
+                  # extensions and no attaches — the engine's own catalogs are scratch, so
+                  # the browse is exercised against an intentionally empty listing.
+                  datasources:
+                    analytics:
+                      jdbcUrl: "jdbc:duckdb:"
                   studio:
                     enabled: true
                     readOnly: false

@@ -8,6 +8,16 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **The data browser browses every declared datasource**
+  (docs/analytics-experience.md track 1): Studio's data browser gains a datasource
+  selector — server databases and `duckdb` engines alike, under the existing
+  `tesseraql.studio.dataBrowser.enabled` opt-in. On a `duckdb` datasource the browser
+  lists tables and views across every catalog visible on the connection — attached
+  datasources and lake tables included — displayed and addressed as
+  `catalog.schema.table`; filters, sort, pagination, and CSV export work unchanged.
+  The datasource is validated by membership like the table name, read-only stays
+  best-effort defense in depth, and row editing remains a `main`-only affordance.
+
 - **The console tells the whole trigger story** (docs/jobs.md): the operations
   console's jobs page now shows the calendar qualifiers (`cron …, calendar jp-banking
   (day 5)`), the operational policies (`overlap: skip`, `sla by 06:00`, `sla > 2h`) as
