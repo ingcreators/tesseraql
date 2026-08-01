@@ -284,14 +284,47 @@ public final class ViewBinding {
                                 .max().orElse(1)));
                     }
                     case "chart" -> {
-                        List<String> labels = new ArrayList<>();
-                        for (Map<String, Object> row : rows) {
-                            Object label = row.get(panel.x());
-                            labels.add(label == null ? "" : String.valueOf(label));
+                        // The kit's data-hc-chart recipe (docs/analytics-experience.md track 2):
+                        // the server emits the source table — the data, the no-JS fallback, and
+                        // the screen-reader representation in one — and the kit's installChart
+                        // draws the Observable Plot SVG client-side. Column one is x; every
+                        // series column follows, marked per column under kind: combo.
+                        List<ViewSpec.Series> series = panel.effectiveSeries();
+                        m.put("chartKind", panel.kind() == null ? "bar" : panel.kind());
+                        m.put("xType", panel.xType());
+                        m.put("height", panel.height());
+                        m.put("legend", panel.legend() == null
+                                ? null
+                                : String.valueOf(panel.legend()));
+                        m.put("yLabel", panel.yLabel());
+                        m.put("xLabel", message(catalog, locale,
+                                "view." + spec.id() + "." + panel.x(), humanize(panel.x())));
+                        List<Map<String, Object>> seriesHeads = new ArrayList<>();
+                        for (ViewSpec.Series charted : series) {
+                            Map<String, Object> head = new LinkedHashMap<>();
+                            head.put("label", message(catalog, locale,
+                                    charted.label() != null
+                                            ? charted.label()
+                                            : "view." + spec.id() + "." + charted.column(),
+                                    charted.label() != null
+                                            ? charted.label()
+                                            : humanize(charted.column())));
+                            head.put("mark", charted.mark());
+                            seriesHeads.add(head);
                         }
-                        m.put("svg", io.tesseraql.yaml.view.ChartSvg.render(
-                                panel.kind() == null ? "bar" : panel.kind(), labels,
-                                numbers(rows, panel.y()), title));
+                        m.put("series", seriesHeads);
+                        List<List<String>> chartRows = new ArrayList<>();
+                        for (Map<String, Object> row : rows) {
+                            List<String> cells = new ArrayList<>(series.size() + 1);
+                            Object x = row.get(panel.x());
+                            cells.add(x == null ? "" : String.valueOf(x));
+                            for (ViewSpec.Series charted : series) {
+                                Object value = row.get(charted.column());
+                                cells.add(value == null ? "" : String.valueOf(value));
+                            }
+                            chartRows.add(cells);
+                        }
+                        m.put("chartRows", chartRows);
                     }
                     case "table" -> {
                         List<ViewSpec.Column> columns = columnsOf(panel.columns(), rows);
@@ -303,6 +336,10 @@ public final class ViewBinding {
                 panels.add(m);
             }
             v.put("panels", panels);
+            // The chart scripts (the Plot bundle + the installChart module) load only where a
+            // chart panel renders — pages without charts ship not a byte of charting.
+            v.put("hasChart", spec.panels().stream()
+                    .anyMatch(panel -> "chart".equals(panel.type())));
             live(v, pagePath, spec.id() + "-view", false);
         } else {
             List<Map<String, Object>> rows = rows(data);

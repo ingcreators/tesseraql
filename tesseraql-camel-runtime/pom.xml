@@ -58,6 +58,10 @@
       <artifactId>hypermedia-components__core</artifactId>
     </dependency>
     <dependency>
+      <groupId>org.webjars.npm</groupId>
+      <artifactId>observablehq__plot</artifactId>
+    </dependency>
+    <dependency>
       <groupId>org.webjars</groupId>
       <artifactId>webjars-locator-lite</artifactId>
     </dependency>

@@ -272,6 +272,24 @@ and onto pre-login pages (the cookie re-sync in [account.md](account.md)). **Nev
 and the two would fight after the next sign-in. Signed-out pages have no CSRF meta tag, so
 a toggle there flips the current page only.
 
+## Charts
+
+Charts are the kit's [chart recipe](https://ingcreators.com/hypermedia-components/recipes/chart/):
+a `data-hc-chart` figure whose contained `hc-table` **is** the data source, the
+no-JavaScript fallback, and the screen-reader data — the kit's `installChart` enhances
+it into an Observable Plot SVG on load and after every htmx swap. Column one is the x
+axis; every further column is a series; `<th data-mark="bar|line|area">` assigns
+per-series marks under the combo kind.
+
+The blessed way to get one is a [dashboard view](declarative-views.md#dashboard-views)
+`chart` panel — the framework emits the recipe markup and loads the two scripts (the
+self-hosted Plot bundle and `/assets/_tesseraql/charts.js`) only on pages that render a
+chart. A hand-written template can emit the same markup and include the same two script
+tags; `installChart` is deliberately outside the kit's auto-init bundle because Plot is
+its optional peer, so nothing chart-shaped loads on pages without charts. Both scripts
+are same-origin webjar assets — the CSP stays `default-src 'self'`, and without
+JavaScript (or without Plot) the table simply stays visible.
+
 ## Custom error pages
 
 Drop `templates/errors/<status>.html` (or the catch-all `templates/errors/error.html`) into

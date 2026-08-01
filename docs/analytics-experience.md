@@ -190,7 +190,7 @@ an earlier one.
 
 ## Machine-checkable surface
 
-- `TQL-VIEW-3311` — chart panel vocabulary violations: unknown `kind:`, `series:`
+- `TQL-VIEW-3313` — chart panel vocabulary violations: unknown `kind:`, `series:`
   and `y:` both present, `mark:` outside `kind: combo`, or a series column the
   panel's source cannot supply being structurally absent (columns are checked at
   render time like every panel column today).

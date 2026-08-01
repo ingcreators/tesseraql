@@ -1,9 +1,11 @@
 <!DOCTYPE html>
 <!-- The framework dashboard pattern (roadmap Phase 39 slice 4, docs/declarative-views.md):
-     query-backed panels on the kit's hc-grid — a stat value, an hc-sparkline, a server-rendered
-     SVG chart wearing the hc-chart skin (every color a kit token, no client scripting), or an
-     embedded table. Override via templates/tql/view/dashboard.html (customization ladder L2) or
-     fill the header/footer slots (L1); the `v` model shape is the public contract. -->
+     query-backed panels on the kit's hc-grid — a stat value, an hc-sparkline, a chart in the
+     kit's data-hc-chart recipe (the server renders the source table — the data, the no-JS
+     fallback, and the screen-reader representation in one — and installChart draws the
+     Observable Plot SVG client-side), or an embedded table. Override via
+     templates/tql/view/dashboard.html (customization ladder L2) or fill the header/footer
+     slots (L1); the `v` model shape is the public contract. -->
 <html xmlns:th="http://www.thymeleaf.org"
       th:replace="~{tql/shell :: shell(${v.title}, ~{}, ~{}, ~{:: #page-content})}">
 <div id="page-content" class="hc-stack">
@@ -27,8 +29,19 @@
         <span class="hc-sparkline"
               th:attr="data-values=${p.series},data-min=${p.min},data-max=${p.max},aria-label=${p.title}"></span>
       </th:block>
-      <figure th:case="'chart'" class="hc-chart">
-        <th:block th:utext="${p.svg}"/>
+      <figure th:case="'chart'" class="hc-chart"
+              th:attr="data-hc-chart=${p.chartKind},data-x-type=${p.xType},data-height=${p.height},data-legend=${p.legend},data-y-label=${p.yLabel}">
+        <table class="hc-table">
+          <caption th:text="${p.title}">Chart</caption>
+          <thead><tr>
+            <th th:text="${p.xLabel}">x</th>
+            <th th:each="s : ${p.series}" th:attr="data-mark=${s.mark}"
+                th:text="${s.label}">series</th>
+          </tr></thead>
+          <tbody>
+            <tr th:each="r : ${p.chartRows}"><td th:each="c : ${r}" th:text="${c}">v</td></tr>
+          </tbody>
+        </table>
       </figure>
       <th:block th:case="'table'">
         <th:block th:insert="~{tql/view/table :: table(|${v.id}-panel-${p.index}|, ${p.columns}, ${p.rows})}"/>
@@ -38,6 +51,13 @@
 </div>
 <th:block th:if="${v.slots['footer'] != null}">
   <th:block th:insert="~{__${v.slots['footer']}__}"/>
+</th:block>
+<!-- installChart is deliberately outside the kit's auto-init bundle (it needs Observable
+     Plot), so the chart scripts load here — only where a chart panel renders. Both are
+     self-hosted; the CSP stays default-src 'self'. -->
+<th:block th:if="${v.hasChart}">
+  <script src="/assets/vendor/observablehq__plot/dist/plot.umd.min.js" defer></script>
+  <script type="module" src="/assets/_tesseraql/charts.js"></script>
 </th:block>
 </div>
 </html>
