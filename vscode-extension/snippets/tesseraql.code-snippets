@@ -116,6 +116,70 @@
       "    sortable: true"
     ]
   },
+  "TesseraQL dashboard view": {
+    "prefix": "tql-view-dashboard",
+    "description": "A declarative dashboard: stat + kit chart + table panels (docs/declarative-views.md)",
+    "body": [
+      "version: tesseraql/v1",
+      "id: ${1:overview}",
+      "kind: view",
+      "view: dashboard",
+      "title: ${2:Overview}",
+      "panels:",
+      "  - { type: stat, source: sql, column: ${3:total}, title: ${4:Total} }",
+      "  - type: chart",
+      "    kind: ${5|bar,line,area,combo,bar-stacked,bar-grouped,scatter|}",
+      "    source: ${6:byCategory}",
+      "    title: ${7:By category}",
+      "    x: ${8:label}",
+      "    yLabel: ${9:units}",
+      "    series:",
+      "      - { column: ${10:value}, label: ${11:Value} }",
+      "  - type: table",
+      "    source: ${12:recent}",
+      "    title: ${13:Recent}"
+    ]
+  },
+  "TesseraQL chart panel": {
+    "prefix": "tql-chart-panel",
+    "description": "A dashboard chart panel in the kit's data-hc-chart vocabulary - multi-series via series:, mark: only under kind: combo (docs/declarative-views.md, lint TQL-VIEW-3313)",
+    "body": [
+      "- type: chart",
+      "  kind: ${1|bar,line,area,combo,bar-stacked,bar-grouped,scatter|}",
+      "  source: ${2:byCategory}",
+      "  title: ${3:By category}",
+      "  x: ${4:label}",
+      "  xType: ${5|category,number,date|}",
+      "  yLabel: ${6:units}",
+      "  series:",
+      "    - { column: ${7:stock}, label: ${8:In stock} }",
+      "    - { column: ${9:reserved}, label: ${10:Reserved} }"
+    ]
+  },
+  "TesseraQL export step": {
+    "prefix": "tql-export-step",
+    "description": "A file-producing pipeline step: the export vocabulary on the job's datasource; publishes step.<id>.transferId/rows/filename (docs/jobs.md, lint TQL-YAML-1041)",
+    "body": [
+      "pipeline:",
+      "  - id: ${1:report}",
+      "    export:",
+      "      format: ${2|csv,excel,pdf|}",
+      "      filename: ${3:report}-{batch.businessDate}.${4:csv}",
+      "      sql: { file: ${5:report}.sql, mode: query }",
+      "      columns:",
+      "        - { name: ${6:category}, header: ${7:Category} }",
+      "        - { name: ${8:total}, header: ${9:Total}, type: number, format: \"#,##0\" }",
+      "  # the produced file lands on the ops console's transfers page;",
+      "  # a follow-up step can carry the pointer:",
+      "  - id: ${10:announce}",
+      "    notify:",
+      "      channel: ${11:reports}",
+      "      payload:",
+      "        rows: step.${1:report}.rows",
+      "        transferId: step.${1:report}.transferId",
+      ""
+    ]
+  },
   "TesseraQL SQL test case": {
     "prefix": "tql-test",
     "description": "A declarative SQL suite case (docs/getting-started.md)",

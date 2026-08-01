@@ -8,6 +8,15 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **Editor catch-up for the analytics surfaces** (ext 0.3.7,
+  docs/vscode-extension.md): snippets for the kit-chart dashboard vocabulary —
+  `tql-view-dashboard` and `tql-chart-panel` carry the `series:` list, the seven
+  kinds, and the passthrough attributes — and for the export step
+  (`tql-export-step`, paired with the follow-up `notify:` that carries the
+  published `step.<id>.transferId`). No symbols-contract change: chart kinds and
+  export formats are enum vocabulary, not declared symbols the editor could
+  navigate to.
+
 - **A job can produce a file: the `export:` pipeline step** (docs/jobs.md): the route
   recipes' export vocabulary — `format`, `filename`, `columns`, templates — as a fifth
   step body, run inline on the job's datasource through the same codec → spool →

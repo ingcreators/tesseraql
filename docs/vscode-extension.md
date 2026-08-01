@@ -150,6 +150,11 @@ aligned with the [YAML surface reference](reference-yaml-surface.md) — includi
 batch authoring surfaces whose contracts live partly in SQL where only a template can
 teach them: `tql-chunk-step` (the keyset reader contract with the `chunk.after`
 guard), `tql-calendar`, and `tql-job-schedule` (the daily-consider qualifiers).
+The analytics surfaces follow the same rule: `tql-view-dashboard` and
+`tql-chart-panel` carry the kit chart vocabulary (the `series:` list, the kinds,
+the passthrough attributes — [declarative views](declarative-views.md)), and
+`tql-export-step` pairs the export step with the follow-up `notify:` that carries
+its published `step.<id>.transferId` ([jobs](jobs.md)).
 
 Schema-driven completion stays with `redhat.vscode-yaml`: the extension declares it
 as a recommendation and leaves the scaffolded schema wiring alone — it complements

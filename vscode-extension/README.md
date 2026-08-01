@@ -39,8 +39,9 @@ never disagree with the build.
 - **Error-code hovers.** Hover any `TQL-<DOMAIN>-<n>` literal for a link into the
   error-code reference.
 - **Snippets** for the blessed shapes (`tql-query-json`, `tql-query-html`,
-  `tql-command`, `tql-view-list`, `tql-workflow`, `tql-test`,
-  `tql-test-transition`, `tql-test-dispatch`).
+  `tql-command`, `tql-view-list`, `tql-view-dashboard`, `tql-chart-panel`,
+  `tql-workflow`, `tql-test`, `tql-test-transition`, `tql-test-dispatch`,
+  `tql-calendar`, `tql-job-schedule`, `tql-chunk-step`, `tql-export-step`).
 
 Schema-driven completion stays with the scaffolded wiring: `tesseraql new` associates
 the committed JSON Schema through the recommended
