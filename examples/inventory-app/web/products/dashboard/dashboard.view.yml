@@ -6,12 +6,17 @@ title: Inventory dashboard
 panels:
   - { type: stat, source: sql, column: products, label: Products }
   - { type: stat, source: sql, column: units, label: Units in stock }
+  # The kit chart recipe (docs/analytics-experience.md track 2): two series grouped
+  # side-by-side, the reorder floor beside the live stock, per category.
   - type: chart
-    kind: bar
+    kind: bar-grouped
     source: byCategory
     title: Stock by category
     x: label
-    y: value
+    yLabel: units
+    series:
+      - { column: stock, label: In stock }
+      - { column: reorder, label: Reorder floor }
   - type: table
     source: lowStock
     title: Below reorder level

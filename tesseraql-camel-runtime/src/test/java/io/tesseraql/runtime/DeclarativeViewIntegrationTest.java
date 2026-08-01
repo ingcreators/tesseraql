@@ -97,10 +97,17 @@ class DeclarativeViewIntegrationTest {
         HttpResponse<String> response = get("/board/stats");
         assertThat(response.statusCode()).isEqualTo(200);
         assertThat(response.body()).contains("class=\"hc-grid\"");
-        // The stat counts the seeded user; the chart is server-rendered SVG in the kit skin.
+        // The stat counts the seeded user; the chart is the kit's data-hc-chart recipe — the
+        // server renders the source table (the no-JS fallback), the kit draws the SVG.
         assertThat(response.body()).contains(">3</strong>");
-        assertThat(response.body()).contains("<figure class=\"hc-chart\">")
-                .contains("hc-chart__plot").contains("var(--hc-chart-series-1)");
+        assertThat(response.body()).contains("data-hc-chart=\"bar\"")
+                .contains("<caption>Groups</caption>")
+                .contains("plot.umd.min.js").contains("/assets/_tesseraql/charts.js");
+        // Both chart scripts are self-hosted and actually serve: the vendored Plot bundle
+        // through the version-less webjar route, the bootstrap from the framework assets.
+        assertThat(get("/assets/vendor/observablehq__plot/dist/plot.umd.min.js")
+                .statusCode()).isEqualTo(200);
+        assertThat(get("/assets/_tesseraql/charts.js").statusCode()).isEqualTo(200);
         assertThat(response.body()).contains("class=\"hc-sparkline\"")
                 .contains("data-values=\"1\"");
         assertThat(response.body()).contains(">engineers</span>");

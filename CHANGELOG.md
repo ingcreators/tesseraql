@@ -8,6 +8,20 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **Dashboard charts are the kit's charts** (docs/declarative-views.md,
+  docs/hypermedia-ui.md): the `chart` panel adopts Hypermedia Components'
+  `data-hc-chart` recipe — the server renders the panel's rows as a real table (the
+  data source, the no-JavaScript fallback, and the screen-reader representation in
+  one) and the kit's `installChart` draws the Observable Plot SVG in the browser. The
+  panel vocabulary grows to the kit's: `kind:` now spans `bar`, `line`, `area`,
+  `combo`, `bar-stacked`, `bar-grouped`, and `scatter`; multi-series arrives as
+  `series:` (per-series `label:` and, under `combo`, `mark:`), with `y:` kept as the
+  one-series shorthand; `xType:`, `height:`, `legend:`, and `yLabel:` pass through as
+  the kit's data attributes. Violations are `TQL-VIEW-3313`. Observable Plot is
+  vendored as a self-hosted webjar and loads — with the `charts.js` bootstrap — only
+  on pages that render a chart panel; the CSP stays `default-src 'self'`.
+
+
 - **The console tells the whole trigger story** (docs/jobs.md): the operations
   console's jobs page now shows the calendar qualifiers (`cron …, calendar jp-banking
   (day 5)`), the operational policies (`overlap: skip`, `sla by 06:00`, `sla > 2h`) as
@@ -32,6 +46,12 @@ All notable changes to TesseraQL are documented here. The format follows
   rows stay with the data browser, and their preview reads the main datasource.
 
 ### Changed
+
+- **BREAKING: the dashboard chart markup changed** — a `chart` panel now emits the
+  kit's `<figure data-hc-chart="…">` with the source table inside, instead of a
+  server-rendered inline SVG; `ChartSvg` is deleted. Templates or tests matching the
+  old `hc-chart__plot` SVG match the source table now, and the chart itself renders
+  client-side (no JavaScript → the table).
 
 - **`GET /_tesseraql/ops/batch/jobs` returns objects** — `{id, app, trigger, overlap,
   sla}` instead of the bare job-id strings, so the API tells at least as much as

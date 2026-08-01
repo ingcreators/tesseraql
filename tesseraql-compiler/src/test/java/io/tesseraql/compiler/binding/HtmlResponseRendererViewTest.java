@@ -286,8 +286,13 @@ class HtmlResponseRendererViewTest {
         assertThat(html).contains(">42</strong>");
         assertThat(html).contains("class=\"hc-sparkline\"").contains("data-values=\"2,5\"")
                 .contains("data-max=\"5\"");
-        assertThat(html).contains("<figure class=\"hc-chart\">")
-                .contains("hc-chart__plot").contains("fill=\"var(--hc-chart-series-1)\"");
+        // The chart panel renders the kit's data-hc-chart figure: the source table is the
+        // data, the no-JS fallback, and the screen-reader representation; the SVG is drawn
+        // client-side by installChart, loaded (with Plot) only because a chart is present.
+        assertThat(html).contains("data-hc-chart=\"bar\"")
+                .contains("<caption>Signups</caption>")
+                .contains("<td>Mon</td><td>2</td>").contains("<td>Tue</td><td>5</td>")
+                .contains("plot.umd.min.js").contains("/assets/_tesseraql/charts.js");
         assertThat(html).contains("hc-datagrid__table").contains(">Tue</span>");
     }
 

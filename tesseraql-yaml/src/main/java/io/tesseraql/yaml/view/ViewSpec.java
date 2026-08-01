@@ -28,6 +28,14 @@ public record ViewSpec(String id, String view, String title, String action, Stri
     /** Structurally invalid view document (docs/declarative-views.md, TQL-VIEW-3301). */
     public static final TqlErrorCode INVALID_VIEW = new TqlErrorCode(TqlDomain.VIEW, 3301);
 
+    /**
+     * Chart-panel vocabulary violation (docs/analytics-experience.md track 2,
+     * TQL-VIEW-3313): an unknown {@code kind:}, {@code y:} and {@code series:} together (or
+     * neither), a {@code mark:} outside {@code kind: combo}, or a malformed passthrough
+     * attribute ({@code xType:}, {@code height:}).
+     */
+    public static final TqlErrorCode INVALID_CHART = new TqlErrorCode(TqlDomain.VIEW, 3313);
+
     public static final String LIST = "list";
     public static final String FORM = "form";
     public static final String DETAIL = "detail";
@@ -36,6 +44,22 @@ public record ViewSpec(String id, String view, String title, String action, Stri
     /** The dashboard panel types (docs/declarative-views.md, slice 4). */
     public static final java.util.Set<String> PANEL_TYPES = java.util.Set.of("stat",
             "sparkline", "chart", "table");
+
+    /**
+     * The chart kinds — the Hypermedia Components {@code data-hc-chart} vocabulary the panel
+     * passes through (docs/analytics-experience.md track 2; {@code histogram} and
+     * {@code heatmap} stay out until a gallery app needs them).
+     */
+    public static final java.util.Set<String> CHART_KINDS = java.util.Set.of("bar", "line",
+            "area", "combo", "bar-stacked", "bar-grouped", "scatter");
+
+    /** Per-series marks, legal only under {@code kind: combo} (the kit's {@code data-mark}). */
+    private static final java.util.Set<String> SERIES_MARKS = java.util.Set.of("bar", "line",
+            "area");
+
+    /** The {@code xType:} passthrough values (the kit's {@code data-x-type}). */
+    private static final java.util.Set<String> X_TYPES = java.util.Set.of("category", "number",
+            "date");
 
     /** The slice-1 widget vocabulary (docs/declarative-views.md, TQL-VIEW-3305). */
     public static final java.util.Set<String> WIDGETS = java.util.Set.of("text", "textarea",
@@ -82,14 +106,34 @@ public record ViewSpec(String id, String view, String title, String action, Stri
     }
 
     /**
+     * One charted series: the numeric {@code column} plotted per row, an optional display
+     * {@code label} (message-key-first like every label), and — under {@code kind: combo}
+     * only — the {@code mark} the kit draws it with ({@code bar}/{@code line}/{@code area}).
+     */
+    public record Series(String column, String label, String mark) {
+    }
+
+    /**
      * A dashboard panel over one of the route's results: a {@code stat} (one value), a
-     * {@code sparkline}/{@code chart} over a series ({@code column} or {@code x}/{@code y};
-     * chart {@code kind} is {@code bar} or {@code line}), or an embedded {@code table}.
+     * {@code sparkline} over a {@code column}, a {@code chart} in the kit's
+     * {@code data-hc-chart} vocabulary ({@code x} plus {@code y} or multi-column
+     * {@code series}; {@code xType}/{@code height}/{@code legend}/{@code yLabel} pass through
+     * as the kit's data attributes), or an embedded {@code table}.
      */
     public record Panel(String title, String type, String source, String column, String x,
-            String y, String kind, List<Column> columns) {
+            String y, String kind, List<Series> series, String xType, Integer height,
+            Boolean legend, String yLabel, List<Column> columns) {
         public Panel {
             columns = columns == null ? List.of() : List.copyOf(columns);
+            series = series == null ? List.of() : List.copyOf(series);
+        }
+
+        /** The charted series: the explicit {@code series:} list, else the {@code y:} shorthand. */
+        public List<Series> effectiveSeries() {
+            if (!series.isEmpty()) {
+                return series;
+            }
+            return y == null ? List.of() : List.of(new Series(y, null, null));
         }
     }
 
@@ -159,19 +203,83 @@ public record ViewSpec(String id, String view, String title, String action, Stri
                 throw invalid(source, "a " + type + " panel requires column:");
             }
             String kind = str(entry.get("kind"));
+            List<Series> series = parseSeries(source, entry.get("series"));
+            String xType = str(entry.get("xType"));
+            Integer height = parseHeight(source, entry.get("height"));
+            Boolean legend = entry.get("legend") instanceof Boolean b ? b : null;
             if ("chart".equals(type)) {
-                if (str(entry.get("x")) == null || str(entry.get("y")) == null) {
-                    throw invalid(source, "a chart panel requires x: and y: columns");
-                }
-                if (kind != null && !"bar".equals(kind) && !"line".equals(kind)) {
-                    throw invalid(source, "chart kind: must be bar or line, got: " + kind);
-                }
+                validateChart(source, entry, kind, series, xType);
+            } else if (entry.get("series") != null || xType != null || height != null
+                    || legend != null || entry.get("yLabel") != null) {
+                throw invalidChart(source, "series:, xType:, height:, legend: and yLabel: are"
+                        + " chart-panel keys");
             }
             panels.add(new Panel(str(entry.get("title")), type, str(entry.get("source")),
-                    column, str(entry.get("x")), str(entry.get("y")), kind,
+                    column, str(entry.get("x")), str(entry.get("y")), kind, series, xType,
+                    height, legend, str(entry.get("yLabel")),
                     parseColumns(source, entry.get("columns"))));
         }
         return panels;
+    }
+
+    /** The chart-panel vocabulary (docs/analytics-experience.md track 2, TQL-VIEW-3313). */
+    private static void validateChart(String source, Map<String, Object> entry, String kind,
+            List<Series> series, String xType) {
+        if (kind != null && !CHART_KINDS.contains(kind)) {
+            throw invalidChart(source, "chart kind: must be one of " + CHART_KINDS + ", got: "
+                    + kind);
+        }
+        if (str(entry.get("x")) == null) {
+            throw invalidChart(source, "a chart panel requires x: (the label column)");
+        }
+        boolean hasY = str(entry.get("y")) != null;
+        if (hasY && !series.isEmpty()) {
+            throw invalidChart(source,
+                    "a chart panel declares y: or series:, not both (y: is the one-series"
+                            + " shorthand)");
+        }
+        if (!hasY && series.isEmpty()) {
+            throw invalidChart(source, "a chart panel requires y: or series:");
+        }
+        boolean combo = "combo".equals(kind);
+        for (Series charted : series) {
+            if (charted.mark() != null && !combo) {
+                throw invalidChart(source, "series mark: is legal only under kind: combo");
+            }
+            if (charted.mark() != null && !SERIES_MARKS.contains(charted.mark())) {
+                throw invalidChart(source, "series mark: must be one of " + SERIES_MARKS
+                        + ", got: " + charted.mark());
+            }
+        }
+        if (combo && series.isEmpty()) {
+            throw invalidChart(source, "kind: combo requires series: (each with its mark:)");
+        }
+        if (xType != null && !X_TYPES.contains(xType)) {
+            throw invalidChart(source, "chart xType: must be one of " + X_TYPES + ", got: "
+                    + xType);
+        }
+    }
+
+    private static List<Series> parseSeries(String source, Object raw) {
+        List<Series> series = new ArrayList<>();
+        for (Map<String, Object> entry : entries(source, raw, "series")) {
+            String column = str(entry.get("column"));
+            if (column == null || column.isBlank()) {
+                throw invalidChart(source, "a series: entry requires column:");
+            }
+            series.add(new Series(column, str(entry.get("label")), str(entry.get("mark"))));
+        }
+        return series;
+    }
+
+    private static Integer parseHeight(String source, Object raw) {
+        if (raw == null) {
+            return null;
+        }
+        if (raw instanceof Integer height && height > 0) {
+            return height;
+        }
+        throw invalidChart(source, "chart height: must be a positive integer, got: " + raw);
     }
 
     private static List<Child> parseChildren(String source, Object raw) {
@@ -256,5 +364,10 @@ public record ViewSpec(String id, String view, String title, String action, Stri
 
     private static TqlException invalid(String source, String message) {
         return new TqlException(INVALID_VIEW, "Invalid view document " + source + ": " + message);
+    }
+
+    private static TqlException invalidChart(String source, String message) {
+        return new TqlException(INVALID_CHART,
+                "Invalid view document " + source + ": " + message);
     }
 }

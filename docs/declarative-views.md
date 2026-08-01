@@ -159,9 +159,11 @@ the kit's `hc-grid`:
 
 - `stat` — one value.
 - `sparkline` — the kit component.
-- `chart` — bar/line as deterministic server-rendered SVG wearing the kit's `hc-chart`
-  skin: every color a `--hc-chart-*` token, the gridline group colored by
-  `[aria-label$=grid]`, no client scripting.
+- `chart` — the kit's [chart recipe](hypermedia-ui.md#charts): the server renders the
+  panel's rows as a real `hc-table` inside the `data-hc-chart` figure — the data
+  source, the no-JavaScript fallback, and the screen-reader representation in one —
+  and the kit's `installChart` draws the Observable Plot SVG in the browser. Without
+  JavaScript the table simply stays visible.
 - `table` — an embedded table on the shared list pattern.
 
 ```yaml
@@ -174,17 +176,34 @@ title: Inventory dashboard
 panels:
   - { type: stat, source: sql, column: products, label: Products }
   - type: chart
-    kind: bar
+    kind: bar-grouped
     source: byCategory          # one of the route's named queries
     title: Stock by category
-    x: label                    # the column supplying each bar's label
-    y: value                    # the numeric column charted
+    x: label                    # the column supplying each mark's label
+    yLabel: units
+    series:                     # one column per charted series
+      - { column: stock, label: In stock }
+      - { column: reorder, label: Reorder floor }
 ```
 
-A `stat` shows the named `column:` of its source's first row; a `chart` plots the
-`x:`/`y:` columns across the source's rows. Panel sources validate like children: a
-panel's `source:` must be `sql` or one of the route's named queries (`TQL-VIEW-3308`).
-Ejection is not offered for dashboards — the SVG is data-dependent.
+A `stat` shows the named `column:` of its source's first row. A `chart` plots the
+`x:` column against its `series:` — or against the single `y:` column, the one-series
+shorthand — across the source's rows:
+
+- `kind:` is the kit vocabulary: `bar`, `line`, `area`, `combo`, `bar-stacked`,
+  `bar-grouped`, `scatter` (default `bar`).
+- `series:` entries carry `column`, an optional `label` (message-key-first, like every
+  label), and — under `kind: combo` only — the `mark` that series draws with
+  (`bar`/`line`/`area`).
+- `xType:` (`category`/`number`/`date`), `height:`, `legend:`, and `yLabel:` pass
+  through as the kit's `data-*` attributes.
+
+The chart scripts — the self-hosted Observable Plot bundle and the framework's
+`charts.js` bootstrap — load only on pages where a chart panel renders; the CSP stays
+`default-src 'self'`. Chart vocabulary violations are `TQL-VIEW-3313`. Panel sources
+validate like children: a panel's `source:` must be `sql` or one of the route's named
+queries (`TQL-VIEW-3308`). Ejection is not offered for dashboards — the panel model is
+data-dependent.
 
 ## Rendering pipeline and the fragment contract
 
@@ -275,6 +294,7 @@ Lint family **`TQL-VIEW-33xx`**:
 | 3308 | a `children:` or `panels:` entry names a source the route's `queries:` do not declare |
 | 3309 | `search:` names an input the route does not declare |
 | 3310 | sortable columns without the route declaring the `sort`/`dir` inputs its SQL applies |
+| 3313 | chart-panel vocabulary: unknown `kind:`, `y:` and `series:` together (or neither), `mark:` outside `kind: combo`, a malformed `xType:`/`height:`, or chart keys on a non-chart panel |
 
 Coverage kind **`view`**: one item per view document, exercised when a declarative
 suite invokes its route. The htmx-contract and OpenAPI generators are unaffected —

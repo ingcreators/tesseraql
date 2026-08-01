@@ -168,7 +168,105 @@ class ViewSpecTest {
                     y: n
                 """);
         assertThatThrownBy(() -> ViewSpec.parse(file))
-                .isInstanceOf(TqlException.class).hasMessageContaining("x: and y:");
+                .isInstanceOf(TqlException.class).hasMessageContaining("TQL-VIEW-3313")
+                .hasMessageContaining("requires x:");
+        Path noSeries = write(dir, "y.view.yml", """
+                kind: view
+                view: dashboard
+                panels:
+                  - type: chart
+                    x: day
+                """);
+        assertThatThrownBy(() -> ViewSpec.parse(noSeries))
+                .isInstanceOf(TqlException.class).hasMessageContaining("y: or series:");
+    }
+
+    @Test
+    void parsesAMultiSeriesChartWithThePassthroughAttributes(@TempDir Path dir)
+            throws Exception {
+        ViewSpec spec = ViewSpec.parse(write(dir, "x.view.yml", """
+                kind: view
+                view: dashboard
+                panels:
+                  - type: chart
+                    kind: bar-grouped
+                    x: month
+                    xType: date
+                    height: 240
+                    legend: false
+                    yLabel: units
+                    series:
+                      - { column: stock, label: In stock }
+                      - { column: reserved }
+                """));
+        ViewSpec.Panel panel = spec.panels().get(0);
+        assertThat(panel.kind()).isEqualTo("bar-grouped");
+        assertThat(panel.effectiveSeries()).containsExactly(
+                new ViewSpec.Series("stock", "In stock", null),
+                new ViewSpec.Series("reserved", null, null));
+        assertThat(panel.xType()).isEqualTo("date");
+        assertThat(panel.height()).isEqualTo(240);
+        assertThat(panel.legend()).isFalse();
+        assertThat(panel.yLabel()).isEqualTo("units");
+    }
+
+    @Test
+    void theYShorthandIsASingleSeries(@TempDir Path dir) throws Exception {
+        ViewSpec spec = ViewSpec.parse(write(dir, "x.view.yml", """
+                kind: view
+                view: dashboard
+                panels:
+                  - { type: chart, x: day, y: n }
+                """));
+        assertThat(spec.panels().get(0).effectiveSeries())
+                .containsExactly(new ViewSpec.Series("n", null, null));
+    }
+
+    @Test
+    void rejectsChartVocabularyViolations(@TempDir Path dir) throws Exception {
+        assertThatThrownBy(() -> ViewSpec.parse(write(dir, "kind.view.yml", """
+                kind: view
+                view: dashboard
+                panels:
+                  - { type: chart, kind: donut, x: day, y: n }
+                """)))
+                .isInstanceOf(TqlException.class).hasMessageContaining("TQL-VIEW-3313");
+        assertThatThrownBy(() -> ViewSpec.parse(write(dir, "both.view.yml", """
+                kind: view
+                view: dashboard
+                panels:
+                  - type: chart
+                    x: day
+                    y: n
+                    series:
+                      - { column: m }
+                """)))
+                .isInstanceOf(TqlException.class).hasMessageContaining("not both");
+        assertThatThrownBy(() -> ViewSpec.parse(write(dir, "mark.view.yml", """
+                kind: view
+                view: dashboard
+                panels:
+                  - type: chart
+                    kind: bar
+                    x: day
+                    series:
+                      - { column: n, mark: line }
+                """)))
+                .isInstanceOf(TqlException.class).hasMessageContaining("kind: combo");
+        assertThatThrownBy(() -> ViewSpec.parse(write(dir, "stat.view.yml", """
+                kind: view
+                view: dashboard
+                panels:
+                  - { type: stat, column: n, height: 100 }
+                """)))
+                .isInstanceOf(TqlException.class).hasMessageContaining("chart-panel keys");
+        assertThatThrownBy(() -> ViewSpec.parse(write(dir, "height.view.yml", """
+                kind: view
+                view: dashboard
+                panels:
+                  - { type: chart, x: day, y: n, height: tall }
+                """)))
+                .isInstanceOf(TqlException.class).hasMessageContaining("positive integer");
     }
 
     @Test
