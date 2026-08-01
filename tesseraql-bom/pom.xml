@@ -210,6 +210,11 @@
         <version>${hypermedia-components.version}</version>
       </dependency>
       <dependency>
+        <groupId>org.webjars.npm</groupId>
+        <artifactId>observablehq__plot</artifactId>
+        <version>${observablehq-plot.version}</version>
+      </dependency>
+      <dependency>
         <groupId>org.webjars</groupId>
         <artifactId>webjars-locator-lite</artifactId>
         <version>${webjars-locator.version}</version>
