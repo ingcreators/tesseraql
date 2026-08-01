@@ -244,7 +244,6 @@ public final class OpsViews {
         return model;
     }
 
-    /** How a job starts, one glanceable phrase: its schedule, its poll source, or "manual". */
     /** The trace page model: the trace tree flattened with per-node indents. */
     public static Map<String, Object> traces(List<TraceNode> tree) {
         List<Map<String, Object>> rows = new ArrayList<>();
