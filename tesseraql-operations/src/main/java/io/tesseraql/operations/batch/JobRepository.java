@@ -77,13 +77,19 @@ public final class JobRepository {
 
     public String startExecution(String jobId, String appName, String triggerType,
             String triggeredBy) {
+        return startExecution(jobId, appName, triggerType, triggeredBy, null);
+    }
+
+    /** Starts an execution recording the business date the run is for (docs/batch-platform.md). */
+    public String startExecution(String jobId, String appName, String triggerType,
+            String triggeredBy, java.time.LocalDate businessDate) {
         String id = UUID.randomUUID().toString();
         Instant now = Instant.now();
         execute("""
                 insert into tql_job_execution
                   (job_execution_id, job_id, app_name, status, trigger_type, triggered_by,
-                   start_time, created_at)
-                values (?, ?, ?, ?, ?, ?, ?, ?)""",
+                   business_date, start_time, created_at)
+                values (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 ps -> {
                     ps.setString(1, id);
                     ps.setString(2, jobId);
@@ -91,8 +97,10 @@ public final class JobRepository {
                     ps.setString(4, JobStatus.RUNNING.name());
                     ps.setString(5, triggerType);
                     ps.setString(6, triggeredBy);
-                    ps.setTimestamp(7, Timestamp.from(now));
+                    ps.setDate(7,
+                            businessDate == null ? null : java.sql.Date.valueOf(businessDate));
                     ps.setTimestamp(8, Timestamp.from(now));
+                    ps.setTimestamp(9, Timestamp.from(now));
                 });
         return id;
     }
@@ -245,6 +253,9 @@ public final class JobRepository {
                 JobStatus.valueOf(rs.getString("status")),
                 rs.getString("trigger_type"),
                 rs.getString("triggered_by"),
+                rs.getDate("business_date") == null
+                        ? null
+                        : rs.getDate("business_date").toLocalDate(),
                 start,
                 end,
                 durationMs(start, end),

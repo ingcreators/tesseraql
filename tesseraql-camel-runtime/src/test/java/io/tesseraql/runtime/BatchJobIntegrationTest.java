@@ -137,6 +137,44 @@ class BatchJobIntegrationTest {
     }
 
     @Test
+    void theBusinessDateDefaultsIsOverridableAndRefusesGarbage() throws Exception {
+        String token = token(List.of("BATCH_OPERATOR"));
+
+        // Defaulted: the firing's local date, recorded on the execution.
+        HttpResponse<String> defaulted = send("POST",
+                "/_tesseraql/ops/batch/jobs/user.dailyMaintenance/run", token, "{}");
+        String executionId = MAPPER.readTree(defaulted.body()).path("executionId").asText();
+        JsonNode recorded = MAPPER.readTree(send("GET",
+                "/_tesseraql/ops/batch/executions/" + executionId, token, null).body());
+        assertThat(recorded.path("businessDate").asText())
+                .isEqualTo(java.time.LocalDate.now().toString());
+
+        // Overridden: the reserved businessDate parameter — running the 31st's close later.
+        HttpResponse<String> overridden = send("POST",
+                "/_tesseraql/ops/batch/jobs/user.dailyMaintenance/run", token,
+                "{\"businessDate\": \"2026-07-31\"}");
+        String overriddenId = MAPPER.readTree(overridden.body()).path("executionId").asText();
+        JsonNode overriddenRun = MAPPER.readTree(send("GET",
+                "/_tesseraql/ops/batch/executions/" + overriddenId, token, null).body());
+        assertThat(overriddenRun.path("businessDate").asText()).isEqualTo("2026-07-31");
+
+        // The ambient bind reaches step SQL: the stamped row carries the date the run
+        // was for, not the date it ran on.
+        HttpResponse<String> stamped = send("POST",
+                "/_tesseraql/ops/batch/jobs/user.stampBusinessDate/run", token,
+                "{\"businessDate\": \"2026-07-31\"}");
+        assertThat(stamped.body()).contains("COMPLETED");
+        assertThat(statusOf("pending-user")).isEqualTo("ASOF-2026-07-31");
+
+        // Garbage refuses before anything executes.
+        HttpResponse<String> garbage = send("POST",
+                "/_tesseraql/ops/batch/jobs/user.dailyMaintenance/run", token,
+                "{\"businessDate\": \"not-a-date\"}");
+        assertThat(garbage.statusCode()).isEqualTo(400);
+        assertThat(garbage.body()).contains("TQL-BATCH-4041");
+    }
+
+    @Test
     void operationsOverviewReportsBatchAndLanes() throws Exception {
         String token = token(List.of("BATCH_OPERATOR"));
         send("POST", "/_tesseraql/ops/batch/jobs/user.dailyMaintenance/run", token, "{}");
@@ -300,6 +338,19 @@ class BatchJobIntegrationTest {
         try (Stream<Path> files = Files.walk(source)) {
             files.forEach(path -> copy(source, target, path));
         }
+        // A job binding the batch.* ambient namespace (docs/batch-platform.md track A):
+        // the business date the run is FOR lands in the row, provably.
+        Files.createDirectories(target.resolve("batch/stamp"));
+        Files.writeString(target.resolve("batch/stamp/job.yml"), """
+                version: tesseraql/v1
+                id: user.stampBusinessDate
+                kind: job
+                recipe: batch-tasklet
+                sql: { file: stamp.sql, mode: update }
+                """);
+        Files.writeString(target.resolve("batch/stamp/stamp.sql"),
+                "update users set status = 'ASOF-' || cast(cast(/* batch.businessDate */"
+                        + " '2026-01-01' as date) as varchar) where name = 'pending-user'\n");
         Files.writeString(target.resolve("config/application.yml"), """
                 server:
                   port: 0

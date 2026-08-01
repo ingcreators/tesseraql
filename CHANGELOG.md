@@ -8,6 +8,15 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **The business date — a batch run knows what it is for**
+  (docs/batch-platform.md slice 1): every job execution now carries a business date —
+  defaulted from the firing's local date, overridden by the reserved `businessDate`
+  parameter on a manual run (`TQL-BATCH-4041` refuses a malformed one before anything
+  executes), recorded on `tql_job_execution` and in the operations API. Step SQL reads
+  it as the ambient `batch.businessDate` bind (with `batch.executionId` alongside),
+  seeded the way `audit.*` is seeded into commands — the audit-grade difference
+  between "ran on the 1st" and "ran the 31st's close on the 1st".
+
 - **The header+lines pattern ships runnable** (docs/transactional-writes.md, the
   procurement retrospective's cookbook item): `POST /api/requisitions` in the
   procurement gallery now creates the header and its line items in one transaction —

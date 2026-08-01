@@ -305,6 +305,8 @@ final class OperationsRouteBuilder extends RouteBuilder {
         map.put("app", execution.appName());
         map.put("status", execution.status().name());
         map.put("triggerType", execution.triggerType());
+        map.put("businessDate",
+                execution.businessDate() == null ? null : execution.businessDate().toString());
         map.put("startTime",
                 execution.startTime() == null ? null : execution.startTime().toString());
         map.put("endTime", execution.endTime() == null ? null : execution.endTime().toString());

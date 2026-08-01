@@ -46,6 +46,9 @@ public final class JobExecutor {
 
     private static final Logger LOG = LoggerFactory.getLogger(JobExecutor.class);
     private static final TqlErrorCode STEP_ERROR = new TqlErrorCode(TqlDomain.BATCH, 5002);
+    /** TQL-BATCH-4041: the reserved businessDate parameter is not an ISO date (HTTP 400). */
+    private static final TqlErrorCode INVALID_BUSINESS_DATE = new TqlErrorCode(TqlDomain.BATCH,
+            4041);
 
     private int sqlTimeoutSeconds;
 
@@ -155,13 +158,22 @@ public final class JobExecutor {
             io.tesseraql.core.tenant.TenantContext tenant, String appName,
             Map<String, Object> jobParams, String triggerType, String triggeredBy) {
         JobDefinition job = jobFile.definition();
+        java.time.LocalDate businessDate = resolveBusinessDate(jobParams);
         String executionId = repository.startExecution(job.id(), appName, triggerType,
-                triggeredBy);
+                triggeredBy, businessDate);
         Map<String, Object> stepResults = new LinkedHashMap<>();
         Map<String, Object> context = new HashMap<>();
         context.put("job", jobParams == null ? Map.of() : jobParams);
         context.put("step", stepResults);
         context.put("tenant", tenant);
+        // The batch.* ambient binds (docs/batch-platform.md track A): every step's SQL
+        // reads the business date the run is FOR — defaulted from the firing's local
+        // date, overridden by the reserved businessDate parameter, recorded on the
+        // execution so a rerun can reuse it.
+        Map<String, Object> batch = new LinkedHashMap<>();
+        batch.put("businessDate", java.sql.Date.valueOf(businessDate));
+        batch.put("executionId", executionId);
+        context.put("batch", batch);
 
         // The app attribute drives the ops console's per-app trace scope (design ch. 26.11).
         io.tesseraql.core.telemetry.Span jobSpan = tracer.start("tesseraql.job")
@@ -190,6 +202,25 @@ public final class JobExecutor {
             jobSpan.end();
         }
         return repository.findExecution(executionId).orElseThrow();
+    }
+
+    /**
+     * The business date this run is for: the reserved {@code businessDate} parameter (ISO
+     * {@code yyyy-MM-dd}) when a manual run or a rerun names one, else the firing's local
+     * date. A malformed value fails the run before anything executes.
+     */
+    private static java.time.LocalDate resolveBusinessDate(Map<String, Object> jobParams) {
+        Object declared = jobParams == null ? null : jobParams.get("businessDate");
+        if (declared == null) {
+            return java.time.LocalDate.now();
+        }
+        try {
+            return java.time.LocalDate.parse(String.valueOf(declared));
+        } catch (java.time.format.DateTimeParseException malformed) {
+            throw TqlException.builder(INVALID_BUSINESS_DATE)
+                    .message("businessDate '" + declared + "' is not an ISO date (yyyy-MM-dd)")
+                    .build();
+        }
     }
 
     /** A failing alert must never mask the job failure being reported. */
@@ -402,6 +433,10 @@ public final class JobExecutor {
         Map<String, Object> params = new LinkedHashMap<>();
         step.sql().params().forEach((bindName, sourceExpr) -> params.put(bindName,
                 evaluation.resolve(Arrays.asList(sourceExpr.split("\\.")))));
+        // The batch.* ambient namespace (docs/batch-platform.md track A) is seeded the
+        // way audit.* is seeded into commands: every step SQL reads the business date
+        // without wiring it, and a declared param of the same name still wins.
+        params.putIfAbsent("batch", context.get("batch"));
         return params;
     }
 

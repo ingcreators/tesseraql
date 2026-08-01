@@ -12,6 +12,8 @@ import java.time.Instant;
  * @param triggerType how the run was triggered (e.g. {@code manual}, {@code schedule})
  * @param triggeredBy who triggered a manual run (the principal's login id), or null for
  *                    scheduled and system-initiated runs
+ * @param businessDate the business date the run was for (docs/batch-platform.md):
+ *                    defaulted from the firing's local date, overridable on manual runs
  * @param startTime   when the execution started
  * @param endTime     when it finished, or null while running
  * @param durationMs  total duration in milliseconds, or null while running
@@ -24,6 +26,7 @@ public record JobExecution(
         JobStatus status,
         String triggerType,
         String triggeredBy,
+        java.time.LocalDate businessDate,
         Instant startTime,
         Instant endTime,
         Long durationMs,

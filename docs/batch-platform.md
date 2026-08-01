@@ -1,6 +1,9 @@
 # Batch platform — the executor enterprise schedulers drive
 
-> **Status: designed, not built.** The batch follow-up to the web-runtime maturation:
+> **Status: slice 1 (business date) implemented** — `batch.businessDate`/
+> `batch.executionId` ambient binds, the recorded `business_date` column, the reserved
+> `businessDate` run parameter (`TQL-BATCH-4041` on garbage). Slices 2–5 remain
+> designed, not built. The batch follow-up to the web-runtime maturation:
 > what `docs/jobs.md` ships today is a sound skeleton (two recipes, Quartz cron /
 > fixed delay, poll triggers, per-tenant fan-out, claim-row cluster safety, execution
 > history, failure alerts, `query-spool`), and what business-application batch still
