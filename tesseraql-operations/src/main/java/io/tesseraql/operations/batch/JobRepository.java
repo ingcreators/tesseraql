@@ -50,6 +50,8 @@ public final class JobRepository {
                     "/tesseraql/db/migration/operations/V5__chunk_checkpoints.sql");
             io.tesseraql.core.util.SqlScripts.applyForVendor(dataSource, JobRepository.class,
                     "/tesseraql/db/migration/operations/V6__execution_params.sql");
+            io.tesseraql.core.util.SqlScripts.applyForVendor(dataSource, JobRepository.class,
+                    "/tesseraql/db/migration/operations/V7__execution_cancel.sql");
         } catch (SQLException ex) {
             throw error("Failed to create batch repository schema", ex);
         }
@@ -186,6 +188,60 @@ public final class JobRepository {
         } catch (SQLException ex) {
             throw error("Failed to check the SLA completion", ex);
         }
+    }
+
+    /**
+     * Requests a cooperative stop of a RUNNING execution (docs/jobs.md "Stopping a run"): the
+     * executor polls the flag at step and chunk-commit boundaries. Returns false when the
+     * execution is not running — a finished run has nothing left to stop.
+     */
+    public boolean requestCancel(String executionId) {
+        try (Connection connection = dataSource.getConnection();
+                PreparedStatement ps = connection.prepareStatement(
+                        "update tql_job_execution set cancel_requested = ?"
+                                + " where job_execution_id = ? and status = ?")) {
+            ps.setTimestamp(1, Timestamp.from(Instant.now()));
+            ps.setString(2, executionId);
+            ps.setString(3, JobStatus.RUNNING.name());
+            return ps.executeUpdate() > 0;
+        } catch (SQLException ex) {
+            throw error("Failed to request a cancel", ex);
+        }
+    }
+
+    /** Whether a cooperative stop was requested for the execution (polled at boundaries). */
+    public boolean isCancelRequested(String executionId) {
+        try (Connection connection = dataSource.getConnection();
+                PreparedStatement ps = connection.prepareStatement(
+                        "select cancel_requested from tql_job_execution"
+                                + " where job_execution_id = ?")) {
+            ps.setString(1, executionId);
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next() && rs.getTimestamp(1) != null;
+            }
+        } catch (SQLException ex) {
+            throw error("Failed to read the cancel flag", ex);
+        }
+    }
+
+    /** Marks an execution STOPPED: the cooperative stop took effect at a boundary. */
+    public void stopExecution(String executionId, String message) {
+        finishExecution(executionId, JobStatus.STOPPED, message);
+    }
+
+    /** Marks a step STOPPED at a chunk-commit boundary, keeping its counts. */
+    public void stopStep(String stepExecutionId, int affectedRows, int skippedRows) {
+        execute("""
+                update tql_step_execution
+                set status = ?, end_time = ?, affected_rows = ?, skipped_rows = ?
+                where step_execution_id = ?""",
+                ps -> {
+                    ps.setString(1, StepStatus.STOPPED.name());
+                    ps.setTimestamp(2, Timestamp.from(Instant.now()));
+                    ps.setInt(3, affectedRows);
+                    ps.setInt(4, skippedRows);
+                    ps.setString(5, stepExecutionId);
+                });
     }
 
     /** The recorded parameters of an execution ({@code tesseraql job rerun}), when present. */

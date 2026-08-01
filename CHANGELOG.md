@@ -8,6 +8,16 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **The cooperative stop — a stop button that tells the truth**
+  (docs/batch-platform.md, a lifted deferral): `tesseraql job cancel <executionId>` and
+  `POST /_tesseraql/ops/batch/executions/{id}/cancel` (policy `ops.batch.run`) set a flag
+  the running executor polls at two boundaries — between pipeline steps (remaining steps
+  never start) and at every chunk commit, where the stop lands exactly on a committed
+  checkpoint: the step ends `STOPPED` with its real counts and a rerun for the same
+  business date resumes precisely there. The semantics are stated, not implied: effect at
+  the next boundary, statements bounded by their SQL timeout, no preemptive kill.
+  Cancelling a finished execution answers 409 with `TQL-BATCH-4042`.
+
 - **The shifted nominal day — 「5日、休日なら翌営業日」 without scheduler state**
   (docs/batch-platform.md, a lifted deferral): a schedule may declare `dayOfMonth: 5`
   with `shift: nextBusinessDay` (default) or `previousBusinessDay`. The shifted target

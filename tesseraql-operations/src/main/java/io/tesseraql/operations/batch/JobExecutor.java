@@ -215,15 +215,31 @@ public final class JobExecutor {
         }
         io.tesseraql.core.telemetry.SpanContext jobContext = jobSpan.context();
         try {
+            boolean stopped = false;
             for (PipelineStep step : job.effectiveSteps()) {
+                // The cooperative stop (docs/jobs.md "Stopping a run"): polled at step
+                // boundaries, so remaining steps do not start once an operator asked.
+                if (repository.isCancelRequested(executionId)) {
+                    stopped = true;
+                    break;
+                }
                 if (skipSteps.contains(step.id())) {
                     // Recorded, not run: the source execution already completed this step.
                     repository.skipStep(repository.startStep(executionId, step.id()));
                     stepResults.put(step.id(), Map.of("skipped", true));
                     continue;
                 }
-                runStepTracked(jobFile, step, dataSource, context, stepResults, executionId,
-                        appName, jobContext);
+                if (runStepTracked(jobFile, step, dataSource, context, stepResults, executionId,
+                        appName, jobContext)) {
+                    stopped = true;
+                    break;
+                }
+            }
+            if (stopped) {
+                repository.stopExecution(executionId,
+                        "stopped by operator (cooperative stop)");
+                LOG.info("Job {} execution {} stopped by operator", job.id(), executionId);
+                return repository.findExecution(executionId).orElseThrow();
             }
             repository.completeExecution(executionId);
             LOG.info("Job {} execution {} completed", job.id(), executionId);
@@ -291,7 +307,8 @@ public final class JobExecutor {
         }
     }
 
-    private void runStepTracked(JobFile jobFile, PipelineStep step, DataSource dataSource,
+    /** Returns true when the step ended at a cooperative-stop boundary (chunk steps). */
+    private boolean runStepTracked(JobFile jobFile, PipelineStep step, DataSource dataSource,
             Map<String, Object> context, Map<String, Object> stepResults, String executionId,
             String appName, io.tesseraql.core.telemetry.SpanContext jobContext) {
         String stepExecutionId = repository.startStep(executionId, step.id());
@@ -311,9 +328,18 @@ public final class JobExecutor {
                 result = runStep(jobFile, step, dataSource, context, stepContext);
             }
             stepResults.put(step.id(), result);
+            if (Boolean.TRUE.equals(result.get("stopped"))) {
+                // The chunk stopped on a committed checkpoint: counts are real, a rerun
+                // for the same business date resumes exactly there.
+                repository.stopStep(stepExecutionId,
+                        ((Number) result.getOrDefault("affectedRows", 0)).intValue(),
+                        ((Number) result.getOrDefault("skipped", 0)).intValue());
+                return true;
+            }
             repository.completeStep(stepExecutionId,
                     ((Number) result.getOrDefault("affectedRows", 0)).intValue(),
                     ((Number) result.getOrDefault("skipped", 0)).intValue());
+            return false;
         } catch (RuntimeException ex) {
             stepSpan.recordError(ex);
             repository.failStep(stepExecutionId, ex.getMessage());
@@ -524,6 +550,7 @@ public final class JobExecutor {
                 bind(select, boundReader);
                 String lastKey = null;
                 int sinceCommit = 0;
+                boolean stopRequested = false;
                 try (ResultSet rows = select.executeQuery()) {
                     ResultSetMetaData metaData = rows.getMetaData();
                     int columns = metaData.getColumnCount();
@@ -580,11 +607,28 @@ public final class JobExecutor {
                             writer.commit();
                             repository.saveCheckpoint(jobId, step.id(), businessDate, lastKey);
                             sinceCommit = 0;
+                            // The cooperative stop lands exactly on a committed checkpoint:
+                            // nothing is lost, and a rerun resumes here.
+                            if (repository.isCancelRequested(executionId)) {
+                                stopRequested = true;
+                                break;
+                            }
                         }
                     }
                 }
-                writer.commit();
-                repository.clearCheckpoint(jobId, step.id(), businessDate);
+                if (stopRequested) {
+                    writer.rollback(); // nothing pending — the stop happened on a commit
+                } else {
+                    writer.commit();
+                    repository.clearCheckpoint(jobId, step.id(), businessDate);
+                }
+                if (stopRequested) {
+                    Map<String, Object> result = new LinkedHashMap<>();
+                    result.put("affectedRows", processed);
+                    result.put("skipped", skipped);
+                    result.put("stopped", true);
+                    return result;
+                }
             } finally {
                 for (PreparedStatement statement : writerStatements.values()) {
                     try {

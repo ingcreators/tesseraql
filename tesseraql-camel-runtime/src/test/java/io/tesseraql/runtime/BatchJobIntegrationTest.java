@@ -7,6 +7,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.tesseraql.operations.batch.JobExecution;
 import io.tesseraql.operations.batch.JobStatus;
 import io.tesseraql.operations.batch.StepExecution;
+import io.tesseraql.operations.batch.StepStatus;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.net.ServerSocket;
@@ -362,6 +363,83 @@ class BatchJobIntegrationTest {
     }
 
     @Test
+    void aCooperativeStopEndsAtTheStepBoundary() {
+        // Step one cancels its own execution through the ambient batch.executionId bind;
+        // the boundary check stops the run before step two ever starts.
+        JobExecution execution = runtime.runJob("user.stopMidway",
+                Map.of("businessDate", "2026-08-05"));
+
+        assertThat(execution.status()).isEqualTo(JobStatus.STOPPED);
+        assertThat(execution.exitMessage()).contains("stopped by operator");
+        List<StepExecution> steps = runtime.jobRepository().findSteps(execution.id());
+        assertThat(steps).hasSize(1); // "never" was never started
+        assertThat(steps.get(0).stepId()).isEqualTo("selfCancel");
+        assertThat(steps.get(0).status()).isEqualTo(StepStatus.COMPLETED);
+    }
+
+    @Test
+    void aCooperativeStopLandsOnAChunkCheckpointAndTheRerunResumes() throws Exception {
+        java.util.concurrent.CompletableFuture<JobExecution> run = java.util.concurrent.CompletableFuture
+                .supplyAsync(() -> runtime.runJob("user.chunkSlow",
+                        Map.of("businessDate", "2026-08-06")));
+        // Wait for the chunk to be mid-stream, then ask it to stop.
+        long deadline = System.currentTimeMillis() + 30_000;
+        while (System.currentTimeMillis() < deadline && countOf("chunk_results_c") < 3) {
+            Thread.sleep(50);
+        }
+        String executionId = runtime.jobRepository().listExecutions(500).stream()
+                .filter(execution -> "user.chunkSlow".equals(execution.jobId()))
+                .filter(execution -> execution.status() == JobStatus.RUNNING)
+                .findFirst().orElseThrow().id();
+        assertThat(runtime.jobRepository().requestCancel(executionId)).isTrue();
+
+        JobExecution stopped = run.get(60, java.util.concurrent.TimeUnit.SECONDS);
+        assertThat(stopped.status()).isEqualTo(JobStatus.STOPPED);
+        long committed = countOf("chunk_results_c");
+        // The stop landed exactly on a committed chunk: a multiple of commitEvery, not all.
+        assertThat(committed % 5).isZero();
+        assertThat(committed).isLessThan(60);
+        StepExecution step = runtime.jobRepository().findSteps(stopped.id()).get(0);
+        assertThat(step.status()).isEqualTo(StepStatus.STOPPED);
+        assertThat(runtime.jobRepository().findCheckpoint("user.chunkSlow", "load",
+                java.time.LocalDate.parse("2026-08-06"))).isPresent();
+
+        // The rerun for the same business date resumes at the checkpoint: the results
+        // table's primary key proves nothing reprocessed, and everything arrives.
+        JobExecution rerun = runtime.runJob("user.chunkSlow",
+                Map.of("businessDate", "2026-08-06"));
+        assertThat(rerun.status()).isEqualTo(JobStatus.COMPLETED);
+        assertThat(countOf("chunk_results_c")).isEqualTo(60);
+        assertThat(runtime.jobRepository().findCheckpoint("user.chunkSlow", "load",
+                java.time.LocalDate.parse("2026-08-06"))).isEmpty();
+    }
+
+    @Test
+    void theCancelEndpointGatesOnScopeStatusAndExistence() throws Exception {
+        String token = token(List.of("BATCH_OPERATOR"));
+        String runningId = runtime.jobRepository().startExecution("user.dailyMaintenance",
+                "user-admin", "manual", null, java.time.LocalDate.now());
+        try {
+            HttpResponse<String> accepted = send("POST",
+                    "/_tesseraql/ops/batch/executions/" + runningId + "/cancel", token, "{}");
+            assertThat(accepted.statusCode()).isEqualTo(200);
+            assertThat(MAPPER.readTree(accepted.body()).path("cancelRequested").asBoolean())
+                    .isTrue();
+        } finally {
+            runtime.jobRepository().completeExecution(runningId);
+        }
+        // A finished run has nothing left to stop: 409 with its own code.
+        HttpResponse<String> conflict = send("POST",
+                "/_tesseraql/ops/batch/executions/" + runningId + "/cancel", token, "{}");
+        assertThat(conflict.statusCode()).isEqualTo(409);
+        assertThat(conflict.body()).contains("TQL-BATCH-4042");
+        // Unknown - or out of scope - reads as Not Found, like every ops surface.
+        HttpResponse<String> unknown = send("POST",
+                "/_tesseraql/ops/batch/executions/no-such/cancel", token, "{}");
+        assertThat(unknown.body()).contains("TQL-BATCH-4040");
+    }
+
+    @Test
     void operationsOverviewReportsBatchAndLanes() throws Exception {
         String token = token(List.of("BATCH_OPERATOR"));
         send("POST", "/_tesseraql/ops/batch/jobs/user.dailyMaintenance/run", token, "{}");
@@ -701,8 +779,61 @@ class BatchJobIntegrationTest {
             chunkFixtures.append("insert into chunk_items_b values ('b%02d', '%s');%n"
                     .formatted(i, i == 8 ? "oops" : "1"));
         }
+        // The cooperative-stop chunk (docs/jobs.md "Stopping a run"): each row sleeps a
+        // little, so the test can request the cancel while the chunk is mid-stream.
+        chunkFixtures.append("create table chunk_items_c"
+                + " (item_key varchar(32) primary key, payload varchar(32) not null);\n")
+                .append("create table chunk_results_c"
+                        + " (item_key varchar(32) primary key, val integer not null);\n");
+        for (int i = 1; i <= 60; i++) {
+            chunkFixtures.append("insert into chunk_items_c values ('c%02d', '1');%n"
+                    .formatted(i));
+        }
         Files.writeString(target.resolve("db/migration/V3__chunk_fixtures.sql"),
                 chunkFixtures.toString());
+        Files.writeString(target.resolve("batch/chunk/slow.yml"), """
+                version: tesseraql/v1
+                id: user.chunkSlow
+                kind: job
+                recipe: batch-pipeline
+                pipeline:
+                  - id: load
+                    chunk:
+                      reader: { file: reader-c.sql }
+                      writer: { file: writer-c.sql }
+                      key: item_key
+                      commitEvery: 5
+                """);
+        Files.writeString(target.resolve("batch/chunk/reader-c.sql"), """
+                select item_key, payload
+                from chunk_items_c
+                /*%if chunk.after != null */
+                where item_key > /* chunk.after */ 'x00'
+                /*%end*/
+                order by item_key
+                """);
+        Files.writeString(target.resolve("batch/chunk/writer-c.sql"),
+                "insert into chunk_results_c (item_key, val)"
+                        + " select /* row.item_key */ 'x00', 1 from pg_sleep(0.05)\n");
+        // A pipeline whose first step cancels its own execution through the ambient
+        // batch.executionId bind: the step boundary must stop the run.
+        Files.createDirectories(target.resolve("batch/stop"));
+        Files.writeString(target.resolve("batch/stop/job.yml"), """
+                version: tesseraql/v1
+                id: user.stopMidway
+                kind: job
+                recipe: batch-pipeline
+                pipeline:
+                  - id: selfCancel
+                    sql: { file: self-cancel.sql, mode: update }
+                  - id: never
+                    sql: { file: never.sql, mode: update }
+                """);
+        Files.writeString(target.resolve("batch/stop/self-cancel.sql"),
+                "update tql_job_execution set cancel_requested = now()"
+                        + " where job_execution_id = /* batch.executionId */ 'x'\n");
+        Files.writeString(target.resolve("batch/stop/never.sql"),
+                "update users set name = name where name = '___none___'\n");
         Files.writeString(target.resolve("db/migration/V2__holidays.sql"), """
                 create table holidays (
                   calendar_id  varchar(64) not null,

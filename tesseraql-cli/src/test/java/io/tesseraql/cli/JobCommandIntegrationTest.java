@@ -90,6 +90,17 @@ class JobCommandIntegrationTest {
         // Unknown targets cannot run at all: exit 2.
         assertThat(execute(args(app, "job", "run", "demo.no-such"))).isEqualTo(2);
         assertThat(execute(args(app, "job", "rerun", "no-such-execution"))).isEqualTo(2);
+
+        // cancel: the cooperative stop travels through the shared database - a RUNNING
+        // execution accepts the request, a finished one has nothing left to stop.
+        execSql("insert into tql_job_execution (job_execution_id, job_id, app_name, status,"
+                + " start_time, created_at) values ('cli-cancel-1', 'demo.touch', 'demo',"
+                + " 'RUNNING', now(), now())");
+        assertThat(execute(args(app, "job", "cancel", "cli-cancel-1"))).isZero();
+        execSql("update tql_job_execution set status = 'COMPLETED'"
+                + " where job_execution_id = 'cli-cancel-1'");
+        assertThat(execute(args(app, "job", "cancel", "cli-cancel-1"))).isEqualTo(2);
+        assertThat(execute(args(app, "job", "cancel", "no-such-execution"))).isEqualTo(2);
     }
 
     /** The demo app's batch surface: a chained pair, a calendar-gated job, a failing pipeline. */

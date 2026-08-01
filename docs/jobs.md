@@ -172,6 +172,7 @@ datasource config, no server needed), with codes a scheduler can branch on:
 $ tesseraql job list --app .
 $ tesseraql job run nightly.close --app . --business-date 2026-07-31 [--param k=v]…
 $ tesseraql job rerun <executionId> --app . [--from-failed-step]
+$ tesseraql job cancel <executionId> --app .   # the cooperative stop, see below
 ```
 
 - **`job run`** waits, prints the execution id and per-step summary, and exits **0** on
@@ -352,6 +353,31 @@ execution). **Alert-only by design**: killing an in-flight JDBC statement safely
 project, and a false sense of "timeout means stopped" is worse than an honest page.
 Malformed declarations refuse at build time (`TQL-BATCH-4210`).
 
+## Stopping a run
+
+What an operator needs is not a kill switch but a stop button that tells the truth. A
+running execution can be asked to stop — **cooperatively**:
+
+```console
+$ tesseraql job cancel <executionId> --app .          # or:
+$ curl -X POST …/_tesseraql/ops/batch/executions/{id}/cancel   # policy ops.batch.run
+```
+
+The request sets a flag in the execution row (so it reaches a run on any node, or another
+terminal's in-process run), and the executor polls it at two boundaries:
+
+- **between pipeline steps** — remaining steps never start; the execution ends `STOPPED`
+  with the message saying so;
+- **at every chunk commit** — the stop lands exactly on a committed checkpoint, the step
+  ends `STOPPED` with its real processed/skipped counts, and a
+  [rerun](#driving-jobs-from-an-external-scheduler) for the same business date resumes
+  precisely there. Nothing is lost and nothing is reprocessed.
+
+The semantics are stated, not implied: the stop takes effect **at the next boundary**, and
+an individual statement is bounded by its SQL timeout, not preempted. Cancelling an
+execution that is not running answers `409` with `TQL-BATCH-4042` — a finished run has
+nothing left to stop.
+
 ## Observing runs
 
 Every run is persisted as an execution with its steps, visible three ways:
@@ -372,6 +398,7 @@ Every run is persisted as an execution with its steps, visible three ways:
 | --- | --- |
 | `TQL-BATCH-4040` | the operations API was asked about a job or execution that does not exist — or that the caller's app scope does not include |
 | `TQL-BATCH-4041` | the reserved `businessDate` run parameter is not an ISO date (`yyyy-MM-dd`) |
+| `TQL-BATCH-4042` | the cancel target is not a RUNNING execution — nothing left to stop (HTTP 409) |
 | `TQL-BATCH-4201` | a schedule names a calendar that no `calendars/*.yml` declares (lint) |
 | `TQL-BATCH-4202` | `runOn:` without a `calendar:`, or an unknown `runOn:` value (lint) |
 | `TQL-BATCH-4203` | a calendar declares both `dates:` and `source:` — holiday rows have exactly one home (lint) |
