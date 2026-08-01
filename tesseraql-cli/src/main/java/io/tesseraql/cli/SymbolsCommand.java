@@ -54,8 +54,11 @@ final class SymbolsCommand implements Callable<Integer> {
                 file -> parser.parseRuleSets(file).rules().keySet());
         sharedDefinitions(document.putArray("decisions"), home, "decisions",
                 file -> parser.parseDecisions(file).decisions().keySet());
+        sharedDefinitions(document.putArray("calendars"), home, "calendars",
+                file -> parser.parseCalendars(file).calendars().keySet());
         routes(document.putArray("routes"), manifest, home);
         workflows(document.putArray("workflows"), manifest, home);
+        jobs(document.putArray("jobs"), manifest, home);
         System.out.println(mapper.writerWithDefaultPrettyPrinter().writeValueAsString(document));
         return 0;
     }
@@ -181,6 +184,59 @@ final class SymbolsCommand implements Callable<Integer> {
                 }
             }
         }
+    }
+
+    /**
+     * The declared batch jobs (docs/jobs.md), each with a one-line trigger story — the editor
+     * completes {@code after:} values, navigates to the declaring file, and the explorer's
+     * Jobs section can say how each job starts without opening it.
+     */
+    private static void jobs(ArrayNode into, AppManifest manifest, Path home)
+            throws IOException {
+        List<io.tesseraql.yaml.manifest.JobFile> jobs = new ArrayList<>(manifest.jobs());
+        jobs.sort(Comparator.comparing(job -> String.valueOf(job.definition().id())));
+        for (io.tesseraql.yaml.manifest.JobFile job : jobs) {
+            ObjectNode entry = into.addObject();
+            entry.put("id", job.definition().id());
+            entry.put("source", home.relativize(job.source()).toString().replace('\\', '/'));
+            int line = firstKeyLine(readLines(job.source()), "id");
+            entry.put("line", line == 0 ? null : line);
+            entry.put("trigger", triggerStory(job.definition().trigger()));
+        }
+    }
+
+    /** The one-line trigger story: how a job starts, calendar qualifiers included. */
+    private static String triggerStory(io.tesseraql.yaml.model.TriggerSpec trigger) {
+        if (trigger == null) {
+            return "on demand";
+        }
+        if (trigger.after() != null && !trigger.after().isBlank()) {
+            return "after " + trigger.after();
+        }
+        if (trigger.poll() != null) {
+            return "poll " + trigger.poll().effectiveSource();
+        }
+        io.tesseraql.yaml.model.TriggerSpec.Schedule schedule = trigger.schedule();
+        if (schedule == null) {
+            return "on demand";
+        }
+        StringBuilder story = new StringBuilder();
+        if (schedule.cron() != null && !schedule.cron().isBlank()) {
+            story.append("cron ").append(schedule.cron());
+        } else if (schedule.fixedDelay() != null && !schedule.fixedDelay().isBlank()) {
+            story.append("every ").append(schedule.fixedDelay());
+        } else {
+            story.append("on demand");
+        }
+        if (schedule.calendar() != null && !schedule.calendar().isBlank()) {
+            story.append(", calendar ").append(schedule.calendar());
+            if (schedule.dayOfMonth() != null) {
+                story.append(" (day ").append(schedule.dayOfMonth()).append(")");
+            } else if (schedule.runOn() != null) {
+                story.append(" (").append(schedule.runOn()).append(")");
+            }
+        }
+        return story.toString();
     }
 
     private static List<String> readLines(Path file) throws IOException {

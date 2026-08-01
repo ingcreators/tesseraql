@@ -186,5 +186,58 @@
       "        - transition: ${5:approve}",
       "          to: ${6:approved}"
     ]
+  },
+  "TesseraQL business-day calendar": {
+    "prefix": "tql-calendar",
+    "description": "A calendars/ shared definition: weekend plus holidays as dates: or a table-backed source: (docs/jobs.md)",
+    "body": [
+      "version: tesseraql/v1",
+      "",
+      "calendars:",
+      "  ${1:jp-banking}:",
+      "    weekend: [saturday, sunday]",
+      "    holidays:",
+      "      dates: [${2:2026-01-01}]",
+      "      # or table-backed, read at fire time:",
+      "      # source: { table: holidays, date: holiday_date, calendar: calendar_id }",
+      ""
+    ]
+  },
+  "TesseraQL calendar-gated schedule": {
+    "prefix": "tql-job-schedule",
+    "description": "A schedule under the daily-consider model: the cron considers, the calendar counts (docs/jobs.md)",
+    "body": [
+      "trigger:",
+      "  schedule:",
+      "    cron: \"${1:0 0 2 * * ?}\"",
+      "    calendar: ${2:jp-banking}",
+      "    ${3|runOn: businessDay,runOn: firstBusinessDayOfMonth,runOn: lastBusinessDayOfMonth,dayOfMonth: 5|}",
+      "    # dayOfMonth runs FOR the nominal date; add shift: previousBusinessDay to move back",
+      ""
+    ]
+  },
+  "TesseraQL chunk step": {
+    "prefix": "tql-chunk-step",
+    "description": "A restartable chunk step with the keyset reader contract - order by the key, resume after the checkpoint (docs/jobs.md)",
+    "body": [
+      "pipeline:",
+      "  - id: ${1:revalue}",
+      "    chunk:",
+      "      reader: { file: ${2:unprocessed}.sql }",
+      "      writer: { file: ${3:process-one}.sql }",
+      "      key: ${4:id}",
+      "      commitEvery: ${5:500}",
+      "      onError: { skipLimit: ${6:0} }",
+      "",
+      "# ${2}.sql - the restart contract lives here (lint TQL-BATCH-4207/4208):",
+      "#   select ${4}, ...",
+      "#   from ${7:source_table}",
+      "#   /*%if chunk.after != null */",
+      "#   where ${4} > cast(/* chunk.after */ '0' as bigint)",
+      "#   /*%end*/",
+      "#   order by ${4}",
+      "# ${3}.sql runs once per row; binds: row.* + batch.*",
+      ""
+    ]
   }
 }

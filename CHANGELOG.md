@@ -8,6 +8,15 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **Editor catch-up for the batch platform** (ext 0.3.6, docs/vscode-extension.md):
+  `tesseraql symbols` now prints `calendars` and `jobs` (each job with its one-line
+  trigger story), and the VS Code extension completes and navigates `calendar:`
+  values (a typo fails open at fire time — the editor is where it gets caught) and
+  `after:` chain targets (completions show how each job starts), adds a Calendars
+  explorer section, and ships the batch snippets — `tql-chunk-step` with the keyset
+  reader contract, `tql-calendar`, `tql-job-schedule`. Pre-0.10 CLIs degrade to
+  empty arrays, the established rule.
+
 - **The cooperative stop — a stop button that tells the truth**
   (docs/batch-platform.md, a lifted deferral): `tesseraql job cancel <executionId>` and
   `POST /_tesseraql/ops/batch/executions/{id}/cancel` (policy `ops.batch.run`) set a flag

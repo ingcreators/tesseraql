@@ -32,8 +32,37 @@ test('a pre-shared-definitions document degrades to empty domains, rules, and de
   assert.deepEqual(symbols.domains, []);
   assert.deepEqual(symbols.rules, []);
   assert.deepEqual(symbols.decisions, []);
+  assert.deepEqual(symbols.calendars, []);
   assert.deepEqual(symbols.routes, []);
   assert.deepEqual(symbols.workflows, []);
+  assert.deepEqual(symbols.jobs, []);
+});
+
+test('parses calendars and jobs with their trigger stories', () => {
+  const symbols = parseAppSymbols(JSON.stringify({
+    policies: [], messages: [],
+    calendars: [{ name: 'jp-banking', source: 'calendars/jp.yml', line: 4 }],
+    jobs: [{
+      id: 'nightly.close', source: 'batch/close/job.yml', line: 2,
+      trigger: 'cron 0 0 2 * * ?, calendar jp-banking (day 5)',
+    }],
+  }));
+  assert.deepEqual(symbols.calendars,
+      [{ name: 'jp-banking', source: 'calendars/jp.yml', line: 4 }]);
+  assert.deepEqual(symbols.jobs, [{
+    name: 'nightly.close', source: 'batch/close/job.yml', line: 2,
+    trigger: 'cron 0 0 2 * * ?, calendar jp-banking (day 5)',
+  }]);
+});
+
+test('calendar: and after: values resolve under the cursor and complete', () => {
+  const calendar = symbolReferenceAt('    calendar: jp-banking', 16);
+  assert.deepEqual(calendar, { kind: 'calendar', value: 'jp-banking', start: 14, end: 24 });
+  const after = symbolReferenceAt('  after: extract.orders', 12);
+  assert.equal(after?.kind, 'job');
+  assert.equal(after?.value, 'extract.orders');
+  assert.equal(completionKindAt('    calendar: jp', 16), 'calendar');
+  assert.equal(completionKindAt('  after: ', 9), 'job');
 });
 
 test('parses workflows with their transition and dispatch ids', () => {

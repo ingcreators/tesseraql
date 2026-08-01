@@ -95,19 +95,24 @@ contract (see below), per app home and refreshed on save, and adds:
   values (catalog keys), `domain:` values (the shared field domains under
   `domains/`), `use:` values (the shared validation rules under `rules/` — and, in a
   `decide:` block, the shared decisions under `decisions/`; the providers answer from
-  both namespaces), `decision:` values (a test suite's `decide:` target), and
+  both namespaces), `decision:` values (a test suite's `decide:` target),
   `workflow:` values (a suite's `transition:`/`dispatch:` targets — the declared
-  workflows, each carrying its transition and dispatch ids).
+  workflows, each carrying its transition and dispatch ids), `calendar:` values (the
+  business-day calendars under `calendars/` — a typo here fails open at fire time,
+  so the editor is where it gets caught), and `after:` values (the declared batch
+  jobs, each completion carrying its one-line trigger story).
 - **Go-to-definition** from a `policy:` value to its declaration in
   `config/tesseraql.yml`, from a `message:` value (or a view `title:`/`label:`
-  that names an existing key) to its line in the default-locale catalog, and from a
+  that names an existing key) to its line in the default-locale catalog, from a
   `domain:`, `use:`, or `decision:` value to the shared definition's line in its
-  `domains/*.yml`, `rules/*.yml`, or `decisions/*.yml` document.
+  `domains/*.yml`, `rules/*.yml`, or `decisions/*.yml` document, from a `calendar:`
+  value to its `calendars/*.yml` declaration, and from an `after:` value to the
+  chained job's document.
 
 Unknown references stay lint findings — the providers navigate, they do not judge.
 A pre-shared-definitions CLI simply omits the `domains`/`rules`/`decisions` arrays
-(a pre-0.10 CLI the `workflows` array), and the extension degrades those features to
-empty rather than rejecting the document.
+(a pre-0.10 CLI the `workflows`/`calendars`/`jobs` arrays), and the extension
+degrades those features to empty rather than rejecting the document.
 
 ## Test Explorer and SQL coverage
 
@@ -141,7 +146,10 @@ cited it.
 ## Snippets and schema completion
 
 The extension ships snippets for the blessed route shapes, kept few and exactly
-aligned with the [YAML surface reference](reference-yaml-surface.md).
+aligned with the [YAML surface reference](reference-yaml-surface.md) — including the
+batch authoring surfaces whose contracts live partly in SQL where only a template can
+teach them: `tql-chunk-step` (the keyset reader contract with the `chunk.after`
+guard), `tql-calendar`, and `tql-job-schedule` (the daily-consider qualifiers).
 
 Schema-driven completion stays with `redhat.vscode-yaml`: the extension declares it
 as a recommendation and leaves the scaffolded schema wiring alone — it complements
@@ -219,14 +227,15 @@ the opt-in regression gate) are identical in both formats.
 Prints what the framework declares:
 
 ```json
-{"policies": [{"name": "...", "source": "...", "line": 1}], "messages": [{"key": "...", "source": "...", "line": 1}], "domains": [{"name": "...", "source": "...", "line": 1}], "rules": [{"name": "...", "source": "...", "line": 1}], "decisions": [{"name": "...", "source": "...", "line": 1}], "routes": [{"id": "...", "source": "...", "path": "...", "recipe": "..."}], "workflows": [{"id": "...", "source": "...", "line": 1, "transitions": ["..."], "dispatches": ["..."]}]}
+{"policies": [{"name": "...", "source": "...", "line": 1}], "messages": [{"key": "...", "source": "...", "line": 1}], "domains": [{"name": "...", "source": "...", "line": 1}], "rules": [{"name": "...", "source": "...", "line": 1}], "decisions": [{"name": "...", "source": "...", "line": 1}], "calendars": [{"name": "...", "source": "...", "line": 1}], "routes": [{"id": "...", "source": "...", "path": "...", "recipe": "..."}], "workflows": [{"id": "...", "source": "...", "line": 1, "transitions": ["..."], "dispatches": ["..."]}], "jobs": [{"id": "...", "source": "...", "line": 1, "trigger": "..."}]}
 ```
 
 Policies come from the app config, message keys from the default-locale catalog
-(flattened dotted keys with their source lines), domains and rules from the
-shared-definition documents under `domains/` and `rules/` (each name with the file
-declaring it), routes and workflows (each workflow with its transition and dispatch
-ids) from the manifest; sorted, deterministic.
+(flattened dotted keys with their source lines), domains, rules, and calendars from
+the shared-definition documents under `domains/`, `rules/`, and `calendars/` (each
+name with the file declaring it), routes, workflows (each workflow with its
+transition and dispatch ids), and jobs (each with its one-line trigger story) from
+the manifest; sorted, deterministic.
 
 ## Publishing
 

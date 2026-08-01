@@ -60,6 +60,16 @@ export function buildAppTree(home: string): AppNode[] {
     });
   }
 
+  // Business-day calendars (docs/jobs.md): the shared definitions job schedules reference.
+  const calendars = collectFiles(path.join(home, 'calendars'), (name) => name.endsWith('.yml'));
+  if (calendars.length > 0) {
+    sections.push({
+      label: 'Calendars',
+      kind: 'section',
+      children: calendars.map((file) => fileNode(path.join(home, 'calendars'), file)),
+    });
+  }
+
   // Approval workflows and the command/guard/assign SQL beside them.
   const workflows = collectFiles(path.join(home, 'workflow'),
       (name) => name.endsWith('.yml') || name.endsWith('.sql'));

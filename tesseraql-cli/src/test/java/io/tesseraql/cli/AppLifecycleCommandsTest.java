@@ -135,9 +135,48 @@ class AppLifecycleCommandsTest {
                 dispatch:
                   - { id: decide_next, oneOf: [approve, escalate] }
                 """);
+        Files.createDirectories(app.resolve("calendars"));
+        Files.writeString(app.resolve("calendars/jp.yml"), """
+                version: tesseraql/v1
+                calendars:
+                  jp-banking:
+                    weekend: [saturday, sunday]
+                """);
+        Files.createDirectories(app.resolve("batch/close"));
+        Files.writeString(app.resolve("batch/close/job.yml"), """
+                version: tesseraql/v1
+                id: nightly.close
+                kind: job
+                recipe: batch-tasklet
+                trigger:
+                  schedule:
+                    cron: "0 0 2 * * ?"
+                    calendar: jp-banking
+                    dayOfMonth: 5
+                sql: { file: close.sql, mode: query }
+                """);
+        Files.writeString(app.resolve("batch/close/close.sql"), "select 1\n");
         Captured captured = executeCapturing("symbols", "--app", app.toString());
         assertThat(captured.exitCode()).isZero();
         JsonNode document = new ObjectMapper().readTree(captured.stdout());
+
+        assertThat(document.get("calendars")).hasSize(1);
+        JsonNode calendar = document.get("calendars").get(0);
+        assertThat(calendar.get("name").asText()).isEqualTo("jp-banking");
+        assertThat(calendar.get("source").asText()).isEqualTo("calendars/jp.yml");
+        assertThat(calendar.get("line").asInt()).isEqualTo(3);
+
+        JsonNode close = null;
+        for (JsonNode job : document.get("jobs")) {
+            if (job.get("id").asText().equals("nightly.close")) {
+                close = job;
+            }
+        }
+        assertThat(close).as("the declared nightly.close job").isNotNull();
+        assertThat(close.get("source").asText()).isEqualTo("batch/close/job.yml");
+        assertThat(close.get("line").asInt()).isEqualTo(2);
+        assertThat(close.get("trigger").asText())
+                .isEqualTo("cron 0 0 2 * * ?, calendar jp-banking (day 5)");
 
         assertThat(document.get("workflows")).hasSize(1);
         JsonNode workflow = document.get("workflows").get(0);
