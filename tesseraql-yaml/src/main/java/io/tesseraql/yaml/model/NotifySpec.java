@@ -19,11 +19,15 @@ import java.util.Map;
  *                  e.g. {@code principal.subject} or {@code body.assignee}; when present, the
  *                  enqueue path honors that subject's per-channel opt-out preference. A
  *                  notification without a recipient is channel-level and always delivered.
+ * @param attach    optional expression resolving to a transfer id — an export step's
+ *                  {@code step.<id>.transferId} — whose produced file rides the mail as an
+ *                  attachment (docs/analytics-experience.md; mail channels only, the bytes
+ *                  are read from the transfer store at delivery time)
  * @param payload   map of payload key to source expression, resolved against the execution
  *                  context; the payload rides the outbox event and feeds the channel's template
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
-public record NotifySpec(String channel, String when, String recipient,
+public record NotifySpec(String channel, String when, String recipient, String attach,
         Map<String, String> payload) {
 
     public NotifySpec {
@@ -34,6 +38,12 @@ public record NotifySpec(String channel, String when, String recipient,
 
     /** Recipient-less form (the shape before roadmap Phase 48) for positional callers. */
     public NotifySpec(String channel, String when, Map<String, String> payload) {
-        this(channel, when, null, payload);
+        this(channel, when, null, null, payload);
+    }
+
+    /** Attachment-less form (the shape before the export step) for positional callers. */
+    public NotifySpec(String channel, String when, String recipient,
+            Map<String, String> payload) {
+        this(channel, when, recipient, null, payload);
     }
 }

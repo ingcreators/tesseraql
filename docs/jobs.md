@@ -353,8 +353,10 @@ pipeline:
   export, and machine callers fetch
   `GET /_tesseraql/ops/batch/transfers/{transferId}/file` under `ops.batch.view`. The
   step publishes `transferId`, `rows`, and `filename` into the step context, so a
-  follow-up `notify:` carries the pointer and an `http-call:` can tell a partner system
-  the drop is ready.
+  follow-up `notify:` carries the pointer — or, on a mail channel, the file itself:
+  `attach: step.report.transferId` sends the produced file as a mail attachment
+  ([notifications](notifications.md#the-notify-step-on-a-job)) — and an `http-call:`
+  can tell a partner system the drop is ready.
 
 ## Transactions
 

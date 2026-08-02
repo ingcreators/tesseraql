@@ -25,8 +25,18 @@ final class NotificationSink implements OutboxEventSink {
 
     NotificationSink(NotificationChannels channels, Path appHome, CamelContext camelContext,
             io.tesseraql.core.inbox.InboxStore inbox) {
+        this(channels, appHome, camelContext, inbox, null);
+    }
+
+    NotificationSink(NotificationChannels channels, Path appHome, CamelContext camelContext,
+            io.tesseraql.core.inbox.InboxStore inbox,
+            io.tesseraql.core.files.FileTransferService transfers) {
         this.channels = channels;
-        this.mail = new MailNotifier(appHome);
+        // An envelope's attach transfer id (docs/analytics-experience.md) opens through the
+        // transfer store at delivery time; without the wire, attaching fails with a plain
+        // message instead of a NullPointerException.
+        this.mail = new MailNotifier(appHome,
+                transfers == null ? null : transfers::download);
         this.inbox = inbox;
     }
 

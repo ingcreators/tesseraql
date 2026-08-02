@@ -33,8 +33,14 @@ import org.thymeleaf.templateresolver.StringTemplateResolver;
  * <p>Channel settings: {@code host} (required), {@code port} (default 25), {@code transport}
  * ({@code smtp}/{@code smtps}, default smtp), {@code from} and {@code template} (required),
  * {@code to} (default recipient; a {@code to} payload key overrides per notification),
- * {@code subject} (an inline TEXT template), and optional {@code username}/{@code password} —
- * typically {@code ${secret.<provider>.<name>}} via the SecretResolver SPI, resolved at send.
+ * {@code subject} (an inline TEXT template), optional {@code username}/{@code password} —
+ * typically {@code ${secret.<provider>.<name>}} via the SecretResolver SPI, resolved at send —
+ * and {@code maxAttachmentBytes} (default 10485760), the cap an attached transfer must fit.
+ *
+ * <p>An envelope carrying an {@code attach} transfer id (docs/analytics-experience.md) sends
+ * multipart: the rendered body plus the transfer's produced file, read from the transfer store
+ * at delivery time through the wired {@link AttachmentSource}. The attachment lives in memory
+ * for the send, which is exactly what the size cap bounds.
  */
 public final class MailNotifier {
 
@@ -43,12 +49,30 @@ public final class MailNotifier {
     /** TQL-BATCH-5303: the mail was not accepted by the server (shared with webhooks). */
     private static final TqlErrorCode DELIVERY_FAILED = new TqlErrorCode(TqlDomain.BATCH, 5303);
 
+    private static final long DEFAULT_MAX_ATTACHMENT_BYTES = 10L * 1024 * 1024;
+
     private static final TemplateEngine INLINE = inlineEngine();
 
+    /**
+     * Opens an attached transfer's produced file — the runtime wires the transfer service's
+     * {@code download()}; this module stays free of the operations stack.
+     */
+    @FunctionalInterface
+    public interface AttachmentSource {
+        java.util.Optional<io.tesseraql.core.files.FileTransferService.Download> open(
+                String transferId);
+    }
+
     private final Path appHome;
+    private final AttachmentSource attachments;
 
     public MailNotifier(Path appHome) {
+        this(appHome, null);
+    }
+
+    public MailNotifier(Path appHome, AttachmentSource attachments) {
         this.appHome = appHome.toAbsolutePath().normalize();
+        this.attachments = attachments;
     }
 
     public void send(NotificationChannels.Channel channel, NotifyEvents.Envelope envelope,
@@ -117,19 +141,86 @@ public final class MailNotifier {
                         return new PasswordAuthentication(username, password);
                     }
                 });
+        String bodyType = template.endsWith(".html")
+                ? "text/html; charset=UTF-8"
+                : "text/plain; charset=UTF-8";
         try {
             MimeMessage message = new MimeMessage(session);
             message.setFrom(new InternetAddress(channel.require("from")));
             message.setRecipients(Message.RecipientType.TO, InternetAddress.parse(to));
             message.setSubject(subject, "UTF-8");
-            message.setContent(body, template.endsWith(".html")
-                    ? "text/html; charset=UTF-8"
-                    : "text/plain; charset=UTF-8");
+            if (envelope.attach() == null) {
+                message.setContent(body, bodyType);
+            } else {
+                message.setContent(attached(channel, envelope.attach(), body, bodyType));
+            }
             Transport.send(message);
         } catch (jakarta.mail.MessagingException ex) {
             // The outbox dispatcher retries and eventually dead-letters the event.
             throw new TqlException(DELIVERY_FAILED, "Mail channel '" + channel.name()
                     + "' delivery failed: " + ex.getMessage());
+        }
+    }
+
+    /**
+     * The multipart body: the rendered template plus the attached transfer's file, read from
+     * the transfer store at delivery time. An unknown or not-yet-downloadable transfer throws
+     * — the dispatcher's retry covers the race with a still-writing export, and a genuinely
+     * missing file dead-letters with this message. The size cap is a channel setting because
+     * the mail server's limit is the operator's fact, not the framework's.
+     */
+    private jakarta.mail.Multipart attached(NotificationChannels.Channel channel,
+            String transferId, String body, String bodyType)
+            throws jakarta.mail.MessagingException {
+        if (attachments == null) {
+            throw new TqlException(MAIL_CHANNEL, "Mail channel '" + channel.name()
+                    + "': the envelope attaches transfer " + transferId
+                    + " but no transfer store is wired in this runtime");
+        }
+        io.tesseraql.core.files.FileTransferService.Download download = attachments
+                .open(transferId).orElseThrow(() -> new TqlException(DELIVERY_FAILED,
+                        "Mail channel '" + channel.name() + "': attached transfer "
+                                + transferId + " has no downloadable file"));
+        long maxBytes = channel.setting("maxAttachmentBytes").map(Long::parseLong)
+                .orElse(DEFAULT_MAX_ATTACHMENT_BYTES);
+        byte[] bytes = readCapped(channel, download, maxBytes);
+
+        jakarta.mail.internet.MimeBodyPart text = new jakarta.mail.internet.MimeBodyPart();
+        text.setContent(body, bodyType);
+        jakarta.mail.internet.MimeBodyPart file = new jakarta.mail.internet.MimeBodyPart();
+        file.setDataHandler(new jakarta.activation.DataHandler(
+                new jakarta.mail.util.ByteArrayDataSource(bytes,
+                        download.contentType() == null
+                                ? "application/octet-stream"
+                                : download.contentType())));
+        file.setFileName(download.filename());
+        jakarta.mail.Multipart multipart = new jakarta.mail.internet.MimeMultipart();
+        multipart.addBodyPart(text);
+        multipart.addBodyPart(file);
+        return multipart;
+    }
+
+    private static byte[] readCapped(NotificationChannels.Channel channel,
+            io.tesseraql.core.files.FileTransferService.Download download, long maxBytes) {
+        try (java.io.InputStream in = download.content()) {
+            java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+            byte[] buffer = new byte[64 * 1024];
+            long total = 0;
+            int read;
+            while ((read = in.read(buffer)) >= 0) {
+                total += read;
+                if (total > maxBytes) {
+                    throw new TqlException(MAIL_CHANNEL, "Mail channel '" + channel.name()
+                            + "': attachment '" + download.filename() + "' exceeds "
+                            + maxBytes + " bytes (raise maxAttachmentBytes on the channel"
+                            + " to allow it)");
+                }
+                out.write(buffer, 0, read);
+            }
+            return out.toByteArray();
+        } catch (java.io.IOException ex) {
+            throw new TqlException(DELIVERY_FAILED, "Mail channel '" + channel.name()
+                    + "': attachment read failed: " + ex.getMessage());
         }
     }
 

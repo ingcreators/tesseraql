@@ -4389,6 +4389,20 @@ public final class AppLinter {
                     "Notification '" + id + "' delivers to inbox channel '" + spec.channel()
                             + "' but declares no recipient:"));
         }
+        // attach: rides only mail (docs/analytics-experience.md): a webhook posts JSON and an
+        // inbox message links, so declaring an attachment there would silently drop it — the
+        // build says so instead. The check only fires when the channel's declared type says
+        // it is not mail; an undeclared channel already warned above.
+        if (spec.attach() != null && !spec.attach().isBlank() && spec.channel() != null) {
+            String type = config.getString("tesseraql.notifications.channels."
+                    + spec.channel() + ".type").orElse(null);
+            if (type != null && !"mail".equals(type)) {
+                findings.add(new LintFinding("TQL-FIELD-2004", "error", source,
+                        "Notification '" + id + "' declares attach: but channel '"
+                                + spec.channel() + "' is type " + type
+                                + " — attachments ride mail channels only"));
+            }
+        }
     }
 
     /**

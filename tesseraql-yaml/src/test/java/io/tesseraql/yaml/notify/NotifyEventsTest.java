@@ -50,6 +50,25 @@ class NotifyEventsTest {
         assertThat(legacy.tenant()).isNull();
     }
 
+    /** The attach: path resolves at enqueue and rides the envelope (analytics track 3). */
+    @Test
+    void anAttachedTransferIdRoundTripsAndAbsentAttachDecodesNull() {
+        NotifyEvents.CompiledNotify notify = NotifyEvents.compile("report.daily", "send",
+                new NotifySpec("reports", null, null, "step.extract.transferId", Map.of()));
+        OutboxEvent event = notify.build(
+                Map.of("step", Map.of("extract", Map.of("transferId", "tr-42"))), "app");
+
+        NotifyEvents.Envelope envelope = NotifyEvents.parse(event.payloadJson());
+        assertThat(envelope.attach()).isEqualTo("tr-42");
+
+        // A path resolving to nothing enqueues without an attachment rather than failing;
+        // pre-attachment envelope JSON decodes with attach absent.
+        assertThat(NotifyEvents.parse(notify.build(Map.of(), "app").payloadJson()).attach())
+                .isNull();
+        assertThat(NotifyEvents.parse("{\"channel\":\"c\",\"source\":\"s\",\"payload\":{}}")
+                .attach()).isNull();
+    }
+
     /** Roadmap Phase 48: the recipient expression resolves against the live context. */
     @Test
     void theRecipientResolvesFromTheContextAndTheOptOutDecisionUsesIt() {
