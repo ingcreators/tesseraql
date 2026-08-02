@@ -167,10 +167,16 @@ pipeline:
 
 Out of scope, named so they stay decisions:
 
-- **Mail attachments.** `MailNotifier` sends single-part bodies; attaching a produced
-  file is a real feature with size, retention, and dead-letter questions — if demand
-  lands, it is designed against the outbox, not bolted on here. The link-in-mail
-  composition above covers the common case.
+- **Mail attachments** — *lifted; demand landed the day the track shipped.* Designed
+  against the outbox as promised: `attach:` on a notify declaration resolves at
+  enqueue to a transfer id that rides the envelope — the **bytes are read from the
+  transfer store at delivery time**, so events stay small and at-least-once/retry/
+  dead-letter are untouched (the same node-locality story as transfer downloads:
+  cluster deployments want `tesseraql.temp.store: db|blob`). Mail channels only
+  (`TQL-FIELD-2004` at build time — a webhook posts JSON, an inbox message links);
+  the size cap is the channel's `maxAttachmentBytes` (default 10 MiB), a channel
+  setting because the mail server's limit is the operator's fact. An unknown or
+  not-yet-readable transfer fails the delivery into the retry policy, naming itself.
 - **SFTP/FTPS push.** Poll sources are deliberately consume-only; a push connector is
   an egress surface needing the same allow-list + credential + admission treatment
   poll sources got, designed as its own piece when a real integration demands it.

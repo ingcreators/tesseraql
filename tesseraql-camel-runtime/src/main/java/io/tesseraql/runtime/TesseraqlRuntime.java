@@ -1526,7 +1526,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
                     .isEmpty()
                             ? null
                             : new NotificationSink(notificationChannels, appHome, context,
-                                    inboxStore);
+                                    inboxStore, fileTransfers);
             // The channel-publish sink relays publish: EVENT events onto messaging channels
             // (roadmap Phase 27), composed alongside the notification sink on the same outbox.
             io.tesseraql.core.outbox.OutboxEventSink channelSink = messagingChannels.isEmpty()

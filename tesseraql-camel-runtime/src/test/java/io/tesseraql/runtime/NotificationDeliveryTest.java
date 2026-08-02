@@ -84,18 +84,48 @@ class NotificationDeliveryTest {
     }
 
     private static NotificationSink sink(Map<String, Object> channels) {
+        return sink(channels, null);
+    }
+
+    private static NotificationSink sink(Map<String, Object> channels,
+            io.tesseraql.core.files.FileTransferService transfers) {
         AppConfig config = new AppConfig(
                 Map.of("tesseraql", Map.of("notifications", Map.of("channels", channels))),
                 name -> null);
-        return new NotificationSink(NotificationChannels.load(config), appHome, camel, null);
+        return new NotificationSink(NotificationChannels.load(config), appHome, camel, null,
+                transfers);
     }
 
     private static OutboxEvent notification(String channel, Map<String, Object> payload) {
+        return notification(channel, null, payload);
+    }
+
+    private static OutboxEvent notification(String channel, String attachTransferId,
+            Map<String, Object> payload) {
         OutboxEvent toInsert = NotifyEvents.event(channel, "users.register.confirmation",
-                payload, "user-admin");
+                null, null, attachTransferId, payload, "user-admin");
         return new OutboxEvent("evt-1", toInsert.aggregateType(), toInsert.aggregateId(),
                 toInsert.eventType(), toInsert.payloadJson(), "PENDING", 0, null, Instant.now(),
                 null, toInsert.appName());
+    }
+
+    /**
+     * A transfer store serving one known export from memory — the delivery-side seam
+     * (docs/analytics-experience.md): only {@code download()} matters to the mail path.
+     */
+    private static io.tesseraql.core.files.FileTransferService oneTransfer(String transferId,
+            io.tesseraql.core.files.FileTransferService.Download download) {
+        return (io.tesseraql.core.files.FileTransferService) java.lang.reflect.Proxy
+                .newProxyInstance(NotificationDeliveryTest.class.getClassLoader(),
+                        new Class<?>[]{io.tesseraql.core.files.FileTransferService.class},
+                        (proxy, method, args) -> {
+                            if ("download".equals(method.getName())) {
+                                return transferId.equals(args[0])
+                                        ? java.util.Optional.of(download)
+                                        : java.util.Optional.empty();
+                            }
+                            throw new UnsupportedOperationException(method.getName());
+                        });
     }
 
     @Test
@@ -121,6 +151,83 @@ class NotificationDeliveryTest {
         String body = GreenMailUtil.getBody(message);
         assertThat(body).contains("Hello sato,").contains("sato@example.com")
                 .contains("-- user-admin");
+    }
+
+    @Test
+    void attachesTheTransferredFileAsMultipartMail() throws Exception {
+        Map<String, Object> channel = Map.of(
+                "type", "mail",
+                "host", "localhost",
+                "port", MAIL.getSmtp().getPort(),
+                "from", "noreply@example.com",
+                "to", "ops@example.com",
+                "template", "templates/mail/welcome.txt");
+        NotificationSink sink = sink(Map.of("report-mail", channel),
+                oneTransfer("tr-1", new io.tesseraql.core.files.FileTransferService.Download(
+                        "price-summary.csv", "text/csv",
+                        new java.io.ByteArrayInputStream(
+                                "sku,price\nMS-230,9\n".getBytes(StandardCharsets.UTF_8)))));
+
+        // The extension's mailbox accumulates across tests in this class: start clean so
+        // "one message" means this test's message.
+        MAIL.purgeEmailFromAllMailboxes();
+        sink.send(notification("report-mail", "tr-1",
+                Map.of("userName", "ops", "email", "ops@example.com")));
+
+        MAIL.waitForIncomingEmail(1);
+        MimeMessage message = MAIL.getReceivedMessages()[0];
+        jakarta.mail.Multipart multipart = (jakarta.mail.Multipart) message.getContent();
+        assertThat(multipart.getCount()).isEqualTo(2);
+        assertThat(String.valueOf(multipart.getBodyPart(0).getContent()))
+                .contains("Hello ops,");
+        jakarta.mail.BodyPart file = multipart.getBodyPart(1);
+        assertThat(file.getFileName()).isEqualTo("price-summary.csv");
+        assertThat(new String(file.getInputStream().readAllBytes(), StandardCharsets.UTF_8))
+                .contains("MS-230,9");
+    }
+
+    @Test
+    void refusesAnOversizeAttachmentNamingTheSetting() {
+        Map<String, Object> channel = Map.of(
+                "type", "mail",
+                "host", "localhost",
+                "port", MAIL.getSmtp().getPort(),
+                "from", "noreply@example.com",
+                "to", "ops@example.com",
+                "maxAttachmentBytes", 4,
+                "template", "templates/mail/welcome.txt");
+        NotificationSink sink = sink(Map.of("report-mail", channel),
+                oneTransfer("tr-1", new io.tesseraql.core.files.FileTransferService.Download(
+                        "big.csv", "text/csv",
+                        new java.io.ByteArrayInputStream(
+                                "far-too-many-bytes".getBytes(StandardCharsets.UTF_8)))));
+
+        assertThatThrownBy(() -> sink.send(notification("report-mail", "tr-1",
+                Map.of("userName", "ops", "email", "ops@example.com"))))
+                .hasMessageContaining("maxAttachmentBytes");
+    }
+
+    @Test
+    void anUnknownAttachedTransferFailsDeliveryForTheRetryPolicy() {
+        Map<String, Object> channel = Map.of(
+                "type", "mail",
+                "host", "localhost",
+                "port", MAIL.getSmtp().getPort(),
+                "from", "noreply@example.com",
+                "to", "ops@example.com",
+                "template", "templates/mail/welcome.txt");
+        NotificationSink withStore = sink(Map.of("report-mail", channel),
+                oneTransfer("tr-1", new io.tesseraql.core.files.FileTransferService.Download(
+                        "x.csv", "text/csv", java.io.InputStream.nullInputStream())));
+        assertThatThrownBy(() -> withStore.send(notification("report-mail", "tr-gone",
+                Map.of("userName", "ops", "email", "ops@example.com"))))
+                .hasMessageContaining("no downloadable file");
+
+        // Without the transfer store wired, attaching says so plainly.
+        NotificationSink unwired = sink(Map.of("report-mail", channel));
+        assertThatThrownBy(() -> unwired.send(notification("report-mail", "tr-1",
+                Map.of("userName", "ops", "email", "ops@example.com"))))
+                .hasMessageContaining("no transfer store is wired");
     }
 
     @Test

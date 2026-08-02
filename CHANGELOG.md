@@ -8,6 +8,16 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **Mail attachments: `attach:` on a notify declaration**
+  (docs/notifications.md): a notification through a mail channel can carry a produced
+  file — `attach: step.report.transferId` names the export step's transfer, the id
+  rides the outbox envelope, and the bytes are read from the transfer store at
+  delivery time, so events stay small and the at-least-once/retry/dead-letter policy
+  is untouched. The mail goes multipart (rendered body + the file under its transfer
+  filename), capped by the channel's `maxAttachmentBytes` (default 10 MiB). Mail
+  channels only: `attach:` on a webhook or inbox channel is a build error
+  (`TQL-FIELD-2004`) rather than a silently dropped file.
+
 - **Editor catch-up for the analytics surfaces** (ext 0.3.7,
   docs/vscode-extension.md): snippets for the kit-chart dashboard vocabulary —
   `tql-view-dashboard` and `tql-chart-panel` carry the `series:` list, the seven

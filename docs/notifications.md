@@ -98,9 +98,33 @@ pipeline:
         deactivated: step.deactivatePending.affectedRows
 ```
 
-A pipeline step declares exactly one of `sql:` or `notify:`. The step reports
-`affectedRows: 1` and its `eventId` when the notification enqueued, `0` when the guard
-skipped it.
+A pipeline step declares exactly one of `sql:` or `notify:` (or the other step bodies —
+see [jobs](jobs.md)). The step reports `affectedRows: 1` and its `eventId` when the
+notification enqueued, `0` when the guard skipped it.
+
+On a **mail** channel, a notify step can carry a produced file with it — the
+[export step](jobs.md#the-export-step)'s published transfer id names it:
+
+```yaml
+  - id: report
+    export:
+      format: csv
+      filename: price-summary-{batch.businessDate}.csv
+      sql: { file: report.sql, mode: query }
+  - id: send
+    notify:
+      channel: reports              # a mail channel
+      attach: step.report.transferId
+      payload:
+        rows: step.report.rows
+```
+
+`attach:` resolves at enqueue to a transfer id that rides the outbox envelope; the
+**bytes are read from the transfer store at delivery time**, so the event stays small and
+the at-least-once/retry/dead-letter policy is untouched. The mail goes multipart — the
+rendered template body plus the file under its transfer filename. Attachments ride mail
+channels only: a webhook posts JSON and an inbox message links, so `attach:` on either is
+a build error rather than a silently dropped file.
 
 ## Per-user opt-out
 
@@ -127,7 +151,11 @@ contexts carry no principal and check the untenanted scope.
 
 Settings: `host` (required), `port` (default 25), `transport` (`smtp`/`smtps`, default
 `smtp`), `from` and `template` (required), `to` (default recipient — a `to` key in the
-notification payload overrides it per message), `subject`, `username`/`password`.
+notification payload overrides it per message), `subject`, `username`/`password`, and
+`maxAttachmentBytes` (default 10485760) — the cap an [attached
+transfer](#the-notify-step-on-a-job) must fit, a channel setting because the mail
+server's limit is the operator's fact. An oversize attachment fails delivery naming the
+setting; the attachment is buffered for the send, which is exactly what the cap bounds.
 
 The body renders the channel's `template` with the standard engine and the standard trust
 model: the template is app-authored and confined to the app home — it is never taken from
@@ -240,8 +268,8 @@ the build like any other kind.
 ## Lint
 
 - `notify:` on a non-command recipe (`TQL-YAML-1004`)
-- a notification without a `channel:`, or a job step with both or neither of
-  `sql:`/`notify:` (`TQL-FIELD-2004`)
+- a notification without a `channel:`, a job step with both or neither of
+  `sql:`/`notify:`, or `attach:` on a channel that is not mail (`TQL-FIELD-2004`)
 - a malformed `when:` guard (`TQL-SQL-2101`)
 - a channel the config does not declare (`TQL-YAML-1102`, warning — another environment's
   config may declare it)

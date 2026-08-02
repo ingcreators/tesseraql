@@ -58,16 +58,27 @@ public final class NotifyEvents {
         Expr recipient = spec.recipient() == null || spec.recipient().isBlank()
                 ? null
                 : ExpressionParser.parse(spec.recipient());
+        String attach = spec.attach() == null || spec.attach().isBlank()
+                ? null
+                : spec.attach();
         return new CompiledNotify(source + "." + id, id, spec.channel(), when, recipient,
-                spec.payload());
+                attach, spec.payload());
     }
 
     /**
      * A compiled notification: the guard and recipient parsed, the payload expressions kept
-     * for per-event resolution against the live execution context.
+     * for per-event resolution against the live execution context. {@code attach} is a
+     * dotted context path resolving to a transfer id whose file rides the mail
+     * (docs/analytics-experience.md) — resolved at enqueue like a payload value.
      */
     public record CompiledNotify(String source, String id, String channel, Expr when,
-            Expr recipient, Map<String, String> payload) {
+            Expr recipient, String attach, Map<String, String> payload) {
+
+        /** The pre-attachment shape, for positional callers. */
+        public CompiledNotify(String source, String id, String channel, Expr when,
+                Expr recipient, Map<String, String> payload) {
+            this(source, id, channel, when, recipient, null, payload);
+        }
 
         /** Whether the guard (if any) lets this notification fire for the given context. */
         public boolean fires(Map<String, Object> context) {
@@ -91,6 +102,21 @@ public final class NotifyEvents {
                     : context));
             String subject = value == null ? null : String.valueOf(value);
             return subject == null || subject.isBlank() ? null : subject;
+        }
+
+        /**
+         * The transfer id the {@code attach:} path resolves to for this event, or null when
+         * the notification attaches nothing (or the path resolves empty — enqueue never
+         * fails on a missing attachment; delivery reports the unknown id honestly).
+         */
+        public String resolveAttach(Map<String, Object> context) {
+            if (attach == null) {
+                return null;
+            }
+            Object value = new EvaluationContext(context == null ? Map.of() : context)
+                    .resolve(Arrays.asList(attach.split("\\.")));
+            String transferId = value == null ? null : String.valueOf(value);
+            return transferId == null || transferId.isBlank() ? null : transferId;
         }
 
         /** Resolves the declared payload expressions against the execution context. */
@@ -117,8 +143,8 @@ public final class NotifyEvents {
          */
         public OutboxEvent build(Map<String, Object> context, String appName,
                 String recipient, String tenantId) {
-            return event(channel, source, recipient, tenantId, resolvePayload(context),
-                    appName);
+            return event(channel, source, recipient, tenantId, resolveAttach(context),
+                    resolvePayload(context), appName);
         }
     }
 
@@ -134,6 +160,13 @@ public final class NotifyEvents {
     /** The full envelope builder: recipient and tenant ride along when addressed (Phase 49). */
     public static OutboxEvent event(String channel, String source, String recipient,
             String tenantId, Map<String, Object> payload, String appName) {
+        return event(channel, source, recipient, tenantId, null, payload, appName);
+    }
+
+    /** The attachment-carrying form: {@code attachTransferId} rides the envelope when set. */
+    public static OutboxEvent event(String channel, String source, String recipient,
+            String tenantId, String attachTransferId, Map<String, Object> payload,
+            String appName) {
         Map<String, Object> envelope = new LinkedHashMap<>();
         envelope.put("channel", channel);
         envelope.put("source", source);
@@ -142,6 +175,9 @@ public final class NotifyEvents {
         }
         if (tenantId != null && !tenantId.isBlank()) {
             envelope.put("tenant", tenantId);
+        }
+        if (attachTransferId != null && !attachTransferId.isBlank()) {
+            envelope.put("attach", attachTransferId);
         }
         envelope.put("payload", payload == null ? Map.of() : payload);
         try {
@@ -167,7 +203,8 @@ public final class NotifyEvents {
                 declared.forEach((key, value) -> payload.put(String.valueOf(key), value));
             }
             return new Envelope(string(raw.get("channel")), string(raw.get("source")),
-                    string(raw.get("recipient")), string(raw.get("tenant")), payload);
+                    string(raw.get("recipient")), string(raw.get("tenant")),
+                    string(raw.get("attach")), payload);
         } catch (JsonProcessingException ex) {
             throw new TqlException(ENCODE_ERROR,
                     "Failed to decode notification envelope: " + ex.getMessage());
@@ -180,7 +217,7 @@ public final class NotifyEvents {
      * both absent.
      */
     public record Envelope(String channel, String source, String recipient, String tenant,
-            Map<String, Object> payload) {
+            String attach, Map<String, Object> payload) {
 
         public Envelope {
             payload = payload == null ? Map.of() : Map.copyOf(payload);
@@ -188,7 +225,13 @@ public final class NotifyEvents {
 
         /** The pre-Phase-49 shape, for callers that never address. */
         public Envelope(String channel, String source, Map<String, Object> payload) {
-            this(channel, source, null, null, payload);
+            this(channel, source, null, null, null, payload);
+        }
+
+        /** The pre-attachment shape, for positional callers. */
+        public Envelope(String channel, String source, String recipient, String tenant,
+                Map<String, Object> payload) {
+            this(channel, source, recipient, tenant, null, payload);
         }
     }
 

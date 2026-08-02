@@ -521,6 +521,57 @@ class AppLinterTest {
                 .allMatch(f -> f.isError() && f.message().contains("unaddressed"));
     }
 
+    /** Attachments ride mail channels only (docs/analytics-experience.md). */
+    @Test
+    void anAttachmentOnANonMailChannelFailsTheBuild(@TempDir Path dir) throws Exception {
+        Files.createDirectories(dir.resolve("config"));
+        Files.writeString(dir.resolve("config/tesseraql.yml"), """
+                tesseraql:
+                  app:
+                    name: t
+                  notifications:
+                    channels:
+                      audit:
+                        type: webhook
+                        url: https://hooks.example/x
+                      reports:
+                        type: mail
+                        host: smtp.example
+                        from: noreply@example.com
+                        to: ops@example.com
+                        template: templates/mail/report.txt
+                """);
+        Files.createDirectories(dir.resolve("batch/report"));
+        Files.writeString(dir.resolve("batch/report/job.yml"), """
+                version: tesseraql/v1
+                id: report.daily
+                kind: job
+                recipe: batch-pipeline
+                pipeline:
+                  - id: extract
+                    export:
+                      format: csv
+                      sql: { file: report.sql, mode: query }
+                  - id: hooked
+                    notify:
+                      channel: audit
+                      attach: step.extract.transferId
+                  - id: mailed
+                    notify:
+                      channel: reports
+                      attach: step.extract.transferId
+                """);
+        Files.writeString(dir.resolve("batch/report/report.sql"), "select 1 as one\n");
+
+        List<LintFinding> findings = new AppLinter().lint(dir);
+
+        assertThat(findings)
+                .filteredOn(f -> f.code().equals("TQL-FIELD-2004"))
+                .hasSize(1)
+                .allMatch(f -> f.isError()
+                        && f.message().contains("attachments ride mail channels only"));
+    }
+
     @Test
     void lintsHttpCallStepsAgainstTheEgressAllowList(@TempDir Path dir) throws Exception {
         Files.createDirectories(dir.resolve("config"));
