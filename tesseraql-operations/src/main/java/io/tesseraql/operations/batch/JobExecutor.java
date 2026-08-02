@@ -74,6 +74,7 @@ public final class JobExecutor {
     private io.tesseraql.core.files.FileTransferService fileTransfers;
     private Path appHome;
     private FilePusher filePusher;
+    private io.tesseraql.core.telemetry.Meter meter = io.tesseraql.core.telemetry.NoopMeter.INSTANCE;
 
     /**
      * Delivers a produced file to a {@code push:} step's target
@@ -151,6 +152,17 @@ public final class JobExecutor {
     }
 
     /**
+     * Wires the meter every run reports through (docs/jobs.md "Observing runs"): a
+     * {@code tesseraql.job.runs} counter tagged job/app/status and a
+     * {@code tesseraql.job.duration} histogram, feeding the same Prometheus exposition the
+     * route counters ride. Optional — the CLI runs with the no-op.
+     */
+    public JobExecutor meter(io.tesseraql.core.telemetry.Meter meter) {
+        this.meter = meter;
+        return this;
+    }
+
+    /**
      * Wires the preference store recipient-aware {@code notify:} steps consult (roadmap
      * Phase 48). Optional — without it every notification enqueues, as before.
      */
@@ -217,7 +229,7 @@ public final class JobExecutor {
                                 + " is still running (overlap: skip)");
                 LOG.info("Job {} firing skipped: execution {} still running", job.id(),
                         running.get(0).id());
-                return repository.findExecution(skippedId).orElseThrow();
+                return metered(repository.findExecution(skippedId).orElseThrow());
             }
         }
         String executionId = repository.startExecution(job.id(), appName, triggerType,
@@ -272,7 +284,7 @@ public final class JobExecutor {
                 repository.stopExecution(executionId,
                         "stopped by operator (cooperative stop)");
                 LOG.info("Job {} execution {} stopped by operator", job.id(), executionId);
-                return repository.findExecution(executionId).orElseThrow();
+                return metered(repository.findExecution(executionId).orElseThrow());
             }
             repository.completeExecution(executionId);
             LOG.info("Job {} execution {} completed", job.id(), executionId);
@@ -284,7 +296,26 @@ public final class JobExecutor {
         } finally {
             jobSpan.end();
         }
-        return repository.findExecution(executionId).orElseThrow();
+        return metered(repository.findExecution(executionId).orElseThrow());
+    }
+
+    /**
+     * Reports one finished run to the meter (docs/jobs.md "Observing runs"): every outcome —
+     * COMPLETED, FAILED, STOPPED, SKIPPED — counts under its own status tag, and completed
+     * runs record their duration, so a Grafana panel answers "did tonight's close run, and
+     * how long has it been trending".
+     */
+    private JobExecution metered(JobExecution execution) {
+        Map<String, String> tags = new LinkedHashMap<>();
+        tags.put("job", execution.jobId());
+        tags.put("app", execution.appName() == null ? "" : execution.appName());
+        tags.put("status", execution.status().name());
+        meter.counter("tesseraql.job.runs").increment(tags);
+        if (execution.durationMs() != null) {
+            meter.histogram("tesseraql.job.duration").record(execution.durationMs(),
+                    Map.of("job", execution.jobId()));
+        }
+        return execution;
     }
 
     /**

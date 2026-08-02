@@ -637,6 +637,9 @@ public final class TesseraqlRuntime implements AutoCloseable {
         io.tesseraql.operations.http.HttpCallClient httpCallClient = new io.tesseraql.operations.http.HttpCallClient(
                 httpOutbound, manifest.config(), tracer, effectiveMeter);
         JobExecutor jobExecutor = new JobExecutor(jobRepository, tempStore, slowSqlLog, tracer)
+                // Every finished run counts on the exposition (docs/jobs.md "Observing
+                // runs"): tesseraql.job.runs by job/app/status + a duration histogram.
+                .meter(effectiveMeter)
                 // The same bound routes and commands run under: a batch statement held a pooled
                 // connection for as long as the driver would let it, which on a job is the
                 // longest anything goes unnoticed — nobody is waiting for the response.
