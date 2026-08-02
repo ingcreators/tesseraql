@@ -224,6 +224,32 @@ class BatchJobIntegrationTest {
     }
 
     @Test
+    void retentionReclaimsOldExportFilesButKeepsTheirHistory() throws Exception {
+        String token = token(List.of("BATCH_OPERATOR"));
+        send("POST", "/_tesseraql/ops/batch/jobs/user.exportReport/run", token,
+                "{\"businessDate\": \"2026-05-01\"}");
+        String transferId = transferIdOf("user.exportReport#extract");
+        io.tesseraql.core.files.FileTransferService transfers = runtime.camelContext()
+                .getRegistry().lookupByNameAndType(
+                        io.tesseraql.camel.TesseraqlProperties.FILE_TRANSFER_BEAN,
+                        io.tesseraql.core.files.FileTransferService.class);
+
+        // A cutoff in the future expires everything produced so far.
+        int expired = transfers.expireTransfersOlderThan(
+                java.time.Instant.now().plusSeconds(60));
+        assertThat(expired).isGreaterThanOrEqualTo(1);
+
+        // The bytes are gone — the download refuses — but the row stays as history,
+        // flagged expired for the transfers page.
+        assertThat(send("GET", "/_tesseraql/ops/batch/transfers/" + transferId + "/file",
+                token, null).statusCode()).isEqualTo(409);
+        assertThat(transfers.recent(100)).anySatisfy(transfer -> {
+            assertThat(transfer.transferId()).isEqualTo(transferId);
+            assertThat(transfer.expired()).isTrue();
+        });
+    }
+
+    @Test
     void aPushStepDeliversTheProducedFileToALocalDrop() throws Exception {
         String token = token(List.of("BATCH_OPERATOR"));
         HttpResponse<String> run = send("POST",

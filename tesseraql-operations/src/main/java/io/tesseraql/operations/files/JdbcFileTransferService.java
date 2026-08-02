@@ -292,6 +292,10 @@ public final class JdbcFileTransferService implements FileTransferService {
                             rs.getLong("row_count"),
                             rs.getString("filename"),
                             rs.getTimestamp("downloaded_at") != null,
+                            // A completed export with no spool left: retention reclaimed it.
+                            "EXPORT".equals(rs.getString("direction"))
+                                    && "COMPLETED".equals(rs.getString("execution_status"))
+                                    && rs.getString("spool_uri") == null,
                             rs.getTimestamp("created_at").toInstant()));
                 }
             }
@@ -326,6 +330,42 @@ public final class JdbcFileTransferService implements FileTransferService {
         } catch (IOException ex) {
             throw new UncheckedIOException(ex);
         }
+    }
+
+    @Override
+    public int expireTransfersOlderThan(Instant cutoff) {
+        List<String[]> due = new ArrayList<>();
+        try (Connection connection = dataSource.getConnection();
+                PreparedStatement statement = connection.prepareStatement(
+                        "select transfer_id, spool_uri from tql_file_transfer"
+                                + " where created_at < ? and spool_uri is not null")) {
+            statement.setTimestamp(1, Timestamp.from(cutoff));
+            try (ResultSet rs = statement.executeQuery()) {
+                while (rs.next()) {
+                    due.add(new String[]{rs.getString(1), rs.getString(2)});
+                }
+            }
+        } catch (SQLException ex) {
+            throw new TqlException(TRANSFER_ERROR,
+                    "Failed to list expirable transfers: " + ex.getMessage());
+        }
+        int expired = 0;
+        for (String[] transfer : due) {
+            try {
+                tempStore.delete(new SpoolRef(transfer[0], SpoolKind.BINARY,
+                        URI.create(transfer[1]), 0, 0, Instant.now()));
+            } catch (RuntimeException ex) {
+                // Delete what we can and keep going: a node-local file spool written on
+                // another node is not ours to free, and one bad reference must not stall
+                // the sweep. The row is cleared either way — the reference is dead.
+                LOG.warn("Transfer {} spool {} not deleted here: {}", transfer[0], transfer[1],
+                        ex.getMessage());
+            }
+            update("update tql_file_transfer set spool_uri = null where transfer_id = ?",
+                    statement -> statement.setString(1, transfer[0]));
+            expired++;
+        }
+        return expired;
     }
 
     /** Stops accepting work and lets running transfers finish. */
