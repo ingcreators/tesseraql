@@ -512,7 +512,12 @@ Every run is persisted as an execution with its steps, visible three ways:
   grants scope which apps' jobs and executions a caller sees;
 - **logs and traces**: each run logs its completion or failure, every job and step is a
   span in the trace tree (with the owning app and affected rows), and slow step SQL shows
-  up in the slow-SQL view like any other statement.
+  up in the slow-SQL view like any other statement;
+- **metrics**: every finished run counts on the Prometheus exposition
+  ([observability](deployment.md)) — `tesseraql_job_runs_total` labelled
+  `job`/`app`/`status` (COMPLETED, FAILED, STOPPED, SKIPPED each count under their
+  own status, so "did tonight's close run" is one query) and a
+  `tesseraql_job_duration_seconds` histogram per job.
 
 ## Error codes
 

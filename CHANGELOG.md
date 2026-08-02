@@ -18,6 +18,13 @@ All notable changes to TesseraQL are documented here. The format follows
   composed — a route input, bound panel queries, and a GET form in the header slot
   (docs/declarative-views.md).
 
+- **Batch runs count on the Prometheus exposition** (docs/jobs.md,
+  docs/deployment.md): `tesseraql_job_runs_total` labelled `job`/`app`/`status` —
+  COMPLETED, FAILED, STOPPED, and SKIPPED each under their own status, so "did
+  tonight's close run" is one query — plus a `tesseraql_job_duration_seconds`
+  histogram per job, riding the same `/_tesseraql/metrics` scrape the route counters
+  use.
+
 - **The analytics loop has a front door** (docs/analytics.md): one guide page walks
   files → scheduled ETL → lake snapshots and time travel → dashboards → the delivered
   report, with pointers into each feature's page. The inventory gallery now proves

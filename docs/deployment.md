@@ -277,6 +277,11 @@ Opt in with `tesseraql.metrics.enabled: true` and scrape `GET /_tesseraql/metric
 recording — per-route invocation counters (`tesseraql_route_invocations_total`), an
 outcome-classed error counter (`tesseraql_route_errors_total`), and latency histograms in
 seconds (`tesseraql_route_duration_seconds_*`) labelled `routeId`/`method`/`outcome`.
+Batch runs ride the same exposition: `tesseraql_job_runs_total` labelled
+`job`/`app`/`status` and `tesseraql_job_duration_seconds_*` per job
+([jobs](jobs.md#observing-runs)) — alert on
+`increase(tesseraql_job_runs_total{status="FAILED"}[1d]) > 0` and on the expected
+nightly run *not* appearing.
 
 Beyond the route metrics, the scrape carries the node's poll-source health — the
 registry behind the console's jobs page, rendered as gauges at scrape time so a silent
