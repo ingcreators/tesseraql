@@ -40,6 +40,8 @@
               <a th:if="${t.downloadHref != null}" th:href="${t.downloadHref}" download
                  th:text="${t.filename}">file</a>
               <span th:if="${t.downloadHref == null}" th:text="${t.filename}"></span>
+              <span class="hc-badge" data-variant="neutral" data-size="sm"
+                    th:if="${t.expired}">expired</span>
             </td>
             <td class="hc-datagrid__cell" th:text="${t.downloaded}"></td>
             <td class="hc-datagrid__cell" th:text="${t.createdAt}"></td>

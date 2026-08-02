@@ -48,10 +48,14 @@ public interface FileTransferService {
     record Download(String filename, String contentType, InputStream content) {
     }
 
-    /** One transfer in the operations overview, tagged with its owning app for scoping. */
+    /**
+     * One transfer in the operations overview, tagged with its owning app for scoping.
+     * {@code expired} marks a completed export whose produced bytes the retention sweep has
+     * reclaimed — the row stays as history, the download answers 409.
+     */
     record TransferSummary(String transferId, String routeId, String appName, String direction,
             String format, String status, long rows, String filename, boolean downloaded,
-            java.time.Instant createdAt) {
+            boolean expired, java.time.Instant createdAt) {
     }
 
     /**
@@ -93,6 +97,16 @@ public interface FileTransferService {
 
     /** The most recent transfers, newest first (for the operations console). */
     List<TransferSummary> recent(int limit);
+
+    /**
+     * Reclaims the produced files of transfers created before {@code cutoff}
+     * (docs/file-transfers.md, retention): the spooled bytes are deleted and the row keeps
+     * its history with the spool reference cleared, so the download answers "no downloadable
+     * file" from then on. Idempotent and safe on every node — though a node-local file spool
+     * can only free its own disk; cluster deployments want {@code tesseraql.temp.store:
+     * db|blob}. Returns the number of transfers whose file was reclaimed.
+     */
+    int expireTransfersOlderThan(java.time.Instant cutoff);
 
     /**
      * Opens the generated file once the export completed (empty when unknown or not ready). The

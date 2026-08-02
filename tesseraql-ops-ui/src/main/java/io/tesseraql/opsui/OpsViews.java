@@ -129,10 +129,12 @@ public final class OpsViews {
             // retrieval path for job-produced files, which have no route-scoped URL
             // (docs/analytics-experience.md track 3).
             row.put("downloadHref", "EXPORT".equals(transfer.direction())
-                    && "COMPLETED".equals(transfer.status())
+                    && "COMPLETED".equals(transfer.status()) && !transfer.expired()
                             ? "/_tesseraql/ops/console/transfers/" + transfer.transferId()
                                     + "/file"
                             : null);
+            // Retention reclaimed the bytes; the row stays as history and says so.
+            row.put("expired", transfer.expired());
             row.put("downloaded", transfer.downloaded() ? "yes" : "-");
             row.put("createdAt", transfer.createdAt() == null
                     ? "-"
