@@ -53,7 +53,7 @@ Schema for TesseraQL Simple YAML documents: routes (web/**/<method>.yml), jobs (
 | `sla` | [object](#sla) | Deadline expectations a periodic managed check alerts on through the alerts channel (kind: job) - alert-only, nothing is killed. Documented in jobs.md. |
 | `perTenant` | boolean | Run this job once per configured tenant, each on its own datasource and tenant context (kind: job). Documented in multi-tenancy.md. |
 | `params` | map of [inputField](#inputfield) | A job's declared parameters (kind: job) - the same field contract routes declare with input:. Documented in jobs.md. |
-| `pipeline` | array of object | A batch-pipeline job's ordered steps (exactly one of sql, notify, http-call, chunk, or export per step), each publishing its result to the step context. Documented in jobs.md. |
+| `pipeline` | array of object | A batch-pipeline job's ordered steps (exactly one of sql, notify, http-call, chunk, export, or push per step), each publishing its result to the step context. Documented in jobs.md. |
 
 ### security
 

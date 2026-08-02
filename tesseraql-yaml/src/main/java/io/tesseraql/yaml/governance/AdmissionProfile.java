@@ -113,7 +113,8 @@ public final class AdmissionProfile {
 
         // 4. Egress must be bounded: a lone "*" is not an allow-list.
         for (String key : new String[]{"tesseraql.http.outbound.allowedHosts",
-                "tesseraql.connectors.poll.allowedHosts"}) {
+                "tesseraql.connectors.poll.allowedHosts",
+                "tesseraql.connectors.push.allowedHosts"}) {
             Object hosts = manifest.config().navigate(key);
             if (hosts instanceof List<?> list && list.stream()
                     .anyMatch(host -> "*".equals(String.valueOf(host).trim()))) {

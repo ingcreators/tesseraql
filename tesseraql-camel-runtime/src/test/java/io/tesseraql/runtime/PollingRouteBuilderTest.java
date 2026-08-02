@@ -5,7 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import io.tesseraql.core.error.TqlException;
 import io.tesseraql.yaml.config.AppConfig;
-import io.tesseraql.yaml.connectors.PollConnectors;
+import io.tesseraql.yaml.connectors.FileConnectors;
 import io.tesseraql.yaml.model.PollSpec;
 import java.nio.file.Path;
 import java.util.List;
@@ -192,7 +192,7 @@ class PollingRouteBuilderTest {
 
         assertThatThrownBy(() -> builder.endpointUri(ftps()))
                 .isInstanceOf(io.tesseraql.core.error.TqlException.class)
-                .hasMessageContaining("only an sftp source");
+                .hasMessageContaining("only an sftp endpoint");
     }
 
     /** A builder whose single credential is spelled by the caller. */
@@ -203,7 +203,7 @@ class PollingRouteBuilderTest {
         poll.put("credentials", Map.of("partner", credential));
         AppConfig config = new AppConfig(
                 Map.of("tesseraql", Map.of("connectors", Map.of("poll", poll))), name -> null);
-        return new PollingRouteBuilder(List.of(), PollConnectors.load(config), "app", Map.of(),
+        return new PollingRouteBuilder(List.of(), FileConnectors.poll(config), "app", Map.of(),
                 home, home.resolve("work"), new io.tesseraql.opsui.PollSourceStatus());
     }
 
@@ -271,7 +271,7 @@ class PollingRouteBuilderTest {
         AppConfig config = new AppConfig(
                 Map.of("tesseraql", Map.of("connectors", Map.of("poll", withCredential))),
                 name -> null);
-        return new PollingRouteBuilder(List.of(), PollConnectors.load(config), "app", Map.of(),
+        return new PollingRouteBuilder(List.of(), FileConnectors.poll(config), "app", Map.of(),
                 home, home.resolve("work"), new io.tesseraql.opsui.PollSourceStatus());
     }
 

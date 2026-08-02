@@ -10,16 +10,37 @@ import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 
-class PollConnectorsTest {
+class FileConnectorsTest {
 
     private static AppConfig config(Map<String, Object> poll, Map<String, String> env) {
         return new AppConfig(
                 Map.of("tesseraql", Map.of("connectors", Map.of("poll", poll))), env::get);
     }
 
+    /** The push block loads through the same policy machinery, independently of poll's. */
+    @Test
+    void thePushBlockIsItsOwnPolicy() {
+        AppConfig config = new AppConfig(Map.of("tesseraql", Map.of("connectors", Map.of(
+                "poll", Map.of("allowedHosts", List.of("inbound.example")),
+                "push", Map.of(
+                        "allowedHosts", List.of("outbound.example"),
+                        "credentials", Map.of("partner", Map.of("username", "svc")))))),
+                name -> null);
+
+        FileConnectors push = FileConnectors.push(config);
+        assertThat(push.block()).isEqualTo("push");
+        assertThat(push.isHostAllowed("outbound.example")).isTrue();
+        assertThat(push.isHostAllowed("inbound.example")).isFalse();
+        assertThat(push.requireCredential("partner").require("username")).isEqualTo("svc");
+        // The refusal names the push block's keys, not poll's.
+        org.assertj.core.api.Assertions
+                .assertThatThrownBy(() -> push.requireCredential("nope"))
+                .hasMessageContaining("tesseraql.connectors.push.credentials");
+    }
+
     @Test
     void loadsAllowListAndCredentials() {
-        PollConnectors poll = PollConnectors.load(config(Map.of(
+        FileConnectors poll = FileConnectors.poll(config(Map.of(
                 "allowedHosts", List.of("sftp.partner.example", "*.internal.example"),
                 "credentials", Map.of(
                         "partner", Map.of("username", "svc", "password", "static-pass"))),
@@ -34,7 +55,7 @@ class PollConnectorsTest {
 
     @Test
     void remoteHostsAreDenyByDefaultWithExactAndWildcardMatching() {
-        PollConnectors poll = PollConnectors.load(config(Map.of(
+        FileConnectors poll = FileConnectors.poll(config(Map.of(
                 "allowedHosts", List.of("sftp.partner.example", "*.internal.example")), Map.of()));
 
         assertThat(poll.isHostAllowed("sftp.partner.example")).isTrue();
@@ -46,19 +67,19 @@ class PollConnectorsTest {
     @Test
     void credentialSettingsResolvePlaceholdersLazilyPerRead() {
         Map<String, String> env = new HashMap<>();
-        PollConnectors poll = PollConnectors.load(config(Map.of(
+        FileConnectors poll = FileConnectors.poll(config(Map.of(
                 "credentials", Map.of(
                         "partner", Map.of("username", "svc", "password", "${SFTP_PASS}"))),
                 env));
 
-        PollConnectors.Credential partner = poll.requireCredential("partner");
+        FileConnectors.Credential partner = poll.requireCredential("partner");
         env.put("SFTP_PASS", "s3cr3t");
         assertThat(partner.require("password")).isEqualTo("s3cr3t");
     }
 
     @Test
     void aMalformedCredentialFailsAtLoadTime() {
-        assertThatThrownBy(() -> PollConnectors.load(config(Map.of(
+        assertThatThrownBy(() -> FileConnectors.poll(config(Map.of(
                 "credentials", Map.of("bad", "not-a-map")), Map.of())))
                 .isInstanceOf(TqlException.class)
                 .hasMessageContaining("TQL-YAML-1104");
@@ -66,7 +87,7 @@ class PollConnectorsTest {
 
     @Test
     void anUnknownCredentialFailsLoudly() {
-        PollConnectors poll = PollConnectors.load(new AppConfig(Map.of(), name -> null));
+        FileConnectors poll = FileConnectors.poll(new AppConfig(Map.of(), name -> null));
 
         assertThat(poll.isEmpty()).isTrue();
         assertThat(poll.isHostAllowed("sftp.partner.example")).isFalse();

@@ -177,9 +177,17 @@ Out of scope, named so they stay decisions:
   the size cap is the channel's `maxAttachmentBytes` (default 10 MiB), a channel
   setting because the mail server's limit is the operator's fact. An unknown or
   not-yet-readable transfer fails the delivery into the retry policy, naming itself.
-- **SFTP/FTPS push.** Poll sources are deliberately consume-only; a push connector is
-  an egress surface needing the same allow-list + credential + admission treatment
-  poll sources got, designed as its own piece when a real integration demands it.
+- **SFTP/FTPS push** — *lifted; designed as its own piece as promised.* The `push:`
+  pipeline step delivers a produced transfer to a local or SFTP/FTPS drop under a
+  mirrored policy block, `tesseraql.connectors.push` — separate from poll's because
+  whom an app accepts files from and whom it delivers to are different trust
+  decisions, each deny-by-default (`TQL-SEC-4141` at run time, `TQL-ADM-4703` on a
+  bare `*`). The endpoint mechanics (RAW-wrapped secrets, SFTP known-hosts pinning,
+  FTPS `PBSZ 0`/`PROT P` + trust store, exactly-one-authentication-method) are one
+  shared implementation with the poll consumers, so the two directions cannot drift
+  the way the FTPS data channel once did. Delivery stages under a temp name and
+  renames, so a partner poller never reads a partial file; a failed delivery fails
+  the step (`TQL-BATCH-5315`) into the ordinary rerun/SLA story.
 - **Parquet as a codec.** Parquet stays DuckDB's format (`COPY TO`, lake tables); a
   `FileCodec` for it would duplicate an engine the framework already embeds.
 

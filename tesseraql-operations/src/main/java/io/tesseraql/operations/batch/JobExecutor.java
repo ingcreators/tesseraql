@@ -73,6 +73,18 @@ public final class JobExecutor {
     private java.util.function.Function<String, io.tesseraql.core.sql.FilePathResolver> filePathResolvers;
     private io.tesseraql.core.files.FileTransferService fileTransfers;
     private Path appHome;
+    private FilePusher filePusher;
+
+    /**
+     * Delivers a produced file to a {@code push:} step's target
+     * (docs/analytics-experience.md); the runtime wires the Camel-backed push service, this
+     * module stays Camel-free.
+     */
+    @FunctionalInterface
+    public interface FilePusher {
+        void push(io.tesseraql.yaml.model.PushSpec spec, String filename,
+                java.io.InputStream content);
+    }
 
     public JobExecutor(JobRepository repository, TempStore tempStore) {
         this(repository, tempStore, io.tesseraql.core.diag.NoopSqlExecutionLog.INSTANCE);
@@ -129,6 +141,12 @@ public final class JobExecutor {
             Path appHome) {
         this.fileTransfers = transfers;
         this.appHome = appHome;
+        return this;
+    }
+
+    /** Wires the delivery service {@code push:} steps send through. Optional, like the rest. */
+    public JobExecutor filePush(FilePusher pusher) {
+        this.filePusher = pusher;
         return this;
     }
 
@@ -341,6 +359,8 @@ public final class JobExecutor {
                         stepContext);
             } else if (step.export() != null) {
                 result = runExportStep(jobFile, step, dataSource, context, appName);
+            } else if (step.push() != null) {
+                result = runPushStep(step, context);
             } else {
                 result = runStep(jobFile, step, dataSource, context, stepContext);
             }
@@ -549,6 +569,48 @@ public final class JobExecutor {
         stepResult.put("transferId", result.transferId());
         stepResult.put("filename", result.filename());
         return stepResult;
+    }
+
+    /**
+     * Runs a push step (docs/analytics-experience.md): the {@code file:} path resolves to a
+     * transfer id — typically an earlier export step's {@code step.<id>.transferId} — whose
+     * produced file the wired pusher delivers to the target. Reading the transfer counts as
+     * its first download (a route-produced transfer's {@code download}-timed follow-up fires),
+     * because delivered is downloaded.
+     */
+    private Map<String, Object> runPushStep(PipelineStep step, Map<String, Object> context) {
+        if (filePusher == null || fileTransfers == null) {
+            throw TqlException.builder(STEP_ERROR)
+                    .message("Step '" + step.id() + "' declares push: but no push/transfer"
+                            + " service is wired")
+                    .build();
+        }
+        io.tesseraql.yaml.model.PushSpec push = step.push();
+        Object resolved = new EvaluationContext(context)
+                .resolve(Arrays.asList(push.file().split("\\.")));
+        String transferId = resolved == null ? null : String.valueOf(resolved);
+        if (transferId == null || transferId.isBlank()) {
+            throw TqlException.builder(STEP_ERROR)
+                    .message("Step '" + step.id() + "': push file: '" + push.file()
+                            + "' resolved to no transfer id")
+                    .build();
+        }
+        io.tesseraql.core.files.FileTransferService.Download download = fileTransfers
+                .download(transferId)
+                .orElseThrow(() -> TqlException.builder(STEP_ERROR)
+                        .message("Step '" + step.id() + "': transfer " + transferId
+                                + " has no downloadable file")
+                        .build());
+        String filename = push.as() == null || push.as().isBlank()
+                ? download.filename()
+                : interpolate(push.as(), context);
+        filePusher.push(push, filename, download.content());
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("affectedRows", 1);
+        result.put("transferId", transferId);
+        result.put("filename", filename);
+        result.put("target", push.effectiveTarget());
+        return result;
     }
 
     /** Renders one step-owned 2-way SQL file the way {@link #runStep} does. */

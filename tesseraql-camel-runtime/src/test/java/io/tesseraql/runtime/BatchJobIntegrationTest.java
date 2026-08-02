@@ -224,6 +224,23 @@ class BatchJobIntegrationTest {
     }
 
     @Test
+    void aPushStepDeliversTheProducedFileToALocalDrop() throws Exception {
+        String token = token(List.of("BATCH_OPERATOR"));
+        HttpResponse<String> run = send("POST",
+                "/_tesseraql/ops/batch/jobs/user.deliverReport/run", token,
+                "{\"businessDate\": \"2026-04-01\"}");
+        assertThat(run.body()).contains("COMPLETED");
+
+        // Delivered under the allow-listed root, named by the interpolated as:, whole —
+        // the .part staging name must be gone.
+        Path delivered = appHome.resolve("outbox/partner/users-2026-04-01.csv");
+        assertThat(delivered).exists();
+        assertThat(Files.readString(delivered)).startsWith("name,status").contains("sato");
+        assertThat(appHome.resolve("outbox/partner/users-2026-04-01.csv.part"))
+                .doesNotExist();
+    }
+
+    @Test
     void businessDayCalendarsFilterScheduledFirings() throws Exception {
         // The control job — a calendar where every day counts — proves the scheduler fires.
         long deadline = System.currentTimeMillis() + 60_000;
@@ -706,6 +723,28 @@ class BatchJobIntegrationTest {
         Files.writeString(target.resolve("batch/report/stamp-transfer.sql"),
                 "update users set status = 'ROWS-' || cast(/* exported */ 0 as varchar)"
                         + " where name = 'pending-user'\n");
+        // A push step delivering the produced transfer to a local drop under the push
+        // block's allowedPaths root (docs/analytics-experience.md).
+        Files.createDirectories(target.resolve("batch/deliver"));
+        Files.writeString(target.resolve("batch/deliver/job.yml"), """
+                version: tesseraql/v1
+                id: user.deliverReport
+                kind: job
+                recipe: batch-pipeline
+                pipeline:
+                  - id: extract
+                    export:
+                      format: csv
+                      sql: { file: report.sql, mode: query }
+                  - id: drop
+                    push:
+                      target: local
+                      path: outbox/partner
+                      file: step.extract.transferId
+                      as: users-{batch.businessDate}.csv
+                """);
+        Files.writeString(target.resolve("batch/deliver/report.sql"),
+                "select name, status from users order by name\n");
         // Business-day calendars (docs/batch-platform.md track B): a control calendar where
         // every day counts, a static holiday list naming today, and a table-backed source the
         // migration seeds with today's row — the gated siblings must never record a run.
@@ -944,6 +983,9 @@ class BatchJobIntegrationTest {
                 tesseraql:
                   diagnostics:
                     slowSqlMillis: 0
+                  connectors:
+                    push:
+                      allowedPaths: [outbox]
                 """.formatted(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(),
                 POSTGRES.getPassword()));
         return target;

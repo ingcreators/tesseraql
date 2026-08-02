@@ -633,6 +633,12 @@ public final class TesseraqlRuntime implements AutoCloseable {
                 // export: pipeline steps write through the same transfer machinery HTTP
                 // file-export routes use (docs/analytics-experience.md track 3).
                 .fileTransfers(fileTransfers, appHome)
+                // push: pipeline steps deliver a produced transfer to a partner drop —
+                // local, or SFTP/FTPS under the push policy block's deny-by-default
+                // allow-list (docs/analytics-experience.md).
+                .filePush(new FilePushService(context,
+                        io.tesseraql.yaml.connectors.FileConnectors.push(manifest.config()),
+                        appHome)::push)
                 // ETL job SQL on a duckdb datasource resolves ${scope.*} placeholders through the
                 // same declared file scopes as routes (docs/duckdb.md).
                 .filePathResolvers(datasourceName -> datasourceName != null
@@ -1405,7 +1411,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
             // local/SFTP/FTPS sources feed the file-import pipeline, under a deny-by-default host
             // allow-list. The Camel file/ftp endpoint stays an implementation detail.
             context.addRoutes(new PollingRouteBuilder(List.copyOf(jobs.values()),
-                    io.tesseraql.yaml.connectors.PollConnectors.load(manifest.config()), appName,
+                    io.tesseraql.yaml.connectors.FileConnectors.poll(manifest.config()), appName,
                     jobOwners, appHome,
                     io.tesseraql.yaml.config.WorkHome.resolve(appHome, manifest.config()),
                     pollSourceStatus));
