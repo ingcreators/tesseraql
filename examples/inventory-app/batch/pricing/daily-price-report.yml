@@ -20,3 +20,11 @@ pipeline:
         - { name: sku, header: SKU }
         - { name: best_price, header: Best price }
         - { name: suppliers, header: Suppliers }
+  # The delivery leg (docs/jobs.md "The push step"): the same file lands in the local
+  # partner drop, whole — staged and renamed, so a poller never reads a partial file.
+  # A remote partner is the same step with target: sftp + a push credential.
+  - id: deliver
+    push:
+      target: local
+      path: outbox/reports
+      file: step.report.transferId
