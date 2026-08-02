@@ -55,6 +55,14 @@ The model is:
 - `fontFamilies` — the app's font families as a CSS `font-family` list, for templates that do
   not name fonts themselves
 
+A print template renders **tables, text, and static markup** — not the dashboard
+charts. Dashboard charts draw client-side (the kit's
+[chart recipe](hypermedia-ui.md#charts) enhances a server-rendered data table in the
+browser), and the PDF engine runs no JavaScript, so a chart cannot appear in a PDF
+report; include the underlying data as a table instead — which is exactly what the
+chart's own no-JavaScript fallback shows. If chart-in-PDF demand lands, the path is
+the kit's server-side rendering story, not a second chart engine here.
+
 Page-oriented CSS drives the print layout:
 
 ```html

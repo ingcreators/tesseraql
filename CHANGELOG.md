@@ -8,6 +8,16 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **Push server-identity lint nudges** (docs/connectors.md): an `sftp` push target
+  without `tesseraql.connectors.push.knownHostsFile` warns (`TQL-SEC-4084`), an
+  `ftps` push target without `tesseraql.connectors.push.trustStore` is an error
+  (`TQL-SEC-4085`) — the poll side's nudges, mirrored, since the runtime enforces the
+  same guarantees on both directions. Docs also record two authoring facts: PDF print
+  templates carry tables and text, not the client-drawn dashboard charts
+  (docs/printable-documents.md), and a **filtered dashboard** is existing vocabulary
+  composed — a route input, bound panel queries, and a GET form in the header slot
+  (docs/declarative-views.md).
+
 - **Batch runs count on the Prometheus exposition** (docs/jobs.md,
   docs/deployment.md): `tesseraql_job_runs_total` labelled `job`/`app`/`status` —
   COMPLETED, FAILED, STOPPED, and SKIPPED each under their own status, so "did
