@@ -15,6 +15,14 @@ All notable changes to TesseraQL are documented here. The format follows
   histogram per job, riding the same `/_tesseraql/metrics` scrape the route counters
   use.
 
+- **The analytics loop has a front door** (docs/analytics.md): one guide page walks
+  files → scheduled ETL → lake snapshots and time travel → dashboards → the delivered
+  report, with pointers into each feature's page. The inventory gallery now proves
+  the whole loop: the daily report **pushes to a local partner drop**, and the
+  dashboard adds a **best-price trend from the lake's history** plus the **snapshot
+  list** — the time-travel index. The five-minute demo gains the close-to-delivery
+  leg.
+
 - **Transfer retention** (docs/file-transfers.md): `tesseraql.transfers.retentionDays`
   reclaims produced files older than that many days on a periodic sweep
   (`sweepInterval`, default 1h) — the spooled bytes are deleted, the transfer row

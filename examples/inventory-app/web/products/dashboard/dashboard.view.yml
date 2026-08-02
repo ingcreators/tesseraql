@@ -32,3 +32,19 @@ panels:
       - { name: sku, label: SKU }
       - { name: best_price, label: Best price }
       - { name: suppliers }
+  # Lake history (docs/duckdb.md): the pricing job appends one snapshot per run —
+  # the trend line reads them, and the snapshot list is the time-travel index
+  # (query any of them with AT (VERSION => n)).
+  - type: chart
+    kind: line
+    source: priceTrend
+    title: Best-price trend (lake)
+    x: label
+    yLabel: avg best price
+    y: avg_price
+  - type: table
+    source: lakeSnapshots
+    title: Lake snapshots
+    columns:
+      - { name: snapshot_id, label: Version }
+      - { name: taken_at, label: Taken at }
