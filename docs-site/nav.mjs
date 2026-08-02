@@ -32,6 +32,7 @@ export const SECTIONS = [
       'attachments',
       'multi-datasource',
       'duckdb',
+      'analytics',
       'testing',
       'documentation-portal',
       'vscode-extension',

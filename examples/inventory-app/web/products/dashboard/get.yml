@@ -20,6 +20,14 @@ queries:
   supplierPrices:
     file: supplier-prices.sql
     datasource: analytics
+  # The lake's history (docs/duckdb.md "Lake tables"): every pricing run appended a
+  # snapshot; the trend and the snapshot list read them beside the live tables.
+  priceTrend:
+    file: price-trend.sql
+    datasource: analytics
+  lakeSnapshots:
+    file: lake-snapshots.sql
+    datasource: analytics
 
 response:
   html:

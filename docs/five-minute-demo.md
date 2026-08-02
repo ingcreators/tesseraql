@@ -71,9 +71,18 @@ around — every stop is live against the seeded data:
    diff. `tesseraql admission --app examples/inventory-app` is the bar a shared app must
    clear ([marketplace admission](admission.md)).
 6. **Dashboards** — open `http://localhost:8080/products/dashboard` in the browser: stats,
-   a chart and a low-stock table from three SQL files and one `view: dashboard` document, no
-   HTML anywhere in the app. The product pages share your browser login (the demo app's JSON
-   APIs stay `auth: bearer` for machine callers).
+   charts and a low-stock table from a handful of SQL files and one `view: dashboard`
+   document, no HTML anywhere in the app — including a supplier-price table read straight
+   off CSV files and a price trend from the lake's snapshots, live database and analytics
+   engine composing in one page. The product pages share your browser login (the demo
+   app's JSON APIs stay `auth: bearer` for machine callers).
+7. **The close, end to end** — on the ops console's jobs page
+   (`/_tesseraql/ops/console/jobs`), run `pricing.loadSummary`: the ETL reads the CSV drop,
+   lands the summary on the live database, and appends a lake snapshot — then the chained
+   `pricing.dailyReport` writes the day's CSV and drops it in `outbox/reports/`. The
+   produced file is on the **transfers** page (downloadable), the run history on
+   **executions**, and the dashboard's trend chart has a new point
+   ([the whole analytics loop](analytics.md)).
 
 ## The low-code loop, end to end
 

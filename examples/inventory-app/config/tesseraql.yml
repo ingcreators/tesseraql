@@ -37,6 +37,12 @@ tesseraql:
             root: data/drops
             partitionBy: tenant
 
+  # The daily report's delivery drop (docs/connectors.md): the push step writes under
+  # this root — deny by default, like every filesystem surface.
+  connectors:
+    push:
+      allowedPaths: [outbox]
+
   security:
     # Path-matched route security defaults (docs/route-defaults.md): the API surface is
     # bearer, everything else is a browser page/fragment with CSRF on writes.

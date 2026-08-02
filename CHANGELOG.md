@@ -8,6 +8,14 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **The analytics loop has a front door** (docs/analytics.md): one guide page walks
+  files → scheduled ETL → lake snapshots and time travel → dashboards → the delivered
+  report, with pointers into each feature's page. The inventory gallery now proves
+  the whole loop: the daily report **pushes to a local partner drop**, and the
+  dashboard adds a **best-price trend from the lake's history** plus the **snapshot
+  list** — the time-travel index. The five-minute demo gains the close-to-delivery
+  leg.
+
 - **SFTP/FTPS/local delivery: the `push:` pipeline step** (docs/jobs.md,
   docs/connectors.md): a job can deliver a produced transfer — typically an export
   step's file — to a partner drop. The outbound mirror of `poll:`, under its own
