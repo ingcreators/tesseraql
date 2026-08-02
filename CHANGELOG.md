@@ -8,6 +8,18 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **SFTP/FTPS/local delivery: the `push:` pipeline step** (docs/jobs.md,
+  docs/connectors.md): a job can deliver a produced transfer — typically an export
+  step's file — to a partner drop. The outbound mirror of `poll:`, under its own
+  deny-by-default policy block `tesseraql.connectors.push` (host allow-list, local
+  `allowedPaths` roots, `knownHostsFile`, FTPS `trustStore`, named credentials through
+  the SecretResolver SPI); the remote endpoint mechanics are one implementation shared
+  with the poll consumers, so the two directions cannot drift apart. Deliveries stage
+  under a temp name and rename, so a partner poller never reads a partial file; an
+  off-list host is `TQL-SEC-4141`, a failed delivery `TQL-BATCH-5315`, malformed steps
+  `TQL-YAML-1042`, and a bare `*` in the push allow-list fails admission
+  (`TQL-ADM-4703`).
+
 - **Mail attachments: `attach:` on a notify declaration**
   (docs/notifications.md): a notification through a mail channel can carry a produced
   file — `attach: step.report.transferId` names the export step's transfer, the id

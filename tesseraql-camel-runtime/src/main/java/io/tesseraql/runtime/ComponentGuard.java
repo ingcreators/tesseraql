@@ -30,12 +30,15 @@ final class ComponentGuard {
 
     /**
      * Installs the guard; call immediately after creating the context. A poll-triggered job's
-     * declared {@code source:} (sftp/ftp/...) is the app's structured component intent, so an
-     * {@code allowed:} narrowing never has to restate it — the deny sets still win, so a job
-     * cannot resurrect a baseline-denied component either.
+     * declared {@code source:} and a push step's declared {@code target:} (sftp/ftps/...) are
+     * the app's structured component intent, so an {@code allowed:} narrowing never has to
+     * restate them — the deny sets still win, so a job cannot resurrect a baseline-denied
+     * component either.
      */
     static void install(CamelContext context, AppManifest manifest) {
-        install(context, ComponentPolicy.from(manifest.config()), declaredPollSources(manifest));
+        Set<String> declared = declaredPollSources(manifest);
+        declared.addAll(declaredPushTargets(manifest));
+        install(context, ComponentPolicy.from(manifest.config()), declared);
     }
 
     /** The enforcement seam, also exercised directly by the unit tests. */
@@ -56,6 +59,19 @@ final class ComponentGuard {
                 });
             }
         });
+    }
+
+    /** The components the app's push steps declare as their {@code target:} (remote only). */
+    private static Set<String> declaredPushTargets(AppManifest manifest) {
+        Set<String> targets = new LinkedHashSet<>();
+        for (JobFile job : manifest.jobs()) {
+            for (io.tesseraql.yaml.model.PipelineStep step : job.definition().pipeline()) {
+                if (step.push() != null && step.push().isRemote()) {
+                    targets.add(step.push().effectiveTarget());
+                }
+            }
+        }
+        return targets;
     }
 
     /** The components the app's poll-triggered jobs declare as their {@code source:}. */

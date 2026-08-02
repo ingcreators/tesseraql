@@ -3777,10 +3777,13 @@ public final class AppLinter {
             if (step.export() != null) {
                 declared++;
             }
+            if (step.push() != null) {
+                declared++;
+            }
             if (declared != 1) {
                 findings.add(new LintFinding("TQL-FIELD-2004", "error", source, "Step '"
                         + step.id() + "' must declare exactly one of sql:, notify:, http-call:,"
-                        + " chunk:, or export:"));
+                        + " chunk:, export:, or push:"));
                 continue;
             }
             if (step.notification() != null) {
@@ -3791,7 +3794,60 @@ public final class AppLinter {
                 lintChunk(job, step, source, findings);
             } else if (step.export() != null) {
                 lintExportStep(job, step, source, findings);
+            } else if (step.push() != null) {
+                lintPushStep(config, step, source, findings);
             }
+        }
+    }
+
+    /**
+     * Statically checks a push step (docs/analytics-experience.md): the transfer reference and
+     * target are required, a remote target needs its host and credential, and the delivered
+     * name stays a bare filename — separators or placeholder-shaped values would let a YAML
+     * scalar steer the write ({@code TQL-YAML-1042}). Host allow-listing stays a runtime
+     * refusal ({@code TQL-SEC-4141}): the allow-list is deployment config another environment
+     * may declare differently.
+     */
+    private void lintPushStep(AppConfig config, io.tesseraql.yaml.model.PipelineStep step,
+            String source, List<LintFinding> findings) {
+        io.tesseraql.yaml.model.PushSpec push = step.push();
+        if (push.file() == null || push.file().isBlank()) {
+            findings.add(new LintFinding("TQL-YAML-1042", "error", source, "Step '" + step.id()
+                    + "': push needs file: (a context path resolving to a transfer id, e.g."
+                    + " step.report.transferId)"));
+        }
+        String target = push.effectiveTarget();
+        if (!"local".equals(target) && !"sftp".equals(target) && !"ftps".equals(target)) {
+            findings.add(new LintFinding("TQL-YAML-1042", "error", source, "Step '" + step.id()
+                    + "': push target: must be local, sftp, or ftps"));
+            return;
+        }
+        if (push.path() == null || push.path().isBlank()) {
+            findings.add(new LintFinding("TQL-YAML-1042", "error", source, "Step '" + step.id()
+                    + "': push needs path: (the directory to deliver into)"));
+        }
+        if (push.isRemote()) {
+            if (push.host() == null || push.host().isBlank()) {
+                findings.add(new LintFinding("TQL-YAML-1042", "error", source, "Step '"
+                        + step.id() + "': a remote push target needs host:"));
+            }
+            if (push.credential() == null || push.credential().isBlank()) {
+                findings.add(new LintFinding("TQL-YAML-1042", "error", source, "Step '"
+                        + step.id() + "': a remote push target needs credential: (declared"
+                        + " under tesseraql.connectors.push.credentials)"));
+            } else if (config.navigate("tesseraql.connectors.push.credentials."
+                    + push.credential()) == null) {
+                // A warning, not an error: another environment's config may declare it.
+                findings.add(new LintFinding("TQL-YAML-1102", "warning", source, "Step '"
+                        + step.id() + "' references undeclared push credential '"
+                        + push.credential() + "'"));
+            }
+        }
+        if (push.as() != null && (push.as().contains("/") || push.as().contains("\\")
+                || push.as().contains("..") || push.as().contains("${"))) {
+            findings.add(new LintFinding("TQL-YAML-1042", "error", source, "Step '" + step.id()
+                    + "': push as: must be a plain file name ({dotted.path} placeholders"
+                    + " resolve against the job context)"));
         }
     }
 

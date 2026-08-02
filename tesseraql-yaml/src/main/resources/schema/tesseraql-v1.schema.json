@@ -360,7 +360,7 @@
     },
     "pipeline": {
       "type": "array",
-      "description": "A batch-pipeline job's ordered steps (exactly one of sql, notify, http-call, chunk, or export per step), each publishing its result to the step context. Documented in jobs.md.",
+      "description": "A batch-pipeline job's ordered steps (exactly one of sql, notify, http-call, chunk, export, or push per step), each publishing its result to the step context. Documented in jobs.md.",
       "items": { "type": "object", "additionalProperties": true }
     }
   },

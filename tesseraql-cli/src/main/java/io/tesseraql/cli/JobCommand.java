@@ -402,6 +402,11 @@ final class JobCommand implements Callable<Integer> {
                 // notify: steps enqueue on the durable outbox; the serving runtime delivers.
                 .notificationOutbox(outbox)
                 .fileTransfers(transfers, app)
+                // push: steps deliver through an owned, lazily-started Camel context — a run
+                // without a push step never pays for it, and the JVM exits with the command.
+                .filePush(new io.tesseraql.runtime.FilePushService(
+                        io.tesseraql.yaml.connectors.FileConnectors.push(manifest.config()),
+                        app)::push)
                 .httpCall(new io.tesseraql.operations.http.HttpCallClient(
                         io.tesseraql.yaml.http.HttpOutbound.load(manifest.config()),
                         manifest.config(), io.tesseraql.core.telemetry.NoopTracer.INSTANCE,

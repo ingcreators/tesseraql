@@ -351,6 +351,52 @@ A poll job is covered by the `file-poll` coverage kind when a declarative suite 
 per-row import SQL (a plain `sql:` case), the same SQL-file basis as route and document coverage.
 Gate it with `coverage.thresholds.file-poll`.
 
+## The `push:` step — outbound delivery
+
+The outbound mirror of `poll:` (docs/analytics-experience.md): a batch pipeline's
+[`push:` step](jobs.md#the-push-step) delivers a produced transfer — typically an
+[export step](jobs.md#the-export-step)'s file — to a partner drop, local or SFTP/FTPS,
+under its own policy block:
+
+```yaml
+tesseraql:
+  connectors:
+    push:
+      allowedHosts:
+        - sftp.partner.example
+      allowedPaths:                 # local targets: deny-by-default roots
+        - outbox
+      knownHostsFile: config/known_hosts
+      credentials:
+        partner-sftp:
+          username: svc
+          password: ${secret.env.PARTNER_SFTP_PASSWORD}
+          # or: privateKeyFile / privateKeyPassphrase — exactly one method
+```
+
+The push block is deliberately separate from the poll block: whom an app accepts files
+from and whom it delivers files to are different trust decisions, each deny-by-default.
+Everything the poll side guarantees holds here through one shared endpoint
+implementation — the FTPS data channel drifted for a year when this logic had two
+homes, so now it has one:
+
+- **Host allow-list**, exact or `*.wildcard`, deny by default: an off-list target fails
+  the step with `TQL-SEC-4141` before anything connects.
+- **SFTP host keys** pin against the push block's `knownHostsFile` (strict checking);
+  unset means unchecked, and lint nudges.
+- **FTPS** requires the push block's `trustStore` (server verification + hostname
+  check) and sends `PBSZ 0`/`PROT P`, so the data channel is as protected as the
+  control channel; a client keystore on the credential supplies mutual TLS.
+- **Credentials** live in config, resolve through the SecretResolver SPI at send, and
+  declare exactly one authentication method — a job never carries one.
+- **Atomic for the partner's poller**: uploads stage under a dot-name and rename on
+  completion, so the other side's `poll:` (or anyone's) never reads a partial file.
+
+Delivery failures are `TQL-BATCH-5315` on the step — the job fails, `sla:` alerting
+and the rerun story apply, and a rerun re-delivers under the same name (an overwrite,
+not a duplicate). The [admission profile](admission.md) bounds push egress like every
+other: a bare `*` in `allowedHosts` fails admission (`TQL-ADM-4703`).
+
 ## The inbound `webhook` recipe
 
 A `webhook` route is an HMAC-verified, replay-protected POST endpoint in front of a SQL pipeline:

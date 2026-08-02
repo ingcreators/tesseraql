@@ -215,6 +215,8 @@ Each pipeline step has an `id` and declares **exactly one** of:
   ([below](#the-chunk-step))
 - `export:` — write a formatted file from an extraction query
   ([below](#the-export-step))
+- `push:` — deliver a produced file to a partner drop, local or SFTP/FTPS
+  ([below](#the-push-step))
 
 Steps run in order, and each step publishes its result into a shared context that later
 steps bind from:
@@ -226,6 +228,7 @@ steps bind from:
 | `step.<id>.status` / `step.<id>.body` / `step.<id>.headers` | an earlier `http-call` step's response |
 | `step.<id>.eventId`        | the outbox event id an earlier `notify:` step enqueued             |
 | `step.<id>.transferId` / `step.<id>.filename` / `step.<id>.rows` | an earlier `export:` step's produced transfer |
+| `step.<id>.target` / `step.<id>.filename` | an earlier `push:` step's delivery |
 | `tenant.id`                | the current tenant, on a [per-tenant job](#per-tenant-jobs)        |
 
 A SQL step names its file (relative to the job's directory) and an execution mode:
@@ -358,6 +361,53 @@ pipeline:
   ([notifications](notifications.md#the-notify-step-on-a-job)) — and an `http-call:`
   can tell a partner system the drop is ready.
 
+## The push step
+
+The delivery leg the export step stops short of: a `push:` step sends a produced
+transfer to a partner drop — the outbound mirror of the [`poll:`
+trigger](connectors.md#the-poll-trigger-for-file-import), under the mirrored policy block:
+
+```yaml
+pipeline:
+  - id: report
+    export:
+      format: csv
+      filename: price-summary-{batch.businessDate}.csv
+      sql: { file: report.sql, mode: query }
+  - id: deliver
+    push:
+      target: sftp                     # local | sftp | ftps
+      host: partner.example.com
+      path: /drop/incoming
+      credential: partner-sftp         # tesseraql.connectors.push.credentials
+      file: step.report.transferId
+      as: prices-{batch.businessDate}.csv   # optional; default: the transfer's filename
+```
+
+- **Deny by default, mirrored from poll.** A remote target's host must be in
+  `tesseraql.connectors.push.allowedHosts`; its `credential:` names an entry under
+  `tesseraql.connectors.push.credentials` (username plus exactly one of `password:` or
+  `privateKeyFile:`), so a job never carries a credential. The push block is separate
+  from the poll block on purpose — whom an app accepts files from and whom it delivers
+  to are different trust decisions. SFTP host keys pin against the push block's
+  `knownHostsFile`; FTPS requires the push block's `trustStore` and sends
+  `PBSZ 0`/`PROT P`, exactly the [poll-side guarantees](connectors.md) — the endpoint
+  mechanics are one shared implementation, so the two directions cannot drift apart.
+- **A `local` target writes under `tesseraql.connectors.push.allowedPaths`** — the
+  deny-by-default root rule every other filesystem surface follows.
+- **Delivery is atomic for the partner's poller**: the file is staged (`.part`
+  locally, a dot-name remotely) and renamed into place, so a partner never reads a
+  partial file.
+- **`file:` names the transfer** — typically the export step's
+  `step.<id>.transferId`, but any transfer id the context can supply. Reading it
+  counts as the transfer's first download. `as:` renames the delivery
+  (`{dotted.path}` placeholders resolve against the job context; a bare filename
+  only — separators are refused at build time, `TQL-YAML-1042`).
+- **A failed delivery fails the job** — connect, authenticate, or write errors are
+  `TQL-BATCH-5315` on the step, so the rerun story and `sla:` alerting apply
+  unchanged; a re-run re-delivers under the same name, which the rename semantics
+  make an overwrite, not a duplicate.
+
 ## Transactions
 
 Each SQL step runs on its own connection and commits independently. A job is **not** one
@@ -483,6 +533,8 @@ Every run is persisted as an execution with its steps, visible three ways:
 | `TQL-BATCH-4210` | an unknown `overlap:` policy, or an `sla:` that is empty or does not parse (lint) |
 | `TQL-BATCH-5001` | the execution store could not record a run |
 | `TQL-BATCH-5002` | a step failed (its SQL raised an error), a chunk step exceeded its `skipLimit`, or a step is misdeclared |
+| `TQL-BATCH-5315` | a `push:` delivery failed — connect, authenticate, write, or rename |
+| `TQL-SEC-4141` | a `push:` target host outside `tesseraql.connectors.push.allowedHosts` (deny by default) |
 
 The `notify:` and `http-call:` step families report their own codes in the same domain
 (channels `TQL-BATCH-5301`…, outbound HTTP `TQL-BATCH-5305`…); see
@@ -490,7 +542,9 @@ The `notify:` and `http-call:` step families report their own codes in the same 
 [error-code reference](reference-error-codes.md).
 
 Lint checks jobs statically: a step not declaring exactly one of `sql:`/`notify:`/
-`http-call:`/`chunk:`/`export:` (`TQL-FIELD-2004`), a malformed `export:` step — no
+`http-call:`/`chunk:`/`export:`/`push:` (`TQL-FIELD-2004`), a malformed `push:` step —
+no transfer reference, an unknown target, a remote target without host/credential, or
+a non-bare delivered name (`TQL-YAML-1042`), a malformed `export:` step — no
 extraction query, no format, or a `download`-timed follow-up (`TQL-YAML-1041`, with the
 pdf template checks and the datasource refusal shared with routes), a job with both a
 schedule and a poll trigger or

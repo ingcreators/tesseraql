@@ -1,10 +1,7 @@
 package io.tesseraql.runtime;
 
-import io.tesseraql.core.error.TqlDomain;
-import io.tesseraql.core.error.TqlErrorCode;
-import io.tesseraql.core.error.TqlException;
 import io.tesseraql.core.util.Durations;
-import io.tesseraql.yaml.connectors.PollConnectors;
+import io.tesseraql.yaml.connectors.FileConnectors;
 import io.tesseraql.yaml.manifest.JobFile;
 import io.tesseraql.yaml.model.ImportSpec;
 import io.tesseraql.yaml.model.PollSpec;
@@ -29,25 +26,18 @@ import org.apache.camel.builder.RouteBuilder;
  */
 final class PollingRouteBuilder extends RouteBuilder {
 
-    /** A remote poll source declared without a credential (docs/connectors.md). */
-    private static final TqlErrorCode REMOTE_NEEDS_CREDENTIAL = new TqlErrorCode(TqlDomain.SEC,
-            4088);
-
-    /** A poll credential declaring no authentication method, or more than one. */
-    private static final TqlErrorCode CREDENTIAL_METHOD = new TqlErrorCode(TqlDomain.SEC, 4089);
-
     private static final System.Logger LOG = System
             .getLogger(PollingRouteBuilder.class.getName());
 
     private final List<JobFile> jobs;
-    private final PollConnectors connectors;
+    private final FileConnectors connectors;
     private final String appName;
     private final Map<String, String> jobOwners;
     private final Path appHome;
     private final Path workHome;
     private final io.tesseraql.opsui.PollSourceStatus status;
 
-    PollingRouteBuilder(List<JobFile> jobs, PollConnectors connectors, String appName,
+    PollingRouteBuilder(List<JobFile> jobs, FileConnectors connectors, String appName,
             Map<String, String> jobOwners, Path appHome, Path workHome,
             io.tesseraql.opsui.PollSourceStatus status) {
         this.jobs = List.copyOf(jobs);
@@ -125,10 +115,15 @@ final class PollingRouteBuilder extends RouteBuilder {
         return switch (poll.effectiveSource()) {
             case "local" -> "file://"
                     + connectors.requireAllowedPath(appHome, poll.path()) + "?" + options;
-            case "sftp" -> remoteUri("sftp", poll, 22,
-                    options + remoteStreamingOptions() + sftpHostKeyOptions());
-            case "ftps" -> remoteUri("ftps", poll, 21,
-                    options + remoteStreamingOptions() + ftpsTransportOptions(poll));
+            case "sftp" -> RemoteFileUris.remoteUri("sftp", connectors, poll.host(),
+                    poll.port(), 22, poll.path(), poll.credential(),
+                    options + remoteStreamingOptions()
+                            + RemoteFileUris.sftpHostKeyOptions(connectors, appHome));
+            case "ftps" -> RemoteFileUris.remoteUri("ftps", connectors, poll.host(),
+                    poll.port(), 21, poll.path(), poll.credential(),
+                    options + remoteStreamingOptions()
+                            + RemoteFileUris.ftpsTransportOptions(connectors, appHome,
+                                    poll.host()));
             default -> throw new IllegalArgumentException(
                     "Unsupported poll source '" + poll.source() + "'");
         };
@@ -151,74 +146,6 @@ final class PollingRouteBuilder extends RouteBuilder {
      */
     private String remoteStreamingOptions() {
         return "&localWorkDirectory=" + workHome.resolve("poll").toAbsolutePath();
-    }
-
-    /**
-     * Host-key verification for an SFTP source: with
-     * {@code tesseraql.connectors.poll.knownHostsFile} set, the server's SSH host key must match
-     * that known-hosts file (resolved against the app home, like other configured file paths);
-     * without it, the key is not checked and lint nudges with {@code TQL-SEC-4084}.
-     */
-    private String sftpHostKeyOptions() {
-        return connectors.knownHostsFile()
-                .map(file -> "&knownHostsFile="
-                        + appHome.resolve(file).normalize().toAbsolutePath()
-                        + "&strictHostKeyChecking=yes")
-                .orElse("&strictHostKeyChecking=no");
-    }
-
-    /**
-     * Transport settings for an FTPS source, so it carries the same guarantees its SFTP sibling
-     * does rather than only looking like it.
-     *
-     * <p>{@code PBSZ 0} + {@code PROT P} encrypt the <em>data</em> connection. Without them TLS
-     * protects the control channel — the credentials — while every polled file's bytes cross the
-     * network in cleartext, which is what the previous {@code disableSecureDataChannelDefaults}
-     * produced: that option reads like hardening and does the opposite, suppressing the very
-     * defaults that would have negotiated protection.
-     *
-     * <p>{@code binary} and {@code passiveMode} both default to false in the component. ASCII
-     * mode line-ending-translates payloads in transit, so an Excel or archive import arrives
-     * corrupt; active mode asks the server to open a connection back to this process, which no
-     * containerized or NAT'd deployment can accept.
-     */
-    private String ftpsTransportOptions(PollSpec poll) {
-        return "&execPbsz=0&execProt=P&binary=true&passiveMode=true" + ftpsTrustOptions(poll);
-    }
-
-    /**
-     * Server-identity verification for an FTPS source, the counterpart of SFTP's known-hosts
-     * check. With {@code tesseraql.connectors.poll.trustStore} declared, the server's certificate
-     * chain is validated against that keystore and the hostname is checked.
-     *
-     * <p>Without it there is nothing to validate against: commons-net's default trust manager
-     * only checks that the certificate is in date — no chain, no anchor, no hostname — so any
-     * self-signed certificate from any host is accepted and TLS proves nothing about who
-     * answered. The job is therefore refused rather than run unverified, and lint says so first
-     * ({@code TQL-SEC-4085}).
-     *
-     * <p>The option names are the component's own: {@code ftpClient.trustStore.} is the
-     * multi-value prefix feeding {@code FtpsEndpoint.ftpClientTrustStoreParameters}, whose
-     * {@code file}/{@code password}/{@code type} keys build the trust manager, and
-     * {@code ftpClient.} maps to {@code FTPSClient} bean properties —
-     * {@code endpointCheckingEnabled} is what turns hostname verification on.
-     */
-    private String ftpsTrustOptions(PollSpec poll) {
-        PollConnectors.TrustStore trust = connectors.trustStore().orElseThrow(
-                () -> new IllegalArgumentException("Poll source 'ftps' for host '" + poll.host()
-                        + "' needs tesseraql.connectors.poll.trustStore: without it the server"
-                        + " certificate is not verified and TLS proves nothing about the peer"));
-        StringBuilder options = new StringBuilder()
-                .append("&ftpClient.trustStore.file=")
-                .append(appHome.resolve(trust.file()).normalize().toAbsolutePath())
-                .append("&ftpClient.endpointCheckingEnabled=true");
-        if (trust.password() != null && !trust.password().isBlank()) {
-            // RAW(...) keeps Camel from URL-decoding a password with reserved characters, the
-            // same treatment the credential password gets.
-            options.append("&ftpClient.trustStore.password=RAW(")
-                    .append(trust.password()).append(')');
-        }
-        return options.toString();
     }
 
     /**
@@ -246,86 +173,4 @@ final class PollingRouteBuilder extends RouteBuilder {
         return value;
     }
 
-    /**
-     * The credential's authentication method, of which there must be exactly one.
-     *
-     * <p>Only a password was ever emitted, so an operator who declared {@code privateKeyFile:}
-     * got a URI with a password setting missing and an error naming the wrong thing. Declaring
-     * both is refused rather than silently preferring one: which one wins is exactly the sort of
-     * question a deployment should never have to answer by experiment.
-     */
-    private String authentication(String scheme, PollConnectors.Credential credential) {
-        java.util.Optional<String> password = credential.setting("password");
-        java.util.Optional<String> privateKey = credential.setting("privateKeyFile");
-        if (password.isPresent() == privateKey.isPresent()) {
-            throw new TqlException(CREDENTIAL_METHOD, "Poll credential '" + credential.name()
-                    + "' needs exactly one of password: or privateKeyFile:, not "
-                    + (password.isPresent() ? "both" : "neither"));
-        }
-        if (password.isPresent()) {
-            // A password authenticates us; an FTPS client certificate can accompany it, since
-            // mutual TLS and a login are different questions the server may ask together.
-            return "&password=RAW(" + password.get() + ")"
-                    + ("ftps".equals(scheme) ? ftpsClientCertificate(credential) : "");
-        }
-        if (!"sftp".equals(scheme)) {
-            throw new TqlException(CREDENTIAL_METHOD, "Poll credential '" + credential.name()
-                    + "' declares privateKeyFile:, which only an sftp source can use");
-        }
-        return sftpKeyOptions(privateKey.get(), credential);
-    }
-
-    /**
-     * An FTPS client certificate, when the credential declares a keystore.
-     *
-     * <p>Mutual TLS is how a partner identifies <em>us</em>, and it was unreachable: the trust
-     * store proved who answered, and nothing carried a certificate the other way, so an FTPS
-     * server requiring one could not be polled at all. The password rides {@code RAW(...)} like
-     * every other secret, and {@code type} defaults rather than being demanded, since a keystore
-     * that is not PKCS#12 is the exception.
-     */
-    private String ftpsClientCertificate(PollConnectors.Credential credential) {
-        java.util.Optional<String> keyStore = credential.setting("keyStoreFile");
-        if (keyStore.isEmpty()) {
-            return "";
-        }
-        StringBuilder options = new StringBuilder("&ftpClient.keyStore.file=")
-                .append(keyStore.get());
-        credential.setting("keyStorePassword").ifPresent(password -> options
-                .append("&ftpClient.keyStore.password=RAW(").append(password).append(')'));
-        credential.setting("keyStoreType")
-                .ifPresent(type -> options.append("&ftpClient.keyStore.type=").append(type));
-        return options.toString();
-    }
-
-    private String sftpKeyOptions(String privateKeyFile, PollConnectors.Credential credential) {
-        StringBuilder key = new StringBuilder("&privateKeyFile=RAW(")
-                .append(privateKeyFile).append(')');
-        credential.setting("privateKeyPassphrase").ifPresent(passphrase -> key
-                .append("&privateKeyPassphrase=RAW(").append(passphrase).append(')'));
-        return key.toString();
-    }
-
-    private String remoteUri(String scheme, PollSpec poll, int defaultPort, String options) {
-        // A remote source with no credential: was accepted, and produced a URI with no username
-        // and no password. SFTP then fails at connect with a message about the server, and FTPS
-        // may succeed as anonymous — a poll job quietly reading whatever an anonymous session can
-        // see. Neither outcome tells the operator that the declaration was incomplete.
-        if (poll.credential() == null || poll.credential().isBlank()) {
-            throw new TqlException(REMOTE_NEEDS_CREDENTIAL, "Poll source '" + scheme
-                    + "' needs a credential: declare one under"
-                    + " tesseraql.connectors.poll.credentials and reference it with credential:");
-        }
-        PollConnectors.Credential credential = connectors.requireCredential(poll.credential());
-        int port = poll.port() == null ? defaultPort : poll.port();
-        String path = poll.path().startsWith("/") ? poll.path().substring(1) : poll.path();
-        StringBuilder uri = new StringBuilder(scheme).append("://")
-                .append(poll.host()).append(':').append(port).append('/').append(path)
-                .append('?').append(options);
-        // RAW(...) keeps Camel from URL-decoding a value with reserved characters, and keeps an
-        // '&' inside one from splitting the query.
-        uri.append("&username=RAW(").append(credential.require("username")).append(')')
-                .append(authentication(scheme, credential));
-        return uri.toString();
-    }
 }
