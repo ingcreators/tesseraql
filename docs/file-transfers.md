@@ -210,6 +210,27 @@ A scheduled job can produce a file through the same vocabulary — the
 job's datasource, records the same transfer rows, and the operations console's
 transfers page links the completed file.
 
+## Retention
+
+Produced files accumulate — a daily report is 365 files a year per job — so the
+transfer store takes a retention policy:
+
+```yaml
+tesseraql:
+  transfers:
+    retentionDays: 30        # nothing expires by default
+    sweepInterval: 1h        # how often the sweep looks (default 1h)
+```
+
+Files older than `retentionDays` are reclaimed on a periodic sweep: the spooled bytes
+are deleted, the transfer row **stays as history** (flagged *expired* on the
+operations console's transfers page), and the download answers "no downloadable file"
+from then on. Nothing expires by default — the same stance lake-table snapshots take:
+retention policy belongs to the app. Every node may sweep; reclaiming is idempotent,
+and with the default node-local `tesseraql.temp.store: file` each node frees its own
+disk — cluster deployments want `db` or `blob`, for retention and for cross-node
+downloads alike.
+
 ## Related pages
 
 - [printable-documents.md](printable-documents.md) — the `pdf` codec and print templates

@@ -16,6 +16,13 @@ All notable changes to TesseraQL are documented here. The format follows
   list** — the time-travel index. The five-minute demo gains the close-to-delivery
   leg.
 
+- **Transfer retention** (docs/file-transfers.md): `tesseraql.transfers.retentionDays`
+  reclaims produced files older than that many days on a periodic sweep
+  (`sweepInterval`, default 1h) — the spooled bytes are deleted, the transfer row
+  stays as history (flagged *expired* on the ops transfers page), and the download
+  answers 409 from then on. Nothing expires by default, the lake-snapshot stance:
+  retention policy belongs to the app.
+
 - **SFTP/FTPS/local delivery: the `push:` pipeline step** (docs/jobs.md,
   docs/connectors.md): a job can deliver a produced transfer — typically an export
   step's file — to a partner drop. The outbound mirror of `poll:`, under its own

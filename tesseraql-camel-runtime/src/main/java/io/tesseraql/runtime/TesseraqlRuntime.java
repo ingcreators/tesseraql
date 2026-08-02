@@ -547,6 +547,24 @@ public final class TesseraqlRuntime implements AutoCloseable {
                 .map(Integer::parseInt).orElse(30));
         fileTransfers.ensureSchema();
         context.getRegistry().bind(TesseraqlProperties.FILE_TRANSFER_BEAN, fileTransfers);
+        // Transfer retention (docs/file-transfers.md): opt-in, because nothing expires by
+        // default — the DuckLake stance, retention policy belongs to the app. When set,
+        // produced files older than retentionDays are reclaimed on a periodic sweep.
+        int transferRetentionDays = manifest.config()
+                .getString("tesseraql.transfers.retentionDays")
+                .map(Integer::parseInt).orElse(0);
+        if (transferRetentionDays > 0) {
+            try {
+                context.addRoutes(new TransferRetentionRoutes(fileTransfers,
+                        transferRetentionDays,
+                        io.tesseraql.core.util.Durations.toMillis(manifest.config()
+                                .getString("tesseraql.transfers.sweepInterval").orElse("1h")),
+                        java.time.Clock.systemDefaultZone()));
+            } catch (Exception ex) {
+                throw new IllegalStateException(
+                        "Failed to wire transfer retention: " + ex.getMessage(), ex);
+            }
+        }
         // Managed attachments (roadmap Phase 30): provisioned and bound when the app declares
         // attachment documents in `managed` mode (the default). The blob store is selected by
         // tesseraql.object-storage.provider — the local file store by default, or S3 from the opt-in
