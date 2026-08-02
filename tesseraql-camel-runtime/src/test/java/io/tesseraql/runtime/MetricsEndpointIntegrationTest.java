@@ -136,6 +136,20 @@ class MetricsEndpointIntegrationTest {
         }
     }
 
+    @Test
+    void jobRunsCountOnTheExpositionWithTheirStatusAndDuration() throws Exception {
+        // One real run through the executor: the counter and the duration histogram land.
+        runtime.runJob("metrics.tick", java.util.Map.of());
+
+        HttpResponse<String> scrape = get("/_tesseraql/metrics", token(List.of("OPS")));
+        assertThat(scrape.statusCode()).isEqualTo(200);
+        assertThat(scrape.body())
+                .contains("# TYPE tesseraql_job_runs_total counter")
+                .contains("job=\"metrics.tick\"")
+                .contains("status=\"COMPLETED\"")
+                .contains("tesseraql_job_duration_seconds");
+    }
+
     private static Path prepareAppHome() throws IOException {
         Path target = Files.createTempDirectory("tesseraql-metrics-it");
         Files.createDirectories(target.resolve("config"));
@@ -205,6 +219,18 @@ class MetricsEndpointIntegrationTest {
                     file: noop.sql
                 """);
         Files.writeString(jobDir.resolve("noop.sql"), "select 1\n");
+        // A runnable tasklet: the job-metrics test drives one run through the executor so
+        // the exposition has a tesseraql_job_runs_total sample (docs/jobs.md).
+        Path tickDir = target.resolve("batch/tick");
+        Files.createDirectories(tickDir);
+        Files.writeString(tickDir.resolve("job.yml"), """
+                version: tesseraql/v1
+                id: metrics.tick
+                kind: job
+                recipe: batch-tasklet
+                sql: { file: tick.sql, mode: query }
+                """);
+        Files.writeString(tickDir.resolve("tick.sql"), "select 1 as one\n");
         return target;
     }
 }

@@ -8,6 +8,13 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **Batch runs count on the Prometheus exposition** (docs/jobs.md,
+  docs/deployment.md): `tesseraql_job_runs_total` labelled `job`/`app`/`status` —
+  COMPLETED, FAILED, STOPPED, and SKIPPED each under their own status, so "did
+  tonight's close run" is one query — plus a `tesseraql_job_duration_seconds`
+  histogram per job, riding the same `/_tesseraql/metrics` scrape the route counters
+  use.
+
 - **Transfer retention** (docs/file-transfers.md): `tesseraql.transfers.retentionDays`
   reclaims produced files older than that many days on a periodic sweep
   (`sweepInterval`, default 1h) — the spooled bytes are deleted, the transfer row
