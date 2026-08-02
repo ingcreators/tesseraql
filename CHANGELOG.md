@@ -8,6 +8,16 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **Push server-identity lint nudges** (docs/connectors.md): an `sftp` push target
+  without `tesseraql.connectors.push.knownHostsFile` warns (`TQL-SEC-4084`), an
+  `ftps` push target without `tesseraql.connectors.push.trustStore` is an error
+  (`TQL-SEC-4085`) — the poll side's nudges, mirrored, since the runtime enforces the
+  same guarantees on both directions. Docs also record two authoring facts: PDF print
+  templates carry tables and text, not the client-drawn dashboard charts
+  (docs/printable-documents.md), and a **filtered dashboard** is existing vocabulary
+  composed — a route input, bound panel queries, and a GET form in the header slot
+  (docs/declarative-views.md).
+
 - **The analytics loop has a front door** (docs/analytics.md): one guide page walks
   files → scheduled ETL → lake snapshots and time travel → dashboards → the delivered
   report, with pointers into each feature's page. The inventory gallery now proves

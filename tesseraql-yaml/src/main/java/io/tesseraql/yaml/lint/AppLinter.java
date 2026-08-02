@@ -3849,6 +3849,23 @@ public final class AppLinter {
                     + "': push as: must be a plain file name ({dotted.path} placeholders"
                     + " resolve against the job context)"));
         }
+        // The poll side's server-identity nudges, mirrored (docs/connectors.md): an SFTP
+        // target without host-key pinning is a warning, an FTPS target without a trust
+        // store is an error — the runtime refuses it anyway, so the build says it first.
+        if ("sftp".equals(target)
+                && config.getString("tesseraql.connectors.push.knownHostsFile")
+                        .filter(value -> !value.isBlank()).isEmpty()) {
+            findings.add(new LintFinding("TQL-SEC-4084", "warning", source, "Step '" + step.id()
+                    + "': sftp push without tesseraql.connectors.push.knownHostsFile — the"
+                    + " server's host key is not verified"));
+        }
+        if ("ftps".equals(target)
+                && config.navigate("tesseraql.connectors.push.trustStore") == null) {
+            findings.add(new LintFinding("TQL-SEC-4085", "error", source, "Step '" + step.id()
+                    + "': ftps push needs tesseraql.connectors.push.trustStore — without it"
+                    + " the server certificate is not verified and TLS proves nothing about"
+                    + " the peer"));
+        }
     }
 
     /**

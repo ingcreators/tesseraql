@@ -83,6 +83,29 @@ class AppLinterPushStepTest {
     }
 
     @Test
+    void serverIdentityNudgesMirrorThePollSide(@TempDir Path dir) throws Exception {
+        // SFTP without the push block's known-hosts file: a warning, like poll's 4084.
+        List<LintFinding> findings = new AppLinter().lint(app(dir,
+                "      target: sftp\n      host: partner.example\n      path: incoming\n"
+                        + "      credential: partner\n      file: step.extract.transferId"));
+        assertThat(findings).anySatisfy(finding -> {
+            assertThat(finding.code()).isEqualTo("TQL-SEC-4084");
+            assertThat(finding.severity()).isEqualTo("warning");
+            assertThat(finding.message()).contains("connectors.push.knownHostsFile");
+        });
+
+        // FTPS without the push block's trust store: an error, like poll's 4085.
+        findings = new AppLinter().lint(app(dir,
+                "      target: ftps\n      host: partner.example\n      path: incoming\n"
+                        + "      credential: partner\n      file: step.extract.transferId"));
+        assertThat(findings).anySatisfy(finding -> {
+            assertThat(finding.code()).isEqualTo("TQL-SEC-4085");
+            assertThat(finding.severity()).isEqualTo("error");
+            assertThat(finding.message()).contains("connectors.push.trustStore");
+        });
+    }
+
+    @Test
     void anUndeclaredCredentialWarnsAndTheDeliveredNameStaysBare(@TempDir Path dir)
             throws Exception {
         List<LintFinding> findings = new AppLinter().lint(app(dir,

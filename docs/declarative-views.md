@@ -205,6 +205,39 @@ validate like children: a panel's `source:` must be `sql` or one of the route's 
 queries (`TQL-VIEW-3308`). Ejection is not offered for dashboards — the panel model is
 data-dependent.
 
+### Filtered dashboards
+
+A parameterized dashboard is existing vocabulary composed, not a new key: declare the
+filter as a route input, bind it in the panel queries, and put a plain GET form in the
+`header` slot — the same declaration validates the value server-side and re-renders
+every panel with it:
+
+```yaml
+# web/sales/dashboard/get.yml (excerpt)
+input:
+  from: { type: date, required: false }
+queries:
+  byRegion:
+    file: by-region.sql        # ... where sale_date >= coalesce(/* query.from */ null, ...)
+```
+
+```html
+<!-- filters.html — filled into the view's header slot -->
+<form th:fragment="filters" class="hc-cluster" method="get" action="/sales/dashboard">
+  <div class="hc-field">
+    <label class="hc-field__label" for="from">From</label>
+    <input class="hc-input" type="date" id="from" name="from" th:value="${params.from}">
+  </div>
+  <button type="submit" class="hc-button" data-variant="primary">Apply</button>
+</form>
+```
+
+```yaml
+# dashboard.view.yml (excerpt)
+slots:
+  header: filters.html::filters
+```
+
 ## Rendering pipeline and the fragment contract
 
 When `view:` is set, the HTML renderer parses the document at build time (cached,
