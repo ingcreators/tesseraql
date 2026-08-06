@@ -3,6 +3,14 @@ id: tql.studio.flags
 kind: route
 recipe: query-html
 
+input:
+  saved:
+    type: string
+    required: false
+  removed:
+    type: string
+    required: false
+
 sql:
   service: studio.flags
   params:
@@ -14,3 +22,5 @@ response:
     template: flags.html
     model:
       f: sql
+      saved: params.saved
+      removed: params.removed

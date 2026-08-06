@@ -3,6 +3,11 @@ id: tql.studio.config
 kind: route
 recipe: query-html
 
+input:
+  saved:
+    type: string
+    required: false
+
 sql:
   service: studio.config
   params:
@@ -14,3 +19,4 @@ response:
     template: config.html
     model:
       cfg: sql
+      saved: params.saved

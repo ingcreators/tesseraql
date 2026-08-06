@@ -3,6 +3,11 @@ id: tql.studio.messages
 kind: route
 recipe: query-html
 
+input:
+  saved:
+    type: string
+    required: false
+
 sql:
   service: studio.messages
   params:
@@ -14,3 +19,4 @@ response:
     template: messages.html
     model:
       msg: sql
+      saved: params.saved

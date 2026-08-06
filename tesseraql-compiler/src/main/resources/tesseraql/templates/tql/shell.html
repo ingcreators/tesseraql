@@ -138,6 +138,10 @@
     <th:block th:replace="${content}"/>
   </main>
 </div>
+<!-- The kit's toast landing zone (docs/hypermedia-ui.md "Response-header signals"): hc:toast
+     events render here. installToast would lazily create a region, but the shell owning it
+     keeps placement/ARIA deliberate and the documented contract literal. -->
+<div class="hc-toast-region" data-hc-toast-region role="region" aria-label="Notifications"></div>
 </body>
 </html>
 <!-- Public 4-arg API (back-compat): app-authored and scaffolder-generated shells call this. It

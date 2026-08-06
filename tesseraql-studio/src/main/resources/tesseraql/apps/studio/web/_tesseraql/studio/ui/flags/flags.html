@@ -8,6 +8,8 @@
   </div>
 </th:block>
 <div id="page-content" class="hc-stack">
+  <p class="hc-alert" data-variant="success" role="status" th:if="${!#strings.isEmpty(saved)}">Flag saved &mdash; live from the next request.</p>
+  <p class="hc-alert" data-variant="success" role="status" th:if="${!#strings.isEmpty(removed)}">Flag removed &mdash; live from the next request.</p>
   <section class="hc-card">
     <h2>Feature flags</h2>
     <p class="hc-field__message">Live feature flags in <code>config/flags.yml</code>. They are

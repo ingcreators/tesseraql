@@ -3,6 +3,14 @@ id: tql.studio.security
 kind: route
 recipe: query-html
 
+input:
+  added:
+    type: string
+    required: false
+  removed:
+    type: string
+    required: false
+
 sql:
   service: studio.security
   params:
@@ -14,3 +22,5 @@ response:
     template: security.html
     model:
       sec: sql
+      added: params.added
+      removed: params.removed
