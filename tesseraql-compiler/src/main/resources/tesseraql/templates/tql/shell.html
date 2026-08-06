@@ -12,9 +12,13 @@
      `.hc-shell__label` navs into the desktop collapse-to-icon-rail control. -->
 <!-- data-theme: the reserved `_theme` variable (stored preference > theme cookie > operator
      default, roadmap Phase 48) with the historical dark fallback when nothing chose. -->
-<html xmlns:th="http://www.thymeleaf.org" th:fragment="shell-impl(title, nav, header, content, collapsible)"
+<!-- data-density: the framework consoles (Studio / Ops / IAM) opt into the kit's compact
+     density sheet — 32px controls, tighter card padding — because they are data-dense work
+     surfaces (docs/studio-ux-refresh.md slice 1). App shells (the public `shell(...)` form)
+     keep the kit default; an app opts in on its own markup if it wants to. -->
+<html xmlns:th="http://www.thymeleaf.org" th:fragment="shell-impl(title, nav, header, content, collapsible, density)"
       lang="en" th:lang="${#locale.toLanguageTag()}" data-theme="dark"
-      th:attr="data-theme=${_theme != null ? _theme : 'dark'}">
+      th:attr="data-theme=${_theme != null ? _theme : 'dark'}, data-density=${density}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -140,9 +144,9 @@
      renders a non-collapsible sidebar — an app's own nav has no icon + `.hc-shell__label`, so the
      collapse rail would hide its labels to nothing. Framework navs opt in via `shell-impl(..., true)`. -->
 <th:block th:fragment="shell(title, nav, header, content)"
-          th:replace="~{tql/shell :: shell-impl(${title}, ${nav}, ${header}, ${content}, false)}"/>
+          th:replace="~{tql/shell :: shell-impl(${title}, ${nav}, ${header}, ${content}, false, null)}"/>
 <th:block th:fragment="page(title, header, content)"
-          th:replace="~{tql/shell :: shell-impl(${title}, ~{tql/shell :: system-nav}, ${header}, ${content}, true)}"/>
+          th:replace="~{tql/shell :: shell-impl(${title}, ~{tql/shell :: system-nav}, ${header}, ${content}, true, 'compact')}"/>
 <!-- The 3-app system navigation. Icons come from the self-hosted sprite (/assets/_tesseraql/icons.svg,
      served by AssetsRouteBuilder); each label is wrapped in `.hc-shell__label` so it hides in the
      collapsed icon rail while keeping the link's accessible name. -->
@@ -161,7 +165,7 @@
      off) render their own disabled state, which is honest wayfinding. Groups use `role="group"` +
      `aria-labelledby` so the section captions name each cluster to assistive tech. -->
 <th:block th:fragment="studio-page(title, header, content)"
-          th:replace="~{tql/shell :: shell-impl(${title}, ~{tql/shell :: studio-nav}, ${header}, ${content}, true)}"/>
+          th:replace="~{tql/shell :: shell-impl(${title}, ~{tql/shell :: studio-nav}, ${header}, ${content}, true, 'compact')}"/>
 <th:block th:fragment="studio-nav">
   <a class="hc-item" href="/_tesseraql/studio/ui"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use href="/assets/_tesseraql/icons.svg#compass"/></svg></span><span class="hc-item__title hc-shell__label">Explorer</span></a>
   <div class="tql-nav__section" role="group" aria-labelledby="tql-nav-docs">
@@ -211,7 +215,7 @@
      system-nav — Overview and the sub-views (Traces / Transfers / Outbox) become reachable from
      anywhere, with the other system apps linked below. installNavCurrent marks the active link. -->
 <th:block th:fragment="ops-page(title, header, content)"
-          th:replace="~{tql/shell :: shell-impl(${title}, ~{tql/shell :: ops-nav}, ${header}, ${content}, true)}"/>
+          th:replace="~{tql/shell :: shell-impl(${title}, ~{tql/shell :: ops-nav}, ${header}, ${content}, true, 'compact')}"/>
 <th:block th:fragment="ops-nav">
   <a class="hc-item" href="/_tesseraql/ops/console"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use href="/assets/_tesseraql/icons.svg#activity"/></svg></span><span class="hc-item__title hc-shell__label">Overview</span></a>
   <a class="hc-item" href="/_tesseraql/ops/console/jobs"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use href="/assets/_tesseraql/icons.svg#timer"/></svg></span><span class="hc-item__title hc-shell__label">Jobs</span></a>
