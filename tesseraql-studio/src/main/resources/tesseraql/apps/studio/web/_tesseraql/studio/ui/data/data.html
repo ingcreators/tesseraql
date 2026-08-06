@@ -11,7 +11,8 @@
   <p class="hc-alert" data-variant="success" role="status" th:if="${data.updated != null}">
     Row updated.</p>
   <section class="hc-card">
-    <h2>Data browser</h2>
+    <div class="hc-card__header">Data browser</div>
+    <div class="hc-card__body hc-stack">
 
     <div class="hc-empty" th:unless="${data.enabled}">
       <p class="hc-empty__title">The data browser is disabled.</p>
@@ -128,14 +129,6 @@
                th:href="|/_tesseraql/studio/ui/data?ds=${#uris.escapeQueryParam(data.datasource)}&amp;table=${#uris.escapeQueryParam(data.table)}|">Clear filters</a>
           </div>
         </form>
-        <div class="hc-cluster">
-          <span class="hc-badge"
-                th:text="|${data.rowCount} row(s) on page ${data.page + 1}|">0 rows</span>
-          <span class="hc-spacer"></span>
-          <a class="hc-button" data-variant="ghost" data-size="sm" download
-             th:href="|/_tesseraql/studio/ui/data/export?${data.queryBase}|">Download CSV</a>
-          <span class="hc-field__message" th:text="|up to ${data.exportMax} rows|">up to 1000 rows</span>
-        </div>
         <div class="hc-datagrid">
           <div class="hc-datagrid__scroll">
             <table class="hc-datagrid__table">
@@ -171,14 +164,25 @@
             </table>
           </div>
         </div>
-        <div class="hc-cluster">
-          <a class="hc-button" data-variant="ghost" data-size="sm" th:if="${data.hasPrev}"
-             th:href="|/_tesseraql/studio/ui/data?${data.queryBase}&amp;page=${data.prevPage}|">&larr; Prev</a>
-          <a class="hc-button" data-variant="ghost" data-size="sm" th:if="${data.hasNext}"
-             th:href="|/_tesseraql/studio/ui/data?${data.queryBase}&amp;page=${data.nextPage}|">Next &rarr;</a>
-        </div>
       </th:block>
     </th:block>
+    </div>
+    <div class="hc-card__footer" th:if="${data.enabled and data.columns != null}">
+      <div class="hc-cluster">
+        <span class="hc-badge"
+              th:text="|${data.rowCount} row(s) on page ${data.page + 1}|">0 rows</span>
+        <span class="hc-spacer"></span>
+        <a class="hc-button" data-variant="ghost" data-size="sm" download
+           th:href="|/_tesseraql/studio/ui/data/export?${data.queryBase}|">Download CSV</a>
+        <span class="hc-field__message" th:text="|up to ${data.exportMax} rows|">up to 1000 rows</span>
+      </div>
+      <div class="hc-cluster">
+        <a class="hc-button" data-variant="ghost" data-size="sm" th:if="${data.hasPrev}"
+           th:href="|/_tesseraql/studio/ui/data?${data.queryBase}&amp;page=${data.prevPage}|">&larr; Prev</a>
+        <a class="hc-button" data-variant="ghost" data-size="sm" th:if="${data.hasNext}"
+           th:href="|/_tesseraql/studio/ui/data?${data.queryBase}&amp;page=${data.nextPage}|">Next &rarr;</a>
+      </div>
+    </div>
   </section>
 </div>
 </html>

@@ -11,39 +11,43 @@
   </div>
 </th:block>
 <div id="page-content" class="hc-stack">
-<!-- Create actions (Studio sidebar IA): the Explorer's job is to browse/open existing routes, so
-     "New route" is a drawer trigger, not a permanent form above the tree. It hx-gets the New-route
-     hc-drawer fragment into the remote-dialog root below, which the kit opens as a side panel — the
-     tree stays in view while you create. The sibling creation flows (Scaffold / Migration / Wizards)
-     are surfaced here too, not only in the sidebar. -->
-<section class="hc-card" th:if="${studio.editable}">
-  <div class="hc-cluster">
-    <button type="button" class="hc-button" data-variant="primary"
-            hx-get="/_tesseraql/studio/ui/new" hx-target="#new-route-dialog" hx-swap="innerHTML">New route</button>
-    <span class="hc-field__message">or create with
-      <a href="/_tesseraql/studio/ui/scaffold">Scaffold</a> ·
-      <a href="/_tesseraql/studio/ui/migration">Migration</a> ·
-      <a href="/_tesseraql/studio/ui/wizard">Wizards</a> ·
-      <a href="/_tesseraql/studio/ui/calendars">Calendars</a> ·
-      <a href="/_tesseraql/studio/ui/jobs">Job policies</a> ·
-      <a href="/_tesseraql/studio/ui/connectors">Connectors</a> ·
-      <a href="/_tesseraql/studio/ui/copilot">Copilot</a>
-    </span>
-  </div>
-  <!-- installRemoteDialog opens the first <dialog> swapped in here with showModal() (the drawer). -->
-  <div id="new-route-dialog" data-hc-remote-dialog-root></div>
-</section>
+<!-- One card, one job (docs/studio-ux-refresh.md slice 3, the review's Explorer mockup): the
+     Routes & jobs card owns its toolbar — filter + create actions live in the card header, not
+     in a separate card whose only content was a button and a sentence of seven links. "New
+     route" stays a drawer trigger (hx-get into the remote-dialog root; the kit opens the
+     swapped hc-drawer as a side panel, so the tree stays in view). The sibling creation flows
+     collapse into a "Create ▾" popover menu. -->
 <section class="hc-card">
-  <h2>Routes &amp; jobs</h2>
-  <div class="hc-field">
-    <label class="hc-field__label" for="explorer-filter">Filter</label>
-    <input class="hc-input" id="explorer-filter" type="search" name="q" th:value="${studio.query}"
+  <div class="hc-card__header">
+    Routes &amp; jobs
+    <span class="hc-spacer"></span>
+    <input class="hc-input" data-size="sm" id="explorer-filter" type="search" name="q"
+           th:value="${studio.query}" aria-label="Filter by id, path, recipe"
            placeholder="Filter by id, path, recipe…" autocomplete="off"
            hx-get="/_tesseraql/studio/ui" hx-trigger="keyup changed delay:250ms, search"
            hx-target="#explorer-tree" hx-select="#explorer-tree" hx-swap="outerHTML"
            hx-indicator="next .htmx-indicator">
     <th:block th:replace="~{tql/shell :: busy('Filtering…')}"/>
+    <th:block th:if="${studio.editable}">
+      <button type="button" class="hc-button" data-variant="primary" data-size="sm"
+              hx-get="/_tesseraql/studio/ui/new" hx-target="#new-route-dialog" hx-swap="innerHTML">New route</button>
+      <button type="button" class="hc-button" data-size="sm" popovertarget="explorer-create-menu">Create &#9662;</button>
+      <div class="hc-popover" id="explorer-create-menu" popover data-side="bottom" data-align="end">
+        <nav class="hc-menu" aria-label="Create with">
+          <a class="hc-menu__item" href="/_tesseraql/studio/ui/scaffold">Scaffold</a>
+          <a class="hc-menu__item" href="/_tesseraql/studio/ui/migration">Migration</a>
+          <a class="hc-menu__item" href="/_tesseraql/studio/ui/wizard">Wizards</a>
+          <a class="hc-menu__item" href="/_tesseraql/studio/ui/calendars">Calendars</a>
+          <a class="hc-menu__item" href="/_tesseraql/studio/ui/jobs">Job policies</a>
+          <a class="hc-menu__item" href="/_tesseraql/studio/ui/connectors">Connectors</a>
+          <a class="hc-menu__item" href="/_tesseraql/studio/ui/copilot">Copilot</a>
+        </nav>
+      </div>
+    </th:block>
   </div>
+  <div class="hc-card__body hc-stack">
+  <!-- installRemoteDialog opens the first <dialog> swapped in here with showModal() (the drawer). -->
+  <div id="new-route-dialog" data-hc-remote-dialog-root th:if="${studio.editable}"></div>
   <div id="explorer-tree" class="hc-stack" th:with="root=${studio.tree}">
     <div class="hc-empty" th:if="${root.empty}">
       <p class="hc-empty__title" th:text="${#strings.isEmpty(studio.query)} ? 'No routes or jobs defined.' : 'No routes or jobs match.'">No matches.</p>
@@ -54,6 +58,7 @@
     <th:block th:each="leaf : ${root.leaves}">
       <th:block th:replace="~{:: explorerLeaf(${leaf})}"></th:block>
     </th:block>
+  </div>
   </div>
 </section>
 </div>

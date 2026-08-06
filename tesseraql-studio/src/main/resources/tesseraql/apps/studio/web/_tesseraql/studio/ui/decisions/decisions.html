@@ -11,7 +11,8 @@
 </th:block>
 <div id="page-content" class="hc-stack">
   <section class="hc-card">
-    <h2>Decision rows</h2>
+    <div class="hc-card__header">Decision rows</div>
+    <div class="hc-card__body hc-stack">
     <p class="hc-field__message">Edit a YAML-backed decision's rows as a grid &mdash; the
       contract (inputs, outputs, policies) stays in the
       <a href="/_tesseraql/studio/ui/source">text editor</a>. Table-backed decisions keep their
@@ -29,9 +30,11 @@
       </div>
       <button class="hc-button" type="submit">Open</button>
     </form>
+    </div>
   </section>
   <section class="hc-card" th:if="${dg.grid}">
-    <h2>Rows <code th:text="${dg.grid.name}"></code></h2>
+    <div class="hc-card__header"><h2>Rows <code th:text="${dg.grid.name}"></code></h2></div>
+    <div class="hc-card__body hc-stack">
     <p class="hc-alert" data-variant="success" role="status" th:if="${dg.saved}">Draft saved.
       Review the diff and apply it from the text editor.</p>
     <p class="hc-alert" data-variant="error" role="alert" th:if="${dg.grid.error}"
@@ -61,13 +64,14 @@
               <input type="hidden" th:name="|c${j}key|" th:value="${dg.grid.columns[j].key}">
               <input type="hidden" th:name="|c${j}kind|" th:value="${dg.grid.columns[j].kind}">
             </th:block>
-            <div style="overflow-x: auto">
+            <div class="hc-table-scroll">
               <table class="hc-table">
                 <thead>
                 <tr>
                   <th th:each="c : ${dg.grid.columns}">
                     <code th:text="${c.key}"></code>
-                    <span class="hc-badge" th:text="${c.kind == 'in' ? 'when' : 'out'}"></span>
+                    <span class="hc-badge" th:attr="data-variant=${c.kind == 'in'} ? 'info' : 'success'"
+                          th:text="${c.kind == 'in' ? 'when' : 'out'}"></span>
                     <span class="hc-field__message" th:if="${c.hint}" th:text="${c.hint}"></span>
                   </th>
                   <th>Delete</th>
@@ -97,6 +101,7 @@
         </th:block>
       </th:block>
     </th:block>
+    </div>
   </section>
 </div>
 </html>

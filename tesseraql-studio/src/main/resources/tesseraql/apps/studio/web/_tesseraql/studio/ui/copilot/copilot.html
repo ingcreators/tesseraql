@@ -13,7 +13,8 @@
 </th:block>
 <div id="page-content" class="hc-stack">
   <section class="hc-card">
-    <h2>Copilot</h2>
+    <div class="hc-card__header">Copilot</div>
+    <div class="hc-card__body hc-stack">
     <div class="hc-empty" th:unless="${chat.enabled}">
       <p class="hc-empty__title">The copilot is not configured.</p>
       <p class="hc-empty__description">TesseraQL ships no model. Point
@@ -50,6 +51,7 @@
         so the copilot answers questions but cannot save drafts in this session.</p>
       <!-- The sse extension behind the streaming placeholder loads once in the shell. -->
     </th:block>
+    </div>
   </section>
 </div>
 </html>

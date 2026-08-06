@@ -9,6 +9,8 @@
 </th:block>
 <div id="page-content" class="hc-stack">
 <section class="hc-card">
+  <div class="hc-card__header">SAML sign-in</div>
+  <div class="hc-card__body hc-stack">
   <p class="hc-field__message">Generates a tesseraql-saml.yml fragment to merge into config/tesseraql.yml.
   Key material is referenced by file path under the app home; never paste certificate contents here.</p>
   <form method="post" action="/_tesseraql/studio/ui/wizard/saml">
@@ -56,15 +58,15 @@
       <label class="hc-field__label" for="provision">Auto-provision new users</label>
       <select class="hc-select" id="provision" name="provision"><option value="false">false</option><option value="true">true</option></select>
     </div>
-    <div class="hc-cluster"><button type="submit" class="hc-button" data-variant="primary">Generate &amp; download config</button></div>
-  
     <div class="hc-cluster">
+      <button type="submit" class="hc-button" data-variant="primary">Generate &amp; download config</button>
       <button class="hc-button" type="submit"
               formaction="/_tesseraql/studio/ui/wizard/saml/apply"
               data-hc-confirm="Write these SAML settings to config/overlay.yml? Only secret references are stored; they apply on the next start."
               data-hc-confirm-title="Write to overlay" data-hc-confirm-label="Write">Write to config overlay</button>
     </div>
   </form>
+  </div>
 </section>
 </div>
 </html>

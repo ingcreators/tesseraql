@@ -11,12 +11,19 @@
   <p class="hc-alert" data-variant="success" role="status" th:if="${!#strings.isEmpty(added)}">Rule added to <code>config/overlay.yml</code> &mdash; effective immediately.</p>
   <p class="hc-alert" data-variant="success" role="status" th:if="${!#strings.isEmpty(removed)}">Rule removed from <code>config/overlay.yml</code> &mdash; effective immediately.</p>
   <section class="hc-card">
-    <h2>Security</h2>
+    <div class="hc-card__header">Security</div>
+    <div class="hc-card__body hc-stack">
     <p class="hc-field__message">Each route's authentication and authorization, mapped to the app's
       policies. Watch for <strong>unprotected</strong> routes (no auth declared), <strong>CSRF
       gaps</strong> (a state-changing browser route without CSRF), and routes pointing at an
       <strong>undefined policy</strong>.</p>
-    <div class="hc-cluster">
+    </div>
+  </section>
+
+  <section class="hc-card">
+    <div class="hc-card__header">
+      Routes
+      <span class="hc-spacer"></span>
       <span class="hc-badge" th:text="|${sec.totalRoutes} route(s)|">0 route(s)</span>
       <span class="hc-badge" th:attr="data-variant=${sec.unprotected > 0} ? 'error' : null"
             th:text="|${sec.unprotected} unprotected|">0 unprotected</span>
@@ -28,10 +35,7 @@
             th:text="|${sec.unusedPolicies} unused-policy|">0 unused-policy</span>
       <span class="hc-badge" th:text="|${sec.policyCount} policy(ies)|">0 policy(ies)</span>
     </div>
-  </section>
-
-  <section class="hc-card">
-    <h3>Routes</h3>
+    <div class="hc-card__body hc-stack">
     <div class="hc-datagrid">
       <div class="hc-datagrid__scroll">
         <table class="hc-datagrid__table">
@@ -69,10 +73,12 @@
         </table>
       </div>
     </div>
+    </div>
   </section>
 
   <section class="hc-card">
-    <h3>Policies</h3>
+    <div class="hc-card__header">Policies</div>
+    <div class="hc-card__body hc-stack">
     <div class="hc-empty" th:if="${sec.policyCount == 0 and !sec.editable}">
       <p class="hc-empty__title">No policies defined.</p>
       <p class="hc-empty__description">Add them under <code>tesseraql.security.policies</code>.</p>
@@ -157,6 +163,7 @@
         </div>
       </form>
     </details>
+    </div>
   </section>
 </div>
 </html>

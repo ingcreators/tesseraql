@@ -9,7 +9,8 @@
 </th:block>
 <div id="page-content" class="hc-stack">
   <section class="hc-card">
-    <h2>2-way SQL builder</h2>
+    <div class="hc-card__header">2-way SQL builder</div>
+    <div class="hc-card__body hc-stack">
     <p class="hc-field__message">Generate a route's <code>select</code>/<code>insert</code>/<code>update</code>/<code>delete</code>
       2-way SQL for an introspected table &mdash; with the bind directives written for you
       (<code>/* id */ 0</code>) &mdash; then copy it into your route's <code>.sql</code> file. Each
@@ -56,6 +57,7 @@
       <p class="hc-empty__title">No introspected schema.</p>
       <p class="hc-field__message">Run the <code>schema</code> goal so
         <code>.tesseraql/docs/schema.json</code> is present, then the builder can read your tables.</p>
+    </div>
     </div>
   </section>
 </div>

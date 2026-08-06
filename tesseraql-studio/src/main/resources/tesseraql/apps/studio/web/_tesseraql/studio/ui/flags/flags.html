@@ -11,7 +11,8 @@
   <p class="hc-alert" data-variant="success" role="status" th:if="${!#strings.isEmpty(saved)}">Flag saved &mdash; live from the next request.</p>
   <p class="hc-alert" data-variant="success" role="status" th:if="${!#strings.isEmpty(removed)}">Flag removed &mdash; live from the next request.</p>
   <section class="hc-card">
-    <h2>Feature flags</h2>
+    <div class="hc-card__header">Feature flags</div>
+    <div class="hc-card__body hc-stack">
     <p class="hc-field__message">Live feature flags in <code>config/flags.yml</code>. They are
       injected into every request as <code>flags.&lt;name&gt;</code>, so routes, templates, and
       validation rules can gate on them &mdash; e.g. <code>th:if="${flags.betaBanner}"</code> or a
@@ -103,6 +104,7 @@
         </div>
       </form>
     </details>
+    </div>
   </section>
 </div>
 </html>

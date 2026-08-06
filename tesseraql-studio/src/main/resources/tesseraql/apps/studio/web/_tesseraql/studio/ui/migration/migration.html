@@ -10,12 +10,15 @@
 </th:block>
 <div id="page-content" class="hc-stack">
   <section class="hc-card" th:unless="${mig.editable}">
+    <div class="hc-card__body">
     <div class="hc-empty">
       <p class="hc-empty__title">You do not have permission to create migrations.</p>
     </div>
+    </div>
   </section>
   <section class="hc-card" th:if="${mig.editable}">
-    <h2>New migration</h2>
+    <div class="hc-card__header">New migration</div>
+    <div class="hc-card__body hc-stack">
     <p class="hc-field__message">Creates a Flyway migration under <code>db/&hellip;/migration</code>.
       A versioned migration is auto-numbered (next:
       <strong th:text="|V${mig.nextVersion}|">V1</strong> for the main datasource); a repeatable one
@@ -156,6 +159,7 @@
         </div>
       </form>
     </details>
+    </div>
   </section>
 </div>
 </html>

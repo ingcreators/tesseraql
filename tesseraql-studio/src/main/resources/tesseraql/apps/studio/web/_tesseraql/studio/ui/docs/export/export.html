@@ -9,10 +9,12 @@
 </th:block>
 <div id="page-content" class="hc-stack">
 <section class="hc-card">
-  <h2>Export API specs</h2>
+  <div class="hc-card__header">Export API specs</div>
+  <div class="hc-card__body hc-stack">
   <p class="hc-field__label">Generated live from the route manifest &mdash; byte-identical to the
     <code>generate</code> build artifacts. The download endpoints are bearer-gated, so the URLs can
     be shared with API tooling that carries the same token.</p>
+  <div class="hc-table-scroll">
   <table class="hc-table">
     <thead><tr><th>Artifact</th><th>File</th><th>Description</th><th></th></tr></thead>
     <tbody>
@@ -27,9 +29,12 @@
       </tr>
     </tbody>
   </table>
+  </div>
+  </div>
 </section>
 <section class="hc-card">
-  <h2>API changes</h2>
+  <div class="hc-card__header">API changes</div>
+  <div class="hc-card__body hc-stack">
   <p class="hc-field__label">What changed in the API since the captured baseline &mdash; operations
     added, removed, or changed (parameters, request body, responses, security). Inferred by diffing
     the current OpenAPI against the baseline; a derived view, not an execution fact.</p>
@@ -48,7 +53,9 @@
           <span class="hc-badge"
                 th:attr="data-variant=${c.kind == 'added'} ? 'success' : (${c.kind == 'removed'} ? 'error' : 'warning')"
                 th:text="${c.kind}"></span>
-          <span class="hc-badge" th:text="${c.method}"></span>
+          <span class="hc-badge"
+                th:attr="data-variant=${c.method == 'GET'} ? 'info' : (${c.method == 'POST'} ? 'success' : (${c.method == 'DELETE'} ? 'error' : 'warning'))"
+                th:text="${c.method}"></span>
           <a th:if="${c.url}" th:href="${c.url}"><code th:text="${c.path}"></code></a>
           <code th:unless="${c.url}" th:text="${c.path}"></code>
           <span class="hc-field__label" th:if="${c.operationId}" th:text="${c.operationId}"></span>
@@ -63,13 +70,16 @@
     <em>Capture baselines now</em> on the
     <a href="/_tesseraql/studio/ui/docs/release-diff">release diff page</a> (for example at release
     time) to track what changed since then.</p>
+  </div>
 </section>
 <section class="hc-card">
-  <h2>Printable route catalog</h2>
-  <p class="hc-field__label">The app's routes as a PDF table, rendered server-side &mdash; for
-    sharing or printing.</p>
-  <a class="hc-button" data-variant="ghost" data-size="sm"
-     href="/_tesseraql/studio/ui/docs/export/pdf">Open printable catalog &rarr;</a>
+  <div class="hc-card__header">Printable route catalog</div>
+  <div class="hc-card__body hc-stack">
+    <p class="hc-field__label">The app's routes as a PDF table, rendered server-side &mdash; for
+      sharing or printing.</p>
+    <a class="hc-button" data-variant="ghost" data-size="sm"
+       href="/_tesseraql/studio/ui/docs/export/pdf">Open printable catalog &rarr;</a>
+  </div>
 </section>
 </div>
 </html>

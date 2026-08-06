@@ -9,19 +9,23 @@
 </th:block>
 <div id="page-content" class="hc-stack">
   <section class="hc-card" th:unless="${dom.hasDomains}">
-    <h2>Field domains</h2>
-    <div class="hc-empty">
-      <p class="hc-empty__title">No field domains declared yet.</p>
-      <p>Declare a field once under <code>domains/</code> and reference it from any route's
-        <code>input:</code> with <code>domain:</code> &mdash; the scaffolder generates a
-        <code>domains/&lt;table&gt;.yml</code> per table.</p>
+    <div class="hc-card__header">Field domains</div>
+    <div class="hc-card__body hc-stack">
+      <div class="hc-empty">
+        <p class="hc-empty__title">No field domains declared yet.</p>
+        <p>Declare a field once under <code>domains/</code> and reference it from any route's
+          <code>input:</code> with <code>domain:</code> &mdash; the scaffolder generates a
+          <code>domains/&lt;table&gt;.yml</code> per table.</p>
+      </div>
     </div>
   </section>
   <section class="hc-card" th:if="${dom.hasDomains}">
-    <h2>Field domains</h2>
+    <div class="hc-card__header">Field domains</div>
+    <div class="hc-card__body hc-stack">
     <p class="hc-field__message">Each domain declares a business field once; routes reference it
       and state only their operational keys. An unreferenced domain is either dead or a missed
       reference (lint <code>TQL-FIELD-4611</code>).</p>
+    <div class="hc-table-scroll">
     <table class="hc-table">
       <thead><tr><th>Domain</th><th>Declares</th><th>Referenced by</th></tr></thead>
       <tbody>
@@ -38,11 +42,15 @@
         </tr>
       </tbody>
     </table>
+    </div>
+    </div>
   </section>
   <section class="hc-card" th:if="${dom.hasCatalog}">
-    <h2>Constraint catalog</h2>
+    <div class="hc-card__header">Constraint catalog</div>
+    <div class="hc-card__body hc-stack">
     <p class="hc-field__message">Database constraint names mapped once, inherited by every route;
       a route-local <code>errors.constraints</code> entry overrides by name.</p>
+    <div class="hc-table-scroll">
     <table class="hc-table">
       <thead><tr><th>Constraint</th><th>Field</th><th>Code</th><th>Message key</th></tr></thead>
       <tbody>
@@ -54,6 +62,8 @@
         </tr>
       </tbody>
     </table>
+    </div>
+    </div>
   </section>
 </div>
 </html>

@@ -12,19 +12,25 @@
 </th:block>
 <div id="page-content" class="hc-stack">
   <section class="hc-card" th:if="${doc.notFound}">
-    <div class="hc-empty"><p class="hc-empty__title">No route <span th:text="${doc.id}"></span>.</p></div>
+    <div class="hc-card__body hc-stack">
+      <div class="hc-empty"><p class="hc-empty__title">No route <span th:text="${doc.id}"></span>.</p></div>
+    </div>
   </section>
   <th:block th:unless="${doc.notFound}">
     <section class="hc-card">
-      <div class="hc-cluster">
-        <span class="hc-badge" th:text="${doc.method}"></span>
-        <code th:text="${doc.path}"></code>
-        <span class="hc-badge" data-variant="info" th:text="${doc.recipe}"></span>
-        <span class="hc-spacer"></span>
-        <a class="hc-button" data-variant="ghost" data-size="sm"
-           th:href="|/_tesseraql/studio/ui/try?path=${#uris.escapeQueryParam(doc.path)}&amp;method=${#uris.escapeQueryParam(doc.method)}|">Try in API console &rarr;</a>
+      <div class="hc-card__header"><h2 th:text="${doc.id}"></h2></div>
+      <div class="hc-card__body hc-stack">
+        <div class="hc-cluster">
+          <span class="hc-badge"
+                th:attr="data-variant=${doc.method == 'GET'} ? 'info' : (${doc.method == 'POST'} ? 'success' : (${doc.method == 'DELETE'} ? 'error' : 'warning'))"
+                th:text="${doc.method}"></span>
+          <code th:text="${doc.path}"></code>
+          <span class="hc-badge" data-variant="info" th:text="${doc.recipe}"></span>
+          <span class="hc-spacer"></span>
+          <a class="hc-button" data-variant="ghost" data-size="sm"
+             th:href="|/_tesseraql/studio/ui/try?path=${#uris.escapeQueryParam(doc.path)}&amp;method=${#uris.escapeQueryParam(doc.method)}|">Try in API console &rarr;</a>
+        </div>
       </div>
-      <h2 th:text="${doc.id}"></h2>
     </section>
     <nav class="hc-toc" aria-label="On this page" data-hc-spy
          th:if="${doc.security or doc.hasInputs or doc.hasValidations or doc.hasNotifications or doc.response or doc.hasDataDeps or doc.hasSql or doc.hasTests}">
@@ -41,40 +47,48 @@
       </ul>
     </nav>
     <section class="hc-card" th:if="${doc.shareUrl}">
-      <h3>Share</h3>
-      <p class="hc-field__label">A signed, expiring read-only link to this route's contract &mdash;
-        openable without signing in. Copy it to share, or open it to preview.</p>
-      <input class="hc-input" type="text" readonly id="share-route" th:value="${doc.shareUrl}">
-      <div class="hc-cluster">
-        <button type="button" class="hc-button" data-variant="ghost" data-size="sm" data-hc-copy="#share-route">Copy</button>
-        <a class="hc-button" data-variant="ghost" data-size="sm" target="_blank" rel="noopener"
-           th:href="${doc.shareUrl}">Open shared view &rarr;</a>
+      <div class="hc-card__header">Share</div>
+      <div class="hc-card__body hc-stack">
+        <p class="hc-field__label">A signed, expiring read-only link to this route's contract &mdash;
+          openable without signing in. Copy it to share, or open it to preview.</p>
+        <input class="hc-input" type="text" readonly id="share-route" th:value="${doc.shareUrl}">
+        <div class="hc-cluster">
+          <button type="button" class="hc-button" data-variant="ghost" data-size="sm" data-hc-copy="#share-route">Copy</button>
+          <a class="hc-button" data-variant="ghost" data-size="sm" target="_blank" rel="noopener"
+             th:href="${doc.shareUrl}">Open shared view &rarr;</a>
+        </div>
       </div>
     </section>
     <section class="hc-card" th:if="${doc.hasReport}">
-      <h3>Last test run</h3>
-      <div class="hc-cluster">
-        <span class="hc-badge" th:if="${doc.covered}" data-variant="success">covered</span>
-        <span class="hc-badge" th:unless="${doc.covered}" data-variant="warning">untested</span>
-        <span class="hc-badge" th:if="${doc.testsRun > 0}"
-              th:attr="data-variant=${doc.allPassed} ? 'success' : 'error'"
-              th:text="|${doc.testsPassed}/${doc.testsRun} passed|"></span>
-        <span class="hc-badge" data-variant="info" th:if="${doc.sqlLinePct != null}"
-              th:text="|lines ${doc.sqlLinePct}%|"></span>
-        <span class="hc-badge" data-variant="info" th:if="${doc.sqlBranchPct != null}"
-              th:text="|branches ${doc.sqlBranchPct}%|"></span>
+      <div class="hc-card__header">Last test run</div>
+      <div class="hc-card__body hc-stack">
+        <div class="hc-cluster">
+          <span class="hc-badge" th:if="${doc.covered}" data-variant="success">covered</span>
+          <span class="hc-badge" th:unless="${doc.covered}" data-variant="warning">untested</span>
+          <span class="hc-badge" th:if="${doc.testsRun > 0}"
+                th:attr="data-variant=${doc.allPassed} ? 'success' : 'error'"
+                th:text="|${doc.testsPassed}/${doc.testsRun} passed|"></span>
+          <span class="hc-badge" data-variant="info" th:if="${doc.sqlLinePct != null}"
+                th:text="|lines ${doc.sqlLinePct}%|"></span>
+          <span class="hc-badge" data-variant="info" th:if="${doc.sqlBranchPct != null}"
+                th:text="|branches ${doc.sqlBranchPct}%|"></span>
+        </div>
       </div>
     </section>
     <section class="hc-card" id="sec-security" th:if="${doc.security}">
-      <h3>Security</h3>
-      <div class="hc-cluster">
-        <span class="hc-badge" th:if="${doc.security.auth}" th:text="|auth: ${doc.security.auth}|"></span>
-        <span class="hc-badge" th:if="${doc.security.policy}" th:text="|policy: ${doc.security.policy}|"></span>
-        <span class="hc-badge" data-variant="warning" th:if="${doc.security.csrf}">CSRF</span>
+      <div class="hc-card__header">Security</div>
+      <div class="hc-card__body hc-stack">
+        <div class="hc-cluster">
+          <span class="hc-badge" th:if="${doc.security.auth}" th:text="|auth: ${doc.security.auth}|"></span>
+          <span class="hc-badge" th:if="${doc.security.policy}" th:text="|policy: ${doc.security.policy}|"></span>
+          <span class="hc-badge" data-variant="warning" th:if="${doc.security.csrf}">CSRF</span>
+        </div>
       </div>
     </section>
     <section class="hc-card" id="sec-inputs" th:if="${doc.hasInputs}">
-      <h3>Inputs</h3>
+      <div class="hc-card__header">Inputs</div>
+      <div class="hc-card__body hc-stack">
+      <div class="hc-table-scroll">
       <table class="hc-table">
         <thead><tr><th>Name</th><th>Type</th><th>Required</th><th>Constraints</th></tr></thead>
         <tbody>
@@ -86,9 +100,13 @@
           </tr>
         </tbody>
       </table>
+      </div>
+      </div>
     </section>
     <section class="hc-card" id="sec-validation" th:if="${doc.hasValidations}">
-      <h3>Validation</h3>
+      <div class="hc-card__header">Validation</div>
+      <div class="hc-card__body hc-stack">
+      <div class="hc-table-scroll">
       <table class="hc-table">
         <thead><tr><th>Rule</th><th>Kind</th><th>Expression / file</th><th>Field</th></tr></thead>
         <tbody>
@@ -100,9 +118,13 @@
           </tr>
         </tbody>
       </table>
+      </div>
+      </div>
     </section>
     <section class="hc-card" id="sec-notifications" th:if="${doc.hasNotifications}">
-      <h3>Notifications</h3>
+      <div class="hc-card__header">Notifications</div>
+      <div class="hc-card__body hc-stack">
+      <div class="hc-table-scroll">
       <table class="hc-table">
         <thead><tr><th>Id</th><th>Channel</th><th>When</th><th>Payload</th></tr></thead>
         <tbody>
@@ -114,38 +136,45 @@
           </tr>
         </tbody>
       </table>
+      </div>
+      </div>
     </section>
     <section class="hc-card" id="sec-response" th:if="${doc.response}">
-      <h3>Response</h3>
-      <div class="hc-cluster">
-        <span class="hc-badge" data-variant="info" th:text="${doc.response.kind}"></span>
-        <span class="hc-badge" th:if="${doc.response.status}" th:text="|status: ${doc.response.status}|"></span>
-        <span class="hc-badge" th:if="${doc.response.template}" th:text="|template: ${doc.response.template}|"></span>
-        <span class="hc-badge" th:if="${doc.response.contentType}" th:text="${doc.response.contentType}"></span>
-        <span class="hc-badge" th:if="${doc.response.location}" th:text="|&rarr; ${doc.response.location}|"></span>
+      <div class="hc-card__header">Response</div>
+      <div class="hc-card__body hc-stack">
+        <div class="hc-cluster">
+          <span class="hc-badge" data-variant="info" th:text="${doc.response.kind}"></span>
+          <span class="hc-badge" th:if="${doc.response.status}" th:text="|status: ${doc.response.status}|"></span>
+          <span class="hc-badge" th:if="${doc.response.template}" th:text="|template: ${doc.response.template}|"></span>
+          <span class="hc-badge" th:if="${doc.response.contentType}" th:text="${doc.response.contentType}"></span>
+          <span class="hc-badge" th:if="${doc.response.location}" th:text="|&rarr; ${doc.response.location}|"></span>
+        </div>
       </div>
     </section>
     <section class="hc-card" id="sec-data" th:if="${doc.hasDataDeps}">
-      <h3>Data dependencies</h3>
-      <p class="hc-field__label">The tables this route's SQL reads from and writes to, inferred from
-        the statements (best-effort). A table introspected into the schema portal links to its page.</p>
-      <div class="hc-cluster" th:unless="${#lists.isEmpty(doc.reads)}">
-        <span class="hc-field__label">reads</span>
-        <th:block th:each="t : ${doc.reads}">
-          <a class="hc-badge" data-variant="info" th:if="${t.url}" th:href="${t.url}" th:text="${t.name}"></a>
-          <span class="hc-badge" data-variant="info" th:unless="${t.url}" th:text="${t.name}"></span>
-        </th:block>
-      </div>
-      <div class="hc-cluster" th:unless="${#lists.isEmpty(doc.writes)}">
-        <span class="hc-field__label">writes</span>
-        <th:block th:each="t : ${doc.writes}">
-          <a class="hc-badge" data-variant="warning" th:if="${t.url}" th:href="${t.url}" th:text="${t.name}"></a>
-          <span class="hc-badge" data-variant="warning" th:unless="${t.url}" th:text="${t.name}"></span>
-        </th:block>
+      <div class="hc-card__header">Data dependencies</div>
+      <div class="hc-card__body hc-stack">
+        <p class="hc-field__label">The tables this route's SQL reads from and writes to, inferred from
+          the statements (best-effort). A table introspected into the schema portal links to its page.</p>
+        <div class="hc-cluster" th:unless="${#lists.isEmpty(doc.reads)}">
+          <span class="hc-field__label">reads</span>
+          <th:block th:each="t : ${doc.reads}">
+            <a class="hc-badge" data-variant="info" th:if="${t.url}" th:href="${t.url}" th:text="${t.name}"></a>
+            <span class="hc-badge" data-variant="info" th:unless="${t.url}" th:text="${t.name}"></span>
+          </th:block>
+        </div>
+        <div class="hc-cluster" th:unless="${#lists.isEmpty(doc.writes)}">
+          <span class="hc-field__label">writes</span>
+          <th:block th:each="t : ${doc.writes}">
+            <a class="hc-badge" data-variant="warning" th:if="${t.url}" th:href="${t.url}" th:text="${t.name}"></a>
+            <span class="hc-badge" data-variant="warning" th:unless="${t.url}" th:text="${t.name}"></span>
+          </th:block>
+        </div>
       </div>
     </section>
     <section class="hc-card" id="sec-sql" th:if="${doc.hasSql}">
-      <h3>SQL</h3>
+      <div class="hc-card__header">SQL</div>
+      <div class="hc-card__body hc-stack">
       <div class="hc-cluster" th:if="${doc.hasReport}">
         <span class="hc-code__swatch" data-state="covered"></span><span class="hc-field__label">covered</span>
         <span class="hc-code__swatch" data-state="missed"></span><span class="hc-field__label">not covered</span>
@@ -174,9 +203,12 @@
         </ol>
         <pre class="hc-code" th:if="${s.statement != null and s.lines == null}"><code th:utext="${s.statementHtml}"></code></pre>
       </div>
+      </div>
     </section>
     <section class="hc-card" id="sec-tests" th:if="${doc.hasTests}">
-      <h3>Tests</h3>
+      <div class="hc-card__header">Tests</div>
+      <div class="hc-card__body hc-stack">
+      <div class="hc-table-scroll">
       <table class="hc-table">
         <thead><tr><th>Name</th><th>Kind</th><th>Target</th>
           <th th:if="${doc.hasReport}">Result</th></tr></thead>
@@ -199,6 +231,8 @@
           </tr>
         </tbody>
       </table>
+      </div>
+      </div>
     </section>
   </th:block>
 </div>

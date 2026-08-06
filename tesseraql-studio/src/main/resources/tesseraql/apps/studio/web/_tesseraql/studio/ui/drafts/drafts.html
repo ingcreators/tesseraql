@@ -9,7 +9,17 @@
 </th:block>
 <div id="page-content" class="hc-stack">
 <section class="hc-card">
-  <h2>Pending drafts</h2>
+  <div class="hc-card__header">
+    Pending drafts
+    <span class="hc-spacer"></span>
+    <input class="hc-input" data-size="sm" id="drafts-filter" type="search" name="q" th:value="${page.query}"
+           aria-label="Filter by path" placeholder="Filter by path&hellip;" autocomplete="off"
+           hx-get="/_tesseraql/studio/ui/drafts" hx-trigger="keyup changed delay:250ms, search"
+           hx-target="#drafts-table" hx-select="#drafts-table" hx-swap="outerHTML"
+           hx-indicator="next .htmx-indicator">
+    <th:block th:replace="~{tql/shell :: busy('Filtering…')}"/>
+  </div>
+  <div class="hc-card__body hc-stack">
   <p class="hc-field__message">Unsaved edits held under <code>work/studio/drafts</code>. Open one to review it in the editor, or apply/discard them in bulk here.</p>
   <p class="hc-alert" data-variant="success" role="status" th:if="${!#strings.isEmpty(applied)}">Applied all clean drafts and reloaded &mdash; new routes are serving now; any conflicting drafts were left below for review.</p>
   <p class="hc-alert" data-variant="success" role="status" th:if="${!#strings.isEmpty(discarded)}">Discarded all pending drafts.</p>
@@ -28,15 +38,6 @@
             data-hc-confirm="Discard every pending draft? This cannot be undone."
             data-hc-confirm-title="Discard all drafts" data-hc-confirm-label="Discard all"
             data-hc-confirm-variant="error">Discard all</button>
-  </div>
-  <div class="hc-field">
-    <label class="hc-field__label" for="drafts-filter">Filter</label>
-    <input class="hc-input" id="drafts-filter" type="search" name="q" th:value="${page.query}"
-           placeholder="Filter by path&hellip;" autocomplete="off"
-           hx-get="/_tesseraql/studio/ui/drafts" hx-trigger="keyup changed delay:250ms, search"
-           hx-target="#drafts-table" hx-select="#drafts-table" hx-swap="outerHTML"
-           hx-indicator="next .htmx-indicator">
-    <th:block th:replace="~{tql/shell :: busy('Filtering…')}"/>
   </div>
   <div id="drafts-table" class="hc-stack">
     <div class="hc-empty" th:unless="${page.hasDrafts}">
@@ -63,6 +64,7 @@
         </table>
       </div>
     </div>
+  </div>
   </div>
 </section>
 </div>

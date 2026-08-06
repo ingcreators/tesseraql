@@ -10,7 +10,8 @@
 </th:block>
 <div id="page-content" class="hc-stack">
   <section class="hc-card">
-    <h2>Job policies</h2>
+    <div class="hc-card__header">Job policies</div>
+    <div class="hc-card__body hc-stack">
     <p class="hc-field__message">A job's trigger &mdash; schedule with its calendar
       qualifiers, or an <code>after:</code> chain &mdash; and its operational promises
       (<code>overlap:</code>, <code>sla:</code>) as a form. Pipeline steps stay in the
@@ -29,9 +30,11 @@
       </div>
       <button class="hc-button" type="submit">Open</button>
     </form>
+    </div>
   </section>
   <section class="hc-card" th:if="${jp.form}">
-    <h2>Policies <code th:text="${jp.form.jobId}"></code></h2>
+    <div class="hc-card__header"><h2>Policies <code th:text="${jp.form.jobId}"></code></h2></div>
+    <div class="hc-card__body hc-stack">
     <p class="hc-alert" data-variant="success" role="status" th:if="${jp.saved}">Draft saved.
       Review the diff and apply it from the text editor.</p>
     <p class="hc-alert" data-variant="warning" role="status" th:if="${jp.form.pollTriggered}">
@@ -114,6 +117,7 @@
         their declarations. Saving writes canonical formatting &mdash; comments are not
         preserved; review and apply from the text editor.</p>
     </form>
+    </div>
   </section>
 </div>
 </html>

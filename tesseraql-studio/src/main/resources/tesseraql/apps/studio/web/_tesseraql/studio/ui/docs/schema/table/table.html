@@ -12,12 +12,15 @@
 </th:block>
 <div id="page-content" class="hc-stack">
   <section class="hc-card" th:if="${tbl.notFound}">
-    <h2>Table</h2>
-    <div class="hc-empty"><p class="hc-empty__title" th:text="|No such table: ${tbl.name}|"></p></div>
+    <div class="hc-card__header">Table</div>
+    <div class="hc-card__body hc-stack">
+      <div class="hc-empty"><p class="hc-empty__title" th:text="|No such table: ${tbl.name}|"></p></div>
+    </div>
   </section>
   <th:block th:unless="${tbl.notFound}">
     <section class="hc-card">
-      <h2 th:text="${tbl.name}"></h2>
+      <div class="hc-card__header"><h2 th:text="${tbl.name}"></h2></div>
+      <div class="hc-card__body hc-stack">
       <div class="hc-cluster">
         <span class="hc-badge" data-variant="info" th:text="${tbl.type}"></span>
         <span class="hc-field__label" th:text="|datasource ${tbl.datasource}|"></span>
@@ -31,6 +34,7 @@
         <a class="hc-button" data-variant="ghost" data-size="sm"
            th:href="|/_tesseraql/studio/ui/data?table=${#uris.escapeQueryParam(tbl.name)}|">Browse data &rarr;</a>
       </div>
+      </div>
     </section>
     <nav class="hc-toc" aria-label="On this page" data-hc-spy>
       <span class="hc-field__label">On this page</span>
@@ -42,33 +46,39 @@
       </ul>
     </nav>
     <section class="hc-card" th:if="${tbl.shareUrl}">
-      <h3>Share</h3>
-      <p class="hc-field__label">A signed, expiring read-only link to this table's reference &mdash;
-        openable without signing in.</p>
-      <input class="hc-input" type="text" readonly id="share-table" th:value="${tbl.shareUrl}">
-      <div class="hc-cluster">
-        <button type="button" class="hc-button" data-variant="ghost" data-size="sm" data-hc-copy="#share-table">Copy</button>
-        <a class="hc-button" data-variant="ghost" data-size="sm" target="_blank" rel="noopener"
-           th:href="${tbl.shareUrl}">Open shared view &rarr;</a>
+      <div class="hc-card__header">Share</div>
+      <div class="hc-card__body hc-stack">
+        <p class="hc-field__label">A signed, expiring read-only link to this table's reference &mdash;
+          openable without signing in.</p>
+        <input class="hc-input" type="text" readonly id="share-table" th:value="${tbl.shareUrl}">
+        <div class="hc-cluster">
+          <button type="button" class="hc-button" data-variant="ghost" data-size="sm" data-hc-copy="#share-table">Copy</button>
+          <a class="hc-button" data-variant="ghost" data-size="sm" target="_blank" rel="noopener"
+             th:href="${tbl.shareUrl}">Open shared view &rarr;</a>
+        </div>
       </div>
     </section>
     <section class="hc-card" id="sec-usage" th:if="${tbl.hasRouteUsage}">
-      <h3>Used by routes</h3>
-      <p class="hc-field__label">The routes whose SQL reads from or writes to this table, inferred
-        from the statements (best-effort). Each links to its route reference.</p>
-      <div class="hc-cluster" th:unless="${#lists.isEmpty(tbl.readByRoutes)}">
-        <span class="hc-field__label">read by</span>
-        <a class="hc-badge" data-variant="info" th:each="r : ${tbl.readByRoutes}"
-           th:href="${r.url}" th:text="${r.id}"></a>
-      </div>
-      <div class="hc-cluster" th:unless="${#lists.isEmpty(tbl.writeByRoutes)}">
-        <span class="hc-field__label">written by</span>
-        <a class="hc-badge" data-variant="warning" th:each="r : ${tbl.writeByRoutes}"
-           th:href="${r.url}" th:text="${r.id}"></a>
+      <div class="hc-card__header">Used by routes</div>
+      <div class="hc-card__body hc-stack">
+        <p class="hc-field__label">The routes whose SQL reads from or writes to this table, inferred
+          from the statements (best-effort). Each links to its route reference.</p>
+        <div class="hc-cluster" th:unless="${#lists.isEmpty(tbl.readByRoutes)}">
+          <span class="hc-field__label">read by</span>
+          <a class="hc-badge" data-variant="info" th:each="r : ${tbl.readByRoutes}"
+             th:href="${r.url}" th:text="${r.id}"></a>
+        </div>
+        <div class="hc-cluster" th:unless="${#lists.isEmpty(tbl.writeByRoutes)}">
+          <span class="hc-field__label">written by</span>
+          <a class="hc-badge" data-variant="warning" th:each="r : ${tbl.writeByRoutes}"
+             th:href="${r.url}" th:text="${r.id}"></a>
+        </div>
       </div>
     </section>
     <section class="hc-card" id="sec-columns">
-      <h2>Columns</h2>
+      <div class="hc-card__header">Columns</div>
+      <div class="hc-card__body hc-stack">
+      <div class="hc-table-scroll">
       <table class="hc-table">
         <thead><tr><th>Column</th><th>Type</th><th>Nullable</th><th>Default</th><th>Key</th><th>Domain</th></tr></thead>
         <tbody>
@@ -92,9 +102,13 @@
           </tr>
         </tbody>
       </table>
+      </div>
+      </div>
     </section>
     <section class="hc-card" id="sec-fks" th:if="${tbl.hasForeignKeys}">
-      <h2>Foreign keys</h2>
+      <div class="hc-card__header">Foreign keys</div>
+      <div class="hc-card__body hc-stack">
+      <div class="hc-table-scroll">
       <table class="hc-table">
         <thead><tr><th>Constraint</th><th>Columns</th><th>References</th></tr></thead>
         <tbody>
@@ -105,9 +119,13 @@
           </tr>
         </tbody>
       </table>
+      </div>
+      </div>
     </section>
     <section class="hc-card" id="sec-indexes" th:if="${tbl.hasUniqueIndexes}">
-      <h2>Unique indexes</h2>
+      <div class="hc-card__header">Unique indexes</div>
+      <div class="hc-card__body hc-stack">
+      <div class="hc-table-scroll">
       <table class="hc-table">
         <thead><tr><th>Index</th><th>Columns</th></tr></thead>
         <tbody>
@@ -117,6 +135,8 @@
           </tr>
         </tbody>
       </table>
+      </div>
+      </div>
     </section>
   </th:block>
 </div>

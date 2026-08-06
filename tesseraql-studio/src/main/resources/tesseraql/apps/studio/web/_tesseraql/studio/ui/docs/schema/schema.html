@@ -14,21 +14,27 @@
 <div id="page-content" class="hc-stack">
   <p class="hc-alert" data-variant="success" role="status" th:if="${!#strings.isEmpty(refreshed)}">Schema refreshed from the live database.</p>
   <section class="hc-card" th:unless="${sch.hasSchema}">
-    <h2>Schema</h2>
-    <div class="hc-empty" th:if="${sch.schemaCorrupt}">
-      <p class="hc-empty__title">The schema sidecar cannot be parsed.</p>
-      <p><code>.tesseraql/docs/schema.json</code> exists but is not a valid schema document
-        &mdash; refresh to regenerate it.</p>
-    </div>
-    <div class="hc-empty" th:unless="${sch.schemaCorrupt}">
-      <p class="hc-empty__title">No schema introspected yet.</p>
-      <p>Refresh the schema above, or run the <code>tesseraql:schema</code> goal in CI, to
-        populate table definitions from the migrated database.</p>
+    <div class="hc-card__header">Schema</div>
+    <div class="hc-card__body hc-stack">
+      <div class="hc-empty" th:if="${sch.schemaCorrupt}">
+        <p class="hc-empty__title">The schema sidecar cannot be parsed.</p>
+        <p><code>.tesseraql/docs/schema.json</code> exists but is not a valid schema document
+          &mdash; refresh to regenerate it.</p>
+      </div>
+      <div class="hc-empty" th:unless="${sch.schemaCorrupt}">
+        <p class="hc-empty__title">No schema introspected yet.</p>
+        <p>Refresh the schema above, or run the <code>tesseraql:schema</code> goal in CI, to
+          populate table definitions from the migrated database.</p>
+      </div>
     </div>
   </section>
   <section class="hc-card" th:if="${sch.hasSchema}" th:each="ds : ${sch.datasources}">
-    <h2 th:text="|Datasource: ${ds.name}|"></h2>
-    <span class="hc-field__label" th:text="|${ds.tableCount} tables|"></span>
+    <div class="hc-card__header">
+      <h2 th:text="|Datasource: ${ds.name}|"></h2>
+      <span class="hc-spacer"></span>
+      <span class="hc-field__label" th:text="|${ds.tableCount} tables|"></span>
+    </div>
+    <div class="hc-card__body hc-stack">
     <div class="hc-datagrid">
       <div class="hc-datagrid__scroll">
         <table class="hc-datagrid__table">
@@ -50,6 +56,7 @@
           </tbody>
         </table>
       </div>
+    </div>
     </div>
   </section>
 </div>

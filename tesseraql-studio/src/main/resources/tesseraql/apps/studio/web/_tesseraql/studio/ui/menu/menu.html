@@ -13,12 +13,15 @@
   <p class="hc-alert" data-variant="success" role="status" th:if="${!#strings.isEmpty(moved)}">Menu order updated.</p>
   <p class="hc-alert" data-variant="success" role="status" th:if="${!#strings.isEmpty(removed)}">Menu item removed.</p>
   <section class="hc-card" th:unless="${menu.editable}">
+    <div class="hc-card__body">
     <div class="hc-empty">
       <p class="hc-empty__title">You do not have permission to edit the menu.</p>
     </div>
+    </div>
   </section>
   <section class="hc-card" th:if="${menu.editable}">
-    <h2>Sidebar menu</h2>
+    <div class="hc-card__header">Sidebar menu</div>
+    <div class="hc-card__body hc-stack">
     <p class="hc-field__message">The app's declarative sidebar (<code>config/menu.yml</code>), rendered
       into the shell and filtered per item by the caller's roles/permissions. An item with no roles and
       no permissions is public; otherwise it shows when the caller holds one of the listed roles or
@@ -165,6 +168,7 @@
       </form>
       <div id="menu-preview" class="hc-stack"></div>
     </details>
+    </div>
   </section>
 </div>
 </html>
