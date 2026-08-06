@@ -25,7 +25,7 @@
                     th:text="${m}" th:selected="${tryit.prefill.method == m}">GET</option>
           </select>
         </div>
-        <div class="hc-field hc-field--grow">
+        <div class="hc-field">
           <label class="hc-field__label" for="try-path">Path</label>
           <input class="hc-input" id="try-path" name="path" required placeholder="/api/users"
                  list="try-path-options" autocomplete="off" th:value="${tryit.prefill.path}">
@@ -49,7 +49,7 @@
         Send my Studio session &mdash; run browser-authenticated routes as me
       </label>
       <div class="hc-cluster">
-        <div class="hc-field hc-field--grow">
+        <div class="hc-field">
           <label class="hc-field__label" for="try-body">Request body (optional)</label>
           <textarea class="hc-input" id="try-body" name="body" rows="6"
                     placeholder='{"userName": "sato"}' th:text="${tryit.prefill.body}"></textarea>

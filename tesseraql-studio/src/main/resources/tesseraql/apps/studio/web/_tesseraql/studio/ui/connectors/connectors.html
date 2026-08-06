@@ -32,7 +32,8 @@
               <input type="hidden" name="confirm" value="true">
               <button class="hc-button" data-variant="ghost" data-size="sm" type="submit"
                       data-hc-confirm="Remove this host from the egress allow-list? Calls to it will be denied after the next start."
-                      data-hc-confirm-title="Remove egress host" data-hc-confirm-label="Remove">Remove</button>
+                      data-hc-confirm-title="Remove egress host" data-hc-confirm-label="Remove"
+                      data-hc-confirm-variant="error">Remove</button>
             </form>
           </li>
           <li th:if="${hosts.isEmpty()}" class="hc-field__message">No hosts allow-listed.</li>
@@ -70,9 +71,10 @@
         </table>
       </div>
     </div>
-    <details class="hc-disclosure" th:if="${cx.editable}">
-      <summary>Add or replace a credential</summary>
-      <form class="hc-stack" method="post" action="/_tesseraql/studio/ui/connectors/credential">
+    <details class="hc-collapsible" th:if="${cx.editable}">
+      <summary class="hc-collapsible__trigger">Add or replace a credential
+        <span class="hc-collapsible__icon" aria-hidden="true">&#9662;</span></summary>
+      <form class="hc-stack hc-collapsible__content" method="post" action="/_tesseraql/studio/ui/connectors/credential">
         <input type="hidden" name="_csrf" th:value="${_csrf}">
         <div class="hc-cluster">
           <label class="hc-field"><span class="hc-field__label">Scope</span>
@@ -119,9 +121,10 @@
       <tr th:if="${cx.webhooks.isEmpty()}"><td colspan="6" class="hc-field__message">None configured.</td></tr>
       </tbody>
     </table>
-    <details class="hc-disclosure" th:if="${cx.editable}">
-      <summary>Add or replace a verifier</summary>
-      <form class="hc-stack" method="post" action="/_tesseraql/studio/ui/connectors/webhook">
+    <details class="hc-collapsible" th:if="${cx.editable}">
+      <summary class="hc-collapsible__trigger">Add or replace a verifier
+        <span class="hc-collapsible__icon" aria-hidden="true">&#9662;</span></summary>
+      <form class="hc-stack hc-collapsible__content" method="post" action="/_tesseraql/studio/ui/connectors/webhook">
         <input type="hidden" name="_csrf" th:value="${_csrf}">
         <div class="hc-cluster">
           <label class="hc-field"><span class="hc-field__label">Provider name</span>

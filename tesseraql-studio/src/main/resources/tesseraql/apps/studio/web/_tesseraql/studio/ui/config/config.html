@@ -16,8 +16,8 @@
       <code>${ENV}</code> reference stays visible rather than its value; a secret's literal value is
       redacted. Read-only.</p>
     <div class="hc-cluster">
-      <span class="hc-badge" data-variant="neutral" th:text="|${cfg.count} key(s)|">0 key(s)</span>
-      <span class="hc-badge" data-variant="neutral" th:text="|${cfg.secretCount} redacted|">0 redacted</span>
+      <span class="hc-badge" th:text="|${cfg.count} key(s)|">0 key(s)</span>
+      <span class="hc-badge" th:text="|${cfg.secretCount} redacted|">0 redacted</span>
     </div>
   </section>
 
@@ -32,7 +32,7 @@
       <input type="hidden" name="_csrf" th:value="${_csrf}">
       <input type="hidden" name="key" th:value="${s.key}">
       <div class="hc-cluster">
-        <div class="hc-field hc-field--grow">
+        <div class="hc-field">
           <label class="hc-field__label" th:for="|set-${s.key}|" th:text="${s.label}">Setting</label>
           <input class="hc-input" th:id="|set-${s.key}|" name="value" th:value="${s.value}"
                  th:type="${s.type == 'integer'} ? 'number' : 'text'" autocomplete="off">
@@ -57,7 +57,7 @@
             <tr class="hc-datagrid__row" th:each="r : ${cfg.rows}" th:attr="data-key=${r.key}">
               <td class="hc-datagrid__cell"><code th:text="${r.key}">key</code></td>
               <td class="hc-datagrid__cell">
-                <span class="hc-badge" data-variant="neutral" th:if="${r.secret}">redacted</span>
+                <span class="hc-badge" th:if="${r.secret}">redacted</span>
                 <span th:unless="${r.secret}" th:text="${r.value}">value</span>
               </td>
             </tr>

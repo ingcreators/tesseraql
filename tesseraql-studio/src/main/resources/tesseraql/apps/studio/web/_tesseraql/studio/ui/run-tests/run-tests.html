@@ -1,5 +1,5 @@
 <div class="hc-stack" xmlns:th="http://www.thymeleaf.org" th:fragment="runTests">
-  <p class="hc-alert" data-variant="info" role="status"
+  <p class="hc-alert" role="status"
      th:unless="${tests.ran}" th:text="${tests.note}"></p>
   <th:block th:if="${tests.ran}">
     <p class="hc-alert" role="status"

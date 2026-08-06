@@ -16,14 +16,16 @@ swap.
 
 **Plain form submit** (what IAM Admin's disable button uses) — the button lives in a normal
 `<form method="post">`; the dialog intercepts the click and submits on confirm. Without
-JavaScript the form still submits, so the action degrades gracefully:
+JavaScript the form still submits, so the action degrades gracefully. The submit-on-confirm
+leg is currently the framework bootstrap's stand-in (`tesseraql.js`; the kit's behavior only
+re-emits `hc:confirmed` — hc-briefs.md brief 4 asks the kit to own this):
 
 ```html
 <form method="post" th:action="|/_tesseraql/admin/users/${u.user_id}/disable|">
   <button type="submit" class="hc-button" data-variant="error"
           th:attr="data-hc-confirm=|Disable user ${u.login_id}?|"
           data-hc-confirm-title="Confirm disable"
-          data-hc-confirm-ok="Disable" data-hc-confirm-variant="error">Disable user</button>
+          data-hc-confirm-label="Disable" data-hc-confirm-variant="error">Disable user</button>
 </form>
 ```
 
@@ -34,7 +36,7 @@ htmx observe it. Without the rewritten trigger the element is inert for htmx:
 
 ```html
 <button class="hc-button" data-variant="error"
-        data-hc-confirm="Delete this draft?" data-hc-confirm-ok="Delete"
+        data-hc-confirm="Delete this draft?" data-hc-confirm-label="Delete"
         data-hc-confirm-variant="error"
         hx-delete="/drafts/123" hx-trigger="hc:confirmed"
         hx-target="closest tr" hx-swap="outerHTML">Delete</button>
@@ -229,7 +231,7 @@ select-all deliberately has **no `name`** so it never posts, and the auto-instal
        data-hc-datagrid-actions="#members" hidden>
     <span data-hc-datagrid-count></span>
     <button class="hc-button" data-variant="error" type="submit" name="action" value="disable"
-            data-hc-confirm="Disable the selected members?" data-hc-confirm-ok="Disable"
+            data-hc-confirm="Disable the selected members?" data-hc-confirm-label="Disable"
             data-hc-confirm-variant="error">Disable selected</button>
   </div>
   <div class="hc-datagrid" id="members">…rows with

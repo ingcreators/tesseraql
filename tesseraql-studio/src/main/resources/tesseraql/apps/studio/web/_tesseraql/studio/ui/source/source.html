@@ -18,9 +18,9 @@
   <th:block th:if="${src.readOnly}">
     <p class="hc-field__message">Read-only mode &mdash; edit drafts via the Studio API.</p>
     <pre class="hc-code"><code th:utext="${src.contentHtml}"></code></pre>
-    <details class="hc-disclosure" open th:if="${src.isRenderable}">
-      <summary>Rendered preview</summary>
-      <p class="hc-field__message">Rendered against the colocated <code>.sample.yml</code> fixture (or an empty model).</p>
+    <details class="hc-collapsible" open th:if="${src.isRenderable}">
+      <summary class="hc-collapsible__trigger">Rendered preview <span class="hc-collapsible__icon" aria-hidden="true">&#9662;</span></summary>
+      <p class="hc-field__message hc-collapsible__content">Rendered against the colocated <code>.sample.yml</code> fixture (or an empty model).</p>
       <input type="hidden" id="src-path" name="path" th:value="${src.path}">
       <th:block th:replace="~{tql/shell :: busy('Rendering…')}"/>
       <div id="render-result" class="hc-stack" aria-live="polite"
@@ -35,7 +35,7 @@
          unsaved-draft marker when a draft is in flight. -->
     <div class="hc-cluster">
       <span class="hc-badge" data-variant="info" th:if="${src.isNew}">new route &middot; not served yet</span>
-      <span class="hc-badge" data-variant="neutral" th:unless="${src.isNew}">served route</span>
+      <span class="hc-badge" th:unless="${src.isNew}">served route</span>
       <span class="hc-badge" data-variant="warning" th:if="${src.hasDraft}">unsaved draft</span>
     </div>
     <p class="hc-field__message" th:if="${src.isNew}">This route does not exist yet: saving keeps a draft, and applying writes the file and serves it immediately (routes hot-reload). A broken definition answers 500 with its compile error until fixed.</p>
@@ -55,9 +55,9 @@
       <div id="preview-result" class="hc-stack" aria-live="polite"></div>
       <div class="hc-cluster"><button type="submit" class="hc-button" data-variant="primary">Save draft</button></div>
     </form>
-    <details class="hc-disclosure" open th:if="${src.isRenderable}">
-      <summary>Rendered preview</summary>
-      <p class="hc-field__message" th:if="${src.isRoute}">Renders this route's response against the sample <em>execution context</em> below (e.g. <code>params</code>, <code>sql.rows</code>) &mdash; prefilled from the colocated <code>.sample.yml</code> fixture when present. A <code>query-json</code> route's <code>response.json.fields</code> masking is applied; add a <code>principal</code> (e.g. <code>permissions</code>/<code>roles</code>) to the sample to preview a privileged view.</p>
+    <details class="hc-collapsible" open th:if="${src.isRenderable}">
+      <summary class="hc-collapsible__trigger">Rendered preview <span class="hc-collapsible__icon" aria-hidden="true">&#9662;</span></summary>
+      <p class="hc-field__message hc-collapsible__content" th:if="${src.isRoute}">Renders this route's response against the sample <em>execution context</em> below (e.g. <code>params</code>, <code>sql.rows</code>) &mdash; prefilled from the colocated <code>.sample.yml</code> fixture when present. A <code>query-json</code> route's <code>response.json.fields</code> masking is applied; add a <code>principal</code> (e.g. <code>permissions</code>/<code>roles</code>) to the sample to preview a privileged view.</p>
       <p class="hc-field__message" th:unless="${src.isRoute}">Renders the draft against the sample <em>template variables</em> below &mdash; prefilled from the colocated <code>.sample.yml</code> fixture when present, blank falls back to an empty model.</p>
       <label class="hc-field__label" for="sample-editor">Sample data (YAML)</label>
       <div class="hc-code" data-editable data-gutter="line-numbers" data-lang="yaml">
@@ -75,36 +75,36 @@
            hx-include="#src-path, #source-editor, #sample-editor, #render-live"
            hx-target="this" hx-swap="innerHTML" hx-indicator="previous span"></div>
     </details>
-    <details class="hc-disclosure" th:if="${src.hasDraft}">
-      <summary>Compare against saved source</summary>
-      <ol class="hc-code" data-mode="diff" th:if="${src.diff}">
+    <details class="hc-collapsible" th:if="${src.hasDraft}">
+      <summary class="hc-collapsible__trigger">Compare against saved source <span class="hc-collapsible__icon" aria-hidden="true">&#9662;</span></summary>
+      <ol class="hc-code hc-collapsible__content" data-mode="diff" th:if="${src.diff}">
         <li class="hc-code__line" th:each="ln : ${src.diff}"
             th:attr="data-state=${ln.state},data-old=${ln.oldNo},data-new=${ln.newNo}"
             th:utext="${ln.html}"></li>
       </ol>
       <pre class="hc-code" th:unless="${src.diff}"><code th:utext="${src.sourceContentHtml}"></code></pre>
     </details>
-    <details class="hc-disclosure" th:if="${src.isMigration and src.testRunnerEnabled}">
-      <summary>Dry-run</summary>
-      <p class="hc-field__message">Runs this migration's DDL against the dev datasource in a sandboxed transaction that is rolled back &mdash; nothing persists &mdash; so you can check it applies before the next migrate. Postgres only (other dialects auto-commit DDL).</p>
+    <details class="hc-collapsible" th:if="${src.isMigration and src.testRunnerEnabled}">
+      <summary class="hc-collapsible__trigger">Dry-run <span class="hc-collapsible__icon" aria-hidden="true">&#9662;</span></summary>
+      <p class="hc-field__message hc-collapsible__content">Runs this migration's DDL against the dev datasource in a sandboxed transaction that is rolled back &mdash; nothing persists &mdash; so you can check it applies before the next migrate. Postgres only (other dialects auto-commit DDL).</p>
       <form hx-post="/_tesseraql/studio/ui/dry-run" hx-include="#source-editor" hx-target="#dry-run-result" hx-swap="innerHTML" hx-disabled-elt="find button">
         <input type="hidden" name="path" th:value="${src.path}">
         <div class="hc-cluster"><button type="submit" class="hc-button" data-variant="primary">Dry-run</button><th:block th:replace="~{tql/shell :: busy('Running…')}"/></div>
       </form>
       <div id="dry-run-result" class="hc-stack" aria-live="polite"></div>
     </details>
-    <details class="hc-disclosure" th:if="${src.isTestable and src.testRunnerEnabled}">
-      <summary>Tests</summary>
-      <p class="hc-field__message">Runs the declarative test cases covering this <span th:text="${src.isJob} ? 'job' : 'route'">route</span> (<code>sql</code>, <code>validate</code>, <code>notify</code>, <code>http-call</code>) against the dev datasource, sandboxed (auto-rollback, timeout, row cap) &mdash; a write case executes and is rolled back, so nothing persists.</p>
+    <details class="hc-collapsible" th:if="${src.isTestable and src.testRunnerEnabled}">
+      <summary class="hc-collapsible__trigger">Tests <span class="hc-collapsible__icon" aria-hidden="true">&#9662;</span></summary>
+      <p class="hc-field__message hc-collapsible__content">Runs the declarative test cases covering this <span th:text="${src.isJob} ? 'job' : 'route'">route</span> (<code>sql</code>, <code>validate</code>, <code>notify</code>, <code>http-call</code>) against the dev datasource, sandboxed (auto-rollback, timeout, row cap) &mdash; a write case executes and is rolled back, so nothing persists.</p>
       <form hx-post="/_tesseraql/studio/ui/run-tests" hx-target="#run-tests-result" hx-swap="innerHTML" hx-disabled-elt="find button">
         <input type="hidden" name="path" th:value="${src.path}">
         <div class="hc-cluster"><button type="submit" class="hc-button" data-variant="primary">Run tests</button><th:block th:replace="~{tql/shell :: busy('Running…')}"/></div>
       </form>
       <div id="run-tests-result" class="hc-stack" aria-live="polite"></div>
     </details>
-    <details class="hc-disclosure" th:if="${src.isRouteSql and src.hasTables}">
-      <summary>SQL builder</summary>
-      <p class="hc-field__message">Generate a <code>select</code>/<code>insert</code>/<code>update</code>/<code>delete</code>
+    <details class="hc-collapsible" th:if="${src.isRouteSql and src.hasTables}">
+      <summary class="hc-collapsible__trigger">SQL builder <span class="hc-collapsible__icon" aria-hidden="true">&#9662;</span></summary>
+      <p class="hc-field__message hc-collapsible__content">Generate a <code>select</code>/<code>insert</code>/<code>update</code>/<code>delete</code>
         2-way SQL snippet for a table and append it to the editor above (the bind directives are
         written for you; a <code>-- sql.params</code> comment lists the mappings to add to the route).</p>
       <form hx-post="/_tesseraql/studio/ui/sql-builder/build"
@@ -136,7 +136,7 @@
       </form>
     </details>
     <p class="hc-alert" data-variant="warning" role="alert" th:if="${src.conflict}">The saved source changed since this draft was started &mdash; applying overwrites those changes. Review the compare panel above first.</p>
-    <p class="hc-alert" data-variant="info" role="note" th:if="${src.confirmApply and not src.conflict and src.hasDraft}">Confirm-before-apply is on: review the compare panel above, then confirm.</p>
+    <p class="hc-alert" role="note" th:if="${src.confirmApply and not src.conflict and src.hasDraft}">Confirm-before-apply is on: review the compare panel above, then confirm.</p>
     <form hx-post="/_tesseraql/studio/ui/apply" hx-target="#apply-result" hx-swap="innerHTML" hx-disabled-elt="find button">
       <input type="hidden" name="path" th:value="${src.path}">
       <label class="hc-field" th:if="${src.conflict}">

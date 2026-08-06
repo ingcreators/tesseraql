@@ -15,16 +15,16 @@
       gaps</strong> (a state-changing browser route without CSRF), and routes pointing at an
       <strong>undefined policy</strong>.</p>
     <div class="hc-cluster">
-      <span class="hc-badge" data-variant="neutral" th:text="|${sec.totalRoutes} route(s)|">0 route(s)</span>
-      <span class="hc-badge" th:attr="data-variant=${sec.unprotected > 0} ? 'error' : 'neutral'"
+      <span class="hc-badge" th:text="|${sec.totalRoutes} route(s)|">0 route(s)</span>
+      <span class="hc-badge" th:attr="data-variant=${sec.unprotected > 0} ? 'error' : null"
             th:text="|${sec.unprotected} unprotected|">0 unprotected</span>
-      <span class="hc-badge" th:attr="data-variant=${sec.csrfGaps > 0} ? 'warning' : 'neutral'"
+      <span class="hc-badge" th:attr="data-variant=${sec.csrfGaps > 0} ? 'warning' : null"
             th:text="|${sec.csrfGaps} CSRF gap(s)|">0 CSRF gap(s)</span>
-      <span class="hc-badge" th:attr="data-variant=${sec.unknownPolicies > 0} ? 'warning' : 'neutral'"
+      <span class="hc-badge" th:attr="data-variant=${sec.unknownPolicies > 0} ? 'warning' : null"
             th:text="|${sec.unknownPolicies} undefined-policy|">0 undefined-policy</span>
-      <span class="hc-badge" th:attr="data-variant=${sec.unusedPolicies > 0} ? 'warning' : 'neutral'"
+      <span class="hc-badge" th:attr="data-variant=${sec.unusedPolicies > 0} ? 'warning' : null"
             th:text="|${sec.unusedPolicies} unused-policy|">0 unused-policy</span>
-      <span class="hc-badge" data-variant="neutral" th:text="|${sec.policyCount} policy(ies)|">0 policy(ies)</span>
+      <span class="hc-badge" th:text="|${sec.policyCount} policy(ies)|">0 policy(ies)</span>
     </div>
   </section>
 
@@ -47,7 +47,7 @@
               </td>
               <td class="hc-datagrid__cell">
                 <span class="hc-badge" data-variant="error" th:if="${r.unprotected}">no auth</span>
-                <span class="hc-badge" data-variant="neutral" th:unless="${r.unprotected}"
+                <span class="hc-badge" th:unless="${r.unprotected}"
                       th:text="${r.auth}">browser</span>
               </td>
               <td class="hc-datagrid__cell">
@@ -73,7 +73,7 @@
     <h3>Policies</h3>
     <div class="hc-empty" th:if="${sec.policyCount == 0 and !sec.editable}">
       <p class="hc-empty__title">No policies defined.</p>
-      <p class="hc-empty__body">Add them under <code>tesseraql.security.policies</code>.</p>
+      <p class="hc-empty__description">Add them under <code>tesseraql.security.policies</code>.</p>
     </div>
     <div class="hc-datagrid" th:if="${sec.policyCount > 0}">
       <div class="hc-datagrid__scroll">
@@ -88,7 +88,7 @@
               <td class="hc-datagrid__cell"><code th:text="${p.id}">policy.id</code></td>
               <td class="hc-datagrid__cell">
                 <div class="hc-cluster">
-                  <span class="hc-badge" data-variant="neutral" th:each="rule : ${p.rules}">
+                  <span class="hc-badge" th:each="rule : ${p.rules}">
                     <span th:text="${rule.label}">role X</span>
                     <form th:if="${sec.editable and rule.editable}" method="post"
                           action="/_tesseraql/studio/ui/security/policy/remove-rule">
@@ -105,9 +105,9 @@
               </td>
               <td class="hc-datagrid__cell">
                 <span class="hc-badge" data-variant="warning" th:if="${p.unused}">unused</span>
-                <details class="hc-disclosure" th:unless="${p.unused}">
-                  <summary th:text="|${p.usedBy} route(s)|">0 route(s)</summary>
-                  <ul class="hc-stack">
+                <details class="hc-collapsible" th:unless="${p.unused}">
+                  <summary class="hc-collapsible__trigger" th:text="|${p.usedBy} route(s)|">0 route(s)</summary>
+                  <ul class="hc-stack hc-collapsible__content">
                     <li th:each="r : ${p.routes}">
                       <a th:href="${r.sourceUrl}"><span th:text="${r.method}">GET</span>
                         <code th:text="${r.path}">/path</code></a>
@@ -121,9 +121,9 @@
       </div>
     </div>
 
-    <details class="hc-disclosure" th:if="${sec.editable}" th:attr="open=${sec.policyCount == 0} ? true : null">
-      <summary>Grant a role or permission</summary>
-      <p class="hc-field__message">Add a rule to a policy, or type a new policy id to create one. The
+    <details class="hc-collapsible" th:if="${sec.editable}" th:attr="open=${sec.policyCount == 0} ? true : null">
+      <summary class="hc-collapsible__trigger">Grant a role or permission <span class="hc-collapsible__icon" aria-hidden="true">&#9662;</span></summary>
+      <p class="hc-field__message hc-collapsible__content">Add a rule to a policy, or type a new policy id to create one. The
         rule is written to <code>config/overlay.yml</code> (the base config is left intact) and takes
         effect immediately. A policy grants access when the caller matches <em>any</em> of its rules.
         A base-defined policy can be overridden here but not deleted.</p>

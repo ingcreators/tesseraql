@@ -58,7 +58,7 @@
 </section>
 </div>
 <th:block th:fragment="explorerNode(folder)">
-  <details class="hc-disclosure" open>
+  <details class="tql-tree" open>
     <summary th:text="${folder.name}"></summary>
     <div class="hc-stack tql-tree__children">
       <!-- Contextual create (Studio sidebar IA): opens the New-route drawer with its Path seeded to
@@ -79,7 +79,7 @@
 </th:block>
 <div class="hc-cluster" th:fragment="explorerLeaf(leaf)">
   <span class="hc-badge"
-        th:attr="data-variant=${leaf.kind == 'job'} ? 'info' : (${leaf.kind == 'draft'} ? 'success' : 'neutral')"
+        th:attr="data-variant=${leaf.kind == 'job'} ? 'info' : (${leaf.kind == 'draft'} ? 'success' : null)"
         th:text="${leaf.badge}"></span>
   <a th:href="${leaf.sourceUrl}" th:text="${leaf.label}"></a>
   <span class="hc-field__message" th:text="${leaf.recipe}" th:unless="${#strings.isEmpty(leaf.recipe)}"></span>

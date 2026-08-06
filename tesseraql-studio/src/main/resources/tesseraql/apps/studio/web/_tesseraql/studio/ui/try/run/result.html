@@ -9,9 +9,9 @@
       <span class="hc-field__message" th:text="|${result.durationMs} ms|">0 ms</span>
       <code th:text="${result.url}">url</code>
     </div>
-    <details class="hc-disclosure">
-      <summary>Response headers</summary>
-      <div class="hc-datagrid">
+    <details class="hc-collapsible">
+      <summary class="hc-collapsible__trigger">Response headers <span class="hc-collapsible__icon" aria-hidden="true">&#9662;</span></summary>
+      <div class="hc-datagrid hc-collapsible__content">
         <div class="hc-datagrid__scroll">
           <table class="hc-datagrid__table">
             <tbody class="hc-datagrid__body">

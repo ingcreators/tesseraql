@@ -35,7 +35,7 @@
       <button type="submit" class="hc-button" data-variant="error"
               th:attr="data-hc-confirm=|Disable user ${u.login_id}? Their active sessions end immediately.|"
               data-hc-confirm-title="Confirm disable"
-              data-hc-confirm-ok="Disable" data-hc-confirm-variant="error">Disable user</button>
+              data-hc-confirm-label="Disable" data-hc-confirm-variant="error">Disable user</button>
     </form>
   </div>
 </section>
@@ -61,7 +61,7 @@
               <button type="submit" class="hc-button" data-variant="ghost" data-size="sm"
                       th:attr="data-hc-confirm=|Sign this device of ${u.login_id} out?|"
                       data-hc-confirm-title="Confirm sign-out"
-                      data-hc-confirm-ok="Sign out device" data-hc-confirm-variant="error">Sign out</button>
+                      data-hc-confirm-label="Sign out device" data-hc-confirm-variant="error">Sign out</button>
             </form>
           </td>
         </tr>
@@ -72,7 +72,7 @@
       <button type="submit" class="hc-button" data-variant="error"
               th:attr="data-hc-confirm=|Sign ${u.login_id} out everywhere?|"
               data-hc-confirm-title="Confirm sign-out"
-              data-hc-confirm-ok="Sign out everywhere" data-hc-confirm-variant="error">Sign out everywhere</button>
+              data-hc-confirm-label="Sign out everywhere" data-hc-confirm-variant="error">Sign out everywhere</button>
     </form>
   </th:block>
 </section>

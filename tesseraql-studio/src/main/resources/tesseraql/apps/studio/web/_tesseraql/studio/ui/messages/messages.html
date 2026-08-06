@@ -14,15 +14,15 @@
       one row per dotted key. A key present in one locale but missing in another is flagged. Edits are
       saved to the locale file and served immediately &mdash; the next page render picks them up.</p>
     <div class="hc-cluster">
-      <span class="hc-badge" data-variant="neutral" th:text="|${msg.localeCount} locale(s)|">0 locale(s)</span>
-      <span class="hc-badge" data-variant="neutral" th:text="|${msg.keyCount} key(s)|">0 key(s)</span>
+      <span class="hc-badge" th:text="|${msg.localeCount} locale(s)|">0 locale(s)</span>
+      <span class="hc-badge" th:text="|${msg.keyCount} key(s)|">0 key(s)</span>
       <span class="hc-badge" th:attr="data-variant=${msg.missingCount > 0} ? 'warning' : 'success'"
             th:text="|${msg.missingCount} missing|">0 missing</span>
     </div>
 
-    <details class="hc-disclosure" th:if="${msg.editable}" th:attr="open=${msg.keyCount == 0} ? true : null">
-      <summary>Set a translation</summary>
-      <form class="hc-stack" method="post" action="/_tesseraql/studio/ui/messages/set">
+    <details class="hc-collapsible" th:if="${msg.editable}" th:attr="open=${msg.keyCount == 0} ? true : null">
+      <summary class="hc-collapsible__trigger">Set a translation <span class="hc-collapsible__icon" aria-hidden="true">&#9662;</span></summary>
+      <form class="hc-stack hc-collapsible__content" method="post" action="/_tesseraql/studio/ui/messages/set">
         <input type="hidden" name="_csrf" th:value="${_csrf}">
         <div class="hc-cluster">
           <div class="hc-field">
@@ -33,7 +33,7 @@
               <option th:each="l : ${msg.locales}" th:value="${l}"></option>
             </datalist>
           </div>
-          <div class="hc-field hc-field--grow">
+          <div class="hc-field">
             <label class="hc-field__label" for="msg-key">Key</label>
             <input class="hc-input" id="msg-key" name="key" required list="msg-key-options"
                    autocomplete="off" placeholder="users.list.title">
@@ -54,7 +54,7 @@
 
     <div class="hc-empty" th:if="${msg.keyCount == 0}">
       <p class="hc-empty__title">No messages yet.</p>
-      <p class="hc-empty__body">This app has no <code>messages/</code> catalogs.</p>
+      <p class="hc-empty__description">This app has no <code>messages/</code> catalogs.</p>
     </div>
 
     <div class="hc-datagrid" th:if="${msg.keyCount > 0}">

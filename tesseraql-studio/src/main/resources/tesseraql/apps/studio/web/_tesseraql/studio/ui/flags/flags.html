@@ -18,7 +18,7 @@
 
     <div class="hc-empty" th:unless="${f.hasFlags}">
       <p class="hc-empty__title">No flags yet.</p>
-      <p class="hc-empty__body">Add one below to create <code>config/flags.yml</code>.</p>
+      <p class="hc-empty__description">Add one below to create <code>config/flags.yml</code>.</p>
     </div>
 
     <div class="hc-datagrid" th:if="${f.hasFlags}">
@@ -43,18 +43,18 @@
                     <input type="hidden" name="type" value="boolean">
                     <input type="hidden" name="value" th:value="${flag.on} ? 'false' : 'true'">
                     <button type="submit" class="hc-button" data-size="sm"
-                            th:attr="data-variant=${flag.on} ? 'success' : 'ghost',
+                            th:attr="data-variant=${flag.on} ? 'primary' : 'ghost',
                                      aria-label=${flag.on} ? 'Turn off' : 'Turn on'"
                             th:text="${flag.on} ? 'on' : 'off'">on</button>
                   </form>
                   <span th:unless="${f.editable}" class="hc-badge"
-                        th:attr="data-variant=${flag.on} ? 'success' : 'neutral'"
+                        th:attr="data-variant=${flag.on} ? 'success' : null"
                         th:text="${flag.on} ? 'on' : 'off'">on</span>
                 </th:block>
                 <span th:unless="${flag.type == 'boolean'}" th:text="${flag.value}">value</span>
               </td>
               <td class="hc-datagrid__cell">
-                <span class="hc-badge" data-variant="neutral" th:text="${flag.type}">type</span>
+                <span class="hc-badge" th:text="${flag.type}">type</span>
               </td>
               <td class="hc-datagrid__cell" th:if="${f.editable}">
                 <form method="post" action="/_tesseraql/studio/ui/flags/remove">
@@ -69,9 +69,9 @@
       </div>
     </div>
 
-    <details class="hc-disclosure" th:if="${f.editable}" th:attr="open=${f.hasFlags} ? null : true">
-      <summary>Set a flag</summary>
-      <form class="hc-stack" method="post" action="/_tesseraql/studio/ui/flags/set">
+    <details class="hc-collapsible" th:if="${f.editable}" th:attr="open=${f.hasFlags} ? null : true">
+      <summary class="hc-collapsible__trigger">Set a flag <span class="hc-collapsible__icon" aria-hidden="true">&#9662;</span></summary>
+      <form class="hc-stack hc-collapsible__content" method="post" action="/_tesseraql/studio/ui/flags/set">
         <input type="hidden" name="_csrf" th:value="${_csrf}">
         <div class="hc-cluster">
           <div class="hc-field">
@@ -90,7 +90,7 @@
               <option value="string">string</option>
             </select>
           </div>
-          <div class="hc-field hc-field--grow">
+          <div class="hc-field">
             <label class="hc-field__label" for="flag-value">Value</label>
             <input class="hc-input" id="flag-value" name="value" autocomplete="off"
                    placeholder="true · 10 · Hello">

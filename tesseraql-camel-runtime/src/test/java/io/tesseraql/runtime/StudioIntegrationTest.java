@@ -1344,9 +1344,9 @@ class StudioIntegrationTest {
 
         assertThat(response.statusCode()).isEqualTo(200);
         assertThat(response.body())
-                .contains("<details class=\"hc-disclosure\" open")
-                .contains("<summary>Rendered preview</summary>")
-                .contains("<summary>Tests</summary>")
+                .contains("<details class=\"hc-collapsible\" open")
+                .contains("<summary class=\"hc-collapsible__trigger\">Rendered preview")
+                .contains("<summary class=\"hc-collapsible__trigger\">Tests")
                 // the bulky heading-stacked layout is gone — these are summaries now, not <h2>
                 .doesNotContain("<h2>Rendered preview</h2>").doesNotContain("<h2>Tests</h2>");
     }
@@ -2467,11 +2467,13 @@ class StudioIntegrationTest {
         // The filter slots live in a disclosure: collapsed with no active condition, and
         // opened + badged with the active count once a filter is applied.
         assertThat(get("/_tesseraql/studio/ui/data?table=tql_users", true).body())
-                .contains("<summary>").doesNotContain("active</span>");
+                .contains("<summary class=\"hc-collapsible__trigger\">")
+                .doesNotContain("active</span>");
         String filtered = get("/_tesseraql/studio/ui/data?table=tql_users"
                 + "&fc0=login_id&fo0=contains&fv0=a"
                 + "&fc1=status&fo1=equals&fv1=ACTIVE", true).body();
-        assertThat(filtered).contains("2 active").contains("<details class=\"hc-disclosure\" open");
+        assertThat(filtered).contains("2 active")
+                .contains("<details class=\"hc-collapsible\" open");
     }
 
     @Test

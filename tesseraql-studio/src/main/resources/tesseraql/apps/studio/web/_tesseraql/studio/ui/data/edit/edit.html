@@ -36,7 +36,7 @@
                 <input type="hidden" th:name="|cn${fStat.index}|" th:value="${f.name}">
               </td>
               <td><code th:text="${f.name}"></code>
-                <span class="hc-badge" data-size="sm" th:if="${f.pk}">PK</span></td>
+                <span class="hc-badge" th:if="${f.pk}">PK</span></td>
               <td><input class="hc-input" data-size="sm" th:name="|cv${fStat.index}|"
                          th:value="${f.value}" th:readonly="${f.pk}"></td>
             </tr>
