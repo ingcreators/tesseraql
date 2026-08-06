@@ -15,11 +15,14 @@ import java.util.Optional;
  * {@code work/} is the app's runtime scratch directory (app-layout.md), never committed. The file
  * is overwritten on each start and best-effort deleted on graceful shutdown — a stale marker after
  * a crash is harmless because {@link #pick} only honours a URL that still answers a connection.
+ *
+ * <p>Public surface ({@link #pick}, {@link #reachable}) because the {@code mcp} dev-tools apply
+ * the same fallback from their own package; writing and deleting stay with {@code serve} here.
  */
-final class EmbeddedDbMarker {
+public final class EmbeddedDbMarker {
 
     /** The marker's conventional location, for messages; resolution honors tesseraql.app.work. */
-    static final String RELATIVE_PATH = "work/embedded-db.jdbc";
+    public static final String RELATIVE_PATH = "work/embedded-db.jdbc";
 
     /** The marker file under the app's resolved work home (docs/config-consumers.md). */
     static java.nio.file.Path marker(Path appHome) {
@@ -30,7 +33,7 @@ final class EmbeddedDbMarker {
 
     /** How {@link #pick} checks whether a candidate datasource answers a trivial connection. */
     @FunctionalInterface
-    interface ConnectionProbe {
+    public interface ConnectionProbe {
         boolean reachable(String jdbcUrl, String username, String password);
     }
 
@@ -83,7 +86,7 @@ final class EmbeddedDbMarker {
      * resolution runs unchanged. {@code configUrl} is {@code null} when the config declares no
      * main URL or its placeholders do not resolve.
      */
-    static Optional<String> pick(Path appHome, String configUrl, String configUsername,
+    public static Optional<String> pick(Path appHome, String configUrl, String configUsername,
             String configPassword, ConnectionProbe probe) {
         Optional<String> marker = read(appHome);
         if (marker.isEmpty()) {
@@ -99,7 +102,7 @@ final class EmbeddedDbMarker {
      * The default {@link ConnectionProbe}: a plain {@link DriverManager} connection attempt with a
      * short login timeout, so an unreachable database answers quickly instead of hanging the CLI.
      */
-    static boolean reachable(String jdbcUrl, String username, String password) {
+    public static boolean reachable(String jdbcUrl, String username, String password) {
         int previousTimeout = DriverManager.getLoginTimeout();
         DriverManager.setLoginTimeout(5);
         try (Connection connection = DriverManager.getConnection(jdbcUrl, username, password)) {

@@ -1,6 +1,7 @@
 package io.tesseraql.cli.mcp;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import io.tesseraql.cli.EmbeddedDbMarker;
 import io.tesseraql.core.error.TqlDomain;
 import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
@@ -45,6 +46,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 /**
  * Exposes TesseraQL's developer surfaces - manifest, sources, schema introspection, lint, tests,
@@ -417,23 +419,44 @@ public final class McpDevTools {
         return DriverManager.getConnection(ds.url(), ds.user(), ds.password());
     }
 
-    /** Resolves a datasource from explicit arguments, falling back to the app's main datasource. */
+    /**
+     * Resolves a datasource with the CLI subcommands' precedence: explicit arguments, then the
+     * app's main datasource when it resolves and answers, then a running
+     * {@code serve --embedded-db} (its {@code work/embedded-db.jdbc} marker) — so the agent's
+     * database tools work against the embedded database another terminal is serving.
+     */
     private Datasource resolve(JsonNode args, AppConfig config) {
         String url = textOrNull(args, "jdbcUrl");
         String user = textOrNull(args, "username");
         String password = textOrNull(args, "password");
-        if (url == null) {
-            url = config.getString("tesseraql.datasources.main.jdbcUrl").orElseThrow(
-                    () -> new TqlException(NO_DATASOURCE, "No jdbcUrl argument and the app config"
-                            + " declares no tesseraql.datasources.main.jdbcUrl"));
+        if (url != null) {
+            return new Datasource(url, user, password);
+        }
+        String configUrl;
+        try {
+            configUrl = config.getString("tesseraql.datasources.main.jdbcUrl").orElse(null);
             if (user == null) {
                 user = config.getString("tesseraql.datasources.main.username").orElse(null);
             }
             if (password == null) {
                 password = config.getString("tesseraql.datasources.main.password").orElse(null);
             }
+        } catch (RuntimeException ex) {
+            // Unresolvable placeholders (e.g. ${db.main.url} with no input declared) — exactly
+            // the situation the running embedded database can answer for.
+            configUrl = null;
         }
-        return new Datasource(url, user, password);
+        Optional<String> marker = EmbeddedDbMarker.pick(appHome, configUrl, user, password,
+                EmbeddedDbMarker::reachable);
+        if (marker.isPresent()) {
+            return new Datasource(marker.get(), null, null);
+        }
+        if (configUrl == null) {
+            throw new TqlException(NO_DATASOURCE, "No jdbcUrl argument, the app config"
+                    + " declares no tesseraql.datasources.main.jdbcUrl, and no running"
+                    + " serve --embedded-db was found");
+        }
+        return new Datasource(configUrl, user, password);
     }
 
     private static Map<String, Object> schemaJson(TableSchema schema) {

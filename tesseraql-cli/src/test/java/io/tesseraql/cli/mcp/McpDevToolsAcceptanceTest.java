@@ -124,6 +124,25 @@ class McpDevToolsAcceptanceTest {
         assertThat(request(server, "prompts/get", bad).has("error")).isTrue();
     }
 
+    @Test
+    void dbToolsPickUpTheRunningEmbeddedDbMarker(@TempDir Path dir) throws Exception {
+        Path app = dir.resolve("marker");
+        AppScaffolder scaffolder = new AppScaffolder();
+        scaffolder.writeNew(app, scaffolder.scaffold("marker"));
+        String jdbcUrl = "jdbc:h2:" + dir.resolve("marker-db")
+                + ";DB_CLOSE_DELAY=-1;DATABASE_TO_LOWER=TRUE";
+        migrate(app, jdbcUrl);
+        // What a running `serve --embedded-db` leaves behind. The skeleton's configured
+        // datasource (localhost:5432) does not answer here, so the database tools fall back
+        // to the marker — no jdbcUrl argument in the call.
+        Files.createDirectories(app.resolve("work"));
+        Files.writeString(app.resolve("work/embedded-db.jdbc"), jdbcUrl + System.lineSeparator());
+
+        McpServer server = new McpDevTools(app, false).toServer();
+        JsonNode schema = callJson(server, "schema_introspect", Map.of("table", "items"));
+        assertThat(schema.get("versionColumn").asText()).isEqualToIgnoringCase("version");
+    }
+
     private void migrate(Path app, String jdbcUrl) throws Exception {
         String sql = Files.readString(app.resolve("db/migration/V1__create_items.sql"));
         try (Connection connection = DriverManager.getConnection(jdbcUrl);

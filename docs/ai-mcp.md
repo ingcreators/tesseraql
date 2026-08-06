@@ -95,7 +95,10 @@ auth.
 | `draft_apply` | promotes a saved draft to the source of truth — only if it compiles |
 
 `schema_introspect`, `scaffold_crud`, `test`, and `ops_status` use the app's configured main
-datasource unless the call supplies `jdbcUrl` / `username` / `password`. Writes go through the
+datasource unless the call supplies `jdbcUrl` / `username` / `password` — and when the
+configured database does not resolve or answer while a `serve --embedded-db` is running,
+they fall back to its embedded database (the `work/embedded-db.jdbc` hand-off, like every
+database-touching CLI command, [getting-started.md](getting-started.md)). Writes go through the
 same machinery as the CLI: `scaffold_crud` through the checksum-aware writer, and the
 draft tools through [Studio's](app-layout.md) draft/apply mechanism — both confined to the
 app home, so a path that escapes it is rejected.
@@ -148,7 +151,7 @@ Runtime errors:
 | Code | Meaning |
 | --- | --- |
 | `TQL-MCP-4002` | a dev-tool call is missing a required argument |
-| `TQL-MCP-5001` | no datasource: the call gave no `jdbcUrl` and the app declares no main datasource |
+| `TQL-MCP-5001` | no datasource: the call gave no `jdbcUrl`, the app declares no main datasource, and no running `serve --embedded-db` was found |
 
 Tool failures (a bad argument, a missing datasource, a draft that does not compile) come back
 as an MCP tool result with `isError: true` and the message — the connection stays up so the
