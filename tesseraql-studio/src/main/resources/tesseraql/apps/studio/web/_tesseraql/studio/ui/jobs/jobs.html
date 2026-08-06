@@ -18,18 +18,39 @@
       <a href="/_tesseraql/studio/ui/source">text editor</a>.</p>
     <div class="hc-empty" th:unless="${jp.hasJobs}"><p class="hc-empty__title">No jobs declared
       under batch/.</p></div>
-    <form class="hc-cluster" method="get" action="/_tesseraql/studio/ui/jobs" th:if="${jp.hasJobs}">
-      <div class="hc-field">
-        <label class="hc-field__label" for="jp-name">Job</label>
-        <select class="hc-select" id="jp-name" name="name">
-          <option value="">(choose)</option>
-          <option th:each="j : ${jp.jobs}" th:value="${j.id}"
-                  th:text="|${j.id} — ${j.trigger}|"
-                  th:selected="${jp.form != null && j.id == jp.form.jobId}"></option>
-        </select>
+    <!-- The declared jobs as a real list (docs/studio-ux-refresh.md slice 6): id, the trigger
+         story, its calendar, and the next date the calendar lets a firing count — the same
+         decision helper the scheduler and ops console use, so the three can never drift. The
+         id opens the policy form below. -->
+    <div class="hc-datagrid" th:if="${jp.hasJobs}">
+      <div class="hc-datagrid__scroll">
+        <table class="hc-datagrid__table">
+          <thead class="hc-datagrid__head"><tr>
+            <th class="hc-datagrid__headcell">Job</th>
+            <th class="hc-datagrid__headcell">Trigger</th>
+            <th class="hc-datagrid__headcell">Calendar</th>
+            <th class="hc-datagrid__headcell">Calendar next</th>
+          </tr></thead>
+          <tbody class="hc-datagrid__body">
+            <tr class="hc-datagrid__row" th:each="j : ${jp.jobs}">
+              <td class="hc-datagrid__cell">
+                <a th:href="|/_tesseraql/studio/ui/jobs?name=${j.id}|"><code th:text="${j.id}"></code></a>
+              </td>
+              <td class="hc-datagrid__cell" th:text="${j.trigger}"></td>
+              <td class="hc-datagrid__cell">
+                <a th:if="${j.calendar}" th:href="|/_tesseraql/studio/ui/calendars?name=${j.calendar}|"
+                   th:text="${j.calendar}"></a>
+                <span th:unless="${j.calendar}">&mdash;</span>
+              </td>
+              <td class="hc-datagrid__cell">
+                <span th:if="${j.next}" th:text="${j.next}"></span>
+                <span th:unless="${j.next}">&mdash;</span>
+              </td>
+            </tr>
+          </tbody>
+        </table>
       </div>
-      <button class="hc-button" type="submit">Open</button>
-    </form>
+    </div>
     </div>
   </section>
   <section class="hc-card" th:if="${jp.form}">
@@ -44,7 +65,11 @@
           th:if="${jp.editable && !jp.form.pollTriggered}">
       <input type="hidden" name="_csrf" th:value="${_csrf}">
       <input type="hidden" name="name" th:value="${jp.form.jobId}">
-      <div class="hc-cluster">
+      <!-- The three policy families as fieldsets (slice 6): each legend names the promise the
+           group makes, so the form reads as its contract. -->
+      <fieldset class="tql-fieldset">
+        <legend class="hc-field__label">Trigger</legend>
+        <div class="hc-cluster">
         <label class="hc-field">
           <span class="hc-field__label">cron (seconds-first)</span>
           <input class="hc-input" data-size="sm" name="cron" th:value="${jp.form.cron}">
@@ -61,8 +86,11 @@
                     th:text="${j.id}" th:selected="${j.id == jp.form.after}"></option>
           </select>
         </div>
-      </div>
-      <div class="hc-cluster">
+        </div>
+      </fieldset>
+      <fieldset class="tql-fieldset">
+        <legend class="hc-field__label">Calendar</legend>
+        <div class="hc-cluster">
         <div class="hc-field">
           <label class="hc-field__label" for="jp-cal">calendar</label>
           <select class="hc-select" id="jp-cal" name="calendar">
@@ -91,8 +119,11 @@
             <option value="previousBusinessDay" th:selected="${jp.form.shift == 'previousBusinessDay'}">previousBusinessDay</option>
           </select>
         </div>
-      </div>
-      <div class="hc-cluster">
+        </div>
+      </fieldset>
+      <fieldset class="tql-fieldset">
+        <legend class="hc-field__label">Operational promises</legend>
+        <div class="hc-cluster">
         <div class="hc-field">
           <label class="hc-field__label" for="jp-overlap">overlap</label>
           <select class="hc-select" id="jp-overlap" name="overlap">
@@ -109,7 +140,8 @@
           <input class="hc-input" data-size="sm" name="slaRunningLongerThan"
                  th:value="${jp.form.slaRunningLongerThan}">
         </label>
-      </div>
+        </div>
+      </fieldset>
       <button class="hc-button" data-variant="primary" type="submit">Save draft</button>
       <p class="hc-field__message">One trigger kind (a schedule or <code>after:</code>), one
         cadence (cron or fixedDelay), one calendar qualifier (runOn or dayOfMonth). Everything

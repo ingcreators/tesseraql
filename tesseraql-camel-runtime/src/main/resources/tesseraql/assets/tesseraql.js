@@ -167,6 +167,17 @@ document.addEventListener("change", (event) => {
 });
 document.addEventListener("DOMContentLoaded", syncShowFor);
 
+// Submit-on-change (slice 6): a control marked data-tql-submit-on-change submits its form when
+// flipped — the Studio flags page's hc-switch toggles post through their plain form this way.
+// Declarative; without JavaScript the switch simply does not auto-submit.
+document.addEventListener("change", (event) => {
+    if (event.target instanceof Element
+            && event.target.matches("[data-tql-submit-on-change]")
+            && event.target.form) {
+        event.target.form.requestSubmit();
+    }
+});
+
 // Theme persistence (roadmap Phase 48): the kit's installThemeToggle (hc 0.1.9) flips
 // data-theme on <html> and fires hc:themechange — client-side only, by design. The stored
 // preference is the source of truth (framework toggles carry no data-persist), so every

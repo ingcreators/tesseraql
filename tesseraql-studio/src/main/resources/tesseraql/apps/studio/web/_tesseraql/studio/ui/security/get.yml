@@ -10,11 +10,21 @@ input:
   removed:
     type: string
     required: false
+  # Status chips + search (docs/studio-ux-refresh.md slice 6): narrow the routes table
+  # server-side; the stat tiles always show the full counts.
+  status:
+    type: string
+    required: false
+  q:
+    type: string
+    required: false
 
 sql:
   service: studio.security
   params:
     roles: principal.roles
+    status: params.status
+    q: params.q
 
 response:
   html:

@@ -1264,6 +1264,63 @@ public final class StudioService {
     }
 
     /** The draft-aware locate (the decisions pattern): the file declaring {@code name}. */
+    /**
+     * The edit card's draft-aware view of a calendar (docs/studio-ux-refresh.md slice 6):
+     * weekend and holiday dates as the PENDING draft has them when one exists, else as the
+     * source declares them — so click-to-toggle edits accumulate visibly before the apply.
+     * {@code null} when no such calendar is declared.
+     */
+    public CalendarEditState calendarEditState(String name) {
+        LocatedCalendar located = locateCalendar(name);
+        if (located == null) {
+            return null;
+        }
+        Map<String, Object> holidays = anyMap(located.node().get("holidays"));
+        boolean tableBacked = holidays.get("source") != null;
+        List<String> weekend = new ArrayList<>();
+        if (located.node().get("weekend") instanceof List<?> declared) {
+            declared.forEach(day -> weekend.add(String.valueOf(day)));
+        } else {
+            weekend.addAll(List.of("saturday", "sunday"));
+        }
+        List<String> dates = new ArrayList<>();
+        if (holidays.get("dates") instanceof List<?> declared) {
+            declared.forEach(date -> dates.add(String.valueOf(date)));
+        }
+        dates.sort(null);
+        return new CalendarEditState(weekend, dates, tableBacked,
+                readDraft(located.path()) != null);
+    }
+
+    /** The draft-aware calendar edit state: see {@link #calendarEditState(String)}. */
+    public record CalendarEditState(List<String> weekend, List<String> dates,
+            boolean tableBacked, boolean draftPending) {
+    }
+
+    /**
+     * Toggles one holiday date on a calendar (slice 6, the edit card's hc-calendar
+     * click-to-toggle): present is removed, absent is added, and the result lands through
+     * {@link #saveCalendar} — the same validation and draft flow as the form save, so
+     * table-backed calendars refuse and successive toggles accumulate on the pending draft.
+     */
+    public Path toggleCalendarHoliday(String name, String date, String actor) {
+        String clean = trimToNull(date);
+        if (clean == null) {
+            throw new TqlException(CALENDAR_EDIT, "A holiday toggle needs a date");
+        }
+        CalendarEditState current = calendarEditState(name);
+        if (current == null) {
+            throw new TqlException(CALENDAR_EDIT,
+                    "No calendar named '" + name + "' is declared");
+        }
+        List<String> dates = new ArrayList<>(current.dates());
+        if (!dates.remove(clean)) {
+            dates.add(clean);
+            dates.sort(null);
+        }
+        return saveCalendar(name, current.weekend(), dates, actor);
+    }
+
     private LocatedCalendar locateCalendar(String name) {
         Path dir = appHome.resolve("calendars");
         if (name == null || name.isBlank() || !Files.isDirectory(dir)) {

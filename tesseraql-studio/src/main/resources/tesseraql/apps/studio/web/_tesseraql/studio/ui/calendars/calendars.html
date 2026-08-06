@@ -109,9 +109,34 @@
     </th:block>
     </div>
   </section>
-  <section class="hc-card" th:if="${cal.editable && cal.selected != null && !cal.selected.tableBacked}">
-    <div class="hc-card__header"><h2>Edit <code th:text="${cal.selected.name}"></code></h2></div>
+  <section class="hc-card" th:if="${cal.editable && cal.edit != null}">
+    <div class="hc-card__header"><h2>Edit <code th:text="${cal.selected.name}"></code></h2>
+      <span class="hc-spacer"></span>
+      <span class="hc-badge" data-variant="warning" th:if="${cal.edit.draftPending}">unapplied draft</span>
+    </div>
     <div class="hc-card__body hc-stack">
+    <!-- Click-to-toggle holidays (docs/studio-ux-refresh.md slice 6): pick a date in the kit's
+         hc-calendar and it toggles in the holiday list through the same validated draft flow as
+         the form save (hc:calendarchange → htmx POST; the behavior writes the hidden date
+         input). The card renders the PENDING DRAFT's state, so successive toggles accumulate
+         visibly; the month grid above stays the SERVED calendar until the draft is applied. -->
+    <div class="tql-editor-layout">
+      <form hx-post="/_tesseraql/studio/ui/calendars/toggle"
+            hx-trigger="hc:calendarchange" hx-target="#page-content"
+            hx-select="#page-content" hx-swap="outerHTML">
+        <input type="hidden" name="name" th:value="${cal.selected.name}">
+        <div class="hc-calendar" data-name="date"
+             th:attr="aria-label=|Toggle a holiday on ${cal.selected.name}|"></div>
+      </form>
+      <div class="hc-stack">
+        <span class="hc-field__label">Holidays</span>
+        <p class="hc-field__message" th:if="${#lists.isEmpty(cal.edit.dates)}">None declared —
+          pick a date on the calendar to add one.</p>
+        <ul class="hc-chips" th:unless="${#lists.isEmpty(cal.edit.dates)}">
+          <li class="hc-chip" th:each="d : ${cal.edit.dates}" th:text="${d}"></li>
+        </ul>
+      </div>
+    </div>
     <form class="hc-stack" method="post" action="/_tesseraql/studio/ui/calendars/save">
       <input type="hidden" name="_csrf" th:value="${_csrf}">
       <input type="hidden" name="name" th:value="${cal.selected.name}">
@@ -120,20 +145,23 @@
         <div class="hc-cluster">
           <label th:each="day : ${ {'monday','tuesday','wednesday','thursday','friday','saturday','sunday'} }">
             <input type="checkbox" th:name="|weekend_${day}|" value="on"
-                   th:checked="${cal.selected.weekend.contains(day)}">
+                   th:checked="${cal.edit.weekend.contains(day)}">
             <span th:text="${day}"></span>
           </label>
         </div>
       </div>
-      <label class="hc-field">
-        <span class="hc-field__label">Holidays (ISO dates, one per line)</span>
-        <textarea class="hc-input" name="dates" rows="8"
-                  th:text="${#strings.listJoin(cal.selected.dates, '&#10;')}"></textarea>
-      </label>
+      <details class="hc-collapsible">
+        <summary class="hc-collapsible__trigger">Bulk-edit holidays <span class="hc-collapsible__icon" aria-hidden="true">&#9662;</span></summary>
+        <label class="hc-field hc-collapsible__content">
+          <span class="hc-field__label">Holidays (ISO dates, one per line)</span>
+          <textarea class="hc-input" name="dates" rows="8"
+                    th:text="${#strings.listJoin(cal.edit.dates, '&#10;')}"></textarea>
+        </label>
+      </details>
       <button class="hc-button" data-variant="primary" type="submit">Save draft</button>
-      <p class="hc-field__message">Saving lands a <strong>draft</strong> in canonical formatting
-        (comments are not preserved); review and apply it from the text editor. Day names and
-        dates are validated first (<code>TQL-STUDIO-4238</code>).</p>
+      <p class="hc-field__message">Toggles and saves land a <strong>draft</strong> in canonical
+        formatting (comments are not preserved); review and apply it from the text editor. Day
+        names and dates are validated first (<code>TQL-STUDIO-4238</code>).</p>
     </form>
     </div>
   </section>

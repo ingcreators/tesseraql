@@ -49,11 +49,27 @@
     <div class="hc-card__header">
       Effective configuration
       <span class="hc-spacer"></span>
+      <!-- Key/value search (docs/studio-ux-refresh.md slice 6): the drafts/audit header-search
+           idiom — narrows server-side, swaps only the table. Secret values are excluded from
+           matching (they are redacted; matching them would leak by inference). -->
+      <input class="hc-input" data-size="sm" id="config-filter" type="search" name="q"
+             th:value="${cfg.query}" aria-label="Filter by key or value"
+             placeholder="Filter by key or value&hellip;" autocomplete="off"
+             hx-get="/_tesseraql/studio/ui/config" hx-trigger="keyup changed delay:250ms, search"
+             hx-target="#config-table" hx-select="#config-table" hx-swap="outerHTML"
+             hx-indicator="next .htmx-indicator">
+      <th:block th:replace="~{tql/shell :: busy('Filtering…')}"/>
       <span class="hc-badge" th:text="|${cfg.count} key(s)|">0 key(s)</span>
       <span class="hc-badge" th:text="|${cfg.secretCount} redacted|">0 redacted</span>
     </div>
     <div class="hc-card__body hc-stack">
-    <div class="hc-datagrid">
+    <div id="config-table" class="hc-stack">
+    <p class="hc-field__message" th:if="${!#strings.isEmpty(cfg.query)}"
+       th:text="|${cfg.shown} of ${cfg.count} key(s) match|">matches</p>
+    <div class="hc-empty" th:if="${#lists.isEmpty(cfg.rows)}">
+      <p class="hc-empty__title">No keys match.</p>
+    </div>
+    <div class="hc-datagrid" th:unless="${#lists.isEmpty(cfg.rows)}">
       <div class="hc-datagrid__scroll">
         <table class="hc-datagrid__table">
           <thead class="hc-datagrid__head"><tr>
@@ -71,6 +87,7 @@
           </tbody>
         </table>
       </div>
+    </div>
     </div>
     </div>
   </section>
