@@ -213,6 +213,9 @@ this.
 
 *Filed: [ingcreators/hypermedia-components#421](https://github.com/ingcreators/hypermedia-components/issues/421) (found 2026-08-06, Studio UX refresh slice 0).*
 
+> **Status: resolved upstream** (#421 closed). The `tesseraql.js` plain-form stand-in stays
+> until the release carrying the fix is adopted here, then retires per the note below.
+
 ### Problem
 
 `installConfirm()` intercepts the click in the capture phase, calls `preventDefault()`, and on
@@ -256,8 +259,8 @@ submit") — delete once the kit owns this.
 
 ## Brief 5 — `hc-tree`: exempt interactive controls from row-click branch toggling
 
-*Found 2026-08-06 (Studio UX refresh slice 4, migrating the Studio explorer to `hc-tree`). Not
-yet filed.*
+*Filed: [ingcreators/hypermedia-components#427](https://github.com/ingcreators/hypermedia-components/issues/427)
+(found 2026-08-06, Studio UX refresh slice 4, migrating the Studio explorer to `hc-tree`).*
 
 ### Problem
 
@@ -296,8 +299,8 @@ actions are free to be buttons again.
 
 ## Brief 6 — declarative conditional field visibility
 
-*Found 2026-08-06 (Studio UX refresh slice 5, converging the Studio builders on one recipe).
-Not yet filed.*
+*Filed: [ingcreators/hypermedia-components#428](https://github.com/ingcreators/hypermedia-components/issues/428)
+(found 2026-08-06, Studio UX refresh slice 5, converging the Studio builders on one recipe).*
 
 ### Problem
 
