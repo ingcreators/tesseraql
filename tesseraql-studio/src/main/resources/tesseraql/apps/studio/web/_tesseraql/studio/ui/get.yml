@@ -7,11 +7,17 @@ input:
   q:
     type: string
     required: false
+  # The command palette's "new route here" entry (docs/studio-ux-refresh.md slice 7):
+  # landing with ?create=<prefix>/ opens the New-route drawer seeded to that folder.
+  create:
+    type: string
+    required: false
 
 sql:
   service: studio.explorer
   params:
     q: params.q
+    create: params.create
     roles: principal.roles
 
 response:

@@ -178,6 +178,29 @@ document.addEventListener("change", (event) => {
     }
 });
 
+// Command palette glue (docs/studio-ux-refresh.md slice 7). Two small declarative pieces the
+// kit deliberately leaves to the app:
+// 1. A visible opener — native <dialog> has no declarative opener, and installCommand only
+//    wires the ⌘K hotkey; data-tql-open-dialog="<selector>" opens the named dialog modally.
+// 2. Navigation — installCommand dispatches hc:commandselect and never touches the network;
+//    palette item values here are same-app URLs, so selection navigates.
+document.addEventListener("click", (event) => {
+    const trigger = event.target instanceof Element
+        ? event.target.closest("[data-tql-open-dialog]") : null;
+    if (trigger) {
+        const dialog = document.querySelector(trigger.getAttribute("data-tql-open-dialog"));
+        if (dialog instanceof HTMLDialogElement) {
+            dialog.showModal();
+        }
+    }
+});
+document.addEventListener("hc:commandselect", (event) => {
+    const value = event.detail && event.detail.value;
+    if (typeof value === "string" && value.startsWith("/")) {
+        window.location.assign(value);
+    }
+});
+
 // Theme persistence (roadmap Phase 48): the kit's installThemeToggle (hc 0.1.9) flips
 // data-theme on <html> and fires hc:themechange — client-side only, by design. The stored
 // preference is the source of truth (framework toggles carry no data-persist), so every
