@@ -433,7 +433,7 @@ order below (P0 → P1 → P2).
   table jump-nav; today the sidebar current-item highlight + the existing header back-links cover it.
 - [x] **H3 — Source editor restructure** (P1) — *done*: `source.html` stacked 9+ always-open panels
   in one card, so the page was overwhelming and the primary actions sat far below the preview output.
-  Every secondary tool is now a uniform collapsible `<details class="hc-disclosure">` panel
+  Every secondary tool is now a uniform collapsible `<details class="hc-collapsible">` panel
   (Rendered preview / Compare / Dry-run / Tests / SQL builder) — Rendered preview stays open as the
   primary feedback, the on-demand tools collapse — so the page is compact and Save/Apply/Discard are
   within reach without scrolling past everything. Pure `<details>` (CSP-safe, no JS/CSS; hc has no

@@ -9,7 +9,7 @@
   <section class="hc-card" th:if="${cov.shareInvalid}">
     <div class="hc-empty">
       <p class="hc-empty__title">This shared link is invalid or has expired.</p>
-      <p class="hc-empty__body">Ask the person who shared it for a fresh link.</p>
+      <p class="hc-empty__description">Ask the person who shared it for a fresh link.</p>
     </div>
   </section>
   <section class="hc-card" th:if="${not cov.shareInvalid and not cov.hasReport}">

@@ -30,14 +30,14 @@
          th:if="${doc.security or doc.hasInputs or doc.hasValidations or doc.hasNotifications or doc.response or doc.hasDataDeps or doc.hasSql or doc.hasTests}">
       <span class="hc-field__label">On this page</span>
       <ul class="hc-toc__list">
-        <li class="hc-toc__item" th:if="${doc.security}"><a class="hc-toc__link" href="#sec-security">Security</a></li>
-        <li class="hc-toc__item" th:if="${doc.hasInputs}"><a class="hc-toc__link" href="#sec-inputs">Inputs</a></li>
-        <li class="hc-toc__item" th:if="${doc.hasValidations}"><a class="hc-toc__link" href="#sec-validation">Validation</a></li>
-        <li class="hc-toc__item" th:if="${doc.hasNotifications}"><a class="hc-toc__link" href="#sec-notifications">Notifications</a></li>
-        <li class="hc-toc__item" th:if="${doc.response}"><a class="hc-toc__link" href="#sec-response">Response</a></li>
-        <li class="hc-toc__item" th:if="${doc.hasDataDeps}"><a class="hc-toc__link" href="#sec-data">Data dependencies</a></li>
-        <li class="hc-toc__item" th:if="${doc.hasSql}"><a class="hc-toc__link" href="#sec-sql">SQL</a></li>
-        <li class="hc-toc__item" th:if="${doc.hasTests}"><a class="hc-toc__link" href="#sec-tests">Tests</a></li>
+        <li th:if="${doc.security}"><a class="hc-toc__link" href="#sec-security">Security</a></li>
+        <li th:if="${doc.hasInputs}"><a class="hc-toc__link" href="#sec-inputs">Inputs</a></li>
+        <li th:if="${doc.hasValidations}"><a class="hc-toc__link" href="#sec-validation">Validation</a></li>
+        <li th:if="${doc.hasNotifications}"><a class="hc-toc__link" href="#sec-notifications">Notifications</a></li>
+        <li th:if="${doc.response}"><a class="hc-toc__link" href="#sec-response">Response</a></li>
+        <li th:if="${doc.hasDataDeps}"><a class="hc-toc__link" href="#sec-data">Data dependencies</a></li>
+        <li th:if="${doc.hasSql}"><a class="hc-toc__link" href="#sec-sql">SQL</a></li>
+        <li th:if="${doc.hasTests}"><a class="hc-toc__link" href="#sec-tests">Tests</a></li>
       </ul>
     </nav>
     <section class="hc-card" th:if="${doc.shareUrl}">

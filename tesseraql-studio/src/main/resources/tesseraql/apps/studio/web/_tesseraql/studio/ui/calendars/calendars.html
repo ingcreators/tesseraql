@@ -75,7 +75,7 @@
                   <span class="hc-badge" data-variant="success" th:if="${d.inMonth && d.lands}">runs</span>
                   <span class="hc-badge" data-variant="info" th:if="${d.inMonth && d.nominal && !d.lands}">nominal</span>
                   <span class="hc-badge" data-variant="error" th:if="${d.inMonth && d.holiday}">holiday</span>
-                  <span class="hc-badge" data-variant="neutral"
+                  <span class="hc-badge"
                         th:if="${d.inMonth && d.weekend && !d.holiday}">weekend</span>
                 </td>
               </tr>

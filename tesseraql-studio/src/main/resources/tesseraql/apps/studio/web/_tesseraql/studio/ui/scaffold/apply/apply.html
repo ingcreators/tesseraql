@@ -1,5 +1,5 @@
 <div class="hc-stack" xmlns:th="http://www.thymeleaf.org" th:fragment="scaffoldApply">
-  <p class="hc-alert" data-variant="info" role="status"
+  <p class="hc-alert" role="status"
      th:unless="${scaffold.enabled}" th:text="${scaffold.note}"></p>
   <th:block th:if="${scaffold.enabled}">
     <p class="hc-alert" role="status"

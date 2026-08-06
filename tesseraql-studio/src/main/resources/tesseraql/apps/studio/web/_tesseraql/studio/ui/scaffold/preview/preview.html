@@ -10,7 +10,7 @@
     <form method="dialog"><button class="hc-button" data-variant="ghost" aria-label="Close">&times;</button></form>
   </header>
   <div class="hc-drawer__body hc-stack">
-    <p class="hc-alert" data-variant="info" role="status"
+    <p class="hc-alert" role="status"
        th:unless="${scaffold.enabled}" th:text="${scaffold.note}"></p>
     <th:block th:if="${scaffold.enabled}">
       <p class="hc-alert" role="status"
@@ -22,7 +22,7 @@
           <details class="hc-stack">
             <summary class="hc-cluster">
               <span class="hc-badge"
-                    th:attr="data-variant=${f.status == 'conflict'} ? 'warning' : (${f.status == 'unchanged'} ? 'neutral' : 'success')"
+                    th:attr="data-variant=${f.status == 'conflict'} ? 'warning' : (${f.status == 'unchanged'} ? null : 'success')"
                     th:text="${f.status}"></span>
               <code th:text="${f.path}"></code>
             </summary>

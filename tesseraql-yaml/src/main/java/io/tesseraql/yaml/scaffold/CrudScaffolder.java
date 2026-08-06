@@ -380,7 +380,7 @@ public final class CrudScaffolder {
                 %s  <span class="hc-action">
                     <button type="submit" class="hc-button" data-variant="error"
                             data-hc-confirm="Delete this record?" data-hc-confirm-title="Confirm delete"
-                            data-hc-confirm-ok="Delete" data-hc-confirm-variant="error">Delete</button>
+                            data-hc-confirm-label="Delete" data-hc-confirm-variant="error">Delete</button>
                     <span class="hc-spinner htmx-indicator" aria-hidden="true"></span>
                   </span>
                 </form>

@@ -109,6 +109,28 @@ document.body.addEventListener("htmx:beforeSwap", (event) => {
 // (data-hc-copy) are now the kit's installNavCurrent and installCopy behaviors (hc 0.1.6, #270/#272),
 // auto-installed by the behaviors bundle imported above — the local stand-ins they replaced are gone.
 
+// Confirmed plain-form submit (docs/hypermedia-ui.md "Confirmed actions", hc-briefs.md
+// brief 4): the kit's confirm behavior only re-emits `hc:confirmed` for htmx to observe —
+// it never re-dispatches a native form submit, so a confirm on a plain `<form method=post>`
+// submit button would confirm into nothing. Until the upstream brief ships, this stand-in
+// completes the documented plain-form contract: on confirm, re-submit the form through the
+// original submitter (preserving its formaction), unless the element or its form is
+// htmx-wired (those carry hx-trigger="hc:confirmed" and htmx owns the request).
+const HTMX_VERBS = ["hx-get", "hx-post", "hx-put", "hx-patch", "hx-delete"];
+const htmxWired = (el) => el != null
+    && HTMX_VERBS.some((a) => el.hasAttribute(a) || el.hasAttribute("data-" + a));
+document.addEventListener("hc:confirmed", (event) => {
+    const source = event.target instanceof Element
+        ? event.target.closest("[data-hc-confirm]") : null;
+    if (!source || !source.form || source.type !== "submit") {
+        return;
+    }
+    if (htmxWired(source) || htmxWired(source.form)) {
+        return;
+    }
+    source.form.requestSubmit(source);
+});
+
 // Theme persistence (roadmap Phase 48): the kit's installThemeToggle (hc 0.1.9) flips
 // data-theme on <html> and fires hc:themechange — client-side only, by design. The stored
 // preference is the source of truth (framework toggles carry no data-persist), so every

@@ -16,7 +16,7 @@
     <h2>Copilot</h2>
     <div class="hc-empty" th:unless="${chat.enabled}">
       <p class="hc-empty__title">The copilot is not configured.</p>
-      <p class="hc-empty__body">TesseraQL ships no model. Point
+      <p class="hc-empty__description">TesseraQL ships no model. Point
         <code>tesseraql.copilot.endpoint</code> at an OpenAI-compatible chat-completions URL,
         name a <code>model</code>, set <code>enabled: true</code>, and keep the key a secret
         reference (<code>apiKey: ${secret.env.COPILOT_KEY}</code>). See

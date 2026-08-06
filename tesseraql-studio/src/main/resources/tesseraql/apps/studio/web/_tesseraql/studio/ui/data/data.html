@@ -15,7 +15,7 @@
 
     <div class="hc-empty" th:unless="${data.enabled}">
       <p class="hc-empty__title">The data browser is disabled.</p>
-      <p class="hc-empty__body">Enable it with <code>tesseraql.studio.dataBrowser.enabled: true</code>.
+      <p class="hc-empty__description">Enable it with <code>tesseraql.studio.dataBrowser.enabled: true</code>.
         It exposes row data, so it is opt-in.</p>
     </div>
 
@@ -62,13 +62,13 @@
           <!-- The condition slots are folded behind a disclosure so the initial view is just
                sort + Apply. It opens automatically when a filter is active, and the summary
                badges the active-condition count. Collapsed selects still submit (native form). -->
-          <details class="hc-disclosure" th:attr="open=${data.hasFilters} ? true : null">
-          <summary>
+          <details class="hc-collapsible" th:attr="open=${data.hasFilters} ? true : null">
+          <summary class="hc-collapsible__trigger">
             <span>Filters</span>
             <span class="hc-badge" data-variant="info" th:if="${data.filterCount > 0}"
-                  th:text="|${data.filterCount} active|">1 active</span>
+                  th:text="|${data.filterCount} active|">1 active</span> <span class="hc-collapsible__icon" aria-hidden="true">&#9662;</span>
           </summary>
-          <div class="hc-field">
+          <div class="hc-field hc-collapsible__content">
             <label class="hc-field__label" for="data-combinator">Match</label>
             <select class="hc-select" id="data-combinator" name="combinator">
               <option value="and" th:selected="${data.combinator == 'and'}">all conditions (AND)</option>
@@ -100,7 +100,7 @@
                 <option value="isNotNull" th:selected="${f.op == 'isNotNull'}">is not null</option>
               </select>
             </div>
-            <div class="hc-field hc-field--grow">
+            <div class="hc-field">
               <label class="hc-field__label">value</label>
               <input class="hc-input" th:name="|fv${s.index}|" th:value="${f.value}"
                      autocomplete="off">
@@ -129,7 +129,7 @@
           </div>
         </form>
         <div class="hc-cluster">
-          <span class="hc-badge" data-variant="neutral"
+          <span class="hc-badge"
                 th:text="|${data.rowCount} row(s) on page ${data.page + 1}|">0 rows</span>
           <span class="hc-spacer"></span>
           <a class="hc-button" data-variant="ghost" data-size="sm" download
@@ -146,7 +146,7 @@
                   <!-- The column's role in the table-backed decision reading it
                        (docs/decision-tables.md): the rows stay raw data, but the header says
                        which cell is a bound, a priority, or an output. -->
-                  <span class="hc-badge" data-variant="info" data-size="sm"
+                  <span class="hc-badge" data-variant="info"
                         th:if="${data.columnContracts != null and data.columnContracts[c] != null}"
                         th:text="${data.columnContracts[c]}">role</span>
                 </th>
@@ -163,8 +163,10 @@
                     <span th:unless="${cell.isNull}" th:text="${cell.value}">value</span>
                   </td>
                 </tr>
+                <!-- The edit-actions column (editHrefs) widens the grid by one — the empty
+                     row must span it too or it renders one cell short. -->
                 <tr th:if="${data.rowCount == 0}"><td class="hc-datagrid__cell"
-                    th:attr="colspan=${#lists.size(data.columns)}">No rows.</td></tr>
+                    th:attr="colspan=${#lists.size(data.columns) + (data.editHrefs != null ? 1 : 0)}">No rows.</td></tr>
               </tbody>
             </table>
           </div>

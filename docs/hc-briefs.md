@@ -209,6 +209,51 @@ this.
 
 ---
 
+## Brief 4 — `data-hc-confirm`: complete the plain-form contract
+
+*Filed: [ingcreators/hypermedia-components#421](https://github.com/ingcreators/hypermedia-components/issues/421) (found 2026-08-06, Studio UX refresh slice 0).*
+
+### Problem
+
+`installConfirm()` intercepts the click in the capture phase, calls `preventDefault()`, and on
+confirm only dispatches the bubbling `hc:confirmed` event for htmx to observe
+(`dist/confirm.js`, all released versions 0.1.0 → 0.1.11). For a submit button in a plain
+`<form method="post">` — the graceful-degradation form the pattern naturally suggests, since
+without JavaScript the form still submits — nothing listens for the event and nothing
+re-dispatches the submit: **the user confirms and the action never happens**. Every consumer
+that combines `data-hc-confirm` with a native form (TesseraQL had fourteen such buttons across
+Studio and IAM Admin, including "disable user" and "write to config overlay") ships a dead
+control, and the mistake is invisible in HTTP-level tests because they post directly.
+
+### Proposal
+
+On confirm, when the source element is a submit button (`type="submit"` on a `<button>` or
+`<input>`) associated with a form, and neither the element nor its form carries an htmx verb
+attribute (`hx-get/post/put/patch/delete`, `data-hx-*` variants), call
+`form.requestSubmit(source)` after dispatching `hc:confirmed`. `requestSubmit(source)`
+preserves the submitter's `formaction`/`formmethod` and runs constraint validation, exactly as
+the intercepted click would have. htmx-wired elements keep today's contract unchanged —
+`hc:confirmed` fires and htmx owns the request.
+
+### CSP
+
+- Behavior in the bundle; **no inline JS**.
+
+### Acceptance criteria
+
+- A confirmed submit button in a plain form submits the form with itself as submitter
+  (its `formaction` honored, validation run).
+- A cancelled dialog submits nothing.
+- htmx-wired elements (`hx-*` verb on the element or its form) are not double-fired.
+- Without JavaScript the form still submits natively (unchanged).
+
+### TesseraQL stand-in to retire
+
+The `hc:confirmed` → `requestSubmit` listener in `tesseraql.js` ("Confirmed plain-form
+submit") — delete once the kit owns this.
+
+---
+
 ## Notes
 
 - Two adjacent gaps were found to be **already shipped** in hc 0.1.5 and have been adopted, not

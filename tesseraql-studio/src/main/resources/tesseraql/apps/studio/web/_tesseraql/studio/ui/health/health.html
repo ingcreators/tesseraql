@@ -15,15 +15,15 @@
       misconfigured security, dangling references, i18n gaps, and more). Fix findings before shipping;
       each error also fails the build gate.</p>
     <div class="hc-cluster">
-      <span class="hc-badge" th:attr="data-variant=${health.errors > 0} ? 'error' : 'neutral'"
+      <span class="hc-badge" th:attr="data-variant=${health.errors > 0} ? 'error' : null"
             th:text="|${health.errors} error(s)|">0 error(s)</span>
-      <span class="hc-badge" th:attr="data-variant=${health.warnings > 0} ? 'warning' : 'neutral'"
+      <span class="hc-badge" th:attr="data-variant=${health.warnings > 0} ? 'warning' : null"
             th:text="|${health.warnings} warning(s)|">0 warning(s)</span>
     </div>
 
     <div class="hc-empty" th:if="${health.clean}">
       <p class="hc-empty__title">No issues found.</p>
-      <p class="hc-empty__body">The app passes every lint check.</p>
+      <p class="hc-empty__description">The app passes every lint check.</p>
     </div>
 
     <div class="hc-datagrid" th:unless="${health.clean}">

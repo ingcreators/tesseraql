@@ -37,7 +37,7 @@
             <td class="hc-datagrid__cell" th:text="${j.calendarNext}"></td>
             <td class="hc-datagrid__cell">
               <th:block th:if="${j.hasPolicies}">
-                <span class="hc-badge" data-variant="neutral" th:each="p : ${j.policies}"
+                <span class="hc-badge" th:each="p : ${j.policies}"
                       th:text="${p}"></span>
               </th:block>
               <span th:unless="${j.hasPolicies}">-</span>

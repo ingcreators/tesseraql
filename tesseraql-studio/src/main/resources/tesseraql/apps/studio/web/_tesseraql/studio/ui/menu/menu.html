@@ -25,7 +25,7 @@
 
     <div class="hc-empty" th:unless="${menu.hasItems}">
       <p class="hc-empty__title">No menu items yet.</p>
-      <p class="hc-empty__body">This app has no <code>config/menu.yml</code> — it currently uses
+      <p class="hc-empty__description">This app has no <code>config/menu.yml</code> — it currently uses
         <code>templates/nav.html</code>. Add an item below to create the declarative menu.</p>
     </div>
 
@@ -88,9 +88,9 @@
       </div>
     </div>
 
-    <details class="hc-disclosure" th:attr="open=${menu.hasItems} ? null : true">
-      <summary>Add menu item</summary>
-      <form class="hc-stack" method="post" action="/_tesseraql/studio/ui/menu/add">
+    <details class="hc-collapsible" th:attr="open=${menu.hasItems} ? null : true">
+      <summary class="hc-collapsible__trigger">Add menu item <span class="hc-collapsible__icon" aria-hidden="true">&#9662;</span></summary>
+      <form class="hc-stack hc-collapsible__content" method="post" action="/_tesseraql/studio/ui/menu/add">
         <input type="hidden" name="_csrf" th:value="${_csrf}">
         <div class="hc-cluster">
           <div class="hc-field">
@@ -141,9 +141,9 @@
       </form>
     </details>
 
-    <details class="hc-disclosure" th:if="${menu.hasItems}">
-      <summary>Preview as role</summary>
-      <p class="hc-field__message">See exactly which items a caller holding a given role or permission
+    <details class="hc-collapsible" th:if="${menu.hasItems}">
+      <summary class="hc-collapsible__trigger">Preview as role <span class="hc-collapsible__icon" aria-hidden="true">&#9662;</span></summary>
+      <p class="hc-field__message hc-collapsible__content">See exactly which items a caller holding a given role or permission
         would see — the same server-side filter the app applies.</p>
       <form class="hc-stack" hx-get="/_tesseraql/studio/ui/menu/preview"
             hx-target="#menu-preview" hx-swap="innerHTML" hx-trigger="submit, change delay:250ms">

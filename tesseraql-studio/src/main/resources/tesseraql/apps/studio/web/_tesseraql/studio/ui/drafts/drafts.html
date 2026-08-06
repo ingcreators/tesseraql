@@ -53,7 +53,7 @@
           <tbody class="hc-datagrid__body">
             <tr class="hc-datagrid__row" th:each="d : ${page.drafts}">
               <td class="hc-datagrid__cell"><a th:href="${d.sourceUrl}" th:text="${d.path}"></a></td>
-              <td class="hc-datagrid__cell"><span class="hc-badge" th:attr="data-variant=${d.isNew} ? 'info' : 'neutral'" th:text="${d.kind}"></span></td>
+              <td class="hc-datagrid__cell"><span class="hc-badge" th:attr="data-variant=${d.isNew} ? 'info' : null" th:text="${d.kind}"></span></td>
               <td class="hc-datagrid__cell">
                 <span class="hc-badge" data-variant="warning" th:if="${d.conflict}">conflict</span>
                 <span th:unless="${d.conflict}">&mdash;</span>

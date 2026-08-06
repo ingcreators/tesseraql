@@ -55,9 +55,9 @@
         <button type="submit" class="hc-button" data-variant="primary">Create migration</button>
       </div>
     </form>
-    <details class="hc-disclosure">
-      <summary>From schema changes</summary>
-      <p class="hc-field__message">Generate a migration from the difference between the captured
+    <details class="hc-collapsible">
+      <summary class="hc-collapsible__trigger">From schema changes <span class="hc-collapsible__icon" aria-hidden="true">&#9662;</span></summary>
+      <p class="hc-field__message hc-collapsible__content">Generate a migration from the difference between the captured
         schema baseline and the current schema &mdash; to capture changes made directly to the
         database back into a migration. Additive changes become real DDL; destructive ones are
         emitted as comments to review.</p>
@@ -72,9 +72,9 @@
         <a href="/_tesseraql/studio/ui/docs/release-diff">release diff page</a> (e.g. at a
         release), then this generates the migration for changes since.</p>
     </details>
-    <details class="hc-disclosure">
-      <summary>DDL builder (optional)</summary>
-      <p class="hc-field__message">Generate standard DDL for a common operation and drop it into the
+    <details class="hc-collapsible">
+      <summary class="hc-collapsible__trigger">DDL builder (optional) <span class="hc-collapsible__icon" aria-hidden="true">&#9662;</span></summary>
+      <p class="hc-field__message hc-collapsible__content">Generate standard DDL for a common operation and drop it into the
         DDL field above to review and refine. Identifiers are not validated &mdash; check the result.</p>
       <form class="hc-stack" hx-post="/_tesseraql/studio/ui/migration/build"
             hx-target="#mig-ddl" hx-swap="innerHTML" hx-disabled-elt="find button">
