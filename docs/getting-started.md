@@ -59,7 +59,8 @@ tesseraql identity-schema --app . --admin-login admin --admin-password-file admi
 
 Then open `http://localhost:8080/_tesseraql/studio` and sign in with that login. The same
 command works under `--embedded-db`: `serve` leaves the running embedded database's JDBC URL in
-`work/embedded-db.jdbc`, and `identity-schema --app .` falls back to it whenever the configured
+`work/embedded-db.jdbc`, and the database-touching commands (`identity-schema`, `migrate`,
+`scaffold crud`, `test`, ...) fall back to it under `--app .` whenever the configured
 database does not answer (announced as `Using the running embedded database
 (work/embedded-db.jdbc)`). To seed a database the app config does not reach — say a remote
 server — pass `--jdbc-url` explicitly; it always takes precedence. The full identity surface —

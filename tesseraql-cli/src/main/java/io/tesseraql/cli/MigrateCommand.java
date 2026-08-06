@@ -41,7 +41,7 @@ final class MigrateCommand implements Callable<Integer> {
     @Override
     public Integer call() throws Exception {
         AppConfig config = new ManifestLoader().load(app).config();
-        DriverManagerDataSource dataSource = datasource.resolve(config);
+        DriverManagerDataSource dataSource = datasource.resolve(config, app);
         String name = appName != null && !appName.isBlank()
                 ? appName
                 : app.toAbsolutePath().normalize().getFileName().toString();

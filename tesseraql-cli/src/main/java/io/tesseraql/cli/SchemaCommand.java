@@ -37,7 +37,7 @@ final class SchemaCommand implements Callable<Integer> {
     @Override
     public Integer call() throws Exception {
         AppConfig config = new ManifestLoader().load(app).config();
-        DriverManagerDataSource dataSource = datasource.resolve(config);
+        DriverManagerDataSource dataSource = datasource.resolve(config, app);
         SchemaGenerator generator = new SchemaGenerator();
         SchemaDoc schema = generator.generate(Map.of(datasourceName, dataSource),
                 Instant.now().toString());

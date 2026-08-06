@@ -67,8 +67,17 @@ public final class TesseraqlCli implements Runnable {
         ProxyEnvironment.bridgeFromEnvironment();
         // Passive, opt-out, non-blocking "a newer release is available" nudge (Phase 38 Tier 1).
         UpdateNotifier.run(System.err);
-        int exitCode = new CommandLine(new TesseraqlCli()).execute(args);
+        int exitCode = commandLine().execute(args);
         System.exit(exitCode);
+    }
+
+    /**
+     * The CLI's picocli front-end: every subcommand plus the shared exception shaping (an
+     * unreachable database is a one-line operator message, not a stack trace).
+     */
+    static CommandLine commandLine() {
+        return new CommandLine(new TesseraqlCli())
+                .setExecutionExceptionHandler(new UnreachableDatabaseHandler());
     }
 
     /** {@code tesseraql serve --app <dir>}: starts the runtime and serves until interrupted. */

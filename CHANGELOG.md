@@ -4,6 +4,23 @@ All notable changes to TesseraQL are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [Semantic Versioning](https://semver.org/).
 
+## Unreleased
+
+### Fixed
+
+- **Every database-touching CLI command finds the running `serve --embedded-db`**
+  (docs/getting-started.md): `scaffold crud`, `migrate`, `test`, `job`, `schema`, and
+  `coverage` now share `identity-schema`'s datasource resolution — an explicit
+  `--jdbc-url`, then the app's configured main datasource when it answers, then the
+  running embedded database's `work/embedded-db.jdbc` marker. Previously only
+  `identity-schema` fell back to the marker; `scaffold crud` even carried its own copy
+  of the config fallback.
+- **An unreachable database is a clear message, not a stack trace**: a CLI command
+  that cannot reach the database (SQLState class 08 or a socket-level cause) now
+  prints what failed and the three ways out — start the database, point
+  `tesseraql.datasources.main.jdbcUrl` / `--jdbc-url` at it, or run
+  `serve --embedded-db` — and exits 1. Other failures keep their full diagnostics.
+
 ## 0.11.0 - 2026-08-02
 
 ### Added

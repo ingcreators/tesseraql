@@ -100,7 +100,7 @@ final class TestCommand implements Callable<Integer> {
         // modules wiring serve boots with).
         CliModules.installAppExtensions(app, modules);
         AppManifest manifest = new ManifestLoader().load(app);
-        DriverManagerDataSource dataSource = datasource.resolve(manifest.config());
+        DriverManagerDataSource dataSource = datasource.resolve(manifest.config(), app);
         Path reports = reportDir != null
                 ? reportDir
                 : io.tesseraql.yaml.config.WorkHome.resolve(app, manifest.config())
