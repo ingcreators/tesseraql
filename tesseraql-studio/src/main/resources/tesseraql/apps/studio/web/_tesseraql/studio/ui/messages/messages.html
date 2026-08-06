@@ -10,16 +10,18 @@
 <div id="page-content" class="hc-stack">
   <p class="hc-alert" data-variant="success" role="status" th:if="${!#strings.isEmpty(saved)}">Translation saved &mdash; served immediately.</p>
   <section class="hc-card">
-    <h2>Messages</h2>
-    <p class="hc-field__message">The app's i18n catalogs (<code>messages/&lt;locale&gt;.yml</code>),
-      one row per dotted key. A key present in one locale but missing in another is flagged. Edits are
-      saved to the locale file and served immediately &mdash; the next page render picks them up.</p>
-    <div class="hc-cluster">
+    <div class="hc-card__header">
+      Messages
+      <span class="hc-spacer"></span>
       <span class="hc-badge" th:text="|${msg.localeCount} locale(s)|">0 locale(s)</span>
       <span class="hc-badge" th:text="|${msg.keyCount} key(s)|">0 key(s)</span>
       <span class="hc-badge" th:attr="data-variant=${msg.missingCount > 0} ? 'warning' : 'success'"
             th:text="|${msg.missingCount} missing|">0 missing</span>
     </div>
+    <div class="hc-card__body hc-stack">
+    <p class="hc-field__message">The app's i18n catalogs (<code>messages/&lt;locale&gt;.yml</code>),
+      one row per dotted key. A key present in one locale but missing in another is flagged. Edits are
+      saved to the locale file and served immediately &mdash; the next page render picks them up.</p>
 
     <details class="hc-collapsible" th:if="${msg.editable}" th:attr="open=${msg.keyCount == 0} ? true : null">
       <summary class="hc-collapsible__trigger">Set a translation <span class="hc-collapsible__icon" aria-hidden="true">&#9662;</span></summary>
@@ -76,6 +78,7 @@
           </tbody>
         </table>
       </div>
+    </div>
     </div>
   </section>
 </div>

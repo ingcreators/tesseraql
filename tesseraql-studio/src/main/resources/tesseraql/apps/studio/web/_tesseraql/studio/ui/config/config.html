@@ -10,20 +10,19 @@
 <div id="page-content" class="hc-stack">
   <p class="hc-alert" data-variant="success" role="status" th:if="${!#strings.isEmpty(saved)}">Setting saved to <code>config/overlay.yml</code> &mdash; it applies on the <strong>next start</strong>.</p>
   <section class="hc-card">
-    <h2>Configuration</h2>
+    <div class="hc-card__header">Configuration</div>
+    <div class="hc-card__body hc-stack">
     <p class="hc-field__message">The app's effective configuration &mdash;
       <code>application.yml</code>, <code>tesseraql.yml</code> and <code>overlay.yml</code> merged,
       flattened to dotted keys. Values are shown <strong>unresolved</strong>, so an
       <code>${ENV}</code> reference stays visible rather than its value; a secret's literal value is
       redacted. Read-only.</p>
-    <div class="hc-cluster">
-      <span class="hc-badge" th:text="|${cfg.count} key(s)|">0 key(s)</span>
-      <span class="hc-badge" th:text="|${cfg.secretCount} redacted|">0 redacted</span>
     </div>
   </section>
 
   <section class="hc-card" th:if="${cfg.editable}">
-    <h3>Editable settings</h3>
+    <div class="hc-card__header">Editable settings</div>
+    <div class="hc-card__body hc-stack">
     <p class="hc-field__message">A curated set of safe settings. A change is written to
       <code>config/overlay.yml</code> (the base config is left intact) and <strong>applied on the
       next restart</strong>; clearing a value removes the override. Engine-critical settings
@@ -43,10 +42,17 @@
         <button type="submit" class="hc-button" data-variant="primary">Save</button>
       </div>
     </form>
+    </div>
   </section>
 
   <section class="hc-card">
-    <h3>Effective configuration</h3>
+    <div class="hc-card__header">
+      Effective configuration
+      <span class="hc-spacer"></span>
+      <span class="hc-badge" th:text="|${cfg.count} key(s)|">0 key(s)</span>
+      <span class="hc-badge" th:text="|${cfg.secretCount} redacted|">0 redacted</span>
+    </div>
+    <div class="hc-card__body hc-stack">
     <div class="hc-datagrid">
       <div class="hc-datagrid__scroll">
         <table class="hc-datagrid__table">
@@ -65,6 +71,7 @@
           </tbody>
         </table>
       </div>
+    </div>
     </div>
   </section>
 </div>

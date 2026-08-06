@@ -9,20 +9,20 @@
 </th:block>
 <div id="page-content" class="hc-stack">
 <section class="hc-card">
-  <h2>Audit trail</h2>
-  <p class="hc-field__message">Who applied or scaffolded what, and when &mdash; recorded under <code>work/studio/audit</code>, newest first.</p>
-  <div class="hc-field">
-    <label class="hc-field__label" for="audit-filter">Filter</label>
-    <input class="hc-input" id="audit-filter" type="search" name="q" th:value="${page.query}"
+  <div class="hc-card__header">
+    Audit trail
+    <span class="hc-spacer"></span>
+    <input class="hc-input" data-size="sm" id="audit-filter" type="search" name="q" th:value="${page.query}"
+           aria-label="Filter by actor, action, target"
            placeholder="Filter by actor, action, target&hellip;" autocomplete="off"
            hx-get="/_tesseraql/studio/ui/audit" hx-trigger="keyup changed delay:250ms, search"
            hx-target="#audit-table" hx-select="#audit-table" hx-swap="outerHTML"
            hx-indicator="next .htmx-indicator" th:attr="hx-vals=${page.hxVals}">
     <th:block th:replace="~{tql/shell :: busy('Filtering…')}"/>
   </div>
+  <div class="hc-card__body hc-stack">
+  <p class="hc-field__message">Who applied or scaffolded what, and when &mdash; recorded under <code>work/studio/audit</code>, newest first.</p>
   <div id="audit-table" class="hc-stack">
-    <p class="hc-field__message" th:if="${page.hasEntries}"
-       th:text="${page.total + ' action' + (page.total == 1 ? '' : 's')}">0 actions</p>
     <div class="hc-empty" th:unless="${page.hasEntries}">
       <p class="hc-empty__title" th:text="${#strings.isEmpty(page.query)} ? 'No audited actions yet.' : 'No actions match.'">No matches.</p>
     </div>
@@ -49,6 +49,11 @@
         </table>
       </div>
     </div>
+  </div>
+  </div>
+  <div class="hc-card__footer" th:if="${page.hasEntries}">
+    <p class="hc-field__message" th:if="${page.hasEntries}"
+       th:text="${page.total + ' action' + (page.total == 1 ? '' : 's')}">0 actions</p>
     <nav class="hc-pagination" aria-label="Pagination" th:if="${page.paged}">
       <a th:if="${page.hasPrev}" class="hc-pagination__item"
          th:href="@{/_tesseraql/studio/ui/audit(q=${page.query},page=${page.prevPage},sort=${page.sortKey},dir=${page.sortDir})}">&lsaquo; Prev</a>

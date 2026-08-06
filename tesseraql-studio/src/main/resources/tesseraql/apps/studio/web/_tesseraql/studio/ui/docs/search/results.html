@@ -7,7 +7,9 @@
       th:text="${results.count + ' match' + (results.count == 1 ? '' : 'es')}">0 matches</li>
   <li class="hc-cluster" th:each="r : ${results.results}">
     <a th:href="${r.detailUrl}" th:text="${r.id}"></a>
-    <span class="hc-badge" th:text="${r.method}"></span>
+    <span class="hc-badge"
+          th:attr="data-variant=${r.method == 'GET'} ? 'info' : (${r.method == 'POST'} ? 'success' : (${r.method == 'DELETE'} ? 'error' : 'warning'))"
+          th:text="${r.method}"></span>
     <code th:text="${r.path}"></code>
   </li>
 </ul>

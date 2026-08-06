@@ -9,21 +9,23 @@
 </th:block>
 <div id="page-content" class="hc-stack">
 <section class="hc-card">
-  <h2>Printable route catalog</h2>
-  <p class="hc-field__label">The app's routes laid out as a PDF table, rendered server-side by the
-    documents codec. Hand it to a reviewer, or print it.</p>
-  <div class="hc-stack" th:if="${docs.hasPdf}">
-    <iframe class="tql-preview-frame" title="Route catalog PDF" th:attr="src=${docs.pdfUrl}"></iframe>
-    <div class="hc-cluster">
-      <a class="hc-button" data-variant="primary" data-size="sm"
-         th:attr="href=${docs.pdfUrl}" download="routes.pdf">Download routes.pdf</a>
+  <div class="hc-card__header">Printable route catalog</div>
+  <div class="hc-card__body hc-stack">
+    <p class="hc-field__label">The app's routes laid out as a PDF table, rendered server-side by the
+      documents codec. Hand it to a reviewer, or print it.</p>
+    <div class="hc-stack" th:if="${docs.hasPdf}">
+      <iframe class="tql-preview-frame" title="Route catalog PDF" th:attr="src=${docs.pdfUrl}"></iframe>
+      <div class="hc-cluster">
+        <a class="hc-button" data-variant="primary" data-size="sm"
+           th:attr="href=${docs.pdfUrl}" download="routes.pdf">Download routes.pdf</a>
+      </div>
     </div>
-  </div>
-  <div class="hc-empty" th:unless="${docs.hasPdf}">
-    <p class="hc-empty__title">PDF export is not available.</p>
-    <p class="hc-empty__description">The optional <code>tesseraql-pdf</code> module is not on the
-      classpath. Start the server with it enabled (<code>serve --modules pdf</code>) to render the
-      printable catalog.</p>
+    <div class="hc-empty" th:unless="${docs.hasPdf}">
+      <p class="hc-empty__title">PDF export is not available.</p>
+      <p class="hc-empty__description">The optional <code>tesseraql-pdf</code> module is not on the
+        classpath. Start the server with it enabled (<code>serve --modules pdf</code>) to render the
+        printable catalog.</p>
+    </div>
   </div>
 </section>
 </div>

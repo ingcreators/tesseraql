@@ -9,7 +9,8 @@
 </th:block>
 <div id="page-content" class="hc-stack">
   <section class="hc-card">
-    <h2>Business-day calendars</h2>
+    <div class="hc-card__header">Business-day calendars</div>
+    <div class="hc-card__body hc-stack">
     <p class="hc-field__message">The cron says when to <em>consider</em> a firing, the calendar
       says whether it <em>counts</em>. The month grid below shows the outcome: business days,
       weekends, holidays &mdash; and, for a nominal-day rule, where a holiday nominal lands.</p>
@@ -31,9 +32,11 @@
       </div>
       <button class="hc-button" type="submit">Open</button>
     </form>
+    </div>
   </section>
   <section class="hc-card" th:if="${cal.grid}">
-    <h2>Month grid <code th:text="${cal.grid.name}"></code></h2>
+    <div class="hc-card__header"><h2>Month grid <code th:text="${cal.grid.name}"></code></h2></div>
+    <div class="hc-card__body hc-stack">
     <p class="hc-alert" data-variant="success" role="status" th:if="${cal.saved}">Draft saved.
       Review the diff and apply it from the text editor.</p>
     <p class="hc-alert" data-variant="error" role="alert" th:if="${cal.grid.error}"
@@ -74,7 +77,7 @@
                   <span th:text="${d.day}"></span>
                   <span class="hc-badge" data-variant="success" th:if="${d.inMonth && d.lands}">runs</span>
                   <span class="hc-badge" data-variant="info" th:if="${d.inMonth && d.nominal && !d.lands}">nominal</span>
-                  <span class="hc-badge" data-variant="error" th:if="${d.inMonth && d.holiday}">holiday</span>
+                  <span class="hc-badge" th:if="${d.inMonth && d.holiday}">holiday</span>
                   <span class="hc-badge"
                         th:if="${d.inMonth && d.weekend && !d.holiday}">weekend</span>
                 </td>
@@ -104,9 +107,11 @@
         date the firing counts &mdash; the run records the <em>nominal</em> date as its business
         date (docs: jobs &mdash; the shifted nominal day).</p>
     </th:block>
+    </div>
   </section>
   <section class="hc-card" th:if="${cal.editable && cal.selected != null && !cal.selected.tableBacked}">
-    <h2>Edit <code th:text="${cal.selected.name}"></code></h2>
+    <div class="hc-card__header"><h2>Edit <code th:text="${cal.selected.name}"></code></h2></div>
+    <div class="hc-card__body hc-stack">
     <form class="hc-stack" method="post" action="/_tesseraql/studio/ui/calendars/save">
       <input type="hidden" name="_csrf" th:value="${_csrf}">
       <input type="hidden" name="name" th:value="${cal.selected.name}">
@@ -130,6 +135,7 @@
         (comments are not preserved); review and apply it from the text editor. Day names and
         dates are validated first (<code>TQL-STUDIO-4238</code>).</p>
     </form>
+    </div>
   </section>
 </div>
 </html>

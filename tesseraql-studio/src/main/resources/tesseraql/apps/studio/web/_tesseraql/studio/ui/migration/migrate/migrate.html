@@ -10,7 +10,8 @@
 </th:block>
 <div id="page-content" class="hc-stack">
   <section class="hc-card">
-    <h2>Migrate</h2>
+    <div class="hc-card__header">Migrate</div>
+    <div class="hc-card__body hc-stack">
     <div class="hc-cluster">
       <span class="hc-badge" data-variant="success"
             th:text="${mig.applied} + ' applied'">1 applied</span>
@@ -24,6 +25,7 @@
       <a class="hc-button" data-variant="primary" href="/_tesseraql/studio/ui/scaffold">Scaffold
         CRUD from a table &rarr;</a>
       <a class="hc-button" href="/_tesseraql/studio/ui/migration">New migration</a>
+    </div>
     </div>
   </section>
 </div>

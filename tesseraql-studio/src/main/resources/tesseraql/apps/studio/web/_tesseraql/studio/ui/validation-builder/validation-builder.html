@@ -9,7 +9,8 @@
 </th:block>
 <div id="page-content" class="hc-stack">
   <section class="hc-card" th:if="${vb.domains != null && !vb.domains.isEmpty()}">
-    <h2>Field domains</h2>
+    <div class="hc-card__header">Field domains</div>
+    <div class="hc-card__body hc-stack">
     <p class="hc-field__message">Single-field constraints (type, bounds, pattern, enum) belong in
       a <a href="/_tesseraql/studio/ui/docs/domains">field domain</a> referenced from
       <code>input:</code> &mdash; this builder is for cross-field and SQL rules that a domain
@@ -17,9 +18,11 @@
     <div class="hc-cluster">
       <span class="hc-badge" th:each="d : ${vb.domains}" th:text="${d}"></span>
     </div>
+    </div>
   </section>
   <section class="hc-card">
-    <h2>Validation builder</h2>
+    <div class="hc-card__header">Validation builder</div>
+    <div class="hc-card__body hc-stack">
     <p class="hc-field__message">Generate a route's <code>validate:</code> block for one rule, then
       copy it into a command route. Expression rules use the core expression language
       (<code>&amp;&amp; || == != &lt; &gt; &lt;= &gt;=</code>); a SQL rule points at a validation SQL
@@ -98,6 +101,7 @@
       </div>
     </form>
     <div id="vb-result" class="hc-stack"></div>
+    </div>
   </section>
 </div>
 </html>

@@ -9,7 +9,8 @@
 </th:block>
 <div id="page-content" class="hc-stack">
   <section class="hc-card">
-    <h2>API console</h2>
+    <div class="hc-card__header">API console</div>
+    <div class="hc-card__body hc-stack">
     <p class="hc-field__message">Send a request to one of this app's own routes and inspect the raw
       response (status, headers, body). The request runs against the live app, so its route enforces
       its own security &mdash; public routes just work; for a <code>bearer</code> route paste a token.
@@ -66,6 +67,7 @@
       </div>
     </form>
     <div id="tryit-result" class="hc-stack"></div>
+    </div>
   </section>
 </div>
 </html>

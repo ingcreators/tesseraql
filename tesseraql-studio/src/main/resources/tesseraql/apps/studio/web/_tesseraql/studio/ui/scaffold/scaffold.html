@@ -9,7 +9,8 @@
 </th:block>
 <div id="page-content" class="hc-stack">
 <section class="hc-card">
-  <h2>Scaffold CRUD from a table</h2>
+  <div class="hc-card__header">Scaffold CRUD from a table</div>
+  <div class="hc-card__body hc-stack">
   <p class="hc-field__message">Generates a table's CRUD slice &mdash; list, detail, and edit pages, 2-way SQL, and a declarative test suite &mdash; from its introspected schema, exactly as the <code>scaffold crud</code> CLI command does. Applying reloads the routes, so the new pages serve immediately.</p>
   <p class="hc-alert" role="status" th:unless="${scaffold.enabled}" th:text="${scaffold.note}"></p>
   <th:block th:if="${scaffold.enabled}">
@@ -44,6 +45,7 @@
       </div>
     </div>
   </th:block>
+  </div>
 </section>
 <!-- The Preview CRUD action opens the generated slice in an hc-drawer (sidebar IA): installRemoteDialog
      opens the <dialog> the preview fragment returns, so you review + apply with the table list still in

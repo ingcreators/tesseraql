@@ -11,7 +11,8 @@
 </th:block>
 <div id="page-content" class="hc-stack">
   <section class="hc-card">
-    <h2>Route form <code th:text="${rf.form.path}"></code></h2>
+    <div class="hc-card__header"><h2>Route form <code th:text="${rf.form.path}"></code></h2></div>
+    <div class="hc-card__body hc-stack">
     <p class="hc-alert" data-variant="warning" role="status" th:if="${rf.form.fromDraft}">
       Editing the pending draft (not the served source).</p>
     <th:block th:if="${rf.form.error}">
@@ -68,7 +69,7 @@
         <p class="hc-field__message">Declared inputs gate binding (undeclared body fields are
           rejected) and drive validation and the generated OpenAPI. Clear a name to drop the
           field.</p>
-        <div style="overflow-x: auto">
+        <div class="hc-table-scroll">
           <table class="hc-table">
             <thead>
             <tr><th>Name</th><th>Domain</th><th>Type</th><th>Required</th><th>Min</th><th>Max</th>
@@ -120,6 +121,7 @@
         </div>
       </form>
     </th:block>
+    </div>
   </section>
 </div>
 </html>

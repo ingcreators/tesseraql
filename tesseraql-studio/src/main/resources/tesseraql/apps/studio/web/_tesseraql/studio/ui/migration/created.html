@@ -10,7 +10,8 @@
 </th:block>
 <div id="page-content" class="hc-stack">
   <section class="hc-card">
-    <h2>Migration created</h2>
+    <div class="hc-card__header">Migration created</div>
+    <div class="hc-card__body hc-stack">
     <div class="hc-cluster">
       <span class="hc-badge" data-variant="success" th:text="${mig.repeatable} ? 'repeatable' : |V${mig.version}|"></span>
       <code th:text="${mig.path}"></code>
@@ -26,6 +27,7 @@
                 data-hc-confirm="Apply all pending migrations to the dev datasource? Flyway has no undo; roll back by writing a follow-up migration."
                 data-hc-confirm-title="Migrate now" data-hc-confirm-label="Migrate">Migrate now</button>
       </form>
+    </div>
     </div>
   </section>
 </div>

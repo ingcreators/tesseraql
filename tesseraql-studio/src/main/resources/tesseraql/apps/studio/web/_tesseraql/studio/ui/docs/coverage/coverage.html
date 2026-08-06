@@ -11,41 +11,52 @@
 </th:block>
 <div id="page-content" class="hc-stack">
   <section class="hc-card" th:unless="${cov.hasReport}">
-    <h2>Coverage</h2>
-    <div class="hc-empty">
-      <p class="hc-empty__title">No test run recorded yet.</p>
-      <p>Run the <code>tesseraql:report</code> goal to populate test results and coverage.</p>
+    <div class="hc-card__header">Coverage</div>
+    <div class="hc-card__body hc-stack">
+      <div class="hc-empty">
+        <p class="hc-empty__title">No test run recorded yet.</p>
+        <p>Run the <code>tesseraql:report</code> goal to populate test results and coverage.</p>
+      </div>
     </div>
   </section>
   <th:block th:if="${cov.hasReport}">
     <section class="hc-card">
-      <h2>Coverage summary</h2>
-      <div class="hc-cluster">
-        <span class="hc-badge" th:attr="data-variant=${cov.report.allPassed} ? 'success' : 'error'"
-              th:text="|${cov.report.passed}/${cov.report.total} passed|"></span>
-        <span class="hc-badge" data-variant="info" th:text="|SQL lines ${cov.report.sqlLinePct}%|"></span>
-        <span class="hc-badge" data-variant="info" th:text="|branches ${cov.report.sqlBranchPct}%|"></span>
-        <span class="hc-badge" th:attr="data-variant=${cov.report.gatePassed} ? 'success' : 'error'"
-              th:text="${cov.report.gatePassed} ? 'gate passed' : 'gate failed'"></span>
+      <div class="hc-card__header">Coverage summary</div>
+      <div class="hc-card__body hc-stack">
+        <div class="hc-cluster">
+          <span class="hc-badge" th:attr="data-variant=${cov.report.allPassed} ? 'success' : 'error'"
+                th:text="|${cov.report.passed}/${cov.report.total} passed|"></span>
+          <span class="hc-badge" th:attr="data-variant=${cov.report.gatePassed} ? 'success' : 'warning'"
+                th:text="|SQL lines ${cov.report.sqlLinePct}%|"></span>
+          <span class="hc-badge" th:attr="data-variant=${cov.report.gatePassed} ? 'success' : 'warning'"
+                th:text="|branches ${cov.report.sqlBranchPct}%|"></span>
+          <span class="hc-badge" th:attr="data-variant=${cov.report.gatePassed} ? 'success' : 'error'"
+                th:text="${cov.report.gatePassed} ? 'gate passed' : 'gate failed'"></span>
+        </div>
+        <span class="hc-field__label" th:if="${cov.report.runId}" th:text="|run ${cov.report.runId}|"></span>
+        <div class="hc-alert" data-variant="error" role="alert" th:if="${cov.hasGateFailures}">
+          <ul>
+            <li th:each="f : ${cov.gateFailures}" th:text="${f}"></li>
+          </ul>
+        </div>
       </div>
-      <span class="hc-field__label" th:if="${cov.report.runId}" th:text="|run ${cov.report.runId}|"></span>
-      <ul th:if="${cov.hasGateFailures}">
-        <li th:each="f : ${cov.gateFailures}" th:text="${f}"></li>
-      </ul>
     </section>
     <section class="hc-card" th:if="${cov.shareUrl}">
-      <h3>Share</h3>
-      <p class="hc-field__label">A signed, expiring read-only link to this dashboard &mdash; openable
-        without signing in. The shared view withholds per-test failure detail.</p>
-      <input class="hc-input" type="text" readonly id="share-coverage" th:value="${cov.shareUrl}">
-      <div class="hc-cluster">
-        <button type="button" class="hc-button" data-variant="ghost" data-size="sm" data-hc-copy="#share-coverage">Copy</button>
-        <a class="hc-button" data-variant="ghost" data-size="sm" target="_blank" rel="noopener"
-           th:href="${cov.shareUrl}">Open shared view &rarr;</a>
+      <div class="hc-card__header">Share</div>
+      <div class="hc-card__body hc-stack">
+        <p class="hc-field__label">A signed, expiring read-only link to this dashboard &mdash; openable
+          without signing in. The shared view withholds per-test failure detail.</p>
+        <input class="hc-input" type="text" readonly id="share-coverage" th:value="${cov.shareUrl}">
+        <div class="hc-cluster">
+          <button type="button" class="hc-button" data-variant="ghost" data-size="sm" data-hc-copy="#share-coverage">Copy</button>
+          <a class="hc-button" data-variant="ghost" data-size="sm" target="_blank" rel="noopener"
+             th:href="${cov.shareUrl}">Open shared view &rarr;</a>
+        </div>
       </div>
     </section>
     <section class="hc-card" th:if="${cov.trend}">
-      <h2>Trend <span class="hc-field__label" th:text="|over ${cov.trend.runs} runs|"></span></h2>
+      <div class="hc-card__header">Trend <span class="hc-field__label" th:text="|over ${cov.trend.runs} runs|"></span></div>
+      <div class="hc-card__body hc-stack">
       <div class="hc-cluster">
         <div class="hc-stack">
           <span class="hc-field__label">Pass rate</span>
@@ -66,12 +77,17 @@
           <span class="hc-badge" data-variant="info" th:text="|${cov.trend.branchPct}%|"></span>
         </div>
       </div>
-      <span class="hc-field__label" th:if="${cov.trend.from}"
-            th:text="|${cov.trend.from} → ${cov.trend.to}. Set tesseraql.historyLimit (0 keeps all) to tune retention.|"></span>
+      </div>
+      <div class="hc-card__footer" th:if="${cov.trend.from}">
+        <span class="hc-field__label"
+              th:text="|${cov.trend.from} → ${cov.trend.to}. Set tesseraql.historyLimit (0 keeps all) to tune retention.|"></span>
+      </div>
     </section>
     <section class="hc-card">
-      <h2>Item coverage</h2>
-      <table class="hc-table" th:if="${cov.hasKinds}">
+      <div class="hc-card__header">Item coverage</div>
+      <div class="hc-card__body hc-stack">
+      <div class="hc-table-scroll" th:if="${cov.hasKinds}">
+      <table class="hc-table">
         <thead><tr><th>Kind</th><th>Covered</th><th>Ratio</th><th>Uncovered</th></tr></thead>
         <tbody>
           <tr th:each="k : ${cov.kinds}">
@@ -89,9 +105,13 @@
           </tr>
         </tbody>
       </table>
+      </div>
+      </div>
     </section>
     <section class="hc-card" th:if="${cov.hasFailingCases}">
-      <h2>Failing tests</h2>
+      <div class="hc-card__header">Failing tests</div>
+      <div class="hc-card__body hc-stack">
+      <div class="hc-table-scroll">
       <table class="hc-table">
         <thead><tr><th>Route</th><th>Case</th><th>Message</th></tr></thead>
         <tbody>
@@ -102,6 +122,8 @@
           </tr>
         </tbody>
       </table>
+      </div>
+      </div>
     </section>
   </th:block>
 </div>

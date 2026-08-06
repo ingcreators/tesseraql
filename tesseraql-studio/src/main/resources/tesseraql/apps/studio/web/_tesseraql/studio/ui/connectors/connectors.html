@@ -13,7 +13,8 @@
   <p class="hc-alert" data-variant="success" role="status" th:if="${cx.saved != null}">
     Saved to <code>config/overlay.yml</code> &mdash; connector settings apply on the next start.</p>
   <section class="hc-card">
-    <h2>Egress allow-lists</h2>
+    <div class="hc-card__header">Egress allow-lists</div>
+    <div class="hc-card__body hc-stack">
     <p class="hc-field__message">Outbound calls are deny-by-default: a host must be allow-listed
       (exact or <code>*.wildcard</code>) before <code>http-call</code> steps or poll triggers may
       reach it. Changes write <code>config/overlay.yml</code> (the full effective list) and apply
@@ -50,25 +51,29 @@
         </form>
       </div>
     </div>
+    </div>
   </section>
   <section class="hc-card">
-    <h2>Connector credentials</h2>
+    <div class="hc-card__header">Connector credentials</div>
+    <div class="hc-card__body hc-stack">
     <p class="hc-field__message">Credentials hold secret <strong>references</strong>
       (<code>${secret.env.NAME}</code>) resolved at call time through the SecretResolver &mdash;
       Studio never writes a literal secret value.</p>
     <div class="hc-grid" style="--hc-grid-min: 22rem">
       <div class="hc-stack" th:each="scope : ${ {'outbound','poll'} }">
         <h3 th:text="${scope == 'outbound'} ? 'HTTP outbound' : 'File poll'"></h3>
-        <table class="hc-table" th:with="creds=${scope == 'outbound' ? cx.outboundCredentials : cx.pollCredentials}">
-          <thead><tr><th>Name</th><th>Type</th><th>Target</th><th>Secret</th></tr></thead>
-          <tbody>
-          <tr th:each="c : ${creds}">
-            <td th:text="${c.name}"></td><td th:text="${c.type}"></td>
-            <td th:text="${c.target}"></td><td><code th:text="${c.secret}"></code></td>
-          </tr>
-          <tr th:if="${creds.isEmpty()}"><td colspan="4" class="hc-field__message">None configured.</td></tr>
-          </tbody>
-        </table>
+        <div class="hc-table-scroll">
+          <table class="hc-table" th:with="creds=${scope == 'outbound' ? cx.outboundCredentials : cx.pollCredentials}">
+            <thead><tr><th>Name</th><th>Type</th><th>Target</th><th>Secret</th></tr></thead>
+            <tbody>
+            <tr th:each="c : ${creds}">
+              <td th:text="${c.name}"></td><td th:text="${c.type}"></td>
+              <td th:text="${c.target}"></td><td><code th:text="${c.secret}"></code></td>
+            </tr>
+            <tr th:if="${creds.isEmpty()}"><td colspan="4" class="hc-field__message">None configured.</td></tr>
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
     <details class="hc-collapsible" th:if="${cx.editable}">
@@ -103,24 +108,28 @@
         <button class="hc-button" data-variant="primary" type="submit">Save credential</button>
       </form>
     </details>
+    </div>
   </section>
   <section class="hc-card">
-    <h2>Inbound webhook verifiers</h2>
+    <div class="hc-card__header">Inbound webhook verifiers</div>
+    <div class="hc-card__body hc-stack">
     <p class="hc-field__message">A <code>recipe: webhook</code> route only serves when its
       provider is configured here (deny-by-default). The HMAC secret is a reference; timestamp
       tolerance is ISO-8601 (<code>PT5M</code>).</p>
-    <table class="hc-table">
-      <thead><tr><th>Provider</th><th>Secret</th><th>Signature header</th>
-        <th>Timestamp header</th><th>Id header</th><th>Tolerance</th></tr></thead>
-      <tbody>
-      <tr th:each="w : ${cx.webhooks}">
-        <td th:text="${w.name}"></td><td><code th:text="${w.secret}"></code></td>
-        <td th:text="${w.signatureHeader}"></td><td th:text="${w.timestampHeader}"></td>
-        <td th:text="${w.idHeader}"></td><td th:text="${w.tolerance}"></td>
-      </tr>
-      <tr th:if="${cx.webhooks.isEmpty()}"><td colspan="6" class="hc-field__message">None configured.</td></tr>
-      </tbody>
-    </table>
+    <div class="hc-table-scroll">
+      <table class="hc-table">
+        <thead><tr><th>Provider</th><th>Secret</th><th>Signature header</th>
+          <th>Timestamp header</th><th>Id header</th><th>Tolerance</th></tr></thead>
+        <tbody>
+        <tr th:each="w : ${cx.webhooks}">
+          <td th:text="${w.name}"></td><td><code th:text="${w.secret}"></code></td>
+          <td th:text="${w.signatureHeader}"></td><td th:text="${w.timestampHeader}"></td>
+          <td th:text="${w.idHeader}"></td><td th:text="${w.tolerance}"></td>
+        </tr>
+        <tr th:if="${cx.webhooks.isEmpty()}"><td colspan="6" class="hc-field__message">None configured.</td></tr>
+        </tbody>
+      </table>
+    </div>
     <details class="hc-collapsible" th:if="${cx.editable}">
       <summary class="hc-collapsible__trigger">Add or replace a verifier
         <span class="hc-collapsible__icon" aria-hidden="true">&#9662;</span></summary>
@@ -143,6 +152,7 @@
         <button class="hc-button" data-variant="primary" type="submit">Save verifier</button>
       </form>
     </details>
+    </div>
   </section>
 </div>
 </html>

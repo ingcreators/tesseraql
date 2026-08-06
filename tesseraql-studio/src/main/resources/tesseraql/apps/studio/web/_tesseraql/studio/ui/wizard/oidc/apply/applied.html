@@ -10,13 +10,15 @@
 </th:block>
 <div id="page-content" class="hc-stack">
   <section class="hc-card">
-    <h2>OIDC settings written</h2>
+    <div class="hc-card__header">OIDC settings written</div>
+    <div class="hc-card__body hc-stack">
     <p class="hc-alert" data-variant="success" role="status">Written to
       <code>config/overlay.yml</code> &mdash; only secret <em>references</em> were stored.</p>
     <p class="hc-field__message">These settings load at startup, so they apply on the
       <strong>next start</strong>. Review the merged result in the
       <a href="/_tesseraql/studio/ui/config">config viewer</a>; the write is in the
       <a href="/_tesseraql/studio/ui/audit">audit trail</a>.</p>
+    </div>
   </section>
 </div>
 </html>

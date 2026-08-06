@@ -9,19 +9,23 @@
 </th:block>
 <div id="page-content" class="hc-stack">
   <section class="hc-card" th:unless="${dom.hasDecisions}">
-    <h2>Decision tables</h2>
-    <div class="hc-empty">
-      <p class="hc-empty__title">No decision tables declared yet.</p>
-      <p>Declare a decision once under <code>decisions/</code> and reference it from any
-        command's <code>decide:</code> with <code>use:</code> &mdash; workflow transitions
-        reference decisions the same way.</p>
+    <div class="hc-card__header">Decision tables</div>
+    <div class="hc-card__body hc-stack">
+      <div class="hc-empty">
+        <p class="hc-empty__title">No decision tables declared yet.</p>
+        <p>Declare a decision once under <code>decisions/</code> and reference it from any
+          command's <code>decide:</code> with <code>use:</code> &mdash; workflow transitions
+          reference decisions the same way.</p>
+      </div>
     </div>
   </section>
   <section class="hc-card" th:if="${dom.hasDecisions}">
-    <h2>Decision tables</h2>
+    <div class="hc-card__header">Decision tables</div>
+    <div class="hc-card__body hc-stack">
     <p class="hc-field__message">Each decision states its contract once; every reference wires
       its own <code>params:</code>. An unreferenced decision is either dead or a missed
       reference (lint <code>TQL-DECISION-4716</code>).</p>
+    <div class="hc-table-scroll">
     <table class="hc-table">
       <thead><tr><th>Decision</th><th>Hit policy</th><th>Rows</th><th>Inputs</th><th>Outputs</th><th>Used by</th></tr></thead>
       <tbody>
@@ -47,6 +51,8 @@
         </tr>
       </tbody>
     </table>
+    </div>
+    </div>
   </section>
 </div>
 </html>
