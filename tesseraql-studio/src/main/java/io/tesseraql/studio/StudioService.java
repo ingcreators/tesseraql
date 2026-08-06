@@ -1263,7 +1263,6 @@ public final class StudioService {
             Map<String, Object> node) {
     }
 
-    /** The draft-aware locate (the decisions pattern): the file declaring {@code name}. */
     /**
      * The edit card's draft-aware view of a calendar (docs/studio-ux-refresh.md slice 6):
      * weekend and holiday dates as the PENDING draft has them when one exists, else as the
@@ -1321,6 +1320,7 @@ public final class StudioService {
         return saveCalendar(name, current.weekend(), dates, actor);
     }
 
+    /** The draft-aware locate (the decisions pattern): the file declaring {@code name}. */
     private LocatedCalendar locateCalendar(String name) {
         Path dir = appHome.resolve("calendars");
         if (name == null || name.isBlank() || !Files.isDirectory(dir)) {
