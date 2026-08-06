@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<!-- The shared-definitions catalog page grammar (docs/studio-ux-refresh.md slice 4): the
+     Domains / Rules / Decisions reference pages are the same page — a declare-once catalog,
+     its empty state, and a "which routes use this" cell — so the shape lives once here and
+     each page passes only its own table and prose. Resolved app-home-relative (this file sits
+     in the app's shared templates/ root, the same root `template:` names fall back to), so the
+     pages reference it as ~{templates/catalog.html :: …}. -->
+<html xmlns:th="http://www.thymeleaf.org">
+<body>
+<!-- The catalog's empty state: one hc-empty recipe, the hint markup supplied by the page. -->
+<section class="hc-card" th:fragment="empty-card(title, emptyTitle, hint)">
+  <div class="hc-card__header" th:text="${title}"></div>
+  <div class="hc-card__body hc-stack">
+    <div class="hc-empty">
+      <p class="hc-empty__title" th:text="${emptyTitle}"></p>
+      <th:block th:replace="${hint}"/>
+    </div>
+  </div>
+</section>
+<!-- The populated catalog: header, the page's intro note, and its table in the kit's scroll
+     container. The table markup (columns differ per catalog) is the page's. -->
+<section class="hc-card" th:fragment="catalog-card(title, note, table)">
+  <div class="hc-card__header" th:text="${title}"></div>
+  <div class="hc-card__body hc-stack">
+    <th:block th:replace="${note}"/>
+    <div class="hc-table-scroll">
+      <th:block th:replace="${table}"/>
+    </div>
+  </div>
+</section>
+<!-- The "used by" cell: the unreferenced warning (a dead declaration or a missed reference —
+     each catalog's lint) or the referencing operations, linked when they have a page. -->
+<th:block th:fragment="used-by(unreferenced, refs)">
+  <span class="hc-badge" data-variant="warning" th:if="${unreferenced}">unreferenced</span>
+  <span class="hc-cluster" th:unless="${unreferenced}">
+    <th:block th:each="u : ${refs}">
+      <a th:if="${u.url}" th:href="${u.url}" th:text="|${u.method} ${u.id}|"></a>
+      <span th:unless="${u.url}" th:text="|${u.method} ${u.id}|"></span>
+    </th:block>
+  </span>
+</th:block>
+</body>
+</html>

@@ -578,6 +578,28 @@ class DocViewsTest {
                 .containsEntry("hasFailingCases", false).doesNotContainKey("failingCases");
     }
 
+    @Test
+    void schemaDiffLinesShadeAdditiveDdlAsAddedAndReviewCommentsAsRemoved() {
+        List<Map<String, Object>> lines = DocViews.schemaDiffLines(
+                "-- datasource: main\n"
+                        + "ALTER TABLE users ADD COLUMN nickname VARCHAR(64);\n"
+                        + "-- DROP TABLE legacy; (removed since the baseline — review)\n");
+
+        assertThat(lines).hasSize(3);
+        assertThat(lines.get(0)).containsEntry("text", "-- datasource: main")
+                .containsEntry("state", "context");
+        assertThat(lines.get(1))
+                .containsEntry("text", "ALTER TABLE users ADD COLUMN nickname VARCHAR(64);")
+                .containsEntry("state", "added");
+        assertThat(lines.get(2)).containsEntry("state", "removed");
+    }
+
+    @Test
+    void schemaDiffLinesAreEmptyForANullOrBlankDelta() {
+        assertThat(DocViews.schemaDiffLines(null)).isEmpty();
+        assertThat(DocViews.schemaDiffLines("")).isEmpty();
+    }
+
     @SuppressWarnings("unchecked")
     private static List<Map<String, Object>> asRows(Object value) {
         return (List<Map<String, Object>>) value;

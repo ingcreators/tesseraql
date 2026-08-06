@@ -179,9 +179,14 @@ class StudioIntegrationTest {
         HttpResponse<String> response = get("/_tesseraql/studio/ui", true);
 
         assertThat(response.statusCode()).isEqualTo(200);
-        // A filter box and a nested directory tree (folders as <details>, ids as leaf links).
+        // A filter box and the kit's hc-tree (slice 4): semantic nested lists installTree
+        // upgrades with the APG keyboard model — folders are aria-expanded branch items,
+        // route/job ids leaf links inside the row's label.
         assertThat(response.body()).contains("id=\"explorer-filter\"")
-                .contains("id=\"explorer-tree\"").contains("<details").contains("users.search");
+                .contains("id=\"explorer-tree\"")
+                .contains("class=\"hc-tree\"").contains("aria-label=\"Routes and jobs\"")
+                .contains("class=\"hc-tree__item\" aria-expanded=\"true\"")
+                .contains("class=\"hc-tree__group\"").contains("users.search");
     }
 
     @Test
@@ -811,6 +816,10 @@ class StudioIntegrationTest {
                 .contains("data-gutter=\"line-numbers\"").contains("data-state=\"covered\"")
                 // the SQL is server-tokenized into hc-code token spans (hc 0.1.4)
                 .contains("class=\"hc-code__tok\" data-tok=\"keyword\"");
+        // UX-refresh slice 4: each statement is an hc-collapsible listing whose summary line
+        // carries the identity + coverage facts; a single-statement route stays open.
+        assertThat(response.body()).contains("<details class=\"hc-collapsible\" open")
+                .contains("class=\"hc-collapsible__trigger\"");
     }
 
     @Test
@@ -1067,7 +1076,10 @@ class StudioIntegrationTest {
                 "/_tesseraql/studio/ui/docs/route?id=" + enc("users.search"), true);
 
         assertThat(response.statusCode()).isEqualTo(200);
+        // UX-refresh slice 4: Share is a header popover action, not a card.
         assertThat(response.body()).contains("Share")
+                .contains("popovertarget=\"share-popover\"")
+                .contains("class=\"hc-popover\" id=\"share-popover\"")
                 .contains("/_tesseraql/docs/share/route?id=users.search")
                 // The share URL field carries a copy button via the kit's installCopy behavior.
                 .contains("id=\"share-route\"").contains("data-hc-copy=\"#share-route\"");
@@ -1643,9 +1655,13 @@ class StudioIntegrationTest {
 
     @Test
     void uiExplorerFolderOffersContextualNewRoute() throws Exception {
-        // Studio sidebar IA: each folder offers a "New route here" drawer trigger; the fragment it
-        // hx-gets seeds the New-route Path (?prefix=) so creation inherits the browsed location.
-        assertThat(get("/_tesseraql/studio/ui", true).body()).contains("New route here")
+        // Studio sidebar IA: each folder offers a contextual create drawer trigger — since
+        // slice 4 a hover/focus-revealed row action in the folder's hc-tree row, an <a href>
+        // (the tree behavior's click handler only exempts links from branch toggling,
+        // hc-briefs.md brief 5) whose hx-get seeds the New-route Path (?prefix=) so creation
+        // inherits the browsed location.
+        assertThat(get("/_tesseraql/studio/ui", true).body())
+                .contains("tql-tree-action").contains("+ New route")
                 .contains("hx-get=\"/_tesseraql/studio/ui/new?prefix=");
         HttpResponse<String> drawer = get(
                 "/_tesseraql/studio/ui/new?prefix=" + enc("web/api/users/"), true);
@@ -2112,6 +2128,12 @@ class StudioIntegrationTest {
         assertThat(page.statusCode()).isEqualTo(200);
         assertThat(page.body()).contains("Release diff")
                 .contains("Migrations the app carries");
+        // UX-refresh slice 4: the schema DDL delta reuses the route reference's line-numbered,
+        // state-shaded hc-code renderer — the fixture baseline lacks customers.email, so the
+        // additive ALTER shades as added; the legend swatches name the two states.
+        assertThat(page.body()).contains("data-gutter=\"line-numbers\"")
+                .contains("data-state=\"added\"").contains("ADD COLUMN email")
+                .contains("class=\"hc-code__swatch\" data-state=\"added\"");
     }
 
     @Test

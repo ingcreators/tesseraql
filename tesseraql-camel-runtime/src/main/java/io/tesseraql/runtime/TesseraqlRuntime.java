@@ -3250,6 +3250,10 @@ public final class TesseraqlRuntime implements AutoCloseable {
                             String ddl = doc.hasSchemaBaseline() ? doc.schemaDiffDdl() : null;
                             model.put("schemaDiff",
                                     ddl == null || ddl.isBlank() ? null : ddl);
+                            // Line rows for the hc-code diff renderer (studio-ux-refresh
+                            // slice 4): additive DDL = added, -- review comments = removed.
+                            model.put("schemaDiffLines",
+                                    io.tesseraql.studio.DocViews.schemaDiffLines(ddl));
                             java.util.List<Map<String, Object>> migrations = new java.util.ArrayList<>();
                             for (io.tesseraql.yaml.manifest.MigrationFile migration : manifest
                                     .migrations()) {

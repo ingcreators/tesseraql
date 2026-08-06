@@ -7,52 +7,39 @@
     <a class="hc-button" data-variant="ghost" data-size="sm" href="/_tesseraql/studio/ui/docs">&larr; docs</a>
   </div>
 </th:block>
+<!-- The page shape (empty state / catalog card / used-by cell) is the shared catalog grammar
+     (templates/catalog.html, slice 4) — this page contributes only its table and prose. -->
 <div id="page-content" class="hc-stack">
-  <section class="hc-card" th:unless="${dom.hasDecisions}">
-    <div class="hc-card__header">Decision tables</div>
-    <div class="hc-card__body hc-stack">
-      <div class="hc-empty">
-        <p class="hc-empty__title">No decision tables declared yet.</p>
-        <p>Declare a decision once under <code>decisions/</code> and reference it from any
-          command's <code>decide:</code> with <code>use:</code> &mdash; workflow transitions
-          reference decisions the same way.</p>
-      </div>
-    </div>
-  </section>
-  <section class="hc-card" th:if="${dom.hasDecisions}">
-    <div class="hc-card__header">Decision tables</div>
-    <div class="hc-card__body hc-stack">
-    <p class="hc-field__message">Each decision states its contract once; every reference wires
-      its own <code>params:</code>. An unreferenced decision is either dead or a missed
-      reference (lint <code>TQL-DECISION-4716</code>).</p>
-    <div class="hc-table-scroll">
-    <table class="hc-table">
-      <thead><tr><th>Decision</th><th>Hit policy</th><th>Rows</th><th>Inputs</th><th>Outputs</th><th>Used by</th></tr></thead>
-      <tbody>
-        <tr th:each="d : ${dom.decisions}">
-          <td><code th:text="${d.name}"></code></td>
-          <td><span class="hc-badge" th:text="${d.hitPolicy}"></span></td>
-          <td>
-            <span class="hc-badge" th:text="${d.kind}"></span>
-            <code th:if="${d.table}" th:text="${d.table}"></code>
-            <span th:if="${d.rows}" th:text="${d.rows}"></span>
-          </td>
-          <td><span class="hc-badge" th:each="i : ${d.inputs}" th:text="${i}"></span></td>
-          <td><span class="hc-badge" th:each="o : ${d.outputs}" th:text="${o}"></span></td>
-          <td>
-            <span class="hc-badge" data-variant="warning" th:if="${d.unreferenced}">unreferenced</span>
-            <span class="hc-cluster" th:unless="${d.unreferenced}">
-              <th:block th:each="u : ${d.usedBy}">
-                <a th:if="${u.url}" th:href="${u.url}" th:text="|${u.method} ${u.id}|"></a>
-                <span th:unless="${u.url}" th:text="|${u.method} ${u.id}|"></span>
-              </th:block>
-            </span>
-          </td>
-        </tr>
-      </tbody>
-    </table>
-    </div>
-    </div>
-  </section>
+  <th:block th:unless="${dom.hasDecisions}">
+    <th:block th:replace="~{templates/catalog.html :: empty-card('Decision tables',
+        'No decision tables declared yet.', ~{:: #decisions-empty-hint})}"/>
+  </th:block>
+  <th:block th:if="${dom.hasDecisions}">
+    <th:block th:replace="~{templates/catalog.html :: catalog-card('Decision tables',
+        ~{:: #decisions-note}, ~{:: #decisions-table})}"/>
+  </th:block>
 </div>
+<p id="decisions-empty-hint">Declare a decision once under <code>decisions/</code> and reference it from any
+  command's <code>decide:</code> with <code>use:</code> &mdash; workflow transitions
+  reference decisions the same way.</p>
+<p id="decisions-note" class="hc-field__message">Each decision states its contract once; every reference wires
+  its own <code>params:</code>. An unreferenced decision is either dead or a missed
+  reference (lint <code>TQL-DECISION-4716</code>).</p>
+<table id="decisions-table" class="hc-table">
+  <thead><tr><th>Decision</th><th>Hit policy</th><th>Rows</th><th>Inputs</th><th>Outputs</th><th>Used by</th></tr></thead>
+  <tbody>
+    <tr th:each="d : ${dom.decisions}">
+      <td><code th:text="${d.name}"></code></td>
+      <td><span class="hc-badge" th:text="${d.hitPolicy}"></span></td>
+      <td>
+        <span class="hc-badge" th:text="${d.kind}"></span>
+        <code th:if="${d.table}" th:text="${d.table}"></code>
+        <span th:if="${d.rows}" th:text="${d.rows}"></span>
+      </td>
+      <td><span class="hc-badge" th:each="i : ${d.inputs}" th:text="${i}"></span></td>
+      <td><span class="hc-badge" th:each="o : ${d.outputs}" th:text="${o}"></span></td>
+      <td><th:block th:replace="~{templates/catalog.html :: used-by(${d.unreferenced}, ${d.usedBy})}"/></td>
+    </tr>
+  </tbody>
+</table>
 </html>

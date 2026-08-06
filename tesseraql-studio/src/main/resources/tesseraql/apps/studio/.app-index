@@ -1,6 +1,7 @@
 # Each route folder is the complete unit: yml + colocated template(s).
 # Studio UI app (design ch. 16): served by the runtime as a mounted system app.
 config/tesseraql.yml
+templates/catalog.html
 web/_tesseraql/docs/share/coverage/get.yml
 web/_tesseraql/docs/share/coverage/share-coverage.html
 web/_tesseraql/docs/share/route/get.yml

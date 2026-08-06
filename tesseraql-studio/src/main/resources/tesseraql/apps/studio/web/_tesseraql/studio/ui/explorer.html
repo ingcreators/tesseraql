@@ -48,49 +48,64 @@
   <div class="hc-card__body hc-stack">
   <!-- installRemoteDialog opens the first <dialog> swapped in here with showModal() (the drawer). -->
   <div id="new-route-dialog" data-hc-remote-dialog-root th:if="${studio.editable}"></div>
-  <div id="explorer-tree" class="hc-stack" th:with="root=${studio.tree}">
+  <!-- The directory tree is the kit's hc-tree (docs/studio-ux-refresh.md slice 4): semantic
+       nested <ul>/<li> upgraded by installTree with the APG keyboard model (roving tabindex,
+       arrow-key traversal, type-ahead) — replacing the hand-rolled <details> disclosures and
+       the .tql-tree__* CSS. Branch-ness is declared by aria-expanded (server-owned, all open
+       initially, matching the old `open` disclosures). The htmx filter swaps this wrapper;
+       the behavior picks up swapped-in trees automatically. -->
+  <div id="explorer-tree" th:with="root=${studio.tree}">
     <div class="hc-empty" th:if="${root.empty}">
       <p class="hc-empty__title" th:text="${#strings.isEmpty(studio.query)} ? 'No routes or jobs defined.' : 'No routes or jobs match.'">No matches.</p>
     </div>
-    <th:block th:each="folder : ${root.folders}">
-      <th:block th:replace="~{:: explorerNode(${folder})}"></th:block>
-    </th:block>
-    <th:block th:each="leaf : ${root.leaves}">
-      <th:block th:replace="~{:: explorerLeaf(${leaf})}"></th:block>
-    </th:block>
+    <ul class="hc-tree" aria-label="Routes and jobs" th:unless="${root.empty}">
+      <th:block th:each="folder : ${root.folders}">
+        <th:block th:replace="~{:: explorerNode(${folder})}"></th:block>
+      </th:block>
+      <th:block th:each="leaf : ${root.leaves}">
+        <th:block th:replace="~{:: explorerLeaf(${leaf})}"></th:block>
+      </th:block>
+    </ul>
   </div>
   </div>
 </section>
 </div>
-<th:block th:fragment="explorerNode(folder)">
-  <details class="tql-tree" open>
-    <summary th:text="${folder.name}"></summary>
-    <div class="hc-stack tql-tree__children">
-      <!-- Contextual create (Studio sidebar IA): opens the New-route drawer with its Path seeded to
-           this folder's prefix, so a new route lands where you are browsing, not a path typed from
-           memory. Same remote-dialog root as the top "New route" trigger. -->
-      <button th:if="${studio.editable}" type="button" class="hc-button tql-tree__new"
-              data-variant="ghost" data-size="sm"
-              th:attr="hx-get=|/_tesseraql/studio/ui/new?prefix=${folder.path}/|"
-              hx-target="#new-route-dialog" hx-swap="innerHTML">+ New route here</button>
-      <th:block th:each="child : ${folder.folders}">
-        <th:block th:replace="~{:: explorerNode(${child})}"></th:block>
-      </th:block>
-      <th:block th:each="leaf : ${folder.leaves}">
-        <th:block th:replace="~{:: explorerLeaf(${leaf})}"></th:block>
-      </th:block>
-    </div>
-  </details>
-</th:block>
-<div class="hc-cluster" th:fragment="explorerLeaf(leaf)">
-  <span class="hc-badge"
-        th:attr="data-variant=${leaf.kind == 'job'} ? 'info' : (${leaf.kind == 'draft'} ? 'success' : null)"
-        th:text="${leaf.badge}"></span>
-  <a th:href="${leaf.sourceUrl}" th:text="${leaf.label}"></a>
-  <span class="hc-field__message" th:text="${leaf.recipe}" th:unless="${#strings.isEmpty(leaf.recipe)}"></span>
-  <!-- Draft state (Studio sidebar IA): a served entry with an unsaved draft, and a conflict when the
-       source moved underneath it. A new draft is its own leaf (kind=draft, the 'new' badge above). -->
-  <span class="hc-badge" data-variant="warning" th:if="${leaf.edited}">unsaved draft</span>
-  <span class="hc-badge" data-variant="error" th:if="${leaf.conflict}">conflict</span>
-</div>
+<li class="hc-tree__item" aria-expanded="true" th:fragment="explorerNode(folder)">
+  <span class="hc-tree__row">
+    <span class="hc-tree__toggle" aria-hidden="true"></span>
+    <span class="hc-tree__label" th:text="${folder.name}"></span>
+    <!-- Contextual create (Studio sidebar IA), now a hover/focus-revealed row action: opens the
+         New-route drawer with its Path seeded to this folder's prefix, so a new route lands where
+         you are browsing. Same remote-dialog root as the top "New route" trigger. An <a href>
+         deliberately, not a <button>: the tree behavior's click handler only exempts links from
+         branch toggling (hc-briefs.md brief 5), and the href is the honest no-JS fallback. -->
+    <a th:if="${studio.editable}" class="hc-button tql-tree-action"
+       data-variant="ghost" data-size="sm"
+       th:href="|/_tesseraql/studio/ui/new?prefix=${folder.path}/|"
+       th:attr="hx-get=|/_tesseraql/studio/ui/new?prefix=${folder.path}/|,aria-label=|New route under ${folder.path}/|"
+       hx-target="#new-route-dialog" hx-swap="innerHTML">+ New route</a>
+  </span>
+  <ul class="hc-tree__group">
+    <th:block th:each="child : ${folder.folders}">
+      <th:block th:replace="~{:: explorerNode(${child})}"></th:block>
+    </th:block>
+    <th:block th:each="leaf : ${folder.leaves}">
+      <th:block th:replace="~{:: explorerLeaf(${leaf})}"></th:block>
+    </th:block>
+  </ul>
+</li>
+<li class="hc-tree__item" th:fragment="explorerLeaf(leaf)">
+  <span class="hc-tree__row">
+    <span class="hc-tree__toggle" aria-hidden="true"></span>
+    <span class="hc-badge"
+          th:attr="data-variant=${leaf.kind == 'job'} ? 'info' : (${leaf.kind == 'draft'} ? 'success' : null)"
+          th:text="${leaf.badge}"></span>
+    <span class="hc-tree__label"><a th:href="${leaf.sourceUrl}" th:text="${leaf.label}"></a></span>
+    <span class="hc-field__message" th:text="${leaf.recipe}" th:unless="${#strings.isEmpty(leaf.recipe)}"></span>
+    <!-- Draft state (Studio sidebar IA): a served entry with an unsaved draft, and a conflict when
+         the source moved underneath it. A new draft is its own leaf (kind=draft, the 'new' badge). -->
+    <span class="hc-badge" data-variant="warning" th:if="${leaf.edited}">unsaved draft</span>
+    <span class="hc-badge" data-variant="error" th:if="${leaf.conflict}">conflict</span>
+  </span>
+</li>
 </html>

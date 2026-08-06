@@ -729,6 +729,30 @@ public final class DocViews {
     }
 
     /**
+     * The release-diff page's schema DDL delta as line rows for the hc-code diff renderer
+     * (docs/studio-ux-refresh.md slice 4) — the same line-numbered, state-shaded surface the
+     * route reference renders coverage with. {@link SchemaDiff} emits additive statements as
+     * real DDL and destructive changes as commented-out {@code -- …} review lines, so an
+     * additive line shades {@code added} and a review comment {@code removed}; the
+     * {@code -- datasource:} section header is {@code context}. Empty for a null or blank delta.
+     */
+    public static List<Map<String, Object>> schemaDiffLines(String ddl) {
+        if (ddl == null || ddl.isBlank()) {
+            return List.of();
+        }
+        List<Map<String, Object>> lines = new ArrayList<>();
+        for (String text : ddl.split("\n")) {
+            Map<String, Object> line = new LinkedHashMap<>();
+            line.put("text", text);
+            line.put("state", text.startsWith("-- datasource:")
+                    ? "context"
+                    : text.startsWith("--") ? "removed" : "added");
+            lines.add(line);
+        }
+        return lines;
+    }
+
+    /**
      * The printable route-catalog model (documentation portal F8): the app name and, when the
      * optional PDF codec is on the classpath, the rendered catalog as a {@code data:} URL for an
      * inline preview and a download link. {@code hasPdf} is false when the {@code tesseraql-pdf}
