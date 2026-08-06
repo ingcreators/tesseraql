@@ -254,6 +254,46 @@ submit") — delete once the kit owns this.
 
 ---
 
+## Brief 5 — `hc-tree`: exempt interactive controls from row-click branch toggling
+
+*Found 2026-08-06 (Studio UX refresh slice 4, migrating the Studio explorer to `hc-tree`). Not
+yet filed.*
+
+### Problem
+
+`installTree()`'s keyboard handler deliberately ignores keys originating from widgets inside
+rows (`event.target.closest('input, button, select, textarea')` — `dist/tree.js`), but its
+**click** handler only exempts links (`event.target.closest('a[href]')`). A `<button>` placed
+inside a `.hc-tree__row` — a per-row action, the shape the row's flex layout invites — therefore
+fires its own action **and** toggles the branch on every click, collapsing the folder the user
+is acting on. The two handlers should agree on what counts as an interactive control.
+
+### Proposal
+
+In the click handler, skip the branch-toggle (and keep the focus move) when the click originated
+inside the same control set the keydown handler exempts: `a[href], input, button, select,
+textarea`. No API change; row actions become first-class without consumers routing around the
+toggle.
+
+### CSP
+
+- Behavior in the bundle; **no inline JS** (unchanged).
+
+### Acceptance criteria
+
+- Clicking a `<button>` (or form control) inside a branch row does not toggle the branch.
+- Clicking the row's text/whitespace still toggles a linkless branch (unchanged).
+- Keyboard behavior is unchanged (already correct).
+
+### TesseraQL workaround to retire
+
+The Studio explorer's "+ New route" row action is authored as an `<a href>` (with `hx-get`)
+instead of a `<button>` purely so the link exemption applies. It is honest markup (the href is
+the no-JS fallback), so this is a soft workaround — but once the kit exempts buttons, row
+actions are free to be buttons again.
+
+---
+
 ## Notes
 
 - Two adjacent gaps were found to be **already shipped** in hc 0.1.5 and have been adopted, not

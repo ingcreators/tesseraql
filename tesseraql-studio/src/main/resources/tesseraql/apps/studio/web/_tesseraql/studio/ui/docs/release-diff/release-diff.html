@@ -43,7 +43,21 @@
     — use <em>Capture baselines now</em> above at a release point.</p>
 
   <h3>Schema</h3>
-  <pre class="hc-code" th:if="${docs.schemaDiff != null}"><code th:text="${docs.schemaDiff}"></code></pre>
+  <!-- The DDL delta reuses the route reference's line-numbered, state-shaded hc-code renderer
+       (slice 4): SchemaDiff emits additive statements as real DDL and destructive changes as
+       commented-out `-- …` review lines, so additive lines shade as added and review comments
+       as removed — the same green/red vocabulary as every other diff surface. A `-- datasource:`
+       section header is context, not a change. -->
+  <th:block th:if="${docs.schemaDiff != null}">
+    <div class="hc-cluster">
+      <span class="hc-code__swatch" data-state="added"></span><span class="hc-field__label">additive DDL</span>
+      <span class="hc-code__swatch" data-state="removed"></span><span class="hc-field__label">destructive &mdash; review</span>
+    </div>
+    <ol class="hc-code" data-gutter="line-numbers">
+      <li class="hc-code__line" th:each="ln : ${docs.schemaDiffLines}"
+          th:attr="data-state=${ln.state}" th:text="${ln.text}"></li>
+    </ol>
+  </th:block>
   <p class="hc-field__message" th:if="${docs.hasSchemaBaseline && docs.schemaDiff == null}">
     No schema changes since the baseline.</p>
   <p class="hc-field__message" th:unless="${docs.hasSchemaBaseline}">No schema baseline

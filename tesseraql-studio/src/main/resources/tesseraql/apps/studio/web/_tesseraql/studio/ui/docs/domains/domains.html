@@ -7,63 +7,49 @@
     <a class="hc-button" data-variant="ghost" data-size="sm" href="/_tesseraql/studio/ui/docs">&larr; docs</a>
   </div>
 </th:block>
+<!-- The page shape (empty state / catalog card / used-by cell) is the shared catalog grammar
+     (templates/catalog.html, slice 4) — this page contributes only its table and prose. -->
 <div id="page-content" class="hc-stack">
-  <section class="hc-card" th:unless="${dom.hasDomains}">
-    <div class="hc-card__header">Field domains</div>
-    <div class="hc-card__body hc-stack">
-      <div class="hc-empty">
-        <p class="hc-empty__title">No field domains declared yet.</p>
-        <p>Declare a field once under <code>domains/</code> and reference it from any route's
-          <code>input:</code> with <code>domain:</code> &mdash; the scaffolder generates a
-          <code>domains/&lt;table&gt;.yml</code> per table.</p>
-      </div>
-    </div>
-  </section>
-  <section class="hc-card" th:if="${dom.hasDomains}">
-    <div class="hc-card__header">Field domains</div>
-    <div class="hc-card__body hc-stack">
-    <p class="hc-field__message">Each domain declares a business field once; routes reference it
-      and state only their operational keys. An unreferenced domain is either dead or a missed
-      reference (lint <code>TQL-FIELD-4611</code>).</p>
-    <div class="hc-table-scroll">
-    <table class="hc-table">
-      <thead><tr><th>Domain</th><th>Declares</th><th>Referenced by</th></tr></thead>
-      <tbody>
-        <tr th:each="d : ${dom.domains}">
-          <td><code th:text="${d.name}"></code></td>
-          <td><span class="hc-badge" th:each="c : ${d.chips}" th:text="${c}"></span></td>
-          <td>
-            <span class="hc-badge" data-variant="warning" th:if="${d.unreferenced}">unreferenced</span>
-            <span class="hc-cluster" th:unless="${d.unreferenced}">
-              <a th:each="r : ${d.referencedBy}" th:href="${r.url}"
-                 th:text="|${r.method} ${r.id}|"></a>
-            </span>
-          </td>
-        </tr>
-      </tbody>
-    </table>
-    </div>
-    </div>
-  </section>
-  <section class="hc-card" th:if="${dom.hasCatalog}">
-    <div class="hc-card__header">Constraint catalog</div>
-    <div class="hc-card__body hc-stack">
-    <p class="hc-field__message">Database constraint names mapped once, inherited by every route;
-      a route-local <code>errors.constraints</code> entry overrides by name.</p>
-    <div class="hc-table-scroll">
-    <table class="hc-table">
-      <thead><tr><th>Constraint</th><th>Field</th><th>Code</th><th>Message key</th></tr></thead>
-      <tbody>
-        <tr th:each="c : ${dom.catalog}">
-          <td><code th:text="${c.name}"></code></td>
-          <td th:text="${c.field}"></td>
-          <td><span th:if="${c.code}" th:text="${c.code}"></span><span th:unless="${c.code}">&mdash;</span></td>
-          <td><span th:if="${c.message}" th:text="${c.message}"></span><span th:unless="${c.message}">&mdash;</span></td>
-        </tr>
-      </tbody>
-    </table>
-    </div>
-    </div>
-  </section>
+  <th:block th:unless="${dom.hasDomains}">
+    <th:block th:replace="~{templates/catalog.html :: empty-card('Field domains',
+        'No field domains declared yet.', ~{:: #domains-empty-hint})}"/>
+  </th:block>
+  <th:block th:if="${dom.hasDomains}">
+    <th:block th:replace="~{templates/catalog.html :: catalog-card('Field domains',
+        ~{:: #domains-note}, ~{:: #domains-table})}"/>
+  </th:block>
+  <th:block th:if="${dom.hasCatalog}">
+    <th:block th:replace="~{templates/catalog.html :: catalog-card('Constraint catalog',
+        ~{:: #constraints-note}, ~{:: #constraints-table})}"/>
+  </th:block>
 </div>
+<p id="domains-empty-hint">Declare a field once under <code>domains/</code> and reference it from any route's
+  <code>input:</code> with <code>domain:</code> &mdash; the scaffolder generates a
+  <code>domains/&lt;table&gt;.yml</code> per table.</p>
+<p id="domains-note" class="hc-field__message">Each domain declares a business field once; routes reference it
+  and state only their operational keys. An unreferenced domain is either dead or a missed
+  reference (lint <code>TQL-FIELD-4611</code>).</p>
+<table id="domains-table" class="hc-table">
+  <thead><tr><th>Domain</th><th>Declares</th><th>Referenced by</th></tr></thead>
+  <tbody>
+    <tr th:each="d : ${dom.domains}">
+      <td><code th:text="${d.name}"></code></td>
+      <td><span class="hc-badge" th:each="c : ${d.chips}" th:text="${c}"></span></td>
+      <td><th:block th:replace="~{templates/catalog.html :: used-by(${d.unreferenced}, ${d.referencedBy})}"/></td>
+    </tr>
+  </tbody>
+</table>
+<p id="constraints-note" class="hc-field__message">Database constraint names mapped once, inherited by every route;
+  a route-local <code>errors.constraints</code> entry overrides by name.</p>
+<table id="constraints-table" class="hc-table">
+  <thead><tr><th>Constraint</th><th>Field</th><th>Code</th><th>Message key</th></tr></thead>
+  <tbody>
+    <tr th:each="c : ${dom.catalog}">
+      <td><code th:text="${c.name}"></code></td>
+      <td th:text="${c.field}"></td>
+      <td><span th:if="${c.code}" th:text="${c.code}"></span><span th:unless="${c.code}">&mdash;</span></td>
+      <td><span th:if="${c.message}" th:text="${c.message}"></span><span th:unless="${c.message}">&mdash;</span></td>
+    </tr>
+  </tbody>
+</table>
 </html>

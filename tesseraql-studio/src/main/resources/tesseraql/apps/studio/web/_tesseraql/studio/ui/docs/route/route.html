@@ -9,6 +9,24 @@
       <li class="hc-breadcrumb__item"><span class="hc-breadcrumb__current" aria-current="page" th:text="${doc.id}">route</span></li>
     </ol>
   </nav>
+  <!-- Share is a header action, not a card (docs/studio-ux-refresh.md slice 4): the signed link
+       is an affordance of the page, and the popover keeps the contract front-and-center. -->
+  <th:block th:if="${doc.shareUrl}">
+    <button type="button" class="hc-button" data-variant="ghost" data-size="sm"
+            popovertarget="share-popover">Share</button>
+    <div class="hc-popover" id="share-popover" popover data-side="bottom" data-align="end">
+      <div class="hc-stack">
+        <p class="hc-field__label">A signed, expiring read-only link to this route's contract &mdash;
+          openable without signing in. Copy it to share, or open it to preview.</p>
+        <input class="hc-input" type="text" readonly id="share-route" th:value="${doc.shareUrl}">
+        <div class="hc-cluster">
+          <button type="button" class="hc-button" data-variant="ghost" data-size="sm" data-hc-copy="#share-route">Copy</button>
+          <a class="hc-button" data-variant="ghost" data-size="sm" target="_blank" rel="noopener"
+             th:href="${doc.shareUrl}">Open shared view &rarr;</a>
+        </div>
+      </div>
+    </div>
+  </th:block>
 </th:block>
 <div id="page-content" class="hc-stack">
   <section class="hc-card" th:if="${doc.notFound}">
@@ -46,19 +64,6 @@
         <li th:if="${doc.hasTests}"><a class="hc-toc__link" href="#sec-tests">Tests</a></li>
       </ul>
     </nav>
-    <section class="hc-card" th:if="${doc.shareUrl}">
-      <div class="hc-card__header">Share</div>
-      <div class="hc-card__body hc-stack">
-        <p class="hc-field__label">A signed, expiring read-only link to this route's contract &mdash;
-          openable without signing in. Copy it to share, or open it to preview.</p>
-        <input class="hc-input" type="text" readonly id="share-route" th:value="${doc.shareUrl}">
-        <div class="hc-cluster">
-          <button type="button" class="hc-button" data-variant="ghost" data-size="sm" data-hc-copy="#share-route">Copy</button>
-          <a class="hc-button" data-variant="ghost" data-size="sm" target="_blank" rel="noopener"
-             th:href="${doc.shareUrl}">Open shared view &rarr;</a>
-        </div>
-      </div>
-    </section>
     <section class="hc-card" th:if="${doc.hasReport}">
       <div class="hc-card__header">Last test run</div>
       <div class="hc-card__body hc-stack">
@@ -179,30 +184,39 @@
         <span class="hc-code__swatch" data-state="covered"></span><span class="hc-field__label">covered</span>
         <span class="hc-code__swatch" data-state="missed"></span><span class="hc-field__label">not covered</span>
       </div>
-      <div class="hc-stack" th:each="s : ${doc.sql}">
-        <div class="hc-cluster">
-          <span class="hc-badge" th:text="${s.label}"></span>
-          <code th:if="${s.file}" th:text="${s.file}"></code>
-          <code th:if="${s.contract}" th:text="|contract: ${s.contract}|"></code>
-          <code th:if="${s.service}" th:text="|service: ${s.service}|"></code>
-          <span class="hc-badge" th:text="|mode: ${s.mode}|"></span>
-          <span class="hc-badge" data-variant="info" th:if="${s.linePct != null}"
-                th:text="|lines ${s.linePct}%|"></span>
-          <span class="hc-badge" data-variant="info" th:if="${s.branchPct != null}"
-                th:text="|branches ${s.branchPct}%|"></span>
+      <!-- Each statement is a collapsible listing (slice 4): the summary line carries the
+           identity and coverage facts, so a multi-statement route scans as a list; a
+           single-statement route stays open. -->
+      <details class="hc-collapsible" th:each="s : ${doc.sql}"
+               th:attr="open=${#lists.size(doc.sql) == 1} ? 'open' : null">
+        <summary class="hc-collapsible__trigger">
+          <span class="hc-cluster">
+            <span class="hc-badge" th:text="${s.label}"></span>
+            <code th:if="${s.file}" th:text="${s.file}"></code>
+            <code th:if="${s.contract}" th:text="|contract: ${s.contract}|"></code>
+            <code th:if="${s.service}" th:text="|service: ${s.service}|"></code>
+            <span class="hc-badge" th:text="|mode: ${s.mode}|"></span>
+            <span class="hc-badge" data-variant="info" th:if="${s.linePct != null}"
+                  th:text="|lines ${s.linePct}%|"></span>
+            <span class="hc-badge" data-variant="info" th:if="${s.branchPct != null}"
+                  th:text="|branches ${s.branchPct}%|"></span>
+          </span>
+          <span class="hc-collapsible__icon" aria-hidden="true">&#9662;</span>
+        </summary>
+        <div class="hc-collapsible__content hc-stack">
+          <div class="hc-cluster" th:unless="${#lists.isEmpty(s.binds)}">
+            <span class="hc-field__label">binds</span>
+            <span class="hc-badge" th:each="b : ${s.binds}" th:text="${b}"></span>
+          </div>
+          <ul th:unless="${#lists.isEmpty(s.structure)}">
+            <li th:each="c : ${s.structure}" th:text="|${c.kind} ${c.expression}|"></li>
+          </ul>
+          <ol class="hc-code" data-gutter="line-numbers" th:if="${s.lines}">
+            <li class="hc-code__line" th:each="ln : ${s.lines}" th:attr="data-state=${ln.state == 'plain'} ? null : ${ln.state}" th:utext="${ln.html}"></li>
+          </ol>
+          <pre class="hc-code" th:if="${s.statement != null and s.lines == null}"><code th:utext="${s.statementHtml}"></code></pre>
         </div>
-        <div class="hc-cluster" th:unless="${#lists.isEmpty(s.binds)}">
-          <span class="hc-field__label">binds</span>
-          <span class="hc-badge" th:each="b : ${s.binds}" th:text="${b}"></span>
-        </div>
-        <ul th:unless="${#lists.isEmpty(s.structure)}">
-          <li th:each="c : ${s.structure}" th:text="|${c.kind} ${c.expression}|"></li>
-        </ul>
-        <ol class="hc-code" data-gutter="line-numbers" th:if="${s.lines}">
-          <li class="hc-code__line" th:each="ln : ${s.lines}" th:attr="data-state=${ln.state == 'plain'} ? null : ${ln.state}" th:utext="${ln.html}"></li>
-        </ol>
-        <pre class="hc-code" th:if="${s.statement != null and s.lines == null}"><code th:utext="${s.statementHtml}"></code></pre>
-      </div>
+      </details>
       </div>
     </section>
     <section class="hc-card" id="sec-tests" th:if="${doc.hasTests}">
