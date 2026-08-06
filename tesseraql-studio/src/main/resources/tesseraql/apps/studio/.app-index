@@ -2,6 +2,7 @@
 # Studio UI app (design ch. 16): served by the runtime as a mounted system app.
 config/tesseraql.yml
 templates/catalog.html
+templates/wizard.html
 web/_tesseraql/docs/share/coverage/get.yml
 web/_tesseraql/docs/share/coverage/share-coverage.html
 web/_tesseraql/docs/share/route/get.yml
@@ -163,6 +164,8 @@ web/_tesseraql/studio/ui/wizard/oidc/get.yml
 web/_tesseraql/studio/ui/wizard/oidc/post.yml
 web/_tesseraql/studio/ui/wizard/oidc/wizard-oidc.html
 web/_tesseraql/studio/ui/wizard/oidc/wizard-oidc.yml.tpl
+web/_tesseraql/studio/ui/wizard/preview/post.yml
+web/_tesseraql/studio/ui/wizard/preview/preview.html
 web/_tesseraql/studio/ui/wizard/saml/apply/applied.html
 web/_tesseraql/studio/ui/wizard/saml/apply/post.yml
 web/_tesseraql/studio/ui/wizard/saml/get.yml

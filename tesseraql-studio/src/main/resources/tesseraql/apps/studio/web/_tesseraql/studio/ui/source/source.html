@@ -39,122 +39,157 @@
       <span class="hc-badge" data-variant="warning" th:if="${src.hasDraft}">unsaved draft</span>
     </div>
     <p class="hc-field__message" th:if="${src.isNew}">This route does not exist yet: saving keeps a draft, and applying writes the file and serves it immediately (routes hot-reload). A broken definition answers 500 with its compile error until fixed.</p>
-    <form method="post" action="/_tesseraql/studio/ui/save">
-      <input type="hidden" name="_csrf" th:value="${_csrf}">
-      <input type="hidden" id="src-path" name="path" th:value="${src.path}">
-      <div class="hc-code" data-editable data-gutter="line-numbers" th:attr="data-lang=${src.lang}">
-        <textarea id="source-editor" name="content" class="hc-code__input" spellcheck="false" aria-label="Source editor"
-                  th:text="${src.content}"
-                  hx-post="/_tesseraql/studio/ui/preview"
-                  hx-trigger="keyup changed delay:300ms, change"
-                  hx-include="#src-path"
-                  hx-target="#preview-result" hx-swap="innerHTML"
-                  hx-indicator="#preview-busy"></textarea>
-      </div>
-      <span id="preview-busy" class="htmx-indicator hc-cluster" role="status"><span class="hc-spinner" data-size="sm" aria-hidden="true"></span><span class="hc-field__message">Checking…</span></span>
-      <div id="preview-result" class="hc-stack" aria-live="polite"></div>
-      <div class="hc-cluster"><button type="submit" class="hc-button" data-variant="primary">Save draft</button></div>
-    </form>
-    <details class="hc-collapsible" open th:if="${src.isRenderable}">
-      <summary class="hc-collapsible__trigger">Rendered preview <span class="hc-collapsible__icon" aria-hidden="true">&#9662;</span></summary>
-      <p class="hc-field__message hc-collapsible__content" th:if="${src.isRoute}">Renders this route's response against the sample <em>execution context</em> below (e.g. <code>params</code>, <code>sql.rows</code>) &mdash; prefilled from the colocated <code>.sample.yml</code> fixture when present. A <code>query-json</code> route's <code>response.json.fields</code> masking is applied; add a <code>principal</code> (e.g. <code>permissions</code>/<code>roles</code>) to the sample to preview a privileged view.</p>
-      <p class="hc-field__message" th:unless="${src.isRoute}">Renders the draft against the sample <em>template variables</em> below &mdash; prefilled from the colocated <code>.sample.yml</code> fixture when present, blank falls back to an empty model.</p>
-      <label class="hc-field__label" for="sample-editor">Sample data (YAML)</label>
-      <div class="hc-code" data-editable data-gutter="line-numbers" data-lang="yaml">
-        <textarea id="sample-editor" name="sampleModel" class="hc-code__input" spellcheck="false"
-                  aria-label="Sample data" th:text="${src.sampleModel}"></textarea>
-      </div>
-      <label class="hc-field" th:if="${src.isRoute and src.testRunnerEnabled}">
-        <input type="checkbox" id="render-live" name="live" value="true">
-        Use live data &mdash; run the route's SQL against the dev datasource (sandboxed)
-      </label>
-      <th:block th:replace="~{tql/shell :: busy('Rendering…')}"/>
-      <div id="render-result" class="hc-stack" aria-live="polite"
-           hx-post="/_tesseraql/studio/ui/render"
-           hx-trigger="load, keyup changed delay:400ms from:#source-editor, keyup changed delay:400ms from:#sample-editor, change from:#render-live"
-           hx-include="#src-path, #source-editor, #sample-editor, #render-live"
-           hx-target="this" hx-swap="innerHTML" hx-indicator="previous span"></div>
-    </details>
-    <details class="hc-collapsible" th:if="${src.hasDraft}">
-      <summary class="hc-collapsible__trigger">Compare against saved source <span class="hc-collapsible__icon" aria-hidden="true">&#9662;</span></summary>
-      <ol class="hc-code hc-collapsible__content" data-mode="diff" th:if="${src.diff}">
-        <li class="hc-code__line" th:each="ln : ${src.diff}"
-            th:attr="data-state=${ln.state},data-old=${ln.oldNo},data-new=${ln.newNo}"
-            th:utext="${ln.html}"></li>
-      </ol>
-      <pre class="hc-code" th:unless="${src.diff}"><code th:utext="${src.sourceContentHtml}"></code></pre>
-    </details>
-    <details class="hc-collapsible" th:if="${src.isMigration and src.testRunnerEnabled}">
-      <summary class="hc-collapsible__trigger">Dry-run <span class="hc-collapsible__icon" aria-hidden="true">&#9662;</span></summary>
-      <p class="hc-field__message hc-collapsible__content">Runs this migration's DDL against the dev datasource in a sandboxed transaction that is rolled back &mdash; nothing persists &mdash; so you can check it applies before the next migrate. Postgres only (other dialects auto-commit DDL).</p>
-      <form hx-post="/_tesseraql/studio/ui/dry-run" hx-include="#source-editor" hx-target="#dry-run-result" hx-swap="innerHTML" hx-disabled-elt="find button">
-        <input type="hidden" name="path" th:value="${src.path}">
-        <div class="hc-cluster"><button type="submit" class="hc-button" data-variant="primary">Dry-run</button><th:block th:replace="~{tql/shell :: busy('Running…')}"/></div>
-      </form>
-      <div id="dry-run-result" class="hc-stack" aria-live="polite"></div>
-    </details>
-    <details class="hc-collapsible" th:if="${src.isTestable and src.testRunnerEnabled}">
-      <summary class="hc-collapsible__trigger">Tests <span class="hc-collapsible__icon" aria-hidden="true">&#9662;</span></summary>
-      <p class="hc-field__message hc-collapsible__content">Runs the declarative test cases covering this <span th:text="${src.isJob} ? 'job' : 'route'">route</span> (<code>sql</code>, <code>validate</code>, <code>notify</code>, <code>http-call</code>) against the dev datasource, sandboxed (auto-rollback, timeout, row cap) &mdash; a write case executes and is rolled back, so nothing persists.</p>
-      <form hx-post="/_tesseraql/studio/ui/run-tests" hx-target="#run-tests-result" hx-swap="innerHTML" hx-disabled-elt="find button">
-        <input type="hidden" name="path" th:value="${src.path}">
-        <div class="hc-cluster"><button type="submit" class="hc-button" data-variant="primary">Run tests</button><th:block th:replace="~{tql/shell :: busy('Running…')}"/></div>
-      </form>
-      <div id="run-tests-result" class="hc-stack" aria-live="polite"></div>
-    </details>
-    <details class="hc-collapsible" th:if="${src.isRouteSql and src.hasTables}">
-      <summary class="hc-collapsible__trigger">SQL builder <span class="hc-collapsible__icon" aria-hidden="true">&#9662;</span></summary>
-      <p class="hc-field__message hc-collapsible__content">Generate a <code>select</code>/<code>insert</code>/<code>update</code>/<code>delete</code>
-        2-way SQL snippet for a table and append it to the editor above (the bind directives are
-        written for you; a <code>-- sql.params</code> comment lists the mappings to add to the route).</p>
-      <form hx-post="/_tesseraql/studio/ui/sql-builder/build"
-            hx-target="#source-editor" hx-swap="beforeend" hx-disabled-elt="find button">
-        <div class="hc-cluster">
-          <div class="hc-field"><label class="hc-field__label">Table</label>
-            <select class="hc-select" name="table" required
-                    hx-get="/_tesseraql/studio/ui/sql-builder/columns"
-                    hx-target="#sb-col" hx-swap="innerHTML" hx-trigger="load, change">
-              <option th:each="t : ${src.tables}" th:value="${t}" th:text="${t}"></option>
-            </select>
-          </div>
-          <div class="hc-field"><label class="hc-field__label">Operation</label>
-            <select class="hc-select" name="operation">
-              <option value="select-by-pk">select by primary key</option>
-              <option value="select-by-column">select by column (=)</option>
-              <option value="select-by-column-in">select by column (in list)</option>
-              <option value="select-by-column-optional">select by column (optional /*%if*/)</option>
-              <option value="insert">insert</option>
-              <option value="update-by-pk">update by primary key</option>
-              <option value="delete-by-pk">delete by primary key</option>
-            </select>
-          </div>
-          <div class="hc-field"><label class="hc-field__label">Filter column</label>
-            <select class="hc-select" name="column" id="sb-col"></select>
-          </div>
+    <!-- Editor beside its rendered preview (docs/studio-ux-refresh.md slice 5): the primary
+         feedback loop — type, see the lint result under the editor and the render next to it —
+         no longer scrolls. The save form is submit-associated from the sticky action bar below
+         (form=), and data-tql-hotkey-save gives it Ctrl/Cmd+S (bootstrap stand-in). -->
+    <div class="tql-editor-layout">
+      <form id="save-form" method="post" action="/_tesseraql/studio/ui/save" class="hc-stack" data-tql-hotkey-save>
+        <input type="hidden" name="_csrf" th:value="${_csrf}">
+        <input type="hidden" id="src-path" name="path" th:value="${src.path}">
+        <div class="hc-code" data-editable data-gutter="line-numbers" th:attr="data-lang=${src.lang}">
+          <textarea id="source-editor" name="content" class="hc-code__input" spellcheck="false" aria-label="Source editor"
+                    th:text="${src.content}"
+                    hx-post="/_tesseraql/studio/ui/preview"
+                    hx-trigger="keyup changed delay:300ms, change"
+                    hx-include="#src-path"
+                    hx-target="#preview-result" hx-swap="innerHTML"
+                    hx-indicator="#preview-busy"></textarea>
         </div>
-        <div class="hc-cluster"><button type="submit" class="hc-button" data-variant="ghost">Append to editor &uarr;</button><th:block th:replace="~{tql/shell :: busy('Building…')}"/></div>
+        <span id="preview-busy" class="htmx-indicator hc-cluster" role="status"><span class="hc-spinner" data-size="sm" aria-hidden="true"></span><span class="hc-field__message">Checking…</span></span>
+        <div id="preview-result" class="hc-stack" aria-live="polite"></div>
       </form>
-    </details>
-    <p class="hc-alert" data-variant="warning" role="alert" th:if="${src.conflict}">The saved source changed since this draft was started &mdash; applying overwrites those changes. Review the compare panel above first.</p>
-    <p class="hc-alert" role="note" th:if="${src.confirmApply and not src.conflict and src.hasDraft}">Confirm-before-apply is on: review the compare panel above, then confirm.</p>
-    <form hx-post="/_tesseraql/studio/ui/apply" hx-target="#apply-result" hx-swap="innerHTML" hx-disabled-elt="find button">
-      <input type="hidden" name="path" th:value="${src.path}">
-      <label class="hc-field" th:if="${src.conflict}">
-        <input type="checkbox" name="force" value="true" required>
-        I reviewed the changes &mdash; overwrite the updated source
-      </label>
-      <label class="hc-field" th:if="${src.confirmApply and not src.conflict}">
-        <input type="checkbox" name="confirm" value="true" required>
-        I reviewed the diff above &mdash; apply this draft
-      </label>
-      <div class="hc-cluster"><button type="submit" class="hc-button" data-variant="primary">Apply draft &amp; reload</button><th:block th:replace="~{tql/shell :: busy('Applying…')}"/></div>
-    </form>
+      <div class="hc-stack" th:if="${src.isRenderable}">
+        <span class="hc-field__label">Rendered preview</span>
+        <p class="hc-field__message" th:if="${src.isRoute}">Renders this route's response against the sample <em>execution context</em> below (e.g. <code>params</code>, <code>sql.rows</code>) &mdash; prefilled from the colocated <code>.sample.yml</code> fixture when present. A <code>query-json</code> route's <code>response.json.fields</code> masking is applied; add a <code>principal</code> (e.g. <code>permissions</code>/<code>roles</code>) to the sample to preview a privileged view.</p>
+        <p class="hc-field__message" th:unless="${src.isRoute}">Renders the draft against the sample <em>template variables</em> below &mdash; prefilled from the colocated <code>.sample.yml</code> fixture when present, blank falls back to an empty model.</p>
+        <label class="hc-field__label" for="sample-editor">Sample data (YAML)</label>
+        <div class="hc-code" data-editable data-gutter="line-numbers" data-lang="yaml">
+          <textarea id="sample-editor" name="sampleModel" class="hc-code__input" spellcheck="false"
+                    aria-label="Sample data" th:text="${src.sampleModel}"></textarea>
+        </div>
+        <label class="hc-field" th:if="${src.isRoute and src.testRunnerEnabled}">
+          <input type="checkbox" id="render-live" name="live" value="true">
+          Use live data &mdash; run the route's SQL against the dev datasource (sandboxed)
+        </label>
+        <th:block th:replace="~{tql/shell :: busy('Rendering…')}"/>
+        <div id="render-result" class="hc-stack" aria-live="polite"
+             hx-post="/_tesseraql/studio/ui/render"
+             hx-trigger="load, keyup changed delay:400ms from:#source-editor, keyup changed delay:400ms from:#sample-editor, change from:#render-live"
+             hx-include="#src-path, #source-editor, #sample-editor, #render-live"
+             hx-target="this" hx-swap="innerHTML" hx-indicator="previous span"></div>
+      </div>
+    </div>
+    <!-- The on-demand tools are tabs (slice 5), replacing the stack of collapsibles: one panel
+         at a time, keyboard-navigable per the kit's tab pattern. Panels are conditional, so the
+         first present tab is the selected one; the others hide until activated (hidden is
+         upgraded to hidden="until-found" by the behavior, keeping Ctrl+F working). -->
+    <div class="hc-tabs"
+         th:with="tabCompare=${src.hasDraft},tabDry=${src.isMigration and src.testRunnerEnabled},tabTests=${src.isTestable and src.testRunnerEnabled},tabSql=${src.isRouteSql and src.hasTables}"
+         th:if="${src.hasDraft or (src.isMigration and src.testRunnerEnabled) or (src.isTestable and src.testRunnerEnabled) or (src.isRouteSql and src.hasTables)}">
+      <div class="hc-tabs__list" role="tablist" aria-label="Editor tools">
+        <button class="hc-tabs__tab" type="button" role="tab" id="tab-compare" aria-controls="panel-compare"
+                th:if="${tabCompare}" th:attr="aria-selected=${tabCompare} ? 'true' : 'false'">Compare</button>
+        <button class="hc-tabs__tab" type="button" role="tab" id="tab-dry-run" aria-controls="panel-dry-run"
+                th:if="${tabDry}" th:attr="aria-selected=${tabDry and not tabCompare} ? 'true' : 'false'">Dry-run</button>
+        <button class="hc-tabs__tab" type="button" role="tab" id="tab-tests" aria-controls="panel-tests"
+                th:if="${tabTests}" th:attr="aria-selected=${tabTests and not tabCompare and not tabDry} ? 'true' : 'false'">Tests</button>
+        <button class="hc-tabs__tab" type="button" role="tab" id="tab-sql-builder" aria-controls="panel-sql-builder"
+                th:if="${tabSql}" th:attr="aria-selected=${tabSql and not tabCompare and not tabDry and not tabTests} ? 'true' : 'false'">SQL builder</button>
+      </div>
+      <div class="hc-tabs__panel hc-stack" role="tabpanel" id="panel-compare" aria-labelledby="tab-compare" th:if="${tabCompare}">
+        <p class="hc-field__message">The draft against the saved source.</p>
+        <ol class="hc-code" data-mode="diff" th:if="${src.diff}">
+          <li class="hc-code__line" th:each="ln : ${src.diff}"
+              th:attr="data-state=${ln.state},data-old=${ln.oldNo},data-new=${ln.newNo}"
+              th:utext="${ln.html}"></li>
+        </ol>
+        <pre class="hc-code" th:unless="${src.diff}"><code th:utext="${src.sourceContentHtml}"></code></pre>
+      </div>
+      <div class="hc-tabs__panel hc-stack" role="tabpanel" id="panel-dry-run" aria-labelledby="tab-dry-run"
+           th:if="${tabDry}" th:attr="hidden=${tabCompare} ? 'hidden' : null">
+        <p class="hc-field__message">Runs this migration's DDL against the dev datasource in a sandboxed transaction that is rolled back &mdash; nothing persists &mdash; so you can check it applies before the next migrate. Postgres only (other dialects auto-commit DDL).</p>
+        <form hx-post="/_tesseraql/studio/ui/dry-run" hx-include="#source-editor" hx-target="#dry-run-result" hx-swap="innerHTML" hx-disabled-elt="find button">
+          <input type="hidden" name="path" th:value="${src.path}">
+          <div class="hc-cluster"><button type="submit" class="hc-button" data-variant="primary">Dry-run</button><th:block th:replace="~{tql/shell :: busy('Running…')}"/></div>
+        </form>
+        <div id="dry-run-result" class="hc-stack" aria-live="polite"></div>
+      </div>
+      <div class="hc-tabs__panel hc-stack" role="tabpanel" id="panel-tests" aria-labelledby="tab-tests"
+           th:if="${tabTests}" th:attr="hidden=${tabCompare or tabDry} ? 'hidden' : null">
+        <p class="hc-field__message">Runs the declarative test cases covering this <span th:text="${src.isJob} ? 'job' : 'route'">route</span> (<code>sql</code>, <code>validate</code>, <code>notify</code>, <code>http-call</code>) against the dev datasource, sandboxed (auto-rollback, timeout, row cap) &mdash; a write case executes and is rolled back, so nothing persists.</p>
+        <form hx-post="/_tesseraql/studio/ui/run-tests" hx-target="#run-tests-result" hx-swap="innerHTML" hx-disabled-elt="find button">
+          <input type="hidden" name="path" th:value="${src.path}">
+          <div class="hc-cluster"><button type="submit" class="hc-button" data-variant="primary">Run tests</button><th:block th:replace="~{tql/shell :: busy('Running…')}"/></div>
+        </form>
+        <div id="run-tests-result" class="hc-stack" aria-live="polite"></div>
+      </div>
+      <div class="hc-tabs__panel hc-stack" role="tabpanel" id="panel-sql-builder" aria-labelledby="tab-sql-builder"
+           th:if="${tabSql}" th:attr="hidden=${tabCompare or tabDry or tabTests} ? 'hidden' : null">
+        <p class="hc-field__message">Generate a <code>select</code>/<code>insert</code>/<code>update</code>/<code>delete</code>
+          2-way SQL snippet for a table and append it to the editor above (the bind directives are
+          written for you; a <code>-- sql.params</code> comment lists the mappings to add to the route).</p>
+        <form hx-post="/_tesseraql/studio/ui/sql-builder/build"
+              hx-target="#source-editor" hx-swap="beforeend" hx-disabled-elt="find button">
+          <div class="hc-cluster">
+            <div class="hc-field"><label class="hc-field__label">Table</label>
+              <select class="hc-select" name="table" required
+                      hx-get="/_tesseraql/studio/ui/sql-builder/columns"
+                      hx-target="#sb-col" hx-swap="innerHTML" hx-trigger="load, change">
+                <option th:each="t : ${src.tables}" th:value="${t}" th:text="${t}"></option>
+              </select>
+            </div>
+            <div class="hc-field"><label class="hc-field__label">Operation</label>
+              <select class="hc-select" name="operation" data-tql-switch>
+                <option value="select-by-pk">select by primary key</option>
+                <option value="select-by-column">select by column (=)</option>
+                <option value="select-by-column-in">select by column (in list)</option>
+                <option value="select-by-column-optional">select by column (optional /*%if*/)</option>
+                <option value="insert">insert</option>
+                <option value="update-by-pk">update by primary key</option>
+                <option value="delete-by-pk">delete by primary key</option>
+              </select>
+            </div>
+            <div class="hc-field" data-tql-show-for="select-by-column select-by-column-in select-by-column-optional">
+              <label class="hc-field__label">Filter column</label>
+              <select class="hc-select" name="column" id="sb-col"></select>
+            </div>
+          </div>
+          <div class="hc-cluster"><button type="submit" class="hc-button" data-variant="ghost">Append to editor &uarr;</button><th:block th:replace="~{tql/shell :: busy('Building…')}"/></div>
+        </form>
+      </div>
+    </div>
+    <p class="hc-alert" data-variant="warning" role="alert" th:if="${src.conflict}">The saved source changed since this draft was started &mdash; applying overwrites those changes. Review the Compare tab above first.</p>
+    <p class="hc-alert" role="note" th:if="${src.confirmApply and not src.conflict and src.hasDraft}">Confirm-before-apply is on: review the Compare tab above, then confirm.</p>
     <div id="apply-result" class="hc-stack" aria-live="polite"></div>
-    <form method="post" action="/_tesseraql/studio/ui/discard" th:if="${src.hasDraft}">
-      <input type="hidden" name="_csrf" th:value="${_csrf}">
-      <input type="hidden" name="path" th:value="${src.path}">
-      <div class="hc-cluster"><button type="submit" class="hc-button" data-variant="ghost">Discard draft</button></div>
-    </form>
+    <!-- The sticky action bar (slice 5): Save / Apply / Discard stay reachable however long the
+         editor grows. Save submits the editor form above via form=; Apply keeps its htmx form
+         (checkbox gates inline); Discard is a confirmed destructive action — the draft is real
+         work, and this was the page's one unconfirmed destroyer. -->
+    <div class="tql-editor-bar">
+      <button type="submit" form="save-form" class="hc-button" data-variant="primary">Save draft</button>
+      <form class="hc-cluster" hx-post="/_tesseraql/studio/ui/apply" hx-target="#apply-result" hx-swap="innerHTML" hx-disabled-elt="find button">
+        <input type="hidden" name="path" th:value="${src.path}">
+        <label class="hc-field" th:if="${src.conflict}">
+          <input type="checkbox" name="force" value="true" required>
+          I reviewed the changes &mdash; overwrite the updated source
+        </label>
+        <label class="hc-field" th:if="${src.confirmApply and not src.conflict}">
+          <input type="checkbox" name="confirm" value="true" required>
+          I reviewed the diff above &mdash; apply this draft
+        </label>
+        <button type="submit" class="hc-button">Apply draft &amp; reload</button><th:block th:replace="~{tql/shell :: busy('Applying…')}"/>
+      </form>
+      <span class="hc-spacer"></span>
+      <form method="post" action="/_tesseraql/studio/ui/discard" th:if="${src.hasDraft}">
+        <input type="hidden" name="_csrf" th:value="${_csrf}">
+        <input type="hidden" name="path" th:value="${src.path}">
+        <button type="submit" class="hc-button" data-variant="error"
+                data-hc-confirm="Discard this draft? The saved source stays as-is; the draft's changes are lost."
+                data-hc-confirm-title="Discard draft" data-hc-confirm-label="Discard"
+                data-hc-confirm-variant="error">Discard draft</button>
+      </form>
+    </div>
   </th:block>
 </section>
 </div>

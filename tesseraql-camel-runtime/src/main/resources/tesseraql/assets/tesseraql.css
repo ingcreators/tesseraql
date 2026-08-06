@@ -36,6 +36,15 @@ a:hover{text-decoration-thickness:2px}
 /* No hover, no reveal — touch devices keep the action always visible. */
 @media (hover: none){.tql-tree-action{opacity:1}}
 
+/* The source editor's two-column working set (docs/studio-ux-refresh.md slice 5): editor and
+   lint feedback on the left, the rendered preview beside it — the primary feedback loop stops
+   scrolling. Single column below the comfortable width. App layout, not an hc surface. */
+.tql-editor-layout{display:grid;grid-template-columns:minmax(0,3fr) minmax(0,2fr);gap:var(--hc-space-4,1rem);align-items:start}
+@media (width < 70rem){.tql-editor-layout{grid-template-columns:minmax(0,1fr)}}
+/* The editor's sticky action bar: Save / Apply / Discard stay reachable however long the editor
+   grows. Surface + border from tokens so both themes hold. */
+.tql-editor-bar{position:sticky;inset-block-end:0;z-index:2;display:flex;align-items:center;gap:var(--hc-space-2,.5rem);flex-wrap:wrap;padding:var(--hc-space-2,.5rem) var(--hc-space-3,.75rem);background:var(--hc-color-surface);border-block-start:1px solid var(--hc-color-border);border-radius:var(--hc-radius-md,6px) var(--hc-radius-md,6px) 0 0}
+
 /* Studio sidebar section headers and grouping (shell studio-nav). hc ships no nav-group primitive,
    so these are app rules: clusters get breathing room and a muted uppercase caption. This file loads
    after hc.min.css and is unlayered, so it wins over the kit at equal specificity without an @layer. */

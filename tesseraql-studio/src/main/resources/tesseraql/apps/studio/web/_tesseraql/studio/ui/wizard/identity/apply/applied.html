@@ -12,6 +12,8 @@
   <section class="hc-card">
     <div class="hc-card__header">Identity realm settings written</div>
     <div class="hc-card__body hc-stack">
+    <!-- The wizard's journey, complete (docs/studio-ux-refresh.md slice 5). -->
+    <th:block th:replace="~{templates/wizard.html :: stepper(4, false)}"/>
     <p class="hc-alert" data-variant="success" role="status">Written to
       <code>config/overlay.yml</code> &mdash; only secret <em>references</em> were stored.</p>
     <p class="hc-field__message">These settings load at startup, so they apply on the

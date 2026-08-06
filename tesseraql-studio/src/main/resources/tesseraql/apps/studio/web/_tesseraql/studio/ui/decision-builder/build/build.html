@@ -1,3 +1,8 @@
 <th:block xmlns:th="http://www.thymeleaf.org">
-  <pre class="hc-code"><code th:text="${db.snippet}"># decide: ...</code></pre>
+  <div class="hc-cluster">
+    <span class="hc-spacer"></span>
+    <button type="button" class="hc-button" data-variant="ghost" data-size="sm"
+            data-hc-copy="#db-snippet">Copy</button>
+  </div>
+  <pre class="hc-code"><code id="db-snippet" th:text="${db.snippet}"># decide: ...</code></pre>
 </th:block>

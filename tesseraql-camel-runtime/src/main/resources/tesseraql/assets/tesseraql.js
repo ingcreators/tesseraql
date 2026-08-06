@@ -131,6 +131,42 @@ document.addEventListener("hc:confirmed", (event) => {
     source.form.requestSubmit(source);
 });
 
+// Save hotkey (docs/studio-ux-refresh.md slice 5): Ctrl/Cmd+S submits the page's save form —
+// the one marked data-tql-hotkey-save (the Studio source editor) — instead of the browser's
+// save-page dialog. Declarative and page-scoped: pages without the attribute keep the default.
+document.addEventListener("keydown", (event) => {
+    if ((event.ctrlKey || event.metaKey) && !event.altKey && event.key.toLowerCase() === "s") {
+        const form = document.querySelector("form[data-tql-hotkey-save]");
+        if (form) {
+            event.preventDefault();
+            form.requestSubmit();
+        }
+    }
+});
+
+// Conditional builder fields (slice 5, hc-briefs.md brief 6): a form control marked
+// data-tql-switch drives the visibility of same-form elements marked data-tql-show-for
+// (a space-separated list of switch values). Hidden fields still submit; the services
+// ignore what the chosen operation does not read. Stand-in until the kit owns a
+// declarative show-when behavior.
+const syncShowFor = () => {
+    for (const sw of document.querySelectorAll("[data-tql-switch]")) {
+        const form = sw.closest("form");
+        if (!form) {
+            continue;
+        }
+        for (const el of form.querySelectorAll("[data-tql-show-for]")) {
+            el.hidden = !el.getAttribute("data-tql-show-for").split(/\s+/).includes(sw.value);
+        }
+    }
+};
+document.addEventListener("change", (event) => {
+    if (event.target instanceof Element && event.target.matches("[data-tql-switch]")) {
+        syncShowFor();
+    }
+});
+document.addEventListener("DOMContentLoaded", syncShowFor);
+
 // Theme persistence (roadmap Phase 48): the kit's installThemeToggle (hc 0.1.9) flips
 // data-theme on <html> and fires hc:themechange — client-side only, by design. The stored
 // preference is the source of truth (framework toggles carry no data-persist), so every

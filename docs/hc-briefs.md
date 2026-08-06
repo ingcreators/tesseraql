@@ -294,6 +294,51 @@ actions are free to be buttons again.
 
 ---
 
+## Brief 6 — declarative conditional field visibility
+
+*Found 2026-08-06 (Studio UX refresh slice 5, converging the Studio builders on one recipe).
+Not yet filed.*
+
+### Problem
+
+A form whose fields depend on a mode selector — "operation: insert" needs no filter column,
+"rule: range" needs a second bound — has no kit primitive to hide the fields the chosen mode
+does not read. The declarative options today are all bad: leave every field visible (the form
+reads as more complex than the task), re-render the form server-side on every selector change
+(a round-trip that loses focus and half-typed values), or hand-rolled JS (which a strict
+`default-src 'self'` CSP forces into the app bundle, where every consumer reinvents it).
+
+### Proposal
+
+A behavior-driven contract, mirroring the confirm/copy attribute style:
+
+- `data-hc-show-when="<value> [<value> …]"` on any element, naming the values under which it
+  is visible;
+- the controlling input is the closest form's `[data-hc-show-switch]` control (or a
+  `data-hc-show-src="<selector>"` override for cross-form cases);
+- the behavior toggles the `hidden` attribute (never `display` inline styles), re-evaluates on
+  `change`, and runs once at install so server-rendered state is honored;
+- hidden controls keep submitting — filtering values is the server's job, visibility is
+  presentation.
+
+### CSP
+
+- Behavior in the bundle; **no inline JS**.
+
+### Acceptance criteria
+
+- Changing the switch shows/hides the marked elements without any request or focus loss.
+- Initial page state is correct before any interaction (install-time evaluation).
+- Elements swapped in by htmx are picked up (the install-on-`htmx:load` idiom the other
+  behaviors use).
+
+### TesseraQL stand-in to retire
+
+The `data-tql-switch` / `data-tql-show-for` listener in `tesseraql.js` (the Studio SQL and
+validation builders) — delete once the kit owns this.
+
+---
+
 ## Notes
 
 - Two adjacent gaps were found to be **already shipped** in hc 0.1.5 and have been adopted, not

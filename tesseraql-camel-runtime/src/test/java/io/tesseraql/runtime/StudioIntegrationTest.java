@@ -1347,19 +1347,23 @@ class StudioIntegrationTest {
     }
 
     @Test
-    void uiSourceToolPanelsAreCollapsibleDisclosures() throws Exception {
-        // Track H3: the editor's secondary tools are uniform collapsible disclosures so the page is
-        // no longer an overwhelming stack of open panels. Rendered preview stays open (primary
-        // feedback); the on-demand tools collapse.
+    void uiSourceToolPanelsAreTabsBesideTheStickyActionBar() throws Exception {
+        // UX-refresh slice 5: the editor's on-demand tools are kit tabs (one panel at a time,
+        // keyboard-navigable), the rendered preview sits beside the editor in the two-column
+        // layout, and Save / Apply / Discard live in a sticky action bar — Save also answering
+        // Ctrl/Cmd+S via the form's data-tql-hotkey-save marker, and Discard (the page's one
+        // destructive action) finally confirmed.
         HttpResponse<String> response = get("/_tesseraql/studio/ui/source?path="
                 + enc("web/users/fragments/table/get.yml"), true);
 
         assertThat(response.statusCode()).isEqualTo(200);
         assertThat(response.body())
-                .contains("<details class=\"hc-collapsible\" open")
-                .contains("<summary class=\"hc-collapsible__trigger\">Rendered preview")
-                .contains("<summary class=\"hc-collapsible__trigger\">Tests")
-                // the bulky heading-stacked layout is gone — these are summaries now, not <h2>
+                .contains("class=\"hc-tabs\"").contains("role=\"tablist\"")
+                .contains("id=\"tab-tests\"").contains("id=\"panel-tests\"")
+                .contains("class=\"tql-editor-layout\"").contains("Rendered preview")
+                .contains("class=\"tql-editor-bar\"").contains("data-tql-hotkey-save")
+                .contains("form=\"save-form\"")
+                // the bulky heading-stacked layout is gone — these are tabs now, not <h2>
                 .doesNotContain("<h2>Rendered preview</h2>").doesNotContain("<h2>Tests</h2>");
     }
 
@@ -1788,12 +1792,14 @@ class StudioIntegrationTest {
                 .isEqualTo(303);
         assertThat(get("/_tesseraql/studio/ui/source?path=" + enc(path), true).body())
                 .contains("unsaved draft")
-                .contains("Compare against saved source")
+                // the comparison is the Compare tab (slice 5), selected because a draft exists
+                .contains("id=\"tab-compare\"").contains("id=\"panel-compare\"")
                 // the compare panel renders a real unified diff (draft differs from the source)
                 .contains("data-mode=\"diff\"")
                 // the diff lines are server-tokenized (the SQL draft has a SELECT keyword)
                 .contains("class=\"hc-code__tok\" data-tok=\"keyword\"")
-                .contains("Discard draft");
+                // Discard is in the sticky bar, and — slice 5 — finally confirmed
+                .contains("Discard draft").contains("data-hc-confirm-title=\"Discard draft\"");
 
         // Discarding redirects back and the badge is gone (the source is restored in the editor).
         HttpResponse<String> discard = postForm("/_tesseraql/studio/ui/discard",
@@ -1874,6 +1880,43 @@ class StudioIntegrationTest {
     }
 
     @Test
+    void wizardPreviewRendersTheGeneratedYamlAndAdvancesTheStepper() throws Exception {
+        // UX-refresh slice 5: the wizard mounts the hc-stepper (Configure → Review YAML →
+        // Apply), previews the SAME .yml.tpl the download serves before either path, and the
+        // persistent overlay write is the emphasized (primary) action.
+        String page = get("/_tesseraql/studio/ui/wizard/oidc", true).body();
+        assertThat(page).contains("class=\"hc-stepper\"").contains("id=\"wizard-stepper\"")
+                .contains("hx-post=\"/_tesseraql/studio/ui/wizard/preview\"")
+                .contains("id=\"wizard-preview\"");
+        // The primary action is the overlay write, not the download.
+        int write = page.indexOf("data-variant=\"primary\" type=\"submit\"");
+        int download = page.indexOf("Generate &amp; download config");
+        assertThat(write).isNotNegative();
+        assertThat(download).isGreaterThan(write);
+
+        HttpResponse<String> preview = postForm("/_tesseraql/studio/ui/wizard/preview",
+                "kind=oidc&discoveryUri="
+                        + enc("https://idp.example.com/.well-known/openid-configuration")
+                        + "&clientId=my-app&redirectUri=" + enc("https://app.example.com/cb")
+                        + "&scopes=" + enc("openid profile") + "&provision=false");
+        assertThat(preview.statusCode()).isEqualTo(200);
+        assertThat(preview.body())
+                // the rendered tpl, escaped into the page
+                .contains("discoveryUri: &quot;https://idp.example.com/"
+                        + ".well-known/openid-configuration&quot;")
+                .contains("clientId: &quot;my-app&quot;")
+                .contains("data-hc-copy=\"#wizard-yaml\"")
+                // the out-of-band stepper advances the page's indicator to Review YAML
+                .contains("hx-swap-oob=\"true\"").contains("aria-current=\"step\"")
+                .contains("Review YAML");
+
+        // The template name comes from a fixed whitelist (TQL-STUDIO-4240) — an unknown kind
+        // is refused, never resolved as a path.
+        assertThat(postForm("/_tesseraql/studio/ui/wizard/preview", "kind=nope").statusCode())
+                .isGreaterThanOrEqualTo(400);
+    }
+
+    @Test
     void wizardSubmitRejectsMissingRequiredField() throws Exception {
         HttpResponse<String> result = postForm("/_tesseraql/studio/ui/wizard/saml",
                 "acsUrl=" + enc("https://app.example.com/acs"));
@@ -1894,6 +1937,12 @@ class StudioIntegrationTest {
         // The editable caller sees the V/R create form (Studio backlog: migration authoring).
         assertThat(response.body()).contains("New migration").contains("Versioned")
                 .contains("Repeatable").contains("name=\"description\"");
+        // UX-refresh slice 5: the DDL is the kit's editable code surface, and the generators
+        // APPEND to it (hx-swap=beforeend) instead of silently replacing what was written.
+        assertThat(response.body()).contains("id=\"mig-ddl\"")
+                .contains("data-editable data-gutter=\"line-numbers\" data-lang=\"tql-sql\"")
+                .contains("hx-target=\"#mig-ddl\" hx-swap=\"beforeend\"")
+                .doesNotContain("hx-target=\"#mig-ddl\" hx-swap=\"innerHTML\"");
     }
 
     @Test
@@ -2625,6 +2674,10 @@ class StudioIntegrationTest {
         // because only this path evaluates the template — the model name is the kind of mistake
         // that compiles, passes every unit test, and answers 500.
         assertThat(response.body()).contains("use a shared rule").contains("id=\"vb-rules\"");
+        // UX-refresh slice 5 (one builder recipe): the operation switch hides the fields the
+        // chosen rule does not read (the data-tql-show-for bootstrap stand-in, brief 6).
+        assertThat(response.body()).contains("data-tql-switch")
+                .contains("data-tql-show-for=\"range\"");
     }
 
     @Test
@@ -2635,7 +2688,9 @@ class StudioIntegrationTest {
         assertThat(response.statusCode()).isEqualTo(200);
         // The generated snippet is HTML-escaped in the fragment (>= becomes &gt;=).
         assertThat(response.body()).contains("validate:").contains("body.age &gt;= 18")
-                .contains("field: age");
+                .contains("field: age")
+                // slice 5: the snippet carries its copy affordance (the kit's installCopy).
+                .contains("data-hc-copy=\"#vb-snippet\"").contains("id=\"vb-snippet\"");
     }
 
     @Test
@@ -2658,7 +2713,9 @@ class StudioIntegrationTest {
         // Every input of the contract is laid out — an omission fails the load
         // (TQL-DECISION-4706), and a snippet that fails the load is worse than none.
         assertThat(response.body()).contains("decide:").contains("use: shippingFee")
-                .contains("weight: params.weight").contains("region: params.region");
+                .contains("weight: params.weight").contains("region: params.region")
+                // slice 5: the snippet carries its copy affordance (the kit's installCopy).
+                .contains("data-hc-copy=\"#db-snippet\"").contains("id=\"db-snippet\"");
     }
 
     @Test
@@ -3038,7 +3095,8 @@ class StudioIntegrationTest {
         HttpResponse<String> response = get("/_tesseraql/studio/ui/migration", true);
 
         assertThat(response.statusCode()).isEqualTo(200);
-        assertThat(response.body()).contains("From schema changes").contains("Generate from diff");
+        // Slice 5: the diff generator appends to the DDL editor instead of replacing it.
+        assertThat(response.body()).contains("From schema changes").contains("Append from diff");
     }
 
     @Test
