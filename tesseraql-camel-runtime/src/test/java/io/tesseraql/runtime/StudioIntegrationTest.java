@@ -1658,6 +1658,46 @@ class StudioIntegrationTest {
     }
 
     @Test
+    void uiCommandPaletteMountsInTheShellAndServesDynamicGroups() throws Exception {
+        // UX-refresh slice 7: every Studio page mounts the kit's hc-command dialog (⌘K via the
+        // behavior's data-hotkey, a visible sidebar trigger via the bootstrap opener) with the
+        // sidebar destinations server-rendered and the route/job groups loading lazily on
+        // first open (intersect once — nothing fetched until the palette is visible).
+        String page = get("/_tesseraql/studio/ui/health", true).body();
+        assertThat(page)
+                .contains("class=\"hc-command-dialog\" id=\"studio-command\" data-hotkey=\"k\"")
+                .contains("class=\"hc-command__input\"").contains("role=\"combobox\"")
+                .contains(
+                        "class=\"hc-command__item\" role=\"option\" data-value=\"/_tesseraql/studio/ui/docs/schema\"")
+                .contains("data-tql-open-dialog=\"#studio-command\"")
+                .contains("hx-get=\"/_tesseraql/studio/ui/command\"")
+                .contains("hx-trigger=\"intersect once\"")
+                .contains("class=\"hc-command__empty\"");
+
+        // The dynamic fragment: routes and jobs as open-in-editor entries, route folders as
+        // "new route here" entries (edit-gated).
+        String fragment = get("/_tesseraql/studio/ui/command", true).body();
+        assertThat(fragment).contains("Open in editor")
+                .contains("GET /api/users · users.search")
+                .contains("/_tesseraql/studio/ui/source?path=web%2Fapi%2Fusers%2Fget.yml")
+                .contains("job directory.sync")
+                .contains("New route here")
+                .contains("New route in web/api/users/")
+                .contains("/_tesseraql/studio/ui?create=web%2Fapi%2Fusers%2F");
+    }
+
+    @Test
+    void uiExplorerCreateParamAutoOpensTheSeededDrawer() throws Exception {
+        // The palette's "new route here" landing: ?create=<prefix>/ renders the auto-loading
+        // drawer trigger, seeded to the folder; the explorer also hints the palette (⌘K).
+        String page = get("/_tesseraql/studio/ui?create=" + enc("web/api/users/"), true).body();
+        assertThat(page)
+                .contains("hx-get=\"/_tesseraql/studio/ui/new?prefix=web/api/users/\"")
+                .contains("hx-trigger=\"load\"")
+                .contains("class=\"hc-kbd\"");
+    }
+
+    @Test
     void uiExplorerFolderOffersContextualNewRoute() throws Exception {
         // Studio sidebar IA: each folder offers a contextual create drawer trigger — since
         // slice 4 a hover/focus-revealed row action in the folder's hc-tree row, an <a href>

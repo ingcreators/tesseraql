@@ -1697,6 +1697,59 @@ public final class TesseraqlRuntime implements AutoCloseable {
                             model.put("scaffoldEnabled", scaffoldEnabled && canEdit);
                             // Echo the filter query (Studio backlog C4) so the input keeps its value.
                             model.put("query", q);
+                            // The palette's "new route here" landing (studio-ux-refresh
+                            // slice 7): ?create=<prefix>/ auto-opens the drawer, seeded.
+                            Object create = params.get("create");
+                            model.put("createPrefix", canEdit && create != null
+                                    ? String.valueOf(create)
+                                    : "");
+                            return model;
+                        })
+                        // The command palette's dynamic groups (studio-ux-refresh slice 7):
+                        // every route/job as an open-in-editor entry, each route folder as a
+                        // "new route here" entry (edit-gated — creation is).
+                        .register("studio.command", params -> {
+                            io.tesseraql.studio.StudioService.Explorer explorer = studio
+                                    .explorer("");
+                            java.util.List<Map<String, Object>> entries = new java.util.ArrayList<>();
+                            java.util.Set<String> folderPaths = new java.util.TreeSet<>();
+                            for (io.tesseraql.studio.StudioService.RouteSummary route : explorer
+                                    .routes()) {
+                                Map<String, Object> row = new java.util.LinkedHashMap<>();
+                                row.put("label", route.method() + " " + route.path() + " · "
+                                        + route.id());
+                                row.put("url", "/_tesseraql/studio/ui/source?path="
+                                        + java.net.URLEncoder.encode(route.source(),
+                                                java.nio.charset.StandardCharsets.UTF_8));
+                                entries.add(row);
+                                int slash = route.source().lastIndexOf('/');
+                                if (slash > 0) {
+                                    folderPaths.add(route.source().substring(0, slash));
+                                }
+                            }
+                            for (io.tesseraql.studio.StudioService.JobSummary job : explorer
+                                    .jobs()) {
+                                Map<String, Object> row = new java.util.LinkedHashMap<>();
+                                row.put("label", "job " + job.id());
+                                row.put("url", "/_tesseraql/studio/ui/source?path="
+                                        + java.net.URLEncoder.encode(job.source(),
+                                                java.nio.charset.StandardCharsets.UTF_8));
+                                entries.add(row);
+                            }
+                            java.util.List<Map<String, Object>> folders = new java.util.ArrayList<>();
+                            for (String path : folderPaths) {
+                                Map<String, Object> row = new java.util.LinkedHashMap<>();
+                                row.put("path", path);
+                                row.put("url", "/_tesseraql/studio/ui?create="
+                                        + java.net.URLEncoder.encode(path + "/",
+                                                java.nio.charset.StandardCharsets.UTF_8));
+                                folders.add(row);
+                            }
+                            Map<String, Object> model = new java.util.LinkedHashMap<>();
+                            model.put("entries", entries);
+                            model.put("folders", folders);
+                            model.put("editable",
+                                    studioAccess.canEdit(params.get("roles")));
                             return model;
                         })
                         // The New-route drawer fragment (Studio sidebar IA): echoes the folder prefix a

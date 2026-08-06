@@ -27,6 +27,8 @@
            hx-get="/_tesseraql/studio/ui" hx-trigger="keyup changed delay:250ms, search"
            hx-target="#explorer-tree" hx-select="#explorer-tree" hx-swap="outerHTML"
            hx-indicator="next .htmx-indicator">
+    <!-- The palette hint (slice 7): this box filters the tree; ⌘K searches everything. -->
+    <kbd class="hc-kbd" aria-hidden="true" title="Command palette">&#8984;K</kbd>
     <th:block th:replace="~{tql/shell :: busy('Filtering…')}"/>
     <th:block th:if="${studio.editable}">
       <button type="button" class="hc-button" data-variant="primary" data-size="sm"
@@ -48,6 +50,11 @@
   <div class="hc-card__body hc-stack">
   <!-- installRemoteDialog opens the first <dialog> swapped in here with showModal() (the drawer). -->
   <div id="new-route-dialog" data-hc-remote-dialog-root th:if="${studio.editable}"></div>
+  <!-- The palette's "new route here" landing (slice 7): ?create=<prefix>/ auto-opens the
+       New-route drawer seeded to that folder — same drawer, same remote-dialog root. -->
+  <div th:if="${studio.editable and !#strings.isEmpty(studio.createPrefix)}"
+       th:attr="hx-get=|/_tesseraql/studio/ui/new?prefix=${studio.createPrefix}|"
+       hx-trigger="load" hx-target="#new-route-dialog" hx-swap="innerHTML"></div>
   <!-- The directory tree is the kit's hc-tree (docs/studio-ux-refresh.md slice 4): semantic
        nested <ul>/<li> upgraded by installTree with the APG keyboard model (roving tabindex,
        arrow-key traversal, type-ahead) — replacing the hand-rolled <details> disclosures and

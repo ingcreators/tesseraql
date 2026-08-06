@@ -1,0 +1,17 @@
+<!-- The command palette's dynamic groups (docs/studio-ux-refresh.md slice 7), swapped over
+     the shell palette's lazy placeholder. Item values are URLs; the bootstrap's
+     hc:commandselect listener navigates. -->
+<th:block xmlns:th="http://www.thymeleaf.org">
+  <div class="hc-command__group" role="group" aria-labelledby="cmd-open"
+       th:unless="${#lists.isEmpty(cmd.entries)}">
+    <div class="hc-command__group-heading" id="cmd-open">Open in editor</div>
+    <div class="hc-command__item" role="option" th:each="e : ${cmd.entries}"
+         th:attr="data-value=${e.url}" th:text="${e.label}"></div>
+  </div>
+  <div class="hc-command__group" role="group" aria-labelledby="cmd-new"
+       th:if="${cmd.editable and !#lists.isEmpty(cmd.folders)}">
+    <div class="hc-command__group-heading" id="cmd-new">New route here</div>
+    <div class="hc-command__item" role="option" th:each="f : ${cmd.folders}"
+         th:attr="data-value=${f.url}" th:text="|New route in ${f.path}/|"></div>
+  </div>
+</th:block>

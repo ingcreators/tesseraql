@@ -171,6 +171,63 @@
 <th:block th:fragment="studio-page(title, header, content)"
           th:replace="~{tql/shell :: shell-impl(${title}, ~{tql/shell :: studio-nav}, ${header}, ${content}, true, 'compact')}"/>
 <th:block th:fragment="studio-nav">
+  <!-- The command palette (docs/studio-ux-refresh.md slice 7): the kit's hc-command in its
+       dialog form — ⌘K/Ctrl+K via the behavior's data-hotkey, plus this visible trigger (the
+       data-tql-open-dialog bootstrap opener; dialogs have no declarative opener yet). The
+       Navigate group mirrors this sidebar's destinations; the routes / jobs / new-route-here
+       groups load lazily from the studio app the first time the palette becomes visible
+       (hx-trigger="intersect once" — nothing is fetched until the palette is opened).
+       Selection is wired by the bootstrap's hc:commandselect listener: item values are URLs. -->
+  <button type="button" class="hc-item" data-tql-open-dialog="#studio-command">
+    <span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use href="/assets/_tesseraql/icons.svg#search"/></svg></span>
+    <span class="hc-item__title hc-shell__label">Search <kbd class="hc-kbd">&#8984;K</kbd></span>
+  </button>
+  <dialog class="hc-command-dialog" id="studio-command" data-hotkey="k">
+    <div class="hc-command">
+      <input class="hc-command__input" type="text" role="combobox" autofocus
+             placeholder="Type a page, route, or job&hellip;" aria-label="Command palette">
+      <div class="hc-command__list" role="listbox" id="studio-command-list">
+        <div class="hc-command__group" role="group" aria-labelledby="cmd-nav">
+          <div class="hc-command__group-heading" id="cmd-nav">Navigate</div>
+          <div class="hc-command__item" role="option" data-value="/_tesseraql/studio/ui">Explorer</div>
+          <div class="hc-command__item" role="option" data-value="/_tesseraql/studio/ui/docs">Docs overview</div>
+          <div class="hc-command__item" role="option" data-value="/_tesseraql/studio/ui/docs/schema">Schema</div>
+          <div class="hc-command__item" role="option" data-value="/_tesseraql/studio/ui/docs/domains">Domains</div>
+          <div class="hc-command__item" role="option" data-value="/_tesseraql/studio/ui/docs/rules">Rules</div>
+          <div class="hc-command__item" role="option" data-value="/_tesseraql/studio/ui/docs/decisions">Decisions</div>
+          <div class="hc-command__item" role="option" data-value="/_tesseraql/studio/ui/docs/coverage">Coverage</div>
+          <div class="hc-command__item" role="option" data-value="/_tesseraql/studio/ui/docs/release-diff">Release diff</div>
+          <div class="hc-command__item" role="option" data-value="/_tesseraql/studio/ui/docs/export">Export</div>
+          <div class="hc-command__item" role="option" data-value="/_tesseraql/studio/ui/scaffold">Scaffold</div>
+          <div class="hc-command__item" role="option" data-value="/_tesseraql/studio/ui/sql-builder">SQL builder</div>
+          <div class="hc-command__item" role="option" data-value="/_tesseraql/studio/ui/validation-builder">Validation builder</div>
+          <div class="hc-command__item" role="option" data-value="/_tesseraql/studio/ui/decision-builder">Decide builder</div>
+          <div class="hc-command__item" role="option" data-value="/_tesseraql/studio/ui/decisions">Decision rows</div>
+          <div class="hc-command__item" role="option" data-value="/_tesseraql/studio/ui/migration">Migration</div>
+          <div class="hc-command__item" role="option" data-value="/_tesseraql/studio/ui/menu">Menu</div>
+          <div class="hc-command__item" role="option" data-value="/_tesseraql/studio/ui/wizard">Wizards</div>
+          <div class="hc-command__item" role="option" data-value="/_tesseraql/studio/ui/try">API console</div>
+          <div class="hc-command__item" role="option" data-value="/_tesseraql/studio/ui/messages">Messages</div>
+          <div class="hc-command__item" role="option" data-value="/_tesseraql/studio/ui/copilot">Copilot</div>
+          <div class="hc-command__item" role="option" data-value="/_tesseraql/studio/ui/drafts">Drafts</div>
+          <div class="hc-command__item" role="option" data-value="/_tesseraql/studio/ui/audit">Audit</div>
+          <div class="hc-command__item" role="option" data-value="/_tesseraql/studio/ui/health">Health</div>
+          <div class="hc-command__item" role="option" data-value="/_tesseraql/studio/ui/security">Security</div>
+          <div class="hc-command__item" role="option" data-value="/_tesseraql/studio/ui/config">Config</div>
+          <div class="hc-command__item" role="option" data-value="/_tesseraql/studio/ui/data">Data browser</div>
+          <div class="hc-command__item" role="option" data-value="/_tesseraql/studio/ui/flags">Flags</div>
+          <div class="hc-command__item" role="option" data-value="/_tesseraql/studio/ui/connectors">Connectors</div>
+          <div class="hc-command__item" role="option" data-value="/_tesseraql/studio/ui/calendars">Calendars</div>
+          <div class="hc-command__item" role="option" data-value="/_tesseraql/studio/ui/jobs">Job policies</div>
+          <div class="hc-command__item" role="option" data-value="/_tesseraql/ops/console">Operations console</div>
+          <div class="hc-command__item" role="option" data-value="/_tesseraql/admin/users">IAM Admin</div>
+        </div>
+        <div hx-get="/_tesseraql/studio/ui/command" hx-trigger="intersect once"
+             hx-swap="outerHTML"></div>
+      </div>
+      <div class="hc-command__empty" hidden>No results.</div>
+    </div>
+  </dialog>
   <a class="hc-item" href="/_tesseraql/studio/ui"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use href="/assets/_tesseraql/icons.svg#compass"/></svg></span><span class="hc-item__title hc-shell__label">Explorer</span></a>
   <div class="tql-nav__section" role="group" aria-labelledby="tql-nav-docs">
     <p class="tql-nav__group" id="tql-nav-docs">Documentation</p>

@@ -1,9 +1,11 @@
 # Studio UX refresh
 
-> **Status: design.** A full-surface UX review of Studio (all 61 templates under
-> `tesseraql-studio`, the shared shell, and `tesseraql.css`) against Hypermedia Components
-> 0.1.11, and the slice plan that follows from it. Slices land individually; each is
-> shippable alone. This is an internal design document (docs-site `EXCLUDED`).
+> **Status: complete.** All slices (0–7) landed 2026-08-06 (#575–#578 slices 0–3, #579
+> slice 4, #580 slice 5, #581 slice 6, slice 7 = the command palette PR). The one open
+> deferral is the `data-neutral="slate"` dark-ramp evaluation, which needs a screenshot A/B.
+> Originally: a full-surface UX review of Studio (all 61 templates under `tesseraql-studio`,
+> the shared shell, and `tesseraql.css`) against Hypermedia Components 0.1.11, and the slice
+> plan that follows from it. This is an internal design document (docs-site `EXCLUDED`).
 
 ## Motivation
 
