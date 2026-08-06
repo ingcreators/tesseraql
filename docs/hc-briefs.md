@@ -342,6 +342,52 @@ validation builders) — delete once the kit owns this.
 
 ---
 
+## Brief 7 — `hc-table` / `hc-datagrid`: tabular figures by default + a numeric-column modifier
+
+*Filed: [ingcreators/hypermedia-components#430](https://github.com/ingcreators/hypermedia-components/issues/430)
+(found 2026-08-06, extending the Studio governance dashboards' number alignment).*
+
+### Problem
+
+Neither table component does anything for numbers: no `font-variant-numeric`, no numeric-cell
+modifier (`data-align` exists only on the anchored-overlay components). With proportional
+figures, columns of digits — counts, amounts, percentages, timestamps — wobble: `111` is
+visibly narrower than `999`, rows never line up vertically, and scanning a data column becomes
+a reading task instead of a glance. Every data-dense consumer rediscovers this and reaches for
+custom CSS over the kit's cell classes — exactly the drift the markup contract exists to
+prevent.
+
+### Proposal
+
+One safe default plus one declarative opt-in:
+
+- **Tabular figures as the component default**: `font-variant-numeric: tabular-nums` on
+  `.hc-table` cells and `.hc-datagrid__cell` / `.hc-datagrid__headcell`. The property affects
+  digits only, so text cells render unchanged — a blanket default with no real downside in
+  tabular contexts.
+- **A numeric-column modifier**: right-alignment is per-column *semantics*, so a declarative
+  hook the server renders — `data-numeric` on a cell/headcell, styled `text-align: end`
+  (logical, so RTL flips free). Composes with the sortable-header story: numeric columns are
+  the ones most often sorted.
+
+### CSP
+
+- CSS only; no behavior, no inline styles asked of the consumer.
+
+### Acceptance criteria
+
+- Digit runs in table/datagrid cells align vertically out of the box; text cells unchanged.
+- `data-numeric` end-aligns a cell/column, in RTL too.
+- Existing consumers need no markup changes; the modifier is opt-in.
+
+### TesseraQL stand-in
+
+Deliberately **none carried**: table cells are the kit's surface, and nothing is broken —
+misaligned digits are a polish gap, not a defect. The stat tiles' `tabular-nums`
+(`.tql-stat__value`, an app-owned class) stays either way.
+
+---
+
 ## Notes
 
 - Two adjacent gaps were found to be **already shipped** in hc 0.1.5 and have been adopted, not
