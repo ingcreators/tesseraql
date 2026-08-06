@@ -1976,8 +1976,24 @@ public final class TesseraqlRuntime implements AutoCloseable {
                                         : null);
                                 rows.add(row);
                             }
+                            // Severity chips + search (studio-ux-refresh slice 6): the table
+                            // narrows, the stat tiles keep the full counts.
+                            String severity = str(params, "severity");
+                            String healthQ = str(params, "q");
+                            java.util.List<Map<String, Object>> shown = rows.stream()
+                                    .filter(row -> severity == null
+                                            || severity.equals(row.get("severity")))
+                                    .filter(row -> healthQ == null || (row.get("code") + " "
+                                            + row.get("source") + " " + row.get("message"))
+                                            .toLowerCase(java.util.Locale.ROOT)
+                                            .contains(healthQ
+                                                    .toLowerCase(java.util.Locale.ROOT)))
+                                    .toList();
                             Map<String, Object> model = new java.util.LinkedHashMap<>();
-                            model.put("findings", rows);
+                            model.put("findings", shown);
+                            model.put("shown", shown.size());
+                            model.put("severity", severity == null ? "" : severity);
+                            model.put("query", healthQ == null ? "" : healthQ);
                             model.put("total", findings.size());
                             model.put("errors", errors);
                             model.put("warnings", findings.size() - errors);
@@ -2039,8 +2055,30 @@ public final class TesseraqlRuntime implements AutoCloseable {
                                     unusedPolicies++;
                                 }
                             }
+                            // Status chips + search (studio-ux-refresh slice 6): the routes
+                            // table narrows, the stat tiles keep the full counts.
+                            String status = str(params, "status");
+                            String secQ = str(params, "q");
+                            java.util.List<Map<String, Object>> shownRoutes = routes.stream()
+                                    .filter(route -> switch (status == null ? "" : status) {
+                                        case "unprotected" -> Boolean.TRUE
+                                                .equals(route.get("unprotected"));
+                                        case "csrf-gap" -> Boolean.TRUE
+                                                .equals(route.get("csrfGap"));
+                                        case "undefined-policy" -> Boolean.TRUE
+                                                .equals(route.get("unknownPolicy"));
+                                        default -> true;
+                                    })
+                                    .filter(route -> secQ == null || (route.get("method") + " "
+                                            + route.get("path") + " " + route.get("policy"))
+                                            .toLowerCase(java.util.Locale.ROOT)
+                                            .contains(secQ.toLowerCase(java.util.Locale.ROOT)))
+                                    .toList();
                             Map<String, Object> model = new java.util.LinkedHashMap<>();
-                            model.put("routes", routes);
+                            model.put("routes", shownRoutes);
+                            model.put("shown", shownRoutes.size());
+                            model.put("status", status == null ? "" : status);
+                            model.put("query", secQ == null ? "" : secQ);
                             model.put("policies", policies);
                             model.put("totalRoutes", routes.size());
                             model.put("unprotected", unprotected);
@@ -2294,8 +2332,24 @@ public final class TesseraqlRuntime implements AutoCloseable {
                             java.util.List<Map<String, Object>> rows = studio.effectiveConfig();
                             long secrets = rows.stream()
                                     .filter(r -> Boolean.TRUE.equals(r.get("secret"))).count();
+                            // Key/value search (studio-ux-refresh slice 6): the table
+                            // narrows, the header keeps the full counts.
+                            String cfgQ = str(params, "q");
+                            java.util.List<Map<String, Object>> shown = cfgQ == null
+                                    ? rows
+                                    : rows.stream()
+                                            .filter(row -> (row.get("key") + " "
+                                                    + (Boolean.TRUE.equals(row.get("secret"))
+                                                            ? ""
+                                                            : row.get("value")))
+                                                    .toLowerCase(java.util.Locale.ROOT)
+                                                    .contains(cfgQ.toLowerCase(
+                                                            java.util.Locale.ROOT)))
+                                            .toList();
                             Map<String, Object> model = new java.util.LinkedHashMap<>();
-                            model.put("rows", rows);
+                            model.put("rows", shown);
+                            model.put("shown", shown.size());
+                            model.put("query", cfgQ == null ? "" : cfgQ);
                             model.put("count", rows.size());
                             model.put("secretCount", secrets);
                             model.put("settings", studio.editableSettings());
@@ -2830,6 +2884,12 @@ public final class TesseraqlRuntime implements AutoCloseable {
                                     .stream().filter(c -> c.name().equals(name)).findFirst()
                                     .orElse(null);
                             model.put("selected", selected);
+                            // The edit card's draft-aware state (studio-ux-refresh slice 6):
+                            // click-to-toggle edits accumulate on the pending draft, so the
+                            // card must render what the DRAFT holds, not the served source.
+                            model.put("edit", selected == null || selected.tableBacked()
+                                    ? null
+                                    : studio.calendarEditState(name));
                             java.util.Set<java.time.LocalDate> tableHolidays = null;
                             if (selected != null && selected.tableBacked()) {
                                 io.tesseraql.yaml.calendar.Calendars loaded = io.tesseraql.yaml.calendar.Calendars
@@ -2875,6 +2935,16 @@ public final class TesseraqlRuntime implements AutoCloseable {
                             studio.saveCalendar(name, weekend, dates, actorOf(params));
                             return Map.of("saved", name);
                         })
+                        // Click-to-toggle holidays (studio-ux-refresh slice 6): the edit
+                        // card's hc-calendar posts the picked date here; the toggle rides
+                        // the same validated draft flow as the form save.
+                        .register("studio.calendars.toggle", params -> {
+                            studioAccess.requireEdit(params.get("roles"));
+                            String calName = String.valueOf(params.get("name"));
+                            studio.toggleCalendarHoliday(calName, str(params, "date"),
+                                    actorOf(params));
+                            return Map.of("saved", calName);
+                        })
                         // Job operational policies (docs/jobs.md, Studio): trigger + calendar
                         // qualifiers + overlap/sla as a structured form through the draft flow.
                         .register("studio.jobs.view", params -> {
@@ -2886,6 +2956,20 @@ public final class TesseraqlRuntime implements AutoCloseable {
                                 row.put("id", jobFile.definition().id());
                                 row.put("trigger", io.tesseraql.yaml.model.TriggerSpec
                                         .describe(jobFile.definition().trigger()));
+                                // The jobs list (studio-ux-refresh slice 6): calendar and
+                                // the next date the calendar lets a firing count — the same
+                                // decision helper the scheduler and ops console use.
+                                io.tesseraql.yaml.model.TriggerSpec.Schedule schedule = jobFile
+                                        .definition().trigger() == null
+                                                ? null
+                                                : jobFile.definition().trigger().schedule();
+                                row.put("calendar", schedule == null
+                                        || schedule.calendar() == null
+                                        || schedule.calendar().isBlank()
+                                                ? null
+                                                : schedule.calendar());
+                                row.put("next", calendarDecisions.nextCounting(jobFile,
+                                        java.time.LocalDate.now()));
                                 declared.add(row);
                             }
                             declared.sort(java.util.Comparator

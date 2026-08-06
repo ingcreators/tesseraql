@@ -10,33 +10,70 @@
 <div id="page-content" class="hc-stack">
   <p class="hc-alert" data-variant="success" role="status" th:if="${!#strings.isEmpty(added)}">Rule added to <code>config/overlay.yml</code> &mdash; effective immediately.</p>
   <p class="hc-alert" data-variant="success" role="status" th:if="${!#strings.isEmpty(removed)}">Rule removed from <code>config/overlay.yml</code> &mdash; effective immediately.</p>
-  <section class="hc-card">
-    <div class="hc-card__header">Security</div>
-    <div class="hc-card__body hc-stack">
-    <p class="hc-field__message">Each route's authentication and authorization, mapped to the app's
-      policies. Watch for <strong>unprotected</strong> routes (no auth declared), <strong>CSRF
-      gaps</strong> (a state-changing browser route without CSRF), and routes pointing at an
-      <strong>undefined policy</strong>.</p>
+  <!-- The governance dashboard grammar (docs/studio-ux-refresh.md slice 6): stat tiles up top
+       (semantic color only where it flags a problem), status filter + search narrowing the
+       routes table server-side, severity stripes on flagged rows. -->
+  <div class="tql-stats">
+    <div class="tql-stat">
+      <span class="tql-stat__value" th:text="${sec.totalRoutes}">0</span>
+      <span class="tql-stat__label">routes</span>
     </div>
-  </section>
+    <div class="tql-stat" th:attr="data-tone=${sec.unprotected > 0} ? 'error' : null">
+      <span class="tql-stat__value" th:text="${sec.unprotected}">0</span>
+      <span class="tql-stat__label">unprotected</span>
+    </div>
+    <div class="tql-stat" th:attr="data-tone=${sec.csrfGaps > 0} ? 'warning' : null">
+      <span class="tql-stat__value" th:text="${sec.csrfGaps}">0</span>
+      <span class="tql-stat__label">CSRF gaps</span>
+    </div>
+    <div class="tql-stat" th:attr="data-tone=${sec.unknownPolicies > 0} ? 'warning' : null">
+      <span class="tql-stat__value" th:text="${sec.unknownPolicies}">0</span>
+      <span class="tql-stat__label">undefined policy</span>
+    </div>
+    <div class="tql-stat" th:attr="data-tone=${sec.unusedPolicies > 0} ? 'warning' : null">
+      <span class="tql-stat__value" th:text="${sec.unusedPolicies}">0</span>
+      <span class="tql-stat__label">unused policies</span>
+    </div>
+    <div class="tql-stat">
+      <span class="tql-stat__value" th:text="${sec.policyCount}">0</span>
+      <span class="tql-stat__label">policies</span>
+    </div>
+  </div>
 
   <section class="hc-card">
     <div class="hc-card__header">
       Routes
       <span class="hc-spacer"></span>
-      <span class="hc-badge" th:text="|${sec.totalRoutes} route(s)|">0 route(s)</span>
-      <span class="hc-badge" th:attr="data-variant=${sec.unprotected > 0} ? 'error' : null"
-            th:text="|${sec.unprotected} unprotected|">0 unprotected</span>
-      <span class="hc-badge" th:attr="data-variant=${sec.csrfGaps > 0} ? 'warning' : null"
-            th:text="|${sec.csrfGaps} CSRF gap(s)|">0 CSRF gap(s)</span>
-      <span class="hc-badge" th:attr="data-variant=${sec.unknownPolicies > 0} ? 'warning' : null"
-            th:text="|${sec.unknownPolicies} undefined-policy|">0 undefined-policy</span>
-      <span class="hc-badge" th:attr="data-variant=${sec.unusedPolicies > 0} ? 'warning' : null"
-            th:text="|${sec.unusedPolicies} unused-policy|">0 unused-policy</span>
-      <span class="hc-badge" th:text="|${sec.policyCount} policy(ies)|">0 policy(ies)</span>
+      <input class="hc-input" data-size="sm" id="security-filter" type="search" name="q"
+             th:value="${sec.query}" aria-label="Filter by method, path, policy"
+             placeholder="Filter by method, path, policy&hellip;" autocomplete="off"
+             hx-get="/_tesseraql/studio/ui/security" hx-trigger="keyup changed delay:250ms, search"
+             hx-target="#security-routes" hx-select="#security-routes" hx-swap="outerHTML"
+             hx-indicator="next .htmx-indicator"
+             th:attr="hx-vals=|{&quot;status&quot;:&quot;${sec.status}&quot;}|">
+      <th:block th:replace="~{tql/shell :: busy('Filtering…')}"/>
     </div>
     <div class="hc-card__body hc-stack">
-    <div class="hc-datagrid">
+    <p class="hc-field__message">Each route's authentication and authorization, mapped to the app's
+      policies. Watch for <strong>unprotected</strong> routes (no auth declared), <strong>CSRF
+      gaps</strong> (a state-changing browser route without CSRF), and routes pointing at an
+      <strong>undefined policy</strong>.</p>
+    <!-- URL-routed hc-tabs (the kit's second tabs pattern): the active filter is aria-current. -->
+    <nav class="hc-tabs__list" aria-label="Status filter">
+      <a class="hc-tabs__tab" href="/_tesseraql/studio/ui/security"
+         th:attr="aria-current=${#strings.isEmpty(sec.status)} ? 'page' : null">All</a>
+      <a class="hc-tabs__tab" href="/_tesseraql/studio/ui/security?status=unprotected"
+         th:attr="aria-current=${sec.status == 'unprotected'} ? 'page' : null">Unprotected</a>
+      <a class="hc-tabs__tab" href="/_tesseraql/studio/ui/security?status=csrf-gap"
+         th:attr="aria-current=${sec.status == 'csrf-gap'} ? 'page' : null">CSRF gaps</a>
+      <a class="hc-tabs__tab" href="/_tesseraql/studio/ui/security?status=undefined-policy"
+         th:attr="aria-current=${sec.status == 'undefined-policy'} ? 'page' : null">Undefined policy</a>
+    </nav>
+    <div id="security-routes" class="hc-stack">
+    <div class="hc-empty" th:if="${#lists.isEmpty(sec.routes)}">
+      <p class="hc-empty__title">No routes match.</p>
+    </div>
+    <div class="hc-datagrid" th:unless="${#lists.isEmpty(sec.routes)}">
       <div class="hc-datagrid__scroll">
         <table class="hc-datagrid__table">
           <thead class="hc-datagrid__head"><tr>
@@ -46,7 +83,8 @@
             <th class="hc-datagrid__headcell">CSRF</th>
           </tr></thead>
           <tbody class="hc-datagrid__body">
-            <tr class="hc-datagrid__row" th:each="r : ${sec.routes}">
+            <tr class="hc-datagrid__row" th:each="r : ${sec.routes}"
+                th:classappend="${r.unprotected} ? 'tql-stripe-error' : (${r.csrfGap or r.unknownPolicy} ? 'tql-stripe-warning' : null)">
               <td class="hc-datagrid__cell">
                 <a th:href="${r.sourceUrl}"><span th:text="${r.method}">GET</span>
                   <code th:text="${r.path}">/path</code></a>
@@ -59,8 +97,7 @@
               <td class="hc-datagrid__cell">
                 <span th:if="${r.policy}">
                   <code th:text="${r.policy}">policy</code>
-                  <span class="hc-badge" data-variant="warning" th:if="${r.unknownPolicy}"
-                        title="No policy with this id is defined">undefined</span>
+                  <span class="hc-badge" data-variant="warning" th:if="${r.unknownPolicy}">undefined</span>
                 </span>
                 <span th:unless="${r.policy}">&mdash;</span>
               </td>
@@ -72,6 +109,7 @@
           </tbody>
         </table>
       </div>
+    </div>
     </div>
     </div>
   </section>

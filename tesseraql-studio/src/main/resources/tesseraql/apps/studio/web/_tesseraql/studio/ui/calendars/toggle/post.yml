@@ -1,0 +1,28 @@
+version: tesseraql/v1
+id: tql.studio.calendars.toggle
+kind: route
+recipe: command-json
+
+# Click-to-toggle holidays (docs/studio-ux-refresh.md slice 6): picking a date in the
+# edit card's hc-calendar posts here; the date is added to — or removed from — the
+# calendar's holiday list through the same validated draft flow as the form save.
+input:
+  name:
+    type: string
+    required: true
+  date:
+    type: string
+    required: true
+
+sql:
+  service: studio.calendars.toggle
+  params:
+    name: params.name
+    date: params.date
+    roles: principal.roles
+    actor: principal.loginId
+
+response:
+  redirect:
+    status: 303
+    location: /_tesseraql/studio/ui/calendars?name={params.name}&saved=1

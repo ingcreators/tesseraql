@@ -8,27 +8,62 @@
   </div>
 </th:block>
 <div id="page-content" class="hc-stack">
+  <!-- The governance dashboard grammar (docs/studio-ux-refresh.md slice 6): stat tiles with
+       tabular numerals up top (semantic color only where it carries meaning), then chips +
+       search narrowing the table server-side (htmx swap, indicator on the input), severity
+       stripes on the rows. -->
+  <div class="tql-stats">
+    <div class="tql-stat" th:attr="data-tone=${health.errors > 0} ? 'error' : null">
+      <span class="tql-stat__value" th:text="${health.errors}">0</span>
+      <span class="tql-stat__label">errors</span>
+    </div>
+    <div class="tql-stat" th:attr="data-tone=${health.warnings > 0} ? 'warning' : null">
+      <span class="tql-stat__value" th:text="${health.warnings}">0</span>
+      <span class="tql-stat__label">warnings</span>
+    </div>
+    <div class="tql-stat">
+      <span class="tql-stat__value" th:text="${health.total}">0</span>
+      <span class="tql-stat__label">findings</span>
+    </div>
+  </div>
   <section class="hc-card">
     <div class="hc-card__header">
       Health
       <span class="hc-spacer"></span>
-      <span class="hc-badge" th:attr="data-variant=${health.errors > 0} ? 'error' : null"
-            th:text="|${health.errors} error(s)|">0 error(s)</span>
-      <span class="hc-badge" th:attr="data-variant=${health.warnings > 0} ? 'warning' : null"
-            th:text="|${health.warnings} warning(s)|">0 warning(s)</span>
+      <input class="hc-input" data-size="sm" id="health-filter" type="search" name="q"
+             th:value="${health.query}" aria-label="Filter by code, source, message"
+             placeholder="Filter by code, source, message&hellip;" autocomplete="off"
+             hx-get="/_tesseraql/studio/ui/health" hx-trigger="keyup changed delay:250ms, search"
+             hx-target="#health-table" hx-select="#health-table" hx-swap="outerHTML"
+             hx-indicator="next .htmx-indicator"
+             th:attr="hx-vals=|{&quot;severity&quot;:&quot;${health.severity}&quot;}|">
+      <th:block th:replace="~{tql/shell :: busy('Filtering…')}"/>
     </div>
     <div class="hc-card__body hc-stack">
     <p class="hc-field__message">The app linter's findings &mdash; the same checks the
       <code>lint</code> CLI/Maven goal runs (unknown recipes, missing SQL files, unprotected or
       misconfigured security, dangling references, i18n gaps, and more). Fix findings before shipping;
       each error also fails the build gate.</p>
+    <!-- URL-routed hc-tabs (the kit's second tabs pattern): plain navigation, the active
+         filter marked aria-current — the browser owns keyboard and focus. -->
+    <nav class="hc-tabs__list" aria-label="Severity filter">
+      <a class="hc-tabs__tab" href="/_tesseraql/studio/ui/health"
+         th:attr="aria-current=${#strings.isEmpty(health.severity)} ? 'page' : null">All</a>
+      <a class="hc-tabs__tab" href="/_tesseraql/studio/ui/health?severity=error"
+         th:attr="aria-current=${health.severity == 'error'} ? 'page' : null">Errors</a>
+      <a class="hc-tabs__tab" href="/_tesseraql/studio/ui/health?severity=warning"
+         th:attr="aria-current=${health.severity == 'warning'} ? 'page' : null">Warnings</a>
+    </nav>
 
+    <div id="health-table" class="hc-stack">
     <div class="hc-empty" th:if="${health.clean}">
       <p class="hc-empty__title">No issues found.</p>
       <p class="hc-empty__description">The app passes every lint check.</p>
     </div>
-
-    <div class="hc-datagrid" th:unless="${health.clean}">
+    <div class="hc-empty" th:if="${!health.clean and #lists.isEmpty(health.findings)}">
+      <p class="hc-empty__title">No findings match.</p>
+    </div>
+    <div class="hc-datagrid" th:unless="${#lists.isEmpty(health.findings)}">
       <div class="hc-datagrid__scroll">
         <table class="hc-datagrid__table">
           <thead class="hc-datagrid__head"><tr>
@@ -38,7 +73,8 @@
             <th class="hc-datagrid__headcell">Message</th>
           </tr></thead>
           <tbody class="hc-datagrid__body">
-            <tr class="hc-datagrid__row" th:each="f : ${health.findings}">
+            <tr class="hc-datagrid__row" th:each="f : ${health.findings}"
+                th:classappend="${f.error} ? 'tql-stripe-error' : 'tql-stripe-warning'">
               <td class="hc-datagrid__cell">
                 <span class="hc-badge" th:attr="data-variant=${f.error} ? 'error' : 'warning'"
                       th:text="${f.severity}">error</span>
@@ -55,6 +91,7 @@
           </tbody>
         </table>
       </div>
+    </div>
     </div>
     </div>
   </section>

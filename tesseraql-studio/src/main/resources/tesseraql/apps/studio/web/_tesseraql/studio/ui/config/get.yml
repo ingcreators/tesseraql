@@ -7,11 +7,17 @@ input:
   saved:
     type: string
     required: false
+  # Key/value search (docs/studio-ux-refresh.md slice 6): narrows the effective-config
+  # table server-side; the header count always shows the full total.
+  q:
+    type: string
+    required: false
 
 sql:
   service: studio.config
   params:
     roles: principal.roles
+    q: params.q
 
 response:
   html:

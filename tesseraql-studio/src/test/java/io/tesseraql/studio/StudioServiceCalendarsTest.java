@@ -100,6 +100,36 @@ class StudioServiceCalendarsTest {
         assertThat(Files.readString(created)).contains("uk-banking").contains("2026-12-25");
     }
 
+    @Test
+    void toggleAddsThenRemovesAHolidayThroughTheDraftFlow(@TempDir Path dir) throws Exception {
+        // Click-to-toggle (studio-ux-refresh slice 6): toggling rides the same validated
+        // draft flow as the form save, and successive toggles accumulate on the draft —
+        // calendarEditState reads the PENDING draft, not the served source.
+        StudioService studio = studio(dir, false);
+
+        studio.toggleCalendarHoliday("jp-banking", "2026-12-31", "it");
+        StudioService.CalendarEditState added = studio.calendarEditState("jp-banking");
+        assertThat(added.dates()).containsExactly("2026-06-05", "2026-12-31");
+        assertThat(added.draftPending()).isTrue();
+
+        studio.toggleCalendarHoliday("jp-banking", "2026-12-31", "it");
+        assertThat(studio.calendarEditState("jp-banking").dates())
+                .containsExactly("2026-06-05");
+    }
+
+    @Test
+    void toggleRefusesBadDatesUnknownAndTableBackedCalendars(@TempDir Path dir)
+            throws Exception {
+        StudioService studio = studio(dir, false);
+
+        assertThatThrownBy(() -> studio.toggleCalendarHoliday("jp-banking", "not-a-date", "it"))
+                .isInstanceOf(TqlException.class).hasMessageContaining("ISO date");
+        assertThatThrownBy(() -> studio.toggleCalendarHoliday("nope", "2026-12-31", "it"))
+                .isInstanceOf(TqlException.class).hasMessageContaining("No calendar");
+        assertThatThrownBy(() -> studio.toggleCalendarHoliday("market", "2026-12-31", "it"))
+                .isInstanceOf(TqlException.class).hasMessageContaining("table-backed");
+    }
+
     private static StudioService.CalendarDayCell cell(StudioService.CalendarMonthGrid grid,
             int day) {
         return grid.weeks().stream().flatMap(List::stream)

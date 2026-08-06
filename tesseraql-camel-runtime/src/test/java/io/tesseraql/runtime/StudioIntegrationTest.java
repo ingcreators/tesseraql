@@ -2379,6 +2379,42 @@ class StudioIntegrationTest {
     }
 
     @Test
+    void uiHealthSeverityChipsAndSearchNarrowTheFindings() throws Exception {
+        // UX-refresh slice 6: stat tiles up top, URL-routed severity tabs, and the header
+        // search — all narrowing server-side while the tiles keep the full counts.
+        String bad = "web/api/lintprobe2/get.yml";
+        Files.createDirectories(appHome.resolve("web/api/lintprobe2"));
+        Files.writeString(appHome.resolve(bad), """
+                version: tesseraql/v1
+                id: lint.probe2
+                kind: route
+                recipe: not-a-real-recipe
+                response:
+                  json:
+                    body:
+                      ok: true
+                """);
+        try {
+            String page = get("/_tesseraql/studio/ui/health", true).body();
+            assertThat(page).contains("class=\"tql-stat\"").contains("findings")
+                    .contains(
+                            "class=\"hc-tabs__tab\" href=\"/_tesseraql/studio/ui/health?severity=error\"")
+                    .contains("id=\"health-filter\"").contains("id=\"health-table\"")
+                    .contains("tql-stripe-error");
+
+            // The unknown-recipe probe is an error, so the warning chip hides it…
+            assertThat(get("/_tesseraql/studio/ui/health?severity=warning", true).body())
+                    .doesNotContain("lintprobe2");
+            // …and the search finds it by source.
+            assertThat(get("/_tesseraql/studio/ui/health?q=lintprobe2", true).body())
+                    .contains("web/api/lintprobe2/get.yml");
+        } finally {
+            Files.deleteIfExists(appHome.resolve(bad));
+            Files.deleteIfExists(appHome.resolve("web/api/lintprobe2"));
+        }
+    }
+
+    @Test
     void uiHealthDashboardRequiresAuthentication() throws Exception {
         assertThat(get("/_tesseraql/studio/ui/health", false).statusCode()).isEqualTo(401);
     }
@@ -2392,10 +2428,41 @@ class StudioIntegrationTest {
         // the policy's rule summary (users.read grants a USER_READ role).
         assertThat(response.body()).contains("Security").contains("/admin/users")
                 .contains("users.read").contains("USER_READ");
-        // /users is a public page, so an unprotected route is flagged.
-        assertThat(response.body()).contains("no auth");
         // The policy → routes reverse link surfaces how many routes each policy guards.
-        assertThat(response.body()).contains("route(s)").contains("unused-policy");
+        assertThat(response.body()).contains("route(s)");
+        // UX-refresh slice 6 (governance grammar): the headline counts are stat tiles —
+        // semantic color only where a count flags a problem (the fixture has unused policies
+        // but no unprotected routes) — the status filter is the kit's URL-routed tabs, and
+        // the header search narrows server-side.
+        assertThat(response.body()).contains("class=\"tql-stat\"")
+                .contains("unused policies").contains("data-tone=\"warning\"")
+                .contains(
+                        "class=\"hc-tabs__tab\" href=\"/_tesseraql/studio/ui/security?status=unprotected\"")
+                .contains("id=\"security-filter\"").contains("id=\"security-routes\"");
+    }
+
+    @Test
+    void uiSecurityOverviewStatusChipsAndSearchNarrowTheRoutesTable() throws Exception {
+        // The chips and search narrow the ROUTES TABLE server-side (the shell nav and the
+        // policies card mention the same paths, so assertions slice to the swapped region);
+        // every fixture route is protected, so the unprotected chip shows the honest empty
+        // state while the stat tiles keep the full counts.
+        String unprotected = routesRegion(
+                get("/_tesseraql/studio/ui/security?status=unprotected", true).body());
+        assertThat(unprotected).contains("No routes match").doesNotContain("/admin/users");
+
+        String searched = routesRegion(
+                get("/_tesseraql/studio/ui/security?q=" + enc("/admin/users"), true).body());
+        assertThat(searched).contains("/admin/users").doesNotContain("/api/probe");
+    }
+
+    /** The #security-routes swap region — what the header search and chips actually narrow. */
+    private static String routesRegion(String page) {
+        int start = page.indexOf("id=\"security-routes\"");
+        int end = page.indexOf(">Policies<", start);
+        assertThat(start).isNotNegative();
+        assertThat(end).isGreaterThan(start);
+        return page.substring(start, end);
     }
 
     @Test
@@ -2823,6 +2890,91 @@ class StudioIntegrationTest {
         } finally {
             Files.deleteIfExists(flags);
         }
+    }
+
+    @Test
+    void uiFlagsBooleanTogglesAreSwitchesAndRemoveIsConfirmed() throws Exception {
+        // UX-refresh slice 6: a boolean flag is the kit's switch (submit-on-change stand-in),
+        // and removing a LIVE flag gates on a confirm.
+        Path flags = appHome.resolve("config/flags.yml");
+        try {
+            Files.writeString(flags, "flags:\n  beta: true\n");
+            String page = get("/_tesseraql/studio/ui/flags", true).body();
+            assertThat(page)
+                    .contains("class=\"hc-switch\" type=\"checkbox\" role=\"switch\"")
+                    .contains("data-tql-submit-on-change")
+                    .contains("data-hc-confirm-title=\"Remove flag\"")
+                    .contains("data-hc-confirm-variant=\"error\"");
+        } finally {
+            Files.deleteIfExists(flags);
+        }
+    }
+
+    @Test
+    void uiConfigSearchNarrowsTheEffectiveKeys() throws Exception {
+        // UX-refresh slice 6: the drafts/audit header-search idiom on the config table.
+        String page = get("/_tesseraql/studio/ui/config", true).body();
+        assertThat(page).contains("id=\"config-filter\"").contains("id=\"config-table\"");
+
+        assertThat(get("/_tesseraql/studio/ui/config?q=zzz-no-such-key", true).body())
+                .contains("No keys match");
+        assertThat(get("/_tesseraql/studio/ui/config?q=" + enc("tesseraql.studio"), true).body())
+                .contains("key(s) match").contains("tesseraql.studio");
+    }
+
+    @Test
+    void uiCalendarsClickToToggleHolidayAccumulatesOnTheDraft() throws Exception {
+        // UX-refresh slice 6: the edit card mounts the kit's hc-calendar; picking a date posts
+        // the toggle, which lands through the same validated draft flow as the form save —
+        // and the card renders the PENDING DRAFT, so successive toggles accumulate visibly.
+        Path calendar = appHome.resolve("calendars/it-toggle.yml");
+        Path draft = appHome.resolve("work/studio/drafts/calendars/it-toggle.yml");
+        Files.createDirectories(calendar.getParent());
+        Files.writeString(calendar, """
+                version: tesseraql/v1
+                calendars:
+                  it-toggle:
+                    weekend: [saturday, sunday]
+                    holidays:
+                      dates: [2026-01-01]
+                """);
+        try {
+            String page = get("/_tesseraql/studio/ui/calendars?name=it-toggle", true).body();
+            assertThat(page).contains("class=\"hc-calendar\"").contains("data-name=\"date\"")
+                    .contains("hx-post=\"/_tesseraql/studio/ui/calendars/toggle\"")
+                    .contains("hx-trigger=\"hc:calendarchange\"")
+                    .contains("2026-01-01");
+
+            // Toggling a new date adds it to the draft…
+            assertThat(postForm("/_tesseraql/studio/ui/calendars/toggle",
+                    "name=it-toggle&date=2026-12-31").statusCode()).isEqualTo(303);
+            assertThat(Files.readString(draft)).contains("2026-12-31").contains("2026-01-01");
+            String toggled = get("/_tesseraql/studio/ui/calendars?name=it-toggle", true).body();
+            assertThat(toggled).contains("2026-12-31").contains("unapplied draft");
+
+            // …and toggling it again removes it from the same draft.
+            assertThat(postForm("/_tesseraql/studio/ui/calendars/toggle",
+                    "name=it-toggle&date=2026-12-31").statusCode()).isEqualTo(303);
+            assertThat(Files.readString(draft)).doesNotContain("2026-12-31")
+                    .contains("2026-01-01");
+        } finally {
+            Files.deleteIfExists(draft);
+            Files.deleteIfExists(calendar);
+        }
+    }
+
+    @Test
+    void uiJobsPageListsDeclaredJobsAboveThePolicyForm() throws Exception {
+        // UX-refresh slice 6: the declared jobs render as a real list — id, trigger story,
+        // calendar, calendar-next — with the id opening the policy form (fieldset-grouped).
+        String page = get("/_tesseraql/studio/ui/jobs", true).body();
+        assertThat(page).contains("Job policies")
+                .contains("Calendar next").contains("directory.sync")
+                .contains("/_tesseraql/studio/ui/jobs?name=directory.sync");
+
+        String form = get("/_tesseraql/studio/ui/jobs?name=" + enc("directory.sync"), true)
+                .body();
+        assertThat(form).contains("Policies");
     }
 
     @Test
