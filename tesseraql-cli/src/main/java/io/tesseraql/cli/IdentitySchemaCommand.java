@@ -4,7 +4,7 @@ import io.tesseraql.apptasks.IdentityBootstrap;
 import io.tesseraql.report.DriverManagerDataSource;
 import io.tesseraql.yaml.config.AppConfig;
 import io.tesseraql.yaml.manifest.ManifestLoader;
-import java.nio.file.Files;
+import io.tesseraql.yaml.secret.SecretFiles;
 import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.List;
@@ -79,7 +79,7 @@ final class IdentitySchemaCommand implements Callable<Integer> {
 
     private String adminPassword() throws Exception {
         if (adminPasswordFile != null) {
-            return Files.readString(adminPasswordFile).trim();
+            return SecretFiles.readTrimmed(adminPasswordFile);
         }
         String env = System.getenv("TESSERAQL_ADMIN_PASSWORD");
         if (env == null || env.isBlank()) {

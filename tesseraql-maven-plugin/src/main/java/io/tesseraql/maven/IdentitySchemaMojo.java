@@ -2,9 +2,9 @@ package io.tesseraql.maven;
 
 import io.tesseraql.apptasks.IdentityBootstrap;
 import io.tesseraql.report.DriverManagerDataSource;
+import io.tesseraql.yaml.secret.SecretFiles;
 import java.io.File;
 import java.io.IOException;
-import java.nio.file.Files;
 import java.sql.SQLException;
 import java.util.Arrays;
 import java.util.List;
@@ -96,7 +96,7 @@ public class IdentitySchemaMojo extends AbstractMojo {
     private String adminPassword() throws MojoExecutionException {
         if (adminPasswordFile != null) {
             try {
-                return Files.readString(adminPasswordFile.toPath()).trim();
+                return SecretFiles.readTrimmed(adminPasswordFile.toPath());
             } catch (IOException ex) {
                 throw new MojoExecutionException("Cannot read tesseraql.adminPasswordFile: "
                         + ex.getMessage(), ex);
