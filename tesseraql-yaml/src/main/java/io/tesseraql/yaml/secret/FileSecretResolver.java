@@ -46,7 +46,7 @@ public final class FileSecretResolver implements SecretResolver {
             return null;
         }
         try {
-            return Files.readString(file).trim();
+            return SecretFiles.readTrimmed(file);
         } catch (IOException ex) {
             throw new UncheckedIOException(ex);
         }

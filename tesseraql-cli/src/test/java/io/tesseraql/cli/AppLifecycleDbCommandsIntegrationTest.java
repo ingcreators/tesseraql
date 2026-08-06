@@ -7,6 +7,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
@@ -77,6 +78,12 @@ class AppLifecycleDbCommandsIntegrationTest {
         // The managed IAM schema applies idempotently.
         assertThat(execute(args(app, "identity-schema"))).isZero();
         assertThat(execute(args(app, "identity-schema"))).isZero();
+
+        // The admin seed accepts a PowerShell-5.1-style password file (UTF-16LE with a BOM).
+        Path passwordFile = dir.resolve("admin.pw");
+        Files.write(passwordFile, "\uFEFFs3cr3t\r\n".getBytes(StandardCharsets.UTF_16LE));
+        assertThat(execute(args(app, "identity-schema", "--admin-login", "admin",
+                "--admin-password-file", passwordFile.toString()))).isZero();
     }
 
     /** A command (with any positional) plus {@code --app} and the container's datasource flags. */
