@@ -8,6 +8,7 @@
   </div>
 </th:block>
 <div id="page-content" class="hc-stack">
+  <p class="hc-alert" data-variant="success" role="status" th:if="${!#strings.isEmpty(saved)}">Setting saved to <code>config/overlay.yml</code> &mdash; it applies on the <strong>next start</strong>.</p>
   <section class="hc-card">
     <h2>Configuration</h2>
     <p class="hc-field__message">The app's effective configuration &mdash;

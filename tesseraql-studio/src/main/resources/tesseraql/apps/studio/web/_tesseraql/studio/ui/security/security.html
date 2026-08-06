@@ -8,6 +8,8 @@
   </div>
 </th:block>
 <div id="page-content" class="hc-stack">
+  <p class="hc-alert" data-variant="success" role="status" th:if="${!#strings.isEmpty(added)}">Rule added to <code>config/overlay.yml</code> &mdash; effective immediately.</p>
+  <p class="hc-alert" data-variant="success" role="status" th:if="${!#strings.isEmpty(removed)}">Rule removed from <code>config/overlay.yml</code> &mdash; effective immediately.</p>
   <section class="hc-card">
     <h2>Security</h2>
     <p class="hc-field__message">Each route's authentication and authorization, mapped to the app's

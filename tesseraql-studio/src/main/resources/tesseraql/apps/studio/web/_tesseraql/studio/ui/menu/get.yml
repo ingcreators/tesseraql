@@ -3,6 +3,17 @@ id: tql.studio.menu
 kind: route
 recipe: query-html
 
+input:
+  added:
+    type: string
+    required: false
+  moved:
+    type: string
+    required: false
+  removed:
+    type: string
+    required: false
+
 sql:
   service: studio.menu.view
   params:
@@ -14,3 +25,6 @@ response:
     template: menu.html
     model:
       menu: sql
+      added: params.added
+      moved: params.moved
+      removed: params.removed

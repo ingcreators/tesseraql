@@ -9,6 +9,9 @@
   </div>
 </th:block>
 <div id="page-content" class="hc-stack">
+  <p class="hc-alert" data-variant="success" role="status" th:if="${!#strings.isEmpty(added)}">Menu item added.</p>
+  <p class="hc-alert" data-variant="success" role="status" th:if="${!#strings.isEmpty(moved)}">Menu order updated.</p>
+  <p class="hc-alert" data-variant="success" role="status" th:if="${!#strings.isEmpty(removed)}">Menu item removed.</p>
   <section class="hc-card" th:unless="${menu.editable}">
     <div class="hc-empty">
       <p class="hc-empty__title">You do not have permission to edit the menu.</p>
