@@ -147,4 +147,6 @@ export const EXCLUDED = [
   'batch-platform.md',
   // Analytics experience (browse named datasources, kit charts, export step), 2026-08-01.
   'analytics-experience.md',
+  // Studio UX refresh (full-surface review + slice plan), 2026-08-06.
+  'studio-ux-refresh.md',
 ];
