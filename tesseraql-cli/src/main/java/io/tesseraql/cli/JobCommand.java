@@ -377,7 +377,7 @@ final class JobCommand implements Callable<Integer> {
 
     /** The in-process wiring `serve` boots, reduced to what a single run needs. */
     private Wiring wire(AppManifest manifest) throws Exception {
-        DriverManagerDataSource main = datasource.resolve(manifest.config());
+        DriverManagerDataSource main = datasource.resolve(manifest.config(), app);
         JobRepository repository = new JobRepository(main);
         repository.ensureSchema();
         io.tesseraql.operations.outbox.JdbcOutboxStore outbox = new io.tesseraql.operations.outbox.JdbcOutboxStore(

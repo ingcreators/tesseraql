@@ -7,11 +7,13 @@ import java.util.Optional;
 import picocli.CommandLine.Option;
 
 /**
- * Shared datasource options for the database-touching subcommands. Mixed into a command with
+ * Shared datasource options for the database-touching subcommands ({@code identity-schema},
+ * {@code migrate}, {@code test}, {@code scaffold crud}, ...). Mixed into a command with
  * {@code @Mixin}, it exposes {@code --jdbc-url/--username/--password} and resolves a
  * {@link DriverManagerDataSource}, falling back to the app's {@code tesseraql.datasources.main.*}
- * config when no URL is given — the same resolution the {@code mcp} dev-tools and
- * {@code scaffold crud} use, kept in one place so the CLI surfaces never drift.
+ * config when no URL is given, kept in one place so the CLI surfaces never drift. (The
+ * {@code mcp} dev-tools still carry their own copy of the config fallback — argument-driven,
+ * not option-driven.)
  */
 final class CliDatasource {
 

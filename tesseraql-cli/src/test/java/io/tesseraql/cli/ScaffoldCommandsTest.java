@@ -9,7 +9,6 @@ import java.sql.DriverManager;
 import java.sql.Statement;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-import picocli.CommandLine;
 
 /**
  * The Phase 23 CLI surface: {@code tesseraql new} and {@code tesseraql scaffold crud} compose
@@ -108,7 +107,29 @@ class ScaffoldCommandsTest {
                 "--route", "web/board/get.yml")).isEqualTo(1);
     }
 
+    @Test
+    void scaffoldCrudPicksUpTheRunningEmbeddedDbMarker(@TempDir Path dir) throws Exception {
+        assertThat(execute("new", "demo", "--dir", dir.toString())).isZero();
+        Path app = dir.resolve("demo");
+        String url = "jdbc:h2:" + dir.resolve("marker-db");
+        try (Connection connection = DriverManager.getConnection(url);
+                Statement statement = connection.createStatement()) {
+            statement.execute(Files.readString(
+                    app.resolve("db/migration/V1__create_items.sql")));
+        }
+        // What a running `serve --embedded-db` leaves behind. The skeleton's configured
+        // datasource (localhost:5432) does not answer here, so resolution falls through to
+        // the marker — no --jdbc-url needed, the first-login hand-off contract.
+        Files.createDirectories(app.resolve("work"));
+        Files.writeString(app.resolve("work/embedded-db.jdbc"), url + System.lineSeparator());
+
+        assertThat(execute("scaffold", "crud", "--app", app.toString(), "--table", "items"))
+                .isZero();
+        assertThat(app.resolve("web/items/list.view.yml")).exists();
+        assertThat(app.resolve("tests/items-crud-test.yml")).exists();
+    }
+
     private static int execute(String... args) {
-        return new CommandLine(new TesseraqlCli()).execute(args);
+        return TesseraqlCli.commandLine().execute(args);
     }
 }

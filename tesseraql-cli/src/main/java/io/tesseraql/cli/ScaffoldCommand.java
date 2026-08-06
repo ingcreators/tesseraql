@@ -12,12 +12,12 @@ import io.tesseraql.yaml.scaffold.TableSchema;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.sql.Connection;
-import java.sql.DriverManager;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Callable;
 import picocli.CommandLine;
 import picocli.CommandLine.Command;
+import picocli.CommandLine.Mixin;
 import picocli.CommandLine.Option;
 
 /**
@@ -48,15 +48,8 @@ final class ScaffoldCommand implements Runnable {
         @Option(names = {"--table"}, required = true, description = "The table to scaffold.")
         String table;
 
-        @Option(names = {"--jdbc-url"}, description = "JDBC URL to introspect"
-                + " (default: the app's main datasource).")
-        String jdbcUrl;
-
-        @Option(names = {"--username"}, description = "Database user for --jdbc-url.")
-        String username;
-
-        @Option(names = {"--password"}, description = "Database password for --jdbc-url.")
-        String password;
+        @Mixin
+        CliDatasource datasource;
 
         @Option(names = {"--force"}, description = "Overwrite edited and user-owned files.")
         boolean force;
@@ -83,25 +76,14 @@ final class ScaffoldCommand implements Runnable {
         }
 
         /**
-         * Connects to {@code --jdbc-url} with the {@code --username}/{@code --password} options,
-         * or falls back to the app's main datasource (URL and credentials) when no URL is given.
+         * Connects with the shared {@link CliDatasource} resolution: an explicit
+         * {@code --jdbc-url}, then the app's main datasource, then a running
+         * {@code serve --embedded-db} (its {@code work/embedded-db.jdbc} marker) when the
+         * config does not resolve or answer — so scaffolding works against the embedded
+         * database another terminal is serving, like {@code identity-schema} does.
          */
         private TableSchema introspect(AppConfig config) throws Exception {
-            String url = jdbcUrl;
-            String user = username;
-            String pass = password;
-            if (url == null) {
-                url = config.getString("tesseraql.datasources.main.jdbcUrl").orElseThrow(
-                        () -> new IllegalArgumentException("No --jdbc-url given and the app"
-                                + " config declares no tesseraql.datasources.main.jdbcUrl"));
-                if (user == null) {
-                    user = config.getString("tesseraql.datasources.main.username").orElse(null);
-                }
-                if (pass == null) {
-                    pass = config.getString("tesseraql.datasources.main.password").orElse(null);
-                }
-            }
-            try (Connection connection = DriverManager.getConnection(url, user, pass)) {
+            try (Connection connection = datasource.resolve(config, app).getConnection()) {
                 return new TableIntrospector().introspect(connection, table);
             }
         }

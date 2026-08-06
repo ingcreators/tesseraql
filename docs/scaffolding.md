@@ -53,7 +53,10 @@ tesseraql scaffold crud --app . --table items \
 ```
 
 The table must already exist in the database — apply your migration first (`serve`
-auto-applies `db/migration` on start, or run `tesseraql migrate --app .`). The table's
+auto-applies `db/migration` on start, or run `tesseraql migrate --app .`). Without
+`--jdbc-url` the app's main datasource is introspected; when it does not answer but a
+`serve --embedded-db` is running, its embedded database is used instead (the
+`work/embedded-db.jdbc` hand-off, [getting-started.md](getting-started.md)). The table's
 shape is then read through plain JDBC metadata (columns in ordinal order, primary key,
 single-column unique indexes) and drives the generated slice:
 
