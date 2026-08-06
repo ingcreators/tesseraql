@@ -2181,6 +2181,20 @@ public final class TesseraqlRuntime implements AutoCloseable {
                                     str(params, "value"), actorOf(params));
                             return Map.of("saved", true);
                         })
+                        // The wizards' Review-YAML step (studio-ux-refresh slice 5): render the
+                        // same .yml.tpl the download serves, from the mounted studio app's
+                        // extracted tree, so the preview IS the artifact. No edit gate — it
+                        // echoes the caller's own input and writes nothing.
+                        .register("studio.wizard.preview", params -> {
+                            java.nio.file.Path studioAppRoot = io.tesseraql.yaml.config.WorkHome
+                                    .resolve(appHome, manifest.config()).resolve("apps")
+                                    .resolve("studio");
+                            Map<String, Object> tplParams = new java.util.LinkedHashMap<>(params);
+                            String kind = str(tplParams, "kind");
+                            tplParams.remove("kind");
+                            return Map.of("yaml", io.tesseraql.studio.StudioService
+                                    .renderWizardYaml(studioAppRoot, kind, tplParams));
+                        })
                         .register("studio.wizard.oidc.apply", params -> {
                             studioAccess.requireEdit(params.get("roles"));
                             Map<String, Object> values = new java.util.LinkedHashMap<>();

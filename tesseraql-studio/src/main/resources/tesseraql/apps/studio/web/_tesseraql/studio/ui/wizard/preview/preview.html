@@ -1,0 +1,14 @@
+<!-- The wizard preview fragment (docs/studio-ux-refresh.md slice 5): the generated YAML,
+     escaped, with a copy affordance — swapped into #wizard-preview as the form changes. The
+     out-of-band stepper advances the page's indicator to the Review step, so progress is
+     server-rendered markup end to end. -->
+<th:block xmlns:th="http://www.thymeleaf.org">
+  <div class="hc-cluster">
+    <span class="hc-field__label">Generated YAML</span>
+    <span class="hc-spacer"></span>
+    <button type="button" class="hc-button" data-variant="ghost" data-size="sm"
+            data-hc-copy="#wizard-yaml">Copy</button>
+  </div>
+  <pre class="hc-code"><code id="wizard-yaml" th:text="${w.yaml}"></code></pre>
+  <th:block th:replace="~{templates/wizard.html :: stepper(2, true)}"/>
+</th:block>

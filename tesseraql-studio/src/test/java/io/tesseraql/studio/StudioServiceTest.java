@@ -1196,6 +1196,40 @@ class StudioServiceTest {
                 .findFirst().orElseThrow().status();
     }
 
+    @Test
+    void renderWizardYamlRendersTheDownloadTplWithBlankDefaults() {
+        // The Review-YAML step renders the SAME .yml.tpl the download serves (slice 5); the
+        // bundled studio app tree in this module's resources is the real template root.
+        Path studioAppRoot = Paths.get("src/main/resources/tesseraql/apps/studio");
+
+        String yaml = StudioService.renderWizardYaml(studioAppRoot, "oidc", Map.of(
+                "discoveryUri", "https://idp.example.com/.well-known/openid-configuration",
+                "clientId", "my-app",
+                "redirectUri", "https://app.example.com/cb",
+                "scopes", "openid profile",
+                "postLoginUrl", "/",
+                "provision", "false"));
+
+        assertThat(yaml)
+                .contains("discoveryUri: \"https://idp.example.com/"
+                        + ".well-known/openid-configuration\"")
+                .contains("clientId: \"my-app\"").contains("scopes: \"openid profile\"");
+
+        // A half-filled form previews with blanks — never an error.
+        assertThat(StudioService.renderWizardYaml(studioAppRoot, "oidc",
+                Map.of("clientId", "my-app")))
+                .contains("clientId: \"my-app\"").contains("discoveryUri: \"\"");
+    }
+
+    @Test
+    void renderWizardYamlRefusesAnUnknownKind() {
+        // The template name is built from a fixed whitelist, never from caller input.
+        assertThatThrownBy(() -> StudioService.renderWizardYaml(
+                Paths.get("src/main/resources/tesseraql/apps/studio"), "../secrets", Map.of()))
+                .isInstanceOf(TqlException.class)
+                .hasMessageContaining("TQL-STUDIO-4240");
+    }
+
     private static TableSchema widgetsSchema() {
         return new TableSchema("widgets",
                 List.of(

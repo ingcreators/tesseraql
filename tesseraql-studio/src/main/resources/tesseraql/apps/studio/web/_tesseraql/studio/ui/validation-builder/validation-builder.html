@@ -51,7 +51,9 @@
       <div class="hc-cluster">
         <div class="hc-field">
           <label class="hc-field__label" for="vb-op">Rule</label>
-          <select class="hc-select" id="vb-op" name="operation">
+          <!-- The switch that hides the fields the chosen rule does not read (slice 5,
+               data-tql-show-for — the bootstrap stand-in for hc-briefs.md brief 6). -->
+          <select class="hc-select" id="vb-op" name="operation" data-tql-switch>
             <option value="required">required (not null)</option>
             <option value="not-empty">not empty (string)</option>
             <option value="min">min (&gt;= value)</option>
@@ -65,7 +67,8 @@
             <option value="use">use a shared rule (rules/)</option>
           </select>
         </div>
-        <div class="hc-field">
+        <div class="hc-field"
+             data-tql-show-for="min max range equals not-equals one-of expression sql use">
           <label class="hc-field__label" for="vb-value">Value / expression / SQL file</label>
           <input class="hc-input" id="vb-value" name="value" autocomplete="off" list="vb-rules"
                  placeholder="18 · 'ACTIVE' · a,b,c · body.a == body.b · validate-x.sql · ruleName">
@@ -73,7 +76,7 @@
             <option th:each="r : ${vb.sharedRules}" th:value="${r.name}"></option>
           </datalist>
         </div>
-        <div class="hc-field">
+        <div class="hc-field" data-tql-show-for="range">
           <label class="hc-field__label" for="vb-value2">Value 2 (range)</label>
           <input class="hc-input" id="vb-value2" name="value2" autocomplete="off" placeholder="65">
         </div>

@@ -1831,6 +1831,34 @@ public final class StudioService {
         return false;
     }
 
+    /** The setup wizards whose {@code .yml.tpl} the Review step may render (slice 5). */
+    private static final Set<String> WIZARD_KINDS = Set.of("identity", "oidc", "saml", "scim");
+
+    private static final TqlErrorCode WIZARD_UNKNOWN = new TqlErrorCode(TqlDomain.STUDIO, 4240);
+
+    /**
+     * Renders a setup wizard's {@code .yml.tpl} — the SAME template its download serves — for the
+     * Review-YAML step (docs/studio-ux-refresh.md slice 5), so what is previewed is what either
+     * path produces. {@code studioAppRoot} is the mounted studio app's extracted tree; every
+     * template variable resolves from {@code params} with a blank default, so a half-filled form
+     * previews with blanks instead of erroring. An unknown {@code kind} is refused
+     * ({@code TQL-STUDIO-4240}) — the template name is built from a fixed whitelist, never from
+     * caller input.
+     */
+    public static String renderWizardYaml(Path studioAppRoot, String kind,
+            Map<String, Object> params) {
+        if (kind == null || !WIZARD_KINDS.contains(kind)) {
+            throw new TqlException(WIZARD_UNKNOWN,
+                    "Unknown wizard '" + kind + "' — expected one of " + WIZARD_KINDS);
+        }
+        Map<String, Object> model = new LinkedHashMap<>();
+        params.forEach((key, value) -> model.put(key,
+                value == null ? "" : String.valueOf(value)));
+        return io.tesseraql.yaml.template.Templates.render(studioAppRoot,
+                "web/_tesseraql/studio/ui/wizard/" + kind + "/wizard-" + kind + ".yml.tpl",
+                model);
+    }
+
     /** Blank stays {@code null}; anything else must be a valid secret reference (Track J2). */
     public static String secretReferenceOrNull(String field, String value) {
         String clean = trimToNull(value);

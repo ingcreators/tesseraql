@@ -14,7 +14,15 @@
   <p class="hc-field__message">Generates a tesseraql-oidc.yml fragment to merge into config/tesseraql.yml.
   The client secret is referenced through the secret provider, never pasted here; the generated file
   shows how to add it for a confidential client.</p>
-  <form method="post" action="/_tesseraql/studio/ui/wizard/oidc">
+  <!-- The wizard's steps (docs/studio-ux-refresh.md slice 5): Configure here, the YAML previews
+       live in the Review pane below (advancing the stepper out-of-band), then Apply — the
+       persistent overlay write is the emphasized action; the download is the take-away path. -->
+  <th:block th:replace="~{templates/wizard.html :: stepper(1, false)}"/>
+  <form method="post" action="/_tesseraql/studio/ui/wizard/oidc"
+        hx-post="/_tesseraql/studio/ui/wizard/preview"
+        hx-trigger="change delay:300ms, keyup changed delay:500ms"
+        hx-target="#wizard-preview" hx-swap="innerHTML">
+    <input type="hidden" name="kind" value="oidc">
     <input type="hidden" name="_csrf" th:value="${_csrf}">
     <div class="hc-field">
       <label class="hc-field__label" for="discovery-uri">Discovery URL</label>
@@ -42,13 +50,17 @@
       <select class="hc-select" id="provision" name="provision"><option value="false">false</option><option value="true">true</option></select>
     </div>
     <div class="hc-cluster">
-      <button type="submit" class="hc-button" data-variant="primary">Generate &amp; download config</button>
-      <button class="hc-button" type="submit"
+      <button class="hc-button" data-variant="primary" type="submit"
               formaction="/_tesseraql/studio/ui/wizard/oidc/apply"
               data-hc-confirm="Write these OIDC settings to config/overlay.yml? Only secret references are stored; they apply on the next start."
               data-hc-confirm-title="Write to overlay" data-hc-confirm-label="Write">Write to config overlay</button>
+      <button type="submit" class="hc-button" data-variant="ghost">Generate &amp; download config</button>
     </div>
   </form>
+  <div id="wizard-preview" class="hc-stack" aria-live="polite">
+    <p class="hc-field__message">Fill the form &mdash; the generated YAML previews here before you
+      write it to the overlay or download it.</p>
+  </div>
   </div>
 </section>
 </div>

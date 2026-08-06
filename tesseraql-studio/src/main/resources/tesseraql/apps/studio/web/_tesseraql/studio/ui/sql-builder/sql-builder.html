@@ -18,8 +18,13 @@
       snippet is prefixed with a <code>-- sql.params</code> comment listing the mappings to add to the
       route &mdash; each binds from <code>params</code>.</p>
     <th:block th:if="${b.hasTables}">
+      <!-- The one builder recipe (docs/studio-ux-refresh.md slice 5): live regeneration on
+           change (300 ms), the result on the kit's code surface with a copy affordance, and
+           the fields the chosen operation does not read hidden (data-tql-switch/-show-for,
+           the bootstrap stand-in for hc-briefs.md brief 6). -->
       <form class="hc-stack" hx-post="/_tesseraql/studio/ui/sql-builder/build"
-            hx-target="#sql-out" hx-swap="innerHTML" hx-disabled-elt="find button">
+            hx-target="#sql-out" hx-swap="innerHTML" hx-trigger="submit, change delay:300ms"
+            hx-disabled-elt="find button">
         <div class="hc-cluster">
           <div class="hc-field"><label class="hc-field__label">Table</label>
             <select class="hc-select" name="table" required
@@ -29,7 +34,7 @@
             </select>
           </div>
           <div class="hc-field"><label class="hc-field__label">Operation</label>
-            <select class="hc-select" name="operation">
+            <select class="hc-select" name="operation" data-tql-switch>
               <option value="select-by-pk">select by primary key</option>
               <option value="select-by-column">select by column (=)</option>
               <option value="select-by-column-in">select by column (in list)</option>
@@ -39,7 +44,8 @@
               <option value="delete-by-pk">delete by primary key</option>
             </select>
           </div>
-          <div class="hc-field"><label class="hc-field__label">Filter column (for the &ldquo;select by column&rdquo; operations)</label>
+          <div class="hc-field" data-tql-show-for="select-by-column select-by-column-in select-by-column-optional">
+            <label class="hc-field__label">Filter column</label>
             <select class="hc-select" name="column" id="sql-col"></select>
           </div>
         </div>
@@ -48,9 +54,16 @@
         </div>
       </form>
       <div class="hc-field">
-        <label class="hc-field__label" for="sql-out">Generated SQL</label>
-        <textarea class="hc-input" id="sql-out" rows="8" spellcheck="false"
-                  aria-label="Generated SQL"></textarea>
+        <div class="hc-cluster">
+          <label class="hc-field__label" for="sql-out">Generated SQL</label>
+          <span class="hc-spacer"></span>
+          <button type="button" class="hc-button" data-variant="ghost" data-size="sm"
+                  data-hc-copy="#sql-out">Copy</button>
+        </div>
+        <div class="hc-code" data-editable data-gutter="line-numbers" data-lang="tql-sql">
+          <textarea class="hc-code__input" id="sql-out" rows="8" spellcheck="false"
+                    aria-label="Generated SQL"></textarea>
+        </div>
       </div>
     </th:block>
     <div class="hc-empty" th:unless="${b.hasTables}">

@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<!-- The setup wizards' shared step indicator (docs/studio-ux-refresh.md slice 5): the kit's
+     zero-JavaScript hc-stepper, rendered by the server for every state — the wizard pages mount
+     it at step 1, the preview fragment re-renders it out-of-band at step 2 when the YAML is
+     reviewed, and the applied pages render it fully complete. `step` is the current 1-based step
+     (4 = all complete); `oob` adds hx-swap-oob so an htmx fragment response can update the
+     page's copy in place. -->
+<html xmlns:th="http://www.thymeleaf.org">
+<body>
+<ol class="hc-stepper" id="wizard-stepper" th:fragment="stepper(step, oob)"
+    th:attr="hx-swap-oob=${oob} ? 'true' : null">
+  <li class="hc-stepper__step"
+      th:attr="data-state=${step > 1} ? 'complete' : null,aria-current=${step == 1} ? 'step' : null">
+    <span class="hc-stepper__marker" aria-hidden="true" th:text="${step > 1} ? '&#10003;' : '1'">1</span>
+    <span class="hc-stepper__label">Configure<span class="hc-sr-only" th:if="${step > 1}"> (completed)</span></span>
+  </li>
+  <li class="hc-stepper__step"
+      th:attr="data-state=${step > 2} ? 'complete' : null,aria-current=${step == 2} ? 'step' : null">
+    <span class="hc-stepper__marker" aria-hidden="true" th:text="${step > 2} ? '&#10003;' : '2'">2</span>
+    <span class="hc-stepper__label">Review YAML<span class="hc-sr-only" th:if="${step > 2}"> (completed)</span></span>
+  </li>
+  <li class="hc-stepper__step"
+      th:attr="data-state=${step > 3} ? 'complete' : null,aria-current=${step == 3} ? 'step' : null">
+    <span class="hc-stepper__marker" aria-hidden="true" th:text="${step > 3} ? '&#10003;' : '3'">3</span>
+    <span class="hc-stepper__label">Apply<span class="hc-sr-only" th:if="${step > 3}"> (completed)</span></span>
+  </li>
+</ol>
+</body>
+</html>

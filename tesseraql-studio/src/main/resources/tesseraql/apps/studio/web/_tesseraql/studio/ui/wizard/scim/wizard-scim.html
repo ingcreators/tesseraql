@@ -13,7 +13,13 @@
   <div class="hc-card__body hc-stack">
   <p class="hc-field__message">Generates a tesseraql-scim.yml fragment to merge into config/tesseraql.yml.
   The outbound token stays an environment-variable reference; never paste the literal secret.</p>
-  <form method="post" action="/_tesseraql/studio/ui/wizard/scim">
+  <!-- Configure → Review YAML → Apply (slice 5): live preview below, overlay write emphasized. -->
+  <th:block th:replace="~{templates/wizard.html :: stepper(1, false)}"/>
+  <form method="post" action="/_tesseraql/studio/ui/wizard/scim"
+        hx-post="/_tesseraql/studio/ui/wizard/preview"
+        hx-trigger="change delay:300ms, keyup changed delay:500ms"
+        hx-target="#wizard-preview" hx-swap="innerHTML">
+    <input type="hidden" name="kind" value="scim">
     <input type="hidden" name="_csrf" th:value="${_csrf}">
     <div class="hc-field">
       <label class="hc-field__label" for="scim-groups">Enable group provisioning</label>
@@ -34,13 +40,17 @@
       <p class="hc-field__message">A placeholder resolved from an environment variable at runtime, so the bearer token stays out of the config file.</p>
     </div>
     <div class="hc-cluster">
-      <button type="submit" class="hc-button" data-variant="primary">Generate &amp; download config</button>
-      <button class="hc-button" type="submit"
+      <button class="hc-button" data-variant="primary" type="submit"
               formaction="/_tesseraql/studio/ui/wizard/scim/apply"
               data-hc-confirm="Write these SCIM settings to config/overlay.yml? Only secret references are stored; they apply on the next start."
               data-hc-confirm-title="Write to overlay" data-hc-confirm-label="Write">Write to config overlay</button>
+      <button type="submit" class="hc-button" data-variant="ghost">Generate &amp; download config</button>
     </div>
   </form>
+  <div id="wizard-preview" class="hc-stack" aria-live="polite">
+    <p class="hc-field__message">Fill the form &mdash; the generated YAML previews here before you
+      write it to the overlay or download it.</p>
+  </div>
   </div>
 </section>
 </div>
