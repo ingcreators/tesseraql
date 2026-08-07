@@ -1,8 +1,12 @@
 # Visual page builder
 
-> **Status: design.** This is an internal design document (docs-site `EXCLUDED`);
-> user-facing documentation lands in `declarative-views.md`/`notifications.md`-style
-> pages as the slices ship. Scope: WYSIWYG editing of hand-owned Thymeleaf page
+> **Status: complete.** Both slices landed 2026-08-07: slice 1 (the builder —
+> `PageBuilder` two-shape split, `ui/builder` canvas iframe, manifest-driven
+> palette/inspector, source-editor flow reuse) and slice 2 (the eject ramp —
+> shared `ViewEjects` orchestration consumed by the CLI and `studio.ejectView`,
+> "Eject view to template…" on `view:` routes, builder handoff). This is an
+> internal design document (docs-site `EXCLUDED`); the user-facing documentation
+> lives in `declarative-views.md`. Original scope: WYSIWYG editing of hand-owned Thymeleaf page
 > templates in Studio, built on `@hypermedia-components/editor-kit`, plus the eject
 > ramp that takes a `view:` route to a hand-owned template without leaving Studio.
 > This is the campaign the HTML email design (docs/html-email.md) deferred; it lifts

@@ -85,6 +85,45 @@ class PageBuilderTest {
     }
 
     @Test
+    void actualEjectorOutputIsBuilderEligible(
+            @org.junit.jupiter.api.io.TempDir java.nio.file.Path tmp)
+            throws java.io.IOException {
+        // The eject ramp lands in the builder (docs/page-builder.md D2): a real
+        // ViewEjects run over the helpdesk example produces a template the builder
+        // accepts, and the split reassembles it byte-for-byte.
+        java.nio.file.Path source = java.nio.file.Paths.get("..", "examples", "helpdesk-app")
+                .toAbsolutePath().normalize();
+        java.nio.file.Path app = tmp.resolve("helpdesk-app");
+        try (java.util.stream.Stream<java.nio.file.Path> files = java.nio.file.Files
+                .walk(source)) {
+            files.forEach(path -> {
+                try {
+                    java.nio.file.Path to = app.resolve(source.relativize(path).toString());
+                    if (java.nio.file.Files.isDirectory(path)) {
+                        java.nio.file.Files.createDirectories(to);
+                    } else {
+                        java.nio.file.Files.createDirectories(to.getParent());
+                        java.nio.file.Files.copy(path, to);
+                    }
+                } catch (java.io.IOException ex) {
+                    throw new java.io.UncheckedIOException(ex);
+                }
+            });
+        }
+        io.tesseraql.yaml.view.ViewEjects.Result result = io.tesseraql.yaml.view.ViewEjects
+                .eject(app, new io.tesseraql.yaml.manifest.ManifestLoader().load(app),
+                        "web/tickets/get.yml", false);
+        String template = java.nio.file.Files
+                .readString(app.resolve(result.templatePath()));
+
+        Parts parts = PageBuilder.parse(template).orElseThrow();
+
+        assertThat(parts.shellWrapped()).isTrue();
+        assertThat(parts.prefix() + parts.region() + parts.suffix()).isEqualTo(template);
+        assertThat(parts.prefix()).contains("Ejected from list.view.yml");
+    }
+
+    @Test
     void mailTemplatesParseAsFragmentsButTheComposerOwnsThem() {
         // A composable mail template has no <html> root, so PageBuilder itself accepts it
         // as a fragment — the entry point routes it to the mail composer instead (the

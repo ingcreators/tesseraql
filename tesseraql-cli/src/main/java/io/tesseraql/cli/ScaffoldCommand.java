@@ -211,67 +211,28 @@ final class ScaffoldCommand implements Runnable {
 
         @Override
         public Integer call() throws Exception {
+            // The orchestration is shared with Studio's eject ramp (docs/page-builder.md
+            // D2): ViewEjects locates the route, renders the pattern, writes the
+            // checksum-stamped template and flips view: to template:.
             var manifest = new ManifestLoader().load(app);
-            String normalized = route.replace('\\', '/');
-            io.tesseraql.yaml.manifest.RouteFile routeFile = manifest.routes().stream()
-                    .filter(candidate -> app.toAbsolutePath().normalize()
-                            .relativize(candidate.source()).toString().replace('\\', '/')
-                            .equals(normalized))
-                    .findFirst()
-                    .orElseThrow(() -> new IllegalArgumentException(
-                            "No route at " + normalized));
-            var html = routeFile.definition().response() == null
-                    ? null
-                    : routeFile.definition().response().html();
-            if (html == null || html.view() == null) {
-                System.out.println("Route " + normalized + " declares no response.html.view —"
-                        + " nothing to eject.");
+            io.tesseraql.yaml.view.ViewEjects.Result result;
+            try {
+                result = io.tesseraql.yaml.view.ViewEjects.eject(app, manifest, route, force);
+            } catch (io.tesseraql.core.error.TqlException ex) {
+                System.out.println(ex.getMessage());
                 return 1;
             }
-            Path routeDir = routeFile.source().getParent();
-            Path viewFile = routeDir.resolve(html.view()).normalize();
-            if (!Files.isRegularFile(viewFile)) {
-                viewFile = app.resolve("templates").resolve(html.view()).normalize();
-            }
-            io.tesseraql.yaml.view.ViewSpec spec = io.tesseraql.yaml.view.ViewSpec
-                    .parse(viewFile);
-            List<io.tesseraql.yaml.view.ViewFields.FieldDef> fields = List.of();
-            if (io.tesseraql.yaml.view.ViewSpec.FORM.equals(spec.view())) {
-                var action = manifest.routes().stream()
-                        .filter(candidate -> "POST".equalsIgnoreCase(candidate.httpMethod())
-                                && candidate.urlPath().equals(spec.action()))
-                        .findFirst()
-                        .orElseThrow(() -> new IllegalArgumentException("The view's action "
-                                + spec.action() + " matches no POST route"));
-                fields = io.tesseraql.yaml.view.ViewFields.derive(html.view(), spec,
-                        action.definition().input());
-            }
-            String templateName = html.view().endsWith(".view.yml")
-                    ? html.view().substring(0, html.view().length() - ".view.yml".length())
-                            + ".html"
-                    : html.view() + ".html";
-            Path home = app.toAbsolutePath().normalize();
-            String targetPath = home.relativize(routeDir.resolve(templateName).normalize())
-                    .toString().replace('\\', '/');
-            var ejected = io.tesseraql.yaml.view.ViewEjector.eject(home, routeDir, html.view(),
-                    spec, fields, targetPath);
-            ScaffoldWriter.Report report = new ScaffoldWriter().apply(app, List.of(ejected),
-                    force);
-            report.written().forEach(path -> System.out.println("  wrote     " + path));
-            report.skipped().forEach(path -> System.out.println("  skipped   " + path));
-            if (report.blocked()) {
+            if (result.blocked()) {
+                System.out.println("  skipped   " + result.templatePath());
                 System.out.println("The target template exists with hand edits."
                         + " Rerun with --force to overwrite it.");
                 return 1;
             }
-            Path routePath = routeFile.source();
-            String flipped = io.tesseraql.yaml.view.ViewEjector.flipRoute(
-                    Files.readString(routePath), html.view(), templateName);
-            Files.writeString(routePath, flipped);
-            System.out.println("  flipped   " + normalized + " (view: -> template: "
-                    + templateName + ")");
-            System.out.println("The view document " + html.view() + " no longer drives"
-                    + " rendering; delete it when you are done.");
+            System.out.println("  wrote     " + result.templatePath());
+            System.out.println("  flipped   " + result.routePath()
+                    + " (view: -> template:)");
+            System.out.println("The view document no longer drives rendering; delete it"
+                    + " when you are done.");
             return 0;
         }
     }

@@ -1815,6 +1815,14 @@ public final class TesseraqlRuntime implements AutoCloseable {
                             model.put("mailComposable", path.endsWith(".html")
                                     && io.tesseraql.studio.MailComposer.parse(current)
                                             .isPresent());
+                            // The eject ramp's entry (docs/page-builder.md D2): a route that
+                            // declares response.html.view offers "Eject to template". The
+                            // saved source is authoritative — a draft's view: line does not
+                            // eject until applied.
+                            String saved = studio.sourceIfExists(path);
+                            model.put("ejectableView", path.startsWith("web/")
+                                    && path.endsWith(".yml") && saved != null
+                                    && saved.matches("(?s).*(?m)^\\s*view:\\s*\\S.*"));
                             // On a route SQL file, offer the 2-way SQL builder inline (insert into the
                             // editor): populate its table dropdown from the schema overlay.
                             if (Boolean.TRUE.equals(model.get("isRouteSql"))) {
@@ -1936,6 +1944,29 @@ public final class TesseraqlRuntime implements AutoCloseable {
                                 model.put("regionClass", split.regionClass());
                                 model.put("shellWrapped", split.shellWrapped());
                             }
+                            return model;
+                        })
+                        // The eject ramp (docs/page-builder.md D2): the CLI's eject-view
+                        // orchestration, edit-gated. The manifest re-loads from disk so the
+                        // route state is the on-disk truth, not the boot snapshot; a
+                        // successful flip reloads routes (the scaffold-apply precedent).
+                        .register("studio.ejectView", params -> {
+                            studioAccess.requireEdit(params.get("roles"));
+                            boolean confirm = "true"
+                                    .equals(String.valueOf(params.get("confirm")));
+                            boolean force = "true".equals(String.valueOf(params.get("force")));
+                            studioAccess.requireConfirm(confirm || force);
+                            String path = String.valueOf(params.get("path"));
+                            io.tesseraql.yaml.view.ViewEjects.Result result = io.tesseraql.yaml.view.ViewEjects
+                                    .eject(appHome,
+                                            new ManifestLoader().load(appHome), path, force);
+                            if (!result.blocked()) {
+                                reloader.reload();
+                            }
+                            Map<String, Object> model = new java.util.LinkedHashMap<>();
+                            model.put("routePath", result.routePath());
+                            model.put("templatePath", result.templatePath());
+                            model.put("blocked", result.blocked());
                             return model;
                         })
                         .register("studio.save", params -> {

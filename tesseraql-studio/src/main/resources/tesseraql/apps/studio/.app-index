@@ -83,6 +83,8 @@ web/_tesseraql/studio/ui/drafts/drafts.html
 web/_tesseraql/studio/ui/drafts/get.yml
 web/_tesseraql/studio/ui/dry-run/dry-run.html
 web/_tesseraql/studio/ui/dry-run/post.yml
+web/_tesseraql/studio/ui/eject-view/eject-view.html
+web/_tesseraql/studio/ui/eject-view/post.yml
 web/_tesseraql/studio/ui/explorer.html
 web/_tesseraql/studio/ui/flags/flags.html
 web/_tesseraql/studio/ui/flags/get.yml
