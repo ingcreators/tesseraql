@@ -199,6 +199,29 @@ class StudioIntegrationTest {
     }
 
     @Test
+    void renderPreviewRunsScriptsOnlyOnOptIn() throws Exception {
+        String form = "path=" + enc("web/users/index.html");
+
+        // Default: the fully sandboxed frame — no scripts, ever.
+        HttpResponse<String> inert = postForm("/_tesseraql/studio/ui/render", form);
+        assertThat(inert.statusCode()).isEqualTo(200);
+        assertThat(inert.body()).contains("sandbox=\"\"").doesNotContain("allow-scripts");
+
+        // Opt-in: allow-scripts WITHOUT allow-same-origin (opaque origin) — hc behaviors
+        // initialize, the Studio session and app routes stay unreachable.
+        HttpResponse<String> live = postForm("/_tesseraql/studio/ui/render",
+                form + "&scripts=true");
+        assertThat(live.statusCode()).isEqualTo(200);
+        assertThat(live.body()).contains("sandbox=\"allow-scripts\"")
+                .doesNotContain("allow-same-origin").doesNotContain("sandbox=\"\"");
+
+        // The opaque-origin frame loads ES modules cross-origin: assets answer with CORS.
+        HttpResponse<String> asset = get("/assets/_tesseraql/tesseraql.js", false);
+        assertThat(asset.statusCode()).isEqualTo(200);
+        assertThat(asset.headers().firstValue("Access-Control-Allow-Origin")).contains("*");
+    }
+
+    @Test
     void uiBuilderOpensAShellWrappedPage() throws Exception {
         HttpResponse<String> response = get(
                 "/_tesseraql/studio/ui/builder?path=" + enc("web/users/index.html"), true);

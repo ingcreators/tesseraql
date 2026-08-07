@@ -8,8 +8,15 @@
     </details>
     <details class="hc-stack" th:if="${render.isHtml}" open>
       <summary>Visual preview</summary>
+      <!--/* Live preview (opt-in): allow-scripts WITHOUT allow-same-origin — the document
+             runs in an opaque origin, so hc behaviors initialize (tabs, show-when, code
+             editors) while the frame can reach neither the Studio session nor the app's
+             routes (htmx network calls are CORS-blocked by design). Two literal iframes,
+             never a computed sandbox attribute: a templating slip must fail closed. */-->
       <iframe class="tql-preview-frame" sandbox="" title="Rendered preview"
-              th:attr="srcdoc=${render.previewDoc}"></iframe>
+              th:unless="${scripts == 'true'}" th:attr="srcdoc=${render.previewDoc}"></iframe>
+      <iframe class="tql-preview-frame" sandbox="allow-scripts" title="Rendered preview (scripts running)"
+              th:if="${scripts == 'true'}" th:attr="srcdoc=${render.previewDoc}"></iframe>
     </details>
     <div class="hc-stack" th:if="${render.isPdf}">
       <iframe class="tql-preview-frame" title="PDF preview" th:attr="src=${render.pdfUrl}"></iframe>

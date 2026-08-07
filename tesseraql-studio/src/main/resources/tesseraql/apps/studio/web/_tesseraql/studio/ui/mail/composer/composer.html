@@ -108,11 +108,15 @@
           <textarea id="sample-editor" name="sampleModel" class="hc-code__input" spellcheck="false"
                     aria-label="Sample data" th:text="${cmp.sampleModel}"></textarea>
         </div>
+        <label class="hc-field">
+          <input type="checkbox" id="render-scripts" name="scripts" value="true">
+          Run scripts in the preview &mdash; note real mail clients never run scripts
+        </label>
         <th:block th:replace="~{tql/shell :: busy('Rendering…')}"/>
         <div id="render-result" class="hc-stack" aria-live="polite"
              hx-post="/_tesseraql/studio/ui/render"
-             hx-trigger="load, change delay:400ms from:#composer-content, keyup changed delay:400ms from:#sample-editor"
-             hx-include="#composer-path, #composer-content, #sample-editor"
+             hx-trigger="load, change delay:400ms from:#composer-content, keyup changed delay:400ms from:#sample-editor, change from:#render-scripts"
+             hx-include="#composer-path, #composer-content, #sample-editor, #render-scripts"
              hx-target="this" hx-swap="innerHTML" hx-indicator="previous span"></div>
       </div>
     </div>
