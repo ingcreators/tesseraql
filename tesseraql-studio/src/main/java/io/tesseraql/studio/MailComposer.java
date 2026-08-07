@@ -1,11 +1,6 @@
 package io.tesseraql.studio;
 
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.UncheckedIOException;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -36,10 +31,7 @@ public final class MailComposer {
 
     private static final String LIBRARY = "tql/email/hc-email";
     private static final String LAYOUT = "tql/email/hc-email-layout";
-    private static final String LIBRARY_RESOURCE = "tesseraql/templates/tql/email/hc-email.html";
 
-    private static final Pattern FRAGMENT_SIGNATURE = Pattern
-            .compile("th:fragment=\"(\\w+)(?:\\(([^)]*)\\))?\"");
     private static final Pattern BLOCK = Pattern
             .compile("<div th:replace=\"~\\{" + LIBRARY + " :: (.+?)\\}\"></div>", Pattern.DOTALL);
 
@@ -49,18 +41,12 @@ public final class MailComposer {
     /**
      * The palette — fragment name to parameter names, parsed from the bundled library on
      * the classpath (the app may shadow the bundled file with a re-themed eject, but the
-     * fragment contract is the drift-guarded one, so the palette reads the framework copy).
+     * fragment contract is the drift-guarded one, so the palette reads the framework
+     * copy). Parsing is shared with the mail wiring lint via {@code EmailFragments}.
      */
     public static Map<String, List<String>> palette() {
-        Map<String, List<String>> palette = new LinkedHashMap<>();
-        Matcher matcher = FRAGMENT_SIGNATURE.matcher(libraryHtml());
-        while (matcher.find()) {
-            List<String> params = matcher.group(2) == null || matcher.group(2).isBlank()
-                    ? List.of()
-                    : List.of(matcher.group(2).split(",\\s*"));
-            palette.put(matcher.group(1), params);
-        }
-        return palette;
+        return io.tesseraql.yaml.template.EmailFragments
+                .bundled(io.tesseraql.yaml.template.EmailFragments.LIBRARY);
     }
 
     /**
@@ -269,15 +255,4 @@ public final class MailComposer {
         return -1;
     }
 
-    private static String libraryHtml() {
-        try (InputStream in = MailComposer.class.getClassLoader()
-                .getResourceAsStream(LIBRARY_RESOURCE)) {
-            if (in == null) {
-                throw new IllegalStateException(LIBRARY_RESOURCE + " is not on the classpath");
-            }
-            return new String(in.readAllBytes(), StandardCharsets.UTF_8);
-        } catch (IOException ex) {
-            throw new UncheckedIOException(ex);
-        }
-    }
 }
