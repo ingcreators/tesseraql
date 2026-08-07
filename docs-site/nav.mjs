@@ -155,4 +155,6 @@ export const EXCLUDED = [
   'html-email.md',
   // Visual page builder (editor-kit canvas over ejected templates + eject ramp), 2026-08-07.
   'page-builder.md',
+  // Pages overview + mail wiring lints (post-campaign gap closing), 2026-08-07.
+  'pages-and-mail-lints.md',
 ];
