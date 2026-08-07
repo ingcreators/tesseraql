@@ -34,7 +34,9 @@
       <span class="hc-badge" data-variant="warning" th:if="${cmp.hasDraft}">unsaved draft</span>
     </div>
     <p class="hc-field__message">Click an element in the canvas to select it, drag to reorder
-      (Alt+&uarr;/&darr; from the keyboard), and edit its attributes in the inspector.
+      (Alt+&uarr;/&darr; from the keyboard), double-click a text element to edit it in place
+      (Enter commits, Escape cancels), and edit its attributes &mdash; <code>class</code>
+      included &mdash; in the inspector.
       <code>th:*</code> expressions are edited verbatim; the wrapper around the editable region
       is preserved byte-for-byte. The editable region is re-serialized on save — check the
       source editor's Compare tab before applying.</p>

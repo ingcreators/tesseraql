@@ -109,6 +109,43 @@ async function init() {
     else editor.selection.clear();
   });
 
+  // Double-click edits a leaf's text in place. The browser edits the live text node, so
+  // the DOM is restored before the change goes through the stack as ONE setText — undo
+  // stays coherent and the contenteditable attribute never reaches serialize().
+  doc.addEventListener('dblclick', (event) => {
+    // The deepest element under the pointer, not the block ancestor pick() prefers —
+    // the text being edited lives on the leaf.
+    const el = event.target instanceof Element ? event.target : null;
+    if (!el || el === mount || !mount.contains(el) || el.children.length > 0) return;
+    event.preventDefault();
+    editor.selection.select(el);
+    const original = el.textContent;
+    el.setAttribute('contenteditable', 'plaintext-only');
+    if (el.contentEditable !== 'plaintext-only') el.setAttribute('contenteditable', '');
+    el.focus();
+    const finish = (commit) => {
+      el.removeEventListener('blur', onBlur);
+      el.removeEventListener('keydown', onKey);
+      el.removeAttribute('contenteditable');
+      const next = el.textContent;
+      el.textContent = original;
+      if (commit && next !== original) editor.stack.apply(setText(el, next));
+      buildInspector();
+    };
+    const onBlur = () => finish(true);
+    const onKey = (e) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        finish(false);
+      } else if (e.key === 'Enter') {
+        e.preventDefault();
+        el.blur();
+      }
+    };
+    el.addEventListener('blur', onBlur);
+    el.addEventListener('keydown', onKey);
+  });
+
   const buildInspector = () => {
     const el = editor.selection.primary;
     inspectorFields.replaceChildren();
@@ -158,9 +195,9 @@ async function init() {
       inspectorFields.appendChild(label);
     }
 
-    // Every other attribute — th:* expressions included — edited verbatim.
+    // Every other attribute — class and th:* expressions included — edited verbatim.
     for (const attr of [...el.attributes]) {
-      if (attr.name === 'class' || attr.name.startsWith('data-hc-editor')
+      if (attr.name.startsWith('data-hc-editor')
           || (block?.dataAttributes ?? []).includes(attr.name)) {
         continue;
       }
